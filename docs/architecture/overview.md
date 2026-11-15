@@ -1,6 +1,6 @@
 # Architecture overview
 
-**Last Updated**: 2026-10-04
+**Last Updated**: 2026-11-12
 
 How the whole system fits together, in one page. Every box here has a deeper
 document behind it; this page exists so you can find the right one.
@@ -112,12 +112,10 @@ See [`contracts/schemas.md`](contracts/schemas.md).
 
 ## Where a number comes from
 
-Nothing in this project may cite a throughput, cost or quality figure without
-saying what measured it and when. One exception, added 2026-08-30: the operator
-console prints a counterfactual cost in currency, from measured token counts and
-a rate the operator sets, labelled a counterfactual and never a bill
-([../../CLAUDE.md](../../CLAUDE.md) Guardrail #10). The numbers that currently shape
-the design:
+Measured throughput, cost and quality figures name their instrument and when
+they were measured ([../../CLAUDE.md](../../CLAUDE.md) Guardrail #10).
+Hardware retains measured resource use and token volume, but no hypothetical
+currency panel. The numbers that currently shape the design:
 
 | Measured | Value | Where |
 | --- | --- | --- |

@@ -1,0 +1,28 @@
+{
+  "completed_at": "2026-11-13T23:26:41Z",
+  "date": "2026-11-13",
+  "embeddings": {
+    "dimensions": 384,
+    "dtype": "int8",
+    "model_id": "all-minilm-l6-v2-quantized",
+    "vectors": {
+      "ai-hz2xhkpj1snxtwrb": "/vv6BAD0AP//8fz59wLu/Qr7APoB/fwCBAD2+gb/AAMABfz+B/n3+/0ABgQBBQT6/wH99wAHBwb89AMDBwD7CgMD//4C/AQIAvgAAQf5BQMGBQEFBPkEC/3//fz8/AD4B/j9BfT8/Qr9BvwTAAL/Bfr+///3BAD/APX1Av3//AD+BPzz/gT8A/wFAwj+Cgf1AQ8BCQcC+vv9EgAGAAAFAf4FAgAE9wQI/wj+8v3++Pr4BAAG9wUS/wUACwT68/39/Ab8+/cA9QEG+Q4C+Qn7BPP+Avr0BvUH+vT0/wgB/AAA+AMKCQb9/P//Awf//fwCDffy+Q8I/vgEBAv3Af36/wcABAoK/vT+Cw7/CP4O+wwMCPr+/wj/+wEB//kJAf7+Af37BPwJBP0HA/n+BfQCAQD4DwgQBAL6BPz4BQL9BwAE/Pf9+Pj7A//5Dvj9+QQADfwABQD9Cfj0/wcDAvn2CAQABgn5Cgj/APoAAfsGA/ICCgUD/vsDCwb4AwMI9AL+"
+    }
+  },
+  "failed_item_ids": [],
+  "items": [
+    {"also_covered_by": null,"also_ran_earlier": [],"band": "medium","band_reason": "not_scored","carried_by": 1,"desk": null,"entities": [],"events": [],"introduced_by_run": 1,"item_id": "ai-hz2xhkpj1snxtwrb","lenses": [],"on_front_page": false,"published_at": "2026-11-13T21:17:17Z","rank_score": 2.308205,"reader_note": null,"same_story_as": null,"secondary_desk": null,"source_form": "article","source_id": "nvidia-technical-blog","source_kind": "announcement","source_name": "NVIDIA Technical Blog","source_url": "https://developer.nvidia.com/blog/run-gpu-powered-black-hole-interferometry-with-nvidia-cuphoton","summary": "NVIDIA's cuPhoton.xBeam is a GPU-based FX correlator for the Event Horizon Telescope, replacing CPU work to ingest and correlate VLBI recordings. On an 8-GPU Vera Rubin NVL72 system it processed a 10 TB dataset in 70 seconds\u2014about 460x faster than an x86 baseline of roughly 32,000 seconds.","time_source": "feed","title": "GPU-Powered Black Hole Interferometry with NVIDIA cuPhoton","truncated": false,"updated_at": null,"updated_by_run": null,"vertical": "ai","visual": null,"watchlist_hit": true}
+  ],
+  "items_planned": 1,
+  "run_id": "2026-11-13-43524838541",
+  "version": "2026-10-20",
+  "verticals": [
+    {"below_feed_floor": false,"considered": 6903,"eligible_feeds": 53,"feed_floor": 35,"id": "ai","planned": 1,"too_old": 6852},
+    {"below_feed_floor": false,"considered": 767,"eligible_feeds": 23,"feed_floor": 21,"id": "energy","planned": 0,"too_old": 680},
+    {"below_feed_floor": false,"considered": 751,"eligible_feeds": 27,"feed_floor": 21,"id": "business-economy","planned": 0,"too_old": 558},
+    {"below_feed_floor": false,"considered": 628,"eligible_feeds": 27,"feed_floor": 21,"id": "world","planned": 0,"too_old": 354},
+    {"below_feed_floor": false,"considered": 1305,"eligible_feeds": 22,"feed_floor": 21,"id": "india","planned": 0,"too_old": 538},
+    {"below_feed_floor": false,"considered": 0,"eligible_feeds": 0,"feed_floor": null,"id": "science","planned": 0,"too_old": 0},
+    {"below_feed_floor": false,"considered": 0,"eligible_feeds": 0,"feed_floor": null,"id": "climate","planned": 0,"too_old": 0}
+  ]
+}

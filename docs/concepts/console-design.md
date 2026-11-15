@@ -1,6 +1,6 @@
 # Console Design
 
-**Last Updated**: 2026-11-10
+**Last Updated**: 2026-11-15
 
 How a figure on the operator console is worded, coloured, ranked and drawn. This
 page rules the words and the states; four pages under it rule the drawing. It is
@@ -62,28 +62,36 @@ Five rules hold for every number the console prints:
  invites a trend that is not there. Under `console.min_attempts_for_rate` a
  figure prints its counts and no share, in a strip and in a mark's name as in
  a sentence. The count is the
- one the share is taken over, and the floor counts it: Judgement's "could not
- tell" is a share of the pairs whose two readings agreed, so it prints `2% of
- the 41 that agreed`, and `1 of the 3 that agreed` under the floor.
+ one the share is taken over, and the floor counts it: Judgement's "Answered
+ not sure both times" is a share of pairs with matching answers, so it prints
+ `2% of 41 pairs with matching answers`, and
+ `1 of 3 pairs with matching answers` under the floor.
 
-**A verdict word is set by the share it judges, never by why a day was held.**
-`inside` and `past` compare a share the page prints with its own mark, the
-dashed limit the plot draws for that share: `past` when the share is above the
-mark, the test the run holds a day on, and `inside` otherwise. The run tests its
-other reasons for holding a day first, such as a record too small to fit a line
-on, so a day held for one of them can still carry a share past its mark. On
-Judgement's agreement panel, the window sentence that prints both shares ends
-`Both rates are inside the marks.` only when both are inside their marks.
-Otherwise it names the share that is past,
-`The 20% that disagreed is past its mark.` or
-`The 39% that could not tell is past its mark.`, or it ends
-`Both rates are past their marks.`
-When rounding would hide the side of the mark, the verdict instead says
-`The share that disagreed is just above its 15% mark.` or
-`The share that could not tell is just above its 35% mark.`, with `just below`
-for the corresponding inside share. The dashed mark labels keep their
-existing figures. Extra decimal places cannot settle this: a smaller
-difference would still round away.
+**Use statistical names for statistical readings.** Name the central reading
+`median (p50)`, not "the middle article" or "the middle request". Name the
+duration cutoff `p90 (90th percentile)`, not "slowest tenth": about 90% of
+durations lie at or below it, with the slowest tenth above it. For throughput,
+the slow end is instead p10; never relabel a duration percentile as a speed
+percentile. The interquartile range is `p25-p75`. Existing percentile
+calculations remain unchanged: observed-rank and interpolated readers retain
+their established conventions.
+
+**Status compares each percentage with its own limit, not why a day was held.**
+Judgement's `Does the judge give the same answer twice?` panel says
+`Neither rate exceeds its limit.` only when both rates are at or below their
+limits. Otherwise it names the rate above its limit, for example
+`The changed-answer rate is 20%, above its 15% limit.` or
+`The "not sure" rate is 39%, above its 35% limit.`, or says
+`Both rates exceed their limits.`
+When rounding would hide which side of a limit a percentage falls on, the
+status instead says `The changed-answer rate is just above its 15% limit.`
+or `The "not sure" rate is just above its 35% limit.`, with `just below` for
+the corresponding rate within its limit. Extra decimal places cannot settle
+this: a smaller difference would still round away.
+The run checks other reasons for holding a day first, such as too few recorded
+pairs, so a day held for another reason can still have a rate above its limit.
+Matching answers mean the judge repeated its answer, not that it called the
+pair one story. The panel states that consistency does not prove correctness.
 
 **Recorded days are not every day in the window.** Judgement's merge-line
 note names how many recorded days fitted nothing, without implying a fit on
@@ -270,35 +278,14 @@ for a sentence, and an assertion that a sentence is absent passes as happily
 when somebody renamed it as when the defect was fixed. `data-machine-record`
 carries one of `recorded`, `off`, `lost` and `none` on every build.
 
-## A figure in currency prints its rate, its source and the word for what it is
+## Figures use configured number formatting
 
-There is exactly one money figure on this site: the counterfactual cost on
-`/console/machine/`. CLAUDE.md Guardrail #10 forbids the rest, and carries the
-maintainer's carve-out for that one, 2026-08-30, on conditions this section holds:
-
-- **Never a currency symbol.** `0.48 USD`, never `$0.48`. A symbol in front of a
- number is the shape a bill takes, and this is not a bill - nothing bills us,
- because Actions minutes are free on a public repository.
-- **The rate is printed, in full, beside the figure.** Both halves of it: a
- provider prices prompt tokens and written tokens apart, and one blended rate
- would understate a run that wrote a lot.
-- **Where the rate came from is printed too** - `Using your rate` or `Using the
- configured rate`. A money figure whose basis is invisible is the exact thing
- Guardrail #10 exists to prevent.
-- **The word for what it is sits in the panel, not in a tooltip**: what the run
- would have cost somewhere else, never an amount owed.
-- **Once the figure has a shape, the word rides the shape.** The value axis
- reads `Counterfactual cost, USD`, and the running shape reads `Counterfactual
- cost so far, USD`; the chart's own description says it again for a reader who
- cannot see the marks. A currency code alone on an axis is the shape a bill
- takes just as surely as a symbol is, and an axis title is the label a reader
- meets before any of the numbers - so it is the one place the word cannot be
- missed. The four figures above the chart keep the sentence they already
- carried. The chart does not inherit it by being near it.
-- **A number uses the shared formatter.** It reads its locale and significant
- digits from `visuals.number_format` in `config/idhazh.json`, never from the
- browser. The Data explorer remains the exception: it prints the engine's
- answer as written.
+Console figures use the shared formatter. It reads its locale and significant
+digits from `visuals.number_format` in `config/idhazh.json`, never from the
+browser. The Data explorer remains the exception: it prints the engine's answer
+as written. The hypothetical currency panel is absent; the
+[Hardware rationale](../architecture/publishing/console-machine.md#design-rationale)
+names the lost scenario readings and the retained measurements.
 
 ## Data explorer prints the engine answer as written
 
@@ -418,6 +405,23 @@ new section.
 **Say it once per screen.** A fact stated twice on one screen reads as two
 facts - two sections both explaining that they follow the window rather than a
 pan, or a date span printed under the heading that already printed it.
+
+**At a glance is two named counts, not a narrated comparison.** Keep the total
+first and the dated bars second. Both cards use `--chart-1`, the primary
+categorical ink, rather than the pale/dulled third category. Each card already
+names its series, so its readout has no colour key: date, measure and exact count
+share one wrapping row below the plot. The tooltip keeps the same named reading.
+Do not restore the sentence explaining that articles and visuals cover the same
+days; the common axis and window already say that.
+
+**Long routes expose their questions in the rail.** Named `panel_groups` in
+`config/console/<route>.json` supply the left-rail links and the matching
+`PanelGroup` headings and anchors. Pipelines groups publishing, time and digest
+output; Summaries groups model spend and summary quality; Judgement groups story
+merging and judge evidence. Hardware and Voices retain their existing groups.
+Keep panel order, ids, readings and judged membership unchanged. The Data
+explorer is one workbench, not a stack of independent panels to split up.
+The same group links remain available in the existing narrow navigation.
 
 ## Design rationale
 

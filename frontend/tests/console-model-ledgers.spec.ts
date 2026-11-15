@@ -3,8 +3,8 @@ import { expect, test } from './support/door-page';
 import { mkdirSync } from 'node:fs';
 import { buildLedger, buildRows, serveToPage } from './support/ledger-lifecycle';
 
-const panelIds = ['model-cards', 'model-throughput', 'call-ending', 'doubt-reasons', 'faithfulness',
-	'source-doubts', 'write-cost', 'score-cost', 'summary-length'];
+const panelIds = ['model-cards', 'model-throughput', 'item-cost', 'call-ending', 'doubt-reasons', 'faithfulness',
+	'source-doubts', 'score-cost', 'summary-length'];
 
 test('the integrated Summaries route reads the native record and keeps all panels in declared order', async ({ page }) => {
 	await page.goto('/console/model/');
@@ -18,7 +18,7 @@ test('the integrated Summaries route reads the native record and keeps all panel
 	await expect(page.getByRole('heading', { name: 'What the model change moved', exact: true })).toHaveCount(0);
 	await expect(page.locator('[data-candle]')).not.toHaveCount(0);
 	await expect(page.locator('[data-run-length]')).not.toHaveCount(0);
-	await expect(page.locator('[data-histogram="write-times"]')).toHaveCount(1);
+	await expect(page.locator('[data-histogram="item-writing"]')).toHaveCount(1);
 	await expect(page.locator('[data-match-day]')).not.toHaveCount(0);
 	await page.locator('[data-model-table-control] > summary').click();
 	await expect(page.locator('[data-instrument="coherence"]')).not.toHaveCount(0);

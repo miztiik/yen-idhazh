@@ -35,7 +35,6 @@ import {
 	unexplainedNote as writeUnexplainedNote,
 	type ReasonDay
 } from '../../src/lib/console/doubt-reasons';
-import { money as writeMoney } from '../../src/lib/charts/machine';
 import { faithfulness as reduceFaithfulness } from '../../src/lib/console/model/faithfulness';
 import { matchHeadline as writeMatchHeadline, type EvalDay } from '../../src/lib/console/eval-instruments';
 import { numberFormatter } from '../../src/lib/number-format';
@@ -148,10 +147,6 @@ export function reasonHeadline(days: readonly ReasonDay[], span: number): string
 
 export function unexplainedNote(days: readonly ReasonDay[], span: number): string | null {
 	return writeUnexplainedNote(days, span, numberFormat);
-}
-
-export function money(amount: number, currency: string): string {
-	return writeMoney(amount, currency, numberFormat);
 }
 
 export function faithfulness(

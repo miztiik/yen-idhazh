@@ -7,8 +7,8 @@
 	 * timeout - so the whole shape is drawn and the two figures anybody quotes
 	 * are ruled on it.
 	 *
-	 * Two panels on the Summaries route draw it: the model writing a summary,
-	 * and the checker reading one afterwards. Same question, same shape, one
+	 * Pipelines draws the whole-summary writing clock; Summaries draws the
+	 * checker and the independent model read/write clocks. Same shape, one
 	 * component - the alternative was a second implementation of a log binning
 	 * and a second pair of rules that could drift from the first. What differs
 	 * between the two is four strings and a name, and they arrive as props.
@@ -77,7 +77,7 @@
 		/** What happened to a summary in that time: `written`, `checked`. */
 		verb: string;
 		/** What one measured thing is, in the singular and the plural. The
-		 * Pipelines route bins how long the model spent reading a PROMPT, and a bar
+		 * model-timing panel bins how long the model spent reading a PROMPT, and a bar
 		 * reading "5 summaries read" would name the wrong thing - the model reads
 		 * the article and writes the summary. */
 		noun?: string;

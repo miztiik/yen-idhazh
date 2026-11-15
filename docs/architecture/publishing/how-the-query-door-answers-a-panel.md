@@ -1,6 +1,6 @@
 # How the query door answers a panel
 
-**Last Updated**: 2026-10-28
+**Last Updated**: 2026-11-13
 
 The query door is the one module a console panel calls to read a committed
 ledger: `slice()` for rows and `ledgerReach()` for how far a ledger reaches, both
@@ -39,6 +39,16 @@ The chart-contract check reads each call with TypeScript's parser. Columns may
 be an inline literal or a named static array, including an imported declaration.
 Unknown runtime expressions and `*` fail the check. Both date endpoints must be
 present; shorthand fields carry the same boundary as explicit assignments.
+
+Hardware's token chart also calls the named `tokenDeviations()` computation.
+It runs authored DuckDB window/aggregate SQL over explicitly projected
+item-health columns through this same staged keeper, file selection and shared
+engine. It accepts validated numeric rules and dated settings metadata as
+bound values, not caller SQL, paths or addresses. Its rows are transient
+browser answers, not a stored ledger, export or explorer-origin read. The
+[Hardware contract](console-machine.md#what-may-not-be-pooled) owns the cohort,
+fixed historical bound, nullable warning rule and unavailable-history behavior.
+Ordinary `slice()` projection and its four states are unchanged.
 
 Everything else comes back as one of four answers, so a panel draws the right one
 of four nothings without inspecting an error:

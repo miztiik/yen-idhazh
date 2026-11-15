@@ -7,7 +7,7 @@
 	import { PIPELINES_QUERY_GROUPS } from '$lib/console/pipelines/query-groups';
 	import * as queries from '$lib/console/queries/pipelines';
 	import { settingsRules } from '$lib/console/settings-moved';
-	import { daysInWindow, windowOfDays } from '$lib/charts/viewport';
+	import { daysInWindow, windowFromDates, windowOfDays } from '$lib/charts/viewport';
 	import { countDays } from '$lib/console/span-words';
 	import { noRecordSentence, setAsideSentence } from '$lib/console/recording';
 	import type { LedgerReach, Row, SliceResult } from '$lib/data/ledger';
@@ -22,9 +22,10 @@
 	import SiteCostPerItem from '$lib/console/pipelines/SiteCostPerItem.svelte';
 	import FailureMix from '$lib/console/pipelines/FailureMix.svelte';
 	import ItemTimeSplit from '$lib/console/pipelines/ItemTimeSplit.svelte';
-	import SlowerOnSameWork from '$lib/console/pipelines/SlowerOnSameWork.svelte';
 	import StageTimings from '$lib/console/pipelines/StageTimings.svelte';
-	import ItemCost from '$lib/console/pipelines/ItemCost.svelte';
+	import TimeCost from '$lib/console/TimeCost.svelte';
+	import TailTrendPanel from '$lib/console/pipelines/TailTrendPanel.svelte';
+	import RecordFrame from '$lib/console/machine/RecordFrame.svelte';
 	import RunTimeline from '$lib/console/pipelines/RunTimeline.svelte';
 	import SlowestArticles from '$lib/console/pipelines/SlowestArticles.svelte';
 	import ChartDrawing from '$lib/console/pipelines/ChartDrawing.svelte';
@@ -40,9 +41,9 @@
 		[queries.failureMixQuery.name]: (range) => sliceOnce(queries.failureMixQuery, range),
 		[queries.failedRuleQuery.name]: (range) => sliceOnce(queries.failedRuleQuery, range),
 		[queries.itemTimeSplitQuery.name]: (range) => sliceOnce(queries.itemTimeSplitQuery, range),
-		[queries.slowerOnSameWorkQuery.name]: (range) => sliceOnce(queries.slowerOnSameWorkQuery, range),
 		[queries.stageTimingsQuery.name]: (range) => sliceOnce(queries.stageTimingsQuery, range),
-		[queries.itemCostQuery.name]: (range) => sliceOnce(queries.itemCostQuery, range),
+		[queries.writeCostQuery.name]: (range) => sliceOnce(queries.writeCostQuery, range),
+		[queries.tailTrendQuery.name]: (range) => sliceOnce(queries.tailTrendQuery, range),
 		[queries.runTimelineQuery.name]: (range) => sliceOnce(queries.runTimelineQuery, range),
 		[queries.slowestArticlesQuery.name]: (range) => sliceOnce(queries.slowestArticlesQuery, range),
 		[queries.articleAgeQuery.name]: (range) => sliceOnce(queries.articleAgeQuery, range)
@@ -51,19 +52,20 @@
 	const choice = useWindowChoice();
 	const windowDays = $derived(choice.days);
 	let mounted = $state(false);
-	let reaches = $state<Record<string, RouteReach>>({});
+	let reaches = $state.raw<Record<string, RouteReach>>({});
 	const reach = $derived(reaches.native ?? null);
-	let answers = $state<Record<string, Answer>>(Object.fromEntries(asks.map((query) => [query.name, 'pending'])));
-	let ranges = $state<Record<string, Range>>({});
+	let answers = $state.raw<Record<string, Answer>>(Object.fromEntries(asks.map((query) => [query.name, 'pending'])));
+	let ranges = $state.raw<Record<string, Range>>({});
 	let revision = 0;
 	const allAnswers = $derived(asks.map((query) => answers[query.name]));
 	const busy = $derived(allAnswers.some((answer) => answer === 'pending'));
 	const nativeBusy = $derived(PIPELINES_QUERY_GROUPS[0].queries.some((query) => answers[query.name] === 'pending'));
 	const recordReady = $derived(mounted && reach?.through !== null && reach?.through !== undefined && !nativeBusy);
-	const viewport = $derived(windowOfDays(data.windowDay, windowDays, knobs.today_anchor));
+	const publishedWindow = $derived(windowFromDates(data.charts.filter((day) => Object.hasOwn(data.publishedItems, day.date)).map((day) => day.date), windowDays));
+	const viewport = $derived(publishedWindow ?? windowOfDays(data.windowDay, windowDays, 'right'));
+	const attemptWindow = $derived(windowFromDates(data.visualAttempts.days.map((day) => day.date), windowDays));
 	const settings = $derived(settingsRules(data, { from: viewport.start, to: viewport.end }, 'none'));
 	const charts = $derived(data.charts.filter((day) => day.date >= viewport.start && day.date <= viewport.end));
-	const attemptDays = $derived(data.visualAttempts.days.filter((day) => day.date >= viewport.start && day.date <= viewport.end));
 	const record = $derived(recordReady ? pipelinesRecord(reach, windowDays) : null);
 
 	async function ask(selected: readonly PanelQuery[], retryWindow = false, days = windowDays) {
@@ -142,8 +144,9 @@
 	const titles: Record<string, string> = {
 		'at-a-glance': 'At a glance', 'run-health': 'Run health', 'site-cost-per-item': 'What one more article costs',
 		'failure-mix': 'What is failing, by stage', 'item-time-split': "Where an item's time went",
-		'slower-on-same-work': 'Whether a run is getting slower on the same work', 'stage-timings': 'Time per item by stage',
-		'item-cost': 'What one item cost the model', 'run-timeline': "Where the run's time went, on the run's own clock",
+		'stage-timings': 'Time per item by stage',
+		'write-cost': 'What one summary cost', 'run-timeline': "Where the run's time went, on the run's own clock",
+		'tail-trend': 'Whether the slowest articles are getting slower',
 		'slowest-articles': 'Which articles took longest in the last run',
 		'chart-drawing': 'Visuals drawn for articles',
 		'visual-refusals': 'Recorded refusal reasons over time',
@@ -151,8 +154,8 @@
 	};
 	const panelQueries: Record<string, PanelQuery> = {
 		'failure-mix': queries.failureMixQuery, 'item-time-split': queries.itemTimeSplitQuery,
-		'slower-on-same-work': queries.slowerOnSameWorkQuery, 'stage-timings': queries.stageTimingsQuery,
-		'item-cost': queries.itemCostQuery, 'article-age': queries.articleAgeQuery,
+		'stage-timings': queries.stageTimingsQuery,
+		'write-cost': queries.writeCostQuery, 'article-age': queries.articleAgeQuery,
 		'slowest-articles': queries.slowestArticlesQuery
 	};
 </script>
@@ -160,14 +163,25 @@
 <svelte:head><title>Pipelines — Console — {data.ui.site_title}</title><meta name="robots" content="noindex" /></svelte:head>
 <noscript><p data-native-script-required>The article record needs JavaScript to load. Private published-day panels remain available below.</p></noscript>
 <WindowControlSource route="pipelines" days={windowDays} presets={knobs.window_presets} monthsFor={() => 0}
-	ready={mounted} {busy} {record} publishedWindow={viewport} statusLine={recordReady ? null : 'The record window is not ready.'} onChange={show} />
+	ready={mounted} {busy} {record} {publishedWindow} statusLine={recordReady ? null : 'Packed chart dates are not ready.'} onChange={show} />
 <RouteStatus route="pipelines" answers={allAnswers} days={windowDays} through={recordReady ? reach?.through : null}
 	recordScope="Native record"
 	shimmerAfterMs={knobs.shimmer_after_ms} onRetry={retry}>
 	{#each configured.panel_groups as group (group.id)}
 		<PanelGroup id={group.id} title={group.title} panels={group.panels.length}>
 			{#each group.panels as id (id)}
-				{#if id === 'run-health'}
+				{#if id === 'tail-trend'}
+					{@const answer = answers[queries.tailTrendQuery.name]}
+					{@const range = ranges[queries.tailTrendQuery.name]}
+					<RecordFrame {id} title={titles[id]} heading="h2" state={answer === 'pending' ? 'loading' : answer.state}
+						height={knobs.chart_height} width={knobs.chart_width} {retry} {range}
+						windowed={{ name: 'machine-latency', days: windowDays }}>
+						{#if range !== undefined}
+							<TailTrendPanel rows={rows(queries.tailTrendQuery)} {range} shell={data} chart={data.chart}
+								{windowDays} floor={knobs.min_attempts_for_rate} />
+						{/if}
+					</RecordFrame>
+				{:else if id === 'run-health'}
 					<RunHealth yieldDays={data.runYieldDays} grid={data.grid} window={viewport} days={windowDays} floorPct={data.floorPct}
 						height={knobs.chart_height} width={knobs.chart_width} tickDensity={data.chart.tick_density} readoutMaxShare={data.chart.readout_max_share} />
 				{:else}
@@ -183,7 +197,7 @@
 						{:else if id === 'chart-drawing'}
 							<ChartDrawing days={charts} {windowDays} {knobs} />
 						{:else if id === 'visual-refusals'}
-							<VisualRefusals days={attemptDays} read={data.visualAttempts.read} window={viewport} {knobs} chart={data.chart} />
+							<VisualRefusals days={data.visualAttempts.days} read={data.visualAttempts.read} window={attemptWindow ?? viewport} {knobs} chart={data.chart} />
 						{:else if id === 'run-timeline'}
 							<RunTimeline {knobs} chart={data.chart} answer={answers[queries.runTimelineQuery.name]} />
 						{:else if id === 'failure-mix'}
@@ -197,12 +211,10 @@
 							<Reserved record panelState={panelState(query)} height={knobs.chart_height} width={knobs.chart_width} name={id} label={titles[id]}>
 								{#if id === 'item-time-split'}
 									<ItemTimeSplit rows={rows(query)} calendar={calendar(query)} {knobs} chart={data.chart} rule={queryRule(query)} />
-								{:else if id === 'slower-on-same-work'}
-									<SlowerOnSameWork rows={rows(query)} calendar={calendar(query)} {knobs} chart={data.chart} rule={queryRule(query)} />
 								{:else if id === 'stage-timings'}
 									<StageTimings rows={rows(query)} {knobs} chart={data.chart} window={queryWindow(query)} rule={queryRule(query)} />
-								{:else if id === 'item-cost'}
-									<ItemCost rows={rows(query)} {knobs} chart={data.chart} />
+								{:else if id === 'write-cost'}
+									<TimeCost id="write-cost" rows={rows(query)} range={ranges[query.name]} chart={data.chart} />
 								{:else if id === 'article-age'}
 									<ArticleAge rows={rows(query)} {knobs} />
 								{:else if id === 'slowest-articles'}

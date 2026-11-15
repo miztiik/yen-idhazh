@@ -9,14 +9,14 @@ import type { ModelRuntime } from "../../services/summary-generator/src/config/l
 import { SummarizeRequestSchema, type SummarizeRequest } from "../../services/summary-generator/src/schemas/request-payload.schema.js";
 import { SummaryErrorSchema, SummaryResultSchema } from "../../services/summary-generator/src/schemas/summary-result.schema.js";
 import {
-  BodyLimitError, cancelResponseBody, readBoundedText, type CompletionFetch,
+  BodyLimitError, cancelResponseBody, readBoundedText, sendHttpRequest, type CompletionFetch,
 } from "../../services/summary-generator/src/services/request-completion.service.js";
 import type { AnalysisConfig } from "./load-analysis-config.js";
 
 export async function callSummaryApi(
   input: SummarizeRequest, context: OperationMetadata, generator: GeneratorConfig,
   config: AnalysisConfig, runtime: Pick<ModelRuntime, "timeout_seconds">,
-  send: CompletionFetch = request => fetch(request), signal?: AbortSignal,
+  send: CompletionFetch = sendHttpRequest, signal?: AbortSignal,
 ) {
   const request = SummarizeRequestSchema.parse(input);
   const body = JSON.stringify(request);

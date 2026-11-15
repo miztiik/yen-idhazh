@@ -1,6 +1,6 @@
 # Which console panel answers what
 
-**Last Updated**: 2026-11-12
+**Last Updated**: 2026-11-15
 
 The console tells an operator what happened to the pipeline; the digest tells a
 reader what happened in the world. This page owns the routes and panel placement.
@@ -86,6 +86,13 @@ Feed and source panels belong to Voices, not Pipelines. Keep `/console/` as the
 Pipelines address; renaming a label is not a reason to break an existing bookmark.
 Shared navigation and window behavior follow their owning pages above.
 
+Model read/write timing (`item-cost`) sits beside throughput on Summaries.
+The whole-summary duration distribution (`write-cost`) sits after stage timings
+on Pipelines. Moving a panel does not change its clocks or evidence endpoint:
+item-cost uses item-health alone, while write-cost keeps the common item-health
+and summary-quality-evals endpoint. Both retain item-health's own first-day
+clamp and print their selected UTC bounds.
+
 ### Each route owns its config, expectations and gate drivers
 
 `config/console/<route>.json` owns that route's panel groups, judged ids and
@@ -134,10 +141,11 @@ disagreed.` Six panels form one untitled group, in this order:
 - `merge-line` compares each nightly calculated line with its proposal. The
   recorded line the newest day used is a separate fact. Neither a calculation
   nor a pair above a threshold proves a published merge.
-- `judge-agreement` compares the judge's first reading with its own second
-  reading, with the summaries swapped. Disagreement and uncertainty keep their
-  own denominators and limits. A day below the reporting floor keeps its counts
-  but draws no rate dot.
+- `judge-agreement`, titled `Does the judge give the same answer twice?`,
+  compares the judge's answers with the summaries swapped. Its lines say
+  `Changed answer after swapping` and `Answered "not sure" both times`.
+  The rates keep their own denominators and configured limits. A day below
+  the reporting floor keeps its counts but draws no rate dot.
 - `record-gates` compares each recorded count with the count needed to fit a
   line. Its day strip keeps days without rows. Missing counts are not zero bars.
 - `verdict-split` separates pairs called one story from pairs called two stories,

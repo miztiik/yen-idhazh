@@ -1,10 +1,11 @@
 # What the Hardware route draws
 
-**Last Updated**: 2026-11-12
+**Last Updated**: 2026-11-14
 
 `/console/machine/` asks what machine the work actually got, whether its two
-clocks agree, and what would change the cost of that work.
-[console.md](console.md) owns the standing band and shared window;
+clocks agree, and how much resource headroom that work left.
+[The shared shell](what-sits-above-every-console-route.md) owns navigation,
+the route title/window and on-demand UTC date metadata;
 [console-charts.md](console-charts.md) owns chart frames and readouts.
 [The machine drawing rules](../../concepts/console-design/how-the-machines-work-is-drawn-and-what-may-not-be-pooled.md)
 own what may not be pooled.
@@ -12,25 +13,33 @@ own what may not be pooled.
 ## The publication boundary
 
 The prerendered page carries configuration and words only. Its route load returns
-`machineConfig`; the shared layout supplies the standing band and settings-change
-words. With scripts off, all eleven titled panels remain, each with an empty
+`machineConfig`; the shared layout supplies navigation, the route title/window
+and the closed `Data dates (UTC)` disclosure. That metadata keeps native record
+reach and the last console update distinct. The shared payload retains
+settings-change metadata for the dated panel rules. With scripts off, all ten
+titled panels remain, each with an empty
 reserved axis frame. No run, host, article, cost or refusal is embedded in HTML
 or route page data.
 
 In the browser, declared questions in `console/queries/machine.ts` ask the native
 `item-health`, `host-fingerprint` and `run-shards` ledgers through `sliceOnce`.
 The common end is the oldest successful through-day of those families, never
-the browser clock. Following panels use the chosen preset; snapshot panels use
+the browser clock. The fixed-work trend separately keeps its item-health-only
+endpoint and first-day clamp; its own UTC bounds print beside its readings.
+Neither group moves the other's endpoint. Following panels use the chosen preset; snapshot panels use
 the newest day and name their newest recorded run rather than falling back to
 an older successful one. The bounded widest host population supplies canonical
-full-identity palette slots and name qualifiers, so narrowing a window cannot
-recolour or rename a machine. Identity is fingerprint version plus digest;
+L3 capacity colour positions and full-identity name qualifiers, so narrowing a
+window cannot recolour a capacity or rename a machine. Identity is fingerprint version plus digest;
 name-only evidence and missing identity remain separate.
 
-`RouteStatus` owns one delayed shimmer and one reserved standing sentence.
-Loading is not an answer. Quiet says `Nothing recorded.`, missing says
+`RouteStatus` owns one delayed shimmer and reserved route-read status, not a
+global metric or verdict band. Successful Hardware reads retain their measured
+run count; a healthy shared completion adds no standing paragraph. Loading is
+not an answer. Reserved panel frames keep their explicit states: quiet says
+`Nothing recorded.`, missing says
 `Not published yet.`, and an unsuccessful fetch says `Did not arrive.`.
-The standing retry re-asks only unsuccessful questions and keeps successful reads.
+The route retry re-asks only unsuccessful questions and keeps successful reads.
 An incompatible index remains unavailable until reload, as the native door requires.
 Changing the window cannot allow a late answer from the old request to replace
 the new one. Redraws and resizes reuse query rows.
@@ -89,7 +98,7 @@ again records its newer plan's count, and settlement keeps the newer numeric
 count. A manifest written before 2026-10-12 keeps the count assembly recomputed
 from its plan. This is the maintainer's ruling of 2026-10-12.
 
-## Four groups, eleven comparisons
+## Four groups, ten comparisons
 
 Membership and order live in `config/console/machine.json`.
 
@@ -97,15 +106,14 @@ Membership and order live in `config/console/machine.json`.
 | --- | --- | --- |
 | What the machine was doing | `two-clocks` | One ranked gap percentage per shard of the newest recorded run, with the allowed-disagreement rule; the item and independent server readings are printed together |
 | | `slower-machines` | Separate Reading and Writing rankings of comparable work by machine kind |
-| | `platform-mix` | Shipped placement counts: one square a job below the configured floor, otherwise stacked day bars; never a probability of the next draw |
-| Where the time went | `tail-trend` | Existing five percentile subplots, one mark a qualified run and one shared scale |
+| | `platform-mix` | Recorded jobs grouped across vendors by exact reported L3 capacity: one square a job below the configured floor, otherwise stacked day bars; never unique physical-machine counts or a probability of the next draw |
+| Where the time went | `slower-on-same-work` | One dated seconds reading for a fixed typical article on one reference machine |
 | How close we are to the limits | `closest-to-memory` | Dated articles ranked by memory held; the empty remainder ends at total machine memory |
 | | `memory-held` | Existing memory split and overlapping process brackets, for the newest day |
 | | `context-headroom` | Label and summary request distributions on one logarithmic domain, with recorded context and cut-request rules |
 | What the model spends | `article-cost` | Existing processor-time, model-time and incremental-memory tracks over the chosen window |
 | | `prompt-reuse` | Daily median label tokens held beside median summary tokens read fresh, plus the independent server-share check |
 | | `read-against-written` | Two run-sequence token lines; Run total or actual Median per article over one paired cohort, with measured/recorded coverage |
-| | `counterfactual-cost` | Running dated total, four editable-price figures; a counterfactual, never a bill |
 
 The two clocks open the route because a disagreement decides whether the rates
 below may be quoted. Every settled panel has one largest lede, one comparison,
@@ -123,6 +131,13 @@ legacy columns are finite migration inputs only. No private manifest inputs are
 added. A conflicting count file is a visible unreachable record, never a
 reactive page crash.
 
+That same bounded query selects `l3_cache_bytes` for placement aggregation.
+`charts/fleet-cache.ts` groups normalized job rows by the exact byte value,
+converting only the label to MiB. Missing L3 remains unmeasured, not zero.
+The browser reuses the fetched rows for full CPU/job/L3 details and does not
+fetch another ledger or infer L2 capacity. The host collector described in
+[host metrics](../../reference/host-metrics.md) produces these measurements.
+
 Slower machines chooses the kind with most qualifying articles as reference,
 with a deterministic name tie-break. Each article's read or write milliseconds
 per token is divided by its own run's reference median, then priced in the
@@ -131,6 +146,17 @@ middle; the slowest-tenth notch uses `ceil(0.9*n)-1`. The configured ten-article
 floor and kind cap apply independently to each list. Runs without a reference
 reading and articles lacking comparable work are counted and printed. Reading
 and writing never become one total.
+
+The fixed-work trend is a different comparison. `slower-on-same-work` chooses
+one reference machine by qualifying article count, with a lexical name
+tie-break, and one typical fresh-input/output token pair over the complete
+qualifying window cohort. Each UTC date prices that same article using its
+reference machine's upper-middle read and write milliseconds per token,
+divided by 1000 and summed as seconds. It keeps its daily calendar, null gaps,
+window median, reference details and unqualified/unnamed counts. It does not
+borrow the machine ranking's per-run normalization or three-family endpoint.
+The existing renderer is mounted inside one route-owned card in the timing
+group, with settings rules over its own clamped item-health range.
 
 The run-wide slowest-article ranking is mounted once on
 [Pipelines](what-the-pipelines-route-draws.md#the-run-wide-article-ranking-keeps-its-original-evidence-endpoint).
@@ -174,8 +200,8 @@ medians summed by day. Input includes cached prompt tokens, and the recorded
 totals include all model calls. These are token volumes, not words or uncached
 compute. Measured versus recorded article counts qualify partial runs.
 
-`readAgainstWritten` returns both metrics from that cohort and retains the
-qualified totals consumed by counterfactual cost. `ReadWritePanel` draws native
+`readAgainstWritten` returns both metrics from that cohort and retains its
+paired-run calculations. `ReadWritePanel` draws native
 `runSeries` geometry, ordered by `compareRuns`: every known run has its own
 position, including same-day runs and unmeasured gaps. No scheduled run or
 elapsed timestamp is inferred. The numeric route knob
@@ -183,7 +209,57 @@ elapsed timestamp is inferred. The numeric route knob
 initial mode: 0 is Run total (the shipped default), 1 is Median per article.
 The config boundary rejects other values. Runtime radio choices stay in memory
 and redraw without a fetch; changing the initial mode is not persistence of a
-reader's choice. Counterfactual cost keeps its daily sums.
+reader's choice.
+
+The token panel separately asks `tokenDeviations()` through the same staged
+data door. Browser DuckDB returns a nullable warning for each real run, trace
+and measure; presentation never calculates its statistics. The fixed input is
+the configured widest console span, clamped to item-health's first day and
+ending at this panel's original three-family endpoint. Display presets do not
+change that input. Both measures arrive together, so switching radios does not
+fetch or reassess.
+
+Each Read or Written value compares with at most the last 30 earlier qualifying
+matching runs, with at least 10 required:
+`abs(value - prior_mean) > 3 * prior_sample_stddev`. The current run and every
+later run are excluded. The comparison is strict and two-sided. The validated
+numeric route knobs `read_write_history_runs`, `read_write_min_prior_runs` and
+`read_write_stddev_multiplier` own those defaults; counts are whole numbers
+at least two, the minimum cannot exceed the history count, and the multiplier
+is positive and finite. Sample deviation zero stays zero: an unequal current
+value flags, while an equal value does not.
+Rule labels and readouts retain fractional multipliers rather than rounding
+them as whole article counts.
+
+Matching uses recorded model identity, quantisation, context, slots, threads,
+batch, temperature, output budgets and visual-decision setting.
+All measured articles in a run must have one known setup. Contiguous setup
+changes reset the baseline, including a return to an older setup; an unknown
+or unmeasured setup breaks that segment. The existing settings-change metadata
+also resets comparisons, including prompt and configured truncation-cap changes.
+An article's actual cut cap is an outcome, not its run's configured setup.
+The metadata covers changes only by UTC day, not by run or
+per-run prompt identity, so every run on a change day is unassessed. Dates
+outside that metadata's comparison coverage are unassessed too. No historical
+setting is reconstructed from current configuration.
+
+Missing values, too little earlier matching history, missing or failed history,
+unknown/mixed settings and unavailable baselines produce NULL, never FALSE.
+A lost day or set-aside file anywhere in the fixed input withholds its
+assessments. The raw selected-window read remains independent and still draws
+available measurements. History is never expanded beyond its declared bound
+to manufacture a baseline.
+
+A hollow warning diamond uses the existing semantic warning role without
+recolouring either categorical trace or changing its solid/dashed identity.
+The same pointer, keyboard, touch and hover readout explains Read and Written
+separately, naming the measured/recorded current cohort, actual prior runs and
+their article coverage, mean, sample deviation and strict cutoff. It says
+`Investigate; not proof of failure.`, `Not flagged.`, or the exact reason for
+`Unassessed`; none changes run status or implies complete-run consumption.
+The run readout retains its largest observed height at its current width.
+Selecting a shorter explanation must not shrink a bottom-of-page viewport and
+clear the shared hover; a width change measures the natural text again.
 
 ### The retained measurements
 
@@ -210,10 +286,10 @@ measurement, producer collection or persisted contract.
 Fingerprint identity is the algorithm and digest pair; equal text under
 algorithms 1 and 2 never joins. Name-only evidence stays coarse.
 
-The tail retains all five percentiles on one domain; under-floor runs are
-printed rather than drawn. Settings-change rules cross the whole stack.
-Its lede quotes the slowest tenth in seconds, not a ratio of the two extreme
-percentiles. Memory-held quotes the model server's resident bound as a share of
+The per-run percentile trend is mounted once on
+[Pipelines](what-the-pipelines-route-draws.md#per-run-slow-article-percentiles-keep-their-own-window),
+with its original cohort, floor and three-family endpoint.
+Memory-held quotes the model server's resident bound as a share of
 the whole machine, explicitly at most because its mapped pages overlap.
 Every dated comparison names changed dates with no measured column, rather than
 claiming nothing changed because no rule could be drawn. No-change and
@@ -264,6 +340,13 @@ standing for measured zero; a previous successful run substituted for the
 newest refused run; lost-state claims derived from a fetch failure.
 
 ## Design rationale
+
+The hypothetical runner-price panel and its editable controls are permanently
+absent, without a hidden or relocated replacement. This loses hypothetical
+price totals and per-article scenarios, not a real bill. The shared token query,
+paired-run calculations and read/write comparison remain unchanged.
+The persisted observability price settings remain compatible; the route no
+longer sends them to a drawing or reads a browser-stored price.
 
 The history plot answers observed placement over time, not newest-run machine
 constraints, processor contention or model paging. Those three diagnostic

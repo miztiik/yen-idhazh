@@ -4,7 +4,7 @@
 	import { useWindowChoice } from '$lib/console/window-slot';
 	import { consoleKnobs, routeConsole, routeKnobs } from '$lib/console/route-console';
 	import { rangeFor, routeReach, sliceOnce, retryAsks, type Range, type RouteReach } from '$lib/console/queries/window';
-	import { feedsFailedQuery, fetchTimeQuery, sourceCutsQuery, whyChosenQuery, watchlistQuery } from '$lib/console/queries/voices';
+	import { feedsFailedQuery, fetchTimeQuery, sourceCutsQuery, whyChosenQuery } from '$lib/console/queries/voices';
 	import { readSession } from '$lib/data/read-session';
 	import { evidenceOf, rowsOf, stateOf, type Answer } from '$lib/console/voices/record';
 	import { sourceHealth } from '$lib/console/voices/source-health';
@@ -14,7 +14,6 @@
 	import { fetchTime } from '$lib/console/voices/fetch-time';
 	import { sourceCuts } from '$lib/console/voices/source-cuts';
 	import { whyChosen } from '$lib/console/voices/why-chosen';
-	import { watchlist } from '$lib/console/voices/watchlist';
 	import RouteStatus from '$lib/components/RouteStatus.svelte';
 	import WindowControlSource from '$lib/components/WindowControlSource.svelte';
 	import PanelGroup from '$lib/components/PanelGroup.svelte';
@@ -25,12 +24,11 @@
 	import SourceCutsPanel from '$lib/console/voices/SourceCutsPanel.svelte';
 	import RankingDiscountPanel from '$lib/console/voices/RankingDiscountPanel.svelte';
 	import WhyChosenPanel from '$lib/console/voices/WhyChosenPanel.svelte';
-	import WatchlistPanel from '$lib/console/voices/WatchlistPanel.svelte';
 
 	let { data } = $props();
 	const console = consoleKnobs();
 	const config = routeConsole('voices');
-	const knobs = routeKnobs('voices', ['article_fails_marked', 'article_fails_named', 'why_chosen_rows', 'watchlist_hits_marked', 'watchlist_hits_named']);
+	const knobs = routeKnobs('voices', ['article_fails_marked', 'article_fails_named', 'why_chosen_rows']);
 	const choice = useWindowChoice();
 	const windowDays = $derived(choice.days);
 	let ready = $state(false);
@@ -39,15 +37,13 @@
 	let fetchAnswer = $state<Answer>('pending');
 	let cutsAnswer = $state<Answer>('pending');
 	let chosenAnswer = $state<Answer>('pending');
-	let watchAnswer = $state<Answer>('pending');
 	let span = $state<Range | null>(null);
 	let fetchSpan = $state<Range | null>(null);
 	let cutsSpan = $state<Range | null>(null);
-	let watchSpan = $state<Range | null>(null);
 	let chosenSpan = $state<Range | null>(null);
 	let generation = 0;
 	let session: symbol | null = null;
-	const answers = $derived([feedsAnswer, fetchAnswer, cutsAnswer, chosenAnswer, watchAnswer]);
+	const answers = $derived([feedsAnswer, fetchAnswer, cutsAnswer, chosenAnswer]);
 	const busy = $derived(answers.includes('pending'));
 	const census = $derived(sourceHealth(data.sourceView, console.source_rows));
 	const discount = $derived(rankingDiscount(data.sourceView, console.source_rows));
@@ -58,7 +54,6 @@
 	const times = $derived(fetchTime(rowsOf(fetchAnswer), console.source_rows, data.number_format));
 	const cuts = $derived(cutsSpan === null ? null : sourceCuts(rowsOf(cutsAnswer), cutsSpan, console.source_rows));
 	const chosen = $derived(whyChosen(rowsOf(chosenAnswer), knobs.why_chosen_rows));
-	const catches = $derived(watchSpan === null ? null : watchlist(rowsOf(watchAnswer), watchSpan, knobs.watchlist_hits_marked, knobs.watchlist_hits_named));
 	const feedPanelState = $derived(feedsAnswer === 'pending' ? 'loading' : data.feedInput.read.state === 'not-packed' ? 'missing' :
 		data.feedInput.read.state === 'unreadable' ? 'unreachable' :
 		(failed && (failed.feedThrough !== null || failed.articleThrough !== null)) || fallback ? 'ready' : stateOf(feedsAnswer));
@@ -82,16 +77,14 @@
 		const needFetch = !retry || stateOf(fetchAnswer) === 'unreachable';
 		const needCuts = !retry || stateOf(cutsAnswer) === 'unreachable';
 		const needChosen = !retry || stateOf(chosenAnswer) === 'unreachable';
-		const needWatch = !retry || stateOf(watchAnswer) === 'unreachable';
 		if (retry) retryAsks([
 			...(needFeeds ? [feedsFailedQuery] : []), ...(needFetch ? [fetchTimeQuery] : []),
-			...(needCuts ? [sourceCutsQuery] : []), ...(needChosen ? [whyChosenQuery] : []), ...(needWatch ? [watchlistQuery] : [])
+			...(needCuts ? [sourceCutsQuery] : []), ...(needChosen ? [whyChosenQuery] : [])
 		]);
 		if (needFeeds) feedsAnswer = 'pending';
 		if (needFetch) fetchAnswer = 'pending';
 		if (needCuts) cutsAnswer = 'pending';
 		if (needChosen) chosenAnswer = 'pending';
-		if (needWatch) watchAnswer = 'pending';
 		const found = await routeReach(['item-health']);
 		if (turn !== generation) return;
 		reach = found;
@@ -99,18 +92,15 @@
 		const t = rangeFor(fetchTimeQuery, days, found, console.window_presets);
 		const c = rangeFor(sourceCutsQuery, days, found, console.window_presets);
 		const y = rangeFor(whyChosenQuery, days, found, console.window_presets);
-		const w = rangeFor(watchlistQuery, days, found, console.window_presets);
 		if (needFeeds) span = 'from' in f ? f : null;
 		if (needFetch) fetchSpan = 'from' in t ? t : null;
 		if (needCuts) cutsSpan = 'from' in c ? c : null;
 		if (needChosen) chosenSpan = 'from' in y ? y : null;
-		if (needWatch) watchSpan = 'from' in w ? w : null;
 		await Promise.all([
 			needFeeds ? ('from' in f ? sliceOnce(feedsFailedQuery, f) : Promise.resolve(f)).then((answer) => { if (turn === generation) feedsAnswer = answer; }) : null,
 			needFetch ? ('from' in t ? sliceOnce(fetchTimeQuery, t) : Promise.resolve(t)).then((answer) => { if (turn === generation) fetchAnswer = answer; }) : null,
 			needCuts ? ('from' in c ? sliceOnce(sourceCutsQuery, c) : Promise.resolve(c)).then((answer) => { if (turn === generation) cutsAnswer = answer; }) : null,
-			needChosen ? ('from' in y ? sliceOnce(whyChosenQuery, y) : Promise.resolve(y)).then((answer) => { if (turn === generation) chosenAnswer = answer; }) : null,
-			needWatch ? ('from' in w ? sliceOnce(watchlistQuery, w) : Promise.resolve(w)).then((answer) => { if (turn === generation) watchAnswer = answer; }) : null
+			needChosen ? ('from' in y ? sliceOnce(whyChosenQuery, y) : Promise.resolve(y)).then((answer) => { if (turn === generation) chosenAnswer = answer; }) : null
 		]);
 	}
 	function monthsFor(): number { return 0; }
@@ -131,6 +121,5 @@
 	<PanelGroup id={config.panel_groups[1].id} title={config.panel_groups[1].title} panels={config.panel_groups[1].panels.length}>
 		<RankingDiscountPanel {discount} width={console.chart_width} height={console.chart_height}/>
 		<WhyChosenPanel view={chosen} panelState={stateOf(chosenAnswer)} width={console.chart_width} height={console.chart_height} readoutMaxShare={data.chart.readout_max_share} notes={evidenceOf(chosenAnswer, chosenSpan)}/>
-		<WatchlistPanel days={windowDays} view={catches} panelState={stateOf(watchAnswer)} width={console.chart_width} height={console.chart_height} tileMinPx={console.tile_min_px} readoutMaxShare={data.chart.readout_max_share} notes={evidenceOf(watchAnswer, watchSpan)}/>
 	</PanelGroup>
 </RouteStatus>

@@ -22,7 +22,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'day.ts', 'encoder.ts', 'index.ts', 'loader.ts', 'month.ts', 'search.ts', 'session.ts', 'weights.ts'
 	],
 	'src/lib/charts': [
-		'cost.ts', 'day-slots.ts', 'fleet.ts', 'frame.ts', 'glance.ts', 'indexed-runs.ts',
+		'day-slots.ts', 'fleet.ts', 'frame.ts', 'glance.ts', 'indexed-runs.ts',
 		'colour-scheme.ts', 'fleet-identity.ts', 'machine-colour.ts', 'machine-name.ts',
 		'label-context.ts', 'machine.ts', 'rank.ts', 'readout.ts', 'run-history.ts', 'run-yield.ts', 'series.ts',
 		'skeleton.ts', 'sparkline.ts', 'stack-types.ts', 'targetbar.ts',
@@ -42,7 +42,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'ItemVisual.svelte', 'KpiCard.svelte', 'LeadingStories.svelte', 'LensChips.svelte',
 		'MoreDays.svelte',
 		'NotHere.svelte', 'Notice.svelte', 'Panel.svelte', 'PanelGroup.svelte', 'PayloadState.svelte',
-		'RankedList.svelte', 'RateControl.svelte', 'ReadAloud.svelte', 'Reserved.svelte', 'RouteStatus.svelte',
+		'RankedList.svelte', 'ReadAloud.svelte', 'Reserved.svelte', 'RouteStatus.svelte',
 		'RunLengths.svelte', 'RunSquares.svelte', 'RunYield.svelte', 'SearchState.svelte',
 		'ShapeSwitch.svelte', 'SiteFooter.svelte', 'SiteHeader.svelte',
 		'SourceCutRange.svelte', 'SourceLink.svelte', 'SourceMark.svelte', 'Sparkline.svelte',
@@ -55,29 +55,29 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'doubt-reasons.ts', 'duration-cohort.ts', 'eval-instruments.ts', 'failure-rules.ts',
 		'holdout.ts', 'judgement-evidence.ts', 'merge-line.ts', 'model-cards.ts',
 		'query-state.ts', 'rates.ts', 'recording.ts', 'RecordNotes.svelte', 'route-console.ts', 'run-square.ts', 'series-tokens.ts',
-		'settings-moved.ts', 'span-words.ts', 'verdict-split.ts', 'waiting.ts', 'window-preference.ts', 'window-slot.ts'
+		'settings-moved.ts', 'span-words.ts', 'TimeCost.svelte', 'verdict-split.ts', 'waiting.ts', 'window-preference.ts', 'window-slot.ts'
 	],
 	'src/lib/console/queries': ['machine.ts', 'model.ts', 'pipelines.ts', 'shared.ts', 'voices.ts', 'window.ts'],
 	'src/lib/console/pipelines': [
 		'ArticleAge.svelte', 'AtAGlance.svelte', 'ChartDrawing.svelte',
-		'FailureMix.svelte', 'ItemCost.svelte', 'ItemTimeSplit.svelte', 'RunHealth.svelte',
-		'RunTimeline.svelte', 'SlowestArticles.svelte', 'SiteCostPerItem.svelte', 'SlowerOnSameWork.svelte', 'StageTimings.svelte',
+		'FailureMix.svelte', 'ItemTimeSplit.svelte', 'RunHealth.svelte',
+		'RunTimeline.svelte', 'SlowestArticles.svelte', 'SiteCostPerItem.svelte', 'TailTrendPanel.svelte', 'StageTimings.svelte',
 		'VisualRefusals.svelte',
 		'article-age.ts', 'at-a-glance.ts', 'attempt-notes.ts', 'chart-drawing.ts', 'drawing-flow.ts', 'failure-mix.ts',
-		'item-cost.ts', 'item-time-split.ts', 'query-groups.ts', 'record-window.ts', 'run-health.ts', 'slowest-articles.ts',
-		'run-timeline.ts', 'site-cost-per-item.ts', 'slower-on-same-work.ts', 'stage-timings.ts', 'visual-attempts.ts', 'visual-refusals.ts'
+		'item-time-split.ts', 'query-groups.ts', 'record-window.ts', 'run-health.ts', 'slowest-articles.ts',
+		'run-timeline.ts', 'site-cost-per-item.ts', 'stage-timings.ts', 'visual-attempts.ts', 'visual-refusals.ts'
 	],
 	'src/lib/console/model': [
 		'rows.ts', 'call-ending.ts', 'faithfulness.ts', 'source-doubts.ts', 'summary-length.ts',
-		'model-throughput.ts', 'model-rule.ts', 'cost.ts', 'Query.svelte', 'Series.svelte',
+		'model-throughput.ts', 'model-rule.ts', 'cost.ts', 'item-cost.ts', 'ItemCost.svelte', 'Query.svelte', 'Series.svelte',
 		'Cards.svelte', 'cards.ts', 'Panels.svelte', 'panels.ts', 'Reasons.svelte', 'doubt-reasons.ts', 'slice.ts', 'work.ts'
 	],
 	'src/lib/console/voices': [
 		'record.ts', 'source-health.ts', 'feeds-failed.ts', 'fetch-time.ts',
-		'retiring.ts', 'source-cuts.ts', 'ranking-discount.ts', 'why-chosen.ts', 'watchlist.ts',
+		'retiring.ts', 'source-cuts.ts', 'ranking-discount.ts', 'why-chosen.ts',
 		'VoicesPanel.svelte', 'RecordFrame.svelte', 'SourceHealthPanel.svelte', 'FeedsFailedPanel.svelte', 'FeedTiles.svelte',
 		'FetchTimePanel.svelte', 'RetiringPanel.svelte', 'SourceCutsPanel.svelte',
-		'RankingDiscountPanel.svelte', 'WhyChosenPanel.svelte', 'WatchlistPanel.svelte'
+		'RankingDiscountPanel.svelte', 'WhyChosenPanel.svelte'
 	],
 	'src/lib/console/explorer': [
 		'address.ts', 'answer.ts', 'AnswerTable.svelte', 'chart-roles.ts', 'column-groups.ts',
@@ -91,7 +91,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'article-cost.ts', 'ArticleCostPanel.svelte', 'FleetDots.svelte',
 		'MachineCharts.svelte', 'RecordFrame.svelte', 'counters.ts', 'host-types.ts', 'records.ts', 'memory-held.ts',
 		'MemoryHeldPanel.svelte', 'PlatformMixPanel.svelte',
-		'refused-runs.ts', 'run-axis.ts', 'ReadWritePanel.svelte', 'TailTrendPanel.svelte'
+		'query-groups.ts', 'refused-runs.ts', 'run-axis.ts', 'ReadWritePanel.svelte', 'SlowerOnSameWork.svelte', 'slower-on-same-work.ts'
 	],
 	'src/lib/data': [
 		'ask-reader.ts', 'compact-index.ts', 'configured-catalog.ts', 'engine.ts', 'fetched-bytes.ts', 'host-fingerprint.ts', 'ledger-catalog.ts', 'ledger-columns.ts',

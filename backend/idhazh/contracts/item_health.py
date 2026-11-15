@@ -194,14 +194,6 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
             "visual_plan_ms_is_estimate",
             "faithfulness_ms",
             "stage_gap_ms",
-            "cpu_model",
-            "prefill_ms",
-            "input_tokens",
-            "cached_tokens",
-            "decode_ms",
-            "output_tokens",
-            "label_input_tokens",
-            "label_cached_tokens",
             "run_id",
             "item_id",
             "source_id",
@@ -215,12 +207,20 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
             "time_source",
         ),
         "frontend/src/lib/console/queries/model.ts": (
+            "prefill_ms",
+            "input_tokens",
+            "cached_tokens",
+            "decode_ms",
+            "output_tokens",
             "url_key",
             "model_id",
+            "label_input_tokens",
+            "label_cached_tokens",
             "summary_finish_reason",
             "label_finish_reason",
         ),
         "frontend/src/lib/console/queries/machine.ts": (
+            "cpu_model",
             "machine_job",
             "machine_pipeline_name",
             "machine_task_name",
@@ -263,10 +263,12 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
             "lens_bonus",
             "watchlist_bonus",
             "carriage_step",
-            "watchlist_hit",
-            "on_front_page",
         ),
         "frontend/src/lib/console/machine/counters.ts": ("llama_rss_peak_bytes",),
+        "frontend/src/lib/data/token-deviation-query.ts": (
+            "n_threads", "n_batch", "model_quantisation", "temperature",
+            "label_budget_tokens", "summary_budget_tokens", "run_visual_decision",
+        ),
         "frontend/src/lib/console/model/work.ts": ("version",),
         "frontend/src/lib/server/payload.ts": ("detail",),
         "backend/utilities/slot_probe.py": (
@@ -299,6 +301,10 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
 #: non-zero naming it.
 UNREAD_CELLS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
     {
+        "Watchlist catches retained without their day-count view": (
+            "watchlist_hit",
+            "on_front_page",
+        ),
         "Processor-steal and paging readings retained without Hardware views": (
             "cpu_steal_pct",
             "llama_major_faults",
@@ -319,15 +325,6 @@ UNREAD_CELLS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
         ),
         "how a call ended, and how much of its prompt the server already held": (
             "recovered",
-        ),
-        "which recorded settings no current item panel reads": (
-            "n_threads",
-            "n_batch",
-            "model_quantisation",
-            "temperature",
-            "label_budget_tokens",
-            "summary_budget_tokens",
-            "run_visual_decision",
         ),
         "how shard size and processor load explain a slow item": (
             "shard_item_count",

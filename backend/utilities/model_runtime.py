@@ -52,7 +52,7 @@ from utilities import model_refs
 #: nobody ships (Guardrail #10).
 #:
 #: The digest is the release API's own `digest` for that asset. It was confirmed
-#: on 2026-08-25 by downloading the 16,377,727-byte archive and hashing it.
+#: on 2026-11-13 by downloading the 23,311,084-byte archive and hashing it.
 PIN_FILE: Final = Path("config/llama-cpp-pin.json")
 
 #: What a cache key names the build as, and the key a step publishes it under.

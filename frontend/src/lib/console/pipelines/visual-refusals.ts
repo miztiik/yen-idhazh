@@ -23,7 +23,10 @@ export function refusalLines(
 	numberFormat: NumberFormatConfig
 ): RefusalLine[] {
 	if (read.state !== 'read') return [];
-	const dates = daysInWindow(window);
+	const start = window.start > read.first ? window.start : read.first;
+	const end = window.end < read.through ? window.end : read.through;
+	if (start > end) return [];
+	const dates = daysInWindow({ start, end });
 	const inside = days.filter((day) => day.date >= window.start && day.date <= window.end);
 	if (inside.length === 0) return [];
 	const recorded = new Map(inside.map((day) => [day.date, day]));

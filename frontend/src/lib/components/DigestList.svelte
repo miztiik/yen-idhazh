@@ -18,6 +18,7 @@
 	 * say so in one sentence.
 	 */
 	import DayNotice from '$lib/components/DayNotice.svelte';
+	import BackToTop from '$lib/components/BackToTop.svelte';
 	import DigestItemView from '$lib/components/DigestItem.svelte';
 	import EmptyDay from '$lib/components/EmptyDay.svelte';
 	import FilterBar from '$lib/components/FilterBar.svelte';
@@ -25,7 +26,7 @@
 	import LeadingStories from '$lib/components/LeadingStories.svelte';
 	import SearchState from '$lib/components/SearchState.svelte';
 	import { base } from '$app/paths';
-	import { loadDay, restoreAnchor } from '$lib/assist/day';
+	import { loadDay, restoreAnchor, type DayStatus } from '$lib/assist/day';
 	import { loadIndex, loadVectors } from '$lib/assist/index';
 	import {
 		cachedEncoder,
@@ -68,6 +69,7 @@
 		vertical = null,
 		datePrefix = '',
 		settled = true,
+		status = 'ready',
 		ui
 	}: {
 		day: DayForPage;
@@ -78,6 +80,7 @@
 		 * is the one moment a story that is on its way looks like a story that was
 		 * never here. */
 		settled?: boolean;
+		status?: DayStatus;
 		ui: ReaderUiConfig;
 	} = $props();
 
@@ -85,6 +88,9 @@
 	let read = $state(new Set<string>());
 	let hideRead = $state(false);
 	let shownCount = $state(0);
+	let added = $state(0);
+	let cleared = $state(false);
+	const loading = $derived(status === 'loading' || status === 'slow');
 	/** The story a reader's own address named, or the empty string.
 	 *
 	 * Read here rather than passed in, because the pager is the only thing that
@@ -369,9 +375,8 @@
 	// The head of the published order, plus every lead. A lead is chosen across
 	// the WHOLE day - measured 2026-09-01 on the 601-story day of 2026-08-31,
 	// the five sat at positions 249, 285, 337, 344 and 493 - so a page holding
-	// only the head is a block whose links land on nothing. They keep their own
-	// published positions and the set never holds one twice: past the last lead
-	// this is exactly the prefix it always was.
+	// only the head is a block whose links land on nothing. The initial page
+	// holds each lead once; later batches follow it without moving existing cards.
 	//
 	// And it reaches the story a reader's own address named. `/<date>/#<item id>`
 	// is a published reader address, so a pager that stops at twelve makes every
@@ -388,12 +393,10 @@
 		wanted === '' || leading.has(wanted) || list.wantedRow < 0 ? 0 : list.wantedRow + 1
 	);
 	const shown = $derived(Math.max(shownCount || PAGE, reach));
-	const paged = $derived(revealed(visible, list.pinnedRows, leading, shown));
+	const paged = $derived(revealed(visible, list.pinnedRows, leading, shown, PAGE));
 	// Counted against the day rather than the list in hand, because on a reading
-	// route the list in hand is a seed. Counting the seed would offer "Show 2
-	// more" and then "Show 55 more" the moment the fetch landed, which is a number
-	// ticking under a reader who is looking at it - the same fault `DayNotice`
-	// avoids by reading the desk counts. `total` is those counts, so it is already
+	// route the list in hand is a seed. The progress total must not grow when
+	// the fetch lands. `total` reads desk counts, so it is already
 	// the truth about the day and it does not move. A filter, a hide or a fold
 	// narrows the list on purpose, and then the list IS the promise: a fold takes
 	// cards off the page that `total` still counts, so leaving the day's own number
@@ -431,16 +434,39 @@
 		setHideRead(hideRead);
 	}
 
-	// The day is drawn in parts so the leads can be painted beside the stream at
-	// the wide breakpoint without leaving their place in the document. Every
-	// part renders its own sections in `digest.sections` order and the parts
-	// themselves are in that order too, so reordering the page is still a config
-	// edit and a narrow screen sees exactly what config asked for.
-	//
-	// The aside stands beside the STREAM, never beside the day's controls: the
-	// filter panel sticks only where it is one band, and one band needs the
-	// whole content box. So it needs the leads to come before the items; any
-	// other order and the day stays one column at every width.
+	$effect(() => {
+		void day.date;
+		void vertical;
+		void needle;
+		void hideRead;
+		shownCount = 0;
+		added = 0;
+	});
+
+	async function loadMore() {
+		const before = paged.length;
+		const nextShown = shown + PAGE;
+		const next = revealed(visible, list.pinnedRows, leading, nextShown, PAGE);
+		const first = next[before];
+		if (!first) return;
+		const focused = document.activeElement;
+		added = next.length - before;
+		shownCount = nextShown;
+		await tick();
+		// A reader who moved away during rendering keeps their new focus.
+		if (document.activeElement === focused || document.activeElement === document.body) {
+			restoreAnchor(`#${first.item_id}`);
+		}
+	}
+
+	function clearRead() {
+		read = forgetAll(day.date);
+		hideRead = false;
+		setHideRead(false);
+		cleared = true;
+	}
+
+	// Stable section owners keep a focused search field mounted while the list changes.
 	const leadsAt = $derived(ui.sections.indexOf('leads'));
 	const streamAt = $derived(ui.sections.indexOf('items'));
 	// Section ownership follows configuration, not the filtered results: moving
@@ -512,19 +538,6 @@
 				Nothing on this page matches &ldquo;{query}&rdquo;. Press Enter to search other days.
 			</p>
 		{:else}
-			{#if read.size > 0}
-				<div class="flex justify-end pt-3">
-					<button
-						type="button"
-						onclick={toggleHide}
-						aria-pressed={hideRead}
-						class="min-h-11 text-sm text-text-tertiary hover:text-accent"
-					>
-						{hideRead ? 'Show everything' : 'Hide what I have read'}
-					</button>
-				</div>
-			{/if}
-
 			{#if visible.length === 0}
 				<p class="py-12 text-base text-text-secondary">
 					You have read everything here today.
@@ -546,7 +559,12 @@
 					/>
 				{/each}
 
-				{#if remaining > 0}
+				<div class="continuation" data-continuation aria-busy={loading}>
+					<p class="reading-progress" role="status">
+						{#if added > 0}{plural(added, 'more story', 'more stories')} loaded. {/if}
+						Showing {paged.length} of {reachable} stories
+					</p>
+					{#if remaining > 0}
 					<!-- Hidden with no script, and replaced by a line that says so.
 					     The control needs a click handler to do anything, so leaving it
 					     drawn hands a script-free reader a button that promises 55
@@ -558,10 +576,11 @@
 					<button
 						type="button"
 						data-pager-scripted
-						onclick={() => (shownCount = shown + PAGE)}
-						class="min-h-11 w-full py-6 text-base text-accent hover:underline"
+						onclick={() => void loadMore()}
+						disabled={status !== 'ready'}
+						class="load-more"
 					>
-						Show {remaining} more
+						{loading ? 'Loading more stories...' : status === 'ready' ? 'Load more stories' : 'More stories unavailable'}
 					</button>
 					<noscript>
 						<style>
@@ -574,25 +593,31 @@
 							works.
 						</p>
 					</noscript>
-				{/if}
+					{/if}
+				</div>
 			{/if}
 
-			{#if read.size > 0}
-				<p class="pt-6 text-sm text-text-tertiary">
-					<button
-						type="button"
-						onclick={() => (read = forgetAll(day.date))}
-						class="hover:text-accent"
-					>
-						Forget what I have read
-					</button>
-				</p>
+			{#if read.size > 0 || cleared}
+				<section class="reading-controls" aria-labelledby="reading-controls-heading">
+					<h2 id="reading-controls-heading">Reading controls</h2>
+					<p class="reading-progress" role="status">
+						{cleared && read.size === 0 ? 'Read marks cleared for this day.' : `${plural(read.size, 'story marked read', 'stories marked read')} on this device.`}
+					</p>
+					<div class="reading-actions">
+						<button type="button" onclick={toggleHide} aria-pressed={hideRead} disabled={read.size === 0}>
+							{hideRead ? 'Show everything' : 'Hide what I have read'}
+						</button>
+						<button type="button" onclick={clearRead}>
+							Forget what I have read
+						</button>
+					</div>
+				</section>
 			{/if}
 		{/if}
 	{/if}
 {/snippet}
 
-<div class="day">
+<div class="day" data-surface="reading">
 	<div class="day-head">
 		<!-- A link that named a story this page does not have. The region is here on
 		     every page, empty ones included: a live region has to be in the document
@@ -610,6 +635,60 @@
 			{@render part(section)}
 		{/each}
 	</div>
+	<BackToTop reading />
+
+	<style>
+		.continuation, .reading-controls {
+			margin-block-start: var(--space-6);
+			padding-block: var(--space-5);
+			border-block-start: 1px solid var(--color-rule);
+		}
+		.continuation {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			gap: var(--space-3);
+		}
+		.reading-progress {
+			margin: 0;
+			color: var(--color-text-secondary);
+			font-size: var(--text-sm);
+			line-height: var(--leading-sm);
+		}
+		.load-more, .reading-actions button {
+			min-block-size: calc(var(--space-6) + var(--space-3));
+			padding: var(--space-2) var(--space-4);
+			border: 1px solid var(--color-rule-strong);
+			border-radius: var(--radius-md);
+			background: var(--color-surface);
+			color: var(--color-accent);
+			font-size: var(--text-base);
+			cursor: pointer;
+		}
+		.load-more:hover:not(:disabled), .reading-actions button:hover:not(:disabled) {
+			border-color: var(--color-accent);
+			background: var(--tint-accent);
+		}
+		button:disabled {
+			color: var(--color-text-tertiary);
+			cursor: default;
+		}
+		.reading-controls h2 {
+			margin: 0 0 var(--space-2);
+			font-size: var(--text-base);
+			line-height: var(--leading-base);
+			color: var(--color-text);
+		}
+		.reading-actions {
+			display: flex;
+			flex-wrap: wrap;
+			gap: var(--space-3);
+			margin-block-start: var(--space-3);
+		}
+		.reading-actions button {
+			font-size: var(--text-sm);
+		}
+	</style>
 
 	{#if split}
 		{#if leads.length > 0}

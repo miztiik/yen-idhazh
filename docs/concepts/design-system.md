@@ -1,6 +1,6 @@
 # Design System
 
-**Last Updated**: 2026-11-12
+**Last Updated**: 2026-11-15
 
 Shared rules for typography, layout, colour, motion and controls. [Console design](console-design.md) owns panel-specific presentation; [appearance configuration](config/appearance.md) owns tunable values.
 
@@ -8,7 +8,7 @@ New designs, charts and visuals render in the browser. Do not add prerendered da
 
 ## Typography is the interface
 
-- The home and archive pages fill the window with configured gutters. Home story prose fills the card's content width; archive text keeps the configured prose measure. Other reading routes retain the configured frame maximum and prose measure.
+- Home, dated and topic pages share one full-window reading shell with configured gutters. Story prose fills the card's content width, including fragment-linked stories. Archive pages fill the window but retain the configured prose measure.
 - The console fills the available window by default, after its labelled rail and configured gutters. A configured numeric console maximum remains available; every mounted drawing measures its own content width.
 - Keep an item's hierarchy to title, summary and provenance. Use the configured display face for titles and the reading face for prose; data uses tabular numerals.
 - Keep article type readable on phones. Reduce columns before reducing prose size. Pair each size token with its leading token.
@@ -101,13 +101,26 @@ sideways scrolling on reading pages.
 
 ### The reading page spends its width in four named zones
 
-Use the source mark, prose, optional item footer rail and optional day aside. Zone widths are configured relative units, not pixel substitutes. The home page places the leading stories above the stream and the item footer beneath the prose, leaving the full card width for stories. On other reading routes, return the item footer beneath the prose when the day aside appears.
+Use the source mark, prose and item footer. Zone widths are configured relative units, not pixel substitutes. Every digest route places leading stories above the stream and the item footer beneath the prose, leaving the full card width for stories. Archive results may use the optional item footer rail.
 
 ### The measure is one block, not one class per line
 
-On reading routes other than the home page, apply `--measure` once to the block holding title and summary, at the prose size. A `ch` width applied separately to different fonts or sizes produces different edges. Keep figures outside that prose cap. Verify zone widths also scale when the root font size changes.
+In archive results, apply `--measure` once to the block holding title and summary, at the prose size. A `ch` width applied separately to different fonts or sizes produces different edges. Digest routes use the full prose width instead. Keep figures outside the prose cap. Verify zone widths also scale when the root font size changes.
 
 ### A chart's column is set by what the chart was drawn at
+
+Console histogram bins and time-series columns have square corners, flat tops
+and straight baselines, including stacked daily columns and compact count
+charts. Their geometry shows measured intervals, counts and additive parts;
+pill-shaped caps remove part of that drawing and obscure its boundaries.
+Rounding is not a blanket rule for filled marks.
+
+Horizontal comparison bars keep pill ends using the configured `--radius-full`.
+Shared `chart-bar` and `chart-bar-stack` styles round each complete filled
+outline; additive joins stay flush, including when an end segment is narrower
+than the radius. Rounding never changes measured lengths, scales, markers or
+overflow. Range bands, job squares, background regions and icons are not
+comparison bars.
 
 Draw against the actual content width in CSS pixels. Do not shrink a wide drawing until its labels are unreadable. Reserve the figure's dimensions to avoid layout shifts; choose a simpler layout when the available width cannot hold its labels.
 The [chart contract](../architecture/publishing/where-a-drawing-becomes-pixels.md#design-rationale)
@@ -218,7 +231,10 @@ State cost before a download, progress while it is measurable, readiness when co
 
 Use the existing Lucide-derived icon system by id. Keep glyphs monochrome and inherit `currentColor`; do not add a handwritten inline path or a second theme-specific artwork set. [Icon provenance](../../frontend/src/lib/icons/PROVENANCE.md) owns source and update details.
 
-Icons belong in controls, chrome and declared classifications. Do not invent a story type with a decorative headline icon. `clock-alert` identifies a printed fallback time that came from this pipeline, not the publisher; absence of time provenance must not manufacture that claim. Tests check both missing ids and unused glyphs. `icons.stroke_px` sets the line width in screen pixels, and `Icon.svelte` converts it to Lucide's 24-unit grid for each icon size. Susan picked 1.5 px from the comparison sheet: at 1.25 px, six 13 px lines in the dark theme were no brighter than secondary text and eight more sat just above it; at 1.5 px, no line is that dim. At density 3, a 1.5 px icon line is 1.50 px beside a weight-600 label stroke of 1.68 px, so the icon does not outweigh its label.
+The Voices glyph uses paired speech bubbles to represent multiple publication
+sources, not a radio signal or a network connection.
+
+Icons belong in controls, chrome and declared classifications. Do not invent a story type with a decorative headline icon. `clock-alert` identifies a printed fallback time that came from this pipeline, not the publisher; absence of time provenance must not manufacture that claim. Console destinations select generated `IconId` values, and `icons.spec.ts` checks that each destination renders SVG geometry. `icons.stroke_px` sets the line width in screen pixels, and `Icon.svelte` converts it to Lucide's 24-unit grid for each icon size. Susan picked 1.5 px from the comparison sheet: at 1.25 px, six 13 px lines in the dark theme were no brighter than secondary text and eight more sat just above it; at 1.5 px, no line is that dim. At density 3, a 1.5 px icon line is 1.50 px beside a weight-600 label stroke of 1.68 px, so the icon does not outweigh its label.
 
 ## Charts render in the browser
 

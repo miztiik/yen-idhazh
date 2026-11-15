@@ -1,6 +1,6 @@
 # Console Charts
 
-**Last Updated**: 2026-11-11
+**Last Updated**: 2026-11-13
 
 What console charts must share: sizing, interaction, loading states and honest
 marks for missing measurements. Panel placement and the private build-time
@@ -63,7 +63,7 @@ and the explicit overlap deduction reconcile the stack. Missing, invalid or
 inconsistent clocks do not supply invented zeroes.
 
 **Reading against writing cost:** `nativeItemCost` in
-`console/pipelines/item-cost.ts` keeps independent complete rate pairs for each
+`console/model/item-cost.ts` keeps independent complete rate pairs for each
 clock. Reading subtracts recorded cached tokens; unknown cache is not zero.
 Its two distributions share one seconds domain. Their sample floor remains
 separate from the failure mix's recorded-row divisor.

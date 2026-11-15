@@ -1,6 +1,6 @@
 # The model on a runner
 
-**Last Updated**: 2026-11-11
+**Last Updated**: 2026-11-13
 
 How a job gets the inference runtime and the weights, and how it proves it got
 the ones it asked for. Every value here is exact: a pin, a cache key, a digest,
@@ -19,12 +19,14 @@ They no longer choose a repository, filename, quantization or server settings.
 
 | Variable | Value |
 | --- | --- |
-| `LLAMA_CPP_BUILD` | `b10598` |
-| `LLAMA_CPP_ASSET` | `llama-b10598-bin-ubuntu-x64.tar.gz` |
-| `LLAMA_CPP_SHA256` | `d77a09db4165f8850b513629ed0ffeaab7851bb03e7cc3870b74e721f894694c` |
+| `LLAMA_CPP_BUILD` | `b12359` (`llama.cpp` `v1.0.0`, commit `b1b770d90d94cad9e9ea5b993bdbc383a522fb28`) |
+| `LLAMA_CPP_ASSET` | `llama-b12359-bin-ubuntu-x64.tar.gz` |
+| `LLAMA_CPP_SHA256` | `0bc1f091e8916102b6d8f2cf944233a620e90a0f856c72d0ce41150c65c2e72e` |
 
-The SHA-256 is the release API's own `digest` for that asset. It was confirmed
-on 2026-08-25 by downloading the 16,377,727-byte archive and hashing it.
+The `v1.0.0` release publishes `nightly-tag.txt` naming `b12359` at the same
+commit, which holds the prebuilt Ubuntu archive. The SHA-256 is the release
+API's own `digest` for that asset. It was confirmed on 2026-11-13 by
+downloading the 23,311,084-byte archive and hashing it.
 
 ### Where the model file is read, and how many places that is
 
@@ -150,7 +152,7 @@ quietly: the server starts and the job spends its hour before anybody reads the
 flag back.
 
 So the answer is committed rather than dispatched.
-`backend/idhazh/llm/b10598-llama-server-help.txt` is the pinned build's recorded
+`backend/idhazh/llm/b12359-llama-server-help.txt` is the pinned build's recorded
 `--help`, packaged with the shared flag reader rather than read from test
 fixtures. `server_flags.py` reads that one named resource. A contract test binds
 its filename to the pin and checks every consumed spelling.

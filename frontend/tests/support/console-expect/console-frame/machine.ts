@@ -11,7 +11,7 @@ export const EXPECT: RouteExpect = {
 		{
 			id: 'where-the-time-went',
 			title: 'Where the time went',
-			panels: ['tail-trend']
+			panels: ['slower-on-same-work']
 		},
 		{
 			id: 'how-close-to-the-limits',
@@ -21,7 +21,7 @@ export const EXPECT: RouteExpect = {
 		{
 			id: 'what-the-model-spends',
 			title: 'What the model spends',
-			panels: ['article-cost', 'prompt-reuse', 'read-against-written', 'counterfactual-cost']
+			panels: ['article-cost', 'prompt-reuse', 'read-against-written']
 		}
 	],
 	verdict: { state: 'route', question: 'is it working' },

@@ -147,7 +147,7 @@
 		data-model-rule-none="the judge's record, not how summaries are written"
 		data-readout-none={record === null
 			? "the judge's score record is unavailable, so there is no range to read; agreed with Susan"
-			: 'two population ranges on one score axis, so there is no column to share, and each range prints its lowest, middle and highest in words; agreed with Susan'}
+			: 'two population ranges on one score axis, so there is no column to share, and each range prints its minimum, median (p50) and maximum in words'}
 		data-verdict-line={reads(applied)}
 		data-verdict-days={record?.daysCounted}
 	>
@@ -213,7 +213,7 @@
 					>
 						{strip.at === null
 							? `Nothing was ${strip.words} yet`
-							: `${strip.words}: ${reads(strip.at.min)} to ${reads(strip.at.max)}, middle ${reads(strip.at.median)}`}
+							: `${strip.words}: ${reads(strip.at.min)} to ${reads(strip.at.max)}, median (p50) ${reads(strip.at.median)}`}
 					</text>
 					{#if strip.at !== null}
 						<line

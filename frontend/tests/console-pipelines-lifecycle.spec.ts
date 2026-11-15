@@ -70,17 +70,17 @@ test('a late wide response cannot replace a short request or fabricate a short r
 	await arrived;
 	await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 	await expect(page.locator('[data-duration-cohort]')).toContainText('1 of 2 recorded item clocks');
-	await expect(page.locator('[data-window-status]')).toHaveText('Showing 1 day, to 15 Jun 2030.');
+	await expect(page.locator('[data-window-status]')).toHaveText('Main packed window: 15 Jun 2030 UTC.');
 	await setWindow(page, 90);
 	await settled(page);
-	await expect(page.locator('[data-window-status]')).toHaveText('Showing 90 days, to 15 Jun 2030.');
+	await expect(page.locator('[data-window-status]')).toHaveText('Main packed window: 18 Mar 2030 - 15 Jun 2030 UTC.');
 });
 
 test('removed visual diagnostics neither mount nor ask for evaluator data', async ({ page }) => {
 	await servePipelines(page, root);
 	const evaluatorRequests: string[] = [];
 	page.on('request', (request) => {
-		if (request.url().includes('/state/compact/summary-quality-evals/')) evaluatorRequests.push(request.url());
+		if (request.url().includes('/state/compact/summary-quality-evals/')) evaluatorRequests.push(new URL(request.url()).pathname.split('/summary-quality-evals/')[1]);
 	});
 	await page.goto('/console/');
 	await hydrated(page);
@@ -94,7 +94,7 @@ test('removed visual diagnostics neither mount nor ask for evaluator data', asyn
 	for (const id of ['chart-drawing', 'visual-refusals']) {
 		await expect(page.locator(`[data-console-panel-id="${id}"]`)).toHaveCount(1);
 	}
-	expect(evaluatorRequests).toEqual([]);
+	expect(evaluatorRequests.sort()).toEqual(['index/daily.json', 'index/monthly.json', 'index/yearly.json']);
 });
 
 test('the run-wide article ranking keeps lagging host/count evidence separate from the current timeline', async ({ page }) => {

@@ -14,21 +14,21 @@ export const itemTimeSplitQuery = {
 	span: 'window'
 } as const satisfies PanelQuery;
 
-export const slowerOnSameWorkQuery = {
-	name: 'slowerOnSameWorkQuery', ledger: 'item-health',
-	columns: ['date', 'cpu_model', 'prefill_ms', 'input_tokens', 'cached_tokens', 'decode_ms', 'output_tokens'],
-	span: 'window'
-} as const satisfies PanelQuery;
-
 export const stageTimingsQuery = {
 	name: 'stageTimingsQuery', ledger: 'item-health',
 	columns: ['date', 'fetch_ms', 'extract_ms', 'summarize_ms'],
 	span: 'window'
 } as const satisfies PanelQuery;
 
-export const itemCostQuery = {
-	name: 'itemCostQuery', ledger: 'item-health',
-	columns: ['date', 'prefill_ms', 'decode_ms', 'input_tokens', 'output_tokens', 'cached_tokens', 'label_input_tokens', 'label_cached_tokens'],
+export const writeCostQuery = {
+	name: 'writeCostQuery', ledger: 'item-health',
+	columns: ['date', 'summarize_ms'],
+	span: 'window'
+} as const satisfies PanelQuery;
+
+export const tailTrendQuery = {
+	name: 'tailTrendQuery', ledger: 'item-health',
+	columns: ['date', 'run_id', 'summarize_ms'],
 	span: 'window'
 } as const satisfies PanelQuery;
 

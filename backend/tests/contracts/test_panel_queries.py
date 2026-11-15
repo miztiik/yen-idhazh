@@ -29,22 +29,22 @@ QUERY_ROOT: Final = "frontend/src/lib/console/queries"
 EXPECTED_NAMES: Final = {
     "shared": ("failedRuleQuery",),
     "pipelines": (
-        "failureMixQuery", "itemTimeSplitQuery", "slowerOnSameWorkQuery",
-        "stageTimingsQuery", "itemCostQuery", "runTimelineQuery", "slowestArticlesQuery", "articleAgeQuery",
+        "failureMixQuery", "itemTimeSplitQuery",
+        "stageTimingsQuery", "writeCostQuery", "tailTrendQuery", "runTimelineQuery", "slowestArticlesQuery", "articleAgeQuery",
     ),
     "model": (
-        "modelThroughputQuery", "callEndingQuery", "faithfulnessQuery",
-        "sourceDoubtsQuery", "sourceDoubtsItemsQuery", "writeCostQuery", "scoreCostQuery",
+        "modelThroughputQuery", "itemCostQuery", "callEndingQuery", "faithfulnessQuery",
+        "sourceDoubtsQuery", "sourceDoubtsItemsQuery", "scoreCostQuery",
         "summaryLengthQuery",
     ),
     "machine": (
         "runShardsQuery",
         "twoClocksQuery", "twoClocksHostsQuery", "slowerMachinesQuery", "platformMixQuery",
-        "tailTrendQuery", "closestToMemoryQuery", "memoryHeldQuery",
+        "slowerOnSameWorkQuery", "closestToMemoryQuery", "memoryHeldQuery",
         "contextHeadroomQuery", "articleCostQuery", "articleCostHostsQuery",
         "promptReuseQuery", "readAgainstWrittenQuery",
     ),
-    "voices": ("feedsFailedQuery", "fetchTimeQuery", "sourceCutsQuery", "whyChosenQuery", "watchlistQuery"),
+    "voices": ("feedsFailedQuery", "fetchTimeQuery", "sourceCutsQuery", "whyChosenQuery"),
     "window": (),
 }
 
@@ -69,10 +69,13 @@ EXPECTED_COLUMNS: Final[Mapping[str, tuple[str, ...]]] = {
     "summaryLengthQuery": ("date", "run_id", "model_id", "summary_words", "source_words_before_cap", "source_words", "compression"),
     "twoClocksQuery": ("date", "run_id", "machine_job", "machine_shard", "prefill_ms", "input_tokens", "cached_tokens"),
     "twoClocksHostsQuery": ("date", "run_id", "job", "shard", "server_prompt_tokens", "server_prompt_seconds"),
-    "slowerMachinesQuery": ("run_id", "cpu_model", "prefill_ms", "input_tokens", "cached_tokens", "decode_ms", "output_tokens"),
+    "slowerMachinesQuery": (
+        "date", "run_id", "machine_job", "machine_pipeline_name", "machine_task_name", "machine_shard",
+        "cpu_model", "prefill_ms", "input_tokens", "cached_tokens", "decode_ms", "output_tokens",
+    ),
     "platformMixQuery": (
         "version", "date", "run_id", "job", "pipeline_name", "task_name", "shard", "fingerprint", "fingerprint_version",
-        "cpu_model", "cpu_logical_processors", "model_load_ms", "job_seconds",
+        "cpu_model", "l3_cache_bytes", "cpu_logical_processors", "model_load_ms", "job_seconds",
         "server_prompt_tokens", "server_prompt_seconds",
         *LEGACY_HOST_INPUT_COLUMNS,
     ),
@@ -92,7 +95,6 @@ EXPECTED_COLUMNS: Final[Mapping[str, tuple[str, ...]]] = {
     "fetchTimeQuery": ("source_id", "fetch_ms", "fetch_connect_ms", "fetch_ttfb_ms", "robots_ms", "retry_total_ms", "retry_count"),
     "sourceCutsQuery": ("date", "source_id", "url_key", "source_words_before_cap", "source_words"),
     "whyChosenQuery": ("date", "run_id", "item_id", "source_id", "selection_score", "authority_score", "tier_score", "feed_weight", "feed_reliability", "recency_bonus", "lens_bonus", "watchlist_bonus", "carriage_step"),
-    "watchlistQuery": ("date", "url_key", "watchlist_hit", "on_front_page"),
 }
 
 
@@ -233,7 +235,7 @@ def test_every_query_declares_exactly_its_planned_columns() -> None:
 def test_validation_names_misspelled_ledgers_columns_and_the_unread_failed_field(
     ledger: str, column: str, fault: str
 ) -> None:
-    query = QueryDeclaration("voices", "watchlistQuery", ledger, (column,), "window")
+    query = QueryDeclaration("voices", "fetchTimeQuery", ledger, (column,), "window")
     faults = query_faults(
         query, ("item-health", "host-fingerprint", "summary-quality-evals"), row_columns(),
         {"item-health": ("failed_field",)},

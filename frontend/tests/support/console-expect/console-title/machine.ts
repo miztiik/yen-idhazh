@@ -6,7 +6,6 @@ export const EXPECT: RouteExpect | null = {
 	label: 'Hardware',
 	minimumHeadings: 19,
 	renamedTitles: [
-		'Whether the speed numbers can be trusted',
-		'Whether the slowest articles are getting slower'
+		'Whether the speed numbers can be trusted'
 	]
 };

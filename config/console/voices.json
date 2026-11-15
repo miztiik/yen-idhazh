@@ -8,10 +8,10 @@
     {
       "id": "what-the-ranking-did",
       "title": "What the ranking did",
-      "panels": ["ranking-discount", "why-chosen", "watchlist"]
+      "panels": ["ranking-discount", "why-chosen"]
     }
   ],
-  "judged": ["source-health", "feeds-failed", "fetch-time", "retiring", "source-cuts", "ranking-discount", "why-chosen", "watchlist"],
+  "judged": ["source-health", "feeds-failed", "fetch-time", "retiring", "source-cuts", "ranking-discount", "why-chosen"],
   "knobs": {
     "article_fails_marked": 1,
     "article_fails_named": 3,

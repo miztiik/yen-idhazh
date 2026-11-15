@@ -19,10 +19,12 @@ import { closestToMemory, contextReadings, countersFrom, processors, textRows, l
 import { slowestArticles } from '../src/lib/console/pipelines/slowest-articles';
 import { fleetJobs } from '../src/lib/charts/fleet';
 import { machineKeys } from '../src/lib/charts/machine-colour';
+import { machineRamp } from '../src/lib/charts/machine-colour';
+import { shardPhases } from '../src/lib/console/machine/shard-phases';
+import { machinePhases } from '../src/lib/console/machine/machine-phases';
 import {
 	clockAgreement,
 	clocksChart,
-	costOf,
 	itemRead,
 	percentileHistory,
 	pooledReadRate,
@@ -33,14 +35,13 @@ import {
 	PERCENTILES,
 	type RunWork
 } from '../src/lib/charts/machine';
-import { costOverDays } from '../src/lib/charts/cost';
 import {
 	carriesServerCounters,
 	machineCounters,
 	type MachineLimits,
 	type MachineRun
 } from '../src/lib/console/machine/counters';
-import { dateSeries, money, numberFormat } from './support/number-format';
+import { dateSeries, numberFormat } from './support/number-format';
 import { frame } from '../src/lib/charts/frame';
 import { articleCost, runnerHourSeconds } from '../src/lib/console/machine/article-cost';
 import { describeRefusedRuns } from '../src/lib/console/machine/refused-runs';
@@ -84,6 +85,97 @@ const LIMITS: MachineLimits = {
 	contextWindow: MODELS.summarizer.server['--ctx-size'],
 	jobTimeoutSeconds: CONFIG.run.shard_timeout_minutes * 60
 };
+
+test('phase totals and weighted rates keep shards separate and exclude incomplete identities or timings', () => {
+	const row = { date: '2026-11-01', run_id: '2026-11-01-1', machine_job: 'work', machine_shard: 0,
+		cpu_model: 'cpu-a', input_tokens: 300, cached_tokens: 100, output_tokens: 100, prefill_ms: 1000, decode_ms: 2000 };
+	const work = shardPhases([
+		row,
+		{ ...row, input_tokens: 500, output_tokens: 200, prefill_ms: 4000, decode_ms: 1000 },
+		{ ...row, machine_shard: 1, prefill_ms: 4000, decode_ms: 4000 },
+		{ ...row, run_id: '2026-11-01-2' },
+		{ ...row, cached_tokens: null },
+		{ ...row, prefill_ms: 0 },
+		{ ...row, machine_shard: null }
+	], []);
+	expect(work.excluded).toBe(3);
+	expect(work.shards).toHaveLength(3);
+	expect(work.shards.find((shard) => shard.label.endsWith('shard 1'))).toMatchObject({
+		articles: 1, prefill: 4, decode: 4, total: 8, prefillTps: 50, decodeTps: 25, prefillShare: 50
+	});
+	expect(work.shards.find((shard) => shard.articles === 2)).toMatchObject({
+		articles: 2, prefill: 5, decode: 3, prefillTps: 120, decodeTps: 100, prefillShare: 62.5
+	});
+	expect(shardPhases([{ ...row, decode_ms: null }], []).shards).toEqual([]);
+});
+
+test('shard hardware joins by date, run, task and shard; unknown and conflicting L3 never borrow a CPU peer reading', () => {
+	const item = { date: '2026-11-01', run_id: '2026-11-01-1', machine_job: 'work', machine_shard: 0,
+		machine_pipeline_name: 'digest', machine_task_name: 'summarize', cpu_model: 'same-cpu',
+		input_tokens: 300, cached_tokens: 100, output_tokens: 100, prefill_ms: 1000, decode_ms: 2000 };
+	const host = { date: item.date, run_id: item.run_id, job: 'work', shard: 0,
+		pipeline_name: 'digest', task_name: 'summarize', cpu_model: 'Intel(R) Xeon(R) measured', l3_cache_bytes: 0 };
+	const hosts = [
+		host, { ...host, l3_cache_bytes: null }, { ...host, run_id: '2026-11-01-2', l3_cache_bytes: 99 },
+		{ ...host, date: '2026-11-02', l3_cache_bytes: 100 }, { ...host, shard: 1, l3_cache_bytes: 101 },
+		{ ...host, pipeline_name: 'other', l3_cache_bytes: 102 },
+		{ ...host, task_name: 'judge', cpu_model: 'AMD measured', l3_cache_bytes: 128 },
+		{ ...host, task_name: 'judge', cpu_model: 'AMD measured', l3_cache_bytes: 256 }
+	];
+	const work = shardPhases([item, { ...item, machine_task_name: 'judge' }, { ...item, machine_shard: 2 }], hosts);
+	expect(work.shards.find((shard) => shard.label.includes('digest/summarize') && shard.label.endsWith('shard 0')))
+		.toMatchObject({ cpuModels: ['Intel(R) Xeon(R) measured'], l3CacheBytes: [0] });
+	expect(work.shards.find((shard) => shard.label.includes('digest/judge')))
+		.toMatchObject({ cpuModels: ['AMD measured'], l3CacheBytes: [128, 256] });
+	expect(work.shards.find((shard) => shard.label.endsWith('shard 2')))
+		.toMatchObject({ cpuModels: ['same-cpu'], l3CacheBytes: [] });
+});
+
+test('hardware phase means weight articles, not shards or runs, and phase rates weight measured seconds', () => {
+	const item = { date: '2026-11-01', run_id: '2026-11-01-1', machine_job: 'work', machine_shard: 0,
+		cpu_model: 'cpu-a', input_tokens: 300, cached_tokens: 100, output_tokens: 100, prefill_ms: 1000, decode_ms: 2000 };
+	const work = machinePhases([
+		item,
+		{ ...item, input_tokens: 500, output_tokens: 200, prefill_ms: 4000, decode_ms: 1000 },
+		{ ...item, machine_shard: 1, prefill_ms: 4000, decode_ms: 4000 },
+		{ ...item, run_id: '2026-11-01-2' },
+		{ ...item, decode_ms: null }
+	], []);
+	expect(work.excluded).toBe(1);
+	expect(work.machines).toHaveLength(1);
+	expect(work.machines[0]).toMatchObject({
+		cpuModels: ['cpu-a'], l3CacheBytes: [], articles: 4, shards: 3,
+		prefill: 2.5, decode: 2.25, total: 4.75, prefillTps: 100
+	});
+	expect(work.machines[0].decodeTps).toBeCloseTo(500 / 9);
+	expect(work.machines[0].prefillShare).toBeCloseTo(100 * 10 / 19);
+	expect(machinePhases([{ ...item, prefill_ms: 0 }], []).machines).toEqual([]);
+});
+
+test('hardware phase groups keep CPU models and distinct, zero, missing or conflicting L3 readings separate', () => {
+	const item = { date: '2026-11-01', run_id: '2026-11-01-1', machine_job: 'work',
+		cpu_model: 'cpu-a', input_tokens: 300, cached_tokens: 100, output_tokens: 100, prefill_ms: 1000, decode_ms: 2000 };
+	const host = { date: item.date, run_id: item.run_id, job: 'work', cpu_model: 'cpu-a' };
+	const work = machinePhases([
+		...[0, 1, 2, 3, 4, 5].map((machine_shard) => ({ ...item, machine_shard })),
+		{ ...item, machine_shard: 6, cpu_model: 'cpu-b' }
+	], [
+		{ ...host, shard: 0, l3_cache_bytes: 128 },
+		{ ...host, shard: 1, l3_cache_bytes: 128 },
+		{ ...host, shard: 2, l3_cache_bytes: 256 },
+		{ ...host, shard: 3, l3_cache_bytes: 0 },
+		{ ...host, shard: 5, l3_cache_bytes: 128 },
+		{ ...host, shard: 5, l3_cache_bytes: 256 },
+		{ ...host, shard: 6, cpu_model: 'cpu-b', l3_cache_bytes: 128 }
+	]);
+	expect(work.machines).toHaveLength(6);
+	expect(work.machines.find((machine) => machine.cpuModels[0] === 'cpu-a' &&
+		machine.l3CacheBytes.length === 1 && machine.l3CacheBytes[0] === 128))
+		.toMatchObject({ articles: 2, shards: 2, total: 3 });
+	expect(work.machines.map((machine) => [machine.cpuModels, machine.l3CacheBytes])).toEqual(expect.arrayContaining([
+		[['cpu-a'], [256]], [['cpu-a'], [0]], [['cpu-a'], []], [['cpu-a'], [128, 256]], [['cpu-b'], [128]]
+	]));
+});
 
 function drawingOptions(stacked = false) {
 	return {
@@ -538,8 +630,6 @@ test.describe('what a run reads against what it writes', () => {
 				median: { read: null, written: null }, measured: 0, recorded: 1 }
 		]);
 		expect(view.runs.map((run) => run.runId)).toEqual(['2026-09-04-1', '2026-09-04-2']);
-		expect(costOverDays(view.runs, { currency: 'USD', inputPerMillion: 1, outputPerMillion: 1 }).days)
-			.toMatchObject([{ date: '2026-09-04', items: 2 }]);
 	});
 
 	test('token totals and actual medians use the same paired finite nonnegative article cohort', () => {
@@ -574,17 +664,6 @@ test.describe('what a run reads against what it writes', () => {
 		expect(readAgainstWritten([]).tokenRuns).toEqual([]);
 	});
 
-	test('input and output are priced apart, at the rate per million', () => {
-		const rate = { currency: 'USD', inputPerMillion: 0.2, outputPerMillion: 0.6 };
-		// 1.5 million prompt tokens at 0.20 is 0.30; 0.3 million written at 0.60 is
-		// 0.18; together 0.48.
-		expect(costOf({ input: 1_500_000, output: 300_000 }, rate)).toBeCloseTo(0.48, 12);
-		// One blended rate cannot reproduce that, which is why there are two.
-		expect(costOf({ input: 1_500_000, output: 0 }, rate)).toBeCloseTo(0.3, 12);
-		expect(costOf({ input: 0, output: 300_000 }, rate)).toBeCloseTo(0.18, 12);
-		expect(costOf({ input: 0, output: 0 }, rate)).toBe(0);
-	});
-
 	test('the default rate comes from the committed config and not from a literal', () => {
 		const configured = observabilityConfig();
 		expect(configured.cost_currency).toBe(CONFIG.observability.cost_currency);
@@ -595,12 +674,6 @@ test.describe('what a run reads against what it writes', () => {
 		expect(configured.cost_currency).toMatch(/^[A-Z]{3}$/);
 	});
 
-	test('money is digits and an ISO code, and never reads the machine locale', () => {
-		expect(money(1234.5, 'USD')).toBe('1,230 USD');
-		expect(money(0.0123, 'USD')).toBe('0.0123 USD');
-		expect(money(0, 'EUR')).toBe('0 EUR');
-		expect(money(0.0027, 'USD')).toBe('0.0027 USD');
-	});
 });
 
 test.describe('a run the counters refuse, handed to every figure built from article rows', () => {
@@ -879,91 +952,6 @@ test.describe('a run the counters refuse, handed to every figure built from arti
 			'has 4 rows: its rows disagree about which day the run belongs to.'
 		]);
 		expect(describeRefusedRuns([])).toBeNull();
-	});
-});
-
-test.describe('the native daily counterfactual cost', () => {
-	const RATE = { currency: 'USD', inputPerMillion: 0.2, outputPerMillion: 0.6 };
-
-	function work(date: string, input: number, output: number, items = 1): RunWork {
-		return {
-			runId: `${date}-1`,
-			date,
-			input,
-			output,
-			prefillMs: null,
-			decodeMs: null,
-			items,
-			timed: 0
-		};
-	}
-
-	/** Three days, the middle one twice the first and the last one half of it. */
-	const RUNS = [
-		work('2026-09-01', 1_000_000, 200_000, 4),
-		work('2026-09-02', 2_000_000, 400_000, 8),
-		work('2026-09-03', 500_000, 100_000, 2)
-	];
-
-	test('one call returns both shapes, and the line ends where the bars add up', () => {
-		// The oracle of this panel. Two builder calls could hand a reader a line
-		// and a stack that disagree, with nothing on screen saying which to
-		// believe - which is the whole reason the no-re-shaping rule exists.
-		const shapes = costOverDays(RUNS, RATE);
-		const bars = shapes.days.reduce((carry, day) => carry + day.read + day.written, 0);
-		expect(shapes.runningTotal).toBeCloseTo(bars, 12);
-
-		// Recomputed by hand rather than from the module: 3.5 million prompt tokens
-		// at 0.20 is 0.70, and 0.7 million written at 0.60 is 0.42.
-		expect(shapes.runningTotal).toBeCloseTo(1.12, 12);
-	});
-
-	test('the line is the bars added up in order, point by point', () => {
-		const shapes = costOverDays(RUNS, RATE);
-		const expected = [
-			[0.2, 0.12, 0.32, 0.32],
-			[0.4, 0.24, 0.64, 0.96],
-			[0.1, 0.06, 0.16, 1.12]
-		];
-		shapes.days.forEach((day, at) => {
-			for (const [column, value] of [day.read, day.written, day.total, day.running].entries()) {
-				expect(value).toBeCloseTo(expected[at][column], 12);
-			}
-		});
-		// A running total never falls, because a day cannot cost less than nothing.
-		const climbs = shapes.days.map((day) => day.running);
-		expect(climbs).toEqual([...climbs].sort((left, right) => left - right));
-	});
-
-	test('two runs on one date are one column, because the panel asks what a day cost', () => {
-		const shapes = costOverDays(
-			[
-				work('2026-09-01', 1_000_000, 200_000, 4),
-				{ ...work('2026-09-01', 500_000, 100_000, 2), runId: '2026-09-01-2' }
-			],
-			RATE
-		);
-		expect(shapes.days).toHaveLength(1);
-		expect(shapes.days[0].items).toBe(6);
-		expect(shapes.days[0].read).toBeCloseTo(0.3, 12);
-		expect(shapes.days[0].written).toBeCloseTo(0.18, 12);
-	});
-
-	test('no day is an absence, not an empty plot', () => {
-		const nothing = costOverDays([], RATE);
-		expect(nothing.days).toEqual([]);
-		expect(nothing.runningTotal).toBe(0);
-		// A run with no date cannot be laid on a time axis and is not a day.
-		const undated = costOverDays([work('', 1_000, 200)], RATE);
-		expect(undated.days).toEqual([]);
-	});
-
-	test('changing either operator-owned price recomputes the same dated cohort', () => {
-		const shapes = costOverDays(RUNS, { ...RATE, inputPerMillion: 0.4, outputPerMillion: 0.3 });
-		expect(shapes.days.map((day) => [day.date, day.items])).toEqual([
-			['2026-09-01', 4], ['2026-09-02', 8], ['2026-09-03', 2]
-		]);
-		expect(shapes.runningTotal).toBeCloseTo(1.61, 12);
 	});
 });
 

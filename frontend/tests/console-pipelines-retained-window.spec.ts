@@ -44,7 +44,7 @@ test('retained month prices and native window chrome remain honest on a narrow v
 	await page.goto('/console/');
 	await expect(page.locator('[data-window-preset="1"] input')).toBeEnabled();
 	await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-busy', 'false');
-	await expect(page.locator('[data-window-status]')).toContainText('Showing 1 day, to ');
+	await expect(page.locator('[data-window-status]')).toContainText('Main packed window: ');
 	const before = await belowTheStrip(page);
 	expect(before.length).toBeGreaterThan(3);
 	for (const preset of presets().filter((days) => days > 1)) {

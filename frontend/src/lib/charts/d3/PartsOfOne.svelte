@@ -13,6 +13,7 @@
 	import type { PartsGeometry } from './partsOfOne';
 	import { factsOf, markReadout, recordsOf, type ReadoutFacts } from '$lib/charts/readout';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
+	import { percentOf } from '$lib/charts/rank';
 
 	let {
 		geometry,
@@ -73,14 +74,19 @@
 						class:overlapping={geometry.overlapping}
 						class:separated={separateSegments}
 					>
-						{#each row.segments as segment (segment.label)}
+						<span class="parts-fills" class:overlapping={geometry.overlapping}
+							class:chart-bar-stack={!geometry.overlapping}
+							style:--chart-filled-width={percentOf((row.total ?? geometry.max) / geometry.max)}>
+						{#each row.segments.filter((segment) => segment.value > 0) as segment (segment.label)}
 							<span
 								class="parts-segment"
+								class:chart-bar={geometry.overlapping}
 								class:emphasized={segment.emphasized}
 								aria-label={`${segment.label}: ${segment.value}`}
 								style="inset-inline-start: {segment.start}; inline-size: {segment.size}; background: var({segment.token})"
 							></span>
 						{/each}
+						</span>
 					</span>
 					{#if showTotal && row.total !== null}<span class="parts-total">{row.total}</span>{/if}
 				</li>
@@ -152,6 +158,9 @@
 		position: absolute;
 		inset-block: 0;
 	}
+
+	.parts-fills { position: absolute; inset: 0; }
+	.parts-fills.overlapping { display: contents; }
 
 	.parts-track.separated .parts-segment {
 		border-inline-end: 1px solid var(--color-surface);

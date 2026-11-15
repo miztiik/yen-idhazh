@@ -4,9 +4,8 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { FLEET_COLUMNS } from '../src/lib/charts/fleet';
-import { platformMixQuery, runShardsQuery } from '../src/lib/console/queries/machine';
+import { platformMixQuery, runShardsQuery, slowerOnSameWorkQuery } from '../src/lib/console/queries/machine';
 import { summaryLengthQuery } from '../src/lib/console/queries/model';
-import { slowerOnSameWorkQuery } from '../src/lib/console/queries/pipelines';
 import { compareRuns, failedRuleQuery, hostKey, joinItemHosts, newestRunRows } from '../src/lib/console/queries/shared';
 import { feedsFailedQuery } from '../src/lib/console/queries/voices';
 import { modelThroughput } from '../src/lib/console/model/model-throughput';
@@ -120,7 +119,7 @@ function host(day: string): Row {
 		version: '2026-10-10', date: day, run_id: `${day}-10`, job: 'work',
 		pipeline_name: null, task_name: null, shard: 0,
 		fingerprint: '0123456789abcdef', fingerprint_version: 2,
-		cpu_model: 'machine-a', cpu_logical_processors: 8, model_load_ms: 2000,
+		cpu_model: 'machine-a', l3_cache_bytes: 32 * 2 ** 20, cpu_logical_processors: 8, model_load_ms: 2000,
 		job_seconds: 30, server_prompt_tokens: 200, server_prompt_seconds: 1,
 		cores: null, threads: null, mhz_max: null, mhz_at_probe: null
 	};
@@ -255,7 +254,7 @@ test('the real three-ledger door anchors at the oldest end and asks each ledger 
 	expect(machines.rows).toEqual(['2026-09-24', '2026-09-25'].map(host));
 	expect(platformMixQuery.columns).toEqual([
 		'version', 'date', 'run_id', 'job', 'pipeline_name', 'task_name', 'shard', 'fingerprint', 'fingerprint_version',
-		'cpu_model', 'cpu_logical_processors', 'model_load_ms',
+		'cpu_model', 'l3_cache_bytes', 'cpu_logical_processors', 'model_load_ms',
 		'job_seconds', 'server_prompt_tokens', 'server_prompt_seconds',
 		'cores', 'threads', 'mhz_max', 'mhz_at_probe'
 	]);
@@ -348,7 +347,7 @@ test('a ledger starting after the common data end is quiet rather than an invert
 	expect(rangeFor(slowerOnSameWorkQuery, 3, reach, PRESETS)).toEqual({ state: 'quiet' });
 });
 
-test('one name and range shares its promise; a new range replaces it and explicit retry asks again', async ({}, info) => {
+test('recent windows survive tab and preset changes; eviction and explicit retry read again', async ({}, info) => {
 	const root = info.outputPath('held-range');
 	await writeWindowLedgers(root);
 	const door = diskDoor(root);
@@ -356,7 +355,7 @@ test('one name and range shares its promise; a new range replaces it and explici
 	const reader = createQueryWindow({
 		reach: door.reach,
 		rows: (ledger, options) => { calls += 1; return door.rows(ledger, options); }
-	});
+	}, 2);
 	const wide = windowRange(3, '2026-09-26', '2026-09-24');
 	const narrow = windowRange(1, '2026-09-26', '2026-09-24');
 	const first = reader.sliceOnce(slowerOnSameWorkQuery, wide);
@@ -366,17 +365,27 @@ test('one name and range shares its promise; a new range replaces it and explici
 	expect(next).not.toBe(first);
 	expect((await next).rows).toHaveLength(1);
 	const back = reader.sliceOnce(slowerOnSameWorkQuery, wide);
-	expect(back).not.toBe(first);
+	expect(back).toBe(first);
 	await back;
+	expect(calls).toBe(2);
+	const otherShape = { ...slowerOnSameWorkQuery, columns: ['cpu_model'] };
+	expect((await reader.sliceOnce(otherShape, wide)).rows[0]).toEqual({ cpu_model: 'machine-a' });
+	expect(reader.sliceOnce(slowerOnSameWorkQuery, wide)).toBe(first);
 	expect(calls).toBe(3);
+	const middle = windowRange(2, '2026-09-26', '2026-09-24');
+	await reader.sliceOnce(slowerOnSameWorkQuery, middle);
+	const evicted = reader.sliceOnce(slowerOnSameWorkQuery, narrow);
+	expect(evicted).not.toBe(next);
+	await evicted;
+	expect(calls).toBe(5);
 	reader.retryAsks([slowerOnSameWorkQuery]);
 	const retried = reader.sliceOnce(slowerOnSameWorkQuery, wide);
 	expect(retried).not.toBe(back);
 	await retried;
-	expect(calls).toBe(4);
+	expect(calls).toBe(6);
 	reader.retryAsks();
 	await reader.sliceOnce(slowerOnSameWorkQuery, wide);
-	expect(calls).toBe(5);
+	expect(calls).toBe(7);
 });
 
 test('missing and unreachable slices are retried using real repaired files, not cached empty successes', async ({}, info) => {

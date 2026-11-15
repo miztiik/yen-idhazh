@@ -12,6 +12,7 @@
 	import { useChartFrame } from '$lib/charts/label-context';
 	import { useNumberFormat } from '$lib/number-format-context';
 	import { grouped } from '$lib/charts/series';
+	import { shortDate } from '$lib/format';
 	import type { ConsoleConfig, ChartConfig } from '$lib/server/config';
 
 	let { days, read, window, knobs, chart }: {
@@ -27,6 +28,9 @@
 </script>
 
 <div data-visual-attempt-view="refusals" data-record-incomplete={evidence.state !== 'read' || evidence.notes.length > 0 ? '' : undefined}>
+	{#if evidence.state === 'read' && days.length > 0}
+		<p data-source-window data-range-from={window.start} data-range-to={window.end}>Packed visual attempts: {shortDate(window.start)}{window.start === window.end ? '' : ` - ${shortDate(window.end)}`} UTC.</p>
+	{/if}
 	<p>Counts of the first failed plan check recorded on each UTC day, including plans later written. These are not failed articles or counts of all omitted visuals.</p>
 	<p data-comparison="Each recorded reason has a daily line on the same UTC dates and count scale.">Each recorded reason has a daily line on the same UTC dates and count scale. A gap is not zero.</p>
 	{#each evidence.notes as note}<p data-record-note>{note}</p>{/each}

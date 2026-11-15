@@ -1,6 +1,6 @@
 # What sits above every console route
 
-**Last Updated**: 2026-11-12
+**Last Updated**: 2026-11-14
 
 How the console keeps navigation, the selected window and dated evidence in reach
 without putting a screen of repeated status ahead of the first useful reading.
@@ -36,8 +36,8 @@ before-paint theme resolution are unchanged.
 ## Route identity and the window lead the evidence
 
 The content column starts with the active route's visible heading and the days
-control. The title, window control and closed `Data dates (UTC)` disclosure form
-one sticky band. Below
+control. The title, window control, compact source-labelled UTC ranges and
+closed `Data sources` disclosure form one sticky band. Below
 the first breakpoint, a labelled native days select replaces the radio tiles,
 keeping the frozen band compact. Its measured height supplies the document's
 scroll padding so anchors and focused controls are not covered. The explorer
@@ -73,12 +73,15 @@ site title. Client navigation updates it just as a direct load does.
 
 ## Run completion and record reach are different dates
 
-The closed `Data dates (UTC)` disclosure holds the native window's existing
-reach and short-record explanation, the separate published-day bounds on mixed
-routes, and the last console update from the band's `generated_at`. A pending
-or missing native reach supplies no data date. Opening this metadata never
-reanchors either source. Per-panel bounds still name independently clamped or
-snapshot evidence.
+The visible date line distinguishes `Published charts` from the `Main packed
+window`; neither is a page-wide endpoint. The latter names both UTC bounds
+instead of an unqualified `Showing ... to ...` claim. A short record names how
+many requested days are available. Pending or missing reach supplies no data
+date. Per-panel bounds name independently clamped, private packed or snapshot
+evidence. The date readings fill the row so the closed disclosure stays
+end-aligned when a pending packed record arrives. `Data sources` explains build-time counts and private chart inputs,
+compact ledgers rather than raw files, and `Site built` from the band's
+`generated_at`. Opening it never reanchors a source.
 
 The last-update timestamp is metadata, not a claim that every ledger reaches
 that instant. A fresh completion produces no standing paragraph. The browser
@@ -121,7 +124,7 @@ document.
 ## Design rationale
 
 The rail keeps labelled destinations reachable without a wide top strip.
-Keeping source dates beside the control, on demand, distinguishes evidence
+Keeping compact source dates visible beside the control distinguishes evidence
 reach from run completion without delaying the first useful chart. Removing
 repeated summaries trades immediate global alerts for space to compare the
 actual readings. Letting the brand scroll away avoids a second fixed header

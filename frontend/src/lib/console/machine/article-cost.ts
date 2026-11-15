@@ -18,6 +18,7 @@
  */
 import { quantile } from '$lib/charts/machine';
 import { percentOf } from '$lib/charts/rank';
+import { shardKey } from './shard-key';
 
 /** Milliseconds to seconds, and hundredths to a fraction. Format literals: the
  * ledger writes milliseconds and whole percent, and neither is a setting. */
@@ -92,21 +93,6 @@ function cell(value: string | undefined): number | null {
 	if (value === undefined || value.trim() === '') return null;
 	const parsed = Number(value);
 	return Number.isFinite(parsed) ? parsed : null;
-}
-
-/** The run and shard an item ran on, which is what a machine record is keyed by. */
-function shardKey(
-	date: string,
-	runId: string,
-	job: string | null | undefined,
-	shard: number | string | null,
-	pipelineName?: string | null,
-	taskName?: string | null
-): string | null {
-	if (shard === null || (typeof shard === 'string' && shard.trim() === '') ||
-		!Number.isSafeInteger(Number(shard)) || Number(shard) < 0) return null;
-	const task = pipelineName && taskName ? [pipelineName, taskName] : [job || 'work'];
-	return JSON.stringify([date, runId, task, Number(shard)]);
 }
 
 function figureOf(values: readonly number[], outOf: number): CostFigure {

@@ -1,6 +1,8 @@
 {
-  "entries": [],
+  "entries": [
+    {"bytes": 17215,"covers": "2026-09","lost_days": [],"rows": 18,"set_aside": 0,"state": "packed"}
+  ],
   "ledger": "fitted-thresholds",
   "period": "monthly",
-  "version": "2026-10-07"
+  "version": "2026-10-25"
 }

@@ -95,6 +95,11 @@ for (const [id, name] of PANELS) {
 			expect(absent).toContain('data-record-note');
 			expect(absent).not.toContain('data-empty=');
 			expect(absent).not.toContain('data-count=');
+		} else if (name === 'AtAGlance') {
+			// Its two named cards already identify the comparison. A narrated
+			// caption must not return just to satisfy an old markup gate.
+			expect(quiet).not.toContain('data-comparison=');
+			expect(absent).not.toContain('data-comparison=');
 		} else {
 			expect(absent).toContain('data-comparison=');
 		}

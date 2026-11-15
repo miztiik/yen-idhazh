@@ -8,13 +8,12 @@
 	 * INSIDE the reserved box rather than under it - a note under it would add
 	 * its own height and shift the page the moment a state resolved.
 	 *
-	 * What it draws while waiting is the axis frame and the tick marks, and no
-	 * numbers (`$lib/charts/skeleton`). A plain grey rectangle would keep the
-	 * room and say nothing about what is coming.
+	 * While waiting it draws the axis frame, tick marks and visible loading
+	 * words, but no invented values (`$lib/charts/skeleton`).
 	 *
 	 * There is no spinner. A spinner suits one wait, a blank page and a person
 	 * who cannot act; the console has a dozen waits and an operator who can act
-	 * from the first frame (Susan, maintainer decision D3).
+	 * from the first frame.
 	 */
 	import type { Snippet } from 'svelte';
 	import { skeletonFrame } from '$lib/charts/skeleton';
@@ -54,7 +53,7 @@
 	/** Warn only where something failed. */
 	const tone = $derived(state === 'unreachable' ? 'warn' : 'neutral');
 	/** Month callers retain their own settled words. Ledger callers use the
-	 * shared words inside this frame; loading never prints an answer. */
+	 * shared words inside this frame; loading prints progress, not an answer. */
 	const settledWord = $derived(record && (state === 'quiet' || state === 'missing' || state === 'unreachable') ? STATE_WORDS[state] : null);
 	const passthrough = $derived(state !== 'loading' && state !== 'unreachable' && settledWord === null);
 </script>
@@ -64,7 +63,7 @@
 {:else}
 	<div
 		class="reserved"
-		class:loading={record && state === 'loading'}
+		class:loading={state === 'loading'}
 		data-reserved={name}
 		data-panel-state={state}
 		data-tone={tone}
@@ -126,21 +125,8 @@
 
 		{#if settledWord !== null}
 			<p class="record-state">{settledWord}</p>
-		{:else if state === 'loading' && !record}
-			<!-- The marks that stand where the data will be, inside the same plot
-			     the SVG drew. They carry the `loading` state class, so the sweep is
-			     switched on by an ancestor and every block on the page moves in one
-			     phase (app.css). -->
-			<div
-				class="reserved-plot"
-				aria-hidden="true"
-				style="top: {skeleton.inset.top}; right: {skeleton.inset.right}; bottom: {skeleton.inset
-					.bottom}; left: {skeleton.inset.left}"
-			>
-				{#each skeleton.bars as bar, index (index)}
-					<span class="loading reserved-bar" style="block-size: {(bar * 100).toFixed(2)}%"></span>
-				{/each}
-			</div>
+		{:else if state === 'loading'}
+			<p class="record-state">Loading chart data...</p>
 		{/if}
 	</div>
 {/if}
@@ -171,6 +157,8 @@
 
 	.reserved.loading {
 		background-color: transparent;
+		/* Every loading frame uses the same inherited sweep phase. */
+		--shimmer-band: var(--color-rule-strong);
 	}
 
 	/* A failed fetch is the only one of the four that is a fault, so it is the
@@ -188,16 +176,4 @@
 		block-size: 100%;
 	}
 
-	.reserved-plot {
-		position: absolute;
-		display: flex;
-		align-items: flex-end;
-		gap: 1.6%;
-	}
-
-	.reserved-bar {
-		flex: 1 1 0;
-		min-inline-size: 1px;
-		align-self: flex-end;
-	}
 </style>

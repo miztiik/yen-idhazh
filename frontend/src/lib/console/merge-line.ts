@@ -478,7 +478,7 @@ export function rateWithDenominator(
 	return `${wholePercent(numerator, denominator, mark)}% of ${grouped(denominator, numberFormat)} pairs`;
 }
 
-/** "Could not tell" in words, against the pairs whose two readings agreed: the
+/** "Not sure" in words, against the pairs with matching answers: the
  * only pairs its share is taken over, so the count beside it is theirs.
  *
  * The floor counts those pairs too. Under it the counts print and no share, and
@@ -493,8 +493,9 @@ export function describeUnclear(
 	numberFormat: NumberFormatConfig,
 	mark?: number
 ): string {
-	if (unclear === null || agreed === null) return 'the count of pairs whose readings agreed is unavailable';
-	if (agreed === 0) return 'not counted, no pair agreed';
-	if (agreed < floor) return `${grouped(Math.round(unclear), numberFormat)} of the ${grouped(agreed, numberFormat)} that agreed`;
-	return `${wholePercent(unclear, agreed, mark)}% of the ${grouped(agreed, numberFormat)} that agreed`;
+	if (unclear === null || agreed === null) return 'the count of pairs with matching answers is unavailable';
+	if (agreed === 0) return 'not counted; no pair had matching answers';
+	const pairs = `${grouped(agreed, numberFormat)} ${agreed === 1 ? 'pair' : 'pairs'} with matching answers`;
+	if (agreed < floor) return `${grouped(Math.round(unclear), numberFormat)} of ${pairs}`;
+	return `${wholePercent(unclear, agreed, mark)}% of ${pairs}`;
 }

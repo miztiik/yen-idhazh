@@ -2,7 +2,7 @@
 import { expect, test } from './support/door-page';
 import { type RouteId } from '../src/lib/console/band';
 import { BY_ROUTE } from './support/console-expect/console-window';
-import { monthsInWindow, monthsToFetch, stepPreset, windowOfDays } from '../src/lib/charts/viewport';
+import { daysInWindow, monthsInWindow, monthsToFetch, stepPreset, windowFromDates, windowOfDays } from '../src/lib/charts/viewport';
 import { minus, presets } from './support/console-window/controls';
 import { config, telemetry } from './support/console-window/controls';
 import { createWindowPreference, WINDOW_PREFERENCE_KEY, type WindowStorage } from '../src/lib/console/window-preference';
@@ -97,6 +97,21 @@ test('a step lands on a preset, and stops at the ends rather than wrapping', () 
     // window left by a pan cannot strand the keys.
     expect(stepPreset(21, presets(), 1)).toBe(30);
     expect(stepPreset(21, presets(), -1)).toBe(14);
+});
+test('each chart source supplies its own UTC endpoint without padding past its records', () => {
+    const packed = windowFromDates(['2026-11-11', '2026-10-01', '2026-11-09'], 14);
+    const published = windowFromDates(['2026-10-01', '2026-11-14'], 14);
+    expect(packed).toEqual({ start: '2026-10-29', end: '2026-11-11' });
+    expect(published).toEqual({ start: '2026-11-01', end: '2026-11-14' });
+    if (packed === null) throw new Error('The packed source has recorded dates.');
+    expect(daysInWindow(packed)).toHaveLength(14);
+    expect(windowFromDates(['2026-11-09', '2026-11-11'], 14))
+        .toEqual({ start: '2026-11-09', end: '2026-11-11' });
+    expect(windowFromDates(['2026-11-09', '2026-11-11'], 1))
+        .toEqual({ start: '2026-11-11', end: '2026-11-11' });
+    expect(windowFromDates([], 14)).toBeNull();
+    expect(() => windowFromDates(['2026-02-30'], 14)).toThrow('UTC dates');
+    expect(() => windowFromDates(['2026-11-11'], 0)).toThrow('day count');
 });
 test('the cost of widening is the months not already in hand, and never a 404', () => {
     const available = ['2026-06', '2026-07', '2026-08'];

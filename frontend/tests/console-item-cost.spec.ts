@@ -1,8 +1,8 @@
 /** Native item cost and per-call reuse over bounded rows, with independent numeric oracles. */
 import { expect, test } from '@playwright/test';
-import { nativeItemCost } from '../src/lib/console/pipelines/item-cost';
+import { nativeItemCost } from '../src/lib/console/model/item-cost';
 import { labelHeldMedian, reuseChecks, reuseSeries } from '../src/lib/console/machine/records';
-import { itemCostQuery } from '../src/lib/console/queries/pipelines';
+import { itemCostQuery } from '../src/lib/console/queries/model';
 import { rangeFor, type RouteReach } from '../src/lib/console/queries/window';
 import type { Row } from '../src/lib/data/ledger';
 

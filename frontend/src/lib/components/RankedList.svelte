@@ -4,14 +4,14 @@
 </script>
 
 {#snippet rangeTrack(mark: RangeMark, token = '--chart-2', classes = '')}
-	<span class="range-fill {classes}" style="inline-size: {mark.medianWidth}; background: var({token})"></span>
+	<span class="range-fill chart-bar {classes}" style="inline-size: {mark.medianWidth}; background: var({token})"></span>
 	{#if mark.max !== null}
 		<span class="range-notch" style="inset-inline-start: {mark.notchWidth}"></span>
 	{/if}
 {/snippet}
 
 {#snippet endsTrack(valuePercent: string, endPercent: string | null, vertical = false, outlined = false, token = '--chart-3')}
-	<span class:vertical class:outlined class="ends-fill bar floor" style="{vertical ? `block-size: ${valuePercent}` : `inline-size: ${valuePercent}`}; background: var({token})"></span>
+	<span class:vertical class:outlined class="ends-fill bar floor chart-bar" style="{vertical ? `block-size: ${valuePercent}` : `inline-size: ${valuePercent}`}; background: var({token})"></span>
 	{#if endPercent !== null}
 		<span class:vertical class="ends-notch notch" style={vertical ? `inset-block-end: ${endPercent}` : `inset-inline-start: ${endPercent}`}></span>
 	{/if}
@@ -150,12 +150,14 @@
 						{:else if row.ends}
 							<span class="ranked-range">{@render endsTrack(row.ends.valuePercent, row.ends.endPercent, false, false, '--chart-1')}</span>
 						{:else if row.segments.length > 0}
-							{#each row.segments as part (part.label)}
-								<span class="ranked-part" style="inset-inline-start: {part.start}; inline-size: {part.size}; background: var({part.token})" aria-label="{part.label}: {part.value}"></span>
-							{/each}
+							<span class="ranked-parts chart-bar-stack" style:--chart-filled-width={row.percent}>
+								{#each row.segments.filter((part) => part.value > 0) as part (part.label)}
+									<span class="ranked-part" style="inset-inline-start: {part.start}; inline-size: {part.size}; background: var({part.token})" aria-label="{part.label}: {part.value}"></span>
+								{/each}
+							</span>
 						{:else}
 							<span
-								class="ranked-bar"
+								class="ranked-bar chart-bar"
 								data-ranked-cell="bar"
 								style="inline-size: {row.percent}"
 							></span>
@@ -187,12 +189,13 @@
 	.range-fill { display: block; block-size: 100%; }
 	.range-notch { position: absolute; inset-block: 0; inline-size: 2px; background: var(--chart-marker); transform: translateX(-1px); }
 	.ends-fill { display: block; block-size: 100%; background: var(--chart-3); }
-	.ends-fill.vertical { inline-size: 100%; border-radius: 1px 1px 0 0; }
+	.ends-fill.vertical { inline-size: 100%; }
 	.ends-fill.outlined { outline: 1px solid var(--color-text); outline-offset: 0; }
 	.ends-notch { position: absolute; inset-block: 0; inline-size: 2px; background: var(--color-text); }
 	.ends-notch.vertical { inset-inline: 0; inset-block-start: auto; inline-size: auto; block-size: 2px; }
 	.ranked-range { display: block; position: relative; block-size: 12px; background: var(--color-surface-sunken); }
 	.ranked-part { position: absolute; inset-block: 0; }
+	.ranked-parts { position: absolute; inset: 0; }
 	.ranked-rule { position: absolute; inset-block: -4px; border-inline-start: 1px dashed var(--chart-marker); }
 	.ranked-rule span { position: absolute; inset-block-end: 100%; font-size: var(--text-xs); color: var(--color-text-secondary); white-space: nowrap; }
 	.ranked-rule-labels { display: grid; min-inline-size: 0; }

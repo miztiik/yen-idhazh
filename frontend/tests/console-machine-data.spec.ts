@@ -431,7 +431,7 @@ test.describe('native context requests against recorded slot limits', () => {
         ]);
         expect(reading.cut).toBe(5);
         expect(reading.label).toEqual([200, 1000, 400, 900, 90000]);
-        expect(reading.rules).toEqual([{ at: 900, label: "Cut articles' middle label request: 900 tokens" }]);
+        expect(reading.rules).toEqual([{ at: 900, label: "Cut articles' median (p50) label request: 900 tokens" }]);
     });
     test('the logarithmic request population excludes zero and invalid cells without losing a recorded zero cap', () => {
         const reading = contextReadings([

@@ -1,8 +1,8 @@
 /**
  * How far does a ledger reach, read from its indexes and nothing else?
  *
- * A console route reads only the days of its window, which ends on the site's
- * newest published day, so it learns from the indexes alone how far a ledger is
+ * A console route reads only the days of its source's window, so it learns
+ * from the indexes alone how far a ledger is
  * packed and where its rows stop, before or instead of a slice.
  * `ledgerReach()` in `ledger.ts` answers with this module. It reads `daily.json`,
  * `monthly.json` and `yearly.json` at the same time, through the page keeper, so

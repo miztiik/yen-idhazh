@@ -38,7 +38,7 @@
 				{@const ticks = dayTicks(strip.bars.map((bar) => bar.date),
 					{ density: chart.tick_density, columns, bounds: [0, width], labels: box.labels })}
 				{@const readout = readoutOf({ type: 'dateSeries', columns: strip.bars.map((bar) => shortDate(bar.date)),
-					series: [{ label: card.label, swatch: 'var(--chart-3)', values: strip.bars.map((bar) => bar.measured ? bar.published : null), format: String }],
+					series: [{ label: card.label, swatch: null, values: strip.bars.map((bar) => bar.measured ? bar.published : null), format: String }],
 					notMeasured: 'No published-day record', resting: 'newest' })}
 				<div data-readout-columns={readout.columns.length} use:observeWidth={(width) => widths = { ...widths, [card.name]: width }}>
 					<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
@@ -50,7 +50,7 @@
 							onSelect: (at) => selected[card.name] = at }}>
 						{#each strip.bars as bar (bar.date)}
 							{@const barHeight = bar.published === 0 ? 0 : Math.max(1, bar.height * plotHeight)}
-							<rect x={bar.x * width} width={bar.width * width} y={plotHeight - barHeight} height={barHeight} fill="var(--chart-3)"
+							<rect x={bar.x * width} width={bar.width * width} y={plotHeight - barHeight} height={barHeight} fill="var(--chart-1)"
 								data-published-bar={bar.date} data-published={bar.published} />
 						{/each}
 						{#each ticks as tick (tick.index)}
@@ -63,14 +63,13 @@
 							{/if}
 						{/each}
 					</svg>
-					<ChartReadout {readout} at={selected[card.name]} name="published-{card.name}" maxShare={chart.readout_max_share} hint="" />
+					<ChartReadout {readout} at={selected[card.name]} name="published-{card.name}" maxShare={chart.readout_max_share} compact hint="" />
 				</div>
 			{/snippet}
 			<KpiCard label={card.label} value={String(card.strip.total)} lede={index === 0} rule={noRule} {trend} />
 		{/each}
 	</div>
 {/if}
-<p data-comparison="Articles published against visuals published over the same days.">Articles published against visuals published over the same days.</p>
 <style>
 	.auto-grid :global(.kpi) { background: var(--color-surface); }
 	svg { inline-size: 100%; max-inline-size: 100%; block-size: auto; }

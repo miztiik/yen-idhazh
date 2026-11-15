@@ -2,6 +2,6 @@
 import type { RouteExpect } from './index';
 
 export const EXPECT: RouteExpect | null = {
-	windowed: ['feeds-failed', 'fetch-time', 'source-cuts', 'watchlist'],
+	windowed: ['feeds-failed', 'fetch-time', 'source-cuts'],
 	dailyTable: false
 };

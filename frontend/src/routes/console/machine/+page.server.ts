@@ -11,12 +11,7 @@ export function load() {
 			contextWindow: inferenceConfig().n_ctx,
 			jobTimeoutSeconds: runConfig().shard_timeout_minutes * 60,
 			recording: observability.host_fingerprint,
-			gradients: themeConfig().gradient_enabled,
-			rate: {
-				currency: observability.cost_currency,
-				inputPerMillion: observability.cost_input_per_million,
-				outputPerMillion: observability.cost_output_per_million
-			}
+			gradients: themeConfig().gradient_enabled
 		}
 	};
 }

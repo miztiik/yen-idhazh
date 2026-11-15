@@ -5,8 +5,8 @@ import { WINDOW_PREFERENCE_KEY } from '../src/lib/console/window-preference';
 
 const PANELS = [
 	'two-clocks', 'slower-machines',
-	'platform-mix', 'tail-trend', 'closest-to-memory', 'memory-held',
-	'context-headroom', 'article-cost', 'prompt-reuse', 'read-against-written', 'counterfactual-cost'
+	'platform-mix', 'slower-on-same-work', 'closest-to-memory', 'memory-held',
+	'context-headroom', 'article-cost', 'prompt-reuse', 'read-against-written'
 ];
 const NATIVE = /\/state\/(?:compact|raw)\/(?:item-health|host-fingerprint|run-shards)\//;
 
@@ -109,6 +109,17 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 	await expect(fleet).toHaveCount(1);
 	expect(Number(await fleet.getAttribute('data-fleet-placements'))).toBeGreaterThan(0);
 	const history = page.locator('[data-console-panel-id="platform-mix"]');
+	await expect(history).not.toContainText('Select a day for machine counts and jobs.');
+	await expect(history).toContainText('Counts are recorded jobs, not unique physical machines.');
+	const cacheLegend = history.locator('[data-fleet-identity-key]');
+	await expect(cacheLegend).toHaveAttribute('aria-label', 'Reported L3 capacity, largest first');
+	expect(await cacheLegend.evaluate((legend) =>
+		legend.getBoundingClientRect().top >= legend.previousElementSibling!.getBoundingClientRect().bottom))
+		.toBe(true);
+	await history.screenshot({ path: test.info().outputPath('hardware-cache-wide-dark.png') });
+	await page.getByRole('button', { name: 'Switch to the light theme' }).click();
+	await history.screenshot({ path: test.info().outputPath('hardware-cache-wide-light.png') });
+	await page.getByRole('button', { name: 'Switch to the dark theme' }).click();
 	const square = history.locator('[data-fleet-square]:not([data-fleet-square="unrecorded"])').first();
 	await square.scrollIntoViewIfNeeded();
 	await square.hover();
@@ -261,6 +272,7 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 		return label.getBoundingClientRect().top - context.getBoundingClientRect().bottom;
 	}), 'the threshold label must not overlap the source readings on a phone').toBeGreaterThanOrEqual(0);
 	await page.screenshot({ path: test.info().outputPath('hardware-narrow-light.png') });
+	await history.screenshot({ path: test.info().outputPath('hardware-cache-narrow-light.png') });
 	await tokens.screenshot({ path: test.info().outputPath('run-token-lines-narrow.png') });
 	await expect.poll(contextFits).toBe(true);
 	await expect.poll(clockRulesFit).toBe(true);
@@ -288,11 +300,13 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 	await expect(page.locator('[data-console-panel-id="slowest-articles"]')).toHaveCount(1);
 	await expect(page.locator('[data-slowest-run]')).toBeVisible();
 	await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-days', '7');
+	const beforeHardwareReturn = [...nativeRequests];
 	await page.getByText('Console menu', { exact: true }).click();
 	await page.locator('[data-console-tab="machine"]').click();
 	await settled(page);
 	await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-days', '7');
 	await expect(page).toHaveTitle(/Hardware/);
+	expect(nativeRequests, 'returning to Hardware reuses the loaded native files').toEqual(beforeHardwareReturn);
 	expect(storageWarnings.some((message) => message.includes('could not be read'))).toBe(true);
 	expect(storageWarnings.some((message) => message.includes('could not be saved'))).toBe(true);
 
@@ -370,7 +384,7 @@ test('actual prerendered Hardware contains words and reserved frames, never ledg
 		await expect(page.locator('[data-panel-query][data-machine-panel-state="loading"]')).toHaveCount(PANELS.length);
 		await expect(page.locator('[data-panel-query] svg')).toHaveCount(PANELS.length);
 		await expect(page.locator('[data-panel-query] svg rect:not([data-reserved-ground]), [data-panel-query] svg path')).toHaveCount(0);
-		await expect(page.locator('[data-console-standing]')).toHaveText('');
+		await expect(page.locator('[data-console-standing]')).toHaveText('Loading chart data. Previously loaded windows are reused.');
 		await expect(page.locator('[data-machine-refused], [data-cost-figures], [data-clock-pair], [data-fleet-job]')).toHaveCount(0);
 		const html = await response!.text();
 		expect(html).not.toMatch(/machineCounters:|machineRuns:|runShards:|RunManifest|RunPlan/);

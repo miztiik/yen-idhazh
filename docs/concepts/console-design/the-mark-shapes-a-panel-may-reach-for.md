@@ -1,6 +1,6 @@
 # The mark shapes a panel may reach for
 
-**Last Updated**: 2026-11-11
+**Last Updated**: 2026-11-12
 
 Ten chart types, the house style they draw with, five named mark shapes and
 three panel-level controls. **A panel is built from one chart type, and a mark
@@ -412,7 +412,7 @@ Machine keys still use `machine-colour.ts`; a spread uses its series' stop.
 | free memory | no fill; the empty track |
 | robots check | `--chart-3` |
 | waiting for headers; retries; connecting | `--chart-2`; `--chart-4`; `--chart-5` |
-| authority; recency; lens; watchlist and its day; carriage | `--chart-1`; `--chart-2`; `--chart-4`; `--chart-5`; `--chart-7` |
+| authority; recency; lens; watchlist; carriage | `--chart-1`; `--chart-2`; `--chart-4`; `--chart-5`; `--chart-7` |
 | cut off at the length limit; other ending; ended on its own | `--chart-4`; `--chart-2`; `--chart-axis` ground |
 | numbers not in the article; does not match; opening left out; maybe as fact | `--chart-1`; `--chart-2`; `--chart-4`; `--chart-5` |
 
@@ -624,30 +624,9 @@ values and readout. This is a shared shape contract, not a claim that current
 FailureMix or Hardware prompt reuse offers a shape switch. FailureMix draws one
 stack of failed-row counts; native prompt reuse draws its dated call readings.
 
-**What the widened form costs.** A running total IS a re-shape, so the identical
-array test alone would refuse a cumulative line - and the only shape a cost has
-that answers whether it is growing is the cumulative one. Widening the test to
-one builder call admits it, and the price is that the byte-identical assertion no
-longer covers every switch. A panel whose shapes come out of one call but are not
-the same array owes its own oracle comparing the two shapes' numbers.
-
-**Counterfactual cost retains one arithmetic result.** `costOverDays` walks the
-qualified runs once and returns dated reading cost, writing cost and running
-total. Native `MachineCharts.svelte` draws that running total and prints the
-reading, writing, window and per-article figures from the same result. Its
-rate controls recompute the result without fetching. The last dated total equals
-the whole-window total, and each day's total is reading plus writing.
-`console-machine.spec.ts` checks that arithmetic. The current native panel has
-no daily-bars/cumulative-line switch; the helper's readings do not imply one.
-
 One control per panel, never one per series and never a preference that follows
 the reader across the site. A Sankey is not a line and a histogram is not a
 stacked bar; forcing the control everywhere would mean massaging data to fit it.
-
-**A running currency total is a counterfactual, never a bill.** The native panel
-prints the currency, configured or operator-supplied rates and their source.
-Both token counts must be recorded for a row to enter its priced cohort;
-cached prompt tokens still count in that counterfactual input price.
 
 ## A comparison drawn in one unit can be confidently wrong, so it carries both
 

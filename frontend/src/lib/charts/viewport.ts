@@ -75,6 +75,23 @@ export function windowOfDays(day: string, days: number, anchor: TodayAnchor): Ti
 	return { start: shift(end, -(days - 1)), end };
 }
 
+/** A selected span ends at its own source's newest date, never at another source or the clock. */
+export function windowFromDates(dates: readonly string[], days: number): TimeWindow | null {
+	if (!Number.isSafeInteger(days) || days < 1) throw new Error('A data window needs a positive whole day count.');
+	let first: string | null = null;
+	let last: string | null = null;
+	for (const date of dates) {
+		if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(toDay(date).getTime()) || dayKey(toDay(date)) !== date) {
+			throw new Error('A data window needs YYYY-MM-DD UTC dates.');
+		}
+		if (first === null || date < first) first = date;
+		if (last === null || date > last) last = date;
+	}
+	if (first === null || last === null) return null;
+	const span = windowOfDays(last, days, 'right');
+	return { start: first > span.start ? first : span.start, end: last };
+}
+
 export function defaultWindow(day: string, config: ViewportConfig): TimeWindow {
 	return windowOfDays(day, config.default_window_days, config.today_anchor);
 }

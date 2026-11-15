@@ -161,7 +161,10 @@ function reference(
 			? 0
 			: visible.findIndex((item) => item.item_id === wanted) + 1;
 	const shown = Math.max(shownCount || PAGE, reach);
-	const paged = visible.filter((item, index) => index < shown || leading.has(item.item_id));
+	const paged = [
+		...visible.filter((item, index) => index < PAGE || leading.has(item.item_id)),
+		...visible.filter((item, index) => index >= PAGE && index < shown && !leading.has(item.item_id))
+	];
 	return {
 		matched: matched.length,
 		visible: ids(visible),
@@ -195,7 +198,7 @@ function shipped(
 	const reach =
 		wanted === '' || leading.has(wanted) || list.wantedRow < 0 ? 0 : list.wantedRow + 1;
 	const shown = Math.max(shownCount || PAGE, reach);
-	const paged = revealed(list.visible, list.pinnedRows, leading, shown);
+	const paged = revealed(list.visible, list.pinnedRows, leading, shown, PAGE);
 	return {
 		matched: list.matched,
 		visible: ids(list.visible),
@@ -262,6 +265,19 @@ const ADDRESSES = [
 ];
 
 test.describe('the day list', () => {
+	test('loading more appends unseen stories without moving already-visible leads', () => {
+		const list = shortlist(INDEX, null, null, PINNED, '');
+		const leading = new Set(leadingStories(DAY.leads, list.visible).map((story) => story.item_id));
+		let previous: DigestItem[] = [];
+		for (let shown = PAGE; shown < list.visible.length + PAGE; shown += PAGE) {
+			const next = revealed(list.visible, list.pinnedRows, leading, shown, PAGE);
+			expect(ids(next.slice(0, previous.length))).toEqual(ids(previous));
+			expect(new Set(ids(next)).size).toBe(next.length);
+			previous = next;
+		}
+		expect(ids(previous).sort()).toEqual(ids(list.visible).sort());
+	});
+
 	test('draws the same stories in the same order as the arithmetic it replaces', () => {
 		const drift: string[] = [];
 		let cases = 0;

@@ -27,7 +27,7 @@ export interface RouteStanding {
 
 export function routeStanding(reading: RouteStanding): string {
 	if (!Number.isInteger(reading.days) || reading.days < 1) throw new Error('A route standing needs a positive day count.');
-	if (reading.state === 'loading') return reading.shimmer ? 'Fetching the record.' : '';
+	if (reading.state === 'loading') return 'Loading chart data. Previously loaded windows are reused.';
 	if (reading.state === 'unreachable') {
 		return `Part of the record did not arrive, so ${reading.unreachable} ${reading.unreachable === 1 ? 'panel has' : 'panels have'} nothing to draw.`;
 	}
@@ -46,7 +46,7 @@ export interface RecordWindow {
 }
 
 /** Freshness is anchored on the returned record, never on the current clock. */
-export function recordWindowSentence(record: RecordWindow): string {
+export function recordWindowSentence(record: RecordWindow, label?: string): string {
 	if (!Number.isSafeInteger(record.asked) || record.asked < 1) throw new Error('A record window needs a positive preset.');
 	if (record.first === null || record.through === null) return '';
 	if (!isDay(record.first) || !isDay(record.through)) throw new Error('A record window needs ordered UTC days.');
@@ -56,6 +56,11 @@ export function recordWindowSentence(record: RecordWindow): string {
 	const dayMs = 86_400_000;
 	const available = Math.floor((end - start) / dayMs) + 1;
 	const days = Math.min(record.asked, available);
+	if (label !== undefined) {
+		const from = new Date(end - (days - 1) * dayMs).toISOString().slice(0, 10);
+		const span = from === record.through ? shortDate(from) : `${shortDate(from)} - ${shortDate(record.through)}`;
+		return `${label}: ${span} UTC.${days < record.asked ? ` ${days} of ${record.asked} requested days are available.` : ''}`;
+	}
 	const shown = `Showing ${days} ${days === 1 ? 'day' : 'days'}, to ${shortDate(record.through)}.`;
 	if (available >= record.asked) return shown;
 	const fills = new Date(start + (record.asked - 1) * dayMs).toISOString().slice(0, 10);

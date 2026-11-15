@@ -135,6 +135,53 @@ test('a reader can load stories, filter the day and keep the layout usable on a 
 	await expect(searchOtherDays).toHaveCSS('clip-path', 'inset(50%)');
 	await expect(page.locator('[data-filter-note]')).toHaveCount(0);
 
+	// Topic and All links change selection, not the reading shell.
+	const topic = page.locator('[data-topic-row] a').nth(1);
+	const topicHref = await topic.getAttribute('href');
+	await topic.click();
+	await expect(page).toHaveURL(new URL(topicHref!, page.url()).href);
+	await dayReady(page);
+	await expectFullArticleWidth();
+	const all = page.getByRole('link', { name: /^All \d+/ });
+	const allHref = await all.getAttribute('href');
+	await all.click();
+	await expect(page).toHaveURL(new URL(allHref!, page.url()).href);
+	await dayReady(page);
+	await expectFullArticleWidth();
+	const datedLeading = await page.locator('[data-leading]').boundingBox();
+	const datedFirst = await stories.first().boundingBox();
+	expect(datedLeading!.y + datedLeading!.height).toBeLessThanOrEqual(datedFirst!.y);
+	const deepId = await stories.last().getAttribute('id');
+	await page.goto(`${new URL(page.url()).pathname}#${deepId}`);
+	await expect(page.locator(`article[id="${deepId}"]`)).toBeFocused();
+	await expectFullArticleWidth();
+	await page.goto('/');
+	await dayReady(page);
+	const originalLink = stories.first().getByRole('link', { name: 'Read the original' });
+	// Exercise the real read handler without leaving the local published fixture.
+	await originalLink.evaluate((link) => link.addEventListener('click', (event) => event.preventDefault(), { once: true }));
+	await originalLink.click();
+	const readingControls = page.getByRole('region', { name: 'Reading controls' });
+	await expect(readingControls).toContainText('1 story marked read');
+	await readingControls.getByRole('button', { name: 'Hide what I have read' }).click();
+	await expect(readingControls.getByRole('button', { name: 'Show everything' })).toBeVisible();
+	const forget = readingControls.getByRole('button', { name: 'Forget what I have read' });
+	await forget.click();
+	await expect(forget).toBeFocused();
+	await expect(readingControls).toContainText('Read marks cleared for this day.');
+	const bottomOrder = await readingControls.evaluate((controls) => {
+		const days = document.querySelector('[data-more-days]');
+		return days !== null && Boolean(controls.compareDocumentPosition(days) & Node.DOCUMENT_POSITION_FOLLOWING);
+	});
+	expect(bottomOrder).toBe(true);
+	await page.emulateMedia({ reducedMotion: 'reduce' });
+	await page.locator('[data-reader-top]').focus();
+	await page.keyboard.press('Enter');
+	await expect(page.getByRole('region', { name: 'About today' }).getByRole('heading', { level: 1 })).toBeFocused();
+	await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+	await expect(page.locator('[data-reader-top]')).toHaveCount(0);
+	await page.emulateMedia({ reducedMotion: 'no-preference' });
+
 	const build: BuildRecord = JSON.parse(readFileSync(
 		join(process.cwd(), '..', 'backend', 'var', 'checks', 'build.json'), 'utf8'
 	));

@@ -91,7 +91,7 @@ They now split by what they are a claim about.
 
 **The confidence sentence stays below, and that is the reason for the whole split.** It is a claim about our summary. Printing "our summary leaves out names or figures from the opening" above a headline the reader has not read is a disclaimer on nothing.
 
-**Below the summary is document order.** The home page also paints the footer below the summary. On other reading routes, the footer can move into a column beside the prose at the side-rail breakpoint. The document order remains the same without stylesheets and for screen readers.
+**Below the summary is document order.** Home, dated and topic pages also paint the footer below the summary. Archive results can move it into a column beside the prose at the side-rail breakpoint. The document order remains the same without stylesheets and for screen readers.
 
 **What it weighs: nothing worth a sentence, which is the answer that had to be measured.** Two builds on a developer machine / / node 24.12.0, 2026-09-01, over the same 12 committed days and 4,468 items - one of this branch, one of the same worktree with the five changed source files checked out at `8d658de3`. `gzip -9` on each prerendered document, treated minus control:
 

@@ -20,7 +20,7 @@ import { emptyState } from '../src/lib/charts/d3/empty';
 import { readoutOf } from '../src/lib/charts/readout';
 import { SERIES_TOKENS } from '../src/lib/console/series-tokens';
 import { failureRuleRows, failureRules } from '../src/lib/console/failure-rules';
-import { dateSeries, distribution, flow, pairedScatter } from './support/number-format';
+import { dateSeries, distribution, flow, pairedScatter, numberFormat } from './support/number-format';
 
 const frontend = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const box = frame(390, 220);
@@ -63,7 +63,8 @@ async function compileDrawing(name: string): Promise<{ default: Component<Record
 		[`$lib/components/${child}.svelte`, `./${child}.server.mjs`] as const
 	]);
 	for (const [child, file] of files) await compiled(file, child, rewrites);
-	const file = ['RankedList', 'KpiCard', 'FailureList', 'TimeHistogram', 'StageTimings'].includes(name)
+	const file = name === 'MachinePhases' ? 'src/lib/console/machine/MachinePhases.svelte'
+		: ['RankedList', 'KpiCard', 'FailureList', 'TimeHistogram', 'StageTimings'].includes(name)
 		? `src/lib/components/${name}.svelte` : `src/lib/charts/d3/${name}.svelte`;
 	const module = await compiled(file, name, rewrites);
 	return import(pathToFileURL(module).href);
@@ -88,6 +89,34 @@ test('a range shares the divisor with ends and named rules; short rows rank last
 	expect(html).toContain('data-chart-type="rankedList"');
 	expect(html).toContain('data-readout-none=');
 	expect(html).toContain('inline-size: 10.0000%; background: var(--chart-1)');
+});
+
+test('each CPU and L3 group draws one mean-time bar with visible shares, weighted rates and sample counts', async () => {
+	const item = { date: '2026-11-01', run_id: '2026-11-01-1', machine_job: 'work', machine_shard: 0,
+		cpu_model: 'cpu-a', input_tokens: 700, cached_tokens: 100, output_tokens: 300, prefill_ms: 5000, decode_ms: 3000 };
+	const props = { numberFormat, rows: [item,
+		{ ...item, machine_shard: 1, input_tokens: 300, output_tokens: 100, prefill_ms: 1000, decode_ms: 1000 },
+		{ ...item, machine_shard: 2, input_tokens: 300, output_tokens: 100, prefill_ms: 1000, decode_ms: 1000 }
+	], hosts: [
+		...[0, 1].map((shard) => ({ date: item.date, run_id: item.run_id, job: 'work', shard,
+			cpu_model: 'Intel(R) Xeon(R) measured', l3_cache_bytes: 48 * 1024 * 1024 }))
+	] };
+	const html = await draw('MachinePhases', props);
+	const rows = html.split('data-ranked-row=').slice(1).map((row) => row.split('</li>')[0]);
+	expect(rows).toHaveLength(2);
+	expect(rows[0]).toContain('Prefill 60%');
+	expect(rows[0]).toContain('Decode 40%');
+	expect(rows[0]).toContain('133 tokens/s');
+	expect(rows[0]).toContain('100 tokens/s');
+	expect(rows[0]).toContain('>5 s/article</span>');
+	expect(rows[0]).toContain('Intel(R) Xeon(R) measured; L3 48 MiB');
+	expect(rows[0]).toContain('2 articles; 2 shards');
+	expect(rows[1]).toContain('cpu-a; L3 not recorded');
+	expect(rows[1]).toContain('inline-size: 20.0000%');
+	expect(rows[1]).toContain('--chart-filled-width: 40.0000%');
+	expect(html.match(/data-ranked-max="5"/g)).toHaveLength(1);
+	expect(html).not.toContain('<details');
+	expect(await draw('MachinePhases', { ...props, rows: [] })).toContain('No article has a recorded shard identity and complete positive phase timings.');
 });
 
 test('a ranked row refuses mixed marks and a range without its article floor', () => {
@@ -165,6 +194,9 @@ test('log distributions bin by decade and common domains place the same rule at 
 	expect(html).toContain('data-readout-shape="record"');
 	expect(html).toContain('data-readout-subject');
 	expect(html).toContain('data-readout-row="share"');
+	const bins = [...html.matchAll(/<rect\b[^>]*>/g)].map((match) => match[0]);
+	expect(bins).toHaveLength(a!.bins.length);
+	for (const bin of bins) expect(bin).not.toMatch(/chart-bar|\b(?:rx|ry|clip-path)\s*[:=]/);
 });
 
 test('ninety days keep readable newest tiles and report the earlier three states truthfully', async () => {
@@ -191,7 +223,7 @@ test('ninety days keep readable newest tiles and report the earlier three states
 test('quantity colours are explicit, keyed by name, while omitted part colours and flow counts stay unchanged', async () => {
 	const rows = [{ label: 'one', parts: [{ label: 'reply', value: 2 }, { label: 'prompt', value: 3 }] }];
 	const geometry = partsOfOne(rows, { order: ['reply', 'prompt'], quantityByLabel: { prompt: 'reading-prompt', reply: 'writing-reply' } });
-	expect(geometry?.key.map((part) => part.token)).toEqual(['--chart-7', '--chart-6']);
+	expect(geometry?.key.map((part) => part.token)).toEqual(['--chart-7', '--chart-1']);
 	expect(partsOfOne(rows, { order: ['reply', 'prompt'] })?.key.map((part) => part.token)).toEqual(['--chart-1', '--chart-2']);
 	expect(() => partsOfOne(rows, { order: ['reply', 'prompt'], tokens: ['--chart-1', '--chart-2'], quantityByLabel: { prompt: 'reading-prompt', reply: 'writing-reply' } })).toThrow(/both/);
 	expect(SERIES_TOKENS).toMatchObject({ fetch: '--chart-1', extract: '--chart-2', summarize: '--chart-3', 'label-call': '--chart-4', 'summary-call': '--chart-5', 'visual-plan': '--chart-6', checking: '--chart-7', other: '--chart-8', 'queue-wait': '--chart-axis', 'free-memory': null });
@@ -241,12 +273,15 @@ test('kept time histograms share an optional positive domain and refuse one that
 	const medianX = (html: string) => html.match(/<line x1="([^"]+)"[^>]*data-hist-rule="median"/)?.[1];
 	expect(medianX(shared)).toBeDefined();
 	expect(medianX(shared)).toBe(medianX(other));
-	const coloured = await draw('TimeHistogram', { ...props, domain: [0.5, 8], barToken: SERIES_TOKENS['reading-prompt'] });
+	const coloured = await draw('TimeHistogram', { ...props, domain: [0.5, 8], barToken: SERIES_TOKENS['writing-reply'] });
 	expect(shared).toContain('fill="var(--chart-1)"');
-	expect(coloured).toContain('fill="var(--chart-6)"');
+	expect(coloured).toContain('fill="var(--chart-7)"');
 	expect(coloured).toContain('stroke="var(--chart-3)"');
-	expect(coloured).toContain('var(--chart-6)');
+	expect(coloured).toContain('var(--chart-7)');
 	expect(medianX(coloured)).toBe(medianX(shared));
+	const bins = [...shared.matchAll(/<rect\b[^>]*>/g)].map((match) => match[0]);
+	expect(bins).toHaveLength(props.times.bins.length);
+	for (const bin of bins) expect(bin).not.toMatch(/chart-bar|\b(?:rx|ry|clip-path)\s*[:=]/);
 	await expect(draw('TimeHistogram', { ...props, domain: [0, 8] })).rejects.toThrow(/positive/);
 	await expect(draw('TimeHistogram', { ...props, domain: [1, 8] })).rejects.toThrow(/contain/);
 	await expect(draw('TimeHistogram', { ...props, domain: [0.5, 1] })).rejects.toThrow(/contain/);
@@ -354,6 +389,13 @@ test('elapsed reconciliation leaves stage heights intact and draws overlap besid
 	expect(first.bracket).toBeLessThanOrEqual(box.right);
 	expect(geometry?.reconciliation?.marks[1].y).toBe(box.bottom);
 	const html = await draw('DateSeries', { ...common, geometry });
+	const columnBars = geometry!.bars.filter((bar) => bar.date === '2026-09-01');
+	const drawnBars = [...html.matchAll(/<rect\b[^>]*data-series-bar=[^>]*>/g)].map((match) => match[0]);
+	expect(drawnBars).toHaveLength(geometry!.bars.length);
+	for (const bar of drawnBars) expect(bar).not.toMatch(/chart-bar|\b(?:rx|ry|clip-path)\s*[:=]/);
+	for (const bar of columnBars) {
+		expect(html).toContain(`x="${bar.x}" y="${bar.y}" width="${bar.width}" height="${bar.height}"`);
+	}
 	expect(html).toContain('data-stack-overlap="2026-09-01"');
 	expect(html).toContain('data-elapsed-value="5"');
 	expect(html).toContain('Solid crossbar: Elapsed time.');

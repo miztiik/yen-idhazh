@@ -1,11 +1,12 @@
 /** Existing glyph identities name console destinations, never their health. */
 import type { RouteId } from './band';
+import type { IconId } from '../icons/generated';
 
 export const ROUTE_GLYPHS = {
 	pipelines: 'shape-flow',
-	model: 'docs',
+	model: 'summaries',
 	machine: 'console',
-	judgement: 'shape-side-by-side',
-	voices: 'topic-world',
+	judgement: 'judgement',
+	voices: 'voices',
 	'data-explorer': 'ledgers'
-} as const satisfies Record<RouteId, string>;
+} as const satisfies Record<RouteId, IconId>;
