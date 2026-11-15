@@ -25,13 +25,13 @@
     "compared_from": "2026-08-23"
   },
   "compaction_lag_days": 0,
-  "covers_through": "2026-11-14",
-  "generated_at": "2026-11-15T00:23:50Z",
+  "covers_through": "2026-11-15",
+  "generated_at": "2026-11-15T03:29:01Z",
   "routes": [
-    {"carries": "The model spent 61 h 17 m of this.","description": "Did the runs work, and what each stage cost.","href": "/console/","id": "pipelines","label": "Pipelines","severity": 3,"worst": "5 runs failed"},
-    {"carries": "This day ran in 9 runs, 3.13x apart on read speed.","description": "What the model wrote, how long it took, and what it got wrong.","href": "/console/model/","id": "model","label": "Summaries","severity": 3,"worst": "156 items failed"},
-    {"carries": "398 articles on this day.","description": "The hardware the model ran on, and how much it varied between runs.","href": "/console/machine/","id": "machine","label": "Hardware","severity": 0,"worst": null},
-    {"carries": "49 summaries were marked \"not sure\" on this day.","description": "Which stories the day merged, and where the judge and a person disagreed.","href": "/console/judgement/","id": "judgement","label": "Judgement","severity": 0,"worst": null},
+    {"carries": "The model spent 6 h 17 m of this.","description": "Did the runs work, and what each stage cost.","href": "/console/","id": "pipelines","label": "Pipelines","severity": 2,"worst": "1 run worth a look"},
+    {"carries": "This day ran as one run, so there is nothing to compare it against.","description": "What the model wrote, how long it took, and what it got wrong.","href": "/console/model/","id": "model","label": "Summaries","severity": 3,"worst": "19 items failed"},
+    {"carries": "61 articles on this day.","description": "The hardware the model ran on, and how much it varied between runs.","href": "/console/machine/","id": "machine","label": "Hardware","severity": 1,"worst": "8 shards read 3.61x apart"},
+    {"carries": "7 summaries were marked \"not sure\" on this day.","description": "Which stories the day merged, and where the judge and a person disagreed.","href": "/console/judgement/","id": "judgement","label": "Judgement","severity": 0,"worst": null},
     {"carries": "100 feeds failed on the last ask.","description": "Who supplied the day, and how far each feed is discounted.","href": "/console/voices/","id": "voices","label": "Voices","severity": 2,"worst": "6 feeds discounted to the floor"},
     {"carries": "Every published ledger the other routes draw from, open to a question of your own.","description": "What the ledgers hold, and whatever you ask of them.","href": "/console/data-explorer/","id": "data-explorer","label": "Data explorer","severity": 0,"worst": null}
   ],
@@ -167,35 +167,27 @@
     "compared_from": "2026-09-14"
   },
   "size": {
-    "articles_to_cap": 475413,
-    "bytes": 68909458,
-    "cap_fraction": 0.06417693383991718,
-    "left_mb": 958.2828197479248,
-    "measured_days": 84,
-    "sentence": "65.7 MB of the 1 GB limit - room for about 475,000 more articles."
+    "articles_to_cap": 475357,
+    "bytes": 69038386,
+    "cap_fraction": 0.06429700739681721,
+    "left_mb": 958.1598644256592,
+    "measured_days": 85,
+    "sentence": "65.8 MB of the 1 GB limit - room for about 475,000 more articles."
   },
   "verdict": {
-    "date": "2026-11-14",
-    "health": "red",
+    "date": "2026-11-15",
+    "health": "amber",
     "more_runs": 0,
     "runs": [
-      {"health": "red","label": "Run 1 failed"},
-      {"health": "red","label": "Run 2 failed"},
-      {"health": "amber","label": "Run 3 is worth a look"},
-      {"health": "amber","label": "Run 4 is worth a look"},
-      {"health": "amber","label": "Run 5 is worth a look"},
-      {"health": "red","label": "Run 6 failed"},
-      {"health": "amber","label": "Run 7 is worth a look"},
-      {"health": "red","label": "Run 8 failed"},
-      {"health": "red","label": "Run 9 failed"}
+      {"health": "amber","label": "Run 1 is worth a look"}
     ],
-    "sentence": "2026-11-14 ran 9 runs and published 421 of 577 planned items. 156 items failed."
+    "sentence": "2026-11-15 ran 1 run and published 61 of 80 planned items. 19 items failed."
   },
   "version": "2026-10-11T21:00",
   "worst": {
-    "href": "/console/",
-    "id": "pipelines",
-    "label": "Pipelines",
-    "sentence": "5 runs failed, so the items they planned are not in the day."
+    "href": "/console/model/",
+    "id": "model",
+    "label": "Summaries",
+    "sentence": "19 items failed, so they are not in the day the digest published."
   }
 }
