@@ -61,31 +61,88 @@ class _LegacyObservations(_LegacyModel):
     lede_sentence_ids: list[_Address] = Field(max_length=2)
 
 
-def read_label_reply(data: Any) -> Any:
-    """Adapt only a complete, closed historical reply; current replies pass unchanged."""
-    if not isinstance(data, dict) or not {"entity_mentions", "place_mentions"} & data.keys():
-        return data
-    retired = _LegacyObservations.model_fields.keys() & data.keys()
-    if retired:
-        _LegacyObservations.model_validate({name: data[name] for name in retired})
-    reply = _LegacyLabelReply.model_validate(
-        {name: value for name, value in data.items() if name not in retired}
+class _AddressedLabel(_LegacyModel):
+    element_id: _Address
+    measure: str = Field(max_length=60)
+    entity: str = Field(max_length=60)
+
+
+class _AddressedMentions(_LegacyModel):
+    mentions: list[_LegacyCitation] = Field(max_length=4)
+    kind: Literal["entity", "place"]
+    name: _Phrase
+
+
+class _AddressedReply(_LegacyModel):
+    labels: list[_AddressedLabel] = Field(max_length=16)
+    proposed: list[_LegacyCitation] = Field(max_length=4)
+    named_mentions: list[_AddressedMentions] = Field(max_length=12)
+
+
+def _has_sentence_address(data: dict[str, Any]) -> bool:
+    proposed = data.get("proposed")
+    if isinstance(proposed, list) and any(
+        isinstance(citation, dict) and "sentence_id" in citation for citation in proposed
+    ):
+        return True
+    groups = data.get("named_mentions")
+    if not isinstance(groups, list):
+        return False
+    return any(
+        isinstance(citation, dict) and "sentence_id" in citation
+        for group in groups
+        if isinstance(group, dict) and isinstance(group.get("mentions"), list)
+        for citation in group["mentions"]
     )
+
+
+def read_label_reply(data: Any) -> dict[str, Any] | None:
+    """Normalize strict historical replies, or defer a current reply to its own model."""
+    if not isinstance(data, dict):
+        return None
+    if {"entity_mentions", "place_mentions"} & data.keys():
+        retired = _LegacyObservations.model_fields.keys() & data.keys()
+        if retired:
+            _LegacyObservations.model_validate({name: data[name] for name in retired})
+        legacy = _LegacyLabelReply.model_validate(
+            {name: value for name, value in data.items() if name not in retired}
+        )
+        data = {
+            "labels": [
+                {"element_id": label.element_id, "measure": label.measure, "entity": label.entity}
+                for label in legacy.labels
+            ],
+            "proposed": [citation.model_dump() for citation in legacy.proposed],
+            "named_mentions": [
+                {
+                    "mentions": [one.model_dump() for one in group.mentions],
+                    "kind": kind,
+                    "name": group.name,
+                }
+                for kind, groups in (
+                    ("entity", legacy.entity_mentions), ("place", legacy.place_mentions)
+                )
+                for group in groups
+            ],
+        }
+    elif not _has_sentence_address(data):
+        return None
+    reply = _AddressedReply.model_validate(data)
     return {
-        "labels": [
-            {"element_id": label.element_id, "measure": label.measure, "entity": label.entity}
-            for label in reply.labels
+        "labels": [label.model_dump() for label in reply.labels],
+        "proposed": [
+            {"surface": citation.surface, "legacy_sentence_id": citation.sentence_id}
+            for citation in reply.proposed
         ],
-        "proposed": [citation.model_dump() for citation in reply.proposed],
         "named_mentions": [
             {
-                "mentions": [one.model_dump() for one in group.mentions],
-                "kind": kind,
+                "mentions": [
+                    {"surface": one.surface, "legacy_sentence_id": one.sentence_id}
+                    for one in group.mentions
+                ],
+                "kind": group.kind,
                 "name": group.name,
             }
-            for kind, groups in (
-                ("entity", reply.entity_mentions), ("place", reply.place_mentions)
-            )
-            for group in groups
+            for group in reply.named_mentions
         ],
     }

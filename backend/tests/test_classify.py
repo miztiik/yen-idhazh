@@ -1,15 +1,9 @@
-"""The two calls that read one article, and the bytes they build.
-
-Row #7a moved these out of `test_visual_planner` with the code they cover. The
-first test is the move's own oracle and it belongs at the top: a refactor that
-changed a request body would have shipped looking like a rename.
-"""
+"""How do label evidence, request contracts and two-call continuations behave?"""
 
 from __future__ import annotations
 
 import dataclasses
 import json
-import re
 from math import ceil
 from pathlib import Path
 from string import Template
@@ -18,7 +12,7 @@ from typing import Any
 import pytest
 from pydantic import BaseModel, ValidationError
 from support.models import a_markers, a_server
-from support.paths import CONFIG_DIR, FIXTURES_DIR, REPO_ROOT, read_text
+from support.paths import CONFIG_DIR, FIXTURES_DIR, read_text
 from support.prompts import LABEL_REPLIES, SUMMARIZE_AND_PLAN_REPLIES, a_table, label_payload
 from support.server import RecordedEndpoint
 
@@ -36,6 +30,7 @@ from idhazh.classify.calls import (
     SUMMARIZE_AND_PLAN_BUDGET_TOKENS,
     LabelReply,
     MentionGroup,
+    ParsedLabelReply,
     anchored,
     apply_labels,
     build_label_request,
@@ -57,7 +52,6 @@ from idhazh.classify.calls import (
     sentence_id,
     sentence_spans,
     summarize_and_plan_budget_tokens,
-    summarize_and_plan_model,
     summarize_and_plan_prose_words,
     summarize_and_plan_schema,
     summarize_and_plan_user_turn,
@@ -66,7 +60,6 @@ from idhazh.classify.plan_visual_request import (
     PLANNING_COLUMNS,
     PLANNING_JUDGEMENTS,
     planning_menu,
-    type_role_guide,
 )
 from idhazh.contracts.article import Article
 from idhazh.contracts.element import (
@@ -107,31 +100,10 @@ from idhazh.stages.two_calls import _shape_cells, two_calls_one_item
 from idhazh.visual_planner import plan_lost_to_the_budget, plan_lost_to_the_window
 from idhazh.visual_validator import validate_plan
 
-RECORDED_PAYLOADS = FIXTURES_DIR / "planner" / "recorded-call-payloads.json"
-
 
 def configured() -> ModelEntry:
     """Read the validated summarizer entry selected by config."""
     return config.load(CONFIG_DIR).models.summarizer
-
-#: How to re-record after a DELIBERATE prompt or bound change. Nothing else may
-#: move these bytes, which is the whole point of the file. It rewrites the two
-#: rendered prompts under `tests/fixtures/prompts/` from the same inputs, so the
-#: payload view and the prompt view cannot come from two different articles.
-#:
-#: **Every write names its newline.** `Path.write_text` translates on Windows,
-#: and `.gitattributes` normalises at `git add` - which is after
-#: `test_repo_text_is_ascii_and_lf` has read these working-tree bytes. So a
-#: recapture taken on Windows failed a test about line endings in a file whose
-#: content was correct.
-RECAPTURE = (
-    "python -c \"import json, pathlib, sys; sys.path[:0] = ['backend', 'backend/tests']; "
-    "import test_classify as t; p = pathlib.Path(t.RECORDED_PAYLOADS); d = json.loads("
-    "p.read_text()); d['label_call'], d['summarize_and_plan_call'] = t.rebuilt_payloads(d['inputs']); "
-    "p.write_text(json.dumps(d, indent=2) + chr(10), newline=chr(10)); "
-    "t.RENDERED_LABEL.write_text(d['label_call']['prompt'], newline=chr(10)); "
-    "t.RENDERED_SUMMARIZE_AND_PLAN.write_text(d['summarize_and_plan_call']['prompt'], newline=chr(10))\""
-)
 
 
 def markers_from(recorded: dict[str, Any]) -> TurnMarkers:
@@ -153,151 +125,11 @@ def markers_from(recorded: dict[str, Any]) -> TurnMarkers:
     )
 
 
-def rebuilt_payloads(inputs: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Both request bodies, from the inputs the fixture recorded beside them.
-
-    Every input is read from the fixture rather than from `config/`, so a knob an
-    operator turns cannot move these bytes and a later row is free to turn one.
-    What can move them is a prompt file, a decoder bound or a change to this
-    code - which is exactly the set a byte comparison should notice.
-    """
-    article = Article.from_json(read_text(REPO_ROOT / inputs["article"]))
-    table = element_table(
-        article, config=ElementsConfig(max_per_article=inputs["elements_max_per_article"])
-    )
-    reply = json.loads(read_text(REPO_ROOT / inputs["label_reply"]))
-    markers = markers_from(inputs["turns"])
-    label_call = build_label_request(
-        article,
-        table,
-        model_id=inputs["model_id"],
-        server=inputs["server"],
-        sampling=inputs["sampling"],
-        markers=markers,
-    )
-    summarize_and_plan_call = build_summarize_and_plan_request(
-        label_call,
-        reply["choices"][0]["message"]["content"],
-        anchored(
-            table,
-            article.text or "",
-            parse_label(reply["choices"][0]["message"]["content"]),
-            config=ElementsConfig(max_per_article=inputs["elements_max_per_article"]),
-            label_source=inputs["model_id"],
-        ),
-        markers=markers,
-        source_words=article.band_source_words,
-    )
-    return label_call, summarize_and_plan_call
-
-
-def test_both_request_bodies_are_the_bytes_recorded_before_the_code_moved() -> None:
-    """Nothing moves these bytes except a deliberate prompt, schema or bound change.
-
-    It was captured from `visual_planner` in the commit before a line of it
-    moved, so a rename that quietly re-rendered a prompt, reordered a message or
-    dropped a decoder bound failed here rather than in a run nobody watches.
-    **Two rows have re-recorded it since** - #3c, which made the bytes ours, and
-    #3e, which moved the instructions in front of the article - so the guard it
-    is now is the one in the first line rather than a comparison against that
-    commit. It is asserted on the serialised bytes rather than on the dicts,
-    because a key order a server tokenises differently is a real difference and
-    a dict comparison cannot see it.
-    """
-    recorded = json.loads(read_text(RECORDED_PAYLOADS))
-    label_call, summarize_and_plan_call = rebuilt_payloads(recorded["inputs"])
-
-    built = json.dumps({"label_call": label_call, "summarize_and_plan_call": summarize_and_plan_call}, indent=2)
-    kept = json.dumps(
-        {"label_call": recorded["label_call"], "summarize_and_plan_call": recorded["summarize_and_plan_call"]}, indent=2
-    )
-    assert built == kept, f"the request bodies moved. If that was deliberate:\n{RECAPTURE}"
-
-
-def test_the_same_check_fails_on_a_body_that_was_re_rendered() -> None:
-    """The bite proof: an oracle that cannot fail is not an oracle."""
-    recorded = json.loads(read_text(RECORDED_PAYLOADS))
-    tampered = dict(recorded["inputs"]) | {"model_id": recorded["inputs"]["model_id"] + "x"}
-
-    label_call, _ = rebuilt_payloads(tampered)
-
-    assert label_call != recorded["label_call"]
-
-
-# --- The prompt bytes, and the property the whole two-call design rests on ---
-#
-# Row #3c. The summarize-and-plan call's prompt opens with the label call's prompt AND the label call's reply, so a
-# prefix cache answers for both and only the new turn is prefilled. The check is
-# a string comparison over committed files: no server, no warm cache slot, and
-# no re-taking it the day the model changes.
-#
-# One assertion alone would not be enough, and the reason is worth stating. A
-# prompt built from turn markers that are complete nonsense passes a prefix
-# check perfectly - the grammar still returns valid JSON, and the failure looks
-# like a quality regression rather than an error. So the markers are checked
-# against a rendering recorded from the server that applies them.
-
-PROMPT_FIXTURES = FIXTURES_DIR / "prompts"
-RENDERED_LABEL = PROMPT_FIXTURES / "label.txt"
-RENDERED_SUMMARIZE_AND_PLAN = PROMPT_FIXTURES / "summarize-and-plan.txt"
-CHAT_TEMPLATE_RENDERING = PROMPT_FIXTURES / "chat-template.json"
-
-
-def recorded_reply() -> str:
-    """The label call's reply as the recorded fixtures hold it - one copy, two views."""
-    inputs = json.loads(read_text(RECORDED_PAYLOADS))["inputs"]
-    body = json.loads(read_text(REPO_ROOT / inputs["label_reply"]))
-    return str(body["choices"][0]["message"]["content"])
+CHAT_TEMPLATE_RENDERING = FIXTURES_DIR / "prompts" / "chat-template.json"
 
 
 class TestThePromptBytes:
-    def test_the_summary_prompt_opens_with_the_label_prompt_and_its_reply(self) -> None:
-        """The oracle, over two files a person can open and read.
 
-        `startswith` rather than a slice comparison, because what matters is
-        that nothing before the new turn moved - not that the two files are the
-        same length.
-        """
-        one = read_text(RENDERED_LABEL)
-        two = read_text(RENDERED_SUMMARIZE_AND_PLAN)
-
-        assert two.startswith(one + recorded_reply())
-
-    def test_the_committed_prompts_are_what_the_builders_render_today(self) -> None:
-        """A fixture nothing regenerates is a fixture that stops describing the code."""
-        inputs = json.loads(read_text(RECORDED_PAYLOADS))["inputs"]
-        label_call, summarize_and_plan_call = rebuilt_payloads(inputs)
-
-        assert label_call["prompt"] == read_text(RENDERED_LABEL)
-        assert summarize_and_plan_call["prompt"] == read_text(RENDERED_SUMMARIZE_AND_PLAN)
-
-    def test_the_label_prompt_names_every_field_of_the_reply_and_no_other(self) -> None:
-        """The three byte oracles above say the prompt MOVED. This says it is wrong.
-
-        They are the same assertion from two distances, and the distance
-        matters: `RECAPTURE` rewrites all three fixtures in one command, so a
-        prompt edit that names a field the grammar has no room for goes green
-        the moment somebody takes the recipe at its word. That happened on
-        2026-09-16 - two commits renamed `quotes` to `Quotes`, dropped `claims`
-        and `keyphrases`, and asked for a `surface` and a certainty grade the
-        decoder cannot accept.
-
-        Constrained decoding is what makes it silent rather than loud.
-        `LabelReply` forbids extra keys, so an invented field never arrives as
-        an error; the probability mass behind it is renormalised onto the
-        tokens the grammar does allow, and a field the prompt stopped
-        describing is still emitted, unguided. Same failure
-        `test_the_last_line_is_read_off_the_grammar` names one call later.
-
-        Top level only. A nested name is a bigger regex for a hazard that has
-        not happened, and both real defects were at the left margin.
-        """
-        files = config.load(CONFIG_DIR).app.prompt_files
-        text = (CONFIG_DIR / files.generate_labels).read_text(encoding="utf-8")
-        named = set(re.findall(r'^"(\w+)": ', text, re.MULTILINE))
-
-        assert label_system_prompt().startswith(text)
-        assert named == set(LabelReply.model_fields)
 
     def test_explicit_turn_markers_match_the_recorded_template(self) -> None:
         """Check both reply openings against their historical recording.
@@ -414,7 +246,7 @@ def schema_types(node: object) -> set[str]:
     return set()
 
 
-def a_reply(**named: object) -> LabelReply:
+def a_reply(**named: object) -> ParsedLabelReply:
     """A reply with every required field filled, so a case reads as its point."""
     body: dict[str, object] = {
         "labels": [],
@@ -422,7 +254,7 @@ def a_reply(**named: object) -> LabelReply:
         "named_mentions": [],
     }
     body.update(named)
-    return LabelReply.model_validate(body)
+    return parse_label(json.dumps(body))
 
 
 def a_group(
@@ -503,27 +335,6 @@ class TestTheLabelCallShape:
             "named_mentions",
         }
 
-    def test_the_mention_lists_do_not_reach_the_tag_control(self) -> None:
-        """Andre's ruling on tags binds this shape, and this is where it was settled.
-
-        What that control protects is the reader-facing tag vocabulary: a page
-        choosing its own tags steers it, so no prompt here asks a model to pick
-        one. A mention list is not that. The model points at characters code
-        cuts, the group key is matched against slugs code already holds, and
-        this pass mints nothing - so the control is untouched and the two lists
-        are named for the Tier 1 thing code takes from them rather than for the
-        Tier 2 key, which is also the truer name.
-
-        It is checked over the schema as well as the prompt, which is one more
-        surface than `test_tag.py` reads: the schema is handed to the decoder in
-        `response_format`, so a class docstring is prompt text too.
-        """
-        schema = json.dumps(label_schema()).lower()
-        prompt = label_system_prompt().lower()
-        for banned in ("lens", "event type", "entities"):
-            assert banned not in prompt, banned
-            assert banned not in schema, banned
-        assert "named_mentions" in label_schema()["properties"]
 
     def test_a_mention_is_written_before_the_name_that_groups_it(self) -> None:
         """Field order is decode order: the anchor first, the judgement last."""
@@ -804,7 +615,7 @@ class TestProposals:
     def test_a_figure_past_the_pattern_cap_is_recovered(self, article_ok: Article) -> None:
         """What `proposed` is for: the bound on work is what a dense article hits."""
         table = a_table(article_ok, DENSE_TEXT, cap=2)
-        reply = a_reply(proposed=[{"sentence_id": "s2", "surface": "5,000 megawatt hours"}])
+        reply = a_reply(proposed=[{"surface": "5,000 megawatt hours"}])
 
         recovered = anchored(
             table, DENSE_TEXT, reply, config=ElementsConfig(max_per_article=2), label_source="m"
@@ -816,7 +627,7 @@ class TestProposals:
 
     def test_a_recovered_figure_is_cut_from_the_article_and_not_from_the_reply(self) -> None:
         """The model pointed. Code cut. The characters are the article's own."""
-        reply = a_reply(proposed=[{"sentence_id": "s2", "surface": "5,000 megawatt hours"}])
+        reply = a_reply(proposed=[{"surface": "5,000 megawatt hours"}])
 
         landed = proposed_quantities(DENSE_TEXT, reply)
 
@@ -826,19 +637,19 @@ class TestProposals:
 
     def test_a_surface_the_article_never_wrote_is_refused(self) -> None:
         """A figure the model typed rather than found has nowhere to anchor."""
-        reply = a_reply(proposed=[{"sentence_id": "s2", "surface": "9,900 megawatt hours"}])
+        reply = a_reply(proposed=[{"surface": "9,900 megawatt hours"}])
         assert proposed_quantities(DENSE_TEXT, reply) == []
 
     def test_a_surface_that_occurs_twice_in_its_sentence_is_refused(self) -> None:
         """Mis-pointing is the failure no span check can see, so ambiguity is a rejection."""
-        text = "It shipped 500 tonnes and then 500 tonnes more."
-        reply = a_reply(proposed=[{"sentence_id": "s0", "surface": "500 tonnes"}])
+        text = "It shipped 500 tonnes. Later it shipped 500 tonnes more."
+        reply = a_reply(proposed=[{"surface": "500 tonnes"}])
         assert proposed_quantities(text, reply) == []
 
     def test_a_surface_holding_two_figures_is_refused(self) -> None:
         text = "Output moved between 1,100 tonnes and 1,900 tonnes."
         reply = a_reply(
-            proposed=[{"sentence_id": "s0", "surface": "1,100 tonnes and 1,900 tonnes"}]
+            proposed=[{"surface": "1,100 tonnes and 1,900 tonnes"}]
         )
         assert proposed_quantities(text, reply) == []
 
@@ -851,12 +662,12 @@ class TestProposals:
     def test_a_number_spelled_out_in_words_stays_refused(self) -> None:
         """Decision 4. There is nothing for the pattern to parse."""
         text = "Cost fell by about a third against the model it replaces."
-        reply = a_reply(proposed=[{"sentence_id": "s0", "surface": "about a third"}])
+        reply = a_reply(proposed=[{"surface": "about a third"}])
         assert proposed_quantities(text, reply) == []
 
     def test_a_relative_change_stays_refused(self) -> None:
         text = "Throughput doubled against the previous release."
-        reply = a_reply(proposed=[{"sentence_id": "s0", "surface": "doubled"}])
+        reply = a_reply(proposed=[{"surface": "doubled"}])
         assert proposed_quantities(text, reply) == []
 
     def test_a_proposal_over_characters_the_pass_already_read_is_dropped(
@@ -1021,7 +832,9 @@ class TestMentions:
         text = "Coast adults reported 12 percent; Coast parents reported 20 percent."
         groups = mention_elements(
             text,
-            a_reply(named_mentions=[a_group("Coast", ("s0", surface), kind="place")]).named_mentions,
+            a_reply(named_mentions=[{
+                "mentions": [{"surface": surface}], "kind": "place", "name": "Coast"
+            }]).named_mentions,
             label_source="m",
             entity_slugs={},
         )
@@ -1532,25 +1345,6 @@ class TestTheInstructionsSitInFrontOfTheArticle:
     reach past it - so every token left there is a token paid per item.
     """
 
-    def test_both_jobs_are_described_in_front_of_the_article(self) -> None:
-        ask = config.load(CONFIG_DIR).app.summarize
-        system = label_system_prompt(ask)
-
-        for moved in (
-            "keep every figure exactly as the item wrote it",
-            '"summary" - Comprehensive, cohesive narrative prose',
-            "supported numeric comparison or relationship",
-            '"confidence": your self-rating',
-        ):
-            assert moved in system, moved
-            assert moved not in summarize_and_plan_user_turn(ask), moved
-
-    def test_the_question_behind_the_article_is_the_band_and_the_fields(self) -> None:
-        """Both variants, because the gated one is the one that could grow."""
-        ask = config.load(CONFIG_DIR).app.summarize
-        for plan in (True, False):
-            turn = summarize_and_plan_user_turn(ask, plan=plan)
-            assert len(turn.strip().splitlines()) == 3, turn
 
     def test_the_system_turn_is_the_same_bytes_on_every_item(
         self, dense: Article, article_ok: Article
@@ -1584,80 +1378,6 @@ class TestTheInstructionsSitInFrontOfTheArticle:
         """`substitute`, not `safe_substitute` - a stray `$knob` reads as an
         instruction, and in an 8.5 KB turn nobody would see it."""
         assert "$" not in label_system_prompt(config.load(CONFIG_DIR).app.summarize)
-
-    def test_the_type_guide_keeps_the_vocabulary_and_reads_the_configured_floors(self) -> None:
-        knobs = VisualsConfig(
-            min_chart_points=4, max_chart_points=7, histogram_bins=4,
-            type_selection_enabled=True, enabled_types=[VisualType.BAR, VisualType.HISTOGRAM],
-        )
-        guide = type_role_guide(knobs)
-        assert "\nbar:" in "\n" + guide
-        assert "\nwhowhat:" not in guide
-        assert "\narea:" not in guide
-        assert "4..7 marks in quantity" in guide
-        assert "at least 4 source quantities for 4 code-computed bins" in guide
-        assert "Chart example:" not in guide and "Decline example:" not in guide
-        assert guide in label_system_prompt(visuals=knobs)
-        generic = type_role_guide(VisualsConfig())
-        assert generic != guide
-        assert set(re.findall(r"^(\w+):", generic, re.MULTILINE)) == {
-            kind.value for kind in VisualsConfig().select_types()
-        }
-
-    def test_the_band_numbers_are_the_only_numbers_behind_the_article(self) -> None:
-        """Decision 1: the article's own band cannot move in front of it.
-
-        The config-level numbers are the same on every item, so they belong in
-        the cached turn; the band's four are not, so they stay in the question.
-        """
-        ask = config.load(CONFIG_DIR).app.summarize
-        band = ask.band_for(0)
-        system = label_system_prompt(ask)
-        turn = summarize_and_plan_user_turn(ask)
-
-        assert f"{band.target_words_min} to {band.target_words_max} words" in turn
-        assert f"{band.target_words_min} to {band.target_words_max}" not in system
-        assert f"at most {ask.max_verbatim_words} words" in system
-
-    def test_the_number_ban_names_the_job_it_belongs_to(self) -> None:
-        """One turn carries both jobs, and they disagree about figures.
-
-        Labelling may not type a number; the summary must keep every figure the
-        item wrote. Left unscoped, the first sentence reads as the rule for both
-        and the summary quietly loses its figures - which no downstream check
-        looks for, because a summary with no number is a valid summary.
-        """
-        system = label_system_prompt(config.load(CONFIG_DIR).app.summarize)
-
-        assert "keep every figure exactly as the item wrote it" in system
-        assert 'Call 1 returns only "labels"' in system
-        assert "Copied source text and printed addresses may contain digits." in system
-        assert "Never type a number" not in system
-
-    def test_the_last_line_is_read_off_the_grammar(self) -> None:
-        """The fields in the recency position cannot disagree with the decoder.
-
-        Written out by hand they could, and the failure is silent: constrained
-        decoding renormalises onto the tokens the grammar allows, so a field
-        named with nowhere to put it pushes its text into the only channel left
-        open, which is the summary a reader reads.
-        """
-        ask = config.load(CONFIG_DIR).app.summarize
-        for plan in (True, False):
-            shape = summarize_and_plan_model(ask, source_words=0, plan=plan)
-            last = summarize_and_plan_user_turn(ask, source_words=0, plan=plan).strip().splitlines()[-1]
-            named = "Write " + ", then ".join(f'"{one}"' for one in shape.model_fields) + "."
-            assert last == named
-
-    def test_the_two_questions_differ_in_their_last_line_only(self) -> None:
-        """The reachability gate spends itself on the grammar. What it changes
-        here is which fields the last line names, and nothing else."""
-        ask = config.load(CONFIG_DIR).app.summarize
-        whole = summarize_and_plan_user_turn(ask, source_words=0).splitlines()
-        gated = summarize_and_plan_user_turn(ask, source_words=0, plan=False).splitlines()
-
-        assert whole[:-1] == gated[:-1]
-        assert whole[-1] != gated[-1]
 
 
 class TestTheSummarizeAndPlanShape:

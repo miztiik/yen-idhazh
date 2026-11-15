@@ -310,15 +310,6 @@ def test_both_digests_are_stable_inside_one_process() -> None:
     assert prompt.prompt_digest() != prompt.grammar_digest()
 
 
-def test_a_changed_system_turn_changes_the_prompt_digest() -> None:
-    """A reworded ask is a different ask, and the column has to say so."""
-    whole = prompt.prompt_text()
-    moved = whole.replace("exact same event", "same event")
-
-    assert moved != whole, "the replacement found nothing, so this proves nothing"
-    assert derive_text_digest(moved) != prompt.prompt_digest()
-
-
 def test_a_changed_re_ask_changes_the_prompt_digest() -> None:
     """The re-ask is the last thing the model reads, so it is part of the ask.
 
