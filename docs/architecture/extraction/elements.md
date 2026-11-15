@@ -1,6 +1,6 @@
 # Elements: every fact in an article, with the characters that prove it
 
-**Last Updated**: 2026-11-12
+**Last Updated**: 2026-11-15
 
 The extraction subsystem's fact table. This page owns the element shape - the
 six kinds, the two tiers, and the span that makes a drawn figure checkable - the
@@ -317,20 +317,17 @@ addresses are ours; the sentences are a stranger's web page.
 [Sentence presentation](../summarize/prompt.md#sentence-addresses-identify-source-sentences-not-physical-line-counts)
 is reversible and does not change the original source spans.
 
-**No field of the reply accepts a number.** Not a value, not a unit, not a
-count, not a span and not a character offset. Every position the model may name
-is a string address code printed for it - `s7` for a sentence, `quantity-19-33`
-for a candidate - so a figure the article does not carry is unreachable by
-grammar rather than caught by a check downstream. That is the row's oracle and
-it is asserted against the generated schema, beside a shape that fails the same
-assertion so the check is known to be able to go red.
+**No field of the reply has a numeric JSON type.** Quantity labels copy printed
+candidate ids. Mentions and proposals copy exact source words only; their text
+may contain digits. Code requires a unique source match, then computes offsets,
+sentence indices and element ids and re-reads quantity values and units.
 
 Table A - Current chart evidence
 
 | ID | Reply field | Purpose and consumer |
 | --- | --- | --- |
 | A1 | `labels[]` | A printed quantity id, its source-stated measure and named subject. Measures guide planning; known-subject links also support scatter/bubble validation. |
-| A2 | `proposed[]` | An exact sentence-local citation of one missed digit-written quantity. Code re-reads its value and unit. |
+| A2 | `proposed[]` | An exact source phrase containing one missed digit-written quantity. Code locates it uniquely in the article and re-reads its value and unit. |
 | A3 | `named_mentions[]` | Exact citations, an `entity` or `place` kind and a source-given group name. Code supplies source-backed chart categories and resolves known identities. |
 
 The typed named collection preserves the former collections' combined capacity.
@@ -340,17 +337,10 @@ Those optional native element fields remain readable in historical tables.
 Chart framing must still preserve estimates, forecasts, attribution and scope.
 The [prompt contract](../summarize/prompt.md#design-rationale) owns this reduction.
 
-**The prompt names only the three consumed top-level fields, and a test holds it
-there.** `LabelReply` forbids an unknown key, so a prompt asking for a field the
-reply has no room for does not fail a run: the decoder moves the probability
-behind that key onto the keys the grammar does allow. A field the prompt stops
-describing is still required, and is still emitted with nothing said about it.
-Both are silent, and both cost quality on every item.
-`test_the_label_prompt_names_every_field_of_the_reply_and_no_other` reads the
-names the prompt introduces at the left margin and compares them against
-`LabelReply.model_fields`. The three recorded-byte fixtures beside it say the
-prompt moved; this one says the move is wrong, which is the difference that
-matters the moment somebody re-records.
+**The current decoder contains only the three consumed collections.**
+`LabelReply` forbids unknown keys, and its citation shape contains only `surface`.
+The parsed internal representation may retain a validated historical sentence
+address, but that representation never supplies the request grammar or budget.
 
 **Named mentions supply chart labels, not an article inventory.** The pattern
 passes produce only `QUANTITY` and `DATE`. Named entity/place spans supply the
@@ -365,14 +355,11 @@ are discarded, because the continuation replays the first raw reply. Unknown
 keys still fail. The [prompt contract](../summarize/prompt.md#the-second-call-writes-this-summary-and-the-article-is-read-once)
 owns this compatibility boundary.
 
-**The mention list is named for what code takes from it.** A prompt in this repository may not ask a
-model to pick a reader-facing tag - a page choosing its own steers a control -
-and [`backend/tests/test_tag.py`](../../../backend/tests/test_tag.py) holds every
-prompt to it. Asking where an item names an organisation is not that: the model
-returns an address and some of the item's own words, code cuts the characters,
-and the group key is matched against slugs code already holds. The control is
-untouched, the list carries the Tier 1 word, and the reasoning is in the design
-rationale below.
+**Named mentions do not choose reader-facing tags.** Code cuts the exact
+source phrases, and group names resolve only against known watchlist aliases.
+The deterministic tagger emits only ids from its configured vocabulary.
+These are validated behavior boundaries, not checks for particular words in a
+prompt.
 
 **`entity` groups under a slug the watchlist holds, and this pass mints none.**
 The model names the organisation in the item's words; code matches that name
@@ -402,10 +389,10 @@ as a quantity. A proposal is re-read in the article's own context, with that
 refusal still in force, so a figure the pattern structurally cannot reach stays
 unreachable. That is the conservative half of the trade and it is deliberate.
 
-Four refusals, and each is ambiguity rather than a near miss:
+These refusals never trigger a fuzzy or first-occurrence fallback:
 
-- **A sentence address that names no sentence.** Nothing to search.
-- **A surface that occurs twice in its sentence, or not at all.** This is the
+- **An invalid historical sentence address.** Nothing to search.
+- **A surface that occurs twice in its source scope, or not at all.** This is the
  mis-pointing failure no span check can see - the span would be real, just the
  wrong one - so ambiguity is refused rather than guessed.
 - **A surface holding two figures, or none.** Same rule, one level down.
@@ -429,11 +416,10 @@ points at both, and code cuts every character. The producers are in
 [`backend/idhazh/classify/calls.py`](../../../backend/idhazh/classify/calls.py)
 beside `proposed`, because they read the same reply.
 
-**Every mention anchors only inside its named sentence.**
-
-| Kind | What the reply carries | How code anchors it |
-| --- | --- | --- |
-| `entity`, `place` | a group key, and up to four `(sentence address, the words)` mentions of it | Each mention is searched inside **its own named sentence** and must occur there exactly once. Every hit is one element |
+**Current mentions contain only source text.** Code searches the one article
+and requires exactly one match, including overlapping occurrences. It computes
+the span and sentence index itself. Historical addressed citations retain their
+original sentence-local scope after strict validation.
 
 **A name is never searched for.** An item writes "Vestas Wind Systems A/S" once
 and "Vestas" four times, and the fullest form may appear nowhere verbatim - so
@@ -446,7 +432,8 @@ one group merely because their surnames match. Geographic markets and countries
 are place mentions; an age or life-stage phrase cannot stand in for a market.
 A repeated bare surface needs a different exact unique occurrence or a minimal
 exact qualifying noun phrase within the existing bound, otherwise it is omitted.
-The locator still searches only the sentence actually named.
+The locator never searches a group name, normalizes source spelling or picks the
+first of several matches. A bad historical address cannot select global search.
 
 **The mention draws; the name never does.** `drawn_label(group)` answers with the
 longest mention that anchored, and a page has nothing else to show: the name is
@@ -479,7 +466,7 @@ covering more than it does.
 
 | Failure | Why no check sees it | What the design does instead |
 | --- | --- | --- |
-| **Mis-pointing** - the model means one `"5"` and the anchor lands on another | The span is real. `text[span_start:span_end] == span_excerpt` passes, the write-time re-slice passes and the read-time one passes | The per-sentence rule. A surface is searched inside one named sentence and must hit exactly once, so ambiguity is a rejection rather than a coin toss |
+| **Mis-pointing** - the model means one `"5"` and the anchor lands on another | The span is real. `text[span_start:span_end] == span_excerpt` passes, the write-time re-slice passes and the read-time one passes | Require one exact occurrence in the article, or in the validated historical sentence. Ambiguous source phrases are rejected rather than assigned a first hit. |
 | **Mis-labelling** - right span, wrong `measure` or `entity` | Tier 2 is a judgement and no string search reaches it | A judgement is only ever attached to an address, so it is checkable against that element's own kind, unit and magnitude. A judgement attached to a free string is checkable against nothing |
 
 Neither is closed and neither is closable by anchoring. What anchoring buys is
@@ -664,22 +651,15 @@ either is fixed.
 `_TRIVIAL_MAX` and the context window stayed with the planner. They are its
 judgements about what makes a bar, and the candidate pass does not share them.
 
-### The mention lists were named, and the tag control was not narrowed
-
-`test_no_prompt_asks_a_model_for_a_tag` refuses any prompt carrying `lens`,
-`event type` or the plural of `entity`, because a page choosing its own
-reader-facing tags steers a control. The obvious field name trips it.
+### Named mentions do not assign tags
 
 The control protects the tag vocabulary. A typed `named_mentions` collection
 points at source characters and selects an existing element kind; it chooses
 no reader-facing tag. Source mentions remain Tier 1 and the known group identity
 remains Tier 2.
 
-**What it costs:** the control now passes on a prompt that does ask about an
-organisation, so silence could later read as approval. This section is the
-record, and `test_the_mention_lists_do_not_reach_the_tag_control` holds the same
-three words out of the reply schema as well - the schema is handed to the decoder,
-so a class docstring is prompt text too.
+The matcher and closed reply contracts enforce this separation. Prompt-content
+assertions and full-request text snapshots are not substitutes for those checks.
 
 ### A mention uses the existing element contract
 
