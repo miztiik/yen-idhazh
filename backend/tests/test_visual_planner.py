@@ -25,13 +25,11 @@ from idhazh.classify.calls import (
     SUMMARIZE_AND_PLAN_BUDGET_TOKENS,
     SUPPRESSED_BUDGET_TOKENS,
     build_summarize_and_plan_request,
-    label_system_prompt,
     parse_summarize_and_plan,
     recovered_completion,
     summarize_and_plan_budget_tokens,
     summarize_and_plan_prose_words,
     summarize_and_plan_schema,
-    summarize_and_plan_user_turn,
 )
 from idhazh.contracts.article import Article
 from idhazh.contracts.element import ElementKind, ElementTable
@@ -304,36 +302,6 @@ class TestTheGateSuppressesThePlanAndNeverTheCall:
             first.get("max_tokens", SUPPRESSED_BUDGET_TOKENS)
         )
 
-    def test_both_halves_reach_the_model_whichever_shape_is_asked_for(self) -> None:
-        """They sit in the system turn now, so this is true by construction.
-
-        It used to be true by substitution - one template with the plan half
-        substituted in or out - and the thing it guarded against was the summary
-        half drifting between the two requests. There is one rendering of both
-        halves now and the gate cannot reach it.
-        """
-        system = label_system_prompt()
-
-        assert "The second job: write a grounded summary of the article" in system
-        assert 'When requested, finish "summary" before "visual".' in system
-        assert summarize_and_plan_user_turn(source_words=0).startswith("Now write about the item above.")
-
-    def test_the_gated_question_asks_for_the_summary_alone(self) -> None:
-        """The last line is the recency position and it must agree with the grammar.
-
-        Naming a field the grammar has nowhere to put does not produce it: a
-        constrained decoder renormalises onto the tokens the grammar allows, so
-        the text goes into the only channel left open, which is the summary a
-        reader reads. The two turns therefore differ in that line and nowhere
-        else.
-        """
-        whole = summarize_and_plan_user_turn(source_words=0).strip().splitlines()
-        gated = summarize_and_plan_user_turn(source_words=0, plan=False).strip().splitlines()
-
-        assert whole[-1] == 'Write "summary", then "visual".'
-        assert '"visual"' not in gated[-1]
-        assert gated[-1].index('"summary"') > gated[-1].index('"title"')
-        assert whole[:-1] == gated[:-1]
 
     def test_a_suppressed_reply_parses_to_a_summary_and_no_plan(self) -> None:
         """`visual` is `None` because none was asked for, not because one was lost."""

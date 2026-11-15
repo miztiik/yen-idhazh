@@ -61,7 +61,7 @@ from pathlib import Path
 from string import Template
 from typing import Annotated, Any, Final, Literal, NamedTuple
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, create_model, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, TypeAdapter, create_model
 
 from idhazh import summarize
 from idhazh.classify.label_request import (
@@ -112,6 +112,7 @@ from idhazh.visual_vocabulary import PLAN_VOCABULARY_VERSION
 #: as `summarize` does. One shared cleaner is worth having and is not this
 #: row's to make.
 _FENCED_JSON = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL)
+_LABEL_JSON = TypeAdapter(dict[str, Any])
 
 
 # --- The label call: the model reads the article and points at it --------------------
@@ -127,7 +128,7 @@ _FENCED_JSON = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL)
 #: judgement and re-label under a newer one without guessing. Bump it when the
 #: label vocabulary or the meaning of a band changes, not when the prompt is
 #: reworded - a reworded prompt still assigns the same fields.
-LABEL_PASS_VERSION: Final = "2026-11-12"
+LABEL_PASS_VERSION: Final = "2026-11-15"
 
 #: Structural bounds on a decoder shape, in the same place and for the same
 #: reason `VisualDraft` carries its own: a `maxItems` is a hard grammar stop, so
@@ -173,15 +174,10 @@ _SENTENCE_LINE_CONTROLS: Final = str.maketrans(
 
 
 class Citation(BaseModel):
-    """A printed sentence address and exact source words.
-
-    Code requires one match inside that sentence and computes the source span.
-    A missing or ambiguous match drops only that citation.
-    """
+    """Exact source words whose unique article location is computed by code."""
 
     model_config = ConfigDict(extra="forbid")
 
-    sentence_id: Address
     surface: Phrase
 
 
@@ -211,25 +207,11 @@ class NamedMentions(BaseModel):
 
 
 class LabelReply(BaseModel):
-    """What the decoder is constrained to emit on the label call.
+    """Current quantity labels and source phrases, closed to unknown keys.
 
-    No numeric JSON field, value, unit, count or character offset is authored.
-    Positions are printed addresses; copied source text may contain digits.
-    Code locates citations and re-reads recovered quantities from the article.
-
-    Field order is decode order. What was found is written before what it means:
-    the labels come first, then the figure code missed, then the named things.
-
-    **The mention list is named for what code takes from it.** A prompt
-    in this repository may not ask a model to pick a reader-facing tag - a page
-    choosing its own steers a control, and `backend/tests/test_tag.py` holds
-    every prompt to it. This asks for no tag. It asks where the item names an
-    organisation, a person, a product or a location, and code cuts the item's
-    own characters at each answer; the group key is matched against slugs code
-    already holds and this pass mints none. So the control is untouched and the
-    list carries the Tier 1 word rather than the Tier 2 one, which is also the
-    truer name for them. The ruling is on
-    `docs/architecture/extraction/elements.md`.
+    Code resolves values, units and locations from the article. The decoder
+    authors no sentence ids, numeric fields or offsets. Named mentions identify
+    source words and known subjects, never reader-facing tags.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -238,10 +220,33 @@ class LabelReply(BaseModel):
     proposed: list[Citation] = Field(max_length=PROPOSED_MAX)
     named_mentions: list[NamedMentions] = Field(max_length=NAMED_MAX)
 
-    @model_validator(mode="before")
-    @classmethod
-    def _read_historical_reply(cls, data: Any) -> Any:
-        return read_label_reply(data)
+class ParsedCitation(BaseModel):
+    """Validated source words with optional historical sentence-local context."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    surface: Phrase
+    legacy_sentence_id: Address | None = Field(default=None, exclude=True)
+
+
+class ParsedNamedMentions(BaseModel):
+    """Validated source citations and their named chart subject."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    mentions: list[ParsedCitation]
+    kind: Literal["entity", "place"]
+    name: Phrase
+
+
+class ParsedLabelReply(BaseModel):
+    """Validated current or historical evidence, never a request grammar."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    labels: list[ElementLabel]
+    proposed: list[ParsedCitation]
+    named_mentions: list[ParsedNamedMentions]
 
 
 def label_schema() -> dict[str, Any]:
@@ -301,7 +306,7 @@ def label_budget_tokens() -> int:
 #: `SUMMARIZE_AND_PLAN_BUDGET_TOKENS` is the precedent and the reason is the same: a
 #: number that only exists inside a function is a number nobody re-derives, and
 #: a bound can then move without anybody seeing what it cost.
-LABEL_BUDGET_TOKENS: Final = 3823
+LABEL_BUDGET_TOKENS: Final = 2738
 
 if label_budget_tokens() != LABEL_BUDGET_TOKENS:
     raise TypeError(
@@ -445,16 +450,9 @@ def label_user_turn(article: Article, table: ElementTable) -> str:
 
 
 def label_request_schema(article: Article, table: ElementTable) -> dict[str, Any]:
-    """Restrict the request to its printed quantity and citation addresses."""
-    text = article.text or ""
+    """Restrict quantity labels to the candidate addresses printed for this article."""
     schema = label_schema()
-    bind_label_reference_choices(
-        schema,
-        table,
-        [
-            sentence_id(index) for index, _ in enumerate(sentence_spans(text))
-        ],
-    )
+    bind_label_reference_choices(schema, table)
     return schema
 
 
@@ -501,12 +499,17 @@ def build_label_request(
     )
 
 
-def parse_label(raw: str) -> LabelReply:
+def parse_label(raw: str) -> ParsedLabelReply:
     content = raw.strip()
     fenced = _FENCED_JSON.match(content)
     if fenced:
         content = fenced.group(1)
-    return LabelReply.model_validate_json(content)
+    data = _LABEL_JSON.validate_json(content)
+    historical = read_label_reply(data)
+    if historical is not None:
+        return ParsedLabelReply.model_validate(historical)
+    current = LabelReply.model_validate(data)
+    return ParsedLabelReply.model_validate(current.model_dump())
 
 
 def _judgements(
@@ -532,7 +535,7 @@ def _judgements(
 
 def apply_labels(
     table: ElementTable,
-    reply: LabelReply,
+    reply: ParsedLabelReply,
     *,
     label_source: str,
     entity_slugs: Mapping[str, str] | None = None,
@@ -575,46 +578,35 @@ def apply_labels(
 
 
 def _locate(
-    text: str, spans: Sequence[tuple[int, int]], citation: Citation
+    text: str, spans: Sequence[tuple[int, int]], citation: ParsedCitation
 ) -> tuple[int, int] | None:
-    """Where one citation's words are in the article, or nothing when nowhere.
-
-    **This is decision 2 and it is the only control the design has over
-    mis-pointing.** The surface is searched inside the one sentence the reply
-    named and nowhere else, and it must occur there exactly once. A surface that
-    occurs twice is a coin toss between two real spans - `text[start:end]` cuts
-    the right characters either way, so no span check downstream can tell the two
-    apart - and ambiguity is refused rather than guessed.
-
-    Four refusals answer `None`: a sentence address that names no sentence, a
-    surface the sentence does not carry, a surface it carries twice, and a
-    surface that is whitespace.
-    """
-    index = sentence_number(citation.sentence_id)
-    if index is None or index >= len(spans):
-        return None
-    first, last = spans[index]
-    sentence = text[first:last]
+    """Locate one exact occurrence, retaining historical sentence-local semantics."""
+    first, last = 0, len(text)
+    if citation.legacy_sentence_id is not None:
+        index = sentence_number(citation.legacy_sentence_id)
+        if index is None or index >= len(spans):
+            return None
+        first, last = spans[index]
     surface = citation.surface.strip()
-    if not surface or sentence.count(surface) != 1:
+    if not surface:
         return None
-    start = first + sentence.index(surface)
+    start = text.find(surface, first, last)
+    if start < 0 or text.find(surface, start + 1, last) >= 0:
+        return None
     return start, start + len(surface)
 
 
-def proposed_quantities(text: str, reply: LabelReply) -> list[Element]:
+def proposed_quantities(text: str, reply: ParsedLabelReply) -> list[Element]:
     """The figures the pattern missed, cut out of the article's own bytes.
 
-    The escape hatch decision 3 asks for, and the reason it is safe is that the
-    model supplies no digits: it names one sentence and the words it means, code
-    searches **only** that sentence, demands exactly one hit, and re-reads the
-    value and the unit with the same number pattern the candidate pass uses.
-    What lands is the article's characters at an offset code computed.
+    The model copies a short phrase; code locates it exactly once and re-reads
+    its value and unit using the candidate pass's own number reader. Historical
+    citations retain their original sentence scope.
 
     Three refusals, and each one is ambiguity rather than a near miss:
 
-    - a sentence address that names no sentence,
-    - a surface that occurs twice in it or not at all - the mis-pointing failure
+    - an invalid historical sentence address,
+    - a surface that occurs twice in its scope or not at all - the mis-pointing failure
       no span check can see, so ambiguity is refused rather than guessed,
     - a surface holding no readable figure, or holding two. A number spelled out
       in words and a relative change stay refused here, because there is nothing
@@ -691,7 +683,7 @@ def drawn_label(group: MentionGroup) -> str:
 
 def mention_elements(
     text: str,
-    groups: Sequence[NamedMentions],
+    groups: Sequence[ParsedNamedMentions],
     *,
     label_source: str,
     entity_slugs: Mapping[str, str],
@@ -701,8 +693,8 @@ def mention_elements(
     **The name is never searched for** (decision 1). An item writes the fullest
     form once and a short form four times, and the fullest form may appear
     nowhere verbatim - so searching for it would reject the thing it was meant to
-    find. Each mention is located by `_locate` instead: inside its own named
-    sentence, exactly once, or it is refused.
+    find. Each mention is located by `_locate` instead: exactly once in the
+    article, or within its validated historical sentence.
 
     Each surviving mention is one Tier 1 element carrying the article's
     characters. The name is Tier 2 and lands only as `Element.entity`, and only
@@ -753,12 +745,12 @@ def mention_elements(
 
 def model_anchored(
     text: str,
-    reply: LabelReply,
+    reply: ParsedLabelReply,
     *,
     label_source: str,
     entity_slugs: Mapping[str, str],
 ) -> tuple[list[MentionGroup], list[Element]]:
-    """Anchor entity/place mentions inside their named source sentences.
+    """Anchor entity/place mentions in the article using their validated source scope.
 
     The groups are returned beside the flat list because a
     drawn label is a property of a group and not of one element.
@@ -773,7 +765,7 @@ def model_anchored(
 def anchored(
     table: ElementTable,
     text: str,
-    reply: LabelReply,
+    reply: ParsedLabelReply,
     *,
     config: ElementsConfig,
     label_source: str,

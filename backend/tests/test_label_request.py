@@ -78,7 +78,7 @@ def test_request_only_offers_printed_references() -> None:
         "the label decoder must choose only candidates printed in this request"
     )
     assert "time_element_id" not in labels
-    assert schema["$defs"]["Citation"]["properties"]["sentence_id"]["enum"] == sentences
+    assert set(schema["$defs"]["Citation"]["properties"]) == {"surface"}
     assert all(f"[{address}]" in calls.candidate_menu(table) for address in candidates)
     assert all(
         f"[{address}] " in calls.numbered_sentences(article.text or "") for address in sentences
@@ -99,8 +99,7 @@ def test_empty_pools_need_no_invented_address(text: str) -> None:
     assert schema["properties"]["labels"]["maxItems"] == 0
     assert "time_element_id" not in schema["$defs"]["ElementLabel"]["properties"]
     assert "enum" not in schema["$defs"]["ElementLabel"]["properties"]["element_id"]
-    if not text.strip():
-        assert schema["$defs"]["Citation"]["properties"]["sentence_id"]["enum"] == ["s0"]
+    assert "sentence_id" not in schema["$defs"]["Citation"]["properties"]
     assert calls.parse_label(json.dumps(empty_reply())).model_dump() == empty_reply()
     assert all(not field.get("minItems", 0) for field in schema["properties"].values())
 
@@ -131,7 +130,7 @@ def test_projection_preserves_native_shape_and_request_budget() -> None:
         assert projected["required"] == expected["required"]
         assert list(projected["properties"]) == list(expected["properties"])
         for field, leaf in projected["properties"].items():
-            if field in {"element_id", "sentence_id"}:
+            if field == "element_id":
                 assert {key: value for key, value in leaf.items() if key != "enum"} == expected[
                     "properties"
                 ][field]
@@ -149,7 +148,7 @@ def test_selected_mentions_still_parse_and_anchor_verbatim() -> None:
             empty_reply(
                 named_mentions=[
                     {
-                        "mentions": [{"sentence_id": "s0", "surface": "Unit A"}],
+                        "mentions": [{"surface": "Unit A"}],
                         "kind": "entity",
                         "name": "Unit A",
                     }
@@ -207,13 +206,17 @@ def test_legacy_observations_are_validated_then_discarded_not_anchored() -> None
     legacy_observations(keyphrases=["x" * 61]),
     legacy_observations(lede_sentence_ids=["s0"] * 3),
     legacy_observations(lede_sentence_ids=["x" * 49]),
-    legacy_observations(unrelated=[]),
+    empty_reply(proposed=[
+        {"sentence_id": "s0", "surface": "10 units"}, {"surface": "20 units"}
+    ]),
 ])
 def test_malformed_legacy_observations_and_unknown_fields_still_fail(
     retired: dict[str, object],
 ) -> None:
     with pytest.raises(ValidationError):
-        calls.parse_label(json.dumps(legacy_reply(**retired)))
+        calls.parse_label(json.dumps(
+            retired if "named_mentions" in retired else legacy_reply(**retired)
+        ))
 
 
 def test_legacy_labels_and_both_mention_kinds_keep_only_chart_evidence() -> None:
@@ -232,8 +235,8 @@ def test_legacy_labels_and_both_mention_kinds_keep_only_chart_evidence() -> None
     assert reply.model_dump() == empty_reply(
         labels=[{"element_id": "quantity-10-12", "measure": "output", "entity": "Unit A"}],
         named_mentions=[
-            {"mentions": [citation], "kind": "entity", "name": "Unit A"},
-            {"mentions": [citation], "kind": "place", "name": "Coast"},
+            {"mentions": [{"surface": "Unit A"}], "kind": "entity", "name": "Unit A"},
+            {"mentions": [{"surface": "Unit A"}], "kind": "place", "name": "Coast"},
         ],
     )
     for malformed in (

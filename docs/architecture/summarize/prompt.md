@@ -92,8 +92,9 @@ If extraction read only part of the article, state that limitation on the item. 
 
 Use grammar-constrained decoding derived from the declared reply model. Refuse unknown keys and validate the result after decoding. A well-shaped object still needs content checks.
 
-The label request narrows its reply schema to printed quantity and sentence
-addresses. Date rows remain source evidence, but receive no first-pass quantity
+The label request restricts quantity references to printed candidate ids.
+New mention and proposal citations contain only exact source text in `surface`;
+code computes their locations. Date rows remain source evidence, but receive no first-pass quantity
 judgments. Empty quantity pools permit only an empty label list; no selection
 is mandatory. Output budgets use the widest current reply shape rather than
 the narrower request.
@@ -149,6 +150,13 @@ discarded; removed quantity/group judgments are validated too. The continuation
 replays the original raw reply only after validation. Unknown keys and malformed
 old evidence still fail. Capture envelopes and historical raw bytes are unchanged.
 
+An original collection key selects the oldest historical format. Otherwise any
+`sentence_id` in a proposal or mention selects the addressed format for the
+entire reply. Every citation in that format must have a valid address field;
+mixed or null/missing addresses fail without retrying as current input.
+Validated historical addresses remain internal and retain sentence-local
+anchoring. They are never exposed in the current decoder grammar.
+
 The planner no longer repeats `element_ids`. Code collects the references in
 encodings, labels, annotations and the declared whole into the native saved
 plan's existing bounded field. Title, caption and diagnostic numbers must be
@@ -172,18 +180,21 @@ presentation does not change `Article.text`, segmentation, offsets or hashes.
 Non-ASCII text stays literal so the existing sanitizer still recognizes forged
 turn markers. The escaped strings remain fenced user data, never instructions.
 
-Copy the printed address literally. Mention surfaces must occur exactly once
-inside that original named sentence. A repeated bare name needs another exact
-unique occurrence or a minimal exact qualifying noun phrase within the existing
-bound; it does not permit neighbouring-sentence, global or fuzzy rescue.
+These addresses remain input presentation, not required model output. A current
+surface must occur exactly once in the entire bounded `Article.text`, including
+overlapping matches. A repeated name needs a short exact qualifying phrase or a
+different unambiguous source occurrence within the existing phrase bound.
+Missing or ambiguous matches are refused, never resolved by choosing the first.
+Historical addressed citations search only their original sentence; an invalid
+address never falls back to searching the article.
 Distinct people remain distinct and geographic markets belong in place mentions. The
 [element contract](../extraction/elements.md#the-two-kinds-only-a-model-can-find)
 owns those meanings and anchoring rules.
 
-The current grammar binds quantity labels to printed quantity ids and citations
-to printed sentences. Only code-minted addresses enter the grammar, never source
-words. Empty pools keep empty selections. Legal references do not establish
-useful numeric generation.
+The current grammar binds quantity labels to printed quantity ids. It asks for
+no sentence id, character offset or position. Code derives those from validated
+source matches. Empty quantity pools keep empty selections. Legal references
+do not establish useful numeric generation.
 
 `measure_two_calls.article_from_user_turn` recognizes the explicit current
 JSON-string heading and the historical raw-line heading separately. It decodes
@@ -205,7 +216,12 @@ The active model entry declares its turn opening, closing, reply openings, syste
 - Confirm the sanitizer strips every declared marker an article could forge.
 - Prove both byte-prefix and token-prefix continuity with the configured tokenizer.
 
-The native completion request carries `json_schema` explicitly and declares `cache_prompt`. Do not assume a compatibility route honors a field merely because it accepts the request. Recorded prompt fixtures prove rendering; live startup checks prove compatibility with the current server and model.
+The native completion request carries `json_schema` explicitly and declares
+`cache_prompt`. Do not assume a compatibility route honors a field merely
+because it accepts the request. Tests cover request contracts, source isolation,
+template substitution and reusable-prefix continuity, not production instruction
+wording or full-prompt snapshots. Live startup checks prove compatibility with
+the current server and model; neither establishes semantic extraction quality.
 
 ### Summary before visual
 
@@ -321,6 +337,13 @@ meaning and known-subject links support chart planning and relationship checks.
 Repeated salience, attribution, hedge, dimension and time judgments have no
 independent downstream check; chart framing must still preserve material
 qualifications, and temporal charts still cite source DATE elements.
+
+State the extraction task directly. A quantity's subject is not merely its
+reporter, but a company reporting its own sales can be both. Skip quantities
+whose meaning is unclear, and use an empty subject only when no named subject
+is stated. Request source phrases rather than sentence identifiers: position
+bookkeeping is code's work. Exact article-wide uniqueness keeps a copied phrase
+checkable without silently choosing among repeated occurrences.
 
 The model sees source ids, kinds, excerpts, parsed values, units and sentence
 addresses, plus retained measure/subject judgments. Character offsets, extractor
