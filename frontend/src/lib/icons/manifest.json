@@ -17,6 +17,7 @@
     "forget",
     "go-top",
     "history",
+    "judgement",
     "ledgers",
     "list-refresh",
     "query-editor",
@@ -34,6 +35,7 @@
     "share-link",
     "sort-ascending",
     "sort-descending",
+    "summaries",
     "theme-dark",
     "topic-ai",
     "topic-business-economy",
@@ -41,6 +43,7 @@
     "topic-energy",
     "topic-india",
     "topic-science",
-    "topic-world"
+    "topic-world",
+    "voices"
   ]
 }

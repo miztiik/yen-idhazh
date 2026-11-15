@@ -1,6 +1,6 @@
 # Icon provenance
 
-**Last Updated**: 2026-11-13
+**Last Updated**: 2026-11-15
 
 ## Source
 
@@ -21,7 +21,8 @@ Feather (MIT). All other copyright (c) for Lucide are held by Lucide Contributor
 ## What is committed
 
 Console destinations use `summaries` from `file-text`, `judgement` from `scale`,
-and `voices` from `rss`, unmodified from the same upstream version.
+and `voices` from `messages-square` (paired speech bubbles), unmodified from
+the same upstream version.
 
 The explorer's three further chart choices use unmodified Lucide 0.544.0 sources:
 `shape-side-by-side` from Lucide `align-start-vertical`, SHA-256 is `c5263b3a6c487881926ca3e54bc99d6f6078c3e5ed747b436919a3b15ea7a97a`;
@@ -47,9 +48,11 @@ The reading page's circular return control uses `go-top` from Lucide
 
 ## How a new icon is added
 
-1. Take the SVG from Lucide, unmodified, into `svg/<semantic-id>.svg`.
-2. Run `npm run build:icons`. `generated.ts` and `manifest.json` are outputs and
-   are never hand-edited.
-3. Use it. `icons.spec.ts` fails on an icon nothing references and on a
-   reference to an icon that does not exist, so a set cannot rot in either
-   direction.
+1. Take the SVG from Lucide, unmodified, into `svg/<semantic-id>.svg`, and add
+   its semantic id to `manifest.json`. That named list is the generator's input;
+   a source file alone does not include an icon in the site.
+2. Run `npm run build:icons` to regenerate `generated.ts` and sort the manifest.
+   Never hand-edit `generated.ts`.
+3. Use the generated `IconId` type for icon selections. The console destination
+   map enforces it, and `icons.spec.ts` checks that every destination renders
+   SVG geometry rather than an empty icon.
