@@ -26,12 +26,12 @@
   },
   "compaction_lag_days": 0,
   "covers_through": "2026-11-15",
-  "generated_at": "2026-11-15T08:28:28Z",
+  "generated_at": "2026-11-15T10:52:42Z",
   "routes": [
-    {"carries": "The model spent 11 h 0 m of this.","description": "Did the runs work, and what each stage cost.","href": "/console/","id": "pipelines","label": "Pipelines","severity": 2,"worst": "2 runs worth a look"},
-    {"carries": "This day ran in 2 runs, 1.18x apart on read speed.","description": "What the model wrote, how long it took, and what it got wrong.","href": "/console/model/","id": "model","label": "Summaries","severity": 3,"worst": "40 items failed"},
-    {"carries": "110 articles on this day.","description": "The hardware the model ran on, and how much it varied between runs.","href": "/console/machine/","id": "machine","label": "Hardware","severity": 2,"worst": "1 shard reported nothing"},
-    {"carries": "19 summaries were marked \"not sure\" on this day.","description": "Which stories the day merged, and where the judge and a person disagreed.","href": "/console/judgement/","id": "judgement","label": "Judgement","severity": 0,"worst": null},
+    {"carries": "The model spent 17 h 5 m of this.","description": "Did the runs work, and what each stage cost.","href": "/console/","id": "pipelines","label": "Pipelines","severity": 2,"worst": "3 runs worth a look"},
+    {"carries": "This day ran in 3 runs, 1.33x apart on read speed.","description": "What the model wrote, how long it took, and what it got wrong.","href": "/console/model/","id": "model","label": "Summaries","severity": 3,"worst": "52 items failed"},
+    {"carries": "171 articles on this day.","description": "The hardware the model ran on, and how much it varied between runs.","href": "/console/machine/","id": "machine","label": "Hardware","severity": 1,"worst": "8 shards read 3.89x apart"},
+    {"carries": "26 summaries were marked \"not sure\" on this day.","description": "Which stories the day merged, and where the judge and a person disagreed.","href": "/console/judgement/","id": "judgement","label": "Judgement","severity": 0,"worst": null},
     {"carries": "100 feeds failed on the last ask.","description": "Who supplied the day, and how far each feed is discounted.","href": "/console/voices/","id": "voices","label": "Voices","severity": 2,"worst": "6 feeds discounted to the floor"},
     {"carries": "Every published ledger the other routes draw from, open to a question of your own.","description": "What the ledgers hold, and whatever you ask of them.","href": "/console/data-explorer/","id": "data-explorer","label": "Data explorer","severity": 0,"worst": null}
   ],
@@ -167,12 +167,12 @@
     "compared_from": "2026-09-14"
   },
   "size": {
-    "articles_to_cap": 475202,
-    "bytes": 69142853,
-    "cap_fraction": 0.06439429987221956,
-    "left_mb": 958.0602369308472,
+    "articles_to_cap": 475343,
+    "bytes": 69268224,
+    "cap_fraction": 0.06451106071472168,
+    "left_mb": 957.940673828125,
     "measured_days": 85,
-    "sentence": "65.9 MB of the 1 GB limit - room for about 475,000 more articles."
+    "sentence": "66.1 MB of the 1 GB limit - room for about 475,000 more articles."
   },
   "verdict": {
     "date": "2026-11-15",
@@ -180,15 +180,16 @@
     "more_runs": 0,
     "runs": [
       {"health": "amber","label": "Run 1 is worth a look"},
-      {"health": "amber","label": "Run 2 is worth a look"}
+      {"health": "amber","label": "Run 2 is worth a look"},
+      {"health": "amber","label": "Run 3 is worth a look"}
     ],
-    "sentence": "2026-11-15 ran 2 runs and published 110 of 150 planned items. 40 items failed."
+    "sentence": "2026-11-15 ran 3 runs and published 171 of 223 planned items. 52 items failed."
   },
   "version": "2026-10-11T21:00",
   "worst": {
     "href": "/console/model/",
     "id": "model",
     "label": "Summaries",
-    "sentence": "40 items failed, so they are not in the day the digest published."
+    "sentence": "52 items failed, so they are not in the day the digest published."
   }
 }
