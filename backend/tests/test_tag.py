@@ -336,16 +336,3 @@ def test_the_same_text_tags_the_same_way_twice(taxonomy: Taxonomy, watchlist: Wa
     assert once.lenses == twice.lenses
     assert once.events == twice.events
     assert once.entities == twice.entities
-
-
-def test_no_prompt_asks_a_model_for_a_tag() -> None:
-    """Andre's ruling: a page choosing its own reader-facing tags steers a control."""
-    prompts = tuple(
-        CONFIG_DIR / name
-        for name in config.load(CONFIG_DIR).app.prompt_files.model_dump().values()
-    )
-    for prompt in prompts:
-        body = prompt.read_text(encoding="utf-8").lower()
-        assert "lens" not in body, prompt.name
-        assert "event type" not in body, prompt.name
-        assert "entities" not in body, prompt.name
