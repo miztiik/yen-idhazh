@@ -122,15 +122,15 @@ test('an unavailable gate count cannot discard a valid bad judge reading', async
 		days: reading.rates
 	});
 	expect(words(html)).toContain('25% of 20 pairs');
-	expect(words(html)).not.toContain('Both rates are inside the marks.');
+	expect(words(html)).not.toContain('Neither rate exceeds its limit.');
 	expect((html.match(/<circle\b/g) ?? []).length).toBe(4);
 	const incomplete = drawn.JudgeAgreement({
 		...propsOf({ surface: 'judge-agreement', preset: 7, days: [], state: '', words: '' }),
 		days: reading.rates.slice(0, 1),
 		complete: false
 	});
-	expect(words(incomplete)).toContain('The count of pairs read twice is unavailable for this window.');
-	expect(words(incomplete)).not.toContain('Both rates are inside the marks.');
+	expect(words(incomplete)).toContain('The count of pairs with two valid answers is unavailable for this window.');
+	expect(words(incomplete)).not.toContain('Neither rate exceeds its limit.');
 });
 
 test('unavailable rates retain a valid fitted line and its historical interpretation', async ({}, info) => {
@@ -178,8 +178,8 @@ test('rate gaps and method boundaries retain dots without manufacturing a combin
 	];
 	const html = drawn.JudgeAgreement(propsOf({ surface: 'judge-agreement', preset: 7, days, state: '', words: '' }));
 	expect(words(html)).toContain('10% of 20 pairs');
-	expect(words(html)).toContain('The reading method changed on 13 Jun. Lines stop there; totals cover only the latest method.');
-	expect(words(html)).toContain('An unavailable rate has no dot.');
+	expect(words(html)).toContain('The counting method changed on 13 Jun. Lines stop there; totals cover only the latest method.');
+	expect(words(html)).toContain('An unavailable percentage has no dot.');
 	expect((html.match(/<circle\b/g) ?? []).length).toBe(8);
 	expect((html.match(/data-agreement-series="disagreement"/g) ?? []).length).toBe(2);
 	expect(html).not.toContain('NaN');
@@ -190,8 +190,8 @@ test('rate gaps and method boundaries retain dots without manufacturing a combin
 		})]
 	}));
 	expect((unavailable.match(/<circle\b/g) ?? []).length).toBe(1);
-	expect(words(unavailable)).not.toContain('Both rates are inside the marks.');
-	expect(unavailable).toContain('rate unavailable over 8 pairs');
+	expect(words(unavailable)).not.toContain('Neither rate exceeds its limit.');
+	expect(unavailable).toContain('percentage unavailable for 8 pairs');
 });
 test('unscorable hand marks keep their total, skipped reason and the same mark read', async ({}, info) => {
 	const root = info.outputPath('marks');
@@ -215,11 +215,11 @@ test('unscorable hand marks keep their total, skipped reason and the same mark r
 test('each nullable denominator suppresses only its own dot and never contributes zero to the window', async ({}, info) => {
 	const { drawn } = await serverPanels(info.outputPath('panels'), [['src/routes/console/judgement/JudgeAgreement.svelte', 'JudgeAgreement'], ['src/routes/console/judgement/RecordGates.svelte', 'RecordGates'], ['src/routes/console/judgement/HoldoutMargin.svelte', 'HoldoutMargin']]);
 	for (const [judged, usable, dots, expected] of [
-		[null, 8, 1, 'Could not tell: 25% of the 8 that agreed.'],
-		[8, null, 1, 'disagreed with the second reading: 0% of 8 pairs.'],
-		[0, null, 0, 'the count of pairs whose readings agreed is unavailable'],
-		[null, null, 0, 'the count of pairs read twice is unavailable'],
-		[8, 4, 1, '1 of the 4 that agreed']
+		[null, 8, 1, 'Answered "not sure" both times: 25% of 8 pairs with matching answers.'],
+		[8, null, 1, 'changed answer after swapping: 0% of 8 pairs.'],
+		[0, null, 0, 'the count of pairs with matching answers is unavailable'],
+		[null, null, 0, 'the count of pairs with two valid answers is unavailable'],
+		[8, 4, 1, '1 of 4 pairs with matching answers']
 	] as const) {
 		const day = judgeDay(WINDOW.end, { pairsJudged: judged, pairsUsable: usable, unclearRate: 0.25 });
 		const html = drawn.JudgeAgreement(propsOf({ surface: 'judge-agreement', preset: 7, days: [day], state: '', words: '' }));
@@ -234,13 +234,20 @@ test('each nullable denominator suppresses only its own dot and never contribute
 			judgeDay(WINDOW.end, { pairsJudged: 10, pairsUsable: 10, disagreementRate: 0.1, unclearRate: 0.1 })
 		]
 	}));
-	expect(words(partial)).toContain('The count of pairs read twice is unavailable for this window.');
-	expect(words(partial)).toContain('Could not tell: 17% of the 18 that agreed.');
+	expect(words(partial)).toContain('The count of pairs with two valid answers is unavailable for this window.');
+	expect(words(partial)).toContain('Answered "not sure" both times: 17% of 18 pairs with matching answers.');
 	expect((partial.match(/<circle\b/g) ?? []).length).toBe(3);
 	const zero = judgeDay(WINDOW.end, { pairsJudged: 8, pairsUsable: 8, disagreementRate: 0, unclearRate: 0 });
-	const zeroHtml = drawn.JudgeAgreement(propsOf({ surface: 'judge-agreement', preset: 7, days: [zero], state: '', words: '' }));
+	const zeroHtml = drawn.JudgeAgreement({
+		...propsOf({ surface: 'judge-agreement', preset: 7, days: [zero], state: '', words: '' }),
+		limits: { disagreementMax: 0.2, unclearMax: 0.4 }
+	});
 	expect((zeroHtml.match(/<circle\b/g) ?? []).length).toBe(2);
 	expect(words(zeroHtml)).toContain('0% of 8 pairs');
+	expect(words(zeroHtml)).toContain('For 8 pairs, the answer stayed the same after swapping.');
+	expect(words(zeroHtml)).toContain('None were "not sure" both times (0%; limit: 40%).');
+	expect(words(zeroHtml)).toContain('Changed-answer limit: 20%');
+	expect(words(zeroHtml)).toContain('Neither rate exceeds its limit.');
 	const gates = drawn.RecordGates(propsOf({ surface: 'record-gates', preset: 7, days: [judgeDay(WINDOW.end)], state: '', words: '' }));
 	expect((gates.match(/data-target-cell="track"/g) ?? []).length).toBe(3);
 	expect((gates.match(/data-target-cell="value"[^>]*>0</g) ?? []).length).toBe(3);
