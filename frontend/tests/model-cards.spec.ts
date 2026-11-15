@@ -21,6 +21,8 @@ import { expect, test } from '@playwright/test';
 
 import { sparklineShape } from '../src/lib/charts/sparkline';
 import { buildCardTrends } from '../src/lib/console/model-cards';
+import { cardModelRule, cardTrendDays } from '../src/lib/console/model/cards';
+import type { ModelRule } from '../src/lib/charts/d3/model-rule';
 
 /** A fabricated model window, oldest first the way the route holds it. Each
  * column moves its own way, so a builder that copied one column onto the rest
@@ -46,6 +48,33 @@ const read = (day: FakeDay, key: string): number | null =>
 	(day as unknown as Record<string, number | null>)[key];
 
 test.describe('a model card reads one selected view, in one pass', () => {
+	test('a mini chart keeps its recent readings and warns only about changes inside its own history', () => {
+		const days = [
+			{ date: '2030-04-01' }, { date: '2030-05-20' }, { date: '2030-06-01' },
+			{ date: '2030-06-11' }, { date: '2030-06-14' }
+		];
+		const rule: ModelRule = { changes: [
+			{ date: '2030-04-01', kind: 'settings', words: 'The old runtime changed.' },
+			{ date: '2030-05-20', kind: 'settings', words: 'The older prompt changed.' },
+			{ date: '2030-06-11', kind: 'settings', words: 'The prompt changed.' },
+			{ date: '2030-06-12', kind: 'checker', words: 'The checker changed.' }
+		], note: 'The settings record starts partway through the selected window.' };
+		for (const start of ['2030-03-17', '2030-05-16', '2030-06-01']) {
+			const recent = cardTrendDays(days.filter((day) => day.date >= start));
+			expect(recent.map((day) => day.date)).toEqual(['2030-06-01', '2030-06-11', '2030-06-14']);
+			const card = cardModelRule(rule, recent.map((day) => day.date));
+			if ('declined' in card) throw new Error('A recorded card rule was declined.');
+			expect(card.changes.map((change) => change.date)).toEqual(['2030-06-11']);
+			expect(card.note).toContain('2030-06-12');
+			expect(card.note).not.toMatch(/2030-04-01|2030-05-20|partway/);
+		}
+		const sparse = cardModelRule(rule, ['2030-06-14']);
+		expect(sparse).toEqual({ changes: [], note: null });
+		expect(cardModelRule(rule, [])).toEqual({ changes: [], note: null });
+		const unavailable = { declined: 'No dated settings record is available for this card.' };
+		expect(cardModelRule(unavailable, ['2030-06-14'])).toEqual(unavailable);
+	});
+
 	test('every card carries the movement of its own column, not a neighbour', () => {
 		const trends = buildCardTrends(KEYS, WINDOW, read, []);
 

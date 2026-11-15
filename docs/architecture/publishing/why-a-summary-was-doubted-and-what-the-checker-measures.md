@@ -1,6 +1,6 @@
 # Why a summary was doubted, and what the checker measures
 
-**Last Updated**: 2026-11-13
+**Last Updated**: 2026-11-15
 
 `/console/model/` answers what the model wrote, how long it took, and what it got
 wrong. Its nine panels are the measure cards, throughput, model read/write
@@ -272,7 +272,12 @@ control rather than in the plot (Guardrail #8).
 `RunLengths`, `Sparkline` and `ThroughputTrend` accept the optional structured
 model rule; callers that omit it retain their legacy behavior. `completeModelRule`
 (also exported as `fullModelRule`) preserves changes on unmeasured days in a note
-rather than moving their boundary to another measured day. Throughput keeps its
+rather than moving their boundary to another measured day. The cards first
+scope that rule to each mini chart's measured date range; their one native
+history disclosure retains the complete selected-window rule and the shared
+recording note remains visible. The
+[model-card rules](../../concepts/console-design/what-the-quality-and-source-panels-draw.md#eleven-measures-are-eleven-cards-and-the-rows-are-one-control-away)
+own the wording and inspection behavior. Throughput keeps its
 candles and adds the window-median rule; call endings skip empty cells and put
 length endings at the bottom. Writing and checking keep `TimeHistogram` and its
 domains. Failed-rule readings live only on Pipelines, through the shared

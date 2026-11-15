@@ -73,11 +73,12 @@
 		 * grow the strip and push everything under it down. */
 		eventRoom?: boolean;
 		/** A named, single-series card already identifies its marks. Keep its
-		 * date beside the reading and omit a redundant colour key. */
+		 * date beside the reading and omit the repeated series label and key. */
 		compact?: boolean;
 	} = $props();
 
 	const view = $derived(readoutView(readout, at, resting, eventRoom));
+	const compactSeries = $derived(compact && readout !== null && 'series' in readout && readout.series.length === 1);
 	/** The hint line's words: the keys, what one column still offers, or none. */
 	const said = $derived(view?.one ? hintOne : hint);
 </script>
@@ -112,7 +113,9 @@
 				data-readout-row={entry.held ? undefined : entry.label}
 				data-readout-held={entry.held ? '' : undefined}
 			>
-				<dd class="readout-label">{#if entry.swatch && !compact}<span class="readout-swatch size-3 rounded-sm" style="background: {entry.swatch}"></span>{'\u00a0'}{/if}{entry.label}</dd>
+				{#if !compactSeries || index !== 0 || entry.value === ''}
+					<dd class="readout-label">{#if entry.swatch && !compact}<span class="readout-swatch size-3 rounded-sm" style="background: {entry.swatch}"></span>{'\u00a0'}{/if}{entry.label}</dd>
+				{/if}
 				{#if entry.value !== ''}
 					{'\u00a0'}
 					<dd

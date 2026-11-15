@@ -30,7 +30,7 @@
 	 * null when the pointer leaves - and hands its own pick back as `selected`,
 	 * so only the row being read shows its marker. */
 	type Strip =
-		| { name: string; maxShare: number; hint: string }
+		| { name: string; maxShare: number; hint: string; compact?: boolean; ruleContext?: string }
 		| { onSelect: (column: number | null) => void; selected: number | null };
 
 	let {
@@ -76,6 +76,10 @@
 		if (modelRule === undefined) return result;
 		return { ...result, events: ruleEvents(fullRule!, marks.dates).lines.map((lines) => [...lines]) };
 	});
+	// Shared history carries events once; the tooltip keeps the complete daily reading.
+	const stripReadout = $derived(own?.ruleContext === undefined ? readout : {
+		...readout, events: readout.events.map(() => [])
+	});
 
 	// Inset by the stroke, or a point sitting on the domain's edge is drawn half
 	// outside the box.
@@ -106,6 +110,7 @@
 		viewBox="0 0 {width} {height}"
 		role="img"
 		aria-label={label}
+		aria-describedby={own?.ruleContext}
 		tabindex={own === null ? undefined : 0}
 		use:pointerReadout={{ marks: columns, width, hover: { name: own?.name ?? series.label, readout }, onSelect: select, selected: at }}
 	>
@@ -157,11 +162,12 @@
 	<div data-readout-columns={readout.columns.length}>
 		{@render line()}
 		<ChartReadout
-			{readout}
+			readout={stripReadout}
 			at={picked}
 			name={own.name}
 			maxShare={own.maxShare}
 			hint={own.hint}
+			compact={own.compact ?? false}
 			eventRoom
 		/>
 	</div>
