@@ -2,8 +2,12 @@ import { expect, test } from './support/door-page';
 import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import type { Component } from 'svelte';
+import { ROUTE_GLYPHS } from '../src/lib/console/route-glyph';
 import { ICON_IDS, ICONS, type IconId } from '../src/lib/icons/generated';
+import { iconsConfig } from '../src/lib/server/config';
+import { renderConfigured, serverCompiler } from './support/server-render';
 import ts from 'typescript';
 /**
  * A missing icon renders nothing at all.
@@ -87,6 +91,18 @@ function invalidIconIdDiagnostics(): readonly ts.Diagnostic[] {
     }
 }
 test.describe('the icon set', () => {
+    test('every console destination renders SVG geometry', async ({}, info) => {
+        const compile = serverCompiler(info.outputPath('route-icons'));
+        const module = await compile('src/lib/icons/Icon.svelte', 'Icon', [
+            ['./generated', '$lib/icons/generated']
+        ]);
+        const icon: Component<Record<string, unknown>> = (await import(pathToFileURL(module).href)).default;
+        Object.assign(globalThis, { __ICON_STROKE_PX__: iconsConfig().stroke_px });
+        for (const [route, id] of Object.entries(ROUTE_GLYPHS)) {
+            const body = renderConfigured(icon, { props: { id } }).body;
+            expect(body, `${route} must draw its ${id} icon`).toMatch(/<(?:path|line|polyline|polygon|rect|circle|ellipse)\b/);
+        }
+    });
     test('the generated icon map follows the named manifest list', () => {
         const icons = manifestIcons();
         expect(ICON_IDS).toEqual(icons);
