@@ -1,5 +1,5 @@
 <script lang="ts">
-	/** Whether the judge agrees with itself, day by day, against the two limits
+	/** How consistently the judge answers in both summary orders, against the two limits
 	 * that hold a run.
 	 *
 	 * **This is the only quality reading on the judge that needs no second
@@ -164,8 +164,8 @@
 	 * a stranded date label (below) off it. */
 	function markLabel(name: 'disagreement' | 'unclear', at: number): string {
 		return name === 'disagreement'
-			? `${percent(at)} - the "disagreed" mark`
-			: `${percent(at)} - the "could not tell" mark`;
+			? `Changed-answer limit: ${percent(at)}`
+			: `"Not sure" limit: ${percent(at)}`;
 	}
 
 	/** One day's two readings in words: what the strip prints at that day, and
@@ -182,13 +182,13 @@
 		const disagreedCount = day.pairsJudged === null || day.disagreementRate === null
 			? null : day.disagreementRate * day.pairsJudged;
 		const disagreed = day.disagreementRate === null && day.pairsJudged !== null
-			? `rate unavailable over ${formatPairs(day.pairsJudged)}`
+			? `percentage unavailable for ${formatPairs(day.pairsJudged)}`
 			: rateWithDenominator(disagreedCount, day.pairsJudged, attemptsFloor, numberFormat, limits.disagreementMax) ??
 			(disagreedCount === null
-				? 'the count of pairs read twice is unavailable'
+				? 'the count of pairs with two valid answers is unavailable'
 				: `${grouped(Math.round(disagreedCount))} of ${formatPairs(day.pairsJudged!)}`);
 		const unclear = day.unclearRate === null && day.pairsUsable !== null
-			? `rate unavailable; ${formatPairs(day.pairsUsable)} agreed`
+			? `percentage unavailable for ${formatPairs(day.pairsUsable)} with matching answers`
 			: describeUnclear(
 			day.pairsUsable === null || day.unclearRate === null ? null : day.unclearRate * day.pairsUsable,
 			day.pairsUsable,
@@ -199,12 +199,7 @@
 		return {
 			disagreed,
 			unclear,
-			name:
-				day.pairsJudged === null || day.pairsUsable === null
-					? `${date}: Disagreed with the second reading: ${disagreed}. Could not tell: ${unclear}.`
-					: day.pairsUsable === 0
-					? `${date}: ${disagreed} disagreed with the second reading. Could not tell: ${unclear}.`
-					: `${date}: ${disagreed} disagreed with the second reading, and ${unclear} could not tell.`
+			name: `${date}: Changed answer after swapping: ${disagreed}. Answered "not sure" both times: ${unclear}.`
 		};
 	}
 
@@ -221,8 +216,8 @@
 	 * pair had no readings come in; a day with no row at all may not be packed
 	 * yet, or there may have been none - the page does not know which. Neither
 	 * says the judge did nothing. The words are Reader's. */
-	const NO_READINGS = 'No readings came in for this day';
-	const NO_NUMBERS = 'The numbers for this day are not here yet, or there are none';
+	const NO_READINGS = 'No judge results were returned for this day';
+	const NO_NUMBERS = 'Results for this day are not available yet, or there are none';
 
 	/** One column a day of the window: where it sits, and either its reading or
 	 * why it holds none. */
@@ -401,25 +396,25 @@
 	): string {
 		const shown = wholePercent(numerator, denominator, mark);
 		if (shown !== wholePercent(numerator, denominator)) {
-			return `The share that ${reading} is just ${numerator / denominator > mark ? 'above' : 'below'} its ${percent(mark)} mark`;
+			return `${reading} is just ${numerator / denominator > mark ? 'above' : 'below'} its ${percent(mark)} limit`;
 		}
-		return `The ${shown}% that ${reading} is ${numerator / denominator > mark ? 'past' : 'inside'} its mark`;
+		return `${reading} is ${shown}%, ${numerator / denominator > mark ? 'above' : 'within'} its ${percent(mark)} limit`;
 	}
 	const disagreedVerdict = $derived(
-		disagreed === null || judged === null || judged === 0 ? '' : describeVerdict(disagreed, judged, limits.disagreementMax, 'disagreed')
+		disagreed === null || judged === null || judged === 0 ? '' : describeVerdict(disagreed, judged, limits.disagreementMax, 'The changed-answer rate')
 	);
 	/** Where the sentence prints both shares, the verdict on the two: the state
 	 * it names and the words that close the sentence. The words are Reader's. */
 	const bothVerdict = $derived.by(() => {
 		if (disagreedPast && unclearPast)
-			return { state: 'both-past', said: 'Both rates are past their marks.' };
+			return { state: 'both-past', said: 'Both rates exceed their limits.' };
 		if (disagreedPast) return { state: 'disagreed-past', said: `${disagreedVerdict}.` };
 		if (unclearPast)
 			return {
 				state: 'unclear-past',
-				said: `${describeVerdict(unclear!, agreed!, limits.unclearMax, 'could not tell')}.`
+				said: `${describeVerdict(unclear!, agreed!, limits.unclearMax, 'The "not sure" rate')}.`
 			};
-		return { state: 'inside', said: 'Both rates are inside the marks.' };
+		return { state: 'inside', said: 'Neither rate exceeds its limit.' };
 	});
 	const heldByJudge = $derived(
 		currentRead.filter((day) => day.heldReason === 'judge_unstable' || day.heldReason === 'judge_uncertain')
@@ -440,14 +435,14 @@
 		const readings = drawnMarks.map((mark) => mark.reading);
 		const leftOut = readings.some((one) => one.disagreeY === null || one.unclearY === null);
 		if (leftOut && readings.some((one) => one.day.disagreementRate === null || one.day.unclearRate === null)) {
-			return 'An unavailable rate has no dot. Its line breaks there; known daily counts remain in the readout.';
+			return 'An unavailable percentage has no dot. Its line breaks there; available daily counts are still shown.';
 		}
 		if (leftOut && readings.some((one) => one.day.pairsJudged === null || one.day.pairsUsable === null)) {
-			return `A dot needs a known count of at least ${formatPairs(attemptsFloor)} for its own reading. Known daily counts remain in the readout.`;
+			return `Each dot needs a known count of at least ${formatPairs(attemptsFloor)} for its percentage. Available daily counts are still shown.`;
 		}
 		if (!leftOut || disagreeShare === null) return null;
 		const fewer = `fewer than ${formatPairs(attemptsFloor)}`;
-		const rule = `A day has no "disagreed" dot if ${fewer} were read twice, and no "could not tell" dot if ${fewer} agreed.`;
+		const rule = `A day has no changed-answer dot if ${fewer} had two valid answers, and no "not sure" dot if ${fewer} had matching answers.`;
 		if (readings.length === 1) return rule;
 		return readings.some((one) => one.disagreeY !== null || one.unclearY !== null)
 			? `${rule} The chart shows a gap where a dot is left out, and that day's counts are still above.`
@@ -465,13 +460,13 @@
 			columns: marks.map((mark) => dayMonth(mark.date)),
 			series: [
 				{
-					label: 'Disagreed with the second reading',
+					label: 'Changed answer after swapping',
 					swatch: 'var(--chart-1)',
 					values: marks.map((mark) => mark.reading?.day.disagreementRate ?? null),
 					format: (_: number, column: number) => marks[column].reading!.said.disagreed
 				},
 				{
-					label: 'Could not tell',
+					label: 'Answered "not sure" both times',
 					swatch: 'var(--chart-3)',
 					values: marks.map((mark) => mark.reading?.day.unclearRate ?? null),
 					format: (_: number, column: number) => marks[column].reading!.said.unclear
@@ -481,7 +476,7 @@
 			notMeasuredAt: marks.map((mark) => mark.unread ??
 				(mark.reading !== null && (
 					mark.reading.day.disagreementRate === null || mark.reading.day.unclearRate === null
-				) ? `Disagreed: ${mark.reading.said.disagreed}. Could not tell: ${mark.reading.said.unclear}.` : null)),
+				) ? `Changed answer after swapping: ${mark.reading.said.disagreed}. Answered "not sure" both times: ${mark.reading.said.unclear}.` : null)),
 			resting: 'newest'
 		})
 	);
@@ -490,12 +485,12 @@
 
 <Panel
 	id="judge-agreement"
-	title="Whether the judge agrees with itself"
-	note={`Every pair is read twice, with the two summaries swapped. The current method uses only pairs with two valid readings; a refusal is not a disagreement. Historical rates retain their original method. A "disagreed" dot shows how often the readings disagreed. A "could not tell" dot shows how often the pairs whose readings agreed could not tell. When a day's rate is past its own dashed mark, the run does not move the merge line that day.`}
+	title="Does the judge give the same answer twice?"
+	note={`We ask whether two summaries describe the same story. Then we swap their order and ask again. "Changed answer after swapping" counts pairs with different answers, out of pairs with two valid answers. "Answered not sure both times" counts pairs with two "not sure" answers, out of pairs with matching answers. Failed answers are excluded, not counted as changes. Older results keep their original counting method. If either daily rate exceeds its limit, leave the setting for merging stories unchanged that day.`}
 >
 	<div
 		data-windowed="judge-agreement"
-		data-panel-question="Did the judge agree with its own second reading?"
+		data-panel-question="Does the judge give the same answer twice?"
 		data-model-rule="no"
 		data-model-rule-name="judge-agreement"
 		data-model-rule-none="the judge's record, not how summaries are written"
@@ -507,39 +502,37 @@
 			? undefined
 			: 'no judge readings were returned, so there is no column to read; agreed with Susan'}
 	>
-		<p class="comparison" data-comparison="The judge's two readings against each other, and each rate against its own limit.">
-			The judge's two readings against each other, and each rate against its own limit.
+		<p class="comparison" data-comparison="Changed-answer and 'not sure' rates against their daily limits.">
+			Changed-answer and "not sure" rates against their daily limits.
 		</p>
 		{#each evidence as note}<p data-evidence-note>{note}</p>{/each}
 		{#if policyStart > 0}
-			<p data-evidence-note>The reading method changed on {dayMonth(drawn[policyStart].date)}. Lines stop there; totals cover only the latest method.</p>
+			<p data-evidence-note>The counting method changed on {dayMonth(drawn[policyStart].date)}. Lines stop there; totals cover only the latest method.</p>
 		{/if}
 		{#if inputDays === null}
-			<p class="lede" data-lede data-empty="missing">The judge's numbers are unavailable for {nameSpan(windowDays)}.</p>
+			<p class="lede" data-lede data-empty="missing">The judge's results are unavailable for {nameSpan(windowDays)}.</p>
 		{:else}
 		<p class="lede" data-lede>
 			{read.length === 0
-				? 'No judge readings were returned for this window.'
+				? 'No judge results were returned for this window.'
 				: missingDisagreement
-					? 'The disagreement rate is unavailable for this window.'
+					? 'The changed-answer rate is unavailable for this window.'
 				: judged === null || disagreed === null
-					? 'The count of pairs read twice is unavailable for this window.'
-					: `${disagreeShare ?? `${grouped(Math.round(disagreed))} of ${formatPairs(judged)}`} disagreed with the judge's own second reading`}
+					? 'The count of pairs with two valid answers is unavailable for this window.'
+					: `The judge changed its answer for ${disagreeShare ?? `${grouped(Math.round(disagreed))} of ${formatPairs(judged)}`}.`}
 		</p>
 		<div use:observeWidth={(next) => (measured = next)}>
 			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 			<svg
 				data-chart-type="dateSeries"
-				data-chart-name="The judge's two readings"
+				data-chart-name="The judge's answers in both orders"
 				class="block max-w-full overflow-visible focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
 				width={box.width}
 				height={box.height}
 				viewBox={`0 0 ${box.width} ${box.height}`}
 				role="img"
 				tabindex="0"
-				aria-label={windowDays === 1
-					? `How often the judge disagreed with its own second reading, in ${nameSpan(windowDays)}`
-					: 'How often the judge disagreed with its own second reading, a day'}
+				aria-label={`Answer changes and "not sure" answers, by day, in ${nameSpan(windowDays)}`}
 				use:pointerReadout={{
 					marks: readoutMarks(marks.map((mark) => mark.x)),
 					width: box.width,
@@ -671,42 +664,48 @@
 		<p class="agreement-note">
 			{#if read.length === 0}
 				<span data-agreement-state="none"
-					>No judge readings were returned for {nameSpan(windowDays)}, so there is nothing to compare.</span
+					>No judge results were returned for {nameSpan(windowDays)}, so there are no pairs to compare.</span
 				>
 			{:else if judged === null || agreed === null}
 				<span data-agreement-state="unavailable-count"
-					>In {nameSpan(windowDays)}, disagreed with the second reading:
+					>In {nameSpan(windowDays)}, changed answer after swapping:
 					{missingDisagreement ? 'the rate is unavailable' : disagreeShare ?? (judged === null || disagreed === null
-						? 'the count of pairs read twice is unavailable'
+						? 'the count of pairs with two valid answers is unavailable'
 						: `${grouped(Math.round(disagreed))} of ${formatPairs(judged)}`)}.
-					Could not tell: {missingUnclear ? 'the rate is unavailable' : unclearSaid}. Known daily counts remain in the readout.</span>
+					Answered "not sure" both times: {missingUnclear ? 'the rate is unavailable' : unclearSaid}. Available daily counts are still shown.</span>
 			{:else if disagreeShare === null}
 				<span data-agreement-state="filling"
 					>{formatPairs(judged)}
-					{judged === 1 ? 'was' : 'were'} read twice in {nameSpan(windowDays)}. That is too few
-					to report a share, so the counts are above.</span
+					had two valid answers in {nameSpan(windowDays)}. That is too few
+					to show a percentage, so only the counts are shown.</span
 				>
 			{:else if heldByJudge > 0}
 				<span data-agreement-state="past-mark"
-					>The two readings disagreed on {disagreeShare} in {nameSpan(windowDays)}. No line was
-					fitted on {heldByJudge} of {countDays(windowDays)}, because a rate was past its mark on
+					>The judge changed its answer for {disagreeShare} in {nameSpan(windowDays)}. The setting for
+					merging stories was left unchanged on {heldByJudge} of {countDays(windowDays)}, because a daily rate exceeded its limit on
 					{heldByJudge === 1 ? 'that day' : 'those days'}.</span
 				>
 			{:else if agreed === 0}
 				<span data-agreement-state="none-agreed"
-					>In {nameSpan(windowDays)}, {disagreeShare} disagreed with their own second reading.
-					Could not tell: {unclearSaid}. {disagreedVerdict}.</span
+					>In {nameSpan(windowDays)}, the judge changed its answer for {disagreeShare}.
+					Answered "not sure" both times: {unclearSaid}. {disagreedVerdict}.</span
 				>
 			{:else if agreed < attemptsFloor}
 				<span data-agreement-state="few-agreed"
-					>In {nameSpan(windowDays)}, {disagreeShare} disagreed with their own second reading, and
-					{unclearSaid} could not tell. {disagreedVerdict}, and {grouped(agreed)} is too few to report a
-					share.</span
+					>In {nameSpan(windowDays)}, the judge changed its answer for {disagreeShare}.
+					Answered "not sure" both times: {unclearSaid}. {disagreedVerdict}.
+					Fewer than {formatPairs(attemptsFloor)} had matching answers, so no "not sure" percentage is shown.</span
 				>
 			{:else}
 				<span data-agreement-state={bothVerdict.state}
-					>In {nameSpan(windowDays)}, {disagreeShare} disagreed with their own second reading, and
-					{unclearSaid} could not tell. {bothVerdict.said}</span
+					>In {nameSpan(windowDays)}, the judge changed its answer for {disagreeShare}.
+					For {formatPairs(agreed)}, the answer stayed the same after swapping.
+					{#if unclear === 0}
+						None were "not sure" both times ({wholePercent(unclear, agreed, limits.unclearMax)}%; limit: {percent(limits.unclearMax)}).
+					{:else}
+						{wholePercent(unclear!, agreed, limits.unclearMax)}% were "not sure" both times (limit: {percent(limits.unclearMax)}).
+					{/if}
+					{bothVerdict.said}</span
 				>
 			{/if}
 		</p>
@@ -714,6 +713,7 @@
 			<p class="floor-note" data-agreement-floor-note>{floorNote}</p>
 		{/if}
 		{/if}
+		<p class="floor-note">Giving the same answer twice does not prove the answer is correct.</p>
 	</div>
 </Panel>
 

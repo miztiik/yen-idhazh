@@ -1,6 +1,6 @@
 # Console Design
 
-**Last Updated**: 2026-11-14
+**Last Updated**: 2026-11-15
 
 How a figure on the operator console is worded, coloured, ranked and drawn. This
 page rules the words and the states; four pages under it rule the drawing. It is
@@ -62,9 +62,10 @@ Five rules hold for every number the console prints:
  invites a trend that is not there. Under `console.min_attempts_for_rate` a
  figure prints its counts and no share, in a strip and in a mark's name as in
  a sentence. The count is the
- one the share is taken over, and the floor counts it: Judgement's "could not
- tell" is a share of the pairs whose two readings agreed, so it prints `2% of
- the 41 that agreed`, and `1 of the 3 that agreed` under the floor.
+ one the share is taken over, and the floor counts it: Judgement's "Answered
+ not sure both times" is a share of pairs with matching answers, so it prints
+ `2% of 41 pairs with matching answers`, and
+ `1 of 3 pairs with matching answers` under the floor.
 
 **Use statistical names for statistical readings.** Name the central reading
 `median (p50)`, not "the middle article" or "the middle request". Name the
@@ -75,24 +76,22 @@ percentile. The interquartile range is `p25-p75`. Existing percentile
 calculations remain unchanged: observed-rank and interpolated readers retain
 their established conventions.
 
-**A verdict word is set by the share it judges, never by why a day was held.**
-`inside` and `past` compare a share the page prints with its own mark, the
-dashed limit the plot draws for that share: `past` when the share is above the
-mark, the test the run holds a day on, and `inside` otherwise. The run tests its
-other reasons for holding a day first, such as a record too small to fit a line
-on, so a day held for one of them can still carry a share past its mark. On
-Judgement's agreement panel, the window sentence that prints both shares ends
-`Both rates are inside the marks.` only when both are inside their marks.
-Otherwise it names the share that is past,
-`The 20% that disagreed is past its mark.` or
-`The 39% that could not tell is past its mark.`, or it ends
-`Both rates are past their marks.`
-When rounding would hide the side of the mark, the verdict instead says
-`The share that disagreed is just above its 15% mark.` or
-`The share that could not tell is just above its 35% mark.`, with `just below`
-for the corresponding inside share. The dashed mark labels keep their
-existing figures. Extra decimal places cannot settle this: a smaller
-difference would still round away.
+**Status compares each percentage with its own limit, not why a day was held.**
+Judgement's `Does the judge give the same answer twice?` panel says
+`Neither rate exceeds its limit.` only when both rates are at or below their
+limits. Otherwise it names the rate above its limit, for example
+`The changed-answer rate is 20%, above its 15% limit.` or
+`The "not sure" rate is 39%, above its 35% limit.`, or says
+`Both rates exceed their limits.`
+When rounding would hide which side of a limit a percentage falls on, the
+status instead says `The changed-answer rate is just above its 15% limit.`
+or `The "not sure" rate is just above its 35% limit.`, with `just below` for
+the corresponding rate within its limit. Extra decimal places cannot settle
+this: a smaller difference would still round away.
+The run checks other reasons for holding a day first, such as too few recorded
+pairs, so a day held for another reason can still have a rate above its limit.
+Matching answers mean the judge repeated its answer, not that it called the
+pair one story. The panel states that consistency does not prove correctness.
 
 **Recorded days are not every day in the window.** Judgement's merge-line
 note names how many recorded days fitted nothing, without implying a fit on
