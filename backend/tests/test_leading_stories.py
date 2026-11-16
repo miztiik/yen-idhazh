@@ -235,26 +235,82 @@ def test_one_subject_may_hold_one_lead_however_many_desks_it_crosses() -> None:
     assert len({items[0].item_id, items[1].item_id} & set(chosen)) == 1
 
 
-def test_a_second_story_dated_yesterday_is_refused() -> None:
-    """One late arrival is a catch-up; a second is beyond today's allowance."""
+def test_a_second_story_dated_yesterday_waits_while_today_can_fill_the_block() -> None:
+    """One late arrival is a catch-up; a second takes a seat only if nothing today could."""
+    today = [
+        story(
+            f"{desk}-{index:010d}",
+            vertical=desk,
+            source_id=f"feed-{index}",
+            rank_score=2.0 - index / 10,
+            carried_by=2,
+        )
+        for index, desk in enumerate(DESKS)
+    ]
+    late = [
+        story(
+            f"{desk}-{90 + index:010d}",
+            vertical=desk,
+            source_id=f"late-{index}",
+            rank_score=9.0,
+            carried_by=2,
+            published_at="2026-08-30T09:00:00Z",
+        )
+        for index, desk in enumerate(["ai", "energy"])
+    ]
+    items = [*late, *today]
+    yesterday = {item.item_id for item in late}
+
+    chosen = choose(items)
+
+    assert len(chosen) == UiConfig().leading_stories
+    assert len(set(chosen) & yesterday) == 1
+    assert len(set(choose(items, lead_max_yesterday=5)) & yesterday) == 2
+
+
+def test_yesterdays_stories_fill_the_seats_today_has_no_story_for(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The first hours of a UTC day: one story dated today, the rest still yesterday's.
+
+    The catch-up seat alone leaves two leads, under the minimum of three, and the
+    block used to vanish. Yesterday's stories now fill what today could not.
+    """
     items = [
         story(
             f"{desk}-{index:010d}",
             vertical=desk,
             source_id=f"feed-{index}",
             rank_score=2.0 - index / 10,
-            published_at=(
-                "2026-08-30T09:00:00Z" if index < 2 else "2026-08-31T09:00:00Z"
-            ),
+            published_at="2026-08-31T09:00:00Z" if index == 0 else "2026-08-30T22:00:00Z",
         )
         for index, desk in enumerate(DESKS)
     ]
+
+    with caplog.at_level(logging.INFO, logger="idhazh"):
+        chosen = choose(items)
+
+    assert set(chosen) == {item.item_id for item in items}
+    assert any("from_yesterday=4" in record.getMessage() for record in caplog.records)
+
+
+def test_the_yesterday_fill_still_obeys_every_other_cap() -> None:
+    """A filler from a newsroom already leading is refused like any other story."""
+    items = [
+        story(
+            f"{desk}-{index:010d}",
+            vertical=desk,
+            source_id="feed-shared" if index in (1, 2) else f"feed-{index}",
+            rank_score=2.0 - index / 10,
+            published_at="2026-08-31T09:00:00Z" if index == 0 else "2026-08-30T22:00:00Z",
+        )
+        for index, desk in enumerate(DESKS)
+    ]
+
     chosen = choose(items)
-    yesterday = {
-        item.item_id for item in items if item.published_at == "2026-08-30T09:00:00Z"
-    }
-    assert len(set(chosen) & yesterday) == 1
-    assert len(choose(items, lead_max_yesterday=5)) == UiConfig().leading_stories
+
+    assert len(chosen) == len(DESKS) - 1
+    assert items[2].item_id not in chosen
 
 
 def test_every_lead_names_a_story_the_day_holds() -> None:

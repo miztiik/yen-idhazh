@@ -1,6 +1,6 @@
 # What the page is drawn from
 
-**Last Updated**: 2026-11-15
+**Last Updated**: 2026-11-16
 
 Every knob a reader's page or an operator's console is drawn from: the file that
 owns them, the rule that decides which file owns a key when two name it, the
@@ -326,8 +326,9 @@ block for - under it nothing renders and the day goes straight to the stream.
 `ui.lead_cluster_floor` (3) is how many distinct sources must name one registry
 entity in their published titles before that shared subject counts,
 `ui.lead_shared_subject_weight` (0.2) is what it then adds, and
-`ui.lead_max_yesterday` (1) bounds how many of the leads the feed dated to the
-previous day. None of them is handed to a browser: the block is decided before
+`ui.lead_max_yesterday` (1) is how many seats stories the feed dated to the
+previous day may take ahead of today's; past it they only fill a seat nothing
+dated today could. None of them is handed to a browser: the block is decided before
 the page sees it, and the page draws what it is handed.
 
 Where the weight came from, and why it must stay under `collect.carriage_step`, is

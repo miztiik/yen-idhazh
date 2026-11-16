@@ -200,9 +200,12 @@ class UiConfig(Model):
         default=1,
         ge=0,
         description=(
-            "The most leads the block may give to stories the feed dated to the "
-            "previous calendar day. A day's leading stories are today's; one late "
-            "arrival is a catch-up and three are yesterday's page."
+            "How many seats stories the feed dated to the previous calendar day may "
+            "take ahead of today's. A day's leading stories are today's; one late "
+            "arrival is a catch-up and three are yesterday's page. Past this number "
+            "they are not refused: they only fill a seat no story dated today could "
+            "take, so the first hours of a UTC day, when almost everything is still "
+            "dated yesterday, do not lose the whole block."
         ),
     )
     lead_rank_weight: float = Field(
