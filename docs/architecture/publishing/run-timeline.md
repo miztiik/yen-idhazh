@@ -1,6 +1,6 @@
 # The run timeline
 
-**Last Updated**: 2026-11-11
+**Last Updated**: 2026-11-16
 
 What shape does the newest run's clock have, and where do its facts come from?
 
@@ -37,6 +37,14 @@ the next minute rather than printing a sixty-second remainder.
 ## Coverage and inspection
 
 `newestRunRows` compares numeric run suffixes with BigInt, not lexical ordering.
+Every distinct recorded `machine_shard` in that run becomes a row in both
+views. The displayed shard count is the size of that set, with no row cap or
+assumption that IDs are contiguous. It is not the current configuration's
+dispatch count. A worker with no recorded item identity cannot be reconstructed
+or timed from these rows; no placeholder or zero reading fills that absence.
+The selected run comes from the newest packed item-health day, which can be
+earlier than the newest published day elsewhere on the route.
+
 Run totals include every recorded item, even one whose shard is missing.
 Endpoint coverage and cost coverage are independent: a missing end never
 removes a measured cost, and a missing cost never removes a valid interval.

@@ -122,6 +122,30 @@ test('recorded endpoints determine elapsed geometry; parked costs and nested cal
 	expect(view.items[0].planEstimated).toBe(true);
 });
 
+test('shard rows follow the newest run identities without a cap or contiguous numbering', () => {
+	const ids = [43, 2, 59, 11, 31, 7, 19];
+	const rows: Row[] = ids.map((shard, index) => ({
+		run_id: '2030-06-01-11', item_id: `article-${shard}`, machine_shard: shard,
+		item_started_at: '2030-06-01T00:00:00Z',
+		item_ended_at: new Date(Date.UTC(2030, 5, 1, 0, 0, index + 1)).toISOString(),
+		item_total_ms: (ids.length - index) * 100
+	}));
+	const view = runTimeline([
+		{ run_id: '2030-06-01-10', item_id: 'older-run', machine_shard: 0 },
+		...rows,
+		{ run_id: '2030-06-01-11', item_id: 'unknown-shard', machine_shard: null },
+		{ run_id: '2030-06-01-11', item_id: 'empty-shard', machine_shard: '' }
+	], 1);
+	expect(view).toMatchObject({ runId: '2030-06-01-11', itemCount: 9, unassigned: 2, detailLimit: 1 });
+	expect(view.shards.map((shard) => shard.shard)).toEqual([2, 7, 11, 19, 31, 43, 59]);
+	const geometry = (measure: 'elapsed' | 'work') =>
+		timelineGeometry(view, measure, 5, 800, DEFAULT_CHART_LABELS, String);
+	expect(geometry('elapsed').bars.map((bar) => bar.shard.shard)).toEqual([19, 7, 31, 11, 59, 2, 43]);
+	expect(geometry('work').bars.map((bar) => bar.shard.shard)).toEqual(ids);
+	expect(runTimeline(rows.filter((row) => row.machine_shard === 11 || row.machine_shard === 59), 1)
+		.shards.map((shard) => shard.shard)).toEqual([11, 59]);
+});
+
 test('incomplete clocks, zero work and article limits cannot silently drop measured run costs', () => {
 	const item = (suffix: string, fields: Row = {}): Row => ({
 		run_id: `2030-06-01-${suffix}`, item_id: suffix, machine_shard: 0,
@@ -146,6 +170,12 @@ test('incomplete clocks, zero work and article limits cannot silently drop measu
 		{ shard: 2, elapsedMs: 2000, workMs: null }
 	]);
 	expect(answer.shards[1].items).toHaveLength(2);
+	const geometry = (measure: 'elapsed' | 'work') =>
+		timelineGeometry(answer, measure, 5, 800, DEFAULT_CHART_LABELS, String);
+	expect(geometry('elapsed').bars.map((bar) => [bar.shard.shard, bar.ms]))
+		.toEqual([[2, 2000], [0, 0], [1, null]]);
+	expect(geometry('work').bars.map((bar) => [bar.shard.shard, bar.ms]))
+		.toEqual([[1, 70], [0, 0], [2, null]]);
 	expect(timelineItems(answer.items, 'cost').map((item) => item.itemId))
 		.toEqual(['no-shard', 'reversed', 'no-end', 'zero', 'no-cost']);
 	expect(timelineItems(answer.items, 'start').map((item) => item.itemId))
