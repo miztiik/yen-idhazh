@@ -217,6 +217,19 @@ def test_success_exit_is_printed_even_when_configured_logging_level_is_error() -
     assert (said["code"], said["label"]) == (0, "ok")
 
 
+def test_library_warnings_are_json_diagnostics_without_untrusted_text() -> None:
+    process = completed_process(
+        "import warnings; from idhazh.council import event_log; "
+        "event_log.install(); warnings.simplefilter('always'); "
+        f"warnings.warn({HOSTILE!r}, RuntimeWarning)"
+    )
+    assert process.returncode == 0 and process.stdout == ""
+    (said,) = [json.loads(line) for line in process.stderr.splitlines()]
+    assert (said["event"], said["kind"], said["level"]) == ("diagnostic", "log", "warning")
+    assert "SOURCE-TEXT" not in process.stderr and "example.invalid" not in process.stderr
+    assert "::error" not in process.stderr
+
+
 @pytest.mark.parametrize("result", ["completed", "stopped_on_deadline", "raised", "exit-zero"])
 def test_actual_shard_entrypoint_prints_only_json_and_earns_its_real_code(
     result: str, tmp_path: Path

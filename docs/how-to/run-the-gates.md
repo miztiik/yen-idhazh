@@ -939,6 +939,10 @@ When the change reaches further than one module, the third line can use a mark
 selector: `-m contract`, `-m visual`, `-m workflow` or `-m "not slow"`, priced
 [below](#run-only-the-tests-a-change-can-break).
 
+Loopback transport tests count native responses at construction, before header
+parsing. The standard client closes a response when its headers fail; observing
+only successful `getresponse()` returns misses those owned resources.
+
 **Read the jobs, not the run's conclusion.** The `scope` job selects which of
 `gates`, `site` and `browser` run, so a commit that
 touched no matching path produces a run marked success with most of them
