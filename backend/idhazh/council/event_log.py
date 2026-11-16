@@ -101,6 +101,7 @@ def install(level: str = "INFO") -> None:
     handler.setFormatter(OneJsonLine())
     logging.basicConfig(level=level, handlers=[handler])
     logging.getLogger().setLevel(level)
+    logging.captureWarnings(True)
     target = os.environ.get("COUNCIL_EVENT_FILE")
     for previous in tuple(_transport.handlers):
         _transport.removeHandler(previous)

@@ -14,11 +14,9 @@ from __future__ import annotations
 import copy
 import json
 import re
+from importlib.metadata import version
 from typing import Any, Final, Literal, NamedTuple
 from urllib.parse import urlsplit
-
-import trafilatura
-from trafilatura.metadata import extract_metadata
 
 from idhazh.contracts.article import Article, ArticleStatus, TitleSource, UntrustedLine
 from idhazh.contracts.base import derive_url_key
@@ -35,7 +33,8 @@ from idhazh.sanitize import SANITIZER_VERSION, sanitize
 
 #: Bumped when extraction changes shape. It is a fingerprint input, because a
 #: different extractor over the same page is a different input to the model.
-EXTRACTOR_VERSION: Final = f"trafilatura-{trafilatura.__version__}-idhazh-4"
+#: Metadata does not initialize the parser's optional downloader before logging.
+EXTRACTOR_VERSION: Final = f"trafilatura-{version('trafilatura')}-idhazh-4"
 
 #: How long a page's own `<title>` may be and still be a headline. A feed
 #: headline is bounded by editorial practice before it reaches us and keeps
@@ -150,6 +149,8 @@ def extract_text(html: str) -> str | None:
     on someone else's page, and it is the part most likely to be hostile.
     Embedded-player consent and error containers are interface text, not prose.
     """
+    import trafilatura
+
     body = trafilatura.extract(
         html,
         include_comments=False,
@@ -207,6 +208,8 @@ def page_headline(html: str) -> str | None:
     `EXTRACTOR_VERSION`, so moving it would re-derive every cached summary to
     buy a parse - and the one pass would have paid the same date hunt anyway.
     """
+    from trafilatura.metadata import extract_metadata
+
     return clean_title(
         extract_metadata(html, extensive=False).title,
         max_chars=PAGE_TITLE_MAX_CHARS,
@@ -252,6 +255,8 @@ def _container_words(tree: Any) -> int:
     thousand articles under one repeated heading would otherwise buy five
     thousand extractions with one heading.
     """
+    import trafilatura
+
     declared = tree.xpath("//meta[@property='og:title']/@content")
     wanted = _reduced(str(declared[0])) if declared else ""
     if not wanted:
@@ -359,6 +364,8 @@ def corroborated_words(html: str, *, min_words: int) -> int | None:
     than a change here** - named so that the next person has it, not performed,
     because 33 ms does not buy it today.
     """
+    import trafilatura
+
     tree = trafilatura.load_html(html)
     if tree is None:
         return None
