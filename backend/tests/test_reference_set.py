@@ -32,14 +32,16 @@ def app() -> AppConfig:
 
 
 def a_row(app: AppConfig, *, band: int, key: str, vertical: str = "ai") -> CorpusRow:
-    """One corpus row whose system turn is the real rendered prompt for `band`."""
+    """One corpus row whose prompt and stored source length belong to `band`."""
     asked = app.summarize.bands[band]
     system = summarize.system_prompt(app.summarize, source_words=asked.min_source_words)
+    prefix = "Source form: article\n\n"
+    body = " ".join(["word"] * max(1, asked.min_source_words - len(prefix.split())))
     return CorpusRow(
         version=CorpusRow.schema_version(),
         messages=[
             ChatTurn(role=ChatRole.SYSTEM, content=system),
-            ChatTurn(role=ChatRole.USER, content="Source form: article\n\nthe body"),
+            ChatTurn(role=ChatRole.USER, content=prefix + body),
             ChatTurn(role=ChatRole.ASSISTANT, content='{"title": "t", "summary": "s"}'),
         ],
         url_key=key.ljust(64, "0"),
@@ -78,19 +80,38 @@ def an_answer(app: AppConfig, band: int) -> str:
 # --- reading the stratification off a row ----------------------------------
 
 
-def test_the_band_is_matched_on_the_rendered_prompt_not_parsed_from_it(app: AppConfig) -> None:
-    """Equality against what a run would have sent, so a template edit cannot fool it."""
+def test_shared_instructions_keep_reference_source_length_bands(app: AppConfig) -> None:
+    """Identical instructions must not put every article into the shortest band."""
     prompts = reference_set.band_prompts(app.summarize)
 
     for index, rendered in enumerate(prompts):
-        assert reference_set.band_of(rendered, prompts) == index
+        assert reference_set.band_of(
+            rendered,
+            prompts,
+            source_words=app.summarize.bands[index].min_source_words,
+            prompt_config=app.summarize,
+        ) == index
+
+
+def test_unique_prompt_match_preserves_a_band_after_source_truncation(app: AppConfig) -> None:
+    assert reference_set.band_of(
+        "Long source instructions",
+        ["Short source instructions", "Long source instructions"],
+        source_words=0,
+        prompt_config=app.summarize,
+    ) == 1
 
 
 def test_a_row_written_under_a_prompt_that_has_since_moved_has_no_band(app: AppConfig) -> None:
     """It is dropped rather than guessed. A row whose ask we cannot name is not a task."""
     prompts = reference_set.band_prompts(app.summarize)
 
-    assert reference_set.band_of("a prompt from an older build", prompts) is None
+    assert reference_set.band_of(
+        "a prompt from an older build",
+        prompts,
+        source_words=0,
+        prompt_config=app.summarize,
+    ) is None
 
 
 def test_the_source_form_is_read_off_the_line_user_turn_writes_first() -> None:
