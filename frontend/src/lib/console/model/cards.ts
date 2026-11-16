@@ -2,6 +2,7 @@
 import type { ModelDay } from '../../server/model-work';
 import type { MovementPolarity } from '../../charts/theme';
 import type { TimeWindow } from '../../charts/viewport';
+import { checkedRule, completeModelRule, type ModelRule } from '../../charts/d3/model-rule';
 import { coveredDays } from '../../data/slice';
 import type { RecordRead } from '../recording';
 import { FLAGS } from '../eval-instruments';
@@ -67,4 +68,17 @@ export function cardTrendDays<T extends { date: string }>(days: readonly T[]): T
 	const first = new Date(`${newest}T00:00:00Z`);
 	first.setUTCDate(first.getUTCDate() - 13);
 	return days.filter((day) => day.date >= first.toISOString().slice(0, 10));
+}
+
+/** Only gaps inside this card's measured history need a card-specific warning. */
+export function cardModelRule(rule: ModelRule, dates: readonly string[]): ModelRule {
+	checkedRule(rule);
+	if ('declined' in rule) return rule;
+	const first = dates[0];
+	const last = dates.at(-1);
+	return completeModelRule({
+		changes: rule.changes.filter((change) => first !== undefined && last !== undefined &&
+			change.date >= first && change.date <= last),
+		note: null
+	}, dates);
 }

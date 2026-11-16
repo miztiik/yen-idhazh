@@ -5,9 +5,8 @@
 	import Sparkline from '../../components/Sparkline.svelte';
 	import { buildCardTrends } from '../model-cards';
 	import { FLAGS, RECORDED } from '../eval-instruments';
-	import { cardColumns, cardValue, cardText, cardTrendDays, cardReadState, type CardReads } from './cards';
+	import { cardColumns, cardValue, cardText, cardTrendDays, cardReadState, cardModelRule, type CardReads } from './cards';
 	import type { ChartConfig } from '../../server/config';
-	import { completeModelRule } from './model-rule';
 	import { nameSpan } from '../span-words';
 	import { formatNumber } from '$lib/number-format';
 	let { days, reads, instruments, start, end, rule, checkerRule, chart, windowDays }: {
@@ -21,9 +20,17 @@
 	const empty = $derived(days === null || reads === undefined ? 'missing' : cardReadState(reads, { start, end }));
 	const trends = $derived(buildCardTrends(cardColumns.map((c) => c.key), cardTrendDays(ordered), cardValue, []));
 	const extra = $derived(RECORDED.filter((i) => ['self_repetition', 'coherence', 'semantic_coverage'].includes(i.id)));
+	const ruleContext = $derived('changes' in checkerRule && checkerRule.changes.length > 0 ? 'model-card-changes' : undefined);
 </script>
 
 <div data-model-cards data-model-cards-day={newest?.date} data-model-cards-from={start} data-model-cards-to={end} data-windowed="model-cards" data-window-days={windowDays}>
+	<p data-model-cards-note data-model-newest={newest?.date} data-window-days={windowDays}
+		data-comparison="each card's newest day against its last 14 days">
+		{#if newest}Newest measured day: <time datetime={newest.date}>{newest.date} UTC</time>. {/if}
+		Mini charts and percentage changes use up to the last 14 days in this window.
+		Point at or focus a line to inspect it; Left and Right step by day, Escape returns to the newest.
+		Missing readings are not zero.
+	</p>
 	{#if newest === undefined}
 		<p data-model-cards-empty={empty} data-lede>{empty === 'missing' ? 'The build-time model record is unavailable in this window.' : 'No model readings were recorded in this window.'}</p>
 		<div data-model-rule="no" data-model-rule-name="model-cards" data-model-rule-none="There are no measured card days on which to place a change." data-readout-none="No model-card readings were available."></div>
@@ -31,7 +38,7 @@
 		<div class="cards" data-chart="cards" aria-label="The newest model readings and their measured daily history">
 			{#each cardColumns as column, index (column.key)}
 				{@const cardTrend = trends.get(column.key)}
-				{@const activeRule = completeModelRule(column.key === 'not-sure' ? checkerRule : rule, cardTrend?.marks.dates ?? [])}
+				{@const activeRule = cardModelRule(column.key === 'not-sure' ? checkerRule : rule, cardTrend?.marks.dates ?? [])}
 				<div data-instrument={column.key === 'determinism' ? 'determinism_violation' : undefined} data-instrument-slot={column.key === 'determinism' ? 'model-cards' : undefined}>
 				<KpiCard label={column.label} value={cardText(cardValue(newest, column.key), column.key)}
 					line={column.line} polarity={column.polarity} lede={index === 0} rule={activeRule}
@@ -41,11 +48,14 @@
 						['not-sure', 'unsupported', 'hedge', 'copied', 'determinism'].includes(column.key) && newest.summaries !== null ? `of ${newest.summaries} ${newest.summaries === 1 ? 'summary' : 'summaries'}` : null}
 					{windowDays}>
 					{#snippet trend()}
-						{#if cardTrend !== undefined}
+						{#if cardTrend !== undefined && !cardTrend.marks.empty}
 							<Sparkline marks={cardTrend.marks} width={188} height={22}
 								label={column.label} series={{ label: column.label, format: (value) => cardText(value, column.key) }}
-								strip={{ name: `model-${column.key}`, maxShare: chart.readout_max_share, hint: 'Point at a day to read it.' }}
+								strip={{ name: `model-${column.key}`, maxShare: chart.readout_max_share, hint: '', compact: true, ruleContext }}
 								modelRule={activeRule} />
+						{:else}
+							<p class="card-history-empty" data-model-card-history-empty={column.key}>{cardTrend?.marks.dates.length
+								? 'Only one measured day; no trend yet.' : 'No measured days for this card.'}</p>
 						{/if}
 					{/snippet}
 				</KpiCard>
@@ -53,8 +63,25 @@
 			{/each}
 		</div>
 	{/if}
-	<p data-model-cards-note data-model-newest={newest?.date} data-window-days={windowDays}>The cards show the newest measured day in this window. A missing reading is not measured, not zero.</p>
-	<p data-comparison="each card's newest day against its last 14 days">Each card's newest day against its last 14 days.</p>
+	{#if 'declined' in checkerRule}
+		<p data-model-cards-rule-note>{checkerRule.declined}</p>
+	{:else}
+		{#if checkerRule.note !== null}<p data-model-cards-rule-note>{checkerRule.note}</p>{/if}
+		{#if checkerRule.changes.length > 0}
+			<details class="console-disclosure" data-model-cards-rule-history data-window-days={windowDays}>
+				<summary class="console-summary" id={ruleContext}>Settings and checker changes in {nameSpan(windowDays)}</summary>
+				<p>This history covers {start} through {end} UTC, including days before the mini charts.
+					Markers stay on measured chart days. Checker markers apply only to Marked "not sure".</p>
+				<ul>
+					{#each checkerRule.changes as change (`${change.date}-${change.kind}`)}
+						<li data-model-card-change={change.date} data-model-card-change-kind={change.kind}>
+							<time datetime={change.date}>{change.date} UTC</time> - {change.kind === 'settings' ? 'Settings' : 'Checker'}: {change.words}.
+						</li>
+					{/each}
+				</ul>
+			</details>
+		{/if}
+	{/if}
 	<p>Nothing acts on these numbers.</p>
 	<details class="console-disclosure" data-model-table-control data-daily-figures="model" data-window-days={windowDays}>
 		<summary class="console-summary">{windowDays === 1 ? 'Show these figures for this one day' : `Show these figures day by day, over these ${windowDays} days`}</summary>
@@ -85,6 +112,7 @@
 
 <style>
 	.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: var(--space-3); }
+	.card-history-empty { font-size: var(--console-small-size); line-height: var(--console-small-leading); color: var(--color-text-secondary); }
 	details { overflow-x: auto; }
 	table { inline-size: 100%; border-collapse: collapse; font-size: var(--text-xs); }
 	th, td { padding: var(--space-2); text-align: right; overflow-wrap: anywhere; border-bottom: 1px solid var(--color-rule); }

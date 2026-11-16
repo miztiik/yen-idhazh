@@ -64,7 +64,7 @@ async function compileDrawing(name: string): Promise<{ default: Component<Record
 	]);
 	for (const [child, file] of files) await compiled(file, child, rewrites);
 	const file = name === 'MachinePhases' ? 'src/lib/console/machine/MachinePhases.svelte'
-		: ['RankedList', 'KpiCard', 'FailureList', 'TimeHistogram', 'StageTimings'].includes(name)
+		: ['RankedList', 'KpiCard', 'ChartReadout', 'FailureList', 'TimeHistogram', 'StageTimings'].includes(name)
 		? `src/lib/components/${name}.svelte` : `src/lib/charts/d3/${name}.svelte`;
 	const module = await compiled(file, name, rewrites);
 	return import(pathToFileURL(module).href);
@@ -177,6 +177,27 @@ test('a first-column boundary stays inside the frame; no changes print their not
 	const stack = dateSeries(stacked, { ...options, stacked: true, rule: declined, domain: [0, 10] });
 	expect(stack?.bars[0].height).toBeCloseTo(box.innerHeight * 0.2);
 	expect(stack?.bars[1].height).toBeCloseTo(box.innerHeight * 0.6);
+});
+
+test('a compact single-series readout retains dates, exact values and dated event labels without repeating its series name', async () => {
+	const readout = readoutOf({
+		type: 'dateSeries', columns: ['2030-06-11', '2030-06-14'],
+		series: [{ label: 'Count', swatch: 'var(--chart-1)', values: [2, 3], format: String }],
+		events: { lines: [[], [{ label: 'Settings changed', value: 'The prompt changed.', swatch: null }]] },
+		notMeasured: 'Not recorded.', resting: 'newest'
+	});
+	const props = { readout, name: 'compact-card', maxShare: 1, hint: '' };
+	const compact = await draw('ChartReadout', { ...props, compact: true });
+	expect(compact).toContain('2030-06-14');
+	expect(compact).toContain('data-readout-row="Count"');
+	expect(compact).toContain('>3</dd>');
+	expect(compact).toContain('Settings changed');
+	expect(compact).toContain('The prompt changed.');
+	expect(compact).not.toContain('>Count</dd>');
+	expect(compact).not.toContain('data-readout-hint=');
+	const ordinary = await draw('ChartReadout', props);
+	expect(ordinary).toContain('Count</dd>');
+	expect(ordinary).toContain('readout-swatch');
 });
 
 test('log distributions bin by decade and common domains place the same rule at the same pixel', async () => {

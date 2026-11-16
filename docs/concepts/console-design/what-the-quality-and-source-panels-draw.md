@@ -1,6 +1,6 @@
 # What the quality and source panels draw
 
-**Last Updated**: 2026-11-13
+**Last Updated**: 2026-11-15
 
 The panels that report what the model wrote and how the sources behaved: the
 eleven measures on `/console/model/`, the two distributions under them, and
@@ -31,7 +31,8 @@ grid, and each carries the same six things: **the label verbatim** - the copy is
 protected and `frontend/tests/console-model.spec.ts` compares the rendered
 labels byte for byte against the page's own `COLUMNS`, so a paraphrase fails the
 build rather than a review; **the newest day's figure**, with which day printed
-once above the grid rather than eleven times; **a line over the window**, drawn
+once above the grid rather than eleven times; **a line over at most the newest
+fourteen days inside the selected window**, drawn
 as markup by `Sparkline`, so each card's line needs no chart instance;
 **the change across that line**, painted from the measure's own declared polarity; **what it is out
 of**, for the six quality figures, because a card has no row to put the
@@ -77,6 +78,19 @@ and the pair has an assertion of its own.
 rows the daily table draws its dividers from. The rule carries a date and an
 id and nothing else - an arrow or a delta across it would claim the swap caused
 whatever the line then did, and no committed figure says that.
+
+The grid has one shared explanation of its short history, missing readings and
+pointer/keyboard inspection. Each line's strip keeps its exact date and value,
+without repeating the card label, change descriptions or inspection instructions.
+One native `Settings and checker changes` disclosure retains every dated
+change in the selected window, including changes before the mini charts.
+Each line references that keyboard-reachable disclosure; its pointer tooltip
+still names the changes on the inspected day.
+Recording qualifications stay visible once beside that disclosure.
+Only a change inside a card's own measured date range can produce its
+missing-day warning; an older change is history, not evidence that the card's
+record is missing. Markers stay on their actual measured dates. A card with
+fewer than two measured days says why it has no trend.
 
 **No card is tinted.** `Copied, not rewritten` reads about 12 percent and nobody
 has agreed what a bad number would be, so a tint there would invent a threshold
@@ -244,6 +258,13 @@ spelling of a name, so where the name cannot sit beside the plot it moves above
 the track and the row takes one more line of type.
 
 ## Design rationale
+
+**Mini-chart scope is not selected-window history.** Passing every selected
+change into every short line wrongly described older, undrawn days as missing
+measurements and repeated their history under each card. Scope each marker
+rule to that card's measured range, retain genuine gaps there, and keep the
+complete selected-window history once in native disclosure. Compact readouts
+remove duplicate labels and instructions, not dates, values or inspection.
 
 **The combined model-change comparison is permanently removed.** This gives up
 one observational before/after view over different article populations.
