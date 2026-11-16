@@ -124,6 +124,11 @@ class AppConfig(Contract):
     )
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-11-16",
+            change="Standalone summaries default to the shared generation prompt.",
+            why="Absent prompt selections use the same title/summary instructions as the API.",
+        ),
+        ChangelogEntry(
             version="2026-11-15",
             change="Retire diagnostic knobs and name the retained corpus compression ceiling.",
             why="Historical config drops retired limits and preserves the corpus ratio cutoff.",
@@ -137,11 +142,6 @@ class AppConfig(Contract):
             version="2026-11-11",
             change="Restrict effective visual choices and defaults to supported numeric charts.",
             why="Retired visual names remain inert when reading historical configuration.",
-        ),
-        ChangelogEntry(
-            version="2026-11-10",
-            change="Archive search coverage and Top visibility have separate controls.",
-            why="Absent controls use defaults; existing day-search coverage is unchanged.",
         ),
         ChangelogEntry(
             version="2026-09-28",

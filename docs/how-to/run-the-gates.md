@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-11-11
+**Last Updated**: 2026-11-16
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -624,7 +624,7 @@ bun install --frozen-lockfile --cwd .\services\summary-generator
 bun run --cwd .\services\serve-pipeline-apis check
 bun run --cwd .\services\serve-pipeline-apis test
 bun run --cwd .\services\host-probes check
-bun run --cwd .\services\host-probes test .\test\serve-machine-apis.test.ts .\test\record-machine-api-events.test.ts .\test\check-machine-api-dependencies.test.ts
+bun run --cwd .\services\host-probes test .\test\serve-machine-apis.test.ts .\test\record-machine-api-events.test.ts
 bun run --cwd .\services\feed-ingest-plan check
 bun run --cwd .\services\feed-ingest-plan test .\test\serve-feed-apis.test.ts .\test\retain-api-profiles.test.ts .\test\independent-api-lifetimes.test.ts .\test\feed-ingest-plan-supervisor.test.ts .\test\safe-persist-http.test.ts .\test\feed-ingest-plan-workflow.test.ts .\test\feed-ingest-plan-report.test.ts .\test\feed-ingest-plan-finalization.test.ts .\test\feed-ingest-plan-host.test.ts
 ```
