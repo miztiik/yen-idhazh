@@ -118,8 +118,9 @@ def to_digest_item(
     """One finished item as a reader consumes it. The link is a first-class element.
 
     The published title is ours when the summarizer wrote one, and the source's
-    when it did not. The fallback runs on a real item whenever a drafted title
-    missed the asked range, so it is the normal path and not the error path.
+    when it did not. The fallback runs on a real item whenever the drafted title
+    could not be published as written - blank, carrying an address, or longer
+    than the field - so it is the normal path and not the error path.
 
     `planned` is the plan row this item was built from, and it is the only place
     the ranking signal and the clock behind `published_at` still exist by now.

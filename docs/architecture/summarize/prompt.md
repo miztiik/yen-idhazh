@@ -60,26 +60,17 @@ Keep editorial wording shared across models. Model-specific turn markers and tem
 - Start the first band at zero and reject duplicate or descending thresholds.
 - Choose using source-body length before truncation. `Article.band_source_words` falls back to the available text length for an older payload without that count.
 - Keep the extraction floor, brief compression rule and first band's request consistent.
-- Keep the absolute rejection floor below every requested band minimum.
 - Check that configured thresholds remain reachable under the extraction and context rules.
 
 The active values live in `config/idhazh.json`; [summary length](../../concepts/config/summary-length.md) owns their configuration. Do not copy model-specific tuning values into generic tests.
 
-## What happens when a reply misses the ask
+## A reply is published as the model wrote it
 
-The requested range and the acceptance policy serve different purposes. `summarize.length_policy` tolerates reasonable misses without losing the story.
+No length decides whether a reply publishes, and nothing shortens one. A reply that holds its shape - a `title` and a `summary`, neither empty - is published word for word, however long or short. Its words meet one check, the [address rule](#the-shape-is-not-the-whole-check); its whitespace is tidied as [the next section](#paragraphs-follow-the-models-prose) says. A summary that is empty once that tidying is done fails the item as `bad_shape`.
 
-| Reply | Action |
-| --- | --- |
-| Within the maximum plus allowance | Publish unchanged |
-| Above it on a band whose action is `trim` | Keep the last complete sentence that fits |
-| Above it on a band whose action is `publish` | Publish over-length |
-| Below the requested minimum | Publish unless the absolute floor applies |
-| Below the absolute floor, from a sufficiently long source | Fail the item with its typed length cause |
+The decoder's grammar bounds neither field above, so a long reply is neither cut off mid-field nor refused. Only the call's output budget ([below](#the-output-budget-is-derived-not-picked)) ends one early. There is no automatic retry.
 
-Use the larger of the proportional and fixed-word overshoot allowances. Apply the absolute floor only above its configured source-length threshold. If no sentence boundary fits a trim, keep the whole reply rather than publish a broken clause.
-
-Long-form bands may retain an over-length ending because it can carry a qualification or response. Length alone must not silently delete a story for exceeding the requested maximum. There is no automatic retry for these misses.
+Do not add a cut, a floor or a character limit to a reply. A sentence splitter cannot find a safe cut, because abbreviations, decimals and percentages contain periods, and a reader can see that a summary is long or short but cannot see that part of it was deleted.
 
 ## Paragraphs follow the model's prose
 
@@ -88,10 +79,7 @@ One blank line separates paragraphs. Prose normalization rejoins a lone
 newline, collapses repeated blank lines and replaces other control characters
 with spaces.
 
-Preserve every nonempty paragraph. Sentence trimming must preserve retained
-paragraph breaks.
-
-Keep decoder character limits loose enough for replies the length policy would publish. A parse failure happens before trimming, so a tight rail can bypass the intended tolerance.
+Preserve every nonempty paragraph.
 
 If extraction read only part of the article, state that limitation on the item. Asking for fewer summary words does not tell the reader that part of the source was missing.
 
@@ -239,13 +227,14 @@ Never recover a partially written summary. A visual plan may cite only validated
 ### The output budget is derived, not picked
 
 When the model file does not declare `sampling.max_tokens`, derive reply budgets
-from the schema's bounded arrays and strings. An explicit limit replaces those
-budgets on each request, including continuations; see
+from the schema's bounded arrays and strings, and from a word count in config
+for the prose fields, which carry no length bound. An explicit limit replaces
+those budgets on each request, including continuations; see
 [model-file.md](../../concepts/config/model-file.md#design-rationale).
 Both calls use the shared JSON-width calculation, but their character-to-token
 conversions differ because their outputs differ.
 
-The summarize-and-plan reply contains prose and bounded structure. The label reply uses a measured output-density estimate. Name the tokenizer and evidence behind that estimate; it is not a mathematical guarantee for every possible string.
+The summarize-and-plan reply contains prose and bounded structure. The prose share is a reservation, not a limit: a reply that writes more spends the room the structure leaves. The label reply uses a measured output-density estimate. Name the tokenizer and evidence behind that estimate; it is not a mathematical guarantee for every possible string.
 
 The label reply also becomes part of the second prompt. Count it in both positions when checking the context window. Do not silently clamp a reply budget to available context. Report a window failure at the call site.
 
@@ -283,7 +272,7 @@ A cut label reply fails as `labels_truncated`. Do not repair missing arrays as e
 After parsing, `to_summary` enforces publishability.
 
 - Reject a summary containing an address or the sanitizer's link marker with `leaked_address`. Reuse the sanitizer's definition instead of adding another URL pattern.
-- If the generated title is invalid or leaks an address, discard that title and use the established fallback; do not discard a valid summary for a title failure.
+- If the generated title is blank, leaks an address or is longer than the payload's title field holds, discard that title and use the established fallback; do not discard a valid summary for a title failure. Publish any other title as written, whatever its length.
 - Record a typed failure and its observed values in item health. Do not infer outcomes later by scraping logs.
 
 ## Two spans on one call
@@ -302,7 +291,7 @@ The chat-template path lets the runtime manage its reasoning split. It must stil
 
 Derive template keyword names and turn structure from the model declaration. Do not rely on an instruction inserted into article text to change reasoning mode.
 
-Re-tokenize the complete rendered requests for a candidate model. Recorded incumbent fixtures prove parser behavior, not another model's template, context fit or live responses. Keep decoder character rails derived from the current acceptance policy, while retaining word-based content checks after parsing.
+Re-tokenize the complete rendered requests for a candidate model. Recorded incumbent fixtures prove parser behavior, not another model's template, context fit or live responses.
 
 ## What the prompt asks for, section by section
 
@@ -310,7 +299,6 @@ Re-tokenize the complete rendered requests for a candidate model. Recorded incum
 | --- | --- |
 | Framing | Make clear how the article knows what it reports |
 | Title | A new factual title drawn from the body, with a source headline when available |
-| Length | The selected band's request |
 | Source form | Attribute an abstract's claims to its authors |
 | Attribution | Name who made a claim; distinguish self-reported figures |
 | Certainty | Preserve the difference between proposal, forecast, claim and result |
@@ -320,7 +308,7 @@ Re-tokenize the complete rendered requests for a candidate model. Recorded incum
 
 ## The title is ours, and the source's is only a fallback
 
-Ask for actor and action without hype, withheld facts or a question addressed to the reader. Fence the source headline like the body. Require a title in the decoded draft so the model attempts it, but permit the published title to fall back to the source headline and then `Untitled item`.
+Ask for actor and action without hype, withheld facts or a question addressed to the reader. Fence the source headline like the body. Require a title in the decoded draft so the model attempts it. Publish the model's headline as it wrote it, with extra spaces collapsed; no word range applies to it. Fall back to the source headline, and then `Untitled item`, only when the model's is blank, carries an address or is longer than the payload's title field holds (500 characters).
 
 An absent source headline does not block summarization. The article keeps that
 absence; the generated title belongs to the summary, not to the source.
@@ -359,7 +347,7 @@ Persisted spans, source hashes and re-slicing checks remain intact: they validat
 the evidence rather than merely help debugging. Summary instructions and the
 shared-prefix continuation are unchanged.
 
-A stable prefix reduces repeated reading without treating prompt wording as a control. Per-band requests fit different source lengths while a separate acceptance policy preserves useful replies. Summary-first decoding protects the reader's primary content when visual planning cannot finish. Model-specific transport declarations keep shared editorial instructions testable across models.
+A stable prefix reduces repeated reading without treating prompt wording as a control. Per-band requests fit different source lengths. Summary-first decoding protects the reader's primary content when visual planning cannot finish. Model-specific transport declarations keep shared editorial instructions testable across models.
 
 Task paths belong to the selected configuration so a candidate never reads
 instructions from the original checkout. One directory holds distinct products

@@ -848,17 +848,11 @@ def anchored(
 # paid for
 
 
-#: How many characters of a decoded string one word may cost, matching
-#: `summarize._MAX_CHARS_PER_WORD` because both rails are cut from the same
-#: cloth: a word count in `config/` spent as a `maxLength` the grammar enforces.
-CHARS_PER_WORD: Final = 12
-
-
 class SummarizeAndPlanReply(NamedTuple):
     """What the summarize-and-plan call came back with, as the two contracts it stands for.
 
-    The decoder shape is not this. That one is generated per band and carries
-    neither of the fields code stamps; it exists to be a grammar and it stops at
+    The decoder shape is not this. That one carries neither of the fields code
+    stamps; it exists to be a grammar and it stops at
     `parse_summarize_and_plan`. What a caller gets is a summary draft the summarizer's own
     gates can read and a plan the validator can rule on.
 
@@ -915,7 +909,7 @@ def _plan_draft_model(legacy_references: bool = False) -> type[BaseModel]:
 def _summarize_and_plan_model(
     draft: type[BaseModel], legacy_references: bool = False
 ) -> type[BaseModel]:
-    """Keyed on the band-narrowed summary shape, which is a hashable type."""
+    """Keyed on the summary draft shape, which is a hashable type."""
     return create_model(
         "SummarizeAndPlanReply",
         __base__=ContractModel,
@@ -1029,10 +1023,11 @@ def summarize_and_plan_user_turn(
 
 
 def summarize_and_plan_prose_words(prompt_config: SummarizeConfig | None = None) -> int:
-    """Every word the reply's prose fields can hold, at their widest.
+    """The words the output budget reserves for the reply's prose fields.
 
-    The union rail rather than one band's, because the budget is a property of
-    the reply shape and not of the article in front of it.
+    The union over bands rather than one band's figure, because the budget is a
+    property of the reply shape and not of the article in front of it. A
+    reservation and not a limit: neither prose field carries a length bound.
     """
     ask = prompt_config or SummarizeConfig()
     return ask.title_words_max + ask.decoder_words_max()
@@ -1044,15 +1039,15 @@ def summarize_and_plan_budget_tokens(
     """The summarize-and-plan call's output budget, derived from the reply shape's own bounds.
 
     **Not picked.** Every array in the shape carries a `maxItems` and every
-    decoded string a `maxLength`, so the longest reply the grammar admits is
-    arithmetic, and the arithmetic runs again on every import - move a bound and
-    this number moves with it, without anybody remembering to.
+    decoded string but the two prose fields a `maxLength`, so everything in the
+    longest reply the grammar admits except its prose is arithmetic, and the
+    arithmetic runs again on every import - move a bound and this number moves
+    with it, without anybody remembering to.
 
     Two halves, converted differently, because they are two different kinds of
     text and one rule would be wrong about one of them.
 
-    - **The prose** is `title` and the summary. Their rails are
-      word counts from `config/`, spent as characters at `CHARS_PER_WORD`, so
+    - **The prose** is `title` and the summary. They have no length bound, so
       the honest unit for them is words: `extract.approx_tokens` at 1.3 tokens a
       word is what the truncation cap already spends, and using a second ratio
       here would put two answers in the repository to one question.
@@ -1062,9 +1057,9 @@ def summarize_and_plan_budget_tokens(
       is used unconverted.
 
     **What this guarantees, and what it does not.** The structural half is a
-    true ceiling. The prose half is a sizing: a reply that spent its whole
-    character rail on 12-character words would cost more tokens than the
-    measured ratio a word, and the rail is a character rail. That is deliberate and it is why
+    true ceiling. The prose half is a sizing: nothing in the grammar stops a
+    reply from writing more words than it reserves, and one that does spends the
+    room the structure leaves. That is deliberate and it is why
     `recovered_completion` exists - section 11.3's wording is that the budget is
     the brake and the recovery is the seatbelt. A budget large enough to be an
     unbreakable ceiling would leave no window for the article it is summarising.
@@ -1083,8 +1078,9 @@ def summarize_and_plan_budget_tokens(
     """
     ask = prompt_config or SummarizeConfig()
     words = summarize_and_plan_prose_words(ask)
-    widest = widest_json_characters(summarize_and_plan_schema(ask, plan=plan))
-    structure = widest - words * CHARS_PER_WORD
+    structure = widest_json_characters(
+        summarize_and_plan_schema(ask, plan=plan), free_text_characters=0
+    )
     return approx_tokens(words) + structure
 
 
@@ -1251,7 +1247,7 @@ def parse_summarize_and_plan(
     brief: bool = False,
     plan: bool = True,
 ) -> SummarizeAndPlanReply:
-    """A whole reply, held to the band the article is in, as the two contracts it stands for.
+    """A whole reply, held to the shape the decoder was given, as the two contracts it stands for.
 
     The decoder shape is an implementation detail of the grammar and stops here.
     What comes out is a `SummaryDraft` and a `VisualPlan`, and building the plan

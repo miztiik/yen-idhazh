@@ -27,57 +27,34 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Mapping
-from functools import lru_cache
 from pathlib import Path
 from string import Template
-from typing import Any, Final, NamedTuple
+from typing import Any, Final
 
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
     ValidationError,
-    create_model,
 )
 
 from idhazh.config import DEFAULT_CONFIG_DIR
-from idhazh.contracts.article import Article, ArticleStatus
+from idhazh.contracts.article import UNTRUSTED_LINE_MAX, Article, ArticleStatus
 from idhazh.contracts.base import (
-    PARAGRAPH_BREAK,
     canonical_json,
     derive_output_digest,
     normalize_prose,
-    paragraphs_of,
 )
 from idhazh.contracts.call_cost import CallCost, CallKind
 from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.knobs.prompts import PromptFilesConfig
-from idhazh.contracts.knobs.summarize import OverLengthAction, SummarizeConfig, SummaryBand
-from idhazh.contracts.summary import LengthAction, Summary, SummaryStatus
+from idhazh.contracts.knobs.summarize import SummarizeConfig
+from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.llm.server import Completion, TurnMarkers, request_payload
 from idhazh.load_prompt_text import load_prompt_text
 from idhazh.sanitize import LINK_PLACEHOLDER, sanitize, untrusted_block
 
-# How the decoder's character rails are derived from the word range the pipeline
-# accepts. The floor is a generation control as much as a check - grammar
-# constrained decoding reads it and keeps writing - so a summary that stops after
-# two sentences is prevented rather than caught. It is set below real English,
-# which runs a little under six characters a word once the space is counted, so a
-# genuine summary at the gate's floor clears it and fails on words if it fails at
-# all. The ceiling is loose and only stops a runaway decode. The word gate in
-# `to_summary` is what decides publishability, and the only rule that can name
-# the real cause in a failure detail.
-#
-# The title gets the ceiling and no floor. The floor exists to stop a long field
-# ending early, which is a failure mode a headline does not have; applied to one
-# it would only pad a good short line into a bad long one.
-_MIN_CHARS_PER_WORD: Final = 5
-_MAX_CHARS_PER_WORD: Final = 12
-
 _FENCED_JSON = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL)
-# One sentence, ending at the terminator and keeping it. Used only by the
-# trimmer, which needs whole sentences and never a character offset.
-_SENTENCE = re.compile(r"[^.!?]*[.!?]+[\"')\]]*\s*|[^.!?]+$")
 
 # Why there was no reply to parse. One sentence per cause, because the operator
 # reading a failed item needs to know whether to restart a process or shorten a
@@ -117,23 +94,25 @@ _NO_REPLY_DETAIL: Final[dict[FailureCode, str]] = {
 }
 
 
+# What the decoder is constrained to emit, and what we agree to believe.
+#
+# Closed to unknown keys, so a planted tool call fails here rather than reaching
+# a payload - the shape is the control, not the prompt.
+#
+# Each field keeps one bound: it is not empty. Nothing here limits how long a
+# headline or a summary may be, so the words the model writes are the words that
+# are published.
+#
+# `title` is required here and optional on the payload. Grammar-constrained
+# decoding is free to skip a property that is not required, so an optional title
+# is a feature that may simply never fire; the payload stays optional because a
+# headline that cannot be published as written should cost the headline, not the
+# item.
+#
+# The class has no docstring on purpose: pydantic copies one into the JSON
+# schema, and this schema is the grammar the server is sent and the bytes the
+# fingerprint hashes.
 class SummaryDraft(BaseModel):
-    """What the decoder is constrained to emit, and what we agree to believe.
-
-    Closed to unknown keys, so a planted tool call fails here rather than
-    reaching a payload - the shape is the control, not the prompt.
-
-    The bounds declared here are the permissive base. `draft_model` narrows them
-    to the numbers config holds, because a decoder counting words differently
-    from the prompt rejects a reply that did exactly what it was told.
-
-    `title` is required here and optional on the payload. Grammar-constrained
-    decoding is free to skip a property that is not required, so an optional
-    title is a feature that may simply never fire; the payload stays optional
-    because a title outside the asked range should cost the rewrite, not the
-    item.
-    """
-
     model_config = ConfigDict(extra="forbid")
 
     # Field order is decode order. A list of key points was decoded before the
@@ -152,47 +131,19 @@ def _template(
     return Template(load_prompt_text(config_dir, files.summarize_article))
 
 
-@lru_cache(maxsize=16)
-def _draft_model(
-    min_chars: int,
-    max_chars: int,
-    title_max_chars: int,
-) -> type[SummaryDraft]:
-    """Keyed on plain ints, because a Pydantic config object is not hashable."""
-    return create_model(
-        "SummaryDraft",
-        __base__=SummaryDraft,
-        title=(str, Field(min_length=1, max_length=title_max_chars)),
-        summary=(str, Field(min_length=min_chars, max_length=max_chars)),
-    )
-
-
 def draft_model(
     prompt_config: SummarizeConfig | None = None,
     *,
     source_words: int | None = None,
     brief: bool = False,
 ) -> type[SummaryDraft]:
-    """The shape the decoder is held to, built from the numbers config holds.
+    """The shape the decoder is held to, which is the same for every article.
 
-    The word rails come from the ladder and its tolerance, never from a global
-    pair. They are the widest any band can publish, because the decoder enforces
-    them as a character budget: a reply past the rail fails to parse, and a reply
-    that cannot parse never reaches the verdict that would have trimmed it or
-    published it long.
-
-    `source_words` and `brief` are taken and not read. They picked the band whose
-    key-point count the decoder enforced, and the two rails that are left are the
-    widest any band can publish, so every band now gets the same shape. They stay
-    on the signature because the caller that knows the article passes them, and a
-    band-keyed rail that returns is a rail this function reads again.
+    The arguments are taken and not read. The shape carries no length bound, so
+    it does not depend on the config or on which band an article is in. They stay
+    on the signature because the callers that know the article pass them.
     """
-    ask = prompt_config or SummarizeConfig()
-    return _draft_model(
-        ask.decoder_words_min() * _MIN_CHARS_PER_WORD,
-        ask.decoder_words_max() * _MAX_CHARS_PER_WORD,
-        ask.title_words_max * _MAX_CHARS_PER_WORD,
-    )
+    return SummaryDraft
 
 
 def output_schema(
@@ -213,12 +164,7 @@ def output_schema_text(
     source_words: int | None = None,
     brief: bool = False,
 ) -> str:
-    """One serialization, so the fingerprint's schema digest is stable.
-
-    The fingerprint calls this with no article, so it hashes the union rail: a
-    stable value that still moves when any band's key-point envelope moves, while
-    `prompt_inputs` hashes every band's exact numbers besides.
-    """
+    """One serialization, so the fingerprint's schema digest is stable."""
     return canonical_json(
         output_schema(prompt_config, source_words=source_words, brief=brief)
     )
@@ -356,113 +302,19 @@ def parse_draft(
     The completion boundary has already separated reasoning using runtime
     channels or the selected entry's explicit delimiters. This parser reads
     only the answer; `to_summary` enforces the reasoning declaration.
-
-    `source_words` and `brief` pick the same band the reply was asked under, so
-    the decoder validates a key-point count against the band that requested it.
     """
     content = raw.strip()
     fenced = _FENCED_JSON.match(content)
     if fenced:
         content = fenced.group(1)
-    ask = prompt_config or SummarizeConfig()
-    draft = draft_model(ask, source_words=source_words, brief=brief).model_validate_json(content)
+    draft = draft_model(
+        prompt_config, source_words=source_words, brief=brief
+    ).model_validate_json(content)
     # Normalize paragraph separators and remove control characters before publication.
     draft.summary = normalize_prose(draft.summary)
+    if not draft.summary:
+        raise ValueError("the summary holds nothing once its whitespace and controls are folded")
     return draft
-
-
-class LengthVerdict(NamedTuple):
-    """What to do with a reply of this length, and the sentence that says why."""
-
-    action: LengthAction
-    detail: str
-
-
-def length_verdict(
-    words: int,
-    band: SummaryBand,
-    ask: SummarizeConfig,
-    *,
-    source_words: int,
-) -> LengthVerdict:
-    """Whether a reply of this many words publishes, and in what shape.
-
-    A length miss is the model rounding a request, not a claim we can check
-    against the article, so it may not cost the reader the story. Only one length
-    still fails an item: a reply under `absolute_floor_words` from a source long
-    enough to have said something, which is a failed extraction wearing a
-    summary's clothes rather than a short summary.
-
-    Overshoot past the allowance is the band's own call. A short band trims,
-    because wire-shaped prose front-loads and the tail is the safe end to cut. A
-    long band publishes over-length, because a feature's key result may arrive
-    last and cutting it is how a summary stops being true.
-
-    Undershoot publishes. The reader can see that a summary is short; they cannot
-    see one that was deleted.
-    """
-    policy = ask.length_policy
-    if (
-        source_words > policy.floor_applies_above_source_words
-        and words < policy.absolute_floor_words
-    ):
-        return LengthVerdict(
-            LengthAction.FAIL,
-            f"summary is {words} words from a {source_words}-word source, under the "
-            f"{policy.absolute_floor_words}-word floor, so it is a failed extraction",
-        )
-    ceiling = band.target_words_max + ask.allowance(band)
-    if words > ceiling:
-        if band.over_length_action is OverLengthAction.PUBLISH:
-            return LengthVerdict(
-                LengthAction.PUBLISH_OVER,
-                f"summary is {words} words against a {band.target_words_max}-word ask; "
-                "published long rather than cut a key detail off the end",
-            )
-        return LengthVerdict(
-            LengthAction.TRIM,
-            f"summary is {words} words against a {band.target_words_max}-word ask; "
-            f"trimmed to the last complete sentence inside {ceiling}",
-        )
-    floor = band.target_words_min * (1.0 - policy.undershoot_ratio)
-    if words < floor:
-        return LengthVerdict(
-            LengthAction.PUBLISH,
-            f"summary is {words} words against a {band.target_words_min}-word ask; "
-            "published short, because a thin summary still tells the reader something",
-        )
-    return LengthVerdict(LengthAction.PUBLISH, "")
-
-
-def trim_to_words(summary: str, ceiling: int) -> str:
-    """The longest run of whole sentences that fits, or the summary untouched.
-
-    Never a mid-sentence cut. A summary with no sentence end inside the budget is
-    returned whole and published long: a dangling half-clause reads as a bug to a
-    reader, where an over-long paragraph reads only as an over-long paragraph.
-
-    Paragraph by paragraph, and the break is kept. Joining everything with a
-    space was how the old trimmer worked, which destroyed the break on exactly
-    the summaries long enough to have earned one - a trim fires because a reply
-    ran long, and a long reply is the only kind this pipeline asks to break.
-    """
-    kept: list[list[str]] = []
-    running = 0
-    for block in paragraphs_of(summary.strip()):
-        sentences: list[str] = []
-        for sentence in _SENTENCE.findall(block):
-            length = len(sentence.split())
-            if running + length > ceiling:
-                break
-            sentences.append(sentence.strip())
-            running += length
-        if sentences:
-            kept.append(sentences)
-        if running >= ceiling:
-            break
-    if not kept:
-        return summary
-    return PARAGRAPH_BREAK.join(" ".join(block) for block in kept)
 
 
 def _cost_of(completion: Completion) -> CallCost:
@@ -489,7 +341,6 @@ def _failed(
     generated_at: str,
     completion: Completion | None = None,
     failure_code: FailureCode | None = None,
-    length_action: LengthAction | None = None,
 ) -> Summary:
     """An item that did not land, carrying what the attempt really cost.
 
@@ -511,7 +362,6 @@ def _failed(
         output_digest=derive_output_digest(None),
         model_id=model_id,
         source_truncated=article.truncated,
-        length_action=length_action,
         generated_at=generated_at,
         status=SummaryStatus.FAILED,
         failure_code=failure_code,
@@ -540,18 +390,21 @@ def _leaked_address(text: str) -> str | None:
     return None
 
 
-def _publishable_title(raw: str, ask: SummarizeConfig) -> str | None:
-    """The drafted title, or nothing if it missed the range it was asked for.
+def _publishable_title(raw: str) -> str | None:
+    """The drafted headline exactly as the model wrote it, or nothing.
 
-    Nothing, and not a failure. A title is the one part of the payload with a
-    working fallback - the source's own headline - so a bad one costs the
-    rewrite and not the item (section 1a). The summary has no such fallback,
-    which is why the same miss there is fatal. An address in the title takes the
+    Only extra spaces are tidied; the words, their count and their length are the
+    model's. Three headlines cannot be published and each one yields nothing
+    rather than a failure: a blank one, one that carries an address, and one
+    longer than the payload field holds. A title is the one part of the payload
+    with a working fallback - the source's own headline - so a bad one costs the
+    headline and not the item (section 1a). The summary has no such fallback,
+    which is why an address there is fatal. An address in the title takes the
     same route out for the same reason: dropping it removes the address from the
     page, and the summary is checked on its own.
     """
     title = " ".join(raw.split())
-    if not ask.title_words_min <= len(title.split()) <= ask.title_words_max:
+    if not title or len(title) > UNTRUSTED_LINE_MAX:
         return None
     if _leaked_address(title) is not None:
         return None
@@ -572,6 +425,10 @@ def to_summary(
 ) -> Summary:
     """One article plus one completion becomes exactly one payload, valid or failed.
 
+    A reply that holds its shape is published exactly as the model wrote it: no
+    length is counted against it and none is cut from it. The one rule on its
+    words is the address check below.
+
     `thinking` is the entry's own declaration, and it decides two of the
     refusals below rather than softening them. Where nothing asked for
     reasoning, reasoning arriving by either route is the flag not taking and the
@@ -580,7 +437,6 @@ def to_summary(
     carried it would be publishing a stranger's page's influence in our own
     words (Guardrail #11).
     """
-    ask = prompt_config or SummarizeConfig()
     if article.status is not ArticleStatus.OK:
         return _failed(
             article,
@@ -635,27 +491,6 @@ def to_summary(
             failure_code=FailureCode.BAD_SHAPE,
         )
 
-    ask = prompt_config or SummarizeConfig()
-    band = ask.band_for(article.band_source_words)
-    verdict = length_verdict(
-        len(draft.summary.split()),
-        band,
-        ask,
-        source_words=article.band_source_words,
-    )
-    if verdict.action is LengthAction.FAIL:
-        return _failed(
-            article,
-            model_id=model_id,
-            detail=verdict.detail,
-            generated_at=generated_at,
-            completion=completion,
-            failure_code=FailureCode.LENGTH_OUT_OF_RANGE,
-            length_action=verdict.action,
-        )
-    if verdict.action is LengthAction.TRIM:
-        draft.summary = trim_to_words(draft.summary, band.target_words_max + ask.allowance(band))
-
     leaked = _leaked_address(draft.summary)
     if leaked is not None:
         return _failed(
@@ -667,7 +502,7 @@ def to_summary(
             failure_code=FailureCode.LEAKED_ADDRESS,
         )
 
-    title = _publishable_title(draft.title, ask)
+    title = _publishable_title(draft.title)
     # The stage makes one call today, so the item total is that call's numbers -
     # derived rather than transcribed, so a second call cannot be recorded in a
     # slot and left out of the total (`Summary` refuses that anyway).
@@ -682,7 +517,6 @@ def to_summary(
         model_id=model_id,
         attempt=attempt,
         source_truncated=article.truncated,
-        length_action=verdict.action,
         call_1=cost,
         input_tokens=cost.input_tokens,
         output_tokens=cost.output_tokens,

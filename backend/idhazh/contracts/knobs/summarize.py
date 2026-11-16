@@ -1,8 +1,7 @@
-"""What the prompt asks the model for, and what the pipeline accepts back."""
+"""What the prompt may ask the model for, and how much room the reply gets."""
 
 from __future__ import annotations
 
-from enum import StrEnum
 from typing import Self
 
 from pydantic import Field, model_validator
@@ -10,71 +9,33 @@ from pydantic import Field, model_validator
 from idhazh.contracts.base import Model
 
 
-class OverLengthAction(StrEnum):
-    """What to do with a reply that overshoots its band by more than the policy allows."""
-
-    TRIM = "trim"
-    PUBLISH = "publish"
-
-
 class LengthPolicy(Model):
-    """What the pipeline accepts, once the prompt has asked.
+    """How much room the output budget leaves past a band's ask.
 
-    The ask lives on the band; this is the tolerance around it. Both are here
-    rather than in `evaluation` because a length miss is not a quality finding -
-    it is the model rounding a request - and a tolerance that cannot see which
-    band an item is in cannot be right for more than one of them.
+    Nothing here accepts, trims or rejects a reply: what the model writes is what
+    is published. The two numbers only size the budget a call is given
+    (`SummarizeConfig.decoder_words_max`), so a reply that runs past its ask
+    still has the tokens to finish.
 
-    Every number is a starting point rather than a measurement (Guardrail #10). Our
-    own length figures describe a pipeline mid-repair - the prompt is being
-    tuned and a fine-tune is in flight - so none of them was used to pick one.
+    Every number is a starting point rather than a measurement (Guardrail #10).
     """
 
     overshoot_ratio: float = Field(
         default=0.20,
         ge=0.0,
         description=(
-            "How far past the band's ask a reply may run and still publish untouched, "
-            "as a share of `target_words_max`. Whichever of this and `overshoot_words` "
-            "is larger wins, so a short band gets a usable allowance too: 20 percent of "
-            "45 words is nine, and nine words is one clause."
+            "How far past the band's ask the output budget leaves room for a reply to "
+            "run, as a share of `target_words_max`. Whichever of this and "
+            "`overshoot_words` is larger wins, so a short band gets usable room too: 20 "
+            "percent of 45 words is nine, and nine words is one clause."
         ),
     )
     overshoot_words: int = Field(
         default=25,
         ge=0,
         description=(
-            "The same allowance as a flat word count, for the bands where a ratio is "
+            "The same room as a flat word count, for the bands where a ratio is "
             "too small to mean anything. The larger of the two applies."
-        ),
-    )
-    undershoot_ratio: float = Field(
-        default=0.30,
-        ge=0.0,
-        le=1.0,
-        description=(
-            "How far under the band's ask a reply may fall and still publish, as a share "
-            "of `target_words_min`. Brevity is not a fault: a short summary of a long "
-            "article is a thin summary, and the reader can see that it is short. Losing "
-            "the story entirely tells them nothing."
-        ),
-    )
-    absolute_floor_words: int = Field(
-        default=25,
-        ge=1,
-        description=(
-            "Below this a reply is a failed extraction wearing a summary's clothes, and "
-            "it is the one length that still fails an item. Applies only to sources "
-            "longer than `floor_applies_above_source_words`, because a 40-word summary "
-            "of a 60-word post is the correct answer."
-        ),
-    )
-    floor_applies_above_source_words: int = Field(
-        default=700,
-        ge=0,
-        description=(
-            "Sources shorter than this are exempt from `absolute_floor_words`. A brief "
-            "has no length to lose."
         ),
     )
 
@@ -87,16 +48,7 @@ class SummaryBand(Model):
     )
     target_words_min: int = Field(ge=1, description="The shortest summary the prompt asks for.")
     target_words_max: int = Field(ge=1, description="The longest summary the prompt asks for.")
-    over_length_action: OverLengthAction = Field(
-        default=OverLengthAction.TRIM,
-        description=(
-            "What to do with a reply that overshoots past the policy's allowance. A "
-            "short band trims at the last complete sentence that fits, because wire-"
-            "shaped prose front-loads and a tail cut is safe. A long band publishes "
-            "over-length instead: a feature's key result may land last, so cutting "
-            "the tail is how a summary becomes wrong rather than merely long."
-        ),
-    )
+
     @model_validator(mode="after")
     def _the_range_is_ordered(self) -> Self:
         if self.target_words_min >= self.target_words_max:
@@ -134,9 +86,6 @@ def _default_bands() -> list[SummaryBand]:
     every source past 4,000 arrives with much the same evidence and earns the
     same ask. A rung above it would grade articles by a length the model never
     saw.
-
-    Each band also carries what to do when a reply runs long - see
-    `SummaryBand.over_length_action`.
     """
     return [
         SummaryBand(
@@ -150,32 +99,24 @@ def _default_bands() -> list[SummaryBand]:
         ),
         SummaryBand(
             min_source_words=2000, target_words_min=95, target_words_max=160,
-            over_length_action=OverLengthAction.PUBLISH,
         ),
         SummaryBand(
             min_source_words=4000, target_words_min=120, target_words_max=200,
-            over_length_action=OverLengthAction.PUBLISH,
         ),
     ]
 
 
 class SummarizeConfig(Model):
-    """What the prompt asks the model for, and what the pipeline accepts back.
+    """What the prompt may ask the model for, and how much room the reply gets.
 
-    A prompt is a request and a gate is a rule. Asking for a tighter range than
-    we accept is what stops a two-word miss from losing a story, so the ask
-    (`bands`) and the tolerance around it (`length_policy`) both live here,
-    where an operator editing one can see the other.
-
-    The allowance is derived from the band rather than applied flat to all five
-    rungs, so it can see which band an item is in. No length outcome except
-    `length_policy.absolute_floor_words` drops an item: a reply outside the
-    tolerance is still a story, and deleting it would cost the day a story to
-    punish the model for rounding.
+    A reply is published exactly as the model wrote it, so nothing here accepts,
+    trims or rejects one. `bands` is the length each article size may be asked
+    for and `length_policy` the room the output budget leaves past it; the title
+    numbers are the headline's own.
 
     Every band and title number here is substituted into the prompt text at
-    render time, so the prompt cannot drift from the bounds the pipeline enforces
-    (Guardrail #6).
+    render time, so a prompt that states one cannot drift from the number the
+    output budget is sized by (Guardrail #6).
     """
 
     bands: list[SummaryBand] = Field(
@@ -190,30 +131,26 @@ class SummarizeConfig(Model):
     length_policy: LengthPolicy = Field(
         default_factory=LengthPolicy,
         description=(
-            "How far a reply may miss its band's ask and still publish, and what happens "
-            "when it misses by more. Config rather than code so the tolerance can move "
-            "with the prompt while the prompt is still being tuned."
+            "How much room the output budget leaves for a reply to run past its band's "
+            "ask. Config rather than code so it can move with the prompt while the "
+            "prompt is still being tuned."
         ),
     )
     title_words_min: int = Field(
         default=6,
         ge=1,
         description=(
-            "Shortest title the prompt asks for. Below this a headline stops naming "
-            "who did what, and the reader is back to guessing from the source's own "
-            "framing."
+            "Shortest title a prompt template may ask for, as `$title_words_min`. No "
+            "published headline is checked against it."
         ),
     )
     title_words_max: int = Field(
         default=14,
         ge=1,
-        le=40,
         description=(
-            "Longest title the prompt asks for, and the decoder's ceiling. Unlike the "
-            "summary there is no floor on the decoder: a headline does not stop early, "
-            "and a floor would only pad a good short one. Capped at 40 so the widest "
-            "decoder ceiling this can produce still fits an UntrustedLine, which is "
-            "what the payload field is."
+            "Longest title a prompt template may ask for, as `$title_words_max`, and the "
+            "headline's share of the reply's output budget. A headline is published as "
+            "the model wrote it and is never cut or dropped for its length against this."
         ),
     )
     max_verbatim_words: int = Field(
@@ -249,16 +186,6 @@ class SummarizeConfig(Model):
             raise ValueError("bands must climb, and no two may start at the same length")
         if self.title_words_min > self.title_words_max:
             raise ValueError("title_words_min must not exceed title_words_max")
-        # Rung 0 asks for the shortest summary on the ladder, so a floor at or above
-        # it fails every note the digest carries - and it fails them as a bad
-        # extraction, which is the one length verdict that still drops an item.
-        if self.length_policy.absolute_floor_words >= min(
-            band.target_words_min for band in self.bands
-        ):
-            raise ValueError(
-                "length_policy.absolute_floor_words must sit below every band's "
-                "target_words_min, or the shortest band fails every item"
-            )
         return self
 
     def band_for(self, source_words: int) -> SummaryBand:
@@ -270,21 +197,15 @@ class SummarizeConfig(Model):
         return chosen
 
     def allowance(self, band: SummaryBand) -> int:
-        """Words past the band's ask that still publish untouched."""
+        """Words past the band's ask that the output budget leaves room for."""
         policy = self.length_policy
         return max(int(band.target_words_max * policy.overshoot_ratio), policy.overshoot_words)
 
     def decoder_words_max(self) -> int:
-        """The widest reply any band can publish, which is the rail the decoder gets.
+        """The most words any band's ask and allowance add up to.
 
-        Deliberately the loosest number in the file. The rail is enforced by the
-        decoder as a character budget, so a reply that runs past it fails to parse
-        at all - and a reply that cannot parse never reaches the length verdict
-        that would have trimmed or published it. A tight rail would turn every
-        overshoot back into the lost item this policy exists to prevent.
+        The union over bands rather than one band's figure, so it does not depend
+        on the article in front of it. It sizes the output budget; it is not a
+        limit on what is published.
         """
         return max(band.target_words_max + self.allowance(band) for band in self.bands)
-
-    def decoder_words_min(self) -> int:
-        """The narrowest reply any band can publish. See `decoder_words_max`."""
-        return self.length_policy.absolute_floor_words

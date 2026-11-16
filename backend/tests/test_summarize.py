@@ -32,7 +32,7 @@ from support.server import RecordedEndpoint
 from idhazh import config, extract
 from idhazh.classify import calls
 from idhazh.classify.calls import summarize_and_plan_schema
-from idhazh.contracts.article import Article, ArticleStatus
+from idhazh.contracts.article import UNTRUSTED_LINE_MAX, Article, ArticleStatus
 from idhazh.contracts.base import (
     canonical_json,
     derive_output_digest,
@@ -42,14 +42,9 @@ from idhazh.contracts.call_cost import CallKind
 from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.knobs.prompts import PromptFilesConfig
-from idhazh.contracts.knobs.summarize import (
-    LengthPolicy,
-    OverLengthAction,
-    SummarizeConfig,
-    SummaryBand,
-)
+from idhazh.contracts.knobs.summarize import SummarizeConfig, SummaryBand
 from idhazh.contracts.sources import SourceForm
-from idhazh.contracts.summary import LengthAction, Summary, SummaryStatus
+from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.llm.reasoning import split_reasoning
 from idhazh.llm.server import (
     PROBE_ANSWER,
@@ -83,14 +78,12 @@ from idhazh.sanitize import (
 from idhazh.summarize import (
     build_request,
     draft_model,
-    length_verdict,
     output_schema,
     output_schema_text,
     parse_draft,
     prompt_inputs,
     system_prompt,
     to_summary,
-    trim_to_words,
     user_turn,
 )
 
@@ -123,12 +116,7 @@ TITLE = "Example Lab publishes smaller inference model under a permissive licenc
 
 
 def body(**overrides: object) -> str:
-    """A publishable reply, so a test can vary the one field it is about.
-
-    The summary is real words and not a run of one letter: the decoder rail
-    counts characters and the gate counts words, and a fixture that only
-    satisfies one of them passes the test that is not looking.
-    """
+    """A publishable reply, so a test can vary the one field it is about."""
     payload: dict[str, object] = {
         "title": TITLE,
         "summary": "word " * 100,
@@ -1252,64 +1240,12 @@ def test_the_title_decodes_before_the_summary() -> None:
     assert list(output_schema()["properties"]) == ["title", "summary"]
 
 
-def test_the_reply_shape_does_not_vary_by_band() -> None:
-    """Every rail left is the widest any band can publish, so no band narrows one.
-
-    The key-point count was the one band-keyed bound - a note held to one, a long
-    read to five - and it made the grammar differ per article, which the prompt
-    then had to state in the same two numbers or lose the item. Gone, the shape
-    is one shape and that whole class of disagreement cannot happen.
-    """
-    ask = SummarizeConfig()
-    shapes = [output_schema(ask, source_words=band.min_source_words) for band in ask.bands]
-
-    assert all(shape == shapes[0] for shape in shapes)
-    assert output_schema(ask) == shapes[0]
-    assert output_schema(ask, brief=True) == shapes[0]
-
-
-def test_the_decoder_rail_never_catches_a_summary_the_verdict_would_publish() -> None:
-    """A publishable summary fails on "words" if it fails at all, never on shape.
-
-    Checked against real English - a little under six characters a word once the
-    space is counted - and not against a string of single letters. The floor is a
-    generation control as well as a check, so it is deliberately close enough to
-    a real summary to keep a constrained decoder writing; a string short enough
-    to trip it was never publishable.
-
-    The ceiling matters more than it looks. A reply past the rail fails to parse,
-    and a reply that cannot parse never reaches the verdict that would have
-    trimmed it or published it long - so a tight rail turns every overshoot back
-    into the lost item the policy exists to prevent.
-    """
-    typical_chars_per_word = 6
-    ask = SummarizeConfig()
-    rail = output_schema(ask)["properties"]["summary"]
-    assert rail["minLength"] < ask.decoder_words_min() * typical_chars_per_word
-    assert rail["maxLength"] > ask.decoder_words_max() * typical_chars_per_word
-    widest = max(band.target_words_max for band in ask.bands)
-    assert ask.decoder_words_max() > widest
-
-
-def test_the_decoder_rail_moves_with_the_ladder_it_is_derived_from() -> None:
-    """Pinned, it would silently stop protecting a ladder somebody widened."""
-    wider = SummarizeConfig(
-        bands=[SummaryBand(min_source_words=0, target_words_min=60, target_words_max=400)],
-        length_policy=LengthPolicy(absolute_floor_words=50),
-    )
-    rail = output_schema(wider)["properties"]["summary"]
-    base = output_schema(SummarizeConfig())["properties"]["summary"]
-    assert rail["minLength"] > base["minLength"]
-    assert rail["maxLength"] > base["maxLength"]
-
-
 def test_changing_what_we_ask_for_changes_the_fingerprints_inputs() -> None:
     """The old bounds lived only in the prompt text and in a gate nothing hashed."""
     tighter = SummarizeConfig(
         bands=[SummaryBand(min_source_words=0, target_words_min=50, target_words_max=120)]
     )
     assert prompt_inputs() != prompt_inputs(tighter)
-    assert output_schema_text() != output_schema_text(tighter)
 
 
 def test_the_stamp_holds_still_while_the_rendered_prompt_moves(band_prompt_root: Path) -> None:
@@ -1405,18 +1341,6 @@ def test_a_longer_article_is_never_asked_for_a_shorter_summary() -> None:
     assert ask.band_for(3999) is feature
 
 
-def test_the_ceiling_is_what_a_two_minute_read_can_afford() -> None:
-    """200 words is the number the whole ladder is built down from.
-
-    An adult reads non-fiction at about 240 words a minute, so two minutes is
-    roughly 480 words and thirty titles spend 250 to 300 of them. A 200-word item
-    is already 50 seconds on one story out of thirty; past that the digest stops
-    helping a reader decide and starts being the article.
-    """
-    ask = SummarizeConfig()
-    assert max(band.target_words_max for band in ask.bands) == 200
-
-
 def test_the_band_chosen_is_the_longest_one_the_article_reaches() -> None:
     ask = SummarizeConfig(
         bands=[
@@ -1449,21 +1373,6 @@ def test_bands_that_do_not_climb_are_refused() -> None:
         )
 
 
-def test_a_floor_at_or_above_the_shortest_ask_is_refused() -> None:
-    """The silent failure this stops: every note fails as a bad extraction, every run.
-
-    `absolute_floor_words` is the one length that still drops an item, and rung 0
-    asks for the shortest summary on the ladder. Set the floor at or above that
-    ask and the digest loses every brief it publishes, reported as a failed
-    extraction rather than as a config mistake.
-    """
-    with pytest.raises(ValidationError):
-        SummarizeConfig(
-            bands=[SummaryBand(min_source_words=0, target_words_min=30, target_words_max=45)],
-            length_policy=LengthPolicy(absolute_floor_words=30),
-        )
-
-
 # --- The title is ours, and the source's is only a fallback ------------------
 
 
@@ -1484,65 +1393,43 @@ def test_the_source_headline_arrives_inside_the_fence() -> None:
     assert "Example Lab releases a smaller model" in fenced
 
 
-def test_the_decoder_ceiling_on_the_title_comes_from_config() -> None:
-    wide = output_schema(SummarizeConfig(title_words_max=30))["properties"]["title"]
-    narrow = output_schema(SummarizeConfig(title_words_max=8))["properties"]["title"]
-    assert wide["maxLength"] > narrow["maxLength"]
+@pytest.mark.parametrize(
+    "headline",
+    [
+        "Model released",
+        (
+            "Example Lab, which also runs two data centres in the north and has said it will "
+            "open a third next spring, publishes a smaller inference model under a permissive "
+            "licence after months of delay and a dispute with its largest investor"
+        ),
+    ],
+    ids=["short", "long"],
+)
+def test_a_headline_publishes_exactly_as_the_model_wrote_it(headline: str) -> None:
+    """No word range is asked of a headline or checked against it."""
+    result = replied(body(title=headline))
+    assert result.status is SummaryStatus.OK
+    assert result.title == headline
 
 
-def test_the_title_decoder_rail_has_a_ceiling_and_no_floor() -> None:
-    """A long field can stop early. A headline cannot, and a floor would pad it."""
-    rail = output_schema()["properties"]["title"]
-    assert rail["maxLength"] > SummarizeConfig().title_words_max
-    assert rail["minLength"] == 1
+@pytest.mark.parametrize(
+    ("length", "published"),
+    [(UNTRUSTED_LINE_MAX, True), (UNTRUSTED_LINE_MAX + 1, False)],
+    ids=["as-wide-as-the-field", "one-character-wider"],
+)
+def test_a_headline_wider_than_the_payload_field_falls_back_to_the_source(
+    length: int, published: bool
+) -> None:
+    """Section 1a, degrade do not fail. The field refuses a wider title outright.
 
-
-def test_the_widest_title_config_allows_still_fits_the_payload_field() -> None:
-    """The decoder ceiling is characters, and so is the field it has to land in.
-
-    A ceiling above the payload field's own cap would hand `to_summary` a draft
-    that cannot become a Summary, and the item would die on a knob nobody read
-    as dangerous. The cap on the knob is what makes that unreachable.
+    The draft yields no title and the item keeps its summary, so the page shows
+    the source's own headline instead of losing the story.
     """
-    widest = SummarizeConfig.model_json_schema()["properties"]["title_words_max"]["maximum"]
-    ask = SummarizeConfig(title_words_max=widest)
-    ceiling = output_schema(ask)["properties"]["title"]["maxLength"]
-    longest = " ".join(["abcdefghijk"] * widest)
-    assert len(longest) <= ceiling, "the fixture has to be a title the decoder could emit"
-    result = replied(body(title=longest), prompt_config=ask)
-    assert result.status is SummaryStatus.OK
-    assert result.title == longest
-
-
-def test_a_title_the_model_wrote_is_the_one_we_publish() -> None:
-    result = replied(body())
-    assert result.status is SummaryStatus.OK
-    assert result.title == TITLE
-
-
-def test_a_title_outside_the_asked_range_costs_the_rewrite_not_the_item() -> None:
-    """Section 1a, degrade do not fail. The source's headline is a working fallback."""
-    result = replied(body(title="Model released"))
+    headline = "x" * length
+    result = replied(body(title=headline))
     assert result.status is SummaryStatus.OK
     assert result.summary
-    assert result.title is None
-
-
-def test_a_long_title_the_decoder_rail_let_through_is_still_dropped() -> None:
-    """The rail counts characters and the gate counts words, so the gate is not spare.
-
-    Forty short words clear the character ceiling and are still not a headline.
-    """
-    result = replied(body(title="ab " * 40))
-    assert result.status is SummaryStatus.OK
-    assert result.title is None
-
-
-def test_the_title_gate_reads_the_config_it_was_given() -> None:
-    reply = body(title="Example Lab releases a smaller model today")
-    assert replied(reply).title is not None
-    narrowed = SummarizeConfig(title_words_min=2, title_words_max=4)
-    assert replied(reply, prompt_config=narrowed).title is None
+    assert result.title == (headline if published else None)
 
 
 def test_the_digest_covers_the_title_a_reader_sees() -> None:
@@ -2157,47 +2044,30 @@ def test_a_runtime_that_reports_no_timings_costs_the_item_nothing() -> None:
     assert summarised("ok").status is SummaryStatus.OK
 
 
-#: The floor that refuses a reply for its length, and the only length that still
-#: fails an item - `test_the_tolerance_comes_from_config` owns the rule. The band
-#: is sized around the recorded reply rather than far above it, because the
-#: decoder rail is a character budget derived from the band: a band that asked
-#: for far more would refuse the reply for its shape, and this case would pass on
-#: a failure code that is not the one under test.
-FLOORED: Final = SummarizeConfig(
-    bands=[
-        SummaryBand(
-            min_source_words=0,
-            target_words_min=80,
-            target_words_max=130,
-        )
-    ],
-    length_policy=LengthPolicy(absolute_floor_words=75, floor_applies_above_source_words=0),
-)
-
-#: One case per reply refusal, including both ways a reply can have a bad shape.
-REFUSED_A_REPLY: Final = ("truncated", "reasoned", "unparseable", "too-short", "leaked")
+#: One case per reply refusal, including the ways a reply can have a bad shape.
+REFUSED_A_REPLY: Final = ("truncated", "reasoned", "unparseable", "blank", "leaked")
 
 
-def refused(case: str) -> tuple[Completion, str, SummarizeConfig | None]:
+def refused(case: str) -> tuple[Completion, str]:
     """Run 32742672105's recorded reply, varied only where one gate reads it.
 
     The envelope never changes, so the five numbers under test are the ones the
     server reported rather than numbers a test wrote down. What varies is the
-    content, the stop reason or the config - whichever the gate under test
-    reads - and each varied body is itself a recorded reply.
+    content or the stop reason, whichever the gate under test reads. Each varied
+    body is itself a recorded reply except the blank one, which is a literal.
     """
     recorded = completion("timed")
     match case:
         case "truncated":
-            return replace(recorded, finish_reason="length"), "ok", None
+            return replace(recorded, finish_reason="length"), "ok"
         case "reasoned":
-            return replace(recorded, reasoning=completion("reasoning-channel").reasoning), "ok", None
+            return replace(recorded, reasoning=completion("reasoning-channel").reasoning), "ok"
         case "unparseable":
-            return replace(recorded, content=completion("obeyed-the-injection").content), "ok", None
-        case "too-short":
-            return recorded, "ok", FLOORED
+            return replace(recorded, content=completion("obeyed-the-injection").content), "ok"
+        case "blank":
+            return replace(recorded, content=body(summary=" ")), "ok"
         case "leaked":
-            return replace(recorded, content=completion("leaked-the-address").content), "ok", None
+            return replace(recorded, content=completion("leaked-the-address").content), "ok"
         case _:
             raise AssertionError(f"no recorded reply for {case}")
 
@@ -2209,12 +2079,10 @@ def test_a_reply_that_failed_its_shape_still_reports_what_it_cost(case: str) -> 
     A day that failed many replies read as a cheap day, because the five cost
     cells carried the model's defaults of zero. They are what the server said.
     """
-    reply, source, ask = refused(case)
+    reply, source = refused(case)
     assert reply.prompt_tokens and reply.completion_tokens, "a free reply would prove nothing"
 
-    result = to_summary(
-        article(source), reply, model_id="m", generated_at=GENERATED_AT, prompt_config=ask
-    )
+    result = to_summary(article(source), reply, model_id="m", generated_at=GENERATED_AT)
 
     assert result.status is SummaryStatus.FAILED
     assert result.failure_code is not None
@@ -2233,15 +2101,12 @@ def test_reply_refusals_retain_their_costs_and_failure_codes() -> None:
     """
     codes = set()
     for case in REFUSED_A_REPLY:
-        reply, source, ask = refused(case)
-        result = to_summary(
-            article(source), reply, model_id="m", generated_at=GENERATED_AT, prompt_config=ask
-        )
+        reply, source = refused(case)
+        result = to_summary(article(source), reply, model_id="m", generated_at=GENERATED_AT)
         codes.add(result.failure_code)
     assert codes == {
         FailureCode.OUTPUT_TRUNCATED,
         FailureCode.BAD_SHAPE,
-        FailureCode.LENGTH_OUT_OF_RANGE,
         FailureCode.LEAKED_ADDRESS,
     }
 
@@ -2253,10 +2118,8 @@ def test_a_failed_row_names_the_call_that_spent_it() -> None:
     so a writer cannot fill the cells and leave the slot empty - which is what
     keeps `reconcile_prefill` and the console's pooled rates correct.
     """
-    reply, source, ask = refused("leaked")
-    result = to_summary(
-        article(source), reply, model_id="m", generated_at=GENERATED_AT, prompt_config=ask
-    )
+    reply, source = refused("leaked")
+    result = to_summary(article(source), reply, model_id="m", generated_at=GENERATED_AT)
 
     assert result.call_1 is not None
     assert result.call_1.kind is CallKind.SUMMARIZE
@@ -2338,100 +2201,7 @@ def test_a_fenced_code_block_is_still_read() -> None:
     assert draft.summary.startswith("word")
 
 
-# --- How far a reply may miss its band's ask ---------------------------------
-#
-# Every band and policy below is BUILT rather than read from `config/`. The
-# committed ladder is a starting point that will move while the prompt is tuned,
-# and a test that reads it asserts only that the file has not changed.
-
-SHORT_BAND = SummaryBand(
-    min_source_words=0,
-    target_words_min=30,
-    target_words_max=45,
-)
-LONG_BAND = SummaryBand(
-    min_source_words=2000,
-    target_words_min=120,
-    target_words_max=200,
-    over_length_action=OverLengthAction.PUBLISH,
-)
-POLICY = SummarizeConfig(bands=[SHORT_BAND, LONG_BAND])
-
-
-def verdict_for(words: int, band: SummaryBand, source_words: int = 3000) -> LengthAction:
-    return length_verdict(words, band, POLICY, source_words=source_words).action
-
-
-def test_the_wider_of_the_two_overshoot_allowances_wins() -> None:
-    """The pair that will look like a bug if the "larger" is ever read as "smaller".
-
-    Twenty percent of a 45-word ask is nine words, which is one clause and no
-    allowance at all. The flat 25 words is what makes the short bands usable, so
-    70 publishes untouched and 71 does not.
-    """
-    assert POLICY.allowance(SHORT_BAND) == 25
-    assert verdict_for(54, SHORT_BAND) is LengthAction.PUBLISH
-    assert verdict_for(70, SHORT_BAND) is LengthAction.PUBLISH
-    assert verdict_for(71, SHORT_BAND) is LengthAction.TRIM
-
-    # On a 200-word ask the ratio is the larger of the two, at 40 words.
-    assert POLICY.allowance(LONG_BAND) == 40
-    assert verdict_for(240, LONG_BAND) is LengthAction.PUBLISH
-    assert verdict_for(241, LONG_BAND) is LengthAction.PUBLISH_OVER
-
-
-def test_the_band_decides_what_happens_to_a_reply_that_ran_long() -> None:
-    """A feature is published long; a note is cut. Neither is dropped."""
-    assert verdict_for(500, SHORT_BAND) is LengthAction.TRIM
-    assert verdict_for(500, LONG_BAND) is LengthAction.PUBLISH_OVER
-
-
-def test_a_short_summary_publishes_rather_than_costing_the_reader_the_story() -> None:
-    """A reader can see that a summary is thin. They cannot see one that was deleted."""
-    assert verdict_for(84, LONG_BAND) is LengthAction.PUBLISH
-    assert verdict_for(83, LONG_BAND) is LengthAction.PUBLISH
-    assert verdict_for(26, LONG_BAND) is LengthAction.PUBLISH
-
-
-def test_the_absolute_floor_is_conditional_on_the_source_having_said_something() -> None:
-    """The pair that proves the floor reads the article and not only the reply.
-
-    Twenty words from a 3,000-word source is a failed extraction wearing a
-    summary's clothes. The same twenty words from a 50-word note is the correct
-    answer, and dropping it would lose a story to arithmetic.
-    """
-    assert verdict_for(20, LONG_BAND, source_words=3000) is LengthAction.FAIL
-    assert verdict_for(20, SHORT_BAND, source_words=50) is LengthAction.PUBLISH
-
-
-def test_the_trimmer_cuts_at_a_sentence_and_never_mid_clause() -> None:
-    summary = "One two three four. Five six seven eight. Nine ten eleven twelve."
-    assert trim_to_words(summary, 8) == "One two three four. Five six seven eight."
-    assert trim_to_words(summary, 4) == "One two three four."
-
-
-def test_a_summary_with_no_sentence_end_inside_the_budget_publishes_whole() -> None:
-    """A dangling half-clause reads as a bug. An over-long paragraph reads as prose."""
-    runaway = "word " * 60
-    assert trim_to_words(runaway, 10) == runaway
-
-
-def test_the_trimmer_keeps_the_paragraph_break_it_trims_across() -> None:
-    """The defect this replaces, and the reason it was worth a test.
-
-    The old trimmer rejoined every kept sentence with one space, so a break did
-    not survive a trim - and a trim fires because a reply ran long, which is the
-    only kind of reply this pipeline asks to break at all. A break that dies on
-    exactly the summaries that earn one is a feature with no live path.
-    """
-    two = "One two three four. Five six.\n\nSeven eight nine ten. Eleven twelve."
-    assert trim_to_words(two, 10) == "One two three four. Five six.\n\nSeven eight nine ten."
-
-
-def test_a_trim_that_empties_the_second_paragraph_leaves_no_dangling_break() -> None:
-    """One paragraph and no trailing blank line, which `Prose` would fold away anyway."""
-    two = "One two three four.\n\nFive six seven eight."
-    assert trim_to_words(two, 4) == "One two three four."
+# --- A reply is published exactly as the model wrote it ----------------------
 
 
 def test_the_sanitizer_and_not_the_prompt_decides_what_a_paragraph_break_is() -> None:
@@ -2458,39 +2228,23 @@ def test_draft_parsing_preserves_every_paragraph_and_normalizes_separators() -> 
     assert parse_draft(body(summary=raw)).summary == f"{first}\n\n{second}\n\n{third}"
 
 
-def test_a_summary_far_over_its_ask_still_reaches_the_reader() -> None:
-    """The defect this replaces: 300 words returned no item at all.
+def test_a_long_multi_paragraph_summary_publishes_exactly_as_written() -> None:
+    """The defect this replaces: a long reply was dropped, or cut at every period.
 
-    Until 2026-09-10 a reply outside one global word range was dropped, so a
-    model that ran long cost the digest the story. It is published now - trimmed
-    or over-length, depending on the band - and the payload records which.
+    The text runs far past the 2,880 characters the decoder used to allow, and it
+    carries the three figures a sentence splitter breaks at: `U.S.`, `$1.2` and
+    `99.9%`. It is already in the shape `parse_draft` leaves a reply in, so
+    "unchanged" is a plain equality.
     """
-    result = replied(body(summary="y " * 300))
+    sentence = "The U.S. agency spent $1.2 billion and reported 99.9% uptime."
+    paragraph = " ".join([sentence] * 24)
+    text = "\n\n".join([paragraph] * 4)
+    assert len(text) > 2880
+
+    result = replied(body(summary=text))
+
     assert result.status is SummaryStatus.OK
-    assert result.summary is not None
-    assert result.length_action in {LengthAction.TRIM, LengthAction.PUBLISH_OVER}
-
-
-def test_the_tolerance_comes_from_config() -> None:
-    """The floor is a knob, and a reply under it is the one length that still fails.
-
-    The summary is built from realistic words rather than a run of one letter.
-    The decoder rail counts characters and the verdict counts words, and a
-    fixture of two-character words trips the rail first - which would pass this
-    test for the wrong reason, on a failure code that is not the one under test.
-    """
-    reply = body(summary="deliberation " * 100)
-    assert replied(reply).status is SummaryStatus.OK
-
-    floored = SummarizeConfig(
-        bands=[SummaryBand(min_source_words=0, target_words_min=200, target_words_max=300)],
-        length_policy=LengthPolicy(
-            absolute_floor_words=150, floor_applies_above_source_words=0
-        ),
-    )
-    refused = replied(reply, prompt_config=floored)
-    assert refused.failure_code is FailureCode.LENGTH_OUT_OF_RANGE
-    assert refused.length_action is LengthAction.FAIL
+    assert result.summary == text
 
 
 # --- A copy is not a summary -------------------------------------------------
@@ -2555,21 +2309,6 @@ def test_the_exfiltration_canarys_address_cannot_reach_a_payload() -> None:
     assert beacon not in (result.failure_detail or ""), "the address must not ride the failure out"
 
 
-def test_the_leaked_reply_failed_on_the_address_and_on_nothing_else() -> None:
-    """Every other rule passes this reply, so the address rule is the one that fired."""
-    draft = parse_draft(completion("leaked-the-address").content)
-    source = article()
-    ask = SummarizeConfig()
-
-    verdict = length_verdict(
-        len(draft.summary.split()),
-        ask.band_for(source.band_source_words),
-        ask,
-        source_words=source.band_source_words,
-    )
-    assert verdict.action is LengthAction.PUBLISH
-
-
 @pytest.mark.parametrize(
     "address",
     [
@@ -2615,24 +2354,15 @@ def test_an_address_in_the_title_costs_the_rewrite_and_not_the_item() -> None:
     """The title has a working fallback, so dropping it takes the address off the page.
 
     The summary has none, which is why the same leak there is fatal. The clean
-    title is asserted too, or the drop could be the word-count rule firing.
+    title is asserted too, so the drop is known to come from the address.
     """
     leaked = "Ministry notice at https://collect.canary.example/beacon opens the consultation"
     clean = "Ministry notice opens the eight-week industrial strategy consultation"
-    assert 6 <= len(leaked.split()) <= 14
-    assert 6 <= len(clean.split()) <= 14
 
     assert replied(body(title=clean)).title == clean
     result = replied(body(title=leaked))
     assert result.status is SummaryStatus.OK
     assert result.title is None
-
-
-def test_an_ordinary_summary_is_untouched_by_the_address_rule() -> None:
-    """A rule that fired on plain prose would cost every item and catch nothing."""
-    result = summarised("ok")
-    assert result.status is SummaryStatus.OK
-    assert result.summary is not None
 
 
 def test_a_failed_article_is_never_sent_to_the_model() -> None:

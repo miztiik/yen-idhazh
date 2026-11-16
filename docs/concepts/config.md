@@ -1,6 +1,6 @@
 # Config
 
-**Last Updated**: 2026-10-23
+**Last Updated**: 2026-11-16
 
 Where tunable behaviour lives, and the rule that separates a knob from an identifier. Config-driven with sane defaults is a project principle ([principles.md](principles.md), Guardrail #6): a fresh clone runs on the defaults, and no threshold, cap or source list is hardcoded in code.
 
@@ -18,7 +18,7 @@ explains what changes together when a setting is removed.
 
 **`config/` is the one source: the committed file names every knob it owns, at the value in force.** A default in the model keeps a fresh clone running and nothing more. It does not tell the person reading `config/` that the knob exists, and a knob nobody can see is a knob nobody tunes - which is the same failure as [a knob nothing reads](#a-knob-nothing-reads-is-deleted), arriving from the other direction.
 
-Measured 2026-09-17, before the rule was enforced: `idhazh.json` did not name **18** of the leaves it owns and `appearance.json` **2**, while the other four config files named all of theirs. Among the missing were `summarize.asks_for_a_visual_plan` and three `summarize.bands` entries that omitted `over_length_action` - a default nested inside a list entry, which is the shape that hides best and the reason the check reads leaf paths rather than top-level keys.
+Measured 2026-09-17, before the rule was enforced: `idhazh.json` did not name **18** of the leaves it owns and `appearance.json` **2**, while the other four config files named all of theirs. Among the missing were `summarize.asks_for_a_visual_plan` and a default that three `summarize.bands` entries omitted - a default nested inside a list entry, which is the shape that hides best and the reason the check reads leaf paths rather than top-level keys.
 
 **Owns, not declares, and the difference is load-bearing.** Three blocks sit on two models, and only one file is their source: `appearance.json` owns everything the published surface draws, while `idhazh.json` keeps `ui`, `console` and `assist` as the read-side migration's middle layer. Filling those legacy blocks out to their model would give one knob two answers in two files - the frontend merges the appearance block over the legacy one, so the loser is edited and nothing happens. `CONFIG_NOT_OWNED` names each side's exclusions, derived from the `MOVED_BLOCKS` and `PIPELINE_OWNED` facts that already governed it.
 
@@ -35,7 +35,7 @@ Eight pages, one question each. Arrive at the one holding your question and stop
 | this one | What is a knob, what is not one, and what happens to one nothing reads |
 | [config/model-file.md](config/model-file.md) | Which model runs, and what runtime settings and turn markers are declared for those exact bytes |
 | [config/appearance.md](config/appearance.md) | What a reader's page and an operator's console are drawn from, and which file owns a key two files name |
-| [config/summary-length.md](config/summary-length.md) | How much of an article is read, how many words the summary is asked for, and what refuses one |
+| [config/summary-length.md](config/summary-length.md) | How much of an article is read, and how many words the summary is asked for |
 | [config/source-lifecycle.md](config/source-lifecycle.md) | When a run stops asking a feed, when an address is retired, and what keeps a link out |
 | [config/run-limits.md](config/run-limits.md) | Whether a number is a guard, an alarm or a limit - the run shape, the job bounds and the page ceilings |
 | [config/retention-ages.md](config/retention-ages.md) | Which instruments run, and how long what they write is kept |

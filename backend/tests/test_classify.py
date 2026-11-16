@@ -20,7 +20,6 @@ from idhazh import config, summarize
 from idhazh.classify.calls import (
     ANCHORED_MAX,
     CHARS_PER_OUTPUT_TOKEN,
-    CHARS_PER_WORD,
     LABEL_BUDGET_TOKENS,
     LABEL_PASS_VERSION,
     LABELS_MAX,
@@ -52,7 +51,6 @@ from idhazh.classify.calls import (
     sentence_id,
     sentence_spans,
     summarize_and_plan_budget_tokens,
-    summarize_and_plan_prose_words,
     summarize_and_plan_schema,
 )
 from idhazh.classify.plan_visual_request import (
@@ -1419,17 +1417,6 @@ def test_an_unstructured_shape_failure_does_not_copy_its_input() -> None:
 
 
 class TestTheDerivedBudget:
-    def test_the_budget_is_the_arithmetic_and_not_a_number_somebody_chose(self) -> None:
-        """Prose at 1.3 tokens a word, structure at one token a character."""
-        ask = SummarizeConfig()
-        words = summarize_and_plan_prose_words(ask)
-        whole = widest_json_characters(summarize_and_plan_schema(ask))
-
-        assert summarize_and_plan_budget_tokens(ask) == approx_tokens(words) + (
-            whole - words * CHARS_PER_WORD
-        )
-        assert summarize_and_plan_budget_tokens(ask) == SUMMARIZE_AND_PLAN_BUDGET_TOKENS
-
     def test_a_bound_that_moves_moves_the_budget_with_it(self) -> None:
         """Re-derived, not restated. This is what "derived" has to mean to be worth saying."""
         ask = SummarizeConfig()

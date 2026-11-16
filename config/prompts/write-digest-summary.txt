@@ -19,8 +19,6 @@ OPERATIONAL PRINCIPLES:
 "title" - A concise, descriptive headline for the document
 "summary" - Comprehensive, cohesive narrative prose synthesizing the core findings, mechanisms, and nuances of the document.
 
-Follow the question below for length. Do not pad.
-
 For both: keep every figure exactly as the item wrote it.
 A quotation is at most $max_verbatim_words words, in double
 quotes, with the speaker in the same sentence.

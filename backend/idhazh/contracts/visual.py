@@ -547,14 +547,18 @@ def _resolve(node: dict[str, Any], defs: dict[str, Any]) -> dict[str, Any]:
     return node
 
 
-def _widest(node: dict[str, Any], defs: dict[str, Any]) -> int:
-    """The longest JSON text this subschema can hold, in characters."""
+def _widest(node: dict[str, Any], defs: dict[str, Any], free_text: int | None) -> int:
+    """The longest JSON text this subschema can hold, in characters.
+
+    `free_text` is how wide to take a string that declares no `maxLength`. None
+    refuses one, because a string with no bound has no worst case.
+    """
     ref = node.get("$ref")
     if isinstance(ref, str) and ref.startswith("#/$defs/"):
-        return _widest(defs[ref.removeprefix("#/$defs/")], defs)
+        return _widest(defs[ref.removeprefix("#/$defs/")], defs, free_text)
     for key in ("anyOf", "oneOf"):
         if key in node:
-            return max(_widest(branch, defs) for branch in node[key])
+            return max(_widest(branch, defs, free_text) for branch in node[key])
     kind = node.get("type")
     if kind == "null":
         return len("null")
@@ -566,27 +570,31 @@ def _widest(node: dict[str, Any], defs: dict[str, Any]) -> int:
     if kind == "string":
         if "enum" in node:
             return max(len(member) for member in node["enum"]) + 2
+        if "maxLength" not in node and free_text is not None:
+            return free_text + 2
         return int(node["maxLength"]) + 2
     if kind == "array":
         items = int(node["maxItems"])
-        return items * _widest(node["items"], defs) + max(items - 1, 0) + 2
+        return items * _widest(node["items"], defs, free_text) + max(items - 1, 0) + 2
     properties = node.get("properties")
     if properties is not None:
         # Under grammar-constrained decoding every declared key is emitted, so the
         # worst case counts them all rather than only the required ones.
         pairs = [
-            len(name) + 3 + _widest(child, defs)
+            len(name) + 3 + _widest(child, defs, free_text)
             for name, child in properties.items()
             if name not in CODE_STAMPED_FIELDS
         ]
         return sum(pairs) + max(len(pairs) - 1, 0) + 2
     keys = sorted((len(m) for m in _resolve(node["propertyNames"], defs)["enum"]), reverse=True)
     kept = keys[: int(node["maxProperties"])]
-    value = _widest(node["additionalProperties"], defs)
+    value = _widest(node["additionalProperties"], defs, free_text)
     return sum(length + 3 + value for length in kept) + max(len(kept) - 1, 0) + 2
 
 
-def widest_json_characters(schema: dict[str, Any]) -> int:
+def widest_json_characters(
+    schema: dict[str, Any], *, free_text_characters: int | None = None
+) -> int:
     """The longest JSON text a generated schema can hold, in characters.
 
     Public because both model calls derive their output budget from the bounds
@@ -597,8 +605,12 @@ def widest_json_characters(schema: dict[str, Any]) -> int:
     It counts every declared property, not only the required ones, because a
     grammar-constrained decoder emits them all. Code-owned fields are skipped
     because the current decoder never writes them.
+
+    A string with no `maxLength` is refused, because it has no longest value. A
+    caller that sizes that text some other way names a width for it here: 0
+    counts only its two quotes, and the caller adds the text itself.
     """
-    return _widest(schema, schema.get("$defs", {}))
+    return _widest(schema, schema.get("$defs", {}), free_text_characters)
 
 
 def worst_case_reply_characters() -> int:

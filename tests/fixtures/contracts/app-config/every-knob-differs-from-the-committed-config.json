@@ -384,35 +384,28 @@
     "bands": [
       {
         "min_source_words": 0,
-        "over_length_action": "trim",
         "target_words_max": 45,
         "target_words_min": 30
       },
       {
         "min_source_words": 60,
-        "over_length_action": "trim",
         "target_words_max": 90,
         "target_words_min": 50
       },
       {
         "min_source_words": 700,
-        "over_length_action": "trim",
         "target_words_max": 150,
         "target_words_min": 70
       },
       {
         "min_source_words": 2000,
-        "over_length_action": "publish",
         "target_words_max": 200,
         "target_words_min": 110
       }
     ],
     "length_policy": {
-      "absolute_floor_words": 20,
-      "floor_applies_above_source_words": 500,
       "overshoot_ratio": 0.15,
-      "overshoot_words": 30,
-      "undershoot_ratio": 0.25
+      "overshoot_words": 30
     },
     "max_verbatim_words": 15,
     "title_words_max": 12,
