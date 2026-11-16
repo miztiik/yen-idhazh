@@ -596,9 +596,9 @@ def test_a_host_that_fails_twice_says_what_the_retries_cost(
     assert retry_total_ms >= 200, "the two failed attempts are inside it"
 
 
-@pytest.mark.parametrize("failure", ["timeout", "incomplete"])
-def test_an_interrupted_body_retries_and_closes_each_response(
-    failure: Literal["timeout", "incomplete"], monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("failure", ["timeout", "incomplete", "headers"])
+def test_an_interrupted_response_retries_and_closes_each_response(
+    failure: Literal["timeout", "incomplete", "headers"], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     body = (PAGES / "article.html").read_bytes()
     budget = ExtractConfig(
