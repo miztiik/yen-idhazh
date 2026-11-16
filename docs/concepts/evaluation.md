@@ -262,10 +262,6 @@ nor a quality glyph. Bands are tunable
 ([config/summary-length.md](config/summary-length.md)) and are re-calibrated
 against the human spot-checks rather than being fixed by taste.
 
-The absolute summary gate starts at
-`summarize.length_policy.absolute_floor_words = 25`. That lets the brief band ask
-for 30 to 45 words without the decoder padding a short source to the old floor.
-
 A low-confidence item still publishes. Its saved band and reason remain
 available to operators without adding a reader-facing quality marker.
 

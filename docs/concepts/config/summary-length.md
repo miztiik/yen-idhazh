@@ -1,6 +1,6 @@
 # What gets summarized, and at what length
 
-**Last Updated**: 2026-11-15
+**Last Updated**: 2026-11-16
 
 The knobs that decide how much of an article is read, whether it is summarized
 at all, how many words the summary is asked for, and which length ratio a
@@ -61,11 +61,9 @@ With the defaults, that is `30 / 0.5 = 60`. An `AppConfig` validator refuses a
 config where the three values disagree.
 
 `config.summarize.bands` starts with the brief band `{0, 30, 45}`. The next band
-starts at 60 words. `summarize.length_policy.absolute_floor_words` is 25, so the
-decoder's summary floor is 125 characters. `evaluation.brief_compression_ceiling`
-is 0.5 and derives the extraction floor above. It is not a copied-text check.
-The band a summary is asked for is chosen by the article's length, not by its
-quality. Briefs can stop naturally rather than pad toward the old word gate.
+starts at 60 words. `evaluation.brief_compression_ceiling` is 0.5 and derives
+the extraction floor above. It is not a copied-text check. The band a summary is
+asked for is chosen by the article's length, not by its quality.
 
 `evaluation.corpus_compression_ceiling` retains the existing training cutoff:
 a candidate's summary/source word ratio must be strictly below 0.75. Equality
@@ -100,12 +98,17 @@ because the cut point hands the model 7,692 words whatever the source holds
 `evaluation.summary_words_max`.** They were a single global range every band's
 ask had to fit inside, so the ladder could only ever request what the widest
 global window already allowed, and a summary outside that window was thrown
-away. Length now belongs to the band that asked for it, and
-`summarize.length_policy` holds the five knobs that say what happens when a
-reply misses: `overshoot_ratio`, `overshoot_words`, `undershoot_ratio`,
-`absolute_floor_words` and `floor_applies_above_source_words`. A config still
+away. Length now belongs to the band that asked for it. A config still
 carrying the two old keys loads - an `EvaluationConfig` before-validator drops
 them - so a payload an earlier run wrote is still readable.
+
+**No length decides whether a summary publishes.** A reply is published exactly
+as the model wrote it: nothing trims it, nothing fails it for being short or
+long, and the decoder's grammar bounds neither the summary nor the headline.
+`summarize.length_policy` holds two knobs, `overshoot_ratio` and
+`overshoot_words`, and they only size the room the output budget leaves past a
+band's ask
+([../../architecture/summarize/prompt.md](../../architecture/summarize/prompt.md#a-reply-is-published-as-the-model-wrote-it)).
 
 **The published surface keeps a second copy of that ladder, and it drifted.**
 `SUMMARIZE_DEFAULTS` in `frontend/src/lib/server/config.ts` is the value the

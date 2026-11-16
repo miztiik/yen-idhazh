@@ -36,11 +36,10 @@ class SummaryStatus(StrEnum):
 
 
 class LengthAction(StrEnum):
-    """What the length verdict did with this reply.
+    """What the retired length verdict did with a reply.
 
-    Recorded because a trimmed summary and a compliant one are indistinguishable
-    afterwards - the ledger records the length after the trim - so without this
-    field the pipeline cannot say how often the tolerance is doing work.
+    No longer written: a reply is published exactly as the model wrote it. Kept so
+    a payload or ledger row written while the verdict existed still reads.
     """
 
     PUBLISH = "publish"
@@ -87,7 +86,8 @@ class Summary(Contract):
         default=None,
         description=(
             "Our own headline, written from the article's facts. Optional because a "
-            "title outside the asked range degrades to the source's rather than "
+            "headline that cannot be published as written - blank, carrying an address, "
+            "or longer than this field holds - degrades to the source's rather than "
             "costing the item (section 1a)."
         ),
     )
@@ -118,13 +118,13 @@ class Summary(Contract):
     length_action: LengthAction | None = Field(
         default=None,
         description=(
-            "What the length verdict did with this reply, or null on a payload written "
-            "before the verdict existed and on any item that never reached it. "
-            "`publish` is inside the band's ask or inside the tolerance around it; "
-            "`publish_over` ran long on a band that would rather be long than cut a "
-            "key detail off the end; `trim` was cut at the last complete sentence "
-            "that fits; `fail` did not reach the absolute floor and is a failed "
-            "extraction rather than a summary."
+            "What the retired length verdict did with this reply. Null on every payload "
+            "written since the verdict was removed, on one written before it existed, and "
+            "on any item that never reached it. `publish` was inside the band's ask or "
+            "inside the tolerance around it; `publish_over` ran long on a band that would "
+            "rather be long than cut a key detail off the end; `trim` was cut at the last "
+            "complete sentence that fit; `fail` did not reach the absolute floor and was a "
+            "failed extraction rather than a summary."
         ),
     )
     input_tokens: int = Field(

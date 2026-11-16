@@ -519,6 +519,7 @@ class FailureCode(StrEnum):
     #: number to move.
     LABELS_TRUNCATED = "labels_truncated"
     BAD_SHAPE = "bad_shape"
+    #: Historical outcome only; a reply is no longer rejected for its length.
     LENGTH_OUT_OF_RANGE = "length_out_of_range"
     #: Historical outcome only; current summarization does not reject copied text.
     COPIED_SOURCE = "copied_source"

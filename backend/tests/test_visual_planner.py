@@ -21,14 +21,11 @@ from support.visual_plans import current_plan
 
 from idhazh import config
 from idhazh.classify.calls import (
-    CHARS_PER_WORD,
-    SUMMARIZE_AND_PLAN_BUDGET_TOKENS,
     SUPPRESSED_BUDGET_TOKENS,
     build_summarize_and_plan_request,
     parse_summarize_and_plan,
     recovered_completion,
     summarize_and_plan_budget_tokens,
-    summarize_and_plan_prose_words,
     summarize_and_plan_schema,
 )
 from idhazh.contracts.article import Article
@@ -41,11 +38,9 @@ from idhazh.contracts.visual import (
     VisualPlan,
     VisualPurpose,
     VisualType,
-    widest_json_characters,
 )
 from idhazh.contracts.visual_decision import NoneReason, VisualDecision, VisualKind
 from idhazh.contracts.visual_telemetry import ValidatorCheck
-from idhazh.extract import approx_tokens
 from idhazh.llm.server import Completion
 from idhazh.render.chart import can_compile
 from idhazh.visual_planner import (
@@ -256,18 +251,6 @@ class TestTheGateSuppressesThePlanAndNeverTheCall:
         assert set(whole["properties"]) == {"summary", "visual"}
         assert "visual" not in suppressed["properties"]
         assert "title" in suppressed["properties"]
-
-    def test_the_suppressed_budget_is_derived_and_not_the_full_one_minus_the_plan(self) -> None:
-        """Two ways of computing one quantity disagree the first time a bound moves."""
-        assert summarize_and_plan_budget_tokens(plan=False) == SUPPRESSED_BUDGET_TOKENS
-        assert summarize_and_plan_budget_tokens() == SUMMARIZE_AND_PLAN_BUDGET_TOKENS
-        assert SUPPRESSED_BUDGET_TOKENS < SUMMARIZE_AND_PLAN_BUDGET_TOKENS
-        ask = config.load(CONFIG_DIR).app.summarize
-        words = summarize_and_plan_prose_words(ask)
-        rebuilt = approx_tokens(words) + (
-            widest_json_characters(summarize_and_plan_schema(ask, plan=False)) - words * CHARS_PER_WORD
-        )
-        assert summarize_and_plan_budget_tokens(ask, plan=False) == rebuilt
 
     def test_suppressing_the_plan_moves_nothing_in_front_of_the_article(
         self, article_ok: Article

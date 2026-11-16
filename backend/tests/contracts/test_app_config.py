@@ -91,8 +91,8 @@ def test_the_config_file_names_every_knob_it_owns(name: str) -> None:
     it.
 
     Leaf paths rather than top-level keys, because a default nested inside a
-    list entry is the shape that hides best: three `summarize.bands` entries
-    omitted `over_length_action` and no block-level check would have seen it.
+    list entry is the shape that hides best: a block-level check cannot see one
+    that several `summarize.bands` entries omit.
     """
     model = CONFIG_FILES[name]
     committed = read_text(CONFIG_DIR / name)

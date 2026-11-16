@@ -350,25 +350,7 @@ def row_for(code: FailureCode) -> ItemHealthRow:
                 date=plan().date,
                 run_id="2026-08-21-1",
             )
-        case FailureCode.LENGTH_OUT_OF_RANGE:
-            draft = {
-                "title": "Clear fixture title",
-                "summary": " ".join(f"longword{n}" for n in range(20)),
-            }
-            failed_summary = summarize.to_summary(
-                ok_article,
-                Completion(json.dumps(draft)),
-                model_id="qwen3-8b",
-                generated_at="2026-08-21T06:00:00Z",
-            )
-            return telemetry.classify_item(
-                planned=item(),
-                article=ok_article,
-                summary=failed_summary,
-                date=plan().date,
-                run_id="2026-08-21-1",
-            )
-        case FailureCode.COPIED_SOURCE:
+        case FailureCode.COPIED_SOURCE | FailureCode.LENGTH_OUT_OF_RANGE:
             historical = Summary.model_validate(
                 {
                     **summary().model_dump(mode="json"),
@@ -376,8 +358,8 @@ def row_for(code: FailureCode) -> ItemHealthRow:
                     "summary": None,
                     "output_digest": derive_output_digest(None),
                     "status": "failed",
-                    "failure_code": "copied_source",
-                    "failure_detail": "Historical copied-source rejection.",
+                    "failure_code": code.value,
+                    "failure_detail": f"Historical {code.value} rejection.",
                 }
             )
             return telemetry.classify_item(
