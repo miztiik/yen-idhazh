@@ -1,12 +1,12 @@
 # The Summarizer Prompt
 
-**Last Updated**: 2026-11-15
+**Last Updated**: 2026-11-16
 
 What the model is asked to produce, how the two calls share context, and what the pipeline validates. Prompt wording is not a security control: sanitization and validated output shapes enforce the boundary.
 
 ## The prompt is a template, not a text
 
-Templates under `config/prompts/` take their word ranges, title limits and
+Templates under `config/prompts/` may take their word ranges, title limits and
 quotation limits from configuration. Use strict substitution so a missing or
 renamed value fails rather than reaching the model as an unresolved placeholder.
 
@@ -26,13 +26,20 @@ Table A - Production instruction files
 | A2 | `write_digest_summary` | `prompts/write-digest-summary.txt` |
 | A3 | `plan_visual` | `prompts/plan-visual.txt` |
 | A4 | `continue_summary` | `prompts/continue-summary.txt` |
-| A5 | `summarize_article` | `prompts/summarize-article.txt` |
+| A5 | `summarize_article` | `prompts/generate-summary.txt` |
 | A6 | `compare_articles` | `prompts/compare-articles.txt` |
 
 Production rendering retains universal-newline reading and performs no
 whitespace trimming. The app config's additive reader uses the declared task paths if an older
 authored input omits `prompt_files`; new authored configuration names them all.
-The standalone summary, corpus and reference-set readers use A5;
+The standalone summary, corpus and reference-set readers use A5, shared with the
+[summary generator's default](../../reference/summary-generator-api.md).
+It emits `title` and `summary` and has no word-band placeholders, so these
+instructions are identical for every article length. Configured templates may
+still use the validated substitution values.
+Reference sampling's length-band handling is described in the
+[reference-set procedure](../../how-to/fine-tune-a-model.md#the-reference-set).
+The digest retains its separate A2 and A4 instructions;
 the comparison judge and its stamp use A6's full rendered instructions.
 Offline judge capture and saved-evidence validation use that same selected file,
 so their recorded identity cannot describe instructions from another root.

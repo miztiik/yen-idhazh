@@ -9,8 +9,8 @@ have, and commits the result. A reference a model wrote is not a reference.
     python backend/utilities/reference_set.py check --write
 
 `queue` turns an unstructured task into a checked one. It samples articles out of
-the committed corpus, stratified on the three things the prompt actually branches
-on, and writes one line per article carrying the exact system turn and the exact
+the committed corpus, stratified by length band, source form and vertical,
+and writes one line per article carrying the exact system turn and the exact
 user turn a run would have sent. The authoring session fills in `assistant` and
 nothing else, so a reference row cannot be written against a prompt we do not
 serve - the same oracle `idhazh.corpus` uses, for the same reason.
@@ -163,9 +163,8 @@ def band_prompts(
 ) -> list[str]:
     """The rendered system turn for each band, in band order.
 
-    Rendered rather than described, so a band's identity here is the exact string
-    a run would have sent. That is what makes `band_of` an equality test instead
-    of a parse of prose that could drift from the template.
+    Match the exact instructions a run would have sent, without parsing prose.
+    A shared prompt without band placeholders produces identical entries.
     """
     return [
         summarize.system_prompt(
@@ -178,12 +177,29 @@ def band_prompts(
     ]
 
 
-def band_of(system: str, prompts: Sequence[str]) -> int | None:
-    """Which band this row was asked for, or None if the prompt has moved since."""
-    for index, rendered in enumerate(prompts):
-        if rendered == system:
-            return index
-    return None
+def band_of(
+    system: str,
+    prompts: Sequence[str],
+    *,
+    source_words: int,
+    prompt_config: SummarizeConfig,
+) -> int | None:
+    """Match live instructions, using stored source length when bands share them.
+
+    The stored user-turn length selects a reference stratum, not a reconstruction
+    of the original pre-truncation word count.
+    """
+    matches = [index for index, rendered in enumerate(prompts) if rendered == system]
+    if not matches:
+        return None
+    return next(
+        (
+            index
+            for index in reversed(matches)
+            if prompt_config.bands[index].min_source_words <= source_words
+        ),
+        matches[0],
+    )
 
 
 def source_form_of(user: str) -> str:
@@ -193,13 +209,7 @@ def source_form_of(user: str) -> str:
 
 
 def stratum(task: Task) -> tuple[str, int, str]:
-    """What a sample must spread across: the two things the prompt branches on, plus vertical.
-
-    Word-count band and source form are what `system_prompt` and `user_turn` read,
-    so a set that is thin in one of them trains a model that is thin there too.
-    Vertical is the third because it is the one diversity column that is fully
-    populated on every row.
-    """
+    """Spread samples across length bands, source forms and verticals."""
     return (task.vertical, task.band, task.source_form)
 
 
@@ -218,7 +228,9 @@ def _tasks_from_corpus(
     found: list[Task] = []
     for row in rows:
         system, user = row.messages[0].content, row.messages[1].content
-        band = band_of(system, prompts)
+        band = band_of(
+            system, prompts, source_words=row.source_words, prompt_config=prompt_config
+        )
         if band is None:
             continue
         asked = prompt_config.bands[band]

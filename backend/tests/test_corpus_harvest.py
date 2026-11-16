@@ -115,26 +115,39 @@ def test_the_first_two_turns_are_the_bytes_the_run_really_sends(
     ] == request["messages"]
 
 
-def test_the_band_travels_with_the_article_it_was_chosen_for(app: AppConfig) -> None:
-    """A brief and a long read are asked for different lengths.
+def test_the_band_travels_with_the_article_it_was_chosen_for(
+    app: AppConfig, tmp_path: Path
+) -> None:
+    """A band-specific template follows each article through the harvest.
 
     A harvest that rendered one band for every row would teach one target length
     for every article, which is the opposite of what the bands exist to do.
     """
     brief = Article.from_json(contract_fixture("article", "brief"))
     long_read = Article.from_json(contract_fixture("article", "ok"))
+    target = tmp_path / app.prompt_files.summarize_article
+    target.parent.mkdir()
+    target.write_text(
+        "Write $target_words_min to $target_words_max words.", encoding="utf-8"
+    )
 
     rows = corpus.harvest_rows(
         [scored(brief, "titled", "high"), scored(long_read, "titled", "high")],
         date=DATE,
         prompt_config=app.summarize,
         evaluation=app.evaluation,
+        prompt_files=app.prompt_files,
+        config_dir=tmp_path,
     )
 
     assert len(rows) == 2
     assert rows[0].system != rows[1].system
     assert rows[0].system == summarize.system_prompt(
-        app.summarize, source_words=brief.band_source_words, brief=brief.brief
+        app.summarize,
+        source_words=brief.band_source_words,
+        brief=brief.brief,
+        prompt_files=app.prompt_files,
+        config_dir=tmp_path,
     )
 
 
@@ -365,7 +378,7 @@ def test_a_backfilled_row_is_the_same_bytes_as_a_harvested_row(
 # --- Rebuilding a row from its address -------------------------------------
 
 
-def test_a_refetched_body_earns_its_own_band_rather_than_the_recorded_one(
+def test_a_refetched_body_earns_its_own_length_band(
     app: AppConfig,
 ) -> None:
     """The reason a refill is allowed to exist at all.
@@ -373,8 +386,8 @@ def test_a_refetched_body_earns_its_own_band_rather_than_the_recorded_one(
     A row rebuilt from an expired artifact would have to guess the length band,
     because `brief` and the pre-cap word count are not recoverable from anything
     committed. Re-fetching does not guess: the extractor computes them from the
-    body that came back. A long page and a short one therefore get different
-    system turns from the same ledger row, which is what this asserts.
+    body that came back. A long page and a short one therefore retain distinct
+    length-policy bands even when their shared prompt is identical.
     """
     long_article, long_text = refetched(refill_body(), app)
     short_article, short_text = refetched(
@@ -390,17 +403,9 @@ def test_a_refetched_body_earns_its_own_band_rather_than_the_recorded_one(
     )
 
     assert short_article.brief and not long_article.brief
-    long_system = summarize.system_prompt(
-        app.summarize,
-        source_words=long_row.article.band_source_words,
-        brief=long_row.article.brief,
-    )
-    short_system = summarize.system_prompt(
-        app.summarize,
-        source_words=short_row.article.band_source_words,
-        brief=short_row.article.brief,
-    )
-    assert long_system != short_system
+    assert app.summarize.band_for(
+        long_row.article.band_source_words
+    ) != app.summarize.band_for(short_row.article.band_source_words)
 
 
 def test_a_refilled_row_carries_the_published_words_as_its_target(app: AppConfig) -> None:

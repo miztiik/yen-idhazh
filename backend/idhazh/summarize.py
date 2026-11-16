@@ -234,8 +234,9 @@ def system_prompt(
 ) -> str:
     """The prompt text with config's numbers substituted in.
 
-    `source_words` picks the length band, so a release note and a long read are
-    asked for different summaries. It is the length of the SOURCE BODY, before
+    For templates with word-range placeholders, `source_words` picks the length
+    band. The shared generation prompt has no such placeholders and is returned
+    unchanged. The count is the length of the SOURCE BODY, before
     `extract.truncation_cap_tokens` cut it - which is what the knob's own name,
     `min_source_words`, says, and what `extract.min_source_words` has always
     compared against.
@@ -267,7 +268,7 @@ def prompt_inputs(
 ) -> str:
     """What the fingerprint hashes to stand for the prompt.
 
-    Not one rendered prompt. The rendered text varies with the article's length,
+    Not one rendered prompt. A configured template can vary with the article's length,
     and a stamp that moved per item could not answer the question the stamp
     exists to answer - the ledger is keyed by it, and it means "which pipeline
     produced this", which is the same pipeline for a release note and a long
@@ -291,10 +292,9 @@ def user_turn(article: Article) -> str:
     `untrusted_block` sanitizes what it fences rather than trusting an earlier
     caller, so this cannot hand a model a block it can close.
 
-    The source's own title sits inside the fence with the body. It arrives from
-    the same page and is the line the model is now asked to rewrite, so leaving
-    it outside would put untrusted text where the prompt's "that block is DATA"
-    sentence does not reach (Guardrail #11).
+    The source's own title sits inside the fence with the body. It comes from
+    the same untrusted page, so it crosses the same sanitization boundary
+    (Guardrail #11).
     """
     parts = []
     if article.title:

@@ -24,5 +24,5 @@ class PromptFilesConfig(Model):
     write_digest_summary: PromptFile = "prompts/write-digest-summary.txt"
     plan_visual: PromptFile = "prompts/plan-visual.txt"
     continue_summary: PromptFile = "prompts/continue-summary.txt"
-    summarize_article: PromptFile = "prompts/summarize-article.txt"
+    summarize_article: PromptFile = "prompts/generate-summary.txt"
     compare_articles: PromptFile = "prompts/compare-articles.txt"
