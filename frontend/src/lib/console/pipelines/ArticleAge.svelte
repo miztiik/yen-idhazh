@@ -25,10 +25,10 @@
 </script>
 <div use:observeWidth={(next) => measured = next}>
 <p data-lede class="lede" data-article-age-inferred={age.inferred}>{age.lede}</p>
-<p data-comparison="Source age at work start: articles over a day old against newer ones.">Source age at work start: articles over a day old against newer ones, measured from the source's stated publication time.</p>
+<p data-comparison="Article age at processing start: over a day old against newer articles.">Articles over a day old against newer ones, measured from the source's stated publication time.</p>
 <div data-model-rule="no" data-model-rule-name="article-age" data-model-rule-none="one distribution of the window, not a date axis">
 	<Distribution {geometry} empty={emptyState('quiet', distributionShortfall(positive, options) ?? 'No positive source-stated age was measured.')}
-		name="article-age" label="Source age at work start in hours, logarithmic scale; inferred and future times excluded"
+		name="article-age" label="Article age when processing began in hours, logarithmic scale; inferred and future times excluded"
 		{width} height={knobs.chart_height} />
 </div>
 {#if age.hours.some((hour) => hour === 0)}

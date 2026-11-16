@@ -49,7 +49,7 @@ export interface EvalPanel {
 }
 
 export const EVAL_PANELS: readonly EvalPanel[] = [
-	{ id: 'daily-figures', title: 'What the model did', route: '/console/model/' },
+	{ id: 'daily-figures', title: 'Model figures by recorded day', route: '/console/model/' },
 	{
 		id: 'faithfulness',
 		title: matchTitle(),

@@ -1,6 +1,6 @@
 # What the Pipelines route draws
 
-**Last Updated**: 2026-11-14
+**Last Updated**: 2026-11-16
 
 Moved plots use the shared width observer and redraw in the CSS-pixel frame
 their panel actually occupies. Private date axes retain missing days as null,
@@ -52,9 +52,9 @@ reads the same article clocks but keeps a separate common endpoint with
 `summary-quality-evals`, as it did on Summaries. The removed
 extraction panel no longer asks `summary-quality-evals`. Neither route load nor the browser reads telemetry CSV,
 `run-timeline`, `span-rollup` or a month inventory for these panels.
-The per-run percentile trend and newest-run slowest ranking share their
-original item-health/host-fingerprint/run-shards endpoint group, not the
-ordinary item-health or writing-cost endpoint.
+The per-run percentile trend and newest-run slowest ranking use item-health
+alone, matching the timeline's endpoint. Hardware and dispatch-count records
+are not inputs to these article-only questions and cannot backdate them.
 
 `at-a-glance`, `run-health`, `site-cost-per-item` and `chart-drawing`
 remain private BUILD_TIME readings of manifests,
@@ -70,7 +70,7 @@ internal missing days rather than padding to the published-count endpoint.
 Its visible packed-attempt bounds qualify the chart. The source-labelled
 date line does not claim that every panel ends on the main item-health date.
 
-**Source age at work start** measures the source's feed-stated publication time
+**Article age when processing began** measures the source's feed-stated publication time
 to the successful item's recorded work start, not to publication by this site.
 Inferred, unusable and future source times stay excluded. Measured zero ages
 remain in the counts and median, with a note explaining why the logarithmic
@@ -181,19 +181,19 @@ empty and the route still renders.
 
 **Pipelines depends on `$lib/charts/machine` for its `seconds` formatter.**
 
-## The run-wide article ranking keeps its original evidence endpoint
+## The run-wide article ranking shares the timeline's article endpoint
 
 `slowest-articles` follows the timeline and mounts only on Pipelines. It ranks
 all qualifying articles across the newest recorded run, not the selected
 shard's paged details. The timeline's shard inspection and the aggregated
 writing-cost distribution do not answer that run-wide identity question.
 
-Its item-health query retains the common endpoint of item-health,
-host-fingerprint and run-shards, then clamps to that newest UTC day. Ordinary
-Pipelines native queries retain their item-health-only endpoint. A lagging host
-or count family can therefore date the ranking earlier without backshifting the
-timeline or other native readings. Each panel prints its own evidence dates.
-Retry retains each group's successful endpoint until the preset changes.
+Its item-health query clamps to the newest recorded article day, just like
+the timeline. Lagging host or dispatch-count records do not select an older
+run. The heading says `Longest article work in the latest recorded run`;
+recorded item work is not an article's elapsed window. Each panel prints its
+evidence dates. Retry retains each group's successful endpoint until the preset
+changes.
 
 The existing numeric `config/console/machine.json` knob
 `slowest_articles_rows` still limits the ranking, preserving prior configuration
@@ -208,16 +208,22 @@ outside it. No clock is normalized or inferred during the move.
 
 ## Per-run slow-article percentiles keep their own window
 
-`tail-trend` sits after writing cost, beside the other windowed timings.
+`tail-trend`, headed `Model processing time by run`, sits after writing cost,
+beside the other windowed timings.
 It retains positive finite `summarize_ms` grouped by actual run, numeric run
 ordering, and the configured measured-article floor. Its p50, p75, p90, p95
 and p99 are linearly interpolated and rounded to whole milliseconds; the five
 subplots share one seconds domain. Timed counts, under-floor run identities
-and counts, percentile readouts and settings-change rules are unchanged.
+and counts, percentile readouts and settings-change evidence stay visible.
+Settings changes use dotted event lines without repeated on-plot labels;
+percentile traces remain solid. The caption names the event lines and the
+readout retains the recorded changes. A short method caption names linear
+interpolation and separate run populations; a native disclosure distinguishes
+model-call duration from the full processing window.
 Unlike the ranking's newest-day snapshot, it asks the inclusive selected
 preset and clamps its start to item-health's own first day. Its settings
-markers retain the full selected preset ending at the same three-family
-endpoint as the ranking, not the ordinary Pipelines endpoint.
+markers retain the full selected preset ending at the same item-health
+endpoint as the ranking and timeline.
 The queried UTC bounds print inside the panel. Daily stage medians and the
 whole-window writing-cost histogram remain separate measurements.
 The component owns its card; its native state frame does not wrap it in a

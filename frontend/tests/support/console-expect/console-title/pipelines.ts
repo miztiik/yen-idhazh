@@ -5,5 +5,5 @@ export const EXPECT: RouteExpect | null = {
 	href: '/console/',
 	label: 'Pipelines',
 	minimumHeadings: 3,
-	renamedTitles: ['Articles published against planned', 'Whether the slowest articles are getting slower']
+	renamedTitles: ['Articles published against planned', 'Model processing time by run']
 };

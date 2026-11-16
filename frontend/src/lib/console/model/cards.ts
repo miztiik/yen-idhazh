@@ -25,7 +25,7 @@ export function cardReadState(reads: CardReads, window: TimeWindow): 'quiet' | '
 }
 
 export const cardColumns: readonly { key: string; label: string; line: string; polarity: MovementPolarity }[] = [
-	{ key: 'summaries', label: 'Summaries today', line: '', polarity: 'no-agreed-direction' },
+	{ key: 'summaries', label: 'Published summaries checked', line: '', polarity: 'no-agreed-direction' },
 	{ key: 'part', label: 'Article read only in part', line: 'The article was too long, so the machine read the start and stopped.', polarity: 'lower-is-better' },
 	{ key: 'part-pct', label: 'Read only in part, as a percent', line: "The same articles, against the day's own count, so a busy day and a quiet one compare.", polarity: 'lower-is-better' },
 	{ key: 'per-item', label: 'Time to write one', line: 'How long the machine takes on one article. The second figure is the articles it read only the start of.', polarity: 'lower-is-better' },

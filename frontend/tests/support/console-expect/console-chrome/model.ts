@@ -6,6 +6,6 @@ export const EXPECT: RouteExpect = {
 	recordingLines: {
 		group: '[data-recording-lines]',
 		section: '[data-console-panel-id="model-cards"]',
-		heading: 'What the model did'
+		heading: 'Model figures by recorded day'
 	}
 };

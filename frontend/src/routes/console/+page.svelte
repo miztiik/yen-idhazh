@@ -145,12 +145,12 @@
 		'at-a-glance': 'At a glance', 'run-health': 'Run health', 'site-cost-per-item': 'What one more article costs',
 		'failure-mix': 'What is failing, by stage', 'item-time-split': "Where an item's time went",
 		'stage-timings': 'Time per item by stage',
-		'write-cost': 'What one summary cost', 'run-timeline': "Where the run's time went, on the run's own clock",
-		'tail-trend': 'Whether the slowest articles are getting slower',
-		'slowest-articles': 'Which articles took longest in the last run',
+		'write-cost': 'What one summary cost', 'run-timeline': 'Recorded article timings by shard',
+		'tail-trend': 'Model processing time by run',
+		'slowest-articles': 'Longest article work in the latest recorded run',
 		'chart-drawing': 'Visuals drawn for articles',
 		'visual-refusals': 'Recorded refusal reasons over time',
-		'article-age': 'Source age at work start'
+		'article-age': 'Article age when processing began'
 	};
 	const panelQueries: Record<string, PanelQuery> = {
 		'failure-mix': queries.failureMixQuery, 'item-time-split': queries.itemTimeSplitQuery,

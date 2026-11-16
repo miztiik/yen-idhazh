@@ -26,7 +26,7 @@
 <div data-model-cards data-model-cards-day={newest?.date} data-model-cards-from={start} data-model-cards-to={end} data-windowed="model-cards" data-window-days={windowDays}>
 	<p data-model-cards-note data-model-newest={newest?.date} data-window-days={windowDays}
 		data-comparison="each card's newest day against its last 14 days">
-		{#if newest}Newest measured day: <time datetime={newest.date}>{newest.date} UTC</time>. {/if}
+		{#if newest}Newest recorded day: <time datetime={newest.date}>{newest.date} UTC</time>. {/if}
 		Mini charts and percentage changes use up to the last 14 days in this window.
 		Point at or focus a line to inspect it; Left and Right step by day, Escape returns to the newest.
 		Missing readings are not zero.
@@ -79,7 +79,6 @@
 			</details>
 		{/if}
 	{/if}
-	<p>Nothing acts on these numbers.</p>
 	<details class="console-disclosure" data-model-table-control data-daily-figures="model" data-window-days={windowDays}>
 		<summary class="console-summary">{windowDays === 1 ? 'Show these figures for this one day' : `Show these figures day by day, over these ${windowDays} days`}</summary>
 		<div class="console-table" data-eval-panel="daily-figures" data-windowed="daily-figures" data-window-days={windowDays} data-model="table">

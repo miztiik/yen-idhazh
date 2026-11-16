@@ -132,8 +132,8 @@ or opening auxiliary verb. `What`, `Which` and `How` are valid when they name
 the content rather than ask a question. A grammatical title must still explain
 what the operator learns; mechanism names alone are not enough.
 
-Preserve protected copy such as `What the model did` on Summaries. An approved
-copy change must keep stable addresses.
+Copy changes keep stable addresses. Summaries' retained section is
+`Model figures by recorded day`, not a claim about live work today.
 
 ## Judgement distinguishes published merges from judging evidence
 

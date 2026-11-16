@@ -261,29 +261,38 @@ test('the real three-ledger door anchors at the oldest end and asks each ledger 
 	expect(platformMixQuery.columns).toEqual(expect.arrayContaining([...FLEET_COLUMNS]));
 });
 
-test('the relocated run-wide ranking keeps its original endpoint without backshifting ordinary Pipelines readings', async ({}, info) => {
-	const root = info.outputPath('independent-ranking-window');
-	const day = '2026-09-24';
+test('item-only timing panels share the newest article day despite lagging hardware records', async ({}, info) => {
+	const root = info.outputPath('consistent-article-window');
+	const day = '2026-09-26';
 	const article = (run: string, item: string, shard: number, ms: number | null): Row => ({
 		date: day, run_id: `${day}-${run}`, item_id: item, source_id: 'source', machine_shard: shard, item_total_ms: ms,
 		fetch_ms: null, extract_ms: null, summarize_ms: null, faithfulness_ms: null, stage_gap_ms: null, queue_wait_ms: null
 	});
 	await buildRows(root, 'item-health', [
-		{ covers: day, rows: [article('9', 'older', 0, 99000), article('10', 'short', 0, 2000),
-			article('10', 'long', 1, 4000), article('10', 'missing', 2, null)] },
+		{ covers: '2026-09-24', rows: [item('2026-09-24')] },
 		{ covers: '2026-09-25', rows: [item('2026-09-25')] },
-		{ covers: '2026-09-26', rows: [item('2026-09-26')] }
+		{ covers: day, rows: [article('9', 'older', 0, 99000), article('10', 'short', 0, 2000),
+			article('10', 'long', 1, 4000), article('10', 'missing', 2, null)] }
 	]);
 	await buildRows(root, 'host-fingerprint', [{ covers: '2026-09-25', rows: [host('2026-09-25')] }]);
-	await buildRows(root, 'run-shards', [{ covers: day, rows: [{ date: day, run_id: `${day}-10`, shards: 3 }] }]);
+	await buildRows(root, 'run-shards', [{
+		covers: '2026-09-24', rows: [{ date: '2026-09-24', run_id: '2026-09-24-10', shards: 3 }]
+	}]);
+	await buildRows(root, 'summary-quality-evals', [{
+		covers: '2026-09-25', rows: [{ date: '2026-09-25', run_id: '2026-09-25-10', model_id: 'fixture-model' }]
+	}]);
 	const reader = createQueryWindow(diskDoor(root));
 	const reaches = await Promise.all(PIPELINES_QUERY_GROUPS.map((group) => reader.routeReach(group.ledgers)));
 	const timeline = PIPELINES_QUERY_GROUPS[0].queries.find((query) => query.name === 'runTimelineQuery')!;
 	const ranking = PIPELINES_QUERY_GROUPS[1].queries[0];
 	const timelineRange = asRange(rangeFor(timeline, 7, reaches[0], PRESETS));
 	const rankingRange = asRange(rangeFor(ranking, 7, reaches[1], PRESETS));
-	expect(timelineRange.to).toBe('2026-09-26');
+	const tailRange = asRange(rangeFor(PIPELINES_QUERY_GROUPS[1].queries[1], 7, reaches[1], PRESETS));
+	const writeRange = asRange(rangeFor(PIPELINES_QUERY_GROUPS[2].queries[0], 7, reaches[2], PRESETS));
+	expect(timelineRange.to).toBe(day);
 	expect(rankingRange).toEqual({ from: day, to: day, days: 1, asked: 1 });
+	expect(tailRange).toEqual({ from: '2026-09-24', to: day, days: 3, asked: 7 });
+	expect(writeRange.to).toBe('2026-09-25');
 	const answer = await reader.sliceOnce(ranking, rankingRange);
 	expect(answer.state).toBe('ok');
 	const view = slowestArticles(answer.rows, numberFormat);
