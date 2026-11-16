@@ -104,10 +104,16 @@ test('article timing panels follow the newest item record despite lagging host/c
 			timedRow(older, { item_id: 'older-short', machine_shard: 0 }),
 			timedRow(older, { item_id: 'older-long', machine_shard: 1, item_total_ms: 1600, stage_gap_ms: 850 })
 		] },
-		{ covers: THROUGH, rows: [timedRow(THROUGH, {
-			item_id: 'latest-clock', machine_shard: 0,
-			item_started_at: `${THROUGH}T00:00:00Z`, item_ended_at: `${THROUGH}T00:00:02Z`
-		})] }
+		{ covers: THROUGH, rows: [
+			timedRow(THROUGH, {
+				item_id: 'latest-clock', machine_shard: 0, item_total_ms: 1600, stage_gap_ms: 850,
+				item_started_at: `${THROUGH}T00:00:00Z`, item_ended_at: `${THROUGH}T00:00:02Z`
+			}),
+			timedRow(THROUGH, {
+				item_id: 'latest-short', machine_shard: 1,
+				item_started_at: `${THROUGH}T00:00:00Z`, item_ended_at: `${THROUGH}T00:00:01Z`
+			})
+		] }
 	]);
 	await buildRows(state, 'host-fingerprint', [{ covers: older, rows: [{ date: older, run_id: `${older}-1`, job: 'work', shard: 0 }] }]);
 	await buildRows(state, 'run-shards', [{ covers: older, rows: [{ date: older, run_id: `${older}-1`, shards: 2 }] }]);
@@ -127,6 +133,11 @@ test('article timing panels follow the newest item record despite lagging host/c
 	await expect(page.locator('[data-console-panel-id="tail-trend"] [data-native-window]'))
 		.toHaveText(`Native record: ${older} through ${THROUGH} UTC.`);
 	await expect(ranking.locator('[data-ranked-row]').first()).toContainText('latest-clock');
+	await expect(ranking.locator('[data-ranked-row]')).toHaveCount(1);
+	await expect(ranking.locator('.ranked-rule')).toHaveAttribute('aria-label', 'Run median: 1.2');
+	await expect(ranking).toContainText('Run median: 1.2 s of item work.');
+	await expect(ranking).toContainText('Showing 1 of 1 articles above the median, from 2 measured articles.');
+	await expect(ranking).not.toContainText('latest-short');
 	await expect(ranking).not.toContainText('older-long');
 });
 

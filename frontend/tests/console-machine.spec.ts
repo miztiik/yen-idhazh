@@ -17,6 +17,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { closestToMemory, contextReadings, countersFrom, processors, textRows, labelHeldMedian, reuseChecks, shardCounts, slowerMachines } from '../src/lib/console/machine/records';
 import { slowestArticles } from '../src/lib/console/pipelines/slowest-articles';
+import { rankedList } from '../src/lib/charts/d3/rankedList';
 import { fleetJobs } from '../src/lib/charts/fleet';
 import { machineKeys } from '../src/lib/charts/machine-colour';
 import { machineRamp } from '../src/lib/charts/machine-colour';
@@ -995,13 +996,34 @@ test.describe('the Hardware browser redraws, from stated readings', () => {
 	test('the slowest list names the newest numeric run and never stacks a negative gap', () => {
 		const actual = slowestArticles([
 			{ run_id: '2026-09-01-9', item_id: 'old', item_total_ms: 99000 },
+			{ run_id: '2026-09-01-10', item_id: 'short', item_total_ms: 1000 },
 			{ run_id: '2026-09-01-10', item_id: 'new', item_total_ms: 4000, fetch_ms: 1000, extract_ms: 1000,
 				summarize_ms: 1000, faithfulness_ms: 2000, stage_gap_ms: -1000, queue_wait_ms: 500 }
 		], numberFormat);
 		expect(actual.run).toBe('2026-09-01-10');
 		expect(actual.rows).toHaveLength(1);
-		expect(actual.rows[0]).toMatchObject({ value: 4, context: 'waited 0.5 s first; stages overlapped by 1 s' });
+		expect(actual.rows[0]).toMatchObject({ value: 4, context: 'queue wait 0.5 s; stages overlapped by 1 s' });
 		expect(actual.rows[0]).not.toHaveProperty('segments');
+	});
+
+	test('the slowest list compares all measured shards before applying its row cap', () => {
+		const run = '2026-09-01-10';
+		const actual = slowestArticles([
+			{ run_id: '2026-09-01-9', item_id: 'older', item_total_ms: 99000 },
+			...[10000, 0, 2000, 5000, 1000, 2000, 2000].map((ms, shard) => ({
+				run_id: run, item_id: `article-${shard}`, machine_shard: shard, item_total_ms: ms,
+				queue_wait_ms: shard === 0 ? 0 : null
+			})),
+			{ run_id: run, item_id: 'missing', item_total_ms: null },
+			{ run_id: run, item_id: 'invalid', item_total_ms: -1 }
+		], numberFormat);
+		expect(actual).toMatchObject({ run, medianSeconds: 2, measured: 7, unmeasured: 2 });
+		expect(actual.rows.map((row) => row.value)).toEqual([10, 5]);
+		expect(actual.rows[0].context).toContain('queue wait 0 s');
+		expect(actual.rows[1].context).toContain('queue wait not recorded');
+		const capped = rankedList(actual.rows, { max: 1 });
+		expect(capped?.rows.map((row) => row.value)).toEqual([10]);
+		expect(capped?.hidden).toBe(1);
 	});
 
 	test('numeric run suffixes beyond safe integers retain their actual order', () => {
@@ -1017,19 +1039,27 @@ test.describe('the Hardware browser redraws, from stated readings', () => {
 		expect(slowestArticles([
 			{ run_id: '2026-09-01-9', item_id: 'older', item_total_ms: 99000 },
 			{ run_id: '2026-09-01-10', item_id: 'newest', item_total_ms: null }
-		], numberFormat)).toEqual({ run: '2026-09-01-10', rows: [], unmeasured: 1 });
-		expect(slowestArticles([{ run_id: '2026-09-01-10', item_id: 'zero', item_total_ms: 0 }], numberFormat).rows[0].value).toBe(0);
+		], numberFormat)).toEqual({ run: '2026-09-01-10', rows: [], medianSeconds: null, measured: 0, unmeasured: 1 });
+		for (const times of [[0], [1000, 1000, 1000]]) {
+			const actual = slowestArticles(times.map((ms, index) => ({
+				run_id: '2026-09-01-10', item_id: `article-${index}`, item_total_ms: ms
+			})), numberFormat);
+			expect(actual).toMatchObject({
+				rows: [], medianSeconds: times[0] / 1000, measured: times.length, unmeasured: 0
+			});
+		}
 	});
 
-	test('positive gaps close the elapsed stack; queue wait stays outside it and missing stages stay absent', () => {
+	test('positive gaps close the work stack; queue wait stays outside it and missing stages stay absent', () => {
 		const row = { run_id: '2026-09-01-1', item_id: 'one', item_total_ms: 5000,
 			fetch_ms: 1000, extract_ms: 1000, summarize_ms: 1000, faithfulness_ms: 1000,
 			stage_gap_ms: 1000, queue_wait_ms: 2000 };
-		const measured = slowestArticles([row], numberFormat).rows[0];
+		const baseline = { run_id: row.run_id, item_id: 'short', item_total_ms: 0 };
+		const measured = slowestArticles([row, baseline], numberFormat).rows[0];
 		expect(measured.value).toBe(5);
 		expect(measured.segments?.map((segment) => segment.value)).toEqual([1, 1, 1, 1, 1]);
-		expect(measured.context).toBe('waited 2 s first');
-		expect(slowestArticles([{ ...row, extract_ms: null }], numberFormat).rows[0]).not.toHaveProperty('segments');
+		expect(measured.context).toBe('queue wait 2 s');
+		expect(slowestArticles([{ ...row, extract_ms: null }, baseline], numberFormat).rows[0]).not.toHaveProperty('segments');
 	});
 
 	test('native host logical, algorithm and model load conflicts preserve whole-run refusal in both orders', () => {

@@ -184,7 +184,7 @@ empty and the route still renders.
 ## The run-wide article ranking shares the timeline's article endpoint
 
 `slowest-articles` follows the timeline and mounts only on Pipelines. It ranks
-all qualifying articles across the newest recorded run, not the selected
+above-median article work across the newest recorded run, not the selected
 shard's paged details. The timeline's shard inspection and the aggregated
 writing-cost distribution do not answer that run-wide identity question.
 
@@ -197,14 +197,20 @@ changes.
 
 The existing numeric `config/console/machine.json` knob
 `slowest_articles_rows` still limits the ranking, preserving prior configuration
-and its default. Recorded `item_total_ms` determines rank, never timestamp
-elapsed time. The newest run does not fall back when its clocks are missing;
-measured zero remains a measured article, and the unmeasured count stays visible.
+and its default. The median uses every finite, nonnegative `item_total_ms` in
+that run, across all recorded shards, before filtering or capping. Only articles
+strictly above it qualify, longest first. The list prints the run median,
+displayed and qualifying counts, omitted rows and missing measurements.
+Recorded item work determines rank, never timestamp elapsed time. The newest
+run does not fall back when its clocks are missing; measured zero still counts.
+A single measurement or no work above the median gets an explicit empty
+comparison, not a claim that work was unmeasured.
 
 Complete nonnegative fetch, extract, summarize and checking stages stack with a
 positive recorded gap as `Other`. Missing stages or gap and negative overlap
-keep the whole recorded-item bar and their original context. Queue wait stays
-outside it. No clock is normalized or inferred during the move.
+keep the whole recorded-item bar and their original context. Parked queue wait
+is labelled separately, never stacked into work; absent wait remains unrecorded.
+No clock is normalized or inferred.
 
 ## Per-run slow-article percentiles keep their own window
 
