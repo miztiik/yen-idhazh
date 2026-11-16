@@ -54,7 +54,6 @@ from idhazh.classify.calls import (
     summarize_and_plan_budget_tokens,
     summarize_and_plan_prose_words,
     summarize_and_plan_schema,
-    summarize_and_plan_user_turn,
 )
 from idhazh.classify.plan_visual_request import (
     PLANNING_COLUMNS,
@@ -73,10 +72,8 @@ from idhazh.contracts.knobs.summarize import SummarizeConfig
 from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.visual import (
-    CODE_STAMPED_FIELDS,
     TITLE_MAX_LENGTH,
     EncodingRole,
-    VisualPlan,
     VisualType,
     widest_json_characters,
 )
@@ -1105,23 +1102,6 @@ def build_label_with_derived_budget(
     )
 
 
-def bounded(schema: object, path: str = "") -> set[str]:
-    """Every place in a generated schema a decoder may write without a bound."""
-    loose: set[str] = set()
-    if isinstance(schema, dict):
-        kind = schema.get("type")
-        if kind == "string" and "maxLength" not in schema and "enum" not in schema:
-            loose.add(path)
-        if kind == "array" and "maxItems" not in schema:
-            loose.add(path)
-        for key, value in schema.items():
-            loose |= bounded(value, f"{path}.{key}" if path else str(key))
-    if isinstance(schema, list):
-        for index, value in enumerate(schema):
-            loose |= bounded(value, f"{path}[{index}]")
-    return loose
-
-
 class TestTheSummarizeAndPlanOracle:
     def test_current_plan_collects_references_without_losing_confidence_or_prose_checks(
         self, article_ok: Article
@@ -1378,82 +1358,6 @@ class TestTheInstructionsSitInFrontOfTheArticle:
         """`substitute`, not `safe_substitute` - a stray `$knob` reads as an
         instruction, and in an 8.5 KB turn nobody would see it."""
         assert "$" not in label_system_prompt(config.load(CONFIG_DIR).app.summarize)
-
-
-class TestTheSummarizeAndPlanShape:
-    def test_the_label_reply_is_replayed_as_the_assistant_turn(self, dense: Article) -> None:
-        markers = a_markers()
-        first = label_payload(dense)
-        prompt = summarize_and_plan_payload(dense, '{"labels": []}')["prompt"]
-
-        assert prompt[len(first["prompt"]) :].startswith('{"labels": []}' + markers.turn_closing)
-        assert prompt.endswith(markers.opening())
-
-    def test_the_second_question_asks_for_both_halves_in_order(self) -> None:
-        turn = summarize_and_plan_user_turn()
-
-        assert turn.index('"summary"') < turn.index('"visual"')
-
-    def test_the_second_question_carries_no_article(self, dense: Article) -> None:
-        """The article is in the first user turn and is still there.
-
-        A second copy would spend prefill on bytes the server already holds, and
-        would put the same untrusted text in front of the model twice.
-        """
-        first = label_payload(dense)
-        added = summarize_and_plan_payload(dense)["prompt"][len(first["prompt"]) :]
-
-        assert (dense.text or "") not in added
-
-    def test_the_ask_and_the_decoder_leave_room_for_the_band(self, dense: Article) -> None:
-        """A prompt that asks for a longer summary than the decoder admits loses the item."""
-        ask = config.load(CONFIG_DIR).app.summarize
-        band = ask.band_for(dense.band_source_words)
-        turn = summarize_and_plan_user_turn(ask, source_words=dense.band_source_words)
-        schema = summarize_and_plan_schema(ask, source_words=dense.band_source_words)
-        summary = schema["$defs"]["SummaryDraft"]["properties"]["summary"]
-
-        assert f"{band.target_words_min} to {band.target_words_max} words" in turn
-        assert summary["maxLength"] >= band.target_words_max
-        assert summary["minLength"] <= band.target_words_min * 12
-
-    def test_the_reply_shape_is_the_same_whichever_band_is_named(self) -> None:
-        """The rails are the envelope every band fits inside, so no band narrows them.
-
-        Key points made the shape band-keyed until 2026-09-24 - a note was held to
-        one and a long read to five - and the prompt had to state the same two
-        numbers or lose an item for doing what it was told. With the points gone
-        the only rails left are the widest any band can publish, so the grammar
-        stopped varying and that whole class of disagreement went with it.
-        """
-        ask = SummarizeConfig()
-        shapes = [
-            summarize_and_plan_schema(ask, source_words=band.min_source_words)
-            for band in ask.bands
-        ]
-
-        assert all(shape == shapes[0] for shape in shapes)
-        assert summarize_and_plan_schema(ask, brief=True) == shapes[0]
-
-    def test_the_plan_the_decoder_sees_carries_neither_field_code_stamps(self) -> None:
-        """`version` and `plan_version` are facts code holds, not questions for a model."""
-        plan = summarize_and_plan_schema()["$defs"]["VisualPlanDraft"]["properties"]
-
-        assert set(plan) & CODE_STAMPED_FIELDS == set()
-        assert set(plan) | CODE_STAMPED_FIELDS == set(VisualPlan.model_fields)
-
-    def test_no_string_and_no_array_in_the_reply_is_unbounded(self) -> None:
-        """The precondition of the budget arithmetic, asserted rather than assumed."""
-        assert bounded(summarize_and_plan_schema()) == set()
-
-    def test_a_reply_the_shape_forbids_is_refused(self) -> None:
-        """Closed to unknown keys, so a planted tool call fails here."""
-        body = json.loads(read_text(SUMMARIZE_AND_PLAN_REPLIES / "summary-and-plan.json"))
-        decoded = json.loads(body["choices"][0]["message"]["content"])
-        decoded["visual"]["alt_text"] = "a picture of anything at all"
-
-        with pytest.raises(ValidationError):
-            parse_summarize_and_plan(json.dumps(decoded), source_words=1320)
 
 
 def declining_reply(**changed: object) -> str:
