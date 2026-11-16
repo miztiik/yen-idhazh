@@ -1,6 +1,6 @@
 # Published Layout
 
-**Last Updated**: 2026-11-15
+**Last Updated**: 2026-11-16
 
 Where the pipeline writes what a reader reads, what a reader's URL looks like, and what a day is once five runs have added to it. Assemble is the stage that produces all of it ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape it writes into and the promises that shape makes.
 
@@ -137,7 +137,7 @@ policy would grade the saved evaluation differently. The comparison still
 requires every other item field, run identity, planned count, failed-item list
 and vertical plan to match. An old item's band cannot be reinterpreted from a
 new wrapper stamp; [the confidence contract](../../concepts/evaluation.md#the-band-says-what-is-missing-not-how-good-the-item-is)
-defines which historical reader warnings are suppressed.
+defines why confidence diagnostics remain recorded but produce no reader warning.
 
 **`items_failed` and `partial` are two readings of one set**, so the fold
 derives both from it: the union of every block's failed item ids, less the items

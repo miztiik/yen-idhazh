@@ -1,23 +1,7 @@
 <script lang="ts">
-	/** The item's footer: how sure we are, and the two things you can do next.
-	 *
-	 * It used to be the whole meta line and it carried four more facts. Those
-	 * moved above the title on 2026-09-01, because who is speaking, which desk it
-	 * is on and when it happened are what a reader uses to decide whether to read
-	 * the title - and they were printed under the summary, where that decision
-	 * has already been made.
-	 *
-	 * What stays is everything that is a claim about our summary rather than
-	 * about the story. The confidence sentence is the reason for the split:
-	 * printing a faithfulness warning above a headline
-	 * the reader has not read is a disclaimer on nothing.
-	 *
-	 * The way out sits at the trailing edge, so it lands in the same place on
-	 * every item however long the sentences beside it run.
-	 */
+	/** The item's footer: other coverage, listening and the original article. */
 	import { base } from '$app/paths';
 	import type { DigestCoverage, DigestItem } from '$lib/payload/types';
-	import ConfidenceChip from './ConfidenceChip.svelte';
 	import ReadAloud from './ReadAloud.svelte';
 	import SourceLink from './SourceLink.svelte';
 
@@ -115,11 +99,7 @@
 	class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-text-secondary"
 	data-item-foot
 >
-	<!-- Two sentences, then the two controls. The coverage line comes first
-	     because it is about the story and the confidence line is about what we
-	     wrote, and that is the order a reader needs them in.
-
-	     Names where the page has them, and the bare count where it does not. They
+	<!-- Names where the page has them, and the bare count where it does not. They
 	     answer different questions - who ran it, and how many did - and the names
 	     are the more useful answer, so the count only prints where no name can be
 	     linked. Every name is a link to OUR page for that newsroom's piece: our
@@ -151,8 +131,6 @@
 	{:else if coverageLine}
 		<span class="text-text-tertiary" data-item-coverage>{coverageLine}</span>
 	{/if}
-
-	<ConfidenceChip band={item.band} reason={item.band_reason} />
 
 	<ReadAloud title={item.title} summary={item.summary} />
 

@@ -398,10 +398,9 @@ export function matchFloor(
 	return Math.min(bounded, down(lowest));
 }
 
-/** The band rules the plot can actually draw, in the words the published item uses.
+/** The confidence rules the operator plot can actually draw.
  *
- * The labels are `bands.ts`'s own, so an operator reading this panel and a
- * reader looking at a story are told the same thing about the same score. The
+ * The labels come from the shared confidence vocabulary. The
  * confidence ramp is lent to these two and to nothing else on the panel: it is
  * a threshold somebody agreed to, which is the only case the console lends it
  * (`docs/concepts/console-design/what-the-quality-and-source-panels-draw.md`).

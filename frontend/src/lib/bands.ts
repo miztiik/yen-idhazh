@@ -1,43 +1,17 @@
-/** Copy lives here, once. A component never spells a band or a source kind. */
+/** Shared labels for operator confidence and publisher provenance. */
 
-import type { BandReason, ConfidenceBand, SourceKind } from './payload/types';
+import type { ConfidenceBand, SourceKind } from './payload/types';
 import taxonomy from '../../../config/taxonomy.json' with { type: 'json' };
 
 export interface BandCopy {
 	label: string;
-	token: string;
-	/** `high` shows nothing on an item: ink spent on the absence of a problem. */
-	showOnItem: boolean;
 }
 
 export const BANDS: Record<ConfidenceBand, BandCopy> = {
-	high: { label: 'Matches the source', token: 'var(--band-high)', showOnItem: false },
-	medium: { label: 'Mostly matches the source', token: 'var(--band-medium)', showOnItem: true },
-	low: { label: 'May not match the source', token: 'var(--band-low)', showOnItem: true }
+	high: { label: 'Matches the source' },
+	medium: { label: 'Mostly matches the source' },
+	low: { label: 'May not match the source' }
 };
-
-/** What is actually missing, in the voice of the truncation note.
- *
- * A band on its own is a grade. It tells a reader an item is worse without
- * telling them what to look for when they click through, which is the only
- * thing they can do about it. Each sentence names one concrete absence.
- */
-export const BAND_REASONS: Record<BandReason, string | null> = {
-	unsupported_number: null,
-	not_scored: 'We could not check this summary against the article.',
-	lead_missing: 'Our summary leaves out names or figures from the opening.',
-	hedge_dropped: null,
-	faithfulness: 'Parts of our summary do not line up with the article.'
-};
-
-/** Only an explicit, still-visible reason can produce a reader warning.
- *
- * Historical number/hedge decisions and unexplained bands cannot establish
- * HHEM confidence. A newer day/view wrapper supplies no item-level provenance.
- */
-export function bandSentence(reason: BandReason | null): string | null {
-	return reason === null ? null : BAND_REASONS[reason];
-}
 
 /** Who is speaking. A vendor's own copy must not read like a reporter's. */
 export interface SourceKindDefinition {

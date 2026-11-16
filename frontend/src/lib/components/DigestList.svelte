@@ -61,6 +61,7 @@
 	} from '$lib/day-shape';
 	import type { ReaderUiConfig } from '$lib/server/config';
 	import type { DayForPage, DigestCoverage, DigestItem } from '$lib/payload/types';
+	import { trackUtcDay } from '$lib/track-utc-day';
 	import { forgetAll, loadHideRead, loadRead, markRead, setHideRead } from '$lib/readstate';
 	import { onMount, tick } from 'svelte';
 
@@ -85,6 +86,8 @@
 	} = $props();
 
 	let query = $state('');
+	// Static markup keeps the full date until the mounted reader knows UTC today.
+	let todayUtc = $state<string | null>(null);
 	let read = $state(new Set<string>());
 	let hideRead = $state(false);
 	let shownCount = $state(0);
@@ -146,11 +149,15 @@
 	let settledCount = $state(0);
 
 	onMount(() => {
+		const stopDayClock = trackUtcDay((date) => (todayUtc = date));
 		hideRead = loadHideRead();
 		const readHash = () => (wanted = window.location.hash.replace(/^#/, ''));
 		readHash();
 		window.addEventListener('hashchange', readHash);
-		return () => window.removeEventListener('hashchange', readHash);
+		return () => {
+			stopDayClock();
+			window.removeEventListener('hashchange', readHash);
+		};
 	});
 
 	// Marks are per digest date, and this component is reused when a reader moves
@@ -553,6 +560,7 @@
 						showMark={ui.source_mark}
 						stack={stackOf(item)}
 						onDate={day.date}
+						{todayUtc}
 						{needle}
 						read={read.has(item.item_id)}
 						onRead={() => (read = markRead(item.item_id, read, day.date))}
