@@ -1,6 +1,7 @@
 /** Deterministic model instruments rules over bounded fixtures; no browser, build, or layout matrix. */
 import { expect, test } from '@playwright/test';
-import { DRAWN_BY, UNDRAWN, EVAL_PANELS, RECORDED, FLAGS, evalDays, flagReadings, recordedReadings, recordedText, type EvalInput } from '../src/lib/console/eval-instruments';
+import { DRAWN_BY, UNDRAWN, EVAL_PANELS, RECORDED, evalDays, recordedReadings, recordedText, type EvalInput } from '../src/lib/console/eval-instruments';
+import { SCORE_COLUMNS } from '../src/lib/server/ledger-rows';
 import { numberFormat } from './support/number-format';
 const FIXTURE: EvalInput[] = [
     { date: '2026-04-02', hhem: '0.90', hhem_delta: '0', compression: '0.20', coherence: '0.10' },
@@ -11,8 +12,8 @@ const FIXTURE: EvalInput[] = [
     { date: '2026-04-01', hhem: '0.90', hhem_delta: '0', compression: '0.70' },
     { date: '2026-04-03', hhem: '', compression: '' },
     { date: '', hhem: '0.99' },
-    { date: '2026-04-04', hhem: 'n/a', extraction_suspect: 'true' },
-    { date: '2026-04-04', hhem: '0.85', determinism_violation: 'True' }
+    { date: '2026-04-04', hhem: 'n/a' },
+    { date: '2026-04-04', hhem: '0.85' }
 ];
 test('every measurement receiver is declared once and every declared receiver answers for a measurement', () => {
     const panels = EVAL_PANELS.map((panel) => panel.id);
@@ -22,16 +23,14 @@ test('every measurement receiver is declared once and every declared receiver an
 });
 test('recorded instruments retain their approved receivers without inventing a checker result', () => {
     const receivers: Readonly<Record<string, string>> = {
-        compression: 'summary-length', self_repetition: 'daily-figures', coherence: 'daily-figures',
-        semantic_coverage: 'daily-figures', evidential_density: 'source-doubts',
-        speculative_density: 'source-doubts',
-        determinism_violation: 'daily-figures'
+        compression: 'summary-length', coherence: 'daily-figures'
     };
-    expect([...RECORDED, ...FLAGS].map((instrument) => instrument.id).sort()).toEqual([...Object.keys(receivers), ...Object.keys(UNDRAWN)].sort());
+    expect(RECORDED.map((instrument) => instrument.id).sort()).toEqual(Object.keys(receivers).sort());
     for (const id of Object.keys(receivers)) expect(DRAWN_BY[id]).toBe(receivers[id]);
-    expect(DRAWN_BY.extraction_suspect).toBeUndefined();
-    expect(UNDRAWN.extraction_suspect).toContain('remains recorded');
-    expect(EVAL_PANELS.find((panel) => panel.id === 'extraction')).toBeUndefined();
+    for (const id of Object.keys(UNDRAWN)) {
+        expect(DRAWN_BY[id]).toBeUndefined();
+        expect(SCORE_COLUMNS).not.toContain(id);
+    }
 });
 test.describe('the arithmetic', () => {
     test('a day is reduced by position, and a missing reading never enters as a zero', () => {
@@ -58,8 +57,6 @@ test.describe('the arithmetic', () => {
         expect(bad.scored).toBe(2);
         expect(bad.matched).toBe(1);
         expect(bad.matchMid).toBe(85);
-        expect(bad.fired.extraction_suspect).toBe(1);
-        expect(bad.fired.determinism_violation).toBe(1);
     });
     test('a cosine keeps its own scale and its sign, and is never read as a percent', () => {
         const days = evalDays(FIXTURE);
@@ -74,14 +71,6 @@ test.describe('the arithmetic', () => {
         const days = evalDays(FIXTURE);
         expect(days.some((day) => day.date === '')).toBe(false);
         expect(days.reduce((sum, day) => sum + day.scored, 0)).toBe(FIXTURE.length - 1);
-    });
-    test('a flag that never fired is counted, not omitted', () => {
-        const readings = flagReadings(evalDays(FIXTURE));
-        expect(readings.map((reading) => reading.id)).toEqual(FLAGS.map((flag) => flag.id));
-        for (const reading of readings) {
-            expect(reading.fired).toBe(1);
-            expect(reading.of).toBe(FIXTURE.length - 1);
-        }
     });
     test('THE ORACLE: what the faithfulness panel draws is reduced from rows written here', () => {
         const days = evalDays([

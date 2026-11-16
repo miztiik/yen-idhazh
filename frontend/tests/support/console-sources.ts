@@ -52,7 +52,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	],
 	'src/lib/console': [
 		'applied-line.ts', 'band.ts', 'chrome.ts', 'completeness.ts', 'console-style.ts', 'daily-figures.ts',
-		'doubt-reasons.ts', 'duration-cohort.ts', 'eval-instruments.ts', 'failure-rules.ts',
+		'duration-cohort.ts', 'eval-instruments.ts', 'failure-rules.ts',
 		'holdout.ts', 'judgement-evidence.ts', 'merge-line.ts', 'model-cards.ts',
 		'query-state.ts', 'rates.ts', 'recording.ts', 'RecordNotes.svelte', 'route-console.ts', 'run-square.ts', 'series-tokens.ts',
 		'settings-moved.ts', 'span-words.ts', 'TimeCost.svelte', 'verdict-split.ts', 'waiting.ts', 'window-preference.ts', 'window-slot.ts'
@@ -68,9 +68,9 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'run-timeline.ts', 'site-cost-per-item.ts', 'stage-timings.ts', 'visual-attempts.ts', 'visual-refusals.ts'
 	],
 	'src/lib/console/model': [
-		'rows.ts', 'call-ending.ts', 'faithfulness.ts', 'source-doubts.ts', 'summary-length.ts',
+		'rows.ts', 'call-ending.ts', 'faithfulness.ts', 'summary-length.ts',
 		'model-throughput.ts', 'model-rule.ts', 'cost.ts', 'item-cost.ts', 'ItemCost.svelte', 'Query.svelte', 'Series.svelte',
-		'Cards.svelte', 'cards.ts', 'Panels.svelte', 'panels.ts', 'Reasons.svelte', 'doubt-reasons.ts', 'slice.ts', 'work.ts'
+		'Cards.svelte', 'cards.ts', 'Panels.svelte', 'panels.ts', 'slice.ts', 'work.ts'
 	],
 	'src/lib/console/voices': [
 		'record.ts', 'source-health.ts', 'feeds-failed.ts', 'fetch-time.ts',

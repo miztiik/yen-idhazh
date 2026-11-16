@@ -115,11 +115,17 @@ class AppConfig(Contract):
             "readCompatibility": (
                 "additive; absent archive controls use defaults; "
                 "absent prompt_files uses the declared task paths; retired visual type/kind "
-                "tokens remain readable but never enable production choices"
+                "tokens remain readable but never enable production choices; "
+                "retired console.doubt_rows is discarded on read"
             )
         }
     )
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-11-15",
+            change="Remove the console source-doubt ranking limit.",
+            why="Historical configs discard the retired limit without restoring the ranking.",
+        ),
         ChangelogEntry(
             version="2026-11-12",
             change="Clarify the existing machine appearance controls.",
@@ -134,11 +140,6 @@ class AppConfig(Contract):
             version="2026-11-10",
             change="Archive search coverage and Top visibility have separate controls.",
             why="Absent controls use defaults; existing day-search coverage is unchanged.",
-        ),
-        ChangelogEntry(
-            version="2026-11-07",
-            change="prompt_files names the production task instructions under the selected config.",
-            why="Candidate configuration must select its own named prompt files.",
         ),
         ChangelogEntry(
             version="2026-09-28",

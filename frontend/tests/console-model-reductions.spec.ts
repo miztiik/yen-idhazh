@@ -4,7 +4,6 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { callEnding } from '../src/lib/console/model/call-ending';
 import { faithfulness } from './support/number-format';
-import { sourceDoubts } from '../src/lib/console/model/source-doubts';
 import { summaryLength } from '../src/lib/console/model/summary-length';
 import { modelThroughput } from '../src/lib/console/model/model-throughput';
 import { modelRuleFor } from '../src/lib/console/model/panels';
@@ -33,20 +32,6 @@ test('sparse rules retain every dated fact without moving a boundary onto anothe
 	expect(full.note).toContain('2030-06-12');
 	expect(full.note).toContain('2030-06-13');
 	expect(ruleEvents(full, ['2030-06-11', '2030-06-14']).lines[1]?.[0]?.value).toBe('The runtime changed.');
-});
-
-test('source attribution takes the later URL score and refuses unknown small shares instead of drawing zero', () => {
-	const scores: Row[] = [
-		{ date: '2030-06-12', url_key: 'same', band: 'high', unsupported_numbers: 0, hedge_dropped: false, evidential_density: 0.1, speculative_density: 0.1 },
-		{ date: '2030-06-14', url_key: 'same', band: 'low', unsupported_numbers: 1, hedge_dropped: true, evidential_density: 0.004, speculative_density: 0.009 },
-		{ date: '2030-06-14', url_key: 'orphan', band: 'low', unsupported_numbers: 0, hedge_dropped: false, evidential_density: null, speculative_density: null }
-	];
-	const result = sourceDoubts(scores, [{ url_key: 'same', source_id: 'matching-source' }],
-		{ start: '2030-06-01', end: '2030-06-14', days: 14 }, { limit: 10, minForShare: 5 });
-	expect(result.rows).toHaveLength(1);
-	expect(result.rows[0]).toMatchObject({ sourceId: 'matching-source', summaries: 1, doubted: 1, sharePct: null, evidential: 4, speculative: 9 });
-	expect(result.unattributed).toBe(1);
-	expect(result.geometry?.rows[0].refused).toContain('Too few');
 });
 
 test('retained metric trends keep model identities and dated setting changes', () => {
@@ -121,13 +106,9 @@ test('recorded native slices drive all eligible model reducers without broadenin
 	const rules = failureRuleRows(recorded('failedRuleQuery'));
 	expect(rules.some((row) => row.code === null)).toBe(true);
 	expect(failureRules(rules, { start: '2026-08-01', end: '2026-08-20' }, 'summarize').failed).toBeGreaterThanOrEqual(0);
-	const sources = sourceDoubts(recorded('sourceDoubtsQuery'), [], { start: '2026-08-01', end: '2026-08-20', days: 20 }, { limit: 10, minForShare: 1 });
-	expect(sources.unattributed).toBeGreaterThan(0);
-	expect(sources.rows).toEqual([]);
-	expect(sources.share).toBeNull();
 });
 
-test('the score-only checker rule and every-change rule retain distinct dated meanings', () => {
+test('only changes to the scorer mark faithfulness, while the cards keep settings alone', () => {
 	const shell = { ...BAND_UNREAD,
 		settingsMoved: { compared_from: '2026-08-01', changes: [] },
 		checkerMoved: { compared_from: '2026-08-01', changes: [
@@ -138,10 +119,10 @@ test('the score-only checker rule and every-change rule retain distinct dated me
 	};
 	const window = { from: '2026-08-01', to: '2026-09-30' };
 	const score = settingsRules(shell, window, 'score');
-	const every = settingsRules(shell, window, 'every');
-	if ('declined' in score || 'declined' in every) throw new Error('Recorded rules were declined.');
+	const cards = settingsRules(shell, window, 'none');
+	if ('declined' in score || 'declined' in cards) throw new Error('Recorded rules were declined.');
 	expect(score.changes.map((c) => c.date)).toEqual(['2026-08-26', '2026-08-29']);
-	expect(every.changes.map((c) => c.date)).toEqual(['2026-08-23', '2026-08-24', '2026-08-26', '2026-08-29', '2026-09-24']);
+	expect(cards.changes).toEqual([]);
 	expect(settingsRules(shell, { from: '2026-08-20', to: '2026-08-20' }, 'none', 'this one day')).toEqual({
 		changes: [], note: 'Nothing changed about how the summaries are written inside this one day.'
 	});

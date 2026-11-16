@@ -349,9 +349,9 @@ figures in the article's opening survived into the summary. It stopped banding
 items before the number and hedge rules,
 because plenty of good articles and blogs open slowly and a summary that left
 the opening behind was not a worse summary for it. `BandReason.lead_missing`
-stays in the vocabulary - committed published days carry it, and a reader of one
-of those days still has to be told why the item was doubted - but nothing
-produces it any more.
+stays in the vocabulary for committed payload compatibility, but nothing
+produces it any more. The historical chip is suppressed when its HHEM grade
+cannot be recovered.
 
 Historical `band` cells and scorer identities remain time-of-write records.
 `backend/utilities/reband_scores.py` can report how their `hhem` values grade
@@ -362,50 +362,6 @@ The checker/verdict bundle is `metrics-5` in newly derived `scorer_version`
 values. Its change identifies the new band semantics, not a new HHEM instrument.
 Saved scorer identities remain unchanged, and a run with no evaluated rows
 continues to record no scorer identity.
-
-## Which sources the checker doubts
-
-A doubted summary is one the checker stopped on for any of three reasons: the
-band came out `low`, the summary asserted a figure the article never gave, or it
-turned the article's hedge into a fact. The Summaries route ranks sources by how
-many of their summaries carry at least one of the three, over the window in
-force, capped at `console.doubt_rows`.
-
-**Three counts, never a blend.** The three have different causes and different
-fixes - a low band is the grader's own confidence, an unsupported number is a
-fabrication, and a dropped hedge is a certainty the article did not have - so the
-row prints all three beside the count and the page never adds them into a score.
-A summary can carry more than one, so the three do not sum to the row's own
-count, which is also why they are never stacked into a bar. `doubted` in
-[frontend/src/lib/server/model-work.ts](../../frontend/src/lib/server/model-work.ts)
-is the ranked source list's predicate, keeping its count consistent with those
-three signals.
-
-**The order is the count, and the page says so.** A share sort puts a source
-with 2 doubted of 3 above one with 40 of 400, and it is the forty that reached a
-reader. Every row carries its own denominator for the same reason, and a source
-under `console.min_attempts_for_rate` summaries prints no share at all - a share
-over three summaries is the second summary. A tie goes to the source's own name:
-a second criterion would be a second ranking nobody declared.
-
-**No source is tinted.** The grader has a measured length bias (see the slicing
-section above), so a colour on a publisher's row would publish a verdict off an
-instrument still being calibrated. The order is the ranking; nothing else on the
-row is a judgement.
-
-**The source is a join, and the join is printed when it fails.** The eval ledger
-records the address and the title and never the feed, so a summary reaches a
-source through `url_key` on the item-health ledger. Measured
-2026-09-01 over the committed ledgers, 3,959 of 4,110 scored rows join, and every
-day from 2026-08-24 joins at 100 percent - the 151 that do not are the two oldest
-scored days, written before item-health carried them. Rows that do not join are
-counted in a sentence under the list rather than dropped, because a denominator
-that quietly shrinks is how a rate starts lying.
-
-Measured 2026-09-01 over a thirty-day window on the committed ledger: 123 sources
-scored something, 112 of them carry at least one doubt, 1,047 summaries of 3,959
-were doubted, and the worst ten hold 266 of those. The tail is sources with a
-single doubt in a month, which is what the cap exists to leave out.
 
 ## The human labels: the instrument, and what it still needs
 
@@ -833,7 +789,11 @@ What that last point cost to establish, measured over 1,490 committed article-an
 
 Coherence runs in the `work` shard, inside `to_eval_row`, because that is where an eval row is composed. The jobs that already hold the sentence encoder for the search index - `plan` and `assemble` - only ever read a row back, so computing the column there would leave the durable per-item payload carrying a null and put two committed rows with one settlement key in disagreement. The encoder loads on the first item that reaches the scorer and answers null where the weights are not in the checkout. Authority: Carmack.
 
-**Four things exist because of the band that went, and none is deleted here.** The `lead_missing` reason on published days, its slice on the console's doubt-reason panel, the `lead_missing` bucket on the day-metrics record, and the `LEAD_MISSING` enum member all stay, because committed days carry the reason and a reader of one of those days still has to be told why. Each now counts zero from 2026-09-24 onward.
+**Historical reasons remain decodable, not visible as mixed diagnostics.**
+The `lead_missing` vocabulary and existing persisted buckets remain readable;
+the console's mixed-reason panel and source-doubt ranking are removed.
+[The summary-console contract](../architecture/publishing/why-a-summary-was-doubted-and-what-the-checker-measures.md#design-rationale)
+separates that frontend removal from the still-recorded raw backend fields.
 
 **A verdict change moves the checker bundle, not the HHEM instrument.**
 `METRICS_VERSION` is `5`, so newly derived scorer identities distinguish

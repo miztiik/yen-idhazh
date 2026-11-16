@@ -6,8 +6,14 @@ What one number about one summary means, and what it cannot see.
 
 Somebody arrives here holding a column name - `self_repetition`, `verbatim_run`,
 `extractiveness`, `truncation_flagged` - off the eval ledger, off `EvalRow`,
-or off a console panel, and wants the sentence that defines it. That is the whole
+and wants the sentence that defines it. That is the whole
 question this page answers.
+
+The backend still records the raw diagnostics defined here. Their retired
+console surfaces no longer read or reduce them;
+[the console contract](../architecture/publishing/why-a-summary-was-doubted-and-what-the-checker-measures.md#design-rationale)
+names what remains visible. Removing a frontend consumer does not retire its
+backend calculation or rewrite its persisted record.
 
 **Faithfulness is not here.** It is the one number with a scorer behind it rather
 than an arithmetic definition, and how it is windowed is inseparable from what it
@@ -76,7 +82,9 @@ Two columns measure the source itself. Both are marker counts over the article's
 
 **They are read against each other, never alone.** High speculation with high attribution is a well-sourced story about something that has not happened yet, which is legitimate work. High speculation with *low* attribution is the fragile case: claims nobody has been named for.
 
-This is deliberately not a fragility score, and it is not a reader-facing signal. It is two numbers on an operator's row, and what they mean together is a calibration question that needs rows before it can be answered.
+This is deliberately not a fragility score or a visible console signal. These
+are recorded raw fields, and interpreting them together remains a calibration
+question.
 
 **Why these are two columns and not one hedge count.** "Reportedly" and "may" are both hedges, and a summary that drops either has published a rumour as a fact - so `hedge_dropped` wants them in one bucket and still gets them in one bucket. But asked about the *article* they say opposite things. Counting them together produces one number that rises for a well-sourced report and for pure speculation alike, which is a number that means nothing.
 

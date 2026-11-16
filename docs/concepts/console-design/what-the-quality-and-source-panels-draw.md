@@ -3,8 +3,8 @@
 **Last Updated**: 2026-11-15
 
 The panels that report what the model wrote and how the sources behaved: the
-eleven measures on `/console/model/`, the two distributions under them, and
-the two panels on `/console/voices/` that watch a
+retained cards and measurements on `/console/model/`, and
+the panels on `/console/voices/` that watch a
 source counting down or losing articles to the truncation cap.
 
 The chart rules these obey are
@@ -18,38 +18,30 @@ inputs. The native writing, checking and summary-length panels instead ask their
 declared browser queries. Their distributions describe the recorded mix; a
 single middle cannot carry its spread.
 
-## Eleven measures are eleven cards, and the rows are one control away
+## Retained measures are cards, and the rows are one control away
 
-Eleven columns of one table cannot answer the question an operator brings to it.
+Columns of one table cannot answer the question an operator brings to it.
 **Did it get worse is a vertical scan**, and in a wide table every column beside
 the one being scanned is a different quantity - a count, a percent, a second, a
-minute. At a thirty-day window that is 330 numbers under eleven header
-paragraphs.
+minute.
 
-So the section leads with eleven cards on one `auto-fit minmax(220px, 1fr)`
-grid, and each carries the same six things: **the label verbatim** - the copy is
-protected and `frontend/tests/console-model.spec.ts` compares the rendered
-labels byte for byte against the page's own `COLUMNS`, so a paraphrase fails the
-build rather than a review; **the newest day's figure**, with which day printed
-once above the grid rather than eleven times; **a line over at most the newest
+The section leads with one card per retained measure on an
+`auto-fit minmax(220px, 1fr)` grid. Each keeps **its documented label and
+explanation**, bound by `frontend/tests/console-model.spec.ts`;
+**the newest day's figure**, with its day printed once above the grid;
+**a line over at most the newest
 fourteen days inside the selected window**, drawn
 as markup by `Sparkline`, so each card's line needs no chart instance;
-**the change across that line**, painted from the measure's own declared polarity; **what it is out
-of**, for the six quality figures, because a card has no row to put the
-denominator one column away; and **its sentence**, in the body where there is
-room.
+and **the change across that line**, painted from the measure's own declared
+polarity.
 
 The label set for `What the model did`, with the sentence each one carries:
 
 | Label | The line under it |
 | --- | --- |
 | Summaries today | - |
-| Marked "not sure" | How many of today's summaries we told you not to trust. |
-| Numbers not in the article | The summary had a figure. The article did not. |
-| "Maybe" told as fact | The article said it might have happened. The summary said it did. |
 | Article read only in part | The article was too long, so the machine read the start and stopped. |
 | Read only in part, as a percent | The same articles, against the day's own count, so a busy day and a quiet one compare. |
-| Copied, not rewritten | How much of a normal summary is lifted word for word. |
 | Time to write one | How long the machine takes on one article. The second figure is the articles it read only the start of. |
 | Model minutes | - |
 | Too long to send | The article and the instructions together did not fit, so the machine was never asked. |
@@ -82,7 +74,7 @@ whatever the line then did, and no committed figure says that.
 The grid has one shared explanation of its short history, missing readings and
 pointer/keyboard inspection. Each line's strip keeps its exact date and value,
 without repeating the card label, change descriptions or inspection instructions.
-One native `Settings and checker changes` disclosure retains every dated
+One native `Settings changes` disclosure retains every dated model or setting
 change in the selected window, including changes before the mini charts.
 Each line references that keyboard-reachable disclosure; its pointer tooltip
 still names the changes on the inspected day.
@@ -92,13 +84,12 @@ missing-day warning; an older change is history, not evidence that the card's
 record is missing. Markers stay on their actual measured dates. A card with
 fewer than two measured days says why it has no trend.
 
-**No card is tinted.** `Copied, not rewritten` reads about 12 percent and nobody
-has agreed what a bad number would be, so a tint there would invent a threshold
-and publish it. The health ramp is lent to a threshold somebody agreed to, and
-to nothing else.
+Scorer-change markers belong to the separate faithfulness plot, not these
+cards. **No card is tinted as a confidence verdict.** Its movement colour follows
+the measure's declared polarity rather than inventing a threshold.
 
 **The daily table stays, below, behind a `Show these figures day by day`
-control.** Nothing is deleted: after a card moves, the rows are what say which
+control.** The retained readings stay available: after a card moves, the rows say which
 day. It is a native disclosure, so the rows are in the prerendered document
 either way and the section works with no script at all. The rows follow the
 window control above them and the line that opens them names the span, because a
@@ -258,6 +249,12 @@ spelling of a name, so where the name cannot sit beside the plot it moves above
 the track and the row takes one more line of type.
 
 ## Design rationale
+
+**Retiring a diagnostic removes its work, not just its marks.** The
+[summary-console contract](../../architecture/publishing/why-a-summary-was-doubted-and-what-the-checker-measures.md#design-rationale)
+names the lost readings and the remaining backend records. No hidden query,
+source join or historical mixed-confidence aggregate replaces the removed
+surfaces. Coherence remains an actual signed reading in the daily table.
 
 **Mini-chart scope is not selected-window history.** Passing every selected
 change into every short line wrongly described older, undrawn days as missing

@@ -17,7 +17,6 @@
 	import Cards from '$lib/console/model/Cards.svelte';
 	import Query from '$lib/console/model/Query.svelte';
 	import Panels from '$lib/console/model/Panels.svelte';
-	import Reasons from '$lib/console/model/Reasons.svelte';
 	import { panelQueries, titles, modelRuleFor } from '$lib/console/model/panels';
 	let { data } = $props();
 	const knobs = consoleKnobs();
@@ -35,14 +34,12 @@
 	const allAnswers = $derived(doorIds.map((id) => answers[id] ?? 'pending'));
 	const tally = $derived(tallyAsks(allAnswers));
 	const first = $derived(reach === null ? null : Object.values(reach.ledgers).flatMap((r) => r?.state === 'ok' ? [r.first] : []).sort()[0] ?? null);
-	const publishedWindow = $derived(windowFromDates((data.reasons ?? []).map((day) => day.date), windowDays));
+	const publishedWindow = $derived(windowFromDates(data.publishedDates, windowDays));
 	const span = $derived(publishedWindow ?? windowOfDays(data.windowDay, windowDays, 'right'));
 	const cardSpan = $derived(windowFromDates(Object.values(data.cardReads).flatMap((read) =>
 		read.state === 'read' ? [read.first, read.through] : []), windowDays) ?? span);
 	const shell = $derived(data);
 	const cardRule = $derived(settingsRules(shell, { from: cardSpan.start, to: cardSpan.end }, 'none', nameSpan(windowDays)));
-	const checkerRule = $derived(settingsRules(shell, { from: cardSpan.start, to: cardSpan.end }, 'every', nameSpan(windowDays)));
-	const reasonRule = $derived(settingsRules(shell, { from: span.start, to: span.end }, 'every', nameSpan(windowDays)));
 	const recording = $derived(data.recordingNotes[String(windowDays)]);
 	const measurementOff = $derived(data.measurementOff[String(windowDays)]);
 	onMount(() => {
@@ -97,7 +94,7 @@
 		{#if recording?.coveredElsewhere != null}<p data-recording="covered-elsewhere">{recording.coveredElsewhere}</p>{/if}
 	</div>
 	<RecordNotes notes={data.recordNotes[String(windowDays)] ?? []} />
-	<p>A dashed line marks a day a recorded setting changed: the model, its settings, the prompt, the chat template, the runtime or the weights file. A dotted line marks a day the checker changed.</p>
+	<p>A dashed line marks a day a recorded setting changed: the model, its settings, the prompt, the chat template, the runtime or the weights file. A dotted line in the faithfulness plot marks a day its scorer changed.</p>
 	{#each configured.panel_groups as group (group.id)}
 		<PanelGroup id={group.id} title={group.title} panels={group.panels.length}>
 			{#each group.panels as id (id)}
@@ -106,9 +103,7 @@
 					<div data-panel-question={titles[id]}>
 					{#if id === 'model-cards'}
 						<Cards days={data.cardDays} reads={data.cardReads} instruments={data.instruments} start={cardSpan.start} end={cardSpan.end}
-							rule={cardRule} {checkerRule} chart={data.chart} {windowDays} />
-					{:else if id === 'doubt-reasons'}
-						<Reasons days={data.reasons} start={span.start} end={span.end} rule={reasonRule} chart={data.chart} {windowDays} />
+							rule={cardRule} chart={data.chart} {windowDays} />
 					{:else if id in panelQueries}
 						{#if id === 'faithfulness'}<a href={data.faithfulnessReference}>How each of these measures is scored</a>{/if}
 						<Query queries={panelQueries[id]} reach={id === 'item-cost' ? itemCostReach : reach} preset={windowDays} presets={knobs.window_presets}

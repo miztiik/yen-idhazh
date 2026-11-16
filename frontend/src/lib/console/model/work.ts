@@ -1,10 +1,7 @@
 /** What the summarizer did on one day's own articles, and what the cap cost.
  *
- * Every figure is a count of that day's items. Nothing here is a score: a value
- * between zero and one names nothing an operator can pull, so the scorer's own
- * numbers stay in the `summary-quality-evals` ledger and only their consequences reach the
- * screen. `copiedPct` is the one share on the page and it leaves here already
- * multiplied out, so a raw ratio has no route to the markup.
+ * Counts, cut shares and writing clocks describe the day's recorded articles.
+ * Faithfulness and coherence are reduced separately from their own measurements.
  *
  * The source table lives here too rather than in a module of its own: it reads
  * the same two ledgers, and it needs the same one definition of what a cut is.
@@ -66,12 +63,6 @@ export interface ModelDay {
 	date: string;
 	/** Rows the score ledger holds for the day. Null where it holds none. */
 	summaries: number | null;
-	/** Summaries we told a reader not to trust - the lowest confidence band. */
-	notSure: number | null;
-	/** Summaries asserting a figure the article never gave. */
-	unsupportedNumbers: number | null;
-	/** Summaries that turned the article's "might" into "did". */
-	hedgeDropped: number | null;
 	/** Summaries written from the start of an article extract cut short.
 	 *
 	 * Counted over the day's rows stamped `CUT_FLAG_MEANS_A_CUT_FROM` or later,
@@ -101,8 +92,6 @@ export interface ModelDay {
 	 * `CUT_FLAG_MEANS_A_CUT_FROM`. Null wherever `readInPart` is.
 	 */
 	readInPartOf: number | null;
-	/** Median share of a summary lifted word for word, as whole percent. */
-	copiedPct: number | null;
 	/** Median milliseconds the model spent writing one summary. */
 	perItemMs: number | null;
 	/** The same median over the articles that were cut short.
@@ -182,39 +171,6 @@ function summarizeMs(health: Record<string, string>[]): number[] {
 		.map((row) => measured(row.summarize_ms))
 		.filter((ms): ms is number => ms !== null && ms > 0);
 }
-/** How much of one summary was lifted word for word.
- *
- * The larger of the two copying measures, because they miss opposite things: a
- * summary can score low on scattered four-word overlap and still lift one whole
- * paragraph. Taking the larger cannot under-report copying, which is the only
- * direction that matters here.
- */
-function copied(row: Record<string, string>): number | null {
-	const overlap = measured(row.extractiveness);
-	const verbatim = measured(row.verbatim_run);
-	return overlap === null && verbatim === null ? null : Math.max(overlap ?? 0, verbatim ?? 0);
-}
-
-/** Did the checker doubt this summary - any one of the three signals.
- *
- * The ranked source list uses one predicate, keeping each source's doubt count
- * consistent with its three recorded signals.
- *
- * The three are never blended into a score, and everywhere the count is shown
- * the three are shown beside it. They have different causes and different
- * fixes: a low band is the grader's own confidence, an unsupported number is a
- * fabrication, and a dropped hedge is a certainty the article did not have.
- * One blended figure would hide which of the three fired, which is the only
- * part an operator can act on.
- */
-export function doubted(row: Record<string, string>): boolean {
-	return (
-		row.band === 'low' ||
-		(measured(row.unsupported_numbers) ?? 0) > 0 ||
-		flag(row.hedge_dropped)
-	);
-}
-
 function day(
 	date: string,
 	scores: Record<string, string>[],
@@ -223,9 +179,6 @@ function day(
 ): ModelDay {
 	const scored = scores.length > 0;
 	const times = summarizeMs(health);
-	const share = median(scores.map(copied).filter((value): value is number => value !== null));
-	const count = (of: (row: Record<string, string>) => boolean) =>
-		scored ? scores.filter(of).length : null;
 	// Only the rows whose cut flag still means a cut. The rest answer an older
 	// question, so they are excluded from the count rather than folded into it.
 	const cutKnown = scores.filter((row) => (row.version ?? '') >= CUT_FLAG_MEANS_A_CUT_FROM);
@@ -241,9 +194,6 @@ function day(
 		// (backend/idhazh/telemetry/publish/day_metrics.py). Null still means the scorer
 		// never ran, which a count of zero cannot say.
 		summaries: scored ? (settled?.scored ?? scores.length) : null,
-		notSure: count((row) => row.band === 'low'),
-		unsupportedNumbers: count((row) => (measured(row.unsupported_numbers) ?? 0) > 0),
-		hedgeDropped: count((row) => flag(row.hedge_dropped)),
 		readInPart,
 		// Over the rows the flag still answers for, not over the day. Dividing by
 		// the whole ledger would shrink the share by however many older rows the
@@ -252,7 +202,6 @@ function day(
 		readInPartPct:
 			readInPart === null ? null : Math.round((readInPart / cutKnown.length) * 100),
 		readInPartOf: readInPart === null ? null : cutKnown.length,
-		copiedPct: share === null ? null : Math.round(share * 100),
 		perItemMs: median(times),
 		perItemCutMs: median(summarizeMs(health.filter(wasCut))),
 		totalMs: times.length === 0 ? null : times.reduce((total, ms) => total + ms, 0),
@@ -865,7 +814,7 @@ function rateSpread(values: number[], rank: typeof quantile = quantile): RateSpr
 /** The token-rate candles, one per timed day inside the window.
  *
  * Bounded to the widest span the control can reach, for the same reason the
- * doubt reasons and the eval days are: a day older than the widest preset can
+ * retained daily readings are: a day older than the widest preset can
  * never be drawn, so building it would only inline a candle no window will ask
  * for into every prerendered document. The filter is on the entries, before the
  * reduction, so the ceiling on the shipped array is the widest preset's days
@@ -939,143 +888,6 @@ export function throughputWithin(
 		})
 		.filter((day): day is ThroughputDay => day !== null)
 		.sort((a, b) => a.date.localeCompare(b.date));
-}
-
-/** The source each article came from, keyed by the article.
- *
- * The score ledger records the address and the title and never the feed, so the
- * source a summary belongs to is a join onto the item-health ledger, which
- * records `source_id`. `url_key` is the key both carry and it is stable across
- * runs; `item_id` is a slot on a page and only holds inside one day.
- *
- * Measured 2026-09-01 over the committed ledgers: 3,959 of 4,110 scored rows
- * join, and every day from 2026-08-24 joins at 100 percent. The 151 that do not
- * are the two oldest scored days, written before item-health carried them. So
- * the join is complete over any window an operator opens, and the count that
- * did not join is printed rather than quietly dropped.
- */
-export function sourceByUrlKey(health: Record<string, string>[]): Map<string, string> {
-	const found = new Map<string, string>();
-	for (const row of health) {
-		const key = row.url_key ?? '';
-		const sourceId = row.source_id ?? '';
-		if (key === '' || sourceId === '') continue;
-		found.set(key, sourceId);
-	}
-	return found;
-}
-
-/** One source, and how often the checker doubted what the model wrote from it. */
-export interface SourceDoubt {
-	sourceId: string;
-	/** Summaries carrying at least one of the three signals. The ranking. */
-	doubted: number;
-	/** The three signals, counted apart. A summary can carry more than one, so
-	 * these three do not add up to `doubted` and are never stacked. */
-	notSure: number;
-	unsupportedNumbers: number;
-	hedgeDropped: number;
-	/** The summaries every count above is out of. The denominator, carried
-	 * rather than inferred: 2 doubted of 3 and 40 of 400 are different facts and
-	 * the count alone cannot tell them apart. */
-	summaries: number;
-	/** `doubted` as whole percent of `summaries`, or null under the floor. A
-	 * share over three summaries is the second summary. */
-	sharePct: number | null;
-}
-
-/** The ranked list, and the sentences that cover what it left out. */
-export interface SourceDoubts {
-	/** The worst sources by doubted summaries, worst first. */
-	rows: SourceDoubt[];
-	/** Sources the cap did not reach, and the doubts they hold between them. */
-	moreSources: number;
-	moreDoubted: number;
-	/** Scored summaries in the window no source could be found for. */
-	unattributed: number;
-	/** Sources the window scored anything from, and summaries it scored. */
-	sources: number;
-	summaries: number;
-	/** Summaries the checker doubted, over every source. */
-	doubted: number;
-	days: number;
-	start: string;
-	end: string;
-}
-
-/** Which sources the checker doubts, over the window the page is showing.
- *
- * Sorted by the COUNT of doubted summaries and never by the share. A share sort
- * puts a source with 2 doubted of 3 above one with 40 of 400, and it is the
- * forty that reached a reader. The page states that rule, because a ranking
- * whose rule is not on the page can only be read for order.
- *
- * A tie is broken by the source's own name. A second criterion would be a
- * second ranking nobody declared, and the alphabet at least cannot be mistaken
- * for a judgement.
- *
- * A source with nothing doubted is left out rather than ranked at zero: it can
- * never reach the top of a list ordered by count, so a row for it would be a
- * row that says the list is longer than it is.
- */
-export function sourceDoubts(
-	scores: Record<string, string>[],
-	health: Record<string, string>[],
-	window: DayWindow,
-	options: { limit: number; minForShare: number }
-): SourceDoubts {
-	const sourceOf = sourceByUrlKey(health);
-	const rows = within(scores, window);
-
-	const per = new Map<string, SourceDoubt>();
-	let unattributed = 0;
-	for (const row of rows) {
-		const sourceId = sourceOf.get(row.url_key ?? '');
-		if (sourceId === undefined) {
-			unattributed += 1;
-			continue;
-		}
-		const at = per.get(sourceId) ?? {
-			sourceId,
-			doubted: 0,
-			notSure: 0,
-			unsupportedNumbers: 0,
-			hedgeDropped: 0,
-			summaries: 0,
-			sharePct: null
-		};
-		at.summaries += 1;
-		if (row.band === 'low') at.notSure += 1;
-		if ((measured(row.unsupported_numbers) ?? 0) > 0) at.unsupportedNumbers += 1;
-		if (flag(row.hedge_dropped)) at.hedgeDropped += 1;
-		if (doubted(row)) at.doubted += 1;
-		per.set(sourceId, at);
-	}
-
-	const found = [...per.values()]
-		.filter((source) => source.doubted > 0)
-		.map((source) => ({
-			...source,
-			sharePct:
-				source.summaries < options.minForShare
-					? null
-					: Math.round((source.doubted / source.summaries) * 100)
-		}))
-		.sort((a, b) => b.doubted - a.doubted || a.sourceId.localeCompare(b.sourceId));
-
-	const rest = found.slice(options.limit);
-	return {
-		rows: found.slice(0, options.limit),
-		moreSources: rest.length,
-		moreDoubted: rest.reduce((total, source) => total + source.doubted, 0),
-		unattributed,
-		sources: per.size,
-		summaries: rows.length,
-		doubted: [...per.values()].reduce((total, source) => total + source.doubted, 0),
-		days: window.days,
-		start: window.start,
-		end: window.end
-	};
 }
 
 /** The band ladder in ascending order, sorted once for a whole pass.

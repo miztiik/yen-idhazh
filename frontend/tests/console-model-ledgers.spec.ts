@@ -3,15 +3,15 @@ import { expect, test } from './support/door-page';
 import { mkdirSync } from 'node:fs';
 import { buildLedger, buildRows, serveToPage } from './support/ledger-lifecycle';
 
-const panelIds = ['model-cards', 'model-throughput', 'item-cost', 'call-ending', 'doubt-reasons', 'faithfulness',
-	'source-doubts', 'score-cost', 'summary-length'];
+const panelIds = ['model-cards', 'model-throughput', 'item-cost', 'call-ending', 'faithfulness',
+	'score-cost', 'summary-length'];
 
 test('the integrated Summaries route reads the native record and keeps all panels in declared order', async ({ page }) => {
 	await page.goto('/console/model/');
 	await expect(page).toHaveTitle(/Summaries/);
 	await expect(page.locator('[data-console-panels="model"]')).toHaveAttribute('data-route-state', 'ok');
 	expect(await page.locator('[data-console-panel-id]').evaluateAll((nodes) => nodes.map((n) => n.getAttribute('data-console-panel-id')))).toEqual(panelIds);
-	await expect(page.locator('[data-model-cards] [data-kpi]')).toHaveCount(12);
+	await expect(page.locator('[data-model-cards] [data-kpi]')).toHaveCount(7);
 	await expect(page.locator('[data-console-panel-id="recorded-only"]')).toHaveCount(0);
 	await expect(page.locator('[data-console-panel-id="refusing-rule"], [data-model-query="refusing-rule"], [data-failure-stages]')).toHaveCount(0);
 	await expect(page.locator('[data-console-panel-id="model-change"], [data-model-query="model-change"], [href="#model-change"]')).toHaveCount(0);
@@ -22,14 +22,13 @@ test('the integrated Summaries route reads the native record and keeps all panel
 	await expect(page.locator('[data-match-day]')).not.toHaveCount(0);
 	await page.locator('[data-model-table-control] > summary').click();
 	await expect(page.locator('[data-instrument="coherence"]')).not.toHaveCount(0);
-	await expect(page.locator('[data-instrument="semantic_coverage"]').first()).toHaveText('not measured');
-	for (const id of ['model-cards', 'source-doubts', 'summary-length']) {
+	for (const id of ['model-cards', 'summary-length']) {
 		await expect(page.locator(`[data-console-panel-id="${id}"]`)).toContainText('Nothing acts on these numbers.');
 	}
 	await page.locator('[data-window-preset="7"]').click();
 	await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-days', '7');
 	const queries = page.locator('[data-model-query]');
-	await expect(queries).toHaveCount(7);
+	await expect(queries).toHaveCount(6);
 	for (const query of await queries.all()) {
 		await expect(query).toHaveAttribute('data-query-asked', '7');
 		await expect(query).toHaveAttribute('data-query-state', 'ready');
@@ -55,7 +54,7 @@ for (const state of ['quiet', 'missing', 'unreachable'] as const) {
 		await page.goto('/console/model/');
 		await expect(page.locator('[data-console-panels="model"]')).toHaveAttribute('data-route-state', state);
 		await expect(page.locator('[data-console-standing]')).toContainText('Native record:');
-		for (const id of panelIds.filter((id) => !['model-cards', 'doubt-reasons'].includes(id))) {
+		for (const id of panelIds.filter((id) => id !== 'model-cards')) {
 			await expect(page.locator(`[data-console-panel-id="${id}"] [data-empty-state]`))
 				.toHaveText(state === 'quiet' ? 'Nothing recorded.' : state === 'missing' ? 'Not published yet.' : 'Did not arrive.');
 			await expect(page.locator(`[data-console-panel-id="${id}"] [data-lede]`)).toHaveCount(0);
@@ -67,7 +66,7 @@ test('pending native doors keep the waiting frame without a settled answer', asy
 	await page.route('**/state/compact/*/index/*.json', () => {});
 	await page.goto('/console/model/');
 	await expect(page.locator('[data-console-panels="model"]')).toHaveAttribute('data-route-state', 'loading');
-	for (const id of panelIds.filter((id) => !['model-cards', 'doubt-reasons'].includes(id))) {
+	for (const id of panelIds.filter((id) => id !== 'model-cards')) {
 		await expect(page.locator(`[data-console-panel-id="${id}"] [data-reserved]`)).toHaveAttribute('data-panel-state', 'loading');
 		await expect(page.locator(`[data-console-panel-id="${id}"] [data-lede]`)).toHaveCount(0);
 	}
@@ -83,7 +82,7 @@ test('a quiet native window still names lost days and unread files', async ({ pa
 	}
 	await page.goto('/console/model/');
 	await expect(page.locator('[data-console-panels="model"]')).toHaveAttribute('data-route-state', 'quiet');
-	for (const id of panelIds.filter((id) => !['model-cards', 'doubt-reasons'].includes(id))) {
+	for (const id of panelIds.filter((id) => id !== 'model-cards')) {
 		const panel = page.locator(`[data-console-panel-id="${id}"]`);
 		await expect(panel.locator('[data-record-note]').first()).toContainText('18 Aug 2026');
 		await expect(panel).toContainText('set aside');

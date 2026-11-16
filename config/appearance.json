@@ -68,7 +68,6 @@
     "context_cut_off_reason": "length",
     "context_high_percentile": 99.0,
     "default_window_days": 14,
-    "doubt_rows": 10,
     "failure_list_max": 25,
     "faithfulness_axis_floor_max": 75,
     "faithfulness_axis_step": 5,
@@ -308,5 +307,5 @@
     "movement_good_light": "#2f6f5e",
     "surface_tint_alpha": 0.07
   },
-  "version": "2026-11-12"
+  "version": "2026-11-15"
 }

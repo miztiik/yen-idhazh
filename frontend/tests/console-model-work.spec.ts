@@ -9,11 +9,6 @@ test('a model change is one divider row, under the days that ran on it', () => {
 	const scored = (date: string, model: string) => ({
 		date,
 		model_id: model,
-		band: 'high',
-		extractiveness: '0.2',
-		verbatim_run: '0.1',
-		unsupported_numbers: '0',
-		hedge_dropped: 'False',
 		truncation_flagged: 'False'
 	});
 
@@ -42,7 +37,7 @@ test('a day with no summaries gets no row, and a day with no health row gets no 
 	});
 
 	const rows = modelWork(
-		[{ date: '2026-08-26', model_id: 'one', band: 'low' }],
+		[{ date: '2026-08-26', model_id: 'one' }],
 		[
 			health('2026-08-26', '2000', 'failed'),
 			health('2026-08-25', '1500', 'ok'),
@@ -54,15 +49,13 @@ test('a day with no summaries gets no row, and a day with no health row gets no 
 	const days = rows.filter((row) => row.kind === 'day').map((row) => row.day);
 	expect(days.map((day) => day.date)).toEqual(['2026-08-26', '2026-08-25']);
 	expect(days[0].failed).toBe(1);
-	expect(days[0].notSure).toBe(1);
 	// Model work, no score row: every quality figure is unknown, not zero.
 	expect(days[1].summaries).toBeNull();
-	expect(days[1].notSure).toBeNull();
-	expect(days[1].copiedPct).toBeNull();
+	expect(days[1].readInPart).toBeNull();
 	expect(days[1].totalMs).toBe(1500);
 
 	// A day with score rows and no health row cannot count failures.
-	const scoredOnly = modelWork([{ date: '2026-08-26', model_id: 'one', band: 'high' }], []);
+	const scoredOnly = modelWork([{ date: '2026-08-26', model_id: 'one' }], []);
 	expect(scoredOnly).toHaveLength(1);
 	expect(scoredOnly[0].kind === 'day' && scoredOnly[0].day.failed).toBeNull();
 	expect(scoredOnly[0].kind === 'day' && scoredOnly[0].day.perItemMs).toBeNull();
@@ -78,7 +71,6 @@ test('the cut flag is counted only over rows that carry the meaning it has now',
 		date: '2026-08-28',
 		version,
 		model_id: 'one',
-		band: 'high',
 		truncation_flagged: flagged
 	});
 
@@ -131,7 +123,6 @@ test('the cut share divides by the rows its own flag answers for', () => {
 		date: '2026-08-28',
 		version,
 		model_id: 'one',
-		band: 'high',
 		truncation_flagged: flagged
 	});
 
@@ -218,6 +209,6 @@ test('the day splits its writing time by the articles it read only the start of'
 		only([health('1000', '400', '400'), health('', '', '', 'context_exceeded')]).refusedForLength
 	).toBe(1);
 	expect(only([health('1000', '400', '400')]).refusedForLength).toBe(0);
-	const scoredOnly = modelWork([{ date: '2026-08-28', model_id: 'one', band: 'high' }], [])[0];
+	const scoredOnly = modelWork([{ date: '2026-08-28', model_id: 'one' }], [])[0];
 	expect(scoredOnly.kind === 'day' && scoredOnly.day.refusedForLength).toBeNull();
 });

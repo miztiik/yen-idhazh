@@ -7,8 +7,8 @@ import { evalDays, type DayScoredCounts, type EvalInput } from '../src/lib/conso
 import { modelWork } from '../src/lib/server/model-work';
 
 /**
- * Row 23: the console reads the three published-set counts back from the day
- * record instead of counting score-ledger rows.
+ * The console reads distinct published counts from the day record instead of
+ * counting score-ledger rows.
  *
  * Three things are checked here, all in plain Node against fixtures so nothing
  * depends on the committed archive (`CLAUDE.md` section 13). First, the reader
@@ -22,7 +22,7 @@ import { modelWork } from '../src/lib/server/model-work';
 
 // --- the reader opens the window, not the archive ---------------------------
 
-function recordText(scored: number, drift = 0, suspect = 0): string {
+function recordText(scored: number, suspect = 0): string {
 	return JSON.stringify({
 		// The producer declares these three as required non-null ints on every
 		// record it writes, so the reader treats an absent one as a malformed
@@ -32,7 +32,6 @@ function recordText(scored: number, drift = 0, suspect = 0): string {
 		items_published: scored + 1,
 		items_failed: 1,
 		summaries_scored: scored,
-		determinism_violations: drift,
 		extraction_suspect: suspect
 	});
 }
@@ -47,7 +46,7 @@ test('dayMetrics opens only the dates asked for, whatever else is in the tree', 
 	const root = mkdtempSync(join(tmpdir(), 'day-metrics-'));
 	try {
 		writeRecord(root, '2026-08-20', recordText(8));
-		writeRecord(root, '2026-08-21', recordText(5, 1, 2));
+		writeRecord(root, '2026-08-21', recordText(5, 2));
 		writeRecord(root, '2026-08-22', recordText(3));
 
 		// A one-day window reads one record and the two beside it stay untouched,
@@ -60,11 +59,7 @@ test('dayMetrics opens only the dates asked for, whatever else is in the tree', 
 			itemsPublished: 6,
 			itemsFailed: 1,
 			summariesScored: 5,
-			determinismViolations: 1,
 			extractionSuspect: 2,
-			// This fixture carries only the required cells, so the band's two extra
-			// counts read null (they are proven present further down).
-			notSure: null,
 			itemsTruncated: null,
 			// And the extraction block, which a record written before 2026-09-08
 			// does not have. Null rather than a block of zeros: zero facts found is
@@ -150,11 +145,8 @@ test('dayMetrics degrades a malformed record instead of failing the build', () =
 });
 
 test('an item count missing is a malformed record, not an older shape', () => {
-	// Every one of the 36 committed records carries all three, and the producer
-	// declares them as required non-null ints, so an absent one means the file is
-	// wrong rather than old. It drops the day to the ledger, exactly as a missing
-	// `summaries_scored` does. The band's two counts below are the other case -
-	// they really do predate their field, so they read null instead.
+	// Required item counts still refuse a malformed record. The optional cut
+	// count below can remain unknown without dropping the day.
 	const root = mkdtempSync(join(tmpdir(), 'day-metrics-'));
 	try {
 		const whole = JSON.parse(recordText(4)) as Record<string, unknown>;
@@ -186,33 +178,28 @@ const DATE = '2026-08-29';
  * A day whose ledger holds more rows than the day published: item `a` re-scored
  * under a second stamp (two rows, one item), and item `gone` scored then
  * dropped (a row for an item no published day holds). Four rows, three distinct
- * ids, and the record says two distinct items were published, one drifting and
- * one extraction-suspect.
+ * ids, and the record says two distinct items were published.
  */
 const ROWS: EvalInput[] = [
-	{ date: DATE, item_id: 'a', hhem: '0.9', coverage: '0.8', determinism_violation: 'True', extraction_suspect: 'False' },
-	{ date: DATE, item_id: 'a', hhem: '0.7', coverage: '0.6', determinism_violation: 'True', extraction_suspect: 'False' },
-	{ date: DATE, item_id: 'b', hhem: '0.5', coverage: '0.4', determinism_violation: 'False', extraction_suspect: 'True' },
-	{ date: DATE, item_id: 'gone', hhem: '0.3', coverage: '0.2', determinism_violation: 'True', extraction_suspect: 'True' }
+	{ date: DATE, item_id: 'a', hhem: '0.9' },
+	{ date: DATE, item_id: 'a', hhem: '0.7' },
+	{ date: DATE, item_id: 'b', hhem: '0.5' },
+	{ date: DATE, item_id: 'gone', hhem: '0.3' }
 ];
 
 const SETTLED = new Map<string, DayScoredCounts>([
-	[DATE, { scored: 2, determinismViolations: 1, extractionSuspect: 1 }]
+	[DATE, { scored: 2 }]
 ]);
 
 test('evalDays without a record counts the ledger rows, as it always did', () => {
 		const [day] = evalDays(ROWS);
 	expect(day.scored).toBe(4);
-	expect(day.fired.determinism_violation).toBe(3);
-	expect(day.fired.extraction_suspect).toBe(2);
 });
 
 test('evalDays with a record counts the distinct-published items', () => {
 		const [day] = evalDays(ROWS, SETTLED);
-	// The three published-set counts are corrected.
+	// The distinct published count replaces the measurement-row count.
 	expect(day.scored).toBe(2);
-	expect(day.fired.determinism_violation).toBe(1);
-	expect(day.fired.extraction_suspect).toBe(1);
 	// Every measurement distribution still reads every row: four hhem readings,
 	// and the median is the same number the rows gave without the record.
 	expect(day.matched).toBe(4);
@@ -242,21 +229,18 @@ test('modelWork keeps null summaries for a day the scorer never ran', () => {
 	// cannot say. Null is preserved whether or not a record is handed in.
 	const health: Record<string, string>[] = [{ date: DATE, summarize_ms: '1200' }];
 	const zero = new Map<string, DayScoredCounts>([
-		[DATE, { scored: 0, determinismViolations: 0, extractionSuspect: 0 }]
+		[DATE, { scored: 0 }]
 	]);
 	const [row] = modelWork([], health, zero);
 	expect(row.kind).toBe('day');
 	if (row.kind === 'day') expect(row.day.summaries).toBeNull();
 });
 
-// --- the band's two extra counts, read leniently from the same record --------
+// --- retained counts do not depend on retired diagnostics ------------------
 
-test('dayMetrics reads the band counts from bands.low and items_truncated', () => {
+test('a day without retired aggregates keeps its published count and extraction cuts', () => {
 	const root = mkdtempSync(join(tmpdir(), 'day-metrics-'));
 	try {
-		// A full record, as the producer writes it: the band's `notSure` is the low
-		// confidence band and its `readInPart` is the cut count, both distinct-
-		// published.
 		writeRecord(
 			root,
 			'2026-08-21',
@@ -265,30 +249,26 @@ test('dayMetrics reads the band counts from bands.low and items_truncated', () =
 				items_published: 7,
 				items_failed: 1,
 				summaries_scored: 5,
-				determinism_violations: 1,
 				extraction_suspect: 2,
-				bands: { high: 3, medium: 1, low: 4 },
 				items_truncated: 6
 			})
 		);
 		const found = dayMetrics(['2026-08-21'], root).get('2026-08-21');
-		expect(found?.notSure).toBe(4);
+		expect(found?.summariesScored).toBe(5);
 		expect(found?.itemsTruncated).toBe(6);
+		expect(found).not.toHaveProperty('determinismViolations');
+		expect(found).not.toHaveProperty('notSure');
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
 });
 
-test('dayMetrics leaves the band counts null on a record without them', () => {
+test('an unrecorded cut count remains unknown without dropping the day', () => {
 	const root = mkdtempSync(join(tmpdir(), 'day-metrics-'));
 	try {
-		// A record carrying only the required cells still reads, so the model route
-		// keeps its correction; the band's two extra counts fall to null for that day
-		// rather than dropping the whole record.
-		writeRecord(root, '2026-08-21', recordText(5, 1, 2));
+		writeRecord(root, '2026-08-21', recordText(5, 2));
 		const found = dayMetrics(['2026-08-21'], root).get('2026-08-21');
 		expect(found?.summariesScored).toBe(5);
-		expect(found?.notSure).toBeNull();
 		expect(found?.itemsTruncated).toBeNull();
 	} finally {
 		rmSync(root, { recursive: true, force: true });

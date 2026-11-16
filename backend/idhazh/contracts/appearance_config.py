@@ -585,11 +585,17 @@ class AppearanceConfig(Contract):
                 "additive; absent archive controls and console_style blocks/leaves use "
                 "declared defaults; style arrays replace whole; numeric console frame "
                 "maxima retain their caps and null selects the full window; "
-                "chart.palette adds spectral and piyg while prior choices remain accepted"
+                "chart.palette adds spectral and piyg while prior choices remain accepted; "
+                "retired console.doubt_rows is discarded on read"
             )
         }
     )
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-11-15",
+            change="Remove the console source-doubt ranking limit.",
+            why="Historical configs discard the retired limit without restoring the ranking.",
+        ),
         ChangelogEntry(
             version="2026-11-12",
             change="Add built-in D3 console palettes and aligned appearance defaults.",
@@ -604,11 +610,6 @@ class AppearanceConfig(Contract):
             version="2026-11-10",
             change="Separate archive search controls and add defaulted console-only styling.",
             why="Missing controls and style leaves use defaults without changing reader styling.",
-        ),
-        ChangelogEntry(
-            version="2026-10-25",
-            change="Bounded browser geometry added for story charts.",
-            why="Story charts use measured reader width and stay separate from console dimensions.",
         ),
         ChangelogEntry(
             version="2026-09-30",

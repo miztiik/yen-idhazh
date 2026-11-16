@@ -1,6 +1,6 @@
 # What the page is drawn from
 
-**Last Updated**: 2026-11-14
+**Last Updated**: 2026-11-15
 
 Every knob a reader's page or an operator's console is drawn from: the file that
 owns them, the rule that decides which file owns a key when two name it, the
@@ -128,6 +128,10 @@ Shared console knobs stay in `config/appearance.json`. Each route owns its panel
 order, judged ids and route-only numeric knobs in `config/console/<route>.json`.
 The six route ids are `pipelines`, `model`, `machine`, `voices`, `judgement` and
 `data-explorer`. The route id is a file name, not the label an operator sees.
+
+The source-doubt ranking and its `console.doubt_rows` limit are removed.
+Both native config families discard that one legacy key on read and never
+serialize it again. Other unknown console keys still fail validation.
 
 Each route file has exactly these three keys:
 

@@ -58,6 +58,17 @@ def test_explorer_file_limit_defaults_and_bounds() -> None:
             ConsoleConfig.model_validate({"explorer_max_files": value})
 
 
+def test_retired_source_doubt_limit_does_not_restore_a_console_reader() -> None:
+    old = {"version": "2026-11-12", "console": {"doubt_rows": 6, "source_rows": 8}}
+    appearance = AppearanceConfig.model_validate(old)
+    app = AppConfig.model_validate({**old, "models_file": "models/recorded-model.json"})
+    for console in (appearance.console, app.console):
+        assert console.source_rows == 8
+        assert "doubt_rows" not in console.model_dump()
+    with pytest.raises(ValidationError, match="doubt_row"):
+        ConsoleConfig.model_validate({"doubt_row": 6})
+
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 APPEARANCE_PATH = REPO_ROOT / "config" / "appearance.json"
 

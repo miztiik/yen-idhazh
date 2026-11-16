@@ -5,7 +5,6 @@ import type { TimeWindow } from '../../charts/viewport';
 import { checkedRule, completeModelRule, type ModelRule } from '../../charts/d3/model-rule';
 import { coveredDays } from '../../data/slice';
 import type { RecordRead } from '../recording';
-import { FLAGS } from '../eval-instruments';
 
 export interface CardReads {
 	article: RecordRead;
@@ -27,25 +26,19 @@ export function cardReadState(reads: CardReads, window: TimeWindow): 'quiet' | '
 
 export const cardColumns: readonly { key: string; label: string; line: string; polarity: MovementPolarity }[] = [
 	{ key: 'summaries', label: 'Summaries today', line: '', polarity: 'no-agreed-direction' },
-	{ key: 'not-sure', label: 'Marked "not sure"', line: "How many of today's summaries we told you not to trust.", polarity: 'lower-is-better' },
-	{ key: 'unsupported', label: 'Numbers not in the article', line: 'The summary had a figure. The article did not.', polarity: 'lower-is-better' },
-	{ key: 'hedge', label: '"Maybe" told as fact', line: 'The article said it might have happened. The summary said it did.', polarity: 'lower-is-better' },
 	{ key: 'part', label: 'Article read only in part', line: 'The article was too long, so the machine read the start and stopped.', polarity: 'lower-is-better' },
 	{ key: 'part-pct', label: 'Read only in part, as a percent', line: "The same articles, against the day's own count, so a busy day and a quiet one compare.", polarity: 'lower-is-better' },
-	{ key: 'copied', label: 'Copied, not rewritten', line: 'How much of a normal summary is lifted word for word.', polarity: 'no-agreed-direction' },
 	{ key: 'per-item', label: 'Time to write one', line: 'How long the machine takes on one article. The second figure is the articles it read only the start of.', polarity: 'lower-is-better' },
 	{ key: 'minutes', label: 'Model minutes', line: '', polarity: 'no-agreed-direction' },
 	{ key: 'too-long', label: 'Too long to send', line: 'The article and the instructions together did not fit, so the machine was never asked.', polarity: 'lower-is-better' },
-	{ key: 'failed', label: 'Failed', line: '', polarity: 'lower-is-better' },
-	{ key: 'determinism', label: FLAGS.find((i) => i.id === 'determinism_violation')!.label, line: FLAGS.find((i) => i.id === 'determinism_violation')!.note, polarity: 'no-agreed-direction' }
+	{ key: 'failed', label: 'Failed', line: '', polarity: 'lower-is-better' }
 ];
 
-export function cardValue(day: ModelDay & { determinismViolations: number | null }, key: string): number | null {
+export function cardValue(day: ModelDay, key: string): number | null {
 	const values: Record<string, number | null> = {
-		summaries: day.summaries, 'not-sure': day.notSure, unsupported: day.unsupportedNumbers,
-		hedge: day.hedgeDropped, part: day.readInPart, 'part-pct': day.readInPartPct,
-		copied: day.copiedPct, 'per-item': day.perItemMs, minutes: day.totalMs,
-		'too-long': day.refusedForLength, failed: day.failed, determinism: day.determinismViolations
+		summaries: day.summaries, part: day.readInPart, 'part-pct': day.readInPartPct,
+		'per-item': day.perItemMs, minutes: day.totalMs,
+		'too-long': day.refusedForLength, failed: day.failed
 	};
 	if (!(key in values)) throw new Error(`No model card declares ${key}.`);
 	return values[key];
@@ -59,7 +52,7 @@ export function cardText(value: number | null, key: string): string {
 		return key === 'minutes' ? `${figure} min` : `${figure} s`;
 	}
 
-	return `${value}${key === 'part-pct' || key === 'copied' ? '%' : ''}`;
+	return `${value}${key === 'part-pct' ? '%' : ''}`;
 }
 
 export function cardTrendDays<T extends { date: string }>(days: readonly T[]): T[] {

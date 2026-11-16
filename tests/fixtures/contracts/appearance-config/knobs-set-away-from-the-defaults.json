@@ -82,7 +82,6 @@
     "context_cut_off_reason": "length",
     "context_high_percentile": 99.0,
     "default_window_days": 30,
-    "doubt_rows": 10,
     "explorer_bar_spread_share": 0.6,
     "explorer_cell_max_ch": 41,
     "explorer_chart_min_rows": 4,

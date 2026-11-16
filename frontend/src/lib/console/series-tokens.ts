@@ -15,7 +15,6 @@ export const SERIES_TOKENS = {
 	other: '--chart-8',
 	'never-fetched': '--chart-8',
 	'not-recorded': '--chart-8',
-	'never-checked': '--chart-8',
 	'fetch-rest': '--chart-8',
 	'other-memory': '--chart-8',
 	'queue-wait': '--chart-axis',
@@ -36,11 +35,7 @@ export const SERIES_TOKENS = {
 	carriage: '--chart-7',
 	'length-limit': '--chart-4',
 	'other-ending': '--chart-2',
-	'ended-on-own': '--chart-axis',
-	'unsupported-numbers': '--chart-1',
-	'does-not-match': '--chart-2',
-	'opening-left-out': '--chart-4',
-	'maybe-as-fact': '--chart-5'
+	'ended-on-own': '--chart-axis'
 } as const satisfies Record<string, ChartToken | null>;
 
 export type Quantity = keyof typeof SERIES_TOKENS;

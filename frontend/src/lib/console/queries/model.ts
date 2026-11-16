@@ -25,18 +25,6 @@ export const faithfulnessQuery = {
 	span: 'window'
 } as const satisfies PanelQuery;
 
-export const sourceDoubtsQuery = {
-	name: 'sourceDoubtsQuery', ledger: 'summary-quality-evals',
-	columns: ['date', 'url_key', 'band', 'unsupported_numbers', 'hedge_dropped', 'evidential_density', 'speculative_density'],
-	span: 'window'
-} as const satisfies PanelQuery;
-
-export const sourceDoubtsItemsQuery = {
-	name: 'sourceDoubtsItemsQuery', ledger: 'item-health',
-	columns: ['url_key', 'source_id'],
-	span: 'window'
-} as const satisfies PanelQuery;
-
 export const scoreCostQuery = {
 	name: 'scoreCostQuery', ledger: 'summary-quality-evals',
 	columns: ['date', 'score_ms'],

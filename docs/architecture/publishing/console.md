@@ -13,8 +13,8 @@ reader what happened in the world. This page owns the routes and panel placement
 - Design loading, empty, missing and failed states per panel. A failed request must not blank the route or hide usable content.
 
 Private inputs remain build-time exceptions: Pipelines reads manifests, published
-item facts and day metrics; Summaries keeps its approved cards, daily disclosure
-and item decisions; Voices keeps the source census, source decisions and feed
+item facts and day metrics; Summaries keeps its retained cards, daily coherence
+and bounded publication dates; Voices keeps the source census, source decisions and feed
 inputs; Judgement keeps its recorded judging and holdout evidence. Those inputs
 are not newly published by removing the chart engine. Hardware's page carries
 configuration and words, then asks its three native ledgers in the browser.
@@ -35,7 +35,7 @@ does not require a runtime backend.
 | [which-console-surfaces-follow-the-window-and-which-say-why-not.md](which-console-surfaces-follow-the-window-and-which-say-why-not.md) | The time-window control and declared exceptions |
 | [what-the-pipelines-route-draws.md](what-the-pipelines-route-draws.md) | Run health, failures, stage costs and retained visual attempts |
 | [how-chart-drawing-is-reported-and-the-rule-it-is-judged-against.md](how-chart-drawing-is-reported-and-the-rule-it-is-judged-against.md) | Chart-drawing outcomes and their retirement rule |
-| [why-a-summary-was-doubted-and-what-the-checker-measures.md](why-a-summary-was-doubted-and-what-the-checker-measures.md) | Summary doubt reasons and checker measurements |
+| [why-a-summary-was-doubted-and-what-the-checker-measures.md](why-a-summary-was-doubted-and-what-the-checker-measures.md) | Retained summary measurements and their data boundaries |
 | [who-supplied-the-day-and-which-feeds-failed.md](who-supplied-the-day-and-which-feeds-failed.md) | Sources and feed failures |
 | [console-machine.md](console-machine.md) | Hardware and whether performance figures are comparable |
 | [console-truncation.md](console-truncation.md) | The effect of the article truncation cap across routes |
@@ -92,6 +92,11 @@ on Pipelines. Moving a panel does not change its clocks or evidence endpoint:
 item-cost uses item-health alone, while write-cost keeps the common item-health
 and summary-quality-evals endpoint. Both retain item-health's own first-day
 clamp and print their selected UTC bounds.
+
+Summaries retains model-work cards, throughput, item cost, call endings,
+HHEM faithfulness with its full-article comparison, checking cost and summary
+length. Its daily table retains coherence. Mixed reason breakdowns and source
+doubt rankings have no panel, query or private aggregate.
 
 ### Each route owns its config, expectations and gate drivers
 
