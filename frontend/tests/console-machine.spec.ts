@@ -1035,6 +1035,14 @@ test.describe('the Hardware browser redraws, from stated readings', () => {
 		], numberFormat).run).toBe(newer);
 	});
 
+	test('the run median uses recorded milliseconds before converting to seconds', () => {
+		const actual = slowestArticles([800, 1600].map((ms, index) => ({
+			run_id: '2026-09-01-10', item_id: `article-${index}`, item_total_ms: ms
+		})), numberFormat);
+		expect(actual.medianSeconds).toBe(1.2);
+		expect(actual.rows.map((row) => row.value)).toEqual([1.6]);
+	});
+
 	test('a newest run without a recorded clock stays unmeasured instead of falling back to an older run', () => {
 		expect(slowestArticles([
 			{ run_id: '2026-09-01-9', item_id: 'older', item_total_ms: 99000 },

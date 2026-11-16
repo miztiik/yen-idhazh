@@ -12,9 +12,12 @@ export function slowestArticles(
 ): { run: string | null; rows: RankedInput[]; medianSeconds: number | null; measured: number; unmeasured: number } {
 	const selected = newestRunRows(rows);
 	const run = selected.length ? String(selected[0].run_id) : null;
-	const ready = selected.flatMap((row): RankedInput[] => {
+	const measured = selected.flatMap((row) => {
 		const workMs = finiteCell(row.item_total_ms);
-		if (workMs === null || workMs < 0) return [];
+		return workMs === null || workMs < 0 ? [] : [{ row, workMs }];
+	});
+	const medianMs = median(measured, ({ workMs }) => workMs) ?? null;
+	const ready = measured.filter(({ workMs }) => medianMs !== null && workMs > medianMs).map(({ row, workMs }): RankedInput => {
 		const gap = finiteCell(row.stage_gap_ms);
 		const wait = finiteCell(row.queue_wait_ms);
 		const clocks = [
@@ -24,7 +27,7 @@ export function slowestArticles(
 		const complete = clocks.every(([, key]) => {
 			const value = finiteCell(row[key]); return value !== null && value >= 0;
 		});
-		return [{
+		return {
 			label: `${row.item_id ?? 'unnamed article'} - ${row.source_id ?? 'source not recorded'}`,
 			value: workMs / 1000,
 			context: [wait === null ? 'queue wait not recorded' : `queue wait ${formatNumber(wait / 1000, numberFormat, { si: false })} s`,
@@ -33,14 +36,13 @@ export function slowestArticles(
 				...clocks.map(([label, key, token]) => ({ label, value: finiteCell(row[key])! / 1000, token })),
 				...(gap > 0 ? [{ label: 'Other', value: gap / 1000, token: '--chart-8' }] : [])
 			] } : {})
-		}];
+		};
 	});
-	const medianSeconds = median(ready, (row) => row.value) ?? null;
 	return {
 		run,
-		rows: medianSeconds === null ? [] : ready.filter((row) => row.value > medianSeconds),
-		medianSeconds,
-		measured: ready.length,
-		unmeasured: selected.length - ready.length
+		rows: ready,
+		medianSeconds: medianMs === null ? null : medianMs / 1000,
+		measured: measured.length,
+		unmeasured: selected.length - measured.length
 	};
 }
