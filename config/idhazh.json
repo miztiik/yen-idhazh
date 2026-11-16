@@ -335,7 +335,7 @@
     "continue_summary": "prompts/continue-summary.txt",
     "generate_labels": "prompts/generate-labels.txt",
     "plan_visual": "prompts/plan-visual.txt",
-    "summarize_article": "prompts/summarize-article.txt",
+    "summarize_article": "prompts/generate-summary.txt",
     "write_digest_summary": "prompts/write-digest-summary.txt"
   },
   "reference_dataset": {
@@ -433,7 +433,7 @@
     "tagline": "Daily news summaries, with links to their sources.",
     "theme_default": "dark"
   },
-  "version": "2026-11-15",
+  "version": "2026-11-16",
   "visuals": {
     "asset_base_url": "",
     "downgrade_enabled": false,

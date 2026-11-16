@@ -41,6 +41,7 @@ from idhazh.contracts.base import (
 from idhazh.contracts.call_cost import CallKind
 from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.knobs.models import ModelsConfig
+from idhazh.contracts.knobs.prompts import PromptFilesConfig
 from idhazh.contracts.knobs.summarize import (
     LengthPolicy,
     OverLengthAction,
@@ -1195,11 +1196,21 @@ def test_the_output_schema_is_generated_not_hand_written() -> None:
     assert output_schema_text() == output_schema_text(), "stable, so the stamp is stable"
 
 
-def test_an_unrenderable_placeholder_never_reaches_a_model() -> None:
+@pytest.fixture
+def band_prompt_root(tmp_path: Path) -> Path:
+    target = tmp_path / PromptFilesConfig().summarize_article
+    target.parent.mkdir()
+    target.write_text(
+        "Write $target_words_min to $target_words_max words.", encoding="utf-8"
+    )
+    return tmp_path
+
+
+def test_an_unrenderable_placeholder_never_reaches_a_model(band_prompt_root: Path) -> None:
     """`substitute`, not `safe_substitute` - a stray `$knob` reads as an instruction."""
     import idhazh.summarize as module
 
-    template = module._template()
+    template = module._template(config_dir=band_prompt_root)
     with pytest.raises(KeyError):
         template.substitute({"target_words_min": 60})
 
@@ -1301,11 +1312,15 @@ def test_changing_what_we_ask_for_changes_the_fingerprints_inputs() -> None:
     assert output_schema_text() != output_schema_text(tighter)
 
 
-def test_the_stamp_holds_still_while_the_rendered_prompt_moves() -> None:
+def test_the_stamp_holds_still_while_the_rendered_prompt_moves(band_prompt_root: Path) -> None:
     """The record names the ask, so it means "which pipeline", not "which item"."""
     ask = SummarizeConfig()
-    assert system_prompt(ask, source_words=0) != system_prompt(ask, source_words=4000)
-    assert prompt_inputs(ask) == prompt_inputs(ask)
+    assert system_prompt(ask, source_words=0, config_dir=band_prompt_root) != system_prompt(
+        ask, source_words=4000, config_dir=band_prompt_root
+    )
+    assert prompt_inputs(ask, config_dir=band_prompt_root) == prompt_inputs(
+        ask, config_dir=band_prompt_root
+    )
 
 
 def test_a_band_the_wording_never_reaches_still_moves_the_stamp() -> None:
@@ -1330,13 +1345,17 @@ def test_a_band_the_wording_never_reaches_still_moves_the_stamp() -> None:
 # --- The length ask follows the article -------------------------------------
 
 
-def test_a_short_article_and_a_long_one_are_asked_for_different_lengths() -> None:
-    """Item 13. One range for both gives a padded release note and a thin long read."""
+def test_a_band_template_asks_short_and_long_articles_for_different_lengths(
+    band_prompt_root: Path,
+) -> None:
+    """Configured word-range placeholders follow the source-length band."""
     ask = SummarizeConfig()
     short = ask.band_for(200)
     long = ask.band_for(4000)
     assert short.target_words_max < long.target_words_max
-    assert system_prompt(ask, source_words=200) != system_prompt(ask, source_words=4000)
+    assert system_prompt(ask, source_words=200, config_dir=band_prompt_root) != system_prompt(
+        ask, source_words=4000, config_dir=band_prompt_root
+    )
 
 
 def test_every_article_length_lands_in_a_band() -> None:

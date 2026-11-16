@@ -1,6 +1,6 @@
 # Fine-tune a summarizer
 
-**Last Updated**: 2026-11-15
+**Last Updated**: 2026-11-16
 
 How the training corpus is built, what maintains it, and what a person does with
 it. Training itself does not happen here: the runner has no GPU, 4 vCPU and a
@@ -447,17 +447,19 @@ python backend/utilities/reference_set.py check # refuse what a run would refuse
 python backend/utilities/reference_set.py check --write # emit reference.jsonl
 ```
 
-- **`queue`** samples articles out of the committed corpus, stratified on the two
- things the prompt branches on - the word-count band and the source form - plus
- vertical, the one diversity column that is fully populated. It is deterministic
- and it extends rather than replaces, so running it again after the corpus rolls
+- **`queue`** samples articles out of the committed corpus, stratified by
+ word-count band, source form and vertical. It matches the current prompt
+ exactly. When bands share identical instructions, it selects among them using
+ the stored user-turn word count (`CorpusRow.source_words`), not an inferred
+ pre-truncation article length. A unique prompt match retains its recorded band.
+ It is deterministic and extends rather than replaces, so running it again after the corpus rolls
  tops the queue up instead of discarding an afternoon of authoring. The test
  slice is a proportional share of every stratum, not the tail: measured
  2026-08-29 over 500 rows, the 100 held back span all five bands (10, 36, 37,
  12, 5) and all five verticals.
 - **`check`** holds each answer to the two rails production uses - the shape the
- constrained decoder is allowed to emit, and the word range the row's own system
- turn asked for - then refuses a `url_key` on both sides of the train/test line,
+ constrained decoder is allowed to emit, and the selected reference band's word
+ range - then refuses a `url_key` on both sides of the train/test line,
  and refuses an article the training window also holds.
 
 **The queue never carries the system prompt.** It carries the band, and `check`

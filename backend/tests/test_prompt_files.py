@@ -148,6 +148,22 @@ def test_summary_reads_only_its_configured_task_and_reloads_changed_text(tmp_pat
     assert first != summarize.system_prompt()
 
 
+def test_standalone_requests_use_the_shared_generation_instructions() -> None:
+    settings = config.load(CONFIG_DIR)
+    expected = load_prompt_text(CONFIG_DIR, "prompts/generate-summary.txt")
+    for files in (None, settings.app.prompt_files):
+        request = summarize.build_request(
+            article(),
+            model_id=settings.models.summarizer.id,
+            sampling=settings.models.summarizer.sampling,
+            markers=a_markers(),
+            prompt_config=settings.app.summarize,
+            prompt_files=files,
+            config_dir=CONFIG_DIR,
+        )
+        assert request["messages"][0]["content"] == expected
+
+
 @pytest.mark.parametrize("task", tuple(PromptFilesConfig.model_fields))
 def test_undeclared_placeholders_never_reach_a_request(tmp_path: Path, task: str) -> None:
     files = PromptFilesConfig()
