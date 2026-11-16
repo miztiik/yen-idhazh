@@ -1,6 +1,6 @@
 # The LLM-COUNCIL, and why judging has its own clock
 
-**Last Updated**: 2026-11-06
+**Last Updated**: 2026-11-16
 
 The room a model verdict is taken in. `LLM-COUNCIL` is a workflow of its own -
 [../../../.github/workflows/llm-council.yml](../../../.github/workflows/llm-council.yml) -
@@ -153,7 +153,10 @@ The planner records dates and counts, the matrix records committed judge
 declarations, each attempted unit records its result, and the collector records
 collection counts and publication status. No event carries article, judge or
 source text. An exception carries only its type and place in the code.
-Unstructured library messages are omitted, not copied into an event.
+Unstructured library messages are omitted, not copied into an event. Python
+warnings use that same diagnostic adapter after logging starts. The article
+parser loads only when extraction is requested, so its optional downloader
+cannot print import warnings before the command installs its handler.
 
 The workflow's key-value outputs stay on stdout. Each entrypoint writes its
 final code, label and fixed sentence together in a `program-finished` event:
