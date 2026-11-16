@@ -176,20 +176,12 @@ One name rather than one per shard. Every shard of a run observes the same
 configuration and writes the same bytes, so the atomic rename settles it and
 there is nothing to reconcile.
 
-## What a violation does
+## Output identity
 
-`determinism_violation` is a column on the eval row. Its count reaches the day
-metrics and the run record, and a row carrying it is kept
-out of the training corpus. The build does not fail.
-
-**A production run never sets it.** A run summarizes each item once, so it
-cannot compare two outputs for one prompt. `determinism_violation` remains in
-the persisted row and corpus selection; the console no longer reads or counts it.
-
-A gate that failed the build would fire across runner CPU classes for reasons
-unrelated to any regression, and a flaky gate gets switched off within a month -
-at which point the project has neither the gate nor the signal. Recorded and
-counted in backend records, it remains inspectable without a console surface.
+The inactive output-difference flag and its day/run aggregates are retired.
+Historical native readers discard those fields by name; the corpus no longer
+selects on them. Input manifests, output digests and repeated-input fingerprints
+remain available for provenance and comparisons without an automatic verdict.
 
 The comparison is over the **published words only** - the generated title and
 summary - so a re-run that produced the same text in a different wall-clock or

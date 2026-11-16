@@ -1,10 +1,10 @@
 # What gets summarized, and at what length
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-11-15
 
 The knobs that decide how much of an article is read, whether it is summarized
-at all, how many words the summary is asked for, and what refuses one for
-copying too much. They are one chain of arithmetic rather than a list: the
+at all, how many words the summary is asked for, and which length ratio a
+training candidate must clear. They are one chain of arithmetic rather than a list: the
 truncation cap bounds what the model sees, the band floor asks for a length, and
 the compression ceiling derives the floor under both. What a knob is, and what
 is not one, is [../config.md](../config.md).
@@ -63,27 +63,15 @@ config where the three values disagree.
 `config.summarize.bands` starts with the brief band `{0, 30, 45}`. The next band
 starts at 60 words. `summarize.length_policy.absolute_floor_words` is 25, so the
 decoder's summary floor is 125 characters. `evaluation.brief_compression_ceiling`
-is 0.5; it caps `verbatim_run` for brief items and derives the floor above.
+is 0.5 and derives the extraction floor above. It is not a copied-text check.
 The band a summary is asked for is chosen by the article's length, not by its
-quality, so no counterweight threshold reads it.
-That lets a brief stop naturally instead of padding toward the old 40-word gate.
+quality. Briefs can stop naturally rather than pad toward the old word gate.
 
-`evaluation.verbatim_reject_ceiling` is 0.75, and it is deliberately a different
-number from `evaluation.brief_compression_ceiling`. The compression ceiling is a
-gate: it reads the scores a run wrote and fails the run when a brief copied too
-much. The reject ceiling is a rule inside the summarize stage: above it the item
-is refused and never scored at all. Give the two one value and the gate has
-nothing left to read, because every item it could have failed was dropped before
-it looked - and a gate that stops failing reads exactly like a pipeline that
-stopped copying. An `EvaluationConfig` validator refuses any reject ceiling at or
-below the gate's, so an operator cannot collapse them by editing one line.
-
-0.75 is a starting point and not a calibrated threshold (Guardrail #10). It is the
-midpoint of the empty band that eight brief items left on 2026-08-26 (run
-33016222069): seven scored at or below 0.241 and the eighth scored 1.000, so
-every value between those two selects the same single item and nothing in the
-data prefers one over another. The floor is fixed at 0.5 by the validator above.
-Eight items is not a distribution.
+`evaluation.corpus_compression_ceiling` retains the existing training cutoff:
+a candidate's summary/source word ratio must be strictly below 0.75. Equality
+still fails. This does not reject a published summary or measure copied text.
+Historical `verbatim_reject_ceiling` configuration reads under the new name,
+preserving its value; a current name takes precedence when both are present.
 
 Every `min_source_words` in this file - `extract.min_source_words` and each
 `summarize.bands[].min_source_words` - counts the **source body**, before

@@ -1,6 +1,6 @@
 # Measure a classifier
 
-**Last Updated**: 2026-09-13
+**Last Updated**: 2026-11-15
 
 How `corpus/reference-dataset-1/` is built, why it is built that way, and what a
 person does with it. It exists so that an accuracy figure for the article
@@ -114,11 +114,10 @@ its caveats gets quoted without them.
 - **It is what the pipeline published**, not what the feeds carried. `rank.py`
   selects up to `run.safety_ceiling_per_run` items a run out of a larger
   candidate pool, so the set inherits every judgement in the selection score.
-- **The fine-tuning window was subtracted**, and that window is rejection-sampled
-  on summary quality - one of its filters is `unsupported_numbers == 0`. So the
-  remainder is **enriched in articles whose summaries failed that filter**. That
-  cuts the other way from the usual worry: the set is, if anything, harder than
-  the published average rather than easier.
+- **The fine-tuning window at the original draw was subtracted.** Its historical
+  selection rules differed from today's retained extraction and compression
+  checks, so the frozen remainder is not evidence about the current selection
+  policy.
 - **It is one window of the news.** The articles come from the committed days
   that were in retention when it was built. A model measured on it is measured on
   that period's stories, in those languages, from those outlets.

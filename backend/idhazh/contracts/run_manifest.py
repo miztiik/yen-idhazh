@@ -217,12 +217,6 @@ class RunRecord(Model):
             "summarized nothing."
         ),
     )
-    determinism_violations: int = Field(
-        default=0,
-        ge=0,
-        description="Recorded, not raised. A gate that fires on a CPU class gets switched off.",
-    )
-
     site_bytes: int = Field(
         ge=0,
         description=(
@@ -300,15 +294,8 @@ class RunRecord(Model):
     @model_validator(mode="before")
     @classmethod
     def _drop_retired_keys(cls, data: Any) -> Any:
-        """Read-side migration for `pipeline_fingerprints`, removed 2026-09-13T22:00.
-
-        Delete this when `git grep -l pipeline_fingerprints -- frontend/public/digest`
-        returns nothing. That may never be true: all 23 committed `run.json`
-        files carry the key and a published day is never rewritten, so the
-        condition is written down as a fact somebody can check rather than as a
-        date somebody guessed.
-        """
-        return without_retired_keys(data, "pipeline_fingerprints")
+        """Read old runs without restoring their retired counts or aggregate fingerprints."""
+        return without_retired_keys(data, "pipeline_fingerprints", "determinism_violations")
 
     @model_validator(mode="after")
     def _counts_reconcile(self) -> Self:
@@ -324,7 +311,20 @@ class RunManifest(Contract):
     """`frontend/public/digest/<YYYY>/<MM>/<DD>/run.json`."""
 
     __schema_stem__: ClassVar[str] = "run-manifest"
+    model_config = ConfigDict(
+        json_schema_extra={
+            "readCompatibility": (
+                "discard historical run determinism_violations and pipeline_fingerprints; "
+                "preserve run counts, clocks, outcomes and input manifests"
+            )
+        }
+    )
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-11-15",
+            change="Remove run determinism_violations.",
+            why="Historical counts are discarded without changing run provenance.",
+        ),
         ChangelogEntry(
             version="2026-10-12",
             change="shards holds the count the plan decided and the matrix dispatched.",
@@ -339,11 +339,6 @@ class RunManifest(Contract):
             version="2026-09-23",
             change="The recorded sampling block is every key sent, not the three read by name.",
             why="Ten keys could move the decode with the record unchanged.",
-        ),
-        ChangelogEntry(
-            version="2026-09-22T12:00",
-            change="Runs may be numbered with gaps, and two runs may not share an ordinal.",
-            why="Runs land in parallel, so no writer can know what the next number is.",
         ),
         ChangelogEntry(
             version="2026-09-20",

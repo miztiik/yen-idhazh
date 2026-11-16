@@ -37,18 +37,16 @@ from idhazh import ledger
 from idhazh.atomic_write import write_atomic
 from idhazh.contracts.day_metrics import (
     INSTRUMENT_COLUMNS,
-    DayBands,
     DayDistribution,
     DayExtraction,
     DayInstrument,
     DayMetrics,
-    DayReasons,
     DaySource,
     DayStageTiming,
     DayThroughput,
 )
 from idhazh.contracts.digest_day import DigestDay
-from idhazh.contracts.eval_row import BandReason, ConfidenceBand, EvalRow
+from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.item_health import ElementClass, ItemHealthRow, ItemStage
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_manifest import ModelRole, RunManifest
@@ -64,21 +62,6 @@ _STAGE_TIMING_COLUMNS: Final[tuple[tuple[ItemStage, str], ...]] = (
     (ItemStage.EXTRACT, "extract_ms"),
     (ItemStage.SUMMARIZE, "summarize_ms"),
 )
-
-#: Which `DayReasons` field a published item's `band_reason` counts into.
-_BAND_REASON_FIELD: Final[dict[BandReason, str]] = {
-    BandReason.UNSUPPORTED_NUMBER: "unsupported_number",
-    BandReason.NOT_SCORED: "not_scored",
-    BandReason.LEAD_MISSING: "lead_missing",
-    BandReason.HEDGE_DROPPED: "hedge_dropped",
-    BandReason.FAITHFULNESS: "faithfulness",
-}
-
-#: The two bands a doubted item falls in. A `high` item is never doubted.
-_DOUBTED: Final[frozenset[ConfidenceBand]] = frozenset(
-    {ConfidenceBand.MEDIUM, ConfidenceBand.LOW}
-)
-
 
 # --- paths -------------------------------------------------------------------
 
@@ -197,7 +180,7 @@ def build(
     touched.
     """
     model_id = _model_id(manifest, score_rows)
-    scored, drifted, suspect = _scored_items(day, score_rows)
+    scored, suspect = _scored_items(day, score_rows)
     return DayMetrics(
         version=DayMetrics.schema_version(),
         date=date,
@@ -214,12 +197,9 @@ def build(
         ),
         items_truncated=sum(1 for item in day.items if item.truncated),
         summaries_scored=scored,
-        determinism_violations=drifted,
         extraction_suspect=suspect,
         sources_present=len({item.source_id for item in day.items}),
         addresses_considered=_addresses_considered(day),
-        bands=_bands(day),
-        reasons=_reasons(day),
         throughput=_throughput(health_rows),
         stage_timing=_stage_timing(health_rows),
         instruments=_instruments(score_rows),
@@ -297,10 +277,10 @@ def _extraction(
 
 def _scored_items(
     day: DigestDay, score_rows: Sequence[dict[str, str]]
-) -> tuple[int, int, int]:
-    """Distinct published items the checker scored, drifted on, and doubted the text of.
+) -> tuple[int, int]:
+    """Distinct published items scored and flagged for suspect extraction.
 
-    Counted over published items, not ledger rows, because these three are capped
+    Counted over published items, not ledger rows, because these counts are capped
     at the published set and the ledger is not one row per published item: it
     dedupes by measurement, so one item re-scored under a new stamp keeps both
     rows, and a run may score an item it then drops. Measured 2026-09-07 over the
@@ -310,54 +290,15 @@ def _scored_items(
     """
     published = {item.item_id for item in day.items}
     scored: set[str] = set()
-    drifted: set[str] = set()
     suspect: set[str] = set()
     for row in score_rows:
         item_id = row.get("item_id", "")
         if item_id not in published:
             continue
         scored.add(item_id)
-        if _flag(row.get("determinism_violation")):
-            drifted.add(item_id)
         if _flag(row.get("extraction_suspect")):
             suspect.add(item_id)
-    return len(scored), len(drifted), len(suspect)
-
-
-
-def _bands(day: DigestDay) -> DayBands:
-    counts = {ConfidenceBand.HIGH: 0, ConfidenceBand.MEDIUM: 0, ConfidenceBand.LOW: 0}
-    for item in day.items:
-        counts[item.band] += 1
-    return DayBands(
-        high=counts[ConfidenceBand.HIGH],
-        medium=counts[ConfidenceBand.MEDIUM],
-        low=counts[ConfidenceBand.LOW],
-    )
-
-
-def _reasons(day: DigestDay) -> DayReasons:
-    """Count each doubted item into exactly one bucket.
-
-    A published `band_reason` names its bucket; a doubted item with no reason is
-    `unattributed` - a real category the Model page counts apart, and never the
-    same fact as `not_scored`. This mirrors `doubt-reasons.ts reasonDays`.
-    """
-    buckets = dict.fromkeys(_BAND_REASON_FIELD.values(), 0)
-    unattributed = 0
-    for item in day.items:
-        if item.band_reason is not None:
-            buckets[_BAND_REASON_FIELD[item.band_reason]] += 1
-        elif item.band in _DOUBTED:
-            unattributed += 1
-    return DayReasons(
-        unsupported_number=buckets["unsupported_number"],
-        not_scored=buckets["not_scored"],
-        lead_missing=buckets["lead_missing"],
-        hedge_dropped=buckets["hedge_dropped"],
-        faithfulness=buckets["faithfulness"],
-        unattributed=unattributed,
-    )
+    return len(scored), len(suspect)
 
 
 def _addresses_considered(day: DigestDay) -> int | None:
@@ -375,24 +316,19 @@ def _addresses_considered(day: DigestDay) -> int | None:
 def _sources(day: DigestDay) -> list[DaySource]:
     """One entry per source that published, counted off the day payload.
 
-    `published`, `doubted` and `truncated` all read the published item, so the
-    per-source counts and the day's bands and truncation cannot disagree.
+    Both counts read the published item, so source and day truncation agree.
     """
     published: dict[str, int] = {}
-    doubted: dict[str, int] = {}
     truncated: dict[str, int] = {}
     for item in day.items:
         source_id = item.source_id
         published[source_id] = published.get(source_id, 0) + 1
-        if item.band in _DOUBTED:
-            doubted[source_id] = doubted.get(source_id, 0) + 1
         if item.truncated:
             truncated[source_id] = truncated.get(source_id, 0) + 1
     return [
         DaySource(
             source_id=source_id,
             published=published[source_id],
-            doubted=doubted.get(source_id, 0),
             truncated=truncated.get(source_id, 0),
         )
         for source_id in sorted(published)

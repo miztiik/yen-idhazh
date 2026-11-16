@@ -492,8 +492,8 @@ class BandModel:
     """The one day's model facts the band draws, each from its own home.
 
     `failed`, `refused_for_length` and `total_ms` are the newest day's own
-    item-health rows. `not_sure` and `read_in_part` are the run's settled
-    published-set counts from the day-metrics record: the score ledger keeps a
+    item-health rows. `read_in_part` is the run's settled published-set count
+    from the day-metrics record: the score ledger keeps a
     row per measurement, so a re-scored item counts twice and a scored-then-
     dropped item counts at all, where the record counts the published set once.
     None is preserved as "unmeasured" throughout - no health rows means no
@@ -503,7 +503,6 @@ class BandModel:
 
     failed: int | None
     refused_for_length: int | None
-    not_sure: int | None
     read_in_part: int | None
     total_ms: int | None
 
@@ -529,7 +528,6 @@ def band_model(
             else sum(1 for row in health_rows if row.get("code") == "context_exceeded")
         ),
         total_ms=None if not times else int(sum(times)),
-        not_sure=None if record is None else record.bands.low,
         read_in_part=None if record is None else record.items_truncated,
     )
 
@@ -562,19 +560,6 @@ def model_candidates(day: BandModel | None) -> list[Candidate]:
                     f"{plural(n, 'item', 'items')} {'was' if n == 1 else 'were'} too long to "
                     f"send, so the model did not see {'it' if n == 1 else 'them'} and the "
                     "truncation cap is past what fits."
-                ),
-                severity=WORTH_A_LOOK,
-            )
-        )
-    if day.not_sure is not None and day.not_sure > 0:
-        n = day.not_sure
-        found.append(
-            Candidate(
-                text=f'{n} marked "not sure"',
-                sentence=(
-                    f"{n} {'summary is' if n == 1 else 'summaries are'} marked \"not sure\", "
-                    f"so the checker could not hold {'it' if n == 1 else 'them'} against the "
-                    "article."
                 ),
                 severity=WORTH_A_LOOK,
             )
@@ -1292,14 +1277,7 @@ def _carries(
             if newest is None
             else f"{plural(newest.published_items, 'article', 'articles')} on this day."
         ),
-        RouteId.JUDGEMENT: (
-            "Nothing on this day recorded how sure the model was."
-            if model is None or model.not_sure is None
-            else (
-                f"{model.not_sure} {'summary was' if model.not_sure == 1 else 'summaries were'} "
-                'marked "not sure" on this day.'
-            )
-        ),
+        RouteId.JUDGEMENT: "Summary measurements and writing costs are on Summaries.",
         RouteId.VOICES: (
             f"{plural(feeds.rested, 'feed', 'feeds')} rested over these "
             f"{plural(feeds.runs, 'run', 'runs')}."

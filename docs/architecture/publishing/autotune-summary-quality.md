@@ -1,29 +1,28 @@
 # Autotuning summary quality: the metrics and the loop
 
-**Last Updated**: 2026-10-11
+**Last Updated**: 2026-11-15
 
 How yen-idhazh measures whether a summary is good, and how the thresholds tune themselves with no human
 in the loop.
 
 **Status: design of record, not deployed behaviour.** Faithfulness (HHEM) ships today and is defined
-on [../../concepts/evaluation.md](../../concepts/evaluation.md#faithfulness-scored-twice). Coverage,
-coherence, fluency and the autotuning loop below are the target design. Plan 36 was to build it; on 2026-10-11 the maintainer moved plan 36 into
+on [../../concepts/evaluation.md](../../concepts/evaluation.md#faithfulness-scored-twice). Coherence is recorded today;
+fluency and the autotuning loop below are the target design. Plan 36 was to build it; on 2026-10-11 the maintainer moved plan 36 into
 [plan 65](../../../TODO/20261011-65-summary-fidelity-judge-plan.md), which decides, question by question, what of this design is built. The design
 reuses the `LLM-COUNCIL` workflow and the `Fit` pattern from the same-story similarity judge
 ([autotune-content-similarity.md](autotune-content-similarity.md)).
 
-## The four metrics
+## The retained and proposed metrics
 
-We are a summarizer, so the honest vocabulary is SummEval's four axes, not RAGAS. RAGAS measures a
+We are a summarizer, not a retriever answering a query. RAGAS measures a
 retriever plus a generator answering a query; we have neither a retriever nor a query, so its
 `Context Precision` and `Context Recall` have nothing to score here, and `Answer Relevance` is a
-question-answering metric with no question. The chart labels are `Faithfulness`, `Coverage`,
-`Coherence`, `Fluency`.
+question-answering metric with no question. The chart labels are `Faithfulness`, `Coherence` and `Fluency`. Lexical coverage and
+number/copying heuristics are retired, not replacement gates.
 
 | Chart label | Instrument | Reads | Output | Stage | Role |
 | --- | --- | --- | --- | --- | --- |
 | Faithfulness | HHEM-2.1-Open cross-encoder | article + summary | 0..1 | same-day digest job | gate: block (absolute) + downgrade (adaptive) |
-| Coverage | word recall against the article's most-used terms | article + summary | 0..1 | same-day digest job | monitor (watch) |
 | Coherence | MiniLM adjacent-sentence cosine | summary only | -1..1 | same-day digest job | monitor (watch) |
 | Fluency | G-Eval (summariser as judge) | summary only | 0..1 | next-day council, sampled | monitor (watch), next-day |
 
@@ -32,14 +31,9 @@ question-answering metric with no question. The chart labels are `Faithfulness`,
 | Our label | SummEval | RAGAS (why it does not fit) |
 | --- | --- | --- |
 | Faithfulness | consistency | Faithfulness - the one clean overlap (grounded in the source, no invention) |
-| Coverage | relevance | ~Context Recall - but there is no retrieved context to score |
 | Coherence | coherence | none |
 | Fluency | fluency | none |
 | (not measured) | - | Context Precision, Answer Relevance - retriever/QA metrics, no retriever, no query |
-
-If an extraction-quality axis is ever wanted it is named `Extraction cleanliness` (or the existing
-`extractiveness` counterweight), never a borrowed RAGAS label - inventing a retriever the reader
-thinks exists is worse than leaving the axis unnamed.
 
 ## How each is measured
 
@@ -47,35 +41,7 @@ thinks exists is worse than leaving the axis unnamed.
   [../../concepts/evaluation.md](../../concepts/evaluation.md#faithfulness-scored-twice), which owns
   the windowing, the two scorings and what the gap between them means. What matters here is only its
   role in the loop: it is the one metric reliable enough to WITHHOLD a story, and it withholds at the
-  absolute 0.50 line, never at the drifting adaptive floor (see the publish gate).
-- **Coverage** = the share of the article's `SALIENT_TERMS` most-used content words that appear in
-  the summary. The reference is built by counting the article's tokens, dropping the function words
-  `metrics._NOT_AN_ENTITY` already names, ranking on `(-count, word)` and taking the top 20; the
-  summary side is its raw token set, so presence counts and repetition does not. Null when the
-  article yielded no content word. Needs the source, so it runs same-day.
-
-  **This amends the line that stood here until 2026-09-24**, which said
-  `|content_ngrams(summary) & content_ngrams(source)| / |content_ngrams(source)|` - recall against
-  the whole article. Measured over 1,490 committed article-and-summary pairs, that shape does not
-  work: at four-gram size the median is 0.017 with half of all summaries between 0.008 and 0.036,
-  which is a near-constant; at unigram size it has range but correlates 0.93 with `compression`,
-  which is a length column and already on the row. Against a fixed 20-term reference the reading is
-  0.60 at the median with 0.35 to 0.85 covering the middle 90 percent, and its rank correlation with
-  article length is -0.09. Stopword removal was measured too and rescued nothing: it moved the median
-  by 0.02 and left the length correlation at -0.85. The amendment buys a column that varies with
-  something other than article length; what it gives up is a fact the article mentioned once and the
-  summary dropped, because it only asks whether the summary carried what the article kept returning
-  to. Authority: Andre, 2026-09-24.
-
-  Two properties a reader of the number needs. The reference is a count, so the column takes at most
-  `SALIENT_TERMS + 1` distinct values - 21 buckets, not a continuous scale. And it is lexical despite
-  the column being named `semantic_coverage`: a summary that writes "the chipmaker" where the article
-  wrote "Nvidia" is scored as a miss.
-
-  `SALIENT_TERMS` is a module constant in `metrics.py` rather than a `config/` knob. Moving it does
-  not tune a threshold, it changes what a committed cell MEANS, and the machinery for that is
-  `METRICS_VERSION` - a knob would assert that rows written either side of a config edit are
-  comparable, and they are not.
+  proposed absolute 0.50 line, never at the drifting adaptive floor (see the publish gate).
 - **Coherence** = mean cosine of adjacent summary sentences. With unit vectors `v_1..v_n` for the
   summary's sentences, `coherence = (1 / (n-1)) * sum_{i=1..n-1} dot(v_i, v_{i+1})`. Summary-only.
   Null for a one-sentence summary. A monitor, never a gate: a repeated sentence reads as maximally
@@ -92,9 +58,9 @@ thinks exists is worse than leaving the axis unnamed.
 No human labels. Each metric gets an adaptive floor - a percentile of its own rolling distribution,
 folded and fitted daily exactly like the same-story similarity line, flipped to the low tail because
 for a quality metric low = bad. The adaptive floor DOWNGRADES or WATCHES; the one line that WITHHOLDS
-is the absolute HHEM 0.50 that already ships and does not drift. Sane defaults ship - faithfulness
+is the proposed absolute HHEM 0.50 and does not drift. Sane defaults ship - faithfulness
 seeds its floor from the ~6,966 committed HHEM readings on day one - and the loop's own first fortnight
-replaces the transplanted numbers on the other three.
+replaces the transplanted numbers on the other proposed instruments.
 
 ```mermaid
 flowchart TD
@@ -103,18 +69,15 @@ flowchart TD
     art["source article"]
     sum --> hhem["HHEM<br/>Faithfulness 0..1"]
     art --> hhem
-    sum --> rouge["Term recall<br/>Coverage 0..1"]
-    art --> rouge
     sum --> mini["MiniLM adjacent cosine<br/>Coherence -1..1"]
     hhem --> row[("EvalRow<br/>state/raw/summary-quality-evals")]
-    rouge --> row
     mini --> row
   end
 
-  band["yesterday's FittedMetricBand"] --> gate{"Publish gate (veto chain)<br/>faithfulness &lt; 0.50 absolute,<br/>or unsupported number?"}
+  band["yesterday's FittedMetricBand"] --> gate{"Publish gate (veto chain)<br/>faithfulness &lt; 0.50 absolute?"}
   hhem --> gate
   gate -- "yes -> withhold" --> withheld["withheld (not published)"]
-  gate -- "no -> publish<br/>(adaptive floor downgrades faithfulness;<br/>coverage/coherence watch only)" --> pub["published item<br/>+ publish_decision stamp"]
+  gate -- "no -> publish<br/>(adaptive floor downgrades faithfulness;<br/>coherence watch only)" --> pub["published item<br/>+ publish_decision stamp"]
 
   subgraph nextday["Next-day - LLM-COUNCIL (reads committed EvalRows only)"]
     sample["stratified sample<br/>~30 summaries/day"] --> geval["G-Eval judge<br/>Fluency 1..5 -> 0..1"]
@@ -132,19 +95,17 @@ flowchart TD
 Fold every committed per-item score into a fixed-size slot record (a rolling histogram that never
 grows with the archive), then walk the slots from the low tail. Each metric's band carries two floors:
 
-- **Block floor - absolute, not adaptive.** The reader-safety line that already ships - HHEM 0.50,
-  plus the unsupported-number rule - and it does not move with the fleet. Only faithfulness has one,
+- **Block floor - absolute, not adaptive.** The proposed absolute HHEM 0.50 line - and it does not move with the fleet. Only faithfulness has one,
   because a false claim is the one failure where no story beats the story.
 - **Downgrade/watch floor - adaptive p05** of the rolling distribution. Below it, faithfulness
-  DOWNGRADES (the low-confidence marker) and the other three only WATCH (an operator alarm), because
-  their low tail is confounded: adjacent-cosine reads a repeated sentence as maximally coherent, and
-  ROUGE-style recall reads a faithful abstraction as low coverage, so their low tail can be a good summary.
+  DOWNGRADES (the low-confidence marker) and the other metrics only WATCH (an operator alarm), because
+  adjacent-cosine can read a repeated sentence as maximally coherent.
 - **Damping 0.15 new / 0.85 old, one-directional - damp the raise.** Raising a floor withholds or
   marks MORE, which is the invisible-deletion direction (a withheld good summary is a story the reader
   never sees), so a rise is damped and needs sustained evidence; a fall (act less) lands at once. This
   is plan 34's invariant: the move toward more invisible deletion is always the damped one.
 - **Gates**: a fit runs only once its distribution has enough days and samples. Faithfulness seeds
-  from the committed HHEM history, so its gates clear on day one; the other three are record-only until
+  from the committed HHEM history, so its gates clear on day one; the other instruments are record-only until
   their distribution fills (~5-10 days).
 - **Settled**: when the fit stops moving week-on-week, council cadence drops to weekly and returns to
   daily on its own.
@@ -158,22 +119,21 @@ visible and recoverable and a watch touches no reader at all.
 ## The publish gate - "content decides its future"
 
 Today HHEM sets a display badge and the item publishes anyway. The loop promotes that to a decision,
-and the decision is a **veto chain, never a composite** - averaging the four axes into one number would
-dilute the one reliable signal (HHEM) with three confounded ones and erase which axis fired, so the
+and the decision is a **veto chain, never a composite** - averaging these axes into one number would
+dilute the one reliable signal (HHEM) with different instruments and erase which axis fired, so the
 gate reads each metric separately and takes the most severe action any of them earns. A displayed
 "overall" number, if the console ever wants one, feeds no action.
 
 Each metric carries an **action config - `block`, `downgrade` or `watch`** - so the loop is fully
-instrumented and the action is a knob, not a hardcode. The shipped defaults:
+instrumented and the action is a knob, not a hardcode. The proposed defaults:
 
 | Metric | Default action | Why |
 | --- | --- | --- |
 | Faithfulness | **block** below 0.50 (absolute), **downgrade** below the adaptive floor | A false claim is the one failure where silence beats the story |
-| Coverage | **watch** | Low term recall can be a faithful abstraction, not an omission - marking it low would lie to the reader |
 | Coherence | **watch** | Adjacent-cosine reads a repeated sentence as coherent - its low tail is not reliably "bad" |
 | Fluency | **watch** | Scored next-day, after the item shipped - it can only alarm on a fleet-wide slide |
 
-So a below-0.50 faithfulness (or any unsupported number) is **withheld**; a faithfulness below its
+Under this proposal, below-0.50 faithfulness is **withheld**; a faithfulness below its
 adaptive floor is **downgraded** with the low-confidence marker; everything else only moves an operator
 alarm. The maintainer can promote any metric's action on its track record.
 
@@ -189,8 +149,8 @@ withhold rate is a bad-summariser day an operator must see, not a digest silentl
 ## Where each metric runs, and why
 
 The binding constraint is that article bodies are gitignored and gone the next day. So anything that
-needs the source (faithfulness, coverage) is computed the day the item is fresh; only summary-only
-metrics (coherence, fluency) can be computed next-day in the council. Faithfulness and coverage and
+needs the source (faithfulness) is computed the day the item is fresh; only summary-only
+metrics (coherence, fluency) can be computed next-day in the council. Faithfulness and
 coherence all land on one committed eval row same-day; the council next-day only folds those numbers
 into distributions, fits the bands, and spends the one decode G-Eval fluency needs on a small daily
 sample.
@@ -199,7 +159,7 @@ sample.
 
 | Option | Why it was rejected | What would bring it back |
 | --- | --- | --- |
-| UniEval, a learned judge scoring all four axes at once (T5-base, about 220 MB) | It is an encoder-decoder, so llama.cpp cannot serve it as it stands. Adopting it means either a GGUF conversion path nobody has walked or a second inference runtime on a 4 vCPU runner beside the one already there, and it was never measured against the four cheap instruments it would replace. | The four above failing to separate a good summary from a bad one, which is a question the recorded-only columns answer before any of them gates anything. Authority: Andre on the quality case, Carmack on the runtime cost, 2026-09-18. |
+| UniEval, a learned judge scoring all four axes at once (T5-base, about 220 MB) | It is an encoder-decoder, so llama.cpp cannot serve it as it stands. Adopting it means either a GGUF conversion path nobody has walked or a second inference runtime on a 4 vCPU runner beside the one already there, and it was never measured against the retained instruments. | The retained instruments failing to separate a good summary from a bad one, which is a question the recorded-only columns answer before any of them gates anything. Authority: Andre on the quality case, Carmack on the runtime cost, 2026-09-18. |
 
 ## See also
 

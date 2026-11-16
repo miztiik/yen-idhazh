@@ -146,7 +146,7 @@ dev = [
 ]
 # The faithfulness scorer. A 250M cross-encoder, but transformers plus torch is
 # hundreds of megabytes, so it stays out of the default install and out of the
-# test path - the model-free counterweights are what run everywhere.
+# test path - length measurements need no model runtime.
 faithfulness = [
     "torch>=2.5",
     # Keep this open-ended so the extra receives current model-loading fixes.

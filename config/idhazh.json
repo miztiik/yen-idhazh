@@ -196,7 +196,6 @@
     "today_anchor": "right"
   },
   "drift": {
-    "extractiveness_rise": 0.15,
     "min_domain_rows": 20,
     "min_window_rows": 20,
     "month_over_month_pct": 10.0,
@@ -213,13 +212,13 @@
     "brief_compression_ceiling": 0.5,
     "chunk_overlap_words": 150,
     "chunk_words": 900,
+    "corpus_compression_ceiling": 0.75,
     "label_draw_per_decile": 6,
     "label_min_run_days": 10,
     "labellers": [
       "miztiik"
     ],
-    "spot_checks_per_week": 10,
-    "verbatim_reject_ceiling": 0.75
+    "spot_checks_per_week": 10
   },
   "extract": {
     "backoff_initial_seconds": 1.0,
@@ -254,7 +253,6 @@
     "harvest_every_days": 7,
     "holdout_days": 2,
     "min_rows": 500,
-    "prompt_iterations": 3,
     "reference_rows": 500,
     "reference_test_rows": 100,
     "sequence_length": 49152,

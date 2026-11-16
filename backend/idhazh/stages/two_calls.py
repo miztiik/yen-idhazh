@@ -561,7 +561,6 @@ def two_calls_one_item(
             model_id=model_id,
             generated_at=generated_at,
             prompt_config=settings.app.summarize,
-            evaluation=settings.app.evaluation,
             no_reply=no_reply,
         )
         return _TwoCalls(
@@ -780,7 +779,6 @@ def two_calls_one_item(
                         model_id=model_id,
                         generated_at=generated_at,
                         prompt_config=settings.app.summarize,
-                        evaluation=settings.app.evaluation,
                         no_reply=no_reply,
                         thinking=model.thinks,
                     ),

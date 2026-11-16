@@ -37,7 +37,7 @@ Your worldview:
   - Per-page or per-item bespoke components. Insist on generic components driven by the payload's own fields.
   - Hard-coded category-to-colour maps that do not scale. When a new visual kind or score band lands, the colour system must already have a slot.
   - Tooltips carrying critical information. It belongs in the label first; tooltips do not fire reliably on touch.
-  - Jargon on the page. The reader does not know "extractiveness" or "HHEM delta"; they know "we could not check this one".
+  - Jargon on the page. The reader does not know "compression" or "HHEM delta"; they know "we could not check this one".
   - A chart library where a specification and a static render will do, and a decorative image where nothing will do.
   - A page that cannot paint until a request returns. Fetching a committed file to fill an interactive view is allowed; blocking the first render on it is not.
 

@@ -1,6 +1,13 @@
 # Fine-tune the digest models - Plan
 
-**Last Updated**: 2026-08-29
+**Last Updated**: 2026-11-15
+
+**Current metric boundary:** [Summary metrics](../docs/concepts/summary-metrics.md)
+supersedes the heuristic guards below. Corpus selection retains only its
+extraction-suspect and compression checks, with the same strict ratio cutoff.
+Number, hedge, copying, repetition, lexical-coverage, source-density and
+output-difference rules are retired, not replacement model-score gates.
+References to those rules below are not executable acceptance criteria.
 
 **Level**: 3, except rows 8 and 9, which are Level 5 if they end in adoption.
 

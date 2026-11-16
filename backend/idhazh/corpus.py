@@ -35,11 +35,8 @@ entirely, and one serialization convention is worth more than that.
 
 **A row can also be rebuilt from the address, once the artifact has expired.**
 `rescored` pairs the published summary with the body a re-fetch just returned,
-and measures every counterweight again against that body rather than trusting
-the numbers the ledger recorded against a body this process never saw. That is
-what makes the rebuild safe on a page that has been edited since: a summary the
-article no longer supports now fails the same gate a live run applies, so it is
-dropped instead of taught.
+and measures its lengths again. The corpus retains its compression and
+extraction-suspect checks, not a faithfulness or copied-text selection gate.
 """
 
 from __future__ import annotations
@@ -305,19 +302,7 @@ def published_is_the_scored_one(published: Published, *, recorded: EvalRow) -> b
 def rescored(
     article: Article, full_text: str, *, recorded: EvalRow, published: Published
 ) -> Scored:
-    """One item measured again, against the body a re-fetch just returned.
-
-    Every counterweight is measured here rather than read off `recorded`, and
-    that is the entire reason this function exists. The recorded numbers scored
-    a body this process has not seen. A page edited since would keep figures that
-    wave through a summary its own article no longer supports, so re-measuring is
-    what lets `keeps_its_counterweights` judge the exact pair the row is about to
-    teach.
-
-    `determinism_violation` is the one measure carried across untouched. It is a
-    property of two decodes of one prompt rather than of the text, so a re-fetch
-    learns nothing new about it, and recomputing it as False would silently
-    un-fail an item the run had already caught.
+    """Recompute lengths against the body a re-fetch just returned.
 
     `coherence` is carried across for a different reason: it reads the summary
     alone, so a re-fetched body cannot move it, and this process holds no
@@ -333,14 +318,6 @@ def rescored(
         {
             **recorded.model_dump(mode="json"),
             "compression": metrics.compression(text, full_text),
-            "extractiveness": metrics.extractiveness(text, full_text),
-            "verbatim_run": metrics.verbatim_run(text, full_text),
-            "unsupported_numbers": metrics.unsupported_numbers(text, full_text),
-            "hedge_dropped": metrics.hedge_dropped(text, full_text),
-            "self_repetition": metrics.self_repetition(text),
-            "semantic_coverage": metrics.semantic_coverage(text, full_text),
-            "evidential_density": metrics.evidential_density(full_text),
-            "speculative_density": metrics.speculative_density(full_text),
             "summary_words": metrics.word_count(text),
             "truncation_flagged": article.truncated,
             "source_words_before_cap": article.source_word_count,
@@ -368,7 +345,6 @@ def _target(
     summary: Summary,
     *,
     prompt_config: SummarizeConfig,
-    evaluation: EvaluationConfig,
 ) -> str | None:
     """The assistant turn: the published output, spelled the way the grammar emits it.
 
@@ -390,28 +366,11 @@ def _target(
     return json.dumps(draft.model_dump(), ensure_ascii=False, separators=(", ", ": "))
 
 
-def keeps_its_counterweights(row: EvalRow, *, evaluation: EvaluationConfig) -> bool:
-    """Rejection sampling on the measures a model cannot game by copying.
-
-    Never on the faithfulness score. That scorer is the alarm this project reads
-    a run by, and a corpus filtered on it trains a model against its own monitor -
-    after which the monitor is measuring something it helped shape.
-
-    And never on `semantic_coverage`, which is the column that replaced the lead
-    coverage this filter used to read. That one is recorded only and nothing has
-    yet shown what a low reading means: over the committed corpus its low tail
-    holds faithful abstractions as readily as omissions, so filtering on it would
-    teach a model to repeat the article's most frequent words. The corpus keeps
-    the criteria that catch copying and invention, which are the two failures a
-    string measure can see without a label.
-    """
+def accepts_training_candidate(row: EvalRow, *, evaluation: EvaluationConfig) -> bool:
+    """Keep extraction and compression checks without selecting on faithfulness."""
     return (
-        not row.hedge_dropped
-        and row.unsupported_numbers == 0
-        and not row.extraction_suspect
-        and not row.determinism_violation
-        and row.extractiveness < evaluation.verbatim_reject_ceiling
-        and row.compression < evaluation.verbatim_reject_ceiling
+        not row.extraction_suspect
+        and row.compression < evaluation.corpus_compression_ceiling
     )
 
 
@@ -439,11 +398,11 @@ def harvest_rows(
         article, summary = scored.article, scored.summary
         if article.status is not ArticleStatus.OK or summary.status is not SummaryStatus.OK:
             continue
-        if scored.row is None or not keeps_its_counterweights(
+        if scored.row is None or not accepts_training_candidate(
             scored.row, evaluation=evaluation
         ):
             continue
-        target = _target(summary, prompt_config=prompt_config, evaluation=evaluation)
+        target = _target(summary, prompt_config=prompt_config)
         if target is None:
             continue
         system = summarize.system_prompt(

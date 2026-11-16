@@ -22,6 +22,8 @@ from support.paths import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
 
 from idhazh.contracts import CONTRACTS
 from idhazh.contracts.base import Contract
+from idhazh.contracts.eval_row import DROPPED_CELLS as DROPPED_EVAL_CELLS
+from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.knobs.prompts import PromptFilesConfig
 from idhazh.contracts.run_manifest import RunManifest
@@ -134,8 +136,51 @@ def test_fixture_round_trips_without_losing_values(path: Path) -> None:
             expected = {"calibration_policy_version": None, **expected}
         if contract.__schema_stem__ == "day-metrics":
             expected.pop("label_similarity", None)
+            for key in ("bands", "reasons", "determinism_violations"):
+                expected.pop(key, None)
+            expected["sources"] = [
+                {key: value for key, value in source.items() if key != "doubted"}
+                for source in expected["sources"]
+            ]
+            expected["instruments"] = [
+                entry for entry in expected["instruments"]
+                if entry["column"] not in DROPPED_EVAL_CELLS
+            ]
+        if contract.__schema_stem__ == "eval-row":
+            expected = {
+                key: value for key, value in expected.items() if key not in DROPPED_EVAL_CELLS
+            }
+        if contract.__schema_stem__ == "label-row":
+            expected = {
+                key: value for key, value in expected.items()
+                if key not in {"unsupported_numbers", "hedge_dropped"}
+            }
+        if contract.__schema_stem__ == "run-manifest":
+            expected = {
+                **expected,
+                "runs": [
+                    {key: value for key, value in run.items() if key != "determinism_violations"}
+                    for run in expected["runs"]
+                ],
+            }
         if contract.__schema_stem__ == "app-config" and "prompt_files" not in original:
             expected = {**expected, "prompt_files": PromptFilesConfig().model_dump(mode="json")}
+        if contract.__schema_stem__ == "app-config":
+            evaluation = dict(expected["evaluation"])
+            if "verbatim_reject_ceiling" in evaluation:
+                evaluation["corpus_compression_ceiling"] = evaluation.pop("verbatim_reject_ceiling")
+            expected = {
+                **expected,
+                "evaluation": evaluation,
+                "drift": {
+                    key: value for key, value in expected["drift"].items()
+                    if key != "extractiveness_rise"
+                },
+                "finetune": {
+                    key: value for key, value in expected["finetune"].items()
+                    if key != "prompt_iterations"
+                },
+            }
         assert json.loads(once) == expected
     else:
         assert original["version"] < record.version
@@ -307,6 +352,15 @@ def test_a_run_record_a_real_run_wrote_still_reads_after_the_blocks_split() -> N
     manifest = RunManifest.model_validate(payload)
     read_back = [use.model_ref.inference for run in manifest.runs for use in run.models]
     assert read_back == carried, "a mapping reads a recorded block back unchanged"
+    assert all("determinism_violations" not in run.model_dump() for run in manifest.runs)
+    for before, after in zip(payload["runs"], manifest.runs, strict=True):
+        assert after.run_id == before["run_id"]
+        assert after.inputs is not None
+        assert after.inputs == PipelineInputs.model_validate(before["inputs"])
+    invalid = json.loads(manifest.to_json())
+    invalid["runs"][0]["items_failed"] += 1
+    with pytest.raises(ValidationError, match="must equal planned"):
+        RunManifest.model_validate(invalid)
 
 
 def test_a_manifest_that_named_any_retired_decode_knob_still_reads() -> None:

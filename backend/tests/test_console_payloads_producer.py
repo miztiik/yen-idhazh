@@ -28,7 +28,7 @@ from support.ledger import (
 from idhazh import config, ledger
 from idhazh.contracts.base import ServerJob, derive_url_key
 from idhazh.contracts.console_band import ConsoleBand, Health, RouteId
-from idhazh.contracts.day_metrics import DayBands, DayMetrics, DayReasons, DaySource
+from idhazh.contracts.day_metrics import DayMetrics, DaySource
 from idhazh.contracts.digest_day import DigestDay, DigestItem, DigestRunRef, DigestVerticalRef
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
@@ -99,7 +99,6 @@ def _eval_row(month: str) -> EvalRow:
         hhem_delta=0.0,
         truncation_flagged=False,
         compression=0.2,
-        extractiveness=0.4,
         band=ConfidenceBand.HIGH,
         summary_words=60,
         pipeline_fingerprint="b" * 64,
@@ -240,22 +239,19 @@ def _record(stamp: str) -> DayMetrics:
         visuals_rendered=1,
         items_truncated=2,
         summaries_scored=3,
-        determinism_violations=0,
         extraction_suspect=0,
         sources_present=1,
-        sources=[DaySource(source_id="grid-news", published=3, doubted=2, truncated=2)],
-        bands=DayBands(high=1, medium=1, low=1),
-        # Two doubted items, so two reason buckets: the record refuses any other
-        # pairing, which is the shape a fixture has to honour.
-        reasons=DayReasons(
-            unsupported_number=1,
-            not_scored=0,
-            lead_missing=0,
-            hedge_dropped=0,
-            faithfulness=1,
-            unattributed=0,
-        ),
+        sources=[DaySource(source_id="grid-news", published=3, truncated=2)],
     )
+
+
+def test_model_band_notes_keep_extraction_cuts_without_confidence_counts() -> None:
+    record = _record("2026-09-10")
+    readings = console_band.band_model([], record)
+    candidates = console_band.model_candidates(readings)
+    assert any("read only in part" in candidate.text for candidate in candidates)
+    assert all("not sure" not in candidate.text for candidate in candidates)
+    assert console_band.band_model([], None).read_in_part is None
 
 
 @pytest.fixture

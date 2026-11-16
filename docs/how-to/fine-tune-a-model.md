@@ -1,6 +1,6 @@
 # Fine-tune a summarizer
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-11-15
 
 How the training corpus is built, what maintains it, and what a person does with
 it. Training itself does not happen here: the runner has no GPU, 4 vCPU and a
@@ -89,16 +89,17 @@ age out. `stats` is the only place that check runs; the notebook does not make
 it, because it reads config as JSON and never imports the backend.
 
 A row is dropped, never degraded, when the summary has no title, when the item
-was not scored, or when it fails one of the deterministic counterweights below.
+was not scored, or when its extraction-suspect or compression check fails.
 
 ### What never selects a row
 
 `hhem`, the faithfulness score. It is the alarm this project reads a run by, and
 a corpus filtered on it trains a model against its own monitor - after which the
-monitor is measuring something it helped shape. The filter uses only the measures
-a model cannot improve by copying: `hedge_dropped`, `unsupported_numbers`,
-`coverage`, `extractiveness`, `compression`, `extraction_suspect` and
-`determinism_violation`.
+monitor is measuring something it helped shape. The retained filter requires
+`extraction_suspect` to be false and `compression` to be strictly below
+`evaluation.corpus_compression_ceiling`. Its existing cutoff remains 0.75.
+Retired heuristic flags and copied-text measurements do not select a row, and
+there is no replacement model-score gate.
 
 ## The three verbs
 
@@ -376,9 +377,10 @@ only way they differ:
  `brief`, and reconstructing it from the two recoverable terms disagrees with
  the recorded value on 3 of 229 items (measured 2026-08-29) - a guessed
  length band, which is the failure this corpus exists to prevent.
- 3. **Every counterweight is measured again** against the body that came back,
- never read off the ledger. An article edited past its summary now fails the
- same gate a live run applies, so it is dropped instead of taught.
+ 3. **Lengths are measured again** against the body that came back. Its current
+ compression ratio must clear the same corpus cutoff. This is not a claim that
+ the new body still supports every published sentence; no replacement
+ faithfulness or copied-text gate is applied.
 
  An address that has moved, gone behind a paywall or started refusing robots is
  dropped and counted by failure code. Re-running picks up whatever is still
@@ -605,5 +607,5 @@ Adopting a tuned model is a Level-5 change and needs explicit approval
 
 - [`../../CLAUDE.md`](../../CLAUDE.md) - section 8 for the force-push exception, Guardrail #2 for the runner budget that keeps training off the runner.
 - [`../concepts/config.md`](../concepts/config.md) - the tunable surface.
-- [`../concepts/evaluation.md`](../concepts/evaluation.md) - what the counterweights measure and why the faithfulness score may only veto.
+- [`../concepts/evaluation.md`](../concepts/evaluation.md) - what retained measurements mean and why faithfulness does not select training rows.
 - [`run-the-gates.md`](run-the-gates.md) - the commands behind the Definition of Done.

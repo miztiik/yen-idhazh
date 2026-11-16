@@ -1,17 +1,7 @@
-"""Does the summary read as connected prose, measured with the sentence encoder.
+"""Measure connected summary prose with the sentence encoder, independently of its source.
 
-The one measure in `evals/` that needs a model to compute, which is why it is
-not in `metrics.py` - that file's first paragraph promises its counterweights
-are model-free and run even when no scorer fits the runner.
-
-It is also the only measure that reads the summary against ITSELF at the level
-of meaning. Every other column compares the summary to the article, and a
-summary of five true sentences that do not follow one another scores perfectly
-on all of them.
-
-Recorded only. It is a poor thing to gate on and always will be: a summary that
-says the same sentence twice reads as maximally coherent, so the failure it is
-blindest to is one `self_repetition` already names.
+Recorded only: repeated sentences can score as perfectly connected, so this
+measurement is not a publication or corpus-selection gate.
 """
 
 from __future__ import annotations

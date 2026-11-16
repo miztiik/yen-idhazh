@@ -628,7 +628,7 @@ def records_json(payload: Any, *, record_lists: frozenset[str] | None = None) ->
 
 
 def derive_output_digest(summary: str | None, *, title: str | None = None) -> str:
-    """What a later run compares against to detect a determinism violation.
+    """Identify the exact published words across runs and corpus joins.
 
     Digests the published words only. A re-run that produced the same text in a
     different wall-clock or token count did not drift, and must not read as if

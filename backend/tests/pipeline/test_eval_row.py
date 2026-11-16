@@ -56,7 +56,7 @@ def test_a_row_carries_everything_needed_to_read_it_years_later() -> None:
     assert built.scorer_version == scorer_version
 
 
-def test_number_and_hedge_diagnostics_do_not_lower_faithfulness_confidence() -> None:
+def test_the_producer_writes_only_retained_measurements_and_faithfulness_confidence() -> None:
     source = "Officials reportedly approved 12 reactors."
     text = "Officials approved 99 reactors."
     written = summary()
@@ -77,11 +77,19 @@ def test_number_and_hedge_diagnostics_do_not_lower_faithfulness_confidence() -> 
         scored_at="2026-08-21T06:18:02Z",
     )
 
-    assert built.unsupported_numbers == 1
-    assert built.hedge_dropped is True
+    retired = {
+        "unsupported_numbers", "hedge_dropped", "extractiveness", "verbatim_run",
+        "self_repetition", "semantic_coverage", "evidential_density",
+        "speculative_density", "determinism_violation",
+    }
+    assert retired.isdisjoint(built.model_dump())
+    assert retired.isdisjoint(built.csv_row())
+    assert retired.isdisjoint(EvalRow.json_schema()["properties"])
     assert built.band is ConfidenceBand.HIGH
     assert built.hhem == 0.95
     assert built.hhem_full == 0.89
+    assert built.summary_words == metrics.word_count(text)
+    assert built.compression == metrics.compression(text, source)
 
 
 def test_the_truncation_gap_is_computed_not_asserted() -> None:
@@ -129,34 +137,6 @@ def test_a_wide_gap_does_not_flag_an_article_nobody_cut() -> None:
     assert not built.truncation_flagged
 
 
-def test_the_row_scores_the_article_and_not_only_the_summary() -> None:
-    """The two densities are the only columns that measure the input.
-
-    Checked with a source the summary does not quote, so a value that came from
-    the summary instead would read as zero and fail here.
-    """
-    sourced = (
-        "The Ministry of Energy said the plant will close in March, according to a "
-        "statement on Tuesday. Officials familiar with the decision claimed the date "
-        "was set in June."
-    )
-    built = to_eval_row(
-        item=plan().items[0],
-        article=article(),
-        summary=summary(),
-        full_text=sourced,
-        premise=sourced,
-        hhem=0.91,
-        hhem_full=0.89,
-        config=EvaluationConfig(),
-        date="2026-08-21",
-        run_id="2026-08-21-1",
-        scorer_version="v",
-        scored_at="2026-08-21T06:18:02Z",
-    )
-    assert built.evidential_density is not None
-    assert built.evidential_density > 0.0
-    assert built.speculative_density == 0.0, "measured, and measured as none"
 
 
 def test_the_row_digests_the_text_the_scorer_was_given() -> None:

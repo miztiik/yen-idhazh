@@ -460,11 +460,9 @@ def refill(
     title, the summary and the key points, so a digest entry is paired with a
     ledger row only when it recomputes to the value that row recorded.
 
-    A pair the run itself rejected is dropped before the fetch, on both counts
-    that matter. It saves the round trip, and it is the more correct answer: the
-    only way such a pair could pass on re-measurement is if the page changed
-    under it, and a row that needs the article to have moved is not a row worth
-    teaching.
+    A pair failing the retained extraction-suspect or compression checks is
+    dropped before the fetch. Accepted pairs have their lengths recomputed
+    against the returned body without a model-score selection gate.
 
     **It reaches every row the ledger holds.** Every candidate comes from a
     ledger row, and the eval ledger keeps every row for ever, so no month is
@@ -498,7 +496,7 @@ def refill(
         if not corpus.published_is_the_scored_one(entry.published, recorded=row):
             counts["published output is a different one"] += 1
             continue
-        if not corpus.keeps_its_counterweights(row, evaluation=settings.app.evaluation):
+        if not corpus.accepts_training_candidate(row, evaluation=settings.app.evaluation):
             counts["the run that made it already rejected it"] += 1
             continue
         if derive_url_key(row.source_url) != row.url_key:

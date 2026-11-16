@@ -238,22 +238,8 @@ RELABELLED_AT: Final = 7
 #: The places `EvalRow` rounds `hhem_delta` to before it re-checks it on read.
 _DELTA_PLACES: Final = 6
 
-#: The four counterweights no console surface reads back. Held flat across the
-#: fixture on purpose: varying them would put a measurement in the ledger that
-#: nobody made, and the columns that are varied below are varied because a page
-#: draws them.
-_EXTRACTIVENESS: Final = 0.22
-_VERBATIM_RUN: Final = 0.07
-#: The two recorded-only columns added on 2026-09-24, held flat for the same
-#: reason as the four above. Typed rather than computed because both need a text
-#: this builder does not have: coherence needs the summary through the sentence
-#: encoder, and semantic coverage needs the article, and a fixture day carries
-#: counts with no article behind them. Both sit mid-scale so each panel draws a
-#: value rather than an empty state.
+#: A recorded coherence reading: this fixture day has no encoder to recompute it.
 _COHERENCE: Final = 0.41
-_SEMANTIC_COVERAGE: Final = 0.60
-_EVIDENTIAL_DENSITY: Final = 0.011
-_SPECULATIVE_DENSITY: Final = 0.004
 
 
 class _Measured(NamedTuple):
@@ -270,8 +256,6 @@ class _Measured(NamedTuple):
     hhem: float
     hhem_full: float
     score_ms: int
-    unsupported_numbers: int = 0
-    hedge_dropped: bool = False
     #: False where the article's length before the cut was never written down.
     #: The row still scores and still counts on every table; it has no x on the
     #: compression plot, so the plot drops it and says how many it dropped.
@@ -327,13 +311,12 @@ SCORED: Final[tuple[_Measured, ...]] = (
         source_words=880, summary_words=96,
         hhem=0.88, hhem_full=0.87, score_ms=330,
     ),
-    # Faithful, but the article hedged and the summary asserted. Its length
-    # before the cut was never recorded, so it scores and counts but is not on
+    # Its length before the cut was never recorded, so it scores and counts but is not on
     # the plot - the state the sentence under the chart exists to declare.
     _Measured(
         source_words=1320, summary_words=118,
         hhem=0.90, hhem_full=0.89, score_ms=410,
-        hedge_dropped=True, full_length_known=False,
+        full_length_known=False,
     ),
     # Low on faithfulness, in the widest target zone. Longer than SEEN_WORD_CAP,
     # so it is also the shortest article the day records as cut - and it is the
@@ -357,13 +340,10 @@ SCORED: Final[tuple[_Measured, ...]] = (
         source_words=2800, summary_words=205,
         hhem=0.91, hhem_full=0.78, score_ms=610,
     ),
-    # Cut, and low whatever the scorer thought: the summary asserts two
-    # figures the article never gave, and nothing else in the row may outvote
-    # that.
+    # Cut, with confidence determined by the recorded faithfulness score.
     _Measured(
         source_words=6100, summary_words=190,
         hhem=0.83, hhem_full=0.69, score_ms=640,
-        unsupported_numbers=2,
     ),
 )
 
@@ -1497,14 +1477,7 @@ def _eval_row(item: DigestItem, measured: _Measured, evaluation: EvaluationConfi
         # `metrics.compression` computes - done on the counts because a fixture
         # day has counts and no article behind them.
         compression=round(measured.summary_words / measured.source_words, _DELTA_PLACES),
-        extractiveness=_EXTRACTIVENESS,
-        verbatim_run=_VERBATIM_RUN,
-        unsupported_numbers=measured.unsupported_numbers,
-        hedge_dropped=measured.hedge_dropped,
-        evidential_density=_EVIDENTIAL_DENSITY,
-        speculative_density=_SPECULATIVE_DENSITY,
         coherence=_COHERENCE,
-        semantic_coverage=_SEMANTIC_COVERAGE,
         extraction_suspect=False,
         band=item.band,
         source_words_before_cap=measured.source_words if measured.full_length_known else None,
@@ -1512,7 +1485,6 @@ def _eval_row(item: DigestItem, measured: _Measured, evaluation: EvaluationConfi
         summary_words=measured.summary_words,
         output_digest=_fixture_digest("summary", item.item_id),
         source_digest=_fixture_digest("premise", item.item_id),
-        determinism_violation=False,
         scorer_version=_scorer_version(evaluation),
         scored_at=f"{DATE}T06:12:00Z",
         score_ms=measured.score_ms,

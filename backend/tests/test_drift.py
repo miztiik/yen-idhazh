@@ -61,7 +61,6 @@ def rows(
     *,
     words: int | None,
     hhem: float | None,
-    extractiveness: float | None,
     n: int | None = None,
 ) -> list[Observation]:
     count = DriftConfig().min_domain_rows if n is None else n
@@ -69,7 +68,6 @@ def rows(
         Observation(
             f"{url}/{index}",
             hhem,
-            extractiveness,
             words,
             model_id="fixture-model",
             scorer_version="fixture-scorer",
@@ -92,14 +90,14 @@ def test_a_domain_is_the_host_without_www() -> None:
 
 
 def test_a_healthy_domain_raises_nothing() -> None:
-    steady = rows(HEALTHY, words=1200, hhem=0.85, extractiveness=0.2)
+    steady = rows(HEALTHY, words=1200, hhem=0.85)
     assert compare(steady, steady) == []
 
 
 def test_a_busy_domain_cannot_lend_evidence_to_a_sparse_domain() -> None:
-    steady = [Observation(f"{OTHER}/{index}", 0.85, 0.2, 1200) for index in range(5)]
-    before = [*steady, Observation(HEALTHY, 0.85, 0.2, 1200)]
-    after = [*steady, Observation(HEALTHY, 0.9, 0.2, 150)]
+    steady = [Observation(f"{OTHER}/{index}", 0.85, 1200) for index in range(5)]
+    before = [*steady, Observation(HEALTHY, 0.85, 1200)]
+    after = [*steady, Observation(HEALTHY, 0.9, 150)]
 
     assert compare(after, before, minimum_rows=5) == []
 
@@ -111,8 +109,8 @@ def test_the_domain_floor_cannot_allow_a_single_article(minimum: int) -> None:
 
 
 def test_repeated_observations_cannot_manufacture_a_domain_sample() -> None:
-    before = rows(HEALTHY, words=1200, hhem=0.85, extractiveness=0.2, n=1) * 20
-    after = rows(HEALTHY, words=150, hhem=0.9, extractiveness=0.8, n=1) * 20
+    before = rows(HEALTHY, words=1200, hhem=0.85, n=1) * 20
+    after = rows(HEALTHY, words=150, hhem=0.9, n=1) * 20
     result = assess(after, before, config=DriftConfig())
 
     assert result.findings == []
@@ -121,7 +119,7 @@ def test_repeated_observations_cannot_manufacture_a_domain_sample() -> None:
 
 
 def test_the_latest_measured_row_wins_by_article_identity() -> None:
-    before = rows(HEALTHY, words=1200, hhem=0.85, extractiveness=0.2)
+    before = rows(HEALTHY, words=1200, hhem=0.85)
     latest = [
         replace(row, url_key=f"article-{index}", scored_at="2026-09-05T12:00:00Z")
         for index, row in enumerate(before)
@@ -131,7 +129,6 @@ def test_the_latest_measured_row_wins_by_article_identity() -> None:
             row,
             source_url=f"{row.source_url}?earlier=1",
             source_word_count=150,
-            extractiveness=0.8,
             scored_at="2026-09-05T10:00:00Z",
         )
         for row in latest
@@ -142,13 +139,12 @@ def test_the_latest_measured_row_wins_by_article_identity() -> None:
 
 
 def test_a_later_unmeasured_row_does_not_erase_a_measured_metric() -> None:
-    before = rows(HEALTHY, words=1200, hhem=None, extractiveness=0.2)
-    measured = rows(HEALTHY, words=150, hhem=None, extractiveness=0.8)
+    before = rows(HEALTHY, words=1200, hhem=None)
+    measured = rows(HEALTHY, words=150, hhem=None)
     unmeasured = [
         replace(
             row,
             source_word_count=None,
-            extractiveness=None,
             scored_at="2026-09-05T12:00:00Z",
         )
         for row in measured
@@ -158,13 +154,12 @@ def test_a_later_unmeasured_row_does_not_erase_a_measured_metric() -> None:
 
     assert {finding.alert for finding in findings} == {
         Alert.SHORTER_SOURCES,
-        Alert.MORE_COPYING,
     }
 
 
 def test_a_partial_review_does_not_claim_every_article_was_compared() -> None:
-    steady = rows(HEALTHY, words=1200, hhem=0.85, extractiveness=0.2)
-    sparse = rows(OTHER, words=150, hhem=0.9, extractiveness=0.8, n=1)
+    steady = rows(HEALTHY, words=1200, hhem=0.85)
+    sparse = rows(OTHER, words=150, hhem=0.9, n=1)
     windows = Windows(
         datetime.date(2026, 8, 2),
         datetime.date(2026, 8, 30),
@@ -177,21 +172,21 @@ def test_a_partial_review_does_not_claim_every_article_was_compared() -> None:
     text, status = report(windows, config=DriftConfig())
 
     assert status == 0
-    assert "no drift in 3 comparable domain/metric series" in text
+    assert "no drift in 2 comparable domain/metric series" in text
     assert "no drift across" not in text
     assert "blog.example.org: source length not compared" in text
 
 
 @pytest.mark.parametrize("field", ["model_id", "scorer_version"])
 def test_model_metrics_do_not_compare_different_versions(field: str) -> None:
-    before = rows(HEALTHY, words=1200, hhem=0.85, extractiveness=0.2)
+    before = rows(HEALTHY, words=1200, hhem=0.85)
     after = [
         replace(
             row,
             model_id="changed" if field == "model_id" else row.model_id,
             scorer_version="changed" if field == "scorer_version" else row.scorer_version,
         )
-        for row in rows(HEALTHY, words=150, hhem=0.9, extractiveness=0.8)
+        for row in rows(HEALTHY, words=150, hhem=0.9)
     ]
     findings = compare(after, before)
 
@@ -199,18 +194,18 @@ def test_model_metrics_do_not_compare_different_versions(field: str) -> None:
 
 
 def test_source_lengths_do_not_depend_on_a_faithfulness_score() -> None:
-    before = rows(HEALTHY, words=1200, hhem=None, extractiveness=None)
-    after = rows(HEALTHY, words=150, hhem=None, extractiveness=None)
+    before = rows(HEALTHY, words=1200, hhem=None)
+    after = rows(HEALTHY, words=150, hhem=None)
 
     assert {finding.alert for finding in compare(after, before)} == {Alert.SHORTER_SOURCES}
 
 
 def test_a_missing_version_does_not_invent_a_comparable_model() -> None:
     before = [
-        replace(row, model_id="") for row in rows(HEALTHY, words=None, hhem=0.8, extractiveness=0.2)
+        replace(row, model_id="") for row in rows(HEALTHY, words=None, hhem=0.8)
     ]
     after = [
-        replace(row, model_id="") for row in rows(HEALTHY, words=None, hhem=0.8, extractiveness=0.8)
+        replace(row, model_id="") for row in rows(HEALTHY, words=None, hhem=0.8)
     ]
     result = assess(after, before, config=DriftConfig())
 
@@ -222,34 +217,20 @@ def test_a_missing_version_does_not_invent_a_comparable_model() -> None:
 # --- A row that does not know how long its article was ------------------------
 
 
-def test_a_row_with_no_recorded_length_still_carries_its_other_two_signals() -> None:
-    """The read-side migration for a nullable `source_word_count`.
-
-    A row written before 2026-08-27 whose article was truncated has no full
-    length anywhere. Dropping the whole observation would take its faithfulness
-    and its extractiveness with it, so the length rule steps over it and the
-    copying rule still sees it.
-    """
-    before = rows(HEALTHY, words=None, hhem=0.85, extractiveness=0.2)
-    after = rows(HEALTHY, words=None, hhem=0.85, extractiveness=0.9)
-    alerts = {finding.alert for finding in compare(after, before)}
-
-    assert Alert.MORE_COPYING in alerts
-    assert Alert.SHORTER_SOURCES not in alerts
 
 
 def test_a_window_that_knows_no_length_does_not_read_as_a_collapse() -> None:
     """Unknown is not zero. A median of nothing must not fire a 100 percent drop."""
-    before = rows(HEALTHY, words=1200, hhem=0.85, extractiveness=0.2)
-    after = rows(HEALTHY, words=None, hhem=0.85, extractiveness=0.2)
+    before = rows(HEALTHY, words=1200, hhem=0.85)
+    after = rows(HEALTHY, words=None, hhem=0.85)
 
     assert compare(after, before) == []
 
 
 def test_the_length_floor_counts_only_articles_with_a_measured_length() -> None:
-    before = rows(HEALTHY, words=1200, hhem=0.85, extractiveness=0.2)
-    after = rows(HEALTHY, words=None, hhem=0.85, extractiveness=0.2, n=3) + rows(
-        HEALTHY, words=180, hhem=0.85, extractiveness=0.2, n=1
+    before = rows(HEALTHY, words=1200, hhem=0.85)
+    after = rows(HEALTHY, words=None, hhem=0.85, n=3) + rows(
+        HEALTHY, words=180, hhem=0.85, n=1
     )
     alerts = {finding.alert for finding in compare(after, before)}
 
@@ -260,15 +241,15 @@ def test_the_length_floor_counts_only_articles_with_a_measured_length() -> None:
 
 
 def test_a_site_redesign_that_shortens_extraction_fires() -> None:
-    before = rows(HEALTHY, words=1200, hhem=0.85, extractiveness=0.2)
-    after = rows(HEALTHY, words=180, hhem=0.85, extractiveness=0.2)
+    before = rows(HEALTHY, words=1200, hhem=0.85)
+    after = rows(HEALTHY, words=180, hhem=0.85)
     alerts = {finding.alert for finding in compare(after, before)}
     assert Alert.SHORTER_SOURCES in alerts
 
 
 def test_the_conjunction_requests_inspection_rather_than_claiming_a_cause() -> None:
-    before = rows(HEALTHY, words=1200, hhem=0.85, extractiveness=0.2)
-    after = rows(HEALTHY, words=150, hhem=0.9, extractiveness=0.2)
+    before = rows(HEALTHY, words=1200, hhem=0.85)
+    after = rows(HEALTHY, words=150, hhem=0.9)
     findings = compare(after, before)
     chrome = [f for f in findings if f.alert is Alert.SCORING_CHROME]
     assert chrome
@@ -279,9 +260,9 @@ def test_the_conjunction_requests_inspection_rather_than_claiming_a_cause() -> N
 
 def test_a_global_mean_would_have_missed_it() -> None:
     """The whole reason the rule is per-domain rather than per-corpus."""
-    broken_before = rows(HEALTHY, words=1200, hhem=0.85, extractiveness=0.2, n=2)
-    broken_after = rows(HEALTHY, words=150, hhem=0.85, extractiveness=0.2, n=2)
-    healthy = rows(OTHER, words=1400, hhem=0.85, extractiveness=0.2, n=15)
+    broken_before = rows(HEALTHY, words=1200, hhem=0.85, n=2)
+    broken_after = rows(HEALTHY, words=150, hhem=0.85, n=2)
+    healthy = rows(OTHER, words=1400, hhem=0.85, n=15)
 
     before = [*broken_before, *healthy]
     after = [*broken_after, *healthy]
@@ -296,21 +277,16 @@ def test_a_global_mean_would_have_missed_it() -> None:
     assert "blog.example.org" not in domains
 
 
-def test_a_summary_that_started_copying_fires() -> None:
-    before = rows(HEALTHY, words=1200, hhem=0.85, extractiveness=0.15)
-    after = rows(HEALTHY, words=1200, hhem=0.85, extractiveness=0.55)
-    alerts = {finding.alert for finding in compare(after, before)}
-    assert Alert.MORE_COPYING in alerts
 
 
 def test_a_domain_seen_only_recently_is_not_a_drift_signal() -> None:
     """A new source has no trailing median to have moved away from."""
-    assert compare(rows(HEALTHY, words=100, hhem=0.5, extractiveness=0.9), []) == []
+    assert compare(rows(HEALTHY, words=100, hhem=0.5), []) == []
 
 
 def test_a_domain_that_stopped_publishing_is_not_reported_here() -> None:
     """That is feed quarantine's job, not drift's."""
-    before = rows(HEALTHY, words=1200, hhem=0.85, extractiveness=0.2)
+    before = rows(HEALTHY, words=1200, hhem=0.85)
     assert compare([], before) == []
 
 
@@ -334,12 +310,12 @@ def test_nothing_attempted_is_not_a_failure() -> None:
 
 
 def test_a_full_pair_of_windows_has_no_shortfall() -> None:
-    both = rows(HEALTHY, words=1200, hhem=0.85, extractiveness=0.2, n=5)
+    both = rows(HEALTHY, words=1200, hhem=0.85, n=5)
     assert shortfall(both, both, 5) is None
 
 
 def test_an_empty_recent_window_names_the_recent_side() -> None:
-    populated = rows(HEALTHY, words=1200, hhem=0.85, extractiveness=0.2, n=5)
+    populated = rows(HEALTHY, words=1200, hhem=0.85, n=5)
     reason = shortfall([], populated, 5)
 
     assert reason is not None
@@ -348,7 +324,7 @@ def test_an_empty_recent_window_names_the_recent_side() -> None:
 
 
 def test_an_empty_baseline_window_names_the_baseline_side() -> None:
-    populated = rows(HEALTHY, words=1200, hhem=0.85, extractiveness=0.2, n=5)
+    populated = rows(HEALTHY, words=1200, hhem=0.85, n=5)
     reason = shortfall(populated, [], 5)
 
     assert reason is not None
@@ -366,8 +342,8 @@ def test_both_sides_empty_names_both() -> None:
 
 def test_a_thin_window_counts_as_nothing_compared() -> None:
     """The floor is a count, not a presence check: four rows is not a trend."""
-    populated = rows(HEALTHY, words=1200, hhem=0.85, extractiveness=0.2, n=5)
-    thin = rows(HEALTHY, words=1200, hhem=0.85, extractiveness=0.2, n=4)
+    populated = rows(HEALTHY, words=1200, hhem=0.85, n=5)
+    thin = rows(HEALTHY, words=1200, hhem=0.85, n=4)
 
     assert shortfall(thin, populated, 5) == (
         "the recent window holds 4 of the 5 rows a comparison needs"
@@ -378,12 +354,12 @@ def test_a_thin_window_counts_as_nothing_compared() -> None:
 
 
 def test_the_issue_body_keeps_findings_when_skipped_details_exceed_githubs_limit() -> None:
-    before = rows(HEALTHY, words=1200, hhem=0.85, extractiveness=0.2)
-    after = rows(HEALTHY, words=150, hhem=0.9, extractiveness=0.8)
+    before = rows(HEALTHY, words=1200, hhem=0.85)
+    after = rows(HEALTHY, words=150, hhem=0.9)
     sparse = [
         row
         for index in range(300)
-        for row in rows(f"https://sparse-{index}.example/story", words=150, hhem=0.9, extractiveness=0.2, n=1)
+        for row in rows(f"https://sparse-{index}.example/story", words=150, hhem=0.9, n=1)
     ]
     windows = Windows(
         datetime.date(2026, 8, 2),
@@ -403,7 +379,7 @@ def test_the_issue_body_keeps_findings_when_skipped_details_exceed_githubs_limit
     assert len(body.encode("utf-8")) <= 65536
     for alert in Alert:
         assert f"{alert.value} news.example.com:" in body
-    assert "900 comparisons had insufficient evidence" in body
+    assert "600 comparisons had insufficient evidence" in body
     assert "sparse-299.example" in full
     assert "sparse-299.example" not in body
     assert run_url in body
@@ -414,9 +390,9 @@ def test_the_issue_body_links_the_full_report_when_findings_alone_are_too_large(
     before = [
         row
         for index in range(180)
-        for row in rows(f"https://changed-{index}.example/story", words=1200, hhem=0.85, extractiveness=0.2, n=2)
+        for row in rows(f"https://changed-{index}.example/story", words=1200, hhem=0.85, n=2)
     ]
-    after = [replace(row, source_word_count=150, hhem=0.9, extractiveness=0.8) for row in before]
+    after = [replace(row, source_word_count=150, hhem=0.9) for row in before]
     windows = Windows(
         datetime.date(2026, 8, 2),
         datetime.date(2026, 8, 30),
@@ -448,12 +424,11 @@ def measured(
     url: str,
     *,
     hhem: float = 0.85,
-    extractiveness: float = 0.20,
     words: int | None = 1200,
 ) -> EvalRow:
     """One eval row carrying the cells the review reads, and the committed fixture's rest.
 
-    The review reads the date, the address, the two scores, the article's length
+    The review reads the date, the address, faithfulness, the article's length
     and the two identities. Every other cell has the shape a committed row has,
     so the address is what makes two rows two measurements: a caller gives each
     row its own, because the writer files a repeated measurement once.
@@ -471,7 +446,6 @@ def measured(
             "hhem": hhem,
             "hhem_full": hhem,
             "hhem_delta": 0.0,
-            "extractiveness": extractiveness,
             "source_words_before_cap": words,
             "source_words": held["source_words"] if words is None else words,
             "model_id": "fixture-model",
@@ -659,7 +633,7 @@ def test_a_populated_pair_of_windows_with_no_drift_still_passes(tmp_path: Path) 
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert "nothing was compared" not in result.stdout
-    assert "no drift in 3 comparable domain/metric series" in result.stdout
+    assert "no drift in 2 comparable domain/metric series" in result.stdout
 
 
 def test_a_ledger_that_is_not_there_is_not_a_green_check(tmp_path: Path) -> None:

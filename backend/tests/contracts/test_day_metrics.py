@@ -3,19 +3,17 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 from support.paths import CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh.contracts.day_metrics import (
-    DayBands,
     DayDistribution,
     DayInstrument,
     DayMetrics,
-    DayReasons,
     DaySource,
     DayStageTiming,
     DayThroughput,
 )
-from idhazh.contracts.eval_row import BandReason, ConfidenceBand
 from idhazh.contracts.item_health import ItemStage
 
 pytestmark = pytest.mark.contract
@@ -45,19 +43,9 @@ def _day_metrics_sample() -> DayMetrics:
         visuals_rendered=2,
         items_truncated=1,
         summaries_scored=5,
-        determinism_violations=0,
         extraction_suspect=1,
         sources_present=2,
         addresses_considered=20,
-        bands=DayBands(high=4, medium=1, low=1),
-        reasons=DayReasons(
-            unsupported_number=1,
-            not_scored=0,
-            lead_missing=1,
-            hedge_dropped=0,
-            faithfulness=0,
-            unattributed=0,
-        ),
         throughput=DayThroughput(
             items=5,
             prefill_ms=12000,
@@ -87,8 +75,8 @@ def _day_metrics_sample() -> DayMetrics:
             DayInstrument(column="coherence", stat=DayDistribution(count=0, total=0.0)),
         ],
         sources=[
-            DaySource(source_id="the-hindu", published=4, doubted=1, truncated=1),
-            DaySource(source_id="reuters", published=2, doubted=1, truncated=0),
+            DaySource(source_id="source-a", published=4, truncated=1),
+            DaySource(source_id="source-b", published=2, truncated=0),
         ],
     )
 
@@ -128,9 +116,32 @@ def test_day_metrics_keeps_an_empty_aggregate_apart_from_a_zero_one() -> None:
     assert empty.stat.count == 0 and empty.stat.total == 0.0 and empty.stat.p50 is None
 
 
-def test_day_metrics_bands_and_reasons_mirror_the_eval_vocabulary() -> None:
-    """The day's partitions only hold if its buckets are the eval bands and
-    reasons themselves. Coupling them here turns a new band or reason added to
-    EvalRow red, rather than letting a doubted item go uncounted."""
-    assert set(DayBands.model_fields) == {band.value for band in ConfidenceBand}
-    assert set(DayReasons.model_fields) == {reason.value for reason in BandReason} | {"unattributed"}
+def test_historical_day_aggregates_are_dropped_without_whitelisting_instruments() -> None:
+    payload = _day_metrics_sample().model_dump(mode="json")
+    payload.update(bands={"low": 99}, reasons={"unsupported_number": 99}, determinism_violations=99)
+    payload["sources"][0]["doubted"] = 99
+    stat = DayDistribution(count=0, total=0.0).model_dump()
+    payload["instruments"].extend(
+        [
+            {"column": "verbatim_run", "stat": {"invalid_retired_stat": True}},
+            {"column": "semantic_coverage", "stat": stat},
+            {"column": "future_reading", "stat": stat},
+            {"column": "source_word_count", "stat": stat},
+        ]
+    )
+    read_back = DayMetrics.model_validate(payload)
+    current = read_back.model_dump(mode="json")
+
+    assert {"bands", "reasons", "determinism_violations"}.isdisjoint(current)
+    assert "doubted" not in current["sources"][0]
+    assert [entry.column for entry in read_back.instruments] == [
+        "hhem", "coherence", "future_reading", "source_words_before_cap"
+    ]
+    assert read_back.throughput == _day_metrics_sample().throughput
+    assert payload["sources"][0]["doubted"] == 99, "migration must not mutate its input"
+    with pytest.raises(ValidationError, match="more scored summaries"):
+        DayMetrics.model_validate({**payload, "summaries_scored": 7})
+    with pytest.raises(ValidationError, match="cannot cut more"):
+        DaySource.model_validate({"source_id": "source-a", "published": 1, "truncated": 2, "doubted": 9})
+    with pytest.raises(ValidationError, match="extra_forbidden"):
+        DayMetrics.model_validate({**payload, "unknown_aggregate": 0})

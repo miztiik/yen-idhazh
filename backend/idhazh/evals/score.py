@@ -68,7 +68,6 @@ def to_eval_row(
     scorer_version: str,
     scored_at: str,
     extraction_suspect: bool = False,
-    determinism_violation: bool = False,
     encoder: Encoder | None = None,
 ) -> EvalRow:
     """Everything measured about one item, in the shape the ledger keeps forever.
@@ -90,14 +89,6 @@ def to_eval_row(
     change that scores something else cannot leave the digest quietly naming the
     text the scorer used to read.
 
-    The two densities take `full_text` alone. They are the only columns that
-    score the article rather than the summary, and they are recorded and not
-    banded: nothing here knows yet what a normal value looks like.
-
-    `self_repetition` takes the summary alone. It is the only column that reads
-    neither the article nor the pair, and it is recorded and not banded for the
-    same reason.
-
     `encoder` is the one model this function touches, and it is optional: a
     caller with no encoder in hand records a null `coherence` and every other
     column exactly as before. The work shard is the only production caller and
@@ -112,9 +103,6 @@ def to_eval_row(
     `EvalRow` refuses a row where the seen count is the larger of the two.
     """
     text = summary.summary or ""
-    unsupported = metrics.unsupported_numbers(text, full_text)
-    hedge = metrics.hedge_dropped(text, full_text)
-    verbatim = metrics.verbatim_run(text, full_text)
     # An article payload written before extract recorded the pre-cap length knows
     # its own full length only when nothing was cut. Otherwise it stays None: the
     # post-cap count would say the article was exactly as long as the part we read.
@@ -151,17 +139,9 @@ def to_eval_row(
         hhem_delta=delta,
         truncation_flagged=article.truncated,
         compression=metrics.compression(text, full_text),
-        extractiveness=metrics.extractiveness(text, full_text),
-        verbatim_run=verbatim,
-        unsupported_numbers=unsupported,
-        hedge_dropped=hedge,
-        evidential_density=metrics.evidential_density(full_text),
-        speculative_density=metrics.speculative_density(full_text),
-        self_repetition=metrics.self_repetition(text),
         coherence=(
             embedding_metrics.coherence(text, encoder=encoder) if encoder is not None else None
         ),
-        semantic_coverage=metrics.semantic_coverage(text, full_text),
         extraction_suspect=extraction_suspect,
         band=band(hhem, config=config),
         source_words_before_cap=source_words,
@@ -169,7 +149,6 @@ def to_eval_row(
         summary_words=metrics.word_count(text),
         output_digest=summary.output_digest,
         source_digest=text_digest(premise),
-        determinism_violation=determinism_violation,
         scorer_version=scorer_version,
         scored_at=scored_at,
     )

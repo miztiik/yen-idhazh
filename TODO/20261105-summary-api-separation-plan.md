@@ -882,7 +882,6 @@ config/
   - `backend/idhazh/similarity/stamps.py`
   - `backend/idhazh/stages/work.py`
   - `backend/idhazh/corpus.py`
-  - `backend/utilities/prompt_loop.py`
   - `backend/utilities/data_wrangler.py`
   - `backend/utilities/reference_set.py`
   - `backend/utilities/measure_two_calls.py`
@@ -954,7 +953,7 @@ config/
 | W5 | `backend/idhazh/prompts/summarize_and_plan_visual.txt` | `config/prompts/write-digest-summary.txt` | Production summary half of the shared system instructions. Preserve substitutions and the separate visual half; do not turn it into the generator API's output contract. |
 | W6 | `backend/idhazh/prompts/plan_visual.txt` | `config/prompts/plan-visual.txt` | Production visual half. Preserve conditional composition and grammar ownership. |
 | W7 | `backend/idhazh/prompts/write_about_the_item.txt` | `config/prompts/continue-summary.txt` | Production's short continuation after the label answer. Preserve its target-word substitutions and continued-call behavior. |
-| W8 | `backend/idhazh/prompts/summarize.txt` | `config/prompts/summarize-article.txt` | Standalone production summary renderer and its prompt-loop/reference/corpus utilities. Preserve their current product and substitutions. |
+| W8 | `backend/idhazh/prompts/summarize.txt` | `config/prompts/summarize-article.txt` | Standalone production summary renderer and its reference/corpus utilities. Preserve their current product and substitutions. |
 | W9 | `backend/idhazh/prompts/judge_same_story.txt` | `config/prompts/compare-articles.txt` | Article-comparison judge's system template. Keep its existing safe user-block assembly, labels, repeated question, grammar and full rendered-text digest; the file move does not rewrite those controls. |
 | W10 | `generation_instruction` in the old workflow config, then K13 | `config/prompts/generate-evaluation-summary.txt` | Comparison workflow's default instruction. Its `title`/`summary` answer shape is not the generator API's product; preserve it. |
 | W11 | UniEval `prompts.fluency` | `config/prompts/evaluate-fluency.txt` | Native UniEval's own model receives the unchanged question with `{summary}`. No llama-server call. |

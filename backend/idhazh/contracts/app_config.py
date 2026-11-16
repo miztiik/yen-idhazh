@@ -116,15 +116,17 @@ class AppConfig(Contract):
                 "additive; absent archive controls use defaults; "
                 "absent prompt_files uses the declared task paths; retired visual type/kind "
                 "tokens remain readable but never enable production choices; "
-                "retired console.doubt_rows is discarded on read"
+                "retired console.doubt_rows and drift.extractiveness_rise are discarded; "
+                "retired finetune.prompt_iterations is discarded; "
+                "evaluation.verbatim_reject_ceiling reads as corpus_compression_ceiling"
             )
         }
     )
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-11-15",
-            change="Remove the console source-doubt ranking limit.",
-            why="Historical configs discard the retired limit without restoring the ranking.",
+            change="Retire diagnostic knobs and name the retained corpus compression ceiling.",
+            why="Historical config drops retired limits and preserves the corpus ratio cutoff.",
         ),
         ChangelogEntry(
             version="2026-11-12",

@@ -22,7 +22,7 @@ from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.knobs import placement
 from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.console import ConsoleConfig
-from idhazh.contracts.knobs.evaluation import EvaluationConfig
+from idhazh.contracts.knobs.evaluation import DriftConfig, EvaluationConfig
 from idhazh.contracts.knobs.ledger import LedgerConfig
 from idhazh.contracts.knobs.model_server import ModelServerConfig, is_loopback, resolve_base_url
 from idhazh.contracts.knobs.models import ModelsConfig
@@ -1079,19 +1079,23 @@ def test_a_leading_block_that_could_never_draw_is_refused() -> None:
         UiConfig(leading_stories=3, leading_per_desk=4)
 
 
-def test_a_reject_ceiling_under_the_brief_gate_is_refused() -> None:
-    """The one edit that would silence a gate instead of tightening it.
 
-    A refused item writes no score, so it leaves the corpus `brief_copying_ceiling`
-    reads. Drop the reject to the gate's own number and every item the gate could
-    have failed is gone before it looks - the gate stops failing, which reads
-    exactly like a pipeline that stopped copying.
-    """
-    gate = EvaluationConfig().brief_compression_ceiling
-    for silenced in (gate, gate / 2):
-        with pytest.raises(ValidationError):
-            EvaluationConfig(verbatim_reject_ceiling=silenced)
-    assert EvaluationConfig(verbatim_reject_ceiling=gate + 0.01).verbatim_reject_ceiling > gate
+
+def test_historical_copying_config_preserves_only_the_corpus_length_cutoff() -> None:
+    old = EvaluationConfig.model_validate({"verbatim_reject_ceiling": 0.63})
+    assert old.corpus_compression_ceiling == 0.63
+    assert "verbatim_reject_ceiling" not in old.model_dump()
+    current = EvaluationConfig.model_validate(
+        {"verbatim_reject_ceiling": 0.63, "corpus_compression_ceiling": 0.72}
+    )
+    assert current.corpus_compression_ceiling == 0.72
+    assert "extractiveness_rise" not in DriftConfig.model_validate(
+        {"extractiveness_rise": 0.9}
+    ).model_dump()
+    with pytest.raises(ValidationError, match="corpus_compression_ceiling"):
+        EvaluationConfig.model_validate({"verbatim_reject_ceiling": 1.1})
+    with pytest.raises(ValidationError, match="extra_forbidden"):
+        EvaluationConfig.model_validate({"unknown_copying_limit": 0.2})
 
 
 def test_a_fresh_clone_measures_itself_and_the_committed_config_agrees() -> None:

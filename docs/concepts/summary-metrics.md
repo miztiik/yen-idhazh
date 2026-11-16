@@ -2,278 +2,90 @@
 
 **Last Updated**: 2026-11-15
 
-What one number about one summary means, and what it cannot see.
+What a retained measurement says about a summary, an extraction or a run.
 
-Somebody arrives here holding a column name - `self_repetition`, `verbatim_run`,
-`extractiveness`, `truncation_flagged` - off the eval ledger, off `EvalRow`,
-and wants the sentence that defines it. That is the whole
-question this page answers.
+The work stage writes summary measurements through `to_eval_row` in
+`backend/idhazh/evals/score.py`. `EvalRow` owns their persisted fields.
+[Evaluation](evaluation.md#faithfulness-scored-twice) defines the HHEM
+faithfulness scores, their window geometry and the confidence thresholds.
 
-The backend still records the raw diagnostics defined here. Their retired
-console surfaces no longer read or reduce them;
-[the console contract](../architecture/publishing/why-a-summary-was-doubted-and-what-the-checker-measures.md#design-rationale)
-names what remains visible. Removing a frontend consumer does not retire its
-backend calculation or rewrite its persisted record.
+## Summary measurements
 
-**Faithfulness is not here.** It is the one number with a scorer behind it rather
-than an arithmetic definition, and how it is windowed is inseparable from what it
-means, so it stays on [evaluation.md](evaluation.md#faithfulness-scored-twice)
-with the rest of the judgement. Every column below exists because faithfulness
-alone cannot see the failure it names.
+Table A
 
-## Why faithfulness alone is not enough
-
-Faithfulness measures **consistency with the source, not informativeness**. Two failure modes score beautifully on it:
-
-- *"This article discusses technology."* Perfectly faithful. Says nothing.
-- A verbatim quote of the first three paragraphs. Perfectly faithful. Has not summarized anything.
-
-The raw diagnostics below describe other properties of a summary. They are not
-confidence inputs: fresh bands use HHEM alone, and no evaluation means explicitly
-unscored ([evaluation.md](evaluation.md#bands-not-raw-numbers)). Their current
-calculations and existing consumers remain separate from that publication rule.
-
-| Counterweight | What it catches |
-| --- | --- |
-| **Unsupported numbers** | A figure the summary asserts that appears nowhere in the full article. Recorded by existing raw consumers, but no longer forces a low-confidence band or a reader warning. |
-| **Dropped hedge** | The source uses a hedge absent from the summary. Recorded by existing raw consumers, but no longer caps confidence or produces a reader warning. |
-| **Extractiveness** | How much of the summary is lifted verbatim, as 4-gram overlap plus the longest unbroken copied run. High extractiveness *plus* high faithfulness means copying, not summarizing. |
-| **Self-repetition** | How much of the summary is a phrase the summary already used. Every counterweight above reads our summary against the *article*; this one reads it against *itself*. **Recorded, never flagged** - see below. |
-| **Compression** | Summary length over source length. **Recorded, never flagged** - see below. |
-
-These diagnostics do not replace a missing faithfulness evaluation. In
-particular, assembly no longer calculates number or hedge checks for an
-unevaluated summary.
-
-## The one column that reads the summary against itself
-
-Every metric above compares our summary to the article, so a summary that says the same clause three times scores clean on all of them. It is the only defect here that reads *better* on every other instrument the worse it gets: a repeated sentence is still perfectly supported by the source, so faithfulness rises, and the repeat is still not copied from the article, so extractiveness does not move.
-
-A model in a loop is what makes it possible, and the temperature decides how a loop ends rather than whether one starts. At temperature zero a model that falls into a loop has no sampling noise to break out of it, so it says the same clause again until the token budget runs out - which is the failure Qwen's own model card names from the other side when it says of thinking mode "DO NOT use greedy decoding, as it can lead to performance degradation and endless repetitions". Every entry pins temperature 0.2 since 2026-09-17, so a loop is likelier to end on its own and this column stays exactly as useful.
-
-**`self_repetition` is the share of the summary's four-word windows that repeat a window it already used.** In plain words: how much of what you are reading, you have already read. Zero means every four-word window in the summary is different, which is what ordinary prose looks like - it is the value a good summary and a bad-but-varied summary both get, so the direction that is bad is *up*.
-
-The window is four words, the same size as extractiveness, because two n-gram sizes in one file are two numbers a reader has to reconcile.
-
-What the numbers mean, measured 2026-08-26 on the fixtures in `backend/tests/test_evals.py`:
-
-| Summary | `self_repetition` | What it is |
+| ID | Column | Meaning and limit |
 | --- | --- | --- |
-| Ordinary prose | **0.000** | The zero point. Nothing is said twice. |
-| One four-word phrase said three times in 100 words | **0.021** | Two of 97 windows on repeat. A wobble. |
-| One six-word clause said three times in 26 words | **0.391** | A loop. This is what the column exists for. |
+| A1 | `coherence` | Mean cosine between adjacent summary sentences, using the sentence encoder. Its scale is -1 to 1; fewer than two sentences or unavailable weights produce null. Repeated sentences can score highly, so it is recorded, never a gate. |
+| A2 | `compression` | Summary word count divided by full-source word count. This is a length ratio, not a confidence grade. The corpus alone retains its existing ratio cutoff, defined in [summary length](config/summary-length.md#the-brief-floor-is-derived-not-chosen). |
+| A3 | `source_words_before_cap` | The extractor's full body count, or null when an old cut article's original length is unknowable. |
+| A4 | `source_words` | The same extractor counter after the cap. It cannot exceed a known pre-cap count. |
+| A5 | `summary_words` | The summary word count, using the retained word tokenizer. Length asks and tolerance remain the summarizer's own policy. |
+| A6 | `score_ms` | The faithfulness scorer's elapsed milliseconds for this item, not the model's writing clock. Historical zeroes can mean unmeasured, not instant. |
 
-**It is recorded and never banded.** No threshold reads it and no reader sees it. The moment a band reads the column it becomes a promise to a reader, and re-cutting a band is a separate decision that needs human labels the ledger does not have yet - see [The human labels](evaluation.md#the-human-labels-the-instrument-and-what-it-still-needs).
-
-**It did not move `metrics-3`.** The scorer version folds `METRICS_VERSION` in, and this page requires ten distinct run-days at one `scorer_version` before any threshold moves. A column that no band and no derived column reads changes nothing a row written under `metrics-3` says, so bumping would have spent a banked run-day to record a fact about nothing. `compression` is the precedent: recorded, diagnostic, and not a pass/fail input.
-
-**This is not the ranker's carriage step, and the names used to collide.** `collect.carriage_step` in [config.md](config.md) is a *ranking* knob: `backend/idhazh/rank.py` adds it once to a story more than one of our feeds carried, so it rewards a story that **several sources** carried. That is repetition across the web. `self_repetition` is repetition inside one summary we wrote. They shared a word until 2026-09-13, when the ranking knob was renamed from `collect.repetition_weight` with the multiplier it weighted, and they now share nothing at all.
-
-## Two columns that score the article, not the summary
-
-Everything so far scores our summary - against the article, or against itself. None of it asks what the article was worth. A faithful, well-covered, correctly-hedged summary of an unsourced rumour scores high on all of them and is still an unsourced rumour.
-
-Two columns measure the source itself. Both are marker counts over the article's own words, and both are recorded rather than banded:
-
-| Column | What it counts |
-| --- | --- |
-| **Evidential density** | Reportative markers - "according to", "reportedly", "sources say". How often the article says *how it knows*. These are the evidence a claim rests on, not a weakness in it. |
-| **Speculative density** | Epistemic markers - "may", "could", "expected to", "unconfirmed". The claim itself is unresolved, future, or merely possible. Nobody is being cited. |
-
-**They are read against each other, never alone.** High speculation with high attribution is a well-sourced story about something that has not happened yet, which is legitimate work. High speculation with *low* attribution is the fragile case: claims nobody has been named for.
-
-This is deliberately not a fragility score or a visible console signal. These
-are recorded raw fields, and interpreting them together remains a calibration
-question.
-
-**Why these are two columns and not one hedge count.** "Reportedly" and "may" are both hedges, and a summary that drops either has published a rumour as a fact - so `hedge_dropped` wants them in one bucket and still gets them in one bucket. But asked about the *article* they say opposite things. Counting them together produces one number that rises for a well-sourced report and for pure speculation alike, which is a number that means nothing.
-
-**What a lexicon cannot do.** These are surface markers. An article can attribute everything to one anonymous source, or make a firm false claim with no marker at all, and neither is visible here. What the columns catch is the article that hedges constantly and cites nobody, which is a real and common shape. Anything more requires corroboration across sources, which this pipeline does not do yet.
-
-## Two rates that score the run, not a summary
-
-Everything above reads one summary or one article. These two read a day's own
-counts, they are free, they need no labels, and they answer a question nothing
-else here can: **when published charts fall, which half of the pipeline moved?**
-
-Every article is read for the quantities and dates it states, before the visual
-planner sees it ([elements.md](../architecture/extraction/elements.md)). That
-reading puts three cells on the item-health census row - whether every span
-still cut its own characters, how many facts were kept, and which of three
-classes the article's numbers put it in - and
-[`backend/idhazh/telemetry/publish/day_metrics.py`](../../backend/idhazh/telemetry/publish/day_metrics.py)
-folds them into the day record's `extraction` block, joined against the
-published day so a chartable article that never published is not counted as one
-the planner passed over.
-
-| Rate | What it is | What a move means |
-| --- | --- | --- |
-| **`extractable_but_unused_rate`** | published articles that could carry a chart and carry none, over published articles that could carry one | it climbs and the planner is passing over material it was given |
-| **`span_integrity_rate`** | articles whose every element span still cut its own characters, over articles the pass ran on | it falls and an article's text moved under a fact we kept, so that article degrades on its own |
-
-**The denominator is the point.** Without it a fall in published charts reads
-the same whether the planner stopped choosing charts or the extractor stopped
-finding numbers, and those have different fixes. The two are told apart by
-reading the rate against the count beside it: the rate moving is the planner,
-`chartable` moving is the reading.
-
-**Three classes, and it will say three until the diagram plan lands.**
-`chartable` is an article stating at least `visuals.min_chart_points` distinct
-quantities that share a unit; `narrative` is an article stating no quantity at
-all; `unclassified` is everything between. `comparative` and `processual` are
-claims about how an article is written rather than about its numbers, so no
-query here can reach them. Anything that reports per class names three and says
-so, on the page as well as here - an operator who read three as the whole
-taxonomy would read `unclassified` as a defect rather than as a question nobody
-has asked yet.
-
-**The threshold is the planner's own knob and not a second one.**
-`visuals.min_chart_points` decides both whether a chart is reachable and whether
-an article is called chartable. Mint a second knob and the console can call an
-article chartable while the planner refuses to draw it, and the rate then
-measures two knobs drifting apart rather than measuring the planner.
-
-**Neither rate gates anything, and `span_integrity_rate` is the reporting face
-of an invariant that degrades one item.** A day of 500 stories does not fail
-because one article's text moved. That is the ruling on
-[elements.md](../architecture/extraction/elements.md): break the build on what
-our own code can get wrong, degrade the item on what one article's data can.
-
-**`METRICS_VERSION` did not move for either.** No band and no derived column
-reads them, so a row written under an earlier stamp still says exactly what it
-said - the same reason it did not move for `self_repetition` or `compression`.
-It moved to `4` on 2026-09-24 for a different reason: two columns left the
-counterweight set and two arrived, so a row cannot be read as if it came from
-the same instruments.
-
-### Three definitions that look reasonable and are not
-
-Each of these was specified one way, and the arithmetic says otherwise:
-
-- **Coverage over the whole article is a constant.** A long article carries far more named entities than a short summary can hold, so raw survival lands near the same low value for a good summary and a bad one. A metric with no dynamic range is worse than no metric, because it looks like a measurement. Anchoring on the lead restores the range and points it at the defect that matters - journalism puts the who, the what and the how-much in the opening lines, so a summary that drops them dropped the story.
-- **A compression *band* is a length detector.** At a fixed output budget, the ratio is dominated by how long the article was. A band on it would flag every short article forever, for a reason that is never about the summary. The ratio is recorded as a diagnostic; the real failures - a headline, or a copy - are detected directly by absolute word bounds.
-- **Verbatim overlap must be contiguous.** Measured as a longest common *subsequence*, function words match in order in almost any document, which puts a floor under the score and makes it move with length instead of with copying. Contiguous n-grams and the longest unbroken run do not have that floor.
-
-For a brief item, `verbatim_run > evaluation.brief_compression_ceiling` marks
-copying. The default is 0.5. This is the
-arithmetic ceiling that makes a 30-word ask possible at a 60-word source floor.
-It is not a confidence threshold. The confidence band stays on the faithfulness
-axis.
-
-Until 2026-08-29 that same comparison also set `truncation_flagged`. It no
-longer does. One column answers one question, and a brief the model copied is a
-fact `verbatim_run` and `extractiveness` already carry.
+Coherence runs where the work stage composes the eval row. Assembly reads that
+row back rather than recomputing it with another encoder. Compression and word
+helpers remain model-free and are also used by extraction and length handling.
 
 ## The cut flag says the article was cut
 
-`truncation_flagged` is `Article.truncated`: extract found the body longer than
-`extract.truncation_cap_tokens` allows and cut it. Nothing else. Extract is the
-only stage that cuts, so it is the only stage that knows, and the column carries
-that fact rather than inferring it.
+`truncation_flagged` is `Article.truncated`: extraction cut the body at
+`extract.truncation_cap_tokens`. It is not inferred from a score gap.
+Extraction remains the only stage that cuts article input.
 
-**It used to be inferred from the faithfulness gap, and the gap cannot answer
-the question.** The rule was `hhem - hhem_full > evaluation.truncation_gap_max`,
-defaulting to `0.1`. That reads as sound - a wide gap means the model saw less
-than the scorer did - and the chunker makes it false. The score is the best of
-overlapping windows, and a cut article's last window is **not** a window of the
-whole article, so the two maxima are taken over different premises. The window
-sets are not nested and the difference is not a cost.
+The most direct cut reading is
+`source_words_before_cap > source_words`. Both counts come from the extractor,
+so their difference measures the cut rather than two tokenizers disagreeing.
+Null pre-cap length stays unknown; it is never filled with zero or the cut
+length.
 
-Measured 2026-08-28 over all 2,683 committed rows of `state/scores.csv`, which
-are exact counts over a committed file and so carry no spread:
+Historical flags predate this meaning. The console keeps its existing
+`CUT_FLAG_MEANS_A_CUT_FROM` boundary; an earlier flag cannot establish that an
+article was cut. The HHEM pair and its validated delta remain independent
+measurements, with the windowing limits described in [evaluation](evaluation.md).
 
-| What | Count |
-| --- | --- |
-| Rows genuinely cut - post-cap word count below pre-cap | **22** |
-| Of those, rows the old flag fired on | **0** |
-| Rows the old flag fired on, in the whole ledger | **1** |
-| Words that one row read, of an article that long | **748 of 748** |
-| Range of `hhem_delta` over the 22 cut rows | **-0.1235 to +0.0381** |
+## Two rates that score the run, not a summary
 
-The threshold it was tested against is `+0.1`, so no cut row could reach it, and
-the one row that did fire was never cut - it fired on the brief-copying clause
-above. A column that is right about 1 row in 2,683 and wrong about all 22 of the
-rows it exists for is not a threshold that needs retuning. Retuning was the
-rejected alternative: to catch the widest cut in the ledger the threshold would
-have to sit at or below `+0.038`, and at that level it fires on chunk-boundary
-noise on articles nobody cut.
+The day-metrics producer, `backend/idhazh/telemetry/publish/day_metrics.py`,
+joins the day's item-health extraction records to its published items.
+`DayExtraction` stores counts, not precomputed rates, so a window can sum the
+counts and divide once.
 
-**Re-measured 2026-08-30, and the fixed writer now has committed rows to be
-judged on.** The ledger holds 3,113 rows and 430 of them are stamped
-`2026-08-29T09:00`, written after the change. The same exact counts over the
-same committed file:
+Table B
 
-| What, over the 430 rows on the new side | Count |
-| --- | --- |
-| Rows genuinely cut | **4** |
-| Of those, rows the flag fired on | **4 of 4** |
-| Rows where the flag disagrees with the word-count pair | **0 of 430** |
-| Rows with no pre-cap length, so no pair to check | **0** |
+| ID | Rate | Numerator and denominator |
+| --- | --- | --- |
+| B1 | `extractable_but_unused_rate` | Published chartable articles without a chart, divided by published chartable articles. Unpublished candidates cannot inflate it. |
+| B2 | `span_integrity_rate` | Articles whose element spans still slice their own characters, divided by articles the extraction pass measured. |
 
-The 2,683 older rows did not move - still 0 of 22, still the one 748-of-748 row -
-because no row was rewritten. So the whole-ledger count of flagged rows is 5, and
-5 is the number nobody should quote: 4 of them answer the cut question and 1
-answers the old one. That is the version branch earning its keep rather than
-being a formality.
+An empty denominator produces null, not zero. Neither rate gates publication.
+Span integrity remains an item-level trust control; a damaged span degrades its
+own item and records why.
 
-**The word-count pair still stays the recommended test**, and the new agreement
-does not change that. The flag is right only on rows a reader has to filter for
-first; `source_words_before_cap > source_words` is right on every row that
-carries both, with nothing to remember. What the 430 of 430 buys is confidence
-that the two now say the same thing, so a reader who picks either one gets the
-same answer on any row written from here.
-
-**`hhem`, `hhem_full` and `hhem_delta` all stay.** They answer what the cut
-cost, which is a different question from whether there was a cut, and n=22 is
-not a distribution to set a threshold from (Guardrail #10). The knob went with its
-last caller in the same commit, so there was never a state where the number
-existed and nothing read it.
-
-**A row stamped before `2026-08-29T09:00` is unknown, not false**, and the two
-sub-cases are not recoverable from the row. A row before `2026-08-27T20:30`
-holds two scores of one text, so its gap could not be non-zero. A row between
-the two stamps holds a real gap read by the wrong rule. The published console
-therefore counts the column only over rows stamped from `2026-08-28` and prints
-absence as absence
-([../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md)).
-
-**`METRICS_VERSION` did not move.** Nothing in
-`backend/idhazh/evals/metrics.py` changed, `truncation_flagged` is not a
-`band` input, and no derived column reads it - so every row written under
-`metrics-3` still says exactly what it said. Bumping it would restart the
-ten-run-day count below to record a change that did not happen to the
-counterweights.
+Chartability uses `visuals.min_chart_points`, the planner's existing threshold,
+not an independent reporting knob. The extraction classes and their limits
+remain defined by the [element contract](../architecture/extraction/elements.md).
 
 ## Design rationale
 
-The checker/verdict bundle is `metrics-5` because new bands no longer read number
-or hedge diagnostics. The HHEM instrument is unchanged. Historical raw bands and
-scorer identities remain recorded values; the reader's minimal legacy handling
-is defined once in [evaluation.md](evaluation.md#the-band-says-what-is-missing-not-how-good-the-item-is).
+The checker bundle is `metrics-6`. Removing heuristic measurements changes
+which cells a row carries, not the HHEM model, weights, window or confidence
+cuts. Old rows keep their recorded versions, bands and scorer identities.
+A run that evaluated nothing still records no scorer identity.
 
-**One column reads the summary against itself (2026-08-26).** Eleven quality columns, and every n-gram machine in `backend/idhazh/evals/metrics.py` intersected the summary's n-grams with the *source's*. Nothing could see a summary that repeated itself, which greedy decoding makes possible and which every other column scores *better* on the worse it gets. Proved on committed fixtures rather than argued: two 26-word summaries of the same article, one saying a clause three times and one saying it once, score exactly equal on `extractiveness` (0.000), `verbatim_run` (0.077) and `coverage` (0.333), and 0.000 against 0.391 on the new one. Authority: Andre's blind-spot finding; nullable and appended, Fowler's layout rule.
+Native readers discard retired cells by name. Current eval rows and day, run
+and human-label records omit their retired measurements and aggregates.
+Historical confidence reasons and copied-source failure tokens remain decodable
+only where an old payload needs them. No archived payload is rewritten, and an
+unknown key or invalid retained value still fails validation.
 
-**`METRICS_VERSION` did not move for it (2026-08-26).** The constant is folded into `scorer_version`, and a threshold may not move until ten distinct run-days have run at one `scorer_version` ([evaluation.md](evaluation.md#the-human-labels-the-instrument-and-what-it-still-needs)). The count has never reached 10. A column no band and no derived column reads changes nothing that a row written under `metrics-3` says, so bumping would have spent a banked run-day to record a fact about nothing. Authority: Andre.
-
-## Rejected alternatives
-
-| Option | Why rejected | Authority |
-| --- | --- | --- |
-| Bump `METRICS_VERSION` to 4 for `self_repetition` | It sits inside `scorer_version`, so it would restart the ten-run-day count this page requires before any threshold can move - to record a fact no threshold reads. `compression` is the precedent: recorded, diagnostic, not a pass/fail input. | Andre |
-| Give `self_repetition` its own n-gram size | Two window sizes in one file are two numbers a reader has to reconcile, and 4 is already the size the extractiveness figure on this page is stated at. | Andre |
-| Band `self_repetition`, or alarm on it | The moment a band reads it, it is a promise to a reader and a threshold decision - and no threshold may move until the labels exist. Recorded first, banded later or never. | Andre |
-| Detect the loop at generation time and retry at a non-zero temperature | That turns the monitor into the selector, which [evaluation.md](evaluation.md#two-rules-that-are-easy-to-break-by-accident) forbids. It also changes what the digest publishes to fix a fault nobody has counted yet. | Andre |
-| Point `verbatim_run` at the summary instead of the source | It is the column that names copying from the article. Repurposing it would delete a measurement to buy a different one and would silently change what every historical row means. | Fowler |
-| Put the measurement on the item-health row | Item health records what a stage *did* with an item. This is a property of the words that came out, which is what the eval ledger is. | Fowler |
-| Retune `evaluation.truncation_gap_max` down instead of deleting it | Over the 22 cut rows the gap runs -0.1235 to +0.0381, so any cut inside that band fires on chunk-boundary noise rather than on truncation. There is no value that separates the two. | Fowler, corrected by measurement |
-| Keep `truncation_flagged` on the gap and add a second column for the cut | The column's name says "was it cut" and its one consumer prints exactly that sentence. Two columns would leave the wrong one wired to the page. | Fowler |
-| Add a "the cut cost us" flag now | It needs a threshold with a measured basis. Twenty-two rows is not one, and `hhem_delta` is already recorded for when there are enough. | Fowler |
-| Keep the brief-item verbatim clause on the same boolean | `verbatim_run` and `extractiveness` already carry that fact and the console already prints it as "Copied, not rewritten". One predicate per column. | Fowler |
-| Move `METRICS_VERSION` to be safe | It is folded into `scorer_version`, so it would restart the ten-run-day count for a column no threshold reads. Nothing in `metrics.py` changed. | Fowler |
+The summarizer no longer measures or rejects copied text. The corpus retains
+its extraction-suspect and compression checks without a replacement model-score
+gate. The offline prompt loop is removed because all of its promotion targets
+were retired; it has no replacement promotion rule.
 
 ## See also
 
-- [evaluation.md](evaluation.md) - how a published summary is judged, and how the judgement is kept honest. Faithfulness, the bands, the human labels and the ledger these columns are written to.
-- [../architecture/publishing/autotune-summary-quality.md](../architecture/publishing/autotune-summary-quality.md) - the target design in which these thresholds move themselves, with no human in the loop. This page says what a number means; that one says what makes it change.
-- [../architecture/publishing/console.md](../architecture/publishing/console.md) - the panels that draw these columns.
-- [../../CLAUDE.md](../../CLAUDE.md) - Guardrail #10 (a number carries its hardware, date and spread).
+- [evaluation.md](evaluation.md) - faithfulness, confidence and human labels.
+- [config/summary-length.md](config/summary-length.md) - extraction and summary length policy.
+- [../architecture/publishing/why-a-summary-was-doubted-and-what-the-checker-measures.md](../architecture/publishing/why-a-summary-was-doubted-and-what-the-checker-measures.md) - retained console consumers.
+- [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) - native contract and compatibility rules.

@@ -245,8 +245,6 @@ def _score_row(*, day: str, number: int) -> EvalRow:
             "hhem_full": faithfulness,
             "hhem_delta": 0.0,
             "band": band.value,
-            "unsupported_numbers": number % 3,
-            "hedge_dropped": number % 4 == 0,
             "extraction_suspect": number % 5 == 0,
             "source_words_before_cap": 1320,
             "source_words": 1320 - (number % 2) * 40,

@@ -36,7 +36,10 @@ The primary measure is **faithfulness**: does the summary assert things the sour
 - against the text the model **actually saw** (post-truncation), and
 - against the **full article**.
 
-A single score cannot distinguish "the model invented something" from "the model faithfully summarized the half of the article we gave it". The **gap between the two** is the cost of truncation, and it is invisible unless you measure both. A large gap flags the item as a truncation artifact rather than a hallucination - a different defect with a different fix.
+A single score cannot distinguish invention from a summary supported only by
+the part the model saw. The validated score difference records that comparison;
+it does not set the extraction-cut flag or prove the cut's cost, because window
+geometry also affects it.
 
 ### The gap, and the 2,232 rows that never measured it
 
@@ -111,7 +114,7 @@ fixed writer had already produced were left alone.
 
 Two readers were taught what an empty cell means in the same commit. The drift
 benchmark keeps such a row and steps over it only in the length rule, so its
-faithfulness and extractiveness still count. The label queue stopped reading the
+faithfulness and recorded identity remain available. The label queue stopped reading the
 column at all - a labeller judges the summary against the premise in front of
 them, which is the truncated text, so `LabelRow` carries
 `source_seen_word_count` and can never be handed a blank.
@@ -187,10 +190,8 @@ this week is delayed. The alternative - leaving the geometry out of the string -
 is worse, because rows measured over a 900-word premise and rows measured over a
 runt would pool silently and nobody could tell them apart afterwards.
 
-`METRICS_VERSION` did **not** move, and stays at `3`. It names the deterministic
-counterweights in `backend/idhazh/evals/metrics.py`, and none of their
-definitions changed when the chunker did. Bumping it would assert a change that
-did not happen.
+The window geometry has its own component in `scorer_version`; a window change
+does not by itself change the checker-bundle version.
 
 ### Slicing costs a long article 0.40 of its score, and the direction is now measured
 
@@ -253,63 +254,6 @@ Discouragement is not a control, so four things make it structurally hard rather
 
 Not to be done: seeding the queue with model pre-labels for a human to confirm. Confirmation is anchoring, and it turns an independent measurement into an expensive agreement rate with the model - LLM-as-judge with a rubber stamp.
 
-## The prompt loop: the judge proposes, the scorers dispose
-
-The summariser prompt used to be argued in prose and never measured, so every
-change to it was a matter of taste - the exact thing rule 2 above warns against,
-seen from the other side. The offline prompt loop
-([../../backend/utilities/prompt_loop.py](../../backend/utilities/prompt_loop.py))
-turns the argument into a measurement, and it is built so that neither of the two
-rules is broken.
-
-It runs write-critique-revise, bounded by `finetune.prompt_iterations`. A model
-judge and the Editor rubric
-([../../backend/utilities/prompt_loop_rubric.md](../../backend/utilities/prompt_loop_rubric.md))
-**propose** a revised prompt. The deterministic, model-free scorers above
-**dispose**: a candidate replaces the incumbent only when it beats it, over a
-frozen committed article set, on all three gate targets. The gate is a Pareto
-beat - no worse on every target, strictly better on at least one - not a
-weighted sum and not an optimiser. The judge's preference is recorded and
-promotes nothing.
-
-The three are `unsupported_numbers`, `hedge_dropped_rate` and `verbatim_run` -
-`prompt_loop.GATE_TARGETS`. They are computed by `metrics.unsupported_numbers`,
-by `metrics.hedge_dropped` and by `metrics.verbatim_run`. All three are
-copy-or-invention defects, which is the set a string measure can judge without a
-human label.
-
-The card carried two more until 2026-09-24. A lead-survival rate was a gate
-target and a new-fact rate deliberately was not, and both went with the eval
-columns behind them. What the loop gave up is a target that steered toward
-summaries which front-load the article's opening, and nothing ever showed those
-read better.
-
-That is how it honours both rules at once. **Rule 2** no longer bans a model
-judge at all - [../../CLAUDE.md](../../CLAUDE.md) section 1a made LLM-as-judge
-primary evaluation - and the loop still keeps the judge off the gate: it authors
-a maintenance artefact, never a verdict on a published summary or visual, and
-selects nothing that publishes.
-**Rule 1** - the metric that selects can no longer alarm - is why the gate reads
-three defect rates and nothing else.
-
-Nothing the loop produces reaches a reader. It runs on a developer machine or a
-manual dispatch, never in the daily pipeline, and it never edits the live prompt
-itself: promoting a winner into `config/prompts/summarize-article.txt` is a human
-act, taken after reading the committed scores. The committed artefacts are the
-winning prompt, the rubric, the scores of every candidate and the seed - never the
-transcripts.
-
-The utility reads the incumbent through the selected config root and
-`prompt_files.summarize_article`, retaining exact template text and the
-production paragraph substitution. [The prompt contract](../architecture/summarize/prompt.md)
-owns task paths and rendered identities.
-
-The load-bearing guard is a test, not a sentence. When the model judge prefers a
-candidate the deterministic scorers refuse, the incumbent stands
-([../../backend/tests/test_prompt_loop.py](../../backend/tests/test_prompt_loop.py)).
-A disagreement between the judge and the scorers is always a stop, never a
-promotion - which is the whole reason a model is allowed to propose at all.
-
 ## Bands, not raw numbers
 
 Scores are bucketed into a small number of confidence bands, and the band - not the number - is what drives behaviour: what gets retried, what publishes with a visible low-confidence marker, and what a reader sees. Bands are tunable ([config/summary-length.md](config/summary-length.md)) and are re-calibrated against the human spot-checks rather than being fixed by taste.
@@ -323,9 +267,8 @@ A low-confidence item still publishes, marked. Hiding it would make the digest l
 There is one band function. Fresh publication grades only `EvalRow.hhem` against
 `evaluation.band_high_min` and `evaluation.band_medium_min`, including when the
 saved row predates this policy. It never trusts the saved row's mixed-policy
-`band`. Unsupported-number and dropped-hedge diagnostics no longer affect
-confidence. Their raw calculations and existing consumers are still present;
-this confidence change does not remove them.
+`band`. Retired heuristic measurements are not computed or used as confidence
+inputs. [Summary metrics](summary-metrics.md) names the retained measurements.
 
 Without an evaluation, an item publishes as `medium` with the explicit
 `not_scored` reason. Assembly does not calculate number or hedge checks on that
@@ -358,8 +301,9 @@ Historical `band` cells and scorer identities remain time-of-write records.
 today without rewriting them. Published historical items have no raw HHEM score;
 neither a newer day wrapper nor a newer served-view stamp recovers one.
 
-The checker/verdict bundle is `metrics-5` in newly derived `scorer_version`
-values. Its change identifies the new band semantics, not a new HHEM instrument.
+The checker/verdict bundle is `metrics-6` in newly derived `scorer_version`
+values. Its change identifies the retired native measurements and HHEM-only
+confidence, not a new HHEM instrument.
 Saved scorer identities remain unchanged, and a run with no evaluated rows
 continues to record no scorer identity.
 
@@ -384,7 +328,7 @@ valid as a label and stops being evidence about that scorer's numbers, so the
 read side re-joins on `output_digest` and takes the live score from this ledger.
 
 **Hidden from the labeller, without exception:** `hhem`, `hhem_full`,
-`hhem_delta`, the band, the band reason, every counterweight, `model_id`,
+`hhem_delta`, the band, the band reason, every automatic reading, `model_id`,
 `summary_attempt`, `pipeline_fingerprint`, `scorer_version`, any other row's label, the
 running tally, and the row's decile. The queue is never ordered by score - that
 would leak the gradient off the sequence.
@@ -396,25 +340,15 @@ alone would have the labeller judging a page that has since changed. Extracted
 text alone would hide the case where the extractor grabbed navigation chrome,
 which is what the `not_the_article` tag is for.
 
-**One binary verdict plus one closed tag.** Every tag names a defect with a
-different fix, so two tags leading to one code change would be one tag.
-`invented_fact`, `wrong_number`, `overstated`, `wrong_subject`,
-`not_the_article`, `unjudgeable`, and `none` for a supported summary. Three of
-them mirror a counterweight the pipeline already computes, which buys that
-counterweight's own precision and recall out of the same sixty labels.
+**One binary verdict plus one closed tag.** Every tag names a human-observed
+defect with a different fix: `invented_fact`, `wrong_number`, `overstated`,
+`wrong_subject`, `not_the_article`, `unjudgeable`, and `none` for a supported
+summary. These judgements remain available independently of automatic metrics.
 
-**Those three counterweights are copied onto the label row from 2026-09-03, and
-that is a change of policy rather than of shape.** The read side used to re-join
-`unsupported_numbers`, `hedge_dropped` and `extraction_suspect` from
-the eval ledger on `output_digest`. The ledger keeps every row for ever, so the
-join still works, but a label that carries its own three values is read with no
-second file beside it - and those three are exactly the precision and recall the
-sixty labels are drawn to buy. `LabelRow` carries the three as
-nullable columns filled by the queue; null means a row written before this stamp,
-which is re-joined from the ledger, and never
-means "the counterweight was read and did not fire". Nothing else moved: there is
-still nowhere on this row to put a machine verdict, and `model_id` is still
-absent by name. Authority: Andre.
+`LabelRow` retains the copied `extraction_suspect` reading. Its historical
+number and hedge measurements are discarded on JSON and CSV reads; current
+writers omit them. Verdicts, tags, scorer identities and recorded human work
+are unchanged. Null extraction state means unrecorded, never false.
 
 Short-source rows stay in the pool. They are extraction failures rather than
 summary defects, and dropping them would bias the sample toward well-extracted
@@ -664,9 +598,8 @@ remain, as does the unselected historical `lead_missing` treatment.
 
 **`band_reason` is not a column of the eval ledger.** Assembly decides a fresh
 reason from the saved `hhem`, or from the absence of an evaluation, and writes it
-onto the published item. The existing console reason panel still reads recorded
-decisions from committed day payloads, including historical vocabulary; it does
-not describe which warnings today's reader renders.
+onto the published item. There is no console reason aggregate or source-doubt
+ranking. Historical reason decoding supports old published items only.
 
 Re-deriving it from the ledger's inputs was the rejected alternative. It would
 put a second copy of `verdict` in a second language, and the day the two
@@ -715,7 +648,7 @@ is absent. The latest row that measured the required metric wins; timestamp
 ties keep the first row.
 
 Source length uses every known pre-cap length, including rows without a
-faithfulness score. Copying and the combined length/faithfulness warning need
+faithfulness score. The combined length/faithfulness warning needs
 matching `model_id` and `scorer_version` values. A
 missing identity is not a match. After a model or scorer change, a
 series with too few earlier articles reports insufficient evidence.
@@ -726,10 +659,8 @@ so a reworded prompt inside a window split the window in two and both halves fel
 under the minimum. Nothing was compared, and nothing compared reads as no drift
 at every call site.
 
-The length threshold is `drift.source_word_count_drop`. The copying threshold
-is `drift.extractiveness_rise`, an absolute increase in the share of copied
-four-word phrases. Their existing values were moved into config without
-loosening them. The combined warning uses articles with both a length and a
+The length threshold remains `drift.source_word_count_drop`. There is no
+copying comparison. The combined warning uses articles with both a length and a
 faithfulness score, rather than comparing two different measured subsets.
 
 `scoring_chrome` remains the alert identifier, but its text says **possible
@@ -781,37 +712,25 @@ unrecoverable historical chip avoids relabelling a number/hedge decision as a
 faithfulness warning. Sealed fragments retain their recorded decisions during
 replay, while all unchanged-content and identity checks remain in force.
 
-**Two measures left and two arrived (2026-09-24).** `lead_coverage` and `new_fact_rate` are gone from the eval row; `coherence` and `semantic_coverage` replace them, both recorded only.
-
-Lead coverage went because a slow opening is not a worse story. New-fact rate went with the key points it counted. Coherence is the mean cosine between neighbouring sentences of the summary, taken with the same sentence encoder the reader's search uses - the one measure here that reads the summary against itself at the level of meaning, and a poor thing to gate on because a summary that repeats a sentence scores near the top of it. Semantic coverage is the share of the article's 20 most-repeated content words the summary kept; it is lexical despite the name, and its denominator is fixed at 20 so it does not fall as the article lengthens.
-
-What that last point cost to establish, measured over 1,490 committed article-and-summary pairs on 2026-09-24: recall against the WHOLE article sits at a median of 0.017 at four-gram size, with half of all summaries between 0.008 and 0.036 - a near-constant. At unigram size the whole-article version has range but correlates 0.93 with `compression`, which is a length column. Against a fixed 20-term reference the reading is 0.60 at the median with 0.35 to 0.85 covering the middle 90 percent, and its rank correlation with article length is -0.09. What it gives up is the fact an article mentioned once and the summary dropped; it only asks whether the summary carried what the article kept returning to. Authority: Andre.
+**Coherence remains a recorded measurement, never a gate.** It compares
+neighbouring summary sentences using the retained sentence encoder; a repeated
+sentence can score highly. Its definition lives in [summary metrics](summary-metrics.md).
 
 Coherence runs in the `work` shard, inside `to_eval_row`, because that is where an eval row is composed. The jobs that already hold the sentence encoder for the search index - `plan` and `assemble` - only ever read a row back, so computing the column there would leave the durable per-item payload carrying a null and put two committed rows with one settlement key in disagreement. The encoder loads on the first item that reaches the scorer and answers null where the weights are not in the checkout. Authority: Carmack.
 
-**Historical reasons remain decodable, not visible as mixed diagnostics.**
-The `lead_missing` vocabulary and existing persisted buckets remain readable;
-the console's mixed-reason panel and source-doubt ranking are removed.
-[The summary-console contract](../architecture/publishing/why-a-summary-was-doubted-and-what-the-checker-measures.md#design-rationale)
-separates that frontend removal from the still-recorded raw backend fields.
-
-**A verdict change moves the checker bundle, not the HHEM instrument.**
-`METRICS_VERSION` is `5`, so newly derived scorer identities distinguish
-faithfulness-only bands from mixed-policy bands. The model, immutable revision,
-observed weights, window geometry and configured cuts do not move. Old rows keep
-their original identities; no instrument is invented when no row was evaluated.
-
-**Lead entities do not cross line breaks (2026-08-23).** The source's title and body can be adjacent without sentence punctuation. Treating the newline as ordinary whitespace created impossible entities such as `biodiversity loss\nwe`, which counted against the summary and could never match it. A line break now ends the entity run while spaces and tabs still join names inside one line, such as `US President Donald Trump`. Authority: Andre's metric boundary, implemented as a structural bug fix.
+**Native retirement is a read-side projection, not a history rewrite.**
+Eval rows discard named retired cells; day metrics discard retired confidence,
+source-doubt and difference aggregates and named instruments; run and label
+records discard their retired copies. Unknown keys and invalid retained values
+still fail. Recorded scorer identities and historical publication decisions stay
+unchanged. The checker bundle advances to `metrics-6` without changing the HHEM
+instrument, geometry or cuts. No identity is invented for an unevaluated run.
 
 **The band and its reason are one function (2026-08-24).** Returning them separately would let a page print a reason that is not why. They travel together as one value, and the band-only helper is a wrapper with no logic of its own. Authority: Fowler.
 
 **The reason is an identifier and the sentence is copy (2026-08-24).** The published item carries `band_reason`; the site owns the words. Rewording a reader-facing sentence must not need a schema change, and the same identifier can read differently on a phone and in a feed. Authority: the identifier discipline in `docs/architecture/contracts/schemas.md`.
 
 **A re-observation writes no row (2026-08-24).** The page has said since it was written that an item whose inputs did not change writes no row at all, and the writer did not enforce it. The rule was the better one - a ledger of measurements, not of times the pipeline looked - so the code changed. Authority: Fowler, closing known defect 6.
-
-**One column reads the summary against itself (2026-08-26).** Eleven quality columns, and every n-gram machine in `backend/idhazh/evals/metrics.py` intersected the summary's n-grams with the *source's*. Nothing could see a summary that repeated itself, which greedy decoding makes possible and which every other column scores *better* on the worse it gets. Proved on committed fixtures rather than argued: two 26-word summaries of the same article, one saying a clause three times and one saying it once, score exactly equal on `extractiveness` (0.000), `verbatim_run` (0.077) and `coverage` (0.333), and 0.000 against 0.391 on the new one. Authority: Andre's blind-spot finding; nullable and appended, Fowler's layout rule.
-
-**`METRICS_VERSION` did not move for it (2026-08-26).** The constant is folded into `scorer_version`, and this page requires ten distinct run-days at one `scorer_version` before a threshold can move. The count is stated once, in [The human labels](#the-human-labels-the-instrument-and-what-it-still-needs), and it had not once reached 10 when this was decided. A column no band and no derived column reads changes nothing that a row written under `metrics-3` says, so bumping would have spent a banked run-day to record a fact about nothing. Authority: Andre.
 
 **A fingerprint change restarts the run-day count at zero (2026-08-27).** The requirement above has asked for ten run-days at one `scorer_version` and one `pipeline_fingerprint` since it was written, and the page never said what happens when one of the two moves. The count goes back to zero, and it has to. The fingerprint exists so that ten days of scores are ten days of the *same* pipeline; a count carried across a model swap would average two different systems and present the result as one measurement. This is not a policy bolted on afterwards. `model_sha256` is a declared field of `PipelineInputs` in [`../../backend/idhazh/contracts/fingerprint.py`](../../backend/idhazh/contracts/fingerprint.py), and the stamp was a digest over that model's own serialization, so a model swap could not leave the stamp still - and neither could a reworded prompt, a llama.cpp rebuild, a changed truncation cap, or any other declared input. **Nothing has written that column since 2026-09-12 and the method that produced it went on 2026-09-21**, so this rule now describes the rows already committed rather than a stamp a run still takes; what a live run records instead is named values, one per input ([../architecture/contracts/determinism.md](../architecture/contracts/determinism.md)). Authority: the determinism contract, read rather than argued.
 
@@ -956,10 +875,6 @@ this page stays about what the columns mean.
 Historical duplicate rows are not rewritten by the lookup migration. It
 preserves their legacy IDs and adds their current three-part measurement keys.
 
-The 2026-08-23 repair kept positions stable. It measured `state/scores.csv` with Python's `csv` module: 33 header names and 19 data rows, all with 33 cells. Ten historical rows predated `score_ms`, so they now carry the contract default `0`. All 19 rows predated `evidential_density` and `speculative_density`, so those cells stay empty as CSV nulls.
-
-**Adding a column was a data migration, every time, while the ledger was a CSV.** `self_repetition` landed on 2026-08-26 and the committed ledger moved with it in the same commit: one name on the header line and one empty cell on each of 2,116 data rows. Measured before and after - the file went from 1,548,111 to 1,550,243 bytes, which is 2,117 commas plus the 15 characters of the column name and not one byte more, and the line count did not change. The rows were padded rather than left short because a contract test failed a row whose cell count differed from its header, and empty is the honest cell: those rows were scored by a build that never measured the thing.
-
 **The row is self-describing.** It carries the date, the source link and the title, not only the scores - so that a row still means something after the day it describes has been pruned from the published site. Those columns exist from the first row, because adding them after a prune cannot recover what was already lost.
 
 That title is the **source's** headline, not the one the summarizer wrote ([../architecture/summarize/prompt.md](../architecture/summarize/prompt.md)). An identity anchor has to be the thing that does not vary, and ours is rewritten every run and absent whenever the rewrite missed its range.
@@ -1008,7 +923,7 @@ reading that list.
 - [../../CLAUDE.md](../../CLAUDE.md) Guardrail #12 - every read must have a fixed-size input.
 - [partitions.md](partitions.md) - what a partition file is called, and what a name the rule does not recognise does.
 - [principles.md](principles.md) - principle 6, the belief this page implements.
-- [../architecture/summarize/prompt.md](../architecture/summarize/prompt.md) - what the prompt asks for, including the hedges these metrics check.
+- [../architecture/summarize/prompt.md](../architecture/summarize/prompt.md) - what the prompt asks for, including attribution and uncertainty instructions.
 - [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) - the eval-row contract.
 - [../architecture/contracts/determinism.md](../architecture/contracts/determinism.md) - the stamp every row carries, and why an unchanged item writes none.
 - [../architecture/publishing/frontend.md](../architecture/publishing/frontend.md) - the published surface a confidence band reaches.

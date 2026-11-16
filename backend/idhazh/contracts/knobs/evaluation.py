@@ -6,7 +6,7 @@ from typing import Any, Self
 
 from pydantic import Field, model_validator
 
-from idhazh.contracts.base import Model, Slug
+from idhazh.contracts.base import Model, Slug, renamed_keys, without_retired_keys
 
 
 class EvaluationConfig(Model):
@@ -37,22 +37,17 @@ class EvaluationConfig(Model):
         gt=0.0,
         le=1.0,
         description=(
-            "Maximum summary/source ratio for a brief item. Also caps verbatim_run on "
-            "briefs and derives extract.min_source_words from the first brief ask."
+            "Summary/source ratio that derives extract.min_source_words from the "
+            "first brief ask."
         ),
     )
-    verbatim_reject_ceiling: float = Field(
+    corpus_compression_ceiling: float = Field(
         default=0.75,
         gt=0.0,
         le=1.0,
         description=(
-            "Above this share of the summary copied from the source in one unbroken "
-            "run, the item is refused rather than published. A starting point and not a "
-            "calibrated threshold (Guardrail #10): it is the midpoint of the band left open "
-            "by one run-day of eight brief items on 2026-08-26, where seven scored at "
-            "or below 0.241 and the eighth scored 1.000, and eight items is not a "
-            "distribution. It must sit above brief_compression_ceiling, or the brief "
-            "copying gate loses the band it can still fail in."
+            "A training candidate's summary/source word ratio must be strictly below "
+            "this ceiling. Does not reject a published summary or measure copied text."
         ),
     )
     spot_checks_per_week: int = Field(default=10, ge=0)
@@ -89,6 +84,11 @@ class EvaluationConfig(Model):
 
     @model_validator(mode="before")
     @classmethod
+    def _name_the_retained_corpus_length_limit(cls, data: Any) -> Any:
+        return renamed_keys(data, {"verbatim_reject_ceiling": "corpus_compression_ceiling"})
+
+    @model_validator(mode="before")
+    @classmethod
     def _summary_word_bounds_moved_to_the_ladder(cls, data: Any) -> Any:
         """Read a config that still names the old global summary word bounds.
 
@@ -120,14 +120,6 @@ class EvaluationConfig(Model):
         # never finishes rather than a job that fails.
         if self.chunk_overlap_words >= self.chunk_words:
             raise ValueError("chunk_overlap_words must sit below chunk_words")
-        # The reject drops the item before it can be scored, so anything it catches
-        # leaves the corpus the brief-copying gate reads. Set the two equal and the
-        # gate has no band left to fail in - and it stops failing silently, which
-        # reads exactly like a fixed pipeline.
-        if self.verbatim_reject_ceiling <= self.brief_compression_ceiling:
-            raise ValueError(
-                "verbatim_reject_ceiling must sit above brief_compression_ceiling"
-            )
         return self
 
 
@@ -150,12 +142,6 @@ class DriftConfig(Model):
         lt=1.0,
         description="Fractional fall in median extracted article length that raises an alert.",
     )
-    extractiveness_rise: float = Field(
-        default=0.15,
-        gt=0.0,
-        le=1.0,
-        description="Absolute rise in median copied four-word-phrase share that raises an alert.",
-    )
     min_window_rows: int = Field(
         default=20,
         ge=1,
@@ -170,3 +156,8 @@ class DriftConfig(Model):
             "instrument and not a quiet week - 20 is a sixth of one of those days."
         ),
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_retired_measurements(cls, data: Any) -> Any:
+        return without_retired_keys(data, "extractiveness_rise")

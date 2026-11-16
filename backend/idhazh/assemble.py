@@ -2116,7 +2116,6 @@ def build_manifest(
     site_files: int,
     shards: int | None = None,
     inputs: PipelineInputs | None = None,
-    determinism_violations: int = 0,
     note: str | None = None,
     item_health_rows: Sequence[ItemHealthRow] | None = None,
     decisions: Sequence[VisualDecision] | None = None,
@@ -2204,7 +2203,6 @@ def build_manifest(
             )
             for vertical in plan.verticals
         ],
-        determinism_violations=determinism_violations,
         inputs=inputs,
         site_bytes=site_bytes,
         site_files=site_files,

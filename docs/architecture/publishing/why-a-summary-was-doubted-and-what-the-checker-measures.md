@@ -236,10 +236,16 @@ shares and rankings; no replacement diagnostic or hidden live query remains.
 HHEM and its full-article comparison, sentence-encoder coherence, lengths,
 compression, real extraction cuts and runtime measurements remain.
 
-This layer removes frontend consumers, not backend calculations or persisted
-diagnostic fields. Fields still emitted by `EvalRow` remain explicitly
-`UNDRAWN` until their native retirement. Legacy confidence-reason decoding is
-protocol compatibility, not an active diagnostic.
+The backend no longer calculates or emits those measurements. Current eval,
+day, run and human-label contracts omit the retired fields; their native readers
+discard the historical keys by name without changing archived records or
+recorded scorer identities. Day readers also discard named retired instruments,
+not unknown instruments generally. `UNDRAWN` now names only retained fields.
+Legacy confidence-reason and copied-source outcome decoding is protocol
+compatibility, not an active diagnostic.
+
+The shared console band also omits low-confidence counts and related warnings.
+Its model notes retain real failures, context refusals and extraction cuts.
 
 Cards retain one settings-only history. Faithfulness retains scorer markers
 only where `score_moved` is true. The publication-date list and independent

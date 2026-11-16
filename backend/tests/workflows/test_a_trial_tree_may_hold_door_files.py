@@ -106,7 +106,6 @@ def _measurement() -> EvalRow:
         hhem_delta=0.0,
         truncation_flagged=False,
         compression=0.2,
-        extractiveness=0.4,
         band=ConfidenceBand.HIGH,
         summary_words=60,
         pipeline_fingerprint="b" * 64,
