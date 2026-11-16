@@ -1,12 +1,4 @@
-"""Compose one item's scores into one ledger row.
-
-The faithfulness score is one input here, not the verdict. It is paired with
-metrics that see what it cannot, and one of them can override it outright: a
-summary asserting a figure the article never gave is low-confidence whatever
-the faithfulness model thinks, because that model marks a wrong number
-generously - the entity and the relation both survive, and only the fact is
-false.
-"""
+"""Compose one item's measurements and faithfulness-only confidence into one ledger row."""
 
 from __future__ import annotations
 
@@ -40,54 +32,25 @@ class Verdict(NamedTuple):
 def verdict(
     faithfulness: float | None,
     *,
-    unsupported_numbers: int,
-    hedge_dropped: bool,
     config: EvaluationConfig,
 ) -> Verdict:
-    """The band, and why it is not the top one.
-
-    An unsupported figure forces the bottom band. Nothing else in the row can
-    see that defect, so nothing else may outvote it. A dropped hedge caps
-    confidence at medium rather than forcing low.
-
-    A `high` item carries no reason. It has nothing to explain, and copy about
-    the absence of a problem is ink a reader cannot act on.
-
-    Whether the article's opening survived used to cap the band here as well,
-    and it was the reason named first when both counterweights failed. It no
-    longer runs: plenty of good articles and blogs open slowly, so a summary
-    that left the opening behind was not a worse summary for it.
-    """
-    if unsupported_numbers:
-        return Verdict(ConfidenceBand.LOW, BandReason.UNSUPPORTED_NUMBER)
+    """Grade faithfulness, or explicitly leave an unevaluated item unscored."""
     if faithfulness is None:
-        scored, reason = ConfidenceBand.MEDIUM, BandReason.NOT_SCORED
-    elif faithfulness >= config.band_high_min:
-        scored, reason = ConfidenceBand.HIGH, None
-    elif faithfulness >= config.band_medium_min:
-        scored, reason = ConfidenceBand.MEDIUM, BandReason.FAITHFULNESS
-    else:
-        scored, reason = ConfidenceBand.LOW, BandReason.FAITHFULNESS
-
-    if scored is ConfidenceBand.HIGH and hedge_dropped:
-        return Verdict(ConfidenceBand.MEDIUM, BandReason.HEDGE_DROPPED)
-    return Verdict(scored, reason)
+        return Verdict(ConfidenceBand.MEDIUM, BandReason.NOT_SCORED)
+    if faithfulness >= config.band_high_min:
+        return Verdict(ConfidenceBand.HIGH, None)
+    if faithfulness >= config.band_medium_min:
+        return Verdict(ConfidenceBand.MEDIUM, BandReason.FAITHFULNESS)
+    return Verdict(ConfidenceBand.LOW, BandReason.FAITHFULNESS)
 
 
 def band(
     faithfulness: float | None,
     *,
-    unsupported_numbers: int,
-    hedge_dropped: bool,
     config: EvaluationConfig,
 ) -> ConfidenceBand:
     """The band alone, for a caller that has no reader to explain it to."""
-    return verdict(
-        faithfulness,
-        unsupported_numbers=unsupported_numbers,
-        hedge_dropped=hedge_dropped,
-        config=config,
-    ).band
+    return verdict(faithfulness, config=config).band
 
 
 def to_eval_row(
@@ -200,12 +163,7 @@ def to_eval_row(
         ),
         semantic_coverage=metrics.semantic_coverage(text, full_text),
         extraction_suspect=extraction_suspect,
-        band=band(
-            hhem,
-            unsupported_numbers=unsupported,
-            hedge_dropped=hedge,
-            config=config,
-        ),
+        band=band(hhem, config=config),
         source_words_before_cap=source_words,
         source_words=article.word_count,
         summary_words=metrics.word_count(text),

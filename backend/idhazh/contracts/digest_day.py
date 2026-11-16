@@ -365,7 +365,9 @@ class DigestItem(Model):
         default=None,
         description=(
             "Why the item is not in the top band. An identifier the site turns into a "
-            "sentence; null on a `high` item and on a day published before this existed."
+            "sentence; null on a `high` item and on historical items without a reason. "
+            "New decisions name faithfulness or not_scored. Historical number and hedge "
+            "reasons, and unexplained low/medium bands, produce no reader warning."
         ),
     )
     source_form: SourceForm = Field(
@@ -555,11 +557,18 @@ class DigestDay(Contract):
         json_schema_extra={
             "readCompatibility": (
                 "historical visual metadata remains readable; absent/null kinds are charts; "
-                "retired actor pointers project to no visual without rewriting stored days"
+                "retired actor pointers project to no visual without rewriting stored days; "
+                "historical confidence decisions remain readable without regrading items; "
+                "the wrapper version is not item-level scoring provenance"
             )
         }
     )
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-11-15",
+            change="Fresh confidence uses faithfulness alone; historical decisions stay readable.",
+            why="Retired number and hedge checks must not surface as current reader warnings.",
+        ),
         ChangelogEntry(
             version="2026-11-11",
             change="Retire actor-grid publication while preserving historical visual metadata.",
@@ -574,11 +583,6 @@ class DigestDay(Contract):
             version="2026-10-20",
             change="Source classification accepts open kind and numeric tier identifiers.",
             why="Registry membership can change without invalidating recorded payloads.",
-        ),
-        ChangelogEntry(
-            version="2026-09-24",
-            change="Removed DigestItem.key_points. A frozen day that carries it still loads.",
-            why="Nothing drew them, and the search filter reads title and summary instead.",
         ),
         ChangelogEntry(
             version="2026-08-21",

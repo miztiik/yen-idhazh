@@ -429,12 +429,7 @@ def verdict_for(measured: _Measured, evaluation: EvaluationConfig) -> score.Verd
     One call feeds both the published item and the ledger row, so the two files
     cannot disagree about what the same item scored on the same day.
     """
-    return score.verdict(
-        measured.hhem,
-        unsupported_numbers=measured.unsupported_numbers,
-        hedge_dropped=measured.hedge_dropped,
-        config=evaluation,
-    )
+    return score.verdict(measured.hhem, config=evaluation)
 
 
 def article_for(index: int, canary: dict[str, object], measured: _Measured) -> Article:

@@ -38,7 +38,7 @@ from idhazh.contracts.source_health_view import SourceHealthView
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.visual_decision import VisualDecision, VisualKind
 from idhazh.embed import Embedder
-from idhazh.evals import metrics, sampling, score, writer
+from idhazh.evals import sampling, score, writer
 from idhazh.fingerprint import (
     prose_changed_alone,
 )
@@ -244,27 +244,14 @@ def stage_assemble(
         if summary.status is not SummaryStatus.OK:
             continue
 
-        # An item publishes with a band whether or not the faithfulness scorer
-        # ran. The counterweights are free and always available, and they never
-        # claim the top band on their own.
+        # A saved row keeps its original band; fresh publication grades its HHEM
+        # score under today's policy. No evaluation means explicitly unscored.
         if payload.eval_path.exists():
             row = EvalRow.read(payload.eval_path)
             rows.append(row)
-            decided = score.verdict(
-                row.hhem,
-                unsupported_numbers=row.unsupported_numbers,
-                hedge_dropped=row.hedge_dropped,
-                config=settings.app.evaluation,
-            )
+            decided = score.verdict(row.hhem, config=settings.app.evaluation)
         else:
-            text = summary.summary or ""
-            full_text = article.text or ""
-            decided = score.verdict(
-                None,
-                unsupported_numbers=metrics.unsupported_numbers(text, full_text),
-                hedge_dropped=metrics.hedge_dropped(text, full_text),
-                config=settings.app.evaluation,
-            )
+            decided = score.verdict(None, config=settings.app.evaluation)
         decision = (
             VisualDecision.read(payload.decision_path) if payload.decision_path.exists() else None
         )
@@ -315,7 +302,12 @@ def stage_assemble(
     if retained_fragment is not None and (
         retained_fragment.date != plan.date
         or retained_fragment.run_id != run_id
-        or retained_fragment.items != digest_items
+        # Confidence is a sealed publication decision, not a content mismatch
+        # when the policy changes. Every other item field still has to agree.
+        or [
+            item.model_dump(exclude={"band", "band_reason"}) for item in retained_fragment.items
+        ]
+        != [item.model_dump(exclude={"band", "band_reason"}) for item in digest_items]
         or retained_fragment.items_planned != len(plan.items)
         or retained_fragment.failed_item_ids != failed_item_ids
         or retained_fragment.verticals != list(plan.verticals)

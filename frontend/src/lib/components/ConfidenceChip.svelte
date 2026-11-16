@@ -7,8 +7,8 @@
 	 * care. One dot and a short sentence stays proportionate at any distribution.
 	 *
 	 * The sentence names what is missing rather than grading the item. A reader
-	 * can act on "leaves out names or figures from the opening"; they cannot act
-	 * on "mostly".
+	 * can act on a faithfulness warning; an unexplained historical band cannot
+	 * establish what was measured.
 	 */
 	import { BANDS, bandSentence } from '$lib/bands';
 	import Icon from '$lib/icons/Icon.svelte';
@@ -17,7 +17,7 @@
 
 	let { band, reason = null }: { band: ConfidenceBand; reason?: BandReason | null } = $props();
 	const copy = $derived(BANDS[band]);
-	const sentence = $derived(bandSentence(band, reason));
+	const sentence = $derived(bandSentence(reason));
 	const MARK: Record<ConfidenceBand, IconId> = {
 		high: 'band-high',
 		medium: 'band-medium',
@@ -25,7 +25,7 @@
 	};
 </script>
 
-{#if copy.showOnItem}
+{#if copy.showOnItem && sentence}
 	<span class="inline-flex items-start gap-1.5" data-band={band} data-band-reason={reason}>
 		<!-- Aligned to the first line, not to the block: a sentence wraps on a phone.
 		     The mark carries the band's own hue, so shape and colour say the same

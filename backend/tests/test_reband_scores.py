@@ -20,9 +20,14 @@ from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-FIXTURE = REPO_ROOT / "tests" / "fixtures" / "evals" / "scores-reband.csv"
-DISPLAY_PATH = Path("tests/fixtures/evals/scores-reband.csv")
+DISPLAY_PATH = Path("saved-scores.csv")
 UTILITY = REPO_ROOT / "backend" / "utilities" / "reband_scores.py"
+HISTORICAL_ROWS = [
+    {"band": "low", "hhem": "0.95", "unsupported_numbers": "1"},
+    {"band": "medium", "hhem": "0.91", "hedge_dropped": "True"},
+    {"band": "high", "hhem": "0.40"},
+    {"band": "high", "hhem": ""},
+]
 
 
 def _load_reband_scores() -> ModuleType:
@@ -44,42 +49,50 @@ main = cast(Callable[[list[str]], int], _module.main)
 
 
 def test_reband_reports_current_distribution_and_move_reasons() -> None:
-    report = reband(read_rows(FIXTURE), EvaluationConfig())
+    report = reband(HISTORICAL_ROWS, EvaluationConfig())
 
-    assert report.rows == 7
-    assert report.recorded == {"high": 5, "medium": 1, "low": 1}
-    # Two of the four rows that used to move were moved by lead coverage alone.
-    # That counterweight is retired, so they stay where they were recorded.
-    assert report.current == {"high": 2, "medium": 3, "low": 2}
-    assert report.moves == {("high", "medium"): 2, ("high", "low"): 1}
-    assert report.reasons == {
-        "dropped hedge": 2,
-        "unsupported numbers": 1,
+    assert report.rows == 4
+    assert report.recorded == report.current == {"high": 2, "medium": 1, "low": 1}
+    assert report.moves == {
+        ("low", "high"): 1,
+        ("medium", "high"): 1,
+        ("high", "low"): 1,
+        ("high", "medium"): 1,
     }
+    assert report.reasons == {"faithfulness": 3, "not scored": 1}
 
 
 def test_reband_output_is_stable_for_operators() -> None:
-    report = reband(read_rows(FIXTURE), EvaluationConfig())
+    report = reband(HISTORICAL_ROWS, EvaluationConfig())
 
     assert lines_for(report, DISPLAY_PATH) == [
-        "scores: tests/fixtures/evals/scores-reband.csv",
-        "rows: 7",
+        "scores: saved-scores.csv",
+        "rows: 4",
         "recorded bands:",
-        "  high: 5 (71.4%)",
-        "  medium: 1 (14.3%)",
-        "  low: 1 (14.3%)",
+        "  high: 2 (50.0%)",
+        "  medium: 1 (25.0%)",
+        "  low: 1 (25.0%)",
         "current bands:",
-        "  high: 2 (28.6%)",
-        "  medium: 3 (42.9%)",
-        "  low: 2 (28.6%)",
-        "rows moved: 3 (42.9%)",
+        "  high: 2 (50.0%)",
+        "  medium: 1 (25.0%)",
+        "  low: 1 (25.0%)",
+        "rows moved: 4 (100.0%)",
         "moves:",
         "  high -> low: 1",
-        "  high -> medium: 2",
+        "  high -> medium: 1",
+        "  low -> high: 1",
+        "  medium -> high: 1",
         "move reasons:",
-        "  dropped hedge: 2",
-        "  unsupported numbers: 1",
+        "  faithfulness: 3",
+        "  not scored: 1",
     ]
+
+
+def test_saved_rows_need_only_the_recorded_band_and_faithfulness(tmp_path: Path) -> None:
+    path = tmp_path / "scores.csv"
+    path.write_text("band,hhem\nlow,0.95\n", encoding="utf-8")
+
+    assert reband(read_rows(path), EvaluationConfig()).moves == {("low", "high"): 1}
 
 
 # --- Reading the ledger through the door ---------------------------------------

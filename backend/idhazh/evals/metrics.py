@@ -37,24 +37,10 @@ from typing import Final
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.evals.hhem import CHUNK_ANCHOR
 
-#: Bumped whenever the set of definitions below changes what a ledger row means.
-#: Part of the derived `scorer_version`, so a row keeps meaning what it meant
-#: when written.
-#:
-#: It did not move for `self_repetition` on 2026-08-26, for the anchored
-#: faithfulness window on 2026-08-28, or for `new_fact_rate`. Each of those
-#: added a column nothing bands or derives from, so every row already written
-#: still said exactly what it said, and moving the stamp would have restarted
-#: the ten-run-day count `docs/concepts/evaluation.md` requires before any
-#: threshold moves - to record a fact no threshold reads.
-#:
-#: It moves to `4` on 2026-09-24, because this time columns LEFT. `coverage` and
-#: `new_fact_rate` are gone and `coherence` and `semantic_coverage` are new, so
-#: a row cannot be read as if it came from the same set of instruments. The
-#: count restarts anyway in the same change - `scorer_version` loses its `lead=`
-#: component with the band input behind it - so the stamp is what names why.
-#: Authority: Andre, Fowler.
-METRICS_VERSION: Final = "4"
+#: The checker/verdict bundle in derived `scorer_version`. Version 5 removes
+#: number and hedge influence on confidence without changing the HHEM instrument.
+#: Historical rows retain the identity under which their band was written.
+METRICS_VERSION: Final = "5"
 
 #: How many of the article's most-repeated content words `semantic_coverage`
 #: asks the summary about. A constant rather than a `config/` knob, like

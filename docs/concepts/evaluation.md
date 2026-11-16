@@ -1,6 +1,6 @@
 # Evaluation
 
-**Last Updated**: 2026-11-11
+**Last Updated**: 2026-11-15
 
 How a published summary is judged, and how the judgement is kept honest. This page fixes the vocabulary; the tunable bands live in [config/summary-length.md](config/summary-length.md).
 
@@ -320,19 +320,17 @@ for 30 to 45 words without the decoder padding a short source to the old floor.
 
 A low-confidence item still publishes, marked. Hiding it would make the digest look better than it is, which is the opposite of the point.
 
-There is one band function. It reads the faithfulness score when one exists, plus the deterministic counterweights that are written to the eval row. A row with no faithfulness score can never claim `high`; it starts at `medium` unless it asserts an unsupported number.
+There is one band function. Fresh publication grades only `EvalRow.hhem` against
+`evaluation.band_high_min` and `evaluation.band_medium_min`, including when the
+saved row predates this policy. It never trusts the saved row's mixed-policy
+`band`. Unsupported-number and dropped-hedge diagnostics no longer affect
+confidence. Their raw calculations and existing consumers are still present;
+this confidence change does not remove them.
 
-The counterweights have different force:
-
-| Counterweight | Band effect |
-| --- | --- |
-| Unsupported numbers | Force `low`. A wrong figure is a direct false claim. |
-| Dropped hedge | Cap `high` at `medium`. The summary flattened uncertainty, but that defect does not erase every faithful sentence. |
-
-The cap is deliberate. A faithful summary that flattened a hedge deserves less
-confidence, not no confidence. Re-cutting the `high` and `medium` thresholds is
-a separate Level 5 decision. The current rows have no human labels, so they do
-not supply an error rate for any cut.
+Without an evaluation, an item publishes as `medium` with the explicit
+`not_scored` reason. Assembly does not calculate number or hedge checks on that
+path. Missing evidence is not a faithfulness failure, and it cannot claim `high`.
+The HHEM model, revision, weights, window and configured thresholds are unchanged.
 
 **The operator console draws both cuts.** `evaluation.band_high_min` and
 `evaluation.band_medium_min` are the two rules across the faithfulness plot on
@@ -346,21 +344,24 @@ quarter of the way up from the bottom. Susan and Andre, 2026-09-25;
 [../architecture/publishing/why-a-summary-was-doubted-and-what-the-checker-measures.md](../architecture/publishing/why-a-summary-was-doubted-and-what-the-checker-measures.md)
 carries what that reversed and why.
 
-**A third counterweight capped the band until 2026-09-24**: whether the names and
-figures in the article's opening survived into the summary. It is retired,
+**The older lead-coverage rule also remains retired**: whether the names and
+figures in the article's opening survived into the summary. It stopped banding
+items before the number and hedge rules,
 because plenty of good articles and blogs open slowly and a summary that left
 the opening behind was not a worse summary for it. `BandReason.lead_missing`
 stays in the vocabulary - committed published days carry it, and a reader of one
 of those days still has to be told why the item was doubted - but nothing
 produces it any more.
 
-Historical `band` cells are a time-of-write record, not a live distribution.
-Rows written before the counterweight caps may record `high` even though today's
-`band` would cap them at `medium`. Re-band the ledger with the current function
-before using the bands as a distribution. Measured 2026-08-24 on the committed
-`state/scores.csv` at 447 rows: recorded 63.8 / 18.1 / 18.1, re-banded
-57.7 / 24.2 / 18.1. Twenty-seven rows move, all of them written before the caps
-landed - 11 on lead coverage, 11 on a dropped hedge, 5 on both.
+Historical `band` cells and scorer identities remain time-of-write records.
+`backend/utilities/reband_scores.py` can report how their `hhem` values grade
+today without rewriting them. Published historical items have no raw HHEM score;
+neither a newer day wrapper nor a newer served-view stamp recovers one.
+
+The checker/verdict bundle is `metrics-5` in newly derived `scorer_version`
+values. Its change identifies the new band semantics, not a new HHEM instrument.
+Saved scorer identities remain unchanged, and a run with no evaluated rows
+continues to record no scorer identity.
 
 ## Which sources the checker doubts
 
@@ -691,102 +692,36 @@ publication.
 
 ## The band says what is missing, not how good the item is
 
-A band on its own is a grade. `medium` used to print "Mostly matches the source",
-which tells a reader an item is worse without telling them what to look for when
-they click through - the only thing they can actually do about it. Both things
-that cap an item at `medium` were already computed, and neither reached the page.
+One function returns a band and its reason together. Fresh decisions produce
+`faithfulness` below the top band, `not_scored` without an evaluation, and no
+reason for `high`. The published item carries the identifier; the site owns
+the sentence.
 
-One function now returns the band **and** the one reason that explains it, so a
-page can never show a band decided by one code path next to a reason decided by
-another. The reason is a closed identifier on the published item; the sentence a
-reader sees is copy owned by the site, and can be rewritten without a schema
-change.
-
-| Reason | What it means |
-| --- | --- |
-| `unsupported_number` | The summary asserts a figure that appears nowhere in the article. Forces `low`. |
-| `not_scored` | No faithfulness score exists, so the item cannot claim the top band. |
-| `lead_missing` | The names and figures in the article's opening did not survive. |
-| `hedge_dropped` | The article hedged and the summary asserted. |
-| `faithfulness` | The faithfulness score itself put the item where it is. |
-
-A `high` item carries no reason. There is nothing to explain, and copy about the
-absence of a problem is ink a reader cannot act on.
-
-When both counterweights fail together - 5 of the 27 re-banded rows - the missing
-lead is named. Dropped facts are the larger loss: a flattened hedge changes how a
-sentence reads, and a missing lead means the story's who, what and how-much never
-arrived.
+The complete confidence chip is absent for historical `unsupported_number` and
+`hedge_dropped` reasons: no sentence, generic band label, dot or accessible
+warning remains. Reasonless historical `low` and `medium` items also show
+nothing, because their HHEM grade cannot be recovered. An absent reason is never
+converted to `not_scored`. Explicit `faithfulness` and `not_scored` warnings
+remain, as does the unselected historical `lead_missing` treatment.
 
 ### The reason lives on the published item, not in the eval ledger
 
-The console plots these five since 2026-09-05, and the panel had to read them
-from the committed day payloads under `frontend/public/digest/`. **`band_reason`
-is not a column of the eval ledger.** The ledger's 35 columns carry the inputs
-the reason is decided from - `hhem`, `coverage`, `unsupported_numbers`,
-`hedge_dropped` - and the band, and no reason. `verdict` decides it,
-`assemble.build_day` writes it onto the item, and that is the only place on disk
-it exists.
+**`band_reason` is not a column of the eval ledger.** Assembly decides a fresh
+reason from the saved `hhem`, or from the absence of an evaluation, and writes it
+onto the published item. The existing console reason panel still reads recorded
+decisions from committed day payloads, including historical vocabulary; it does
+not describe which warnings today's reader renders.
 
 Re-deriving it from the ledger's inputs was the rejected alternative. It would
 put a second copy of `verdict` in a second language, and the day the two
 disagree the console is wrong about the item a reader was shown - which is the
 one failure this instrument exists to prevent.
 
-**Each item carries at most one reason**, because `verdict` returns exactly
-one. That is what lets the five be added: a stacked column of the five is the
-count of summaries the checker wrote a reason on, with nothing counted twice.
-
-### What the five reasons look like today
-
-Measured 2026-09-05 over all 16 committed day payloads, 6,633 published
-summaries. Exact counts over committed files, so there is no spread.
-
-| Reason | Summaries | Share of published |
-| --- | ---: | ---: |
-| none - the item reached `high` | 4,124 | 62.2% |
-| `faithfulness` | 1,312 | 19.8% |
-| `hedge_dropped` | 533 | 8.0% |
-| `lead_missing` | 453 | 6.8% |
-| `unsupported_number` | 211 | 3.2% |
-| `not_scored` | **0** | **0%** |
-
-**One summary in five is doubted because it does not line up with the article,
-and that is the largest single fault by a factor of two and a half.** The bands
-behind it are `high` 3,755, `medium` 1,817 and `low` 1,061.
-
-Two of those rows are worth reading twice.
-
-**`not_scored` has never fired.** It is drawn when no faithfulness score exists,
-and the scorer has run on every production item so far. The panel still declares
-it, and names it in a sentence under the plot rather than drawing an invisible
-line - a reader cannot otherwise tell a fault that never happened from one nobody
-looked for. The day the scorer is switched off, the line appears by itself.
-
-**`high` carries a reason on 0 of 3,755 items**, which is the rule above holding
-in the committed record rather than only in the function.
-
-### 369 summaries are doubted with no reason, and every one predates the field
-
-The five reasons total 2,509 while `medium` and `low` together total 2,878, so
-**369 doubtful summaries name nothing**. Measured per day, all 369 sit on three
-days: 2026-08-21 (4 of its 4 doubtful summaries), 2026-08-23 (52) and 2026-08-24
-(313). Every day from 2026-08-25 onward has **zero**. The two oldest days do not
-carry the `band_reason` key at all, and the next two carry it null on every item
-- the field was added to `DigestItem` after they were published.
-
-So the gap is a record we did not keep, not a reason the checker failed to give.
-The console says exactly that, in the panel, with the count: a column missing
-them is short by that much rather than clean. Reading a short column there as a
-quiet day is the same mistake as reading a zero as an absence, and this page has
-made that one before - see the 2,232 rows above that never measured the
-truncation gap.
-
-**Nothing is backfilled.** The band was written by a run that had already
-decided the reason and thrown it away, so recomputing one now would mean
-re-scoring those 369 items against today's scorer and stamping the answer onto a
-day another scorer banded. That publishes a number nobody measured on those items
-(Guardrail #10). Three days aging out of the widest console window costs less.
+Historical payload values remain readable without a rewrite or reconstruction
+from a score ledger. A retained run fragment is a recorded publication decision:
+recovery keeps its saved band and reason rather than rejecting unchanged work
+because today's policy would grade it differently. Content, item identity, run
+identity, planned counts, failed items and verticals must still match.
 
 ## Per-item scores cannot see drift
 
@@ -883,9 +818,12 @@ least one visual must have two named reviewers before a rate is quotable; this
 means agreement can be measured, not that it meets a threshold. No numerical
 agreement threshold is set here.
 
-**The band is one function (2026-08-23).** The old code had one function for rows with a faithfulness score and another function for rows without one. Only the first path wrote the eval row, so the counterweights were measured and then ignored by the reader-facing band. One function removes that split. Authority: Fowler.
-
-**Failed counterweights cap at `medium` (2026-08-23).** A dropped hedge reduces confidence, but it does not prove the whole summary false. Unsupported numbers still force `low`, because a wrong figure is a direct false claim. Authority: maintainer, resolving the known-defects open question.
+**Fresh confidence and historical decisions are different facts.** One shared
+verdict grades HHEM alone for newly written bands. An old score row can supply
+its raw HHEM for fresh publication, but an old published item cannot. Hiding an
+unrecoverable historical chip avoids relabelling a number/hedge decision as a
+faithfulness warning. Sealed fragments retain their recorded decisions during
+replay, while all unchanged-content and identity checks remain in force.
 
 **Two measures left and two arrived (2026-09-24).** `lead_coverage` and `new_fact_rate` are gone from the eval row; `coherence` and `semantic_coverage` replace them, both recorded only.
 
@@ -897,7 +835,11 @@ Coherence runs in the `work` shard, inside `to_eval_row`, because that is where 
 
 **Four things exist because of the band that went, and none is deleted here.** The `lead_missing` reason on published days, its slice on the console's doubt-reason panel, the `lead_missing` bucket on the day-metrics record, and the `LEAD_MISSING` enum member all stay, because committed days carry the reason and a reader of one of those days still has to be told why. Each now counts zero from 2026-09-24 onward.
 
-**Dropping the band input moves `scorer_version` once.** The derived string loses its `lead=` component, so every row written after this change carries a different instrument identity and the run-day count in `evaluation.label_min_run_days` restarts. `METRICS_VERSION` moves to `4` in the same change, which is what names why: two columns left the counterweight set and two arrived, so a row cannot be read as if it came from the same instruments.
+**A verdict change moves the checker bundle, not the HHEM instrument.**
+`METRICS_VERSION` is `5`, so newly derived scorer identities distinguish
+faithfulness-only bands from mixed-policy bands. The model, immutable revision,
+observed weights, window geometry and configured cuts do not move. Old rows keep
+their original identities; no instrument is invented when no row was evaluated.
 
 **Lead entities do not cross line breaks (2026-08-23).** The source's title and body can be adjacent without sentence punctuation. Treating the newline as ordinary whitespace created impossible entities such as `biodiversity loss\nwe`, which counted against the summary and could never match it. A line break now ends the entity run while spaces and tabs still join names inside one line, such as `US President Donald Trump`. Authority: Andre's metric boundary, implemented as a structural bug fix.
 
@@ -942,32 +884,21 @@ Coherence runs in the `work` shard, inside `to_eval_row`, because that is where 
 
 | Option | Why rejected | Authority |
 | --- | --- | --- |
-| Let lead coverage or a dropped hedge force `low` | It overcorrects. A good summary of a badly-extracted or narrow source can miss the lead and still be faithful to what it says. | maintainer |
 | Re-cut the faithfulness band thresholds to reduce the `high` share | A band share is not an error rate. Choosing 0.90 over 0.80 would choose how much of the digest is called `high` and only then discover what `high` means. The decision needs human labels, not more unlabelled rows. It also changes nothing the reader sees: `high` prints no item-level copy. | Andre, Reader |
 | Delete the four duplicate rows the old writer left in the ledger | They are an honest record of a run that really did re-summarize those items. The ledger is append-only, and rewriting history to make a denominator tidier is the band-aid, not the fix. | Fowler |
-| Keep `band_reason` on the eval row as well | It is derivable from four columns already on the row, and adding a column to a committed append-only CSV is a migration bought for nothing. | Fowler |
-| Print both reasons when both counterweights fail | Two sentences on one item in a meta row is a paragraph. A reader gets one thing to check. | Reader |
+| Keep `band_reason` on the eval row as well | Fresh reasons follow the HHEM score and configured cuts; historical publication decisions already live on the published item. | Fowler |
 
 ## Why this is a census and not a sample
 
-Scoring every changed item costs something, and the obvious economy is to score a sample instead - every third day, say, or only the sources that are easiest to work with. It was proposed, examined and rejected. The reasons are worth keeping, because the proposal will look sensible again in six months.
+The item-health census records every item. The faithfulness ledger is a
+different population: its evaluations may be sampled by run, as defined below.
+An aggregate must state which population it reads; a sampled score distribution
+is never a complete count of published items.
 
-**A per-item claim to a reader cannot be backed by a sample.** Every item on the page carries a confidence signal, and a low-confidence item publishes *marked*. If most items are never scored, most items have no signal, and there are only three things to do with them: render them unmarked, which silently turns "not measured" into "fine" on the reader's page; mark them "unchecked", which puts a caveat on almost the whole digest; or delete the signal. All three are worse than paying for the measurement.
-
-**Sampling by source is the one axis guaranteed to bias the result.** The sources that are cleanest to work with - institutions publishing one column of semantic HTML, in plain declarative prose - are exactly the ones the pipeline finds easiest. Scoring only those measures the system where it cannot fail. Worse, it disarms specific instruments: dropped hedges essentially never occur in institutional prose, so that metric would report zero forever and read as a passing test. And extraction rot - the slow failure this whole page exists to catch - concentrates on the messy sources a clean-source sample never fetches. That is a smoke detector installed in the room that cannot catch fire.
-
-**The economics do not justify it.** The deterministic counterweights are string operations - a rounding error against the cost of generating the summary in the first place. Only the faithfulness model costs anything real, and rationing it is a decision that should follow a measurement rather than precede one. The rule: measure the faithfulness scorer's share of per-item wall-clock, and if it exceeds a stated share of the budget, sample *it* alone, selected deterministically, and never below the rate at which a month-over-month comparison stays valid. The counterweights are never sampled. That rationing now exists, and it is drawn per run rather than within a day - see [The scorer is sampled by run, and nothing else is](#the-scorer-is-sampled-by-run-and-nothing-else-is) for why the earlier wording changed.
-
-**If a sample is ever taken, it is recorded and never left as an absence.**
-Nothing skips, so a missing row today cannot
-prove that work was skipped. Any future skip or sample reason must be explicit.
-And any aggregate built on a sample states its denominator in the open: a count
-that describes part of the digest may never be displayed as though it described
-all of it. Where that record lives followed the unit being sampled: a per-item
-draw would have needed a column on every row, and the per-run draw needs one cell
-on the run.
-
-**One thing to do regardless:** the reader-facing confidence signal is driven by the counterweights, which are a census by construction and cost nothing. The faithfulness score is the operator-facing instrument that calibrates the bands. That split keeps a reader-facing promise off the most expensive metric in the system.
+Sampling never invents confidence. An unsampled or otherwise unevaluated item
+publishes with `not_scored`; number and hedge checks do not substitute for the
+missing score. The manifest records the rate, draw and actual scorer identity
+so absence is not mistaken for a measured zero.
 
 ### The scorer is sampled by run, and nothing else is
 

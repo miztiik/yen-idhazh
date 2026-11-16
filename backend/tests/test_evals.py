@@ -43,7 +43,6 @@ from idhazh.evals.hhem import (
 from idhazh.evals.metrics import (
     EVIDENTIAL_TERMS,
     HEDGE_TERMS,
-    METRICS_VERSION,
     SPECULATIVE_TERMS,
     compression,
     evidential_density,
@@ -57,7 +56,7 @@ from idhazh.evals.metrics import (
     verbatim_run,
     word_count,
 )
-from idhazh.evals.score import band, to_eval_row
+from idhazh.evals.score import to_eval_row
 from idhazh.extract import to_article_with_source
 from idhazh.fetch import FetchResult
 
@@ -149,13 +148,6 @@ def test_semantic_coverage_does_not_grow_with_the_article() -> None:
     unchanged = semantic_coverage(_COVERAGE_SUMMARY, f"{_COVERAGE_SOURCE} {padding}", terms=5)
 
     assert unchanged == semantic_coverage(_COVERAGE_SUMMARY, _COVERAGE_SOURCE, terms=5) == 0.6
-
-
-def test_a_dropped_hedge_caps_high_at_medium() -> None:
-    assert (
-        band(0.99, unsupported_numbers=0, hedge_dropped=True, config=EvaluationConfig())
-        is ConfidenceBand.MEDIUM
-    )
 
 
 # --- The defect nothing else can see: a wrong number -----------------------
@@ -666,17 +658,6 @@ def test_a_page_left_whole_is_not_flagged_whatever_the_two_scores_did() -> None:
     assert not row.truncation_flagged
 
 
-def test_the_counterweights_did_not_change_meaning() -> None:
-    """Nothing in `metrics.py` moved for this column, so the constant may not either.
-
-    `METRICS_VERSION` sits inside `scorer_version`, and a new scorer version
-    restarts the ten-run-day count `docs/concepts/evaluation.md` requires before
-    any threshold may move. `truncation_flagged` is not a `band()` input and no
-    derived column reads it, so the stamp did not move for it.
-    """
-    assert METRICS_VERSION == "4"
-
-
 # --- Recorded, never flagged -------------------------------------------------
 
 
@@ -709,20 +690,9 @@ def test_scorer_version_spells_its_components() -> None:
         evaluation=EvaluationConfig(),
     )
     assert (
-        version == f"hhem-2.1-open@a1b2c3d4;weights-9f8e7d6c;metrics-{METRICS_VERSION};"
+        version == "hhem-2.1-open@a1b2c3d4;weights-9f8e7d6c;metrics-5;"
         "window=900/150/anchored;bands=0.80/0.50"
     )
-
-
-def test_the_counterweights_version_moved_when_the_set_of_counterweights_did() -> None:
-    """`METRICS_VERSION` names the definitions in `metrics.py`, and the set changed.
-
-    It stayed at 3 through a window geometry change and two added columns,
-    because none of those changed what an existing column meant. It moves to 4
-    because two columns LEFT and two arrived, so a row cannot be read as if it
-    came from the same set of instruments.
-    """
-    assert METRICS_VERSION == "4"
 
 
 def test_a_moved_window_moves_the_scorer_version() -> None:

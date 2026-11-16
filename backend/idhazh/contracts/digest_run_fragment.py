@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from typing import ClassVar
 
-from pydantic import Field
+from pydantic import ConfigDict, Field
 
 from idhazh.contracts.base import (
     ChangelogEntry,
@@ -39,12 +39,26 @@ class DigestRunFragment(Contract):
     """One run's block of a published day, before anything folds it in."""
 
     __schema_stem__: ClassVar[str] = "digest-run-fragment"
+    model_config = ConfigDict(
+        json_schema_extra={
+            "readCompatibility": (
+                "historical items and their recorded confidence decisions remain readable; "
+                "replay preserves sealed band/reason values while validating all other "
+                "saved content and run identity"
+            )
+        }
+    )
     #: What orders the blocks on the page, and the only order that keeps the
     #: never-reshuffle promise: a run's block lands where it landed. Both parts
     #: are required - two runs can finish in the same second, and the id is what
     #: separates them so the assembly is reproducible rather than arbitrary.
     __sort_key__: ClassVar[tuple[str, str]] = ("completed_at", "run_id")
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-11-15",
+            change="New confidence uses faithfulness alone; replay retains sealed decisions.",
+            why="A changed confidence policy must not invalidate unchanged completed work.",
+        ),
         ChangelogEntry(
             version="2026-10-20",
             change="Embedded item source kinds accept open identifiers.",

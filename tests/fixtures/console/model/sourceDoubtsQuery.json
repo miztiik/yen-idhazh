@@ -49,7 +49,7 @@
     {
       "date": "2026-08-20",
       "url_key": "bebf099ed6a0d1bb696bf05f9a1587a84d5d7ea53414a5f1209b3bed8b585ee2",
-      "band": "low",
+      "band": "high",
       "unsupported_numbers": 2,
       "hedge_dropped": false,
       "evidential_density": 0.011,
@@ -58,7 +58,7 @@
     {
       "date": "2026-08-20",
       "url_key": "e1ece4340223bec76c3b311050ecc5ebaece5f30bf18ed6e5338ab01c8ccd979",
-      "band": "medium",
+      "band": "high",
       "unsupported_numbers": 0,
       "hedge_dropped": true,
       "evidential_density": 0.011,

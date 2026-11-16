@@ -22,21 +22,21 @@ export const BANDS: Record<ConfidenceBand, BandCopy> = {
  * telling them what to look for when they click through, which is the only
  * thing they can do about it. Each sentence names one concrete absence.
  */
-export const BAND_REASONS: Record<BandReason, string> = {
-	unsupported_number: 'Our summary gives a figure the article does not.',
+export const BAND_REASONS: Record<BandReason, string | null> = {
+	unsupported_number: null,
 	not_scored: 'We could not check this summary against the article.',
 	lead_missing: 'Our summary leaves out names or figures from the opening.',
-	hedge_dropped: 'The article is more careful about this than our summary is.',
+	hedge_dropped: null,
 	faithfulness: 'Parts of our summary do not line up with the article.'
 };
 
-/** The sentence for an item, or the band label when nothing explains it.
+/** Only an explicit, still-visible reason can produce a reader warning.
  *
- * A day published before the reason existed carries none, and falls back to the
- * label it already showed.
+ * Historical number/hedge decisions and unexplained bands cannot establish
+ * HHEM confidence. A newer day/view wrapper supplies no item-level provenance.
  */
-export function bandSentence(band: ConfidenceBand, reason: BandReason | null): string {
-	return reason ? BAND_REASONS[reason] : BANDS[band].label;
+export function bandSentence(reason: BandReason | null): string | null {
+	return reason === null ? null : BAND_REASONS[reason];
 }
 
 /** Who is speaking. A vendor's own copy must not read like a reporter's. */

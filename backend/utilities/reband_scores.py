@@ -5,8 +5,8 @@ right history to keep, but it is the wrong column to read when the question is
 "what would these rows be under the current band function?"
 
 **It reaches every row the ledger holds.** Re-banding needs each row's own
-`hhem`, `coverage`, `unsupported_numbers` and `hedge_dropped`, and the scores
-ledger keeps every row for ever, so no month is left out of the denominator.
+`hhem`, and the scores ledger keeps every row for ever, so no month is left
+out of the denominator.
 """
 
 from __future__ import annotations
@@ -26,13 +26,11 @@ from idhazh.contracts.ledger_name import LedgerName
 from idhazh.evals import writer
 from idhazh.evals.score import band
 
-REQUIRED_COLUMNS = ("band", "hhem", "unsupported_numbers", "coverage", "hedge_dropped")
+REQUIRED_COLUMNS = ("band", "hhem")
 ORDERED_BANDS = (ConfidenceBand.HIGH.value, ConfidenceBand.MEDIUM.value, ConfidenceBand.LOW.value)
 REASON_ORDER = (
-    "lead coverage",
-    "dropped hedge",
-    "lead coverage and dropped hedge",
-    "unsupported numbers",
+    "faithfulness",
+    "not scored",
 )
 
 
@@ -45,22 +43,8 @@ class RebandReport:
     reasons: Counter[str]
 
 
-def _bool_cell(value: str) -> bool:
-    return value.strip().lower() == "true"
-
-
 def _faithfulness(value: str) -> float | None:
     return float(value) if value.strip() else None
-
-
-def _reason(row: dict[str, str], config: EvaluationConfig) -> str:
-    dropped_hedge = _bool_cell(row["hedge_dropped"])
-    unsupported = int(row["unsupported_numbers"] or 0) > 0
-    if dropped_hedge:
-        return "dropped hedge"
-    if unsupported:
-        return "unsupported numbers"
-    return "other"
 
 
 def read_rows(path: Path) -> list[dict[str, str]]:
@@ -101,17 +85,13 @@ def reband(rows: Iterable[dict[str, str]], config: EvaluationConfig) -> RebandRe
     for row in rows:
         total += 1
         old = row["band"]
-        new = band(
-            _faithfulness(row["hhem"]),
-            unsupported_numbers=int(row["unsupported_numbers"] or 0),
-            hedge_dropped=_bool_cell(row["hedge_dropped"]),
-            config=config,
-        ).value
+        faithfulness = _faithfulness(row["hhem"])
+        new = band(faithfulness, config=config).value
         recorded[old] += 1
         current[new] += 1
         if old != new:
             moves[(old, new)] += 1
-            reasons[_reason(row, config)] += 1
+            reasons["not scored" if faithfulness is None else "faithfulness"] += 1
 
     return RebandReport(
         rows=total,

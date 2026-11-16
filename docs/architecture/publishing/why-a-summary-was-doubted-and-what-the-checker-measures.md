@@ -72,15 +72,16 @@ Per-call charging follows
 
 ## Why a summary was doubted, and the one ledger that can answer it
 
-The route draws the five reasons a summary failed to reach the top band, one
-column a day, over the window the page shares. The measure cards above it say how
-often the checker stopped; this says which check failed.
+The existing route draws recorded reasons a summary failed to reach the top
+band, including historical decisions, one column a day over its shared window.
+It is not a count of the warnings the current reading surface displays.
 
 **It reads the committed day payloads, not the eval ledger.** `band_reason` is
-decided by `verdict` and written onto the published item by `assemble.build_day`.
-The eval ledger's 35 columns carry the inputs a reason is decided from - `hhem`,
-`coverage`, `unsupported_numbers`, `hedge_dropped` - and the band, and no reason
-column at all. The route reads only the publication inventory's named day payloads,
+decided by `verdict` and written onto the published item during assembly.
+Fresh decisions use only the saved `hhem`, or explicitly `not_scored` when no
+evaluation exists. The raw eval ledger retains its recorded band and existing
+diagnostic columns, but has no reason column. The route reads only the
+publication inventory's named day payloads,
 and what ships is one count per reason per day
 rather than the payloads. Re-deriving the reason from the ledger's inputs was
 refused: it puts a second copy of `verdict` in a second language, and the day the
@@ -286,6 +287,12 @@ Its stage control retains the model-stage readings in the native record. Summari
 mounts no refusal chart and starts no second failed-rule query.
 
 ## Design rationale
+
+Reader warnings follow the
+[confidence compatibility rule](../../concepts/evaluation.md#the-band-says-what-is-missing-not-how-good-the-item-is):
+historical number/hedge chips and unexplained low/medium chips render nothing.
+The existing console panels still consume recorded decisions and raw diagnostics;
+changing fresh confidence does not remove those consumers or rewrite history.
 
 The combined model-change comparison is permanently removed, with no hidden
 or relocated replacement. The
