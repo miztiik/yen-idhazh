@@ -118,6 +118,7 @@ test('article timing panels follow the newest item record despite lagging host/c
 	await hydrated(page);
 	await settled(page);
 	await expect(page.locator('[data-run-timeline]')).toHaveAttribute('data-run-timeline', `${THROUGH}-1`);
+	await expect(page.locator('[data-run-timeline]')).toContainText('1 recorded shard.');
 	const ranking = page.locator('[data-console-panel-id="slowest-articles"]');
 	await expect(ranking).toHaveCount(1);
 	await expect(ranking.locator('[data-slowest-run]')).toHaveAttribute('data-slowest-run', `${THROUGH}-1`);
