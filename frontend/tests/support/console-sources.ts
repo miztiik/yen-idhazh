@@ -16,7 +16,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	src: ['app.d.ts', 'query-engine-assets.d.ts', 'service-worker.ts'],
 	'src/lib': [
 		'archive-calendar.ts', 'bands.ts', 'chart-evidence.ts', 'day-shape.ts', 'feed-health.ts', 'format.ts',
-		'links.ts', 'offline.generated.ts', 'offline.ts', 'readstate.ts', 'reveal.ts', 'theme.ts'
+		'links.ts', 'offline.generated.ts', 'offline.ts', 'readstate.ts', 'reveal.ts', 'theme.ts', 'track-utc-day.ts'
 	],
 	'src/lib/assist': [
 		'day.ts', 'encoder.ts', 'index.ts', 'loader.ts', 'month.ts', 'search.ts', 'session.ts', 'weights.ts'
@@ -36,7 +36,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	],
 	'src/lib/components': [
 		'ArchiveSearch.svelte', 'ChartReadout.svelte', 'ChoiceTiles.svelte',
-		'ConfidenceChip.svelte', 'ConsoleNav.svelte', 'DayNotice.svelte',
+		'ConsoleNav.svelte', 'DayNotice.svelte',
 		'DigestItem.svelte', 'DigestList.svelte', 'EmptyDay.svelte', 'FailureList.svelte', 'FailureRuleRanking.svelte',
 		'FilterBar.svelte', 'FoundStories.svelte', 'ItemMeta.svelte',
 		'ItemVisual.svelte', 'KpiCard.svelte', 'LeadingStories.svelte', 'LensChips.svelte',

@@ -20,6 +20,8 @@ test('the integrated Summaries route reads the native record and keeps all panel
 	await expect(page.locator('[data-run-length]')).not.toHaveCount(0);
 	await expect(page.locator('[data-histogram="item-writing"]')).toHaveCount(1);
 	await expect(page.locator('[data-match-day]')).not.toHaveCount(0);
+	await expect(page.locator('[data-console-panel-id="faithfulness"] [data-model-match-note]'))
+		.toHaveText('For a flagged summary: Automated check found a possible mismatch. Read the original.');
 	await page.locator('[data-model-table-control] > summary').click();
 	await expect(page.locator('[data-instrument="coherence"]')).not.toHaveCount(0);
 	for (const id of ['model-cards', 'summary-length']) {

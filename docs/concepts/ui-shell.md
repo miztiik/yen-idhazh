@@ -1,6 +1,6 @@
 # UI Shell
 
-**Last Updated**: 2026-11-11
+**Last Updated**: 2026-11-16
 
 **Known noncompliance:** Existing prerendering does not meet [Telemetry Intent](telemetry-intent.md) and will be removed as existing pages migrate. All new designs, charts and visuals must render in the browser; none may be prerendered.
 
@@ -78,7 +78,9 @@ Loaded content is the normal case. Design these five additional states:
 2. **Missing:** the host returns 404 or 410 for the requested day. Offer the archive.
 3. **Waiting:** the request is pending. A reading page names the wait after `ui.payload_slow_ms`, without a spinner, skeleton or progress bar. Console panels reserve their dimensions immediately and shimmer only after `console.shimmer_after_ms`.
 4. **Unreachable:** another fetch failure occurred. Keep existing content, name the failed request, offer retry and list days available offline.
-5. **Degraded:** show low-confidence, truncated or missing-visual items inline.
+5. **Degraded:** keep truncated or missing-visual items readable inline. Reader
+   pages show no summary-quality warning or quality glyph; quality evaluation
+   remains in the backend and operator console.
 
 Never report a failed connection as an unpublished day. Never clear usable content
 or leave a blank page because another request failed.
@@ -89,14 +91,29 @@ The stream runs newest first without dropping published stories or changing the
 editorial leading block ([placement.md](placement.md)). Put each story's own
 absolute UTC timestamp beside its heading, not on a shared rail or behind hover.
 
-Use a numeric clock. Add a date when it differs from the viewed day, and the year
-when needed. Mark first-sighting time as such; never present it as the feed's time.
-If `time_source` is unknown, show no time. If an older record has no attribution,
-do not invent one. A relative time may supplement, never replace, the absolute one.
+Use `HH:mm UTC` only when both the viewed edition and the story's publication
+day are actual UTC today. Otherwise print `DD MMM YYYY HH:mm UTC`, for example
+`15 Nov 2026 23:30 UTC`, including a two-digit day and the year. Every dated
+article on an archived edition gets its full publication date, even when it
+matches that edition. A previous-day article in today's edition also gets its
+full date. Never substitute the edition date for the story's own date.
 
-Use the same type as the other item metadata and label each clock `UTC`. On a
-dated page the stamp replaces the day link; search results keep the day link
-instead. These rules apply to browser-rendered content too.
+Resolve today from the mounted reader's UTC clock, not the build time or payload
+generation time. Refresh at UTC midnight and when the page becomes visible,
+regains focus or returns from the browser's page cache. Before the browser clock
+is available, including without JavaScript, keep the full date rather than
+guessing that the edition is today.
+
+Mark first-sighting time as such; never present it as the feed's publication
+time. If `time_source` is unknown, show no time. If an older record has no
+attribution, do not invent one. A relative time may supplement, never replace,
+the absolute one.
+
+Use the same type and wrapping as the other item metadata and label each clock
+`UTC`. The semantic time element retains the original timestamp in `datetime`;
+only its visible label changes. On a dated page the stamp replaces the day link;
+search results keep the day link instead. These rules apply to browser-rendered
+content too.
 
 ## What the shell must never do
 

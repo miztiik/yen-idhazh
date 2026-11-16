@@ -72,6 +72,9 @@ test('a reader can load stories, filter the day and keep the layout usable on a 
 	await expectFullArticleWidth();
 	await expect(page.locator('[data-time-note]')).toHaveCount(0);
 	await expect(stories.locator('[data-item-time]').first()).toContainText('UTC');
+	await expect(stories.locator('time[data-item-time]').first())
+		.toHaveAttribute('datetime', /^\d{4}-\d{2}-\d{2}T.+Z$/);
+	await expect(stories.locator('[data-band], [data-band-reason]')).toHaveCount(0);
 
 	await expect(page.locator('[data-leading]')).toBeVisible();
 	const leading = await page.locator('[data-leading]').boundingBox();
@@ -194,6 +197,18 @@ test('a reader can load stories, filter the day and keep the layout usable on a 
 		const response = await page.request.get(`/digest/${year}/${month}/${day}/digest.json`);
 		expect(response.ok()).toBe(true);
 		const published: DigestDay = await response.json();
+		const visibleIds = new Set(await stories.evaluateAll((nodes) => nodes.map((node) => node.id)));
+		const flagged = published.items.find((item) =>
+			visibleIds.has(item.item_id) && item.band !== 'high' && item.band_reason !== null
+		);
+		if (!flagged) throw new Error('the reader canary must display a recorded confidence concern');
+		const flaggedStory = page.locator(`article.item[id="${flagged.item_id}"]`);
+		await expect(flaggedStory.locator('[data-band], [data-band-reason]')).toHaveCount(0);
+		await expect(flaggedStory.locator('[data-item-foot]')).not.toContainText(
+			/Parts of our summary|We could not check this summary|Our summary leaves out|Automated check found/
+		);
+		await expect(flaggedStory.getByRole('link', { name: 'Read the original' }))
+			.toHaveAttribute('href', flagged.source_url);
 		const chart = published.items.find((item) =>
 			item.visual?.kind === 'chart' && item.visual.state === 'rendered'
 		);

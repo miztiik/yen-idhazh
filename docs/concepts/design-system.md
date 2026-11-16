@@ -1,6 +1,6 @@
 # Design System
 
-**Last Updated**: 2026-11-15
+**Last Updated**: 2026-11-16
 
 Shared rules for typography, layout, colour, motion and controls. [Console design](console-design.md) owns panel-specific presentation; [appearance configuration](config/appearance.md) owns tunable values.
 
@@ -17,7 +17,7 @@ New designs, charts and visuals render in the browser. Do not add prerendered da
 
 ## The state-driven styling pattern
 
-Reflect state through classes and `data-` attributes; let CSS render it. Loading, empty, degraded, truncated and low-confidence states must be explicit. Use payload metadata rather than a bespoke layout for each item.
+Reflect state through classes and `data-` attributes; let CSS render it. Loading, empty, degraded and truncated states must be explicit. Summary-confidence diagnostics belong to the operator console, not reader-facing warnings or coloured glyphs. Use payload metadata rather than a bespoke layout for each item.
 
 Inline styles are for genuinely dynamic values such as coordinates or computed widths. Fixed appearance belongs in tokens and classes.
 

@@ -1,6 +1,6 @@
 # What the summary console measures
 
-**Last Updated**: 2026-11-15
+**Last Updated**: 2026-11-16
 
 `/console/model/` answers what the model wrote, how long it took, and what it got
 wrong. Its panels are the retained measure cards, throughput, model read/write
@@ -112,6 +112,10 @@ fact at the size it is worth.
 at each of the two scores a published story is banded on - `band_high_min` and
 `band_medium_min` in [../../../config/idhazh.json](../../../config/idhazh.json),
 0.80 and 0.50 as committed. No reading is tinted and no day is coloured.
+The panel explains a flagged summary with "Automated check found a possible
+mismatch. Read the original." This guidance is operator-only; reader pages show
+neither confidence text nor a quality glyph. Scoring and saved bands are
+unchanged.
 
 **A rule under the axis floor is dropped, not handed over.** The floor rises to
 fill the panel with the range the days hold, and on the committed record it sits
@@ -123,14 +127,14 @@ rather than promising two. The doubt rule comes back on the day the floor drops
 to meet a figure beneath it, which is the day an operator opened the panel for.
 
 The distinction is between a threshold and a verdict. A rule across the scale
-says what a score has to clear before a reader is told the story matches its
-source; a coloured figure says this one is bad, which is a judgement no fifteen
+says what a score has to clear before it reaches the recorded high-confidence
+band; a coloured figure says this one is bad, which is a judgement no fifteen
 committed days can support. Until 2026-09-25 this page refused both, on the
 ground that a threshold taken off this window would be a guess wearing a
 measurement's clothes. That reasoning was sound and answered a different
 question: these two were never taken off this window. They are already in force -
 every published item carries the band they decide - so a panel that hid them was
-an operator panel disagreeing with the page a reader sees. Susan and Andre,
+an operator panel hiding the policy recorded on published items. Susan and Andre,
 2026-09-25. What it cost: an operator can no longer read the plot as a bare
 measurement, because a line on it is policy. What it bought: the plot now
 answers the question the operator actually has, which is whether today's

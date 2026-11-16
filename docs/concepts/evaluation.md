@@ -1,6 +1,6 @@
 # Evaluation
 
-**Last Updated**: 2026-11-15
+**Last Updated**: 2026-11-16
 
 How a published summary is judged, and how the judgement is kept honest. This page fixes the vocabulary; the tunable bands live in [config/summary-length.md](config/summary-length.md).
 
@@ -256,13 +256,18 @@ Not to be done: seeding the queue with model pre-labels for a human to confirm. 
 
 ## Bands, not raw numbers
 
-Scores are bucketed into a small number of confidence bands, and the band - not the number - is what drives behaviour: what gets retried, what publishes with a visible low-confidence marker, and what a reader sees. Bands are tunable ([config/summary-length.md](config/summary-length.md)) and are re-calibrated against the human spot-checks rather than being fixed by taste.
+Scores are bucketed into a small number of confidence bands for recorded
+evaluation and operator inspection. Reader pages show neither confidence text
+nor a quality glyph. Bands are tunable
+([config/summary-length.md](config/summary-length.md)) and are re-calibrated
+against the human spot-checks rather than being fixed by taste.
 
 The absolute summary gate starts at
 `summarize.length_policy.absolute_floor_words = 25`. That lets the brief band ask
 for 30 to 45 words without the decoder padding a short source to the old floor.
 
-A low-confidence item still publishes, marked. Hiding it would make the digest look better than it is, which is the opposite of the point.
+A low-confidence item still publishes. Its saved band and reason remain
+available to operators without adding a reader-facing quality marker.
 
 There is one band function. Fresh publication grades only `EvalRow.hhem` against
 `evaluation.band_high_min` and `evaluation.band_medium_min`, including when the
@@ -277,8 +282,8 @@ The HHEM model, revision, weights, window and configured thresholds are unchange
 
 **The operator console draws both cuts.** `evaluation.band_high_min` and
 `evaluation.band_medium_min` are the two rules across the faithfulness plot on
-`/console/model/`, in the same words the published item uses - matches its
-source above the first, may not match below the second. They are read from
+`/console/model/` - matches its source above the first, may not match below
+the second. They are read from
 config rather than written into the chart, so re-cutting them moves the plot and
 the published band together. The panel spells the two lines out in plain words
 as well: each point is one day's middle summary, meaning half that day's
@@ -293,8 +298,8 @@ items before the number and hedge rules,
 because plenty of good articles and blogs open slowly and a summary that left
 the opening behind was not a worse summary for it. `BandReason.lead_missing`
 stays in the vocabulary for committed payload compatibility, but nothing
-produces it any more. The historical chip is suppressed when its HHEM grade
-cannot be recovered.
+produces it any more. Like every other confidence reason, it produces no
+reader-facing warning.
 
 Historical `band` cells and scorer identities remain time-of-write records.
 `backend/utilities/reband_scores.py` can report how their `hhem` values grade
@@ -584,15 +589,17 @@ publication.
 
 One function returns a band and its reason together. Fresh decisions produce
 `faithfulness` below the top band, `not_scored` without an evaluation, and no
-reason for `high`. The published item carries the identifier; the site owns
-the sentence.
+reason for `high`. The published item retains that identifier for compatibility
+and diagnosis, but reader pages render no confidence sentence, generic band
+label, coloured glyph or accessible quality warning for any band or reason.
+This includes historical reasons and items without a recorded reason. Source
+limitations and actual extraction-cut notices remain separate.
 
-The complete confidence chip is absent for historical `unsupported_number` and
-`hedge_dropped` reasons: no sentence, generic band label, dot or accessible
-warning remains. Reasonless historical `low` and `medium` items also show
-nothing, because their HHEM grade cannot be recovered. An absent reason is never
-converted to `not_scored`. Explicit `faithfulness` and `not_scored` warnings
-remain, as does the unselected historical `lead_missing` treatment.
+The operator console retains HHEM readings and confidence thresholds. Its
+guidance for a flagged summary is: "Automated check found a possible mismatch.
+Read the original." This describes a model estimate rather than asserting that
+the summary is wrong; it does not add a per-item console ranking or change
+publication decisions.
 
 ### The reason lives on the published item, not in the eval ledger
 
@@ -707,10 +714,11 @@ agreement threshold is set here.
 
 **Fresh confidence and historical decisions are different facts.** One shared
 verdict grades HHEM alone for newly written bands. An old score row can supply
-its raw HHEM for fresh publication, but an old published item cannot. Hiding an
-unrecoverable historical chip avoids relabelling a number/hedge decision as a
-faithfulness warning. Sealed fragments retain their recorded decisions during
-replay, while all unchanged-content and identity checks remain in force.
+its raw HHEM for fresh publication, but an old published item cannot. Reader
+Confidence marks are absent regardless of the recorded reason; no old
+number/hedge decision is relabelled as a model finding. Sealed fragments retain
+their recorded decisions during replay, while all unchanged-content and
+identity checks remain in force.
 
 **Coherence remains a recorded measurement, never a gate.** It compares
 neighbouring summary sentences using the retained sentence encoder; a repeated
@@ -728,7 +736,10 @@ instrument, geometry or cuts. No identity is invented for an unevaluated run.
 
 **The band and its reason are one function (2026-08-24).** Returning them separately would let a page print a reason that is not why. They travel together as one value, and the band-only helper is a wrapper with no logic of its own. Authority: Fowler.
 
-**The reason is an identifier and the sentence is copy (2026-08-24).** The published item carries `band_reason`; the site owns the words. Rewording a reader-facing sentence must not need a schema change, and the same identifier can read differently on a phone and in a feed. Authority: the identifier discipline in `docs/architecture/contracts/schemas.md`.
+**The reason is an identifier and the sentence is copy.** The published item
+carries `band_reason`; operator guidance can change without rewriting that
+record or its schema. Keeping confidence diagnostics off reader pages does not
+remove the retained HHEM evaluation or its provenance.
 
 **A re-observation writes no row (2026-08-24).** The page has said since it was written that an item whose inputs did not change writes no row at all, and the writer did not enforce it. The rule was the better one - a ledger of measurements, not of times the pipeline looked - so the code changed. Authority: Fowler, closing known defect 6.
 

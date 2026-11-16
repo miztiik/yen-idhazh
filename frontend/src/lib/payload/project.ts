@@ -66,9 +66,10 @@ export const VIEW_VERSION = '2026-11-11';
  */
 export const COVERAGE_NAMES_MAX = 3;
 
-// The fields a page renders, and no others. Traced along the render path rather
-// than guessed: `DigestList` scopes and filters the list, and `DigestItem` with
-// `ItemMeta`, `ItemVisual`, `LensChips`, `ConfidenceChip`, `ReadAloud` and
+// The served-item projection retains its existing confidence fields for payload
+// compatibility; reader components do not display them. `DigestList` scopes and
+// filters the list, and `DigestItem` with
+// `ItemMeta`, `ItemVisual`, `LensChips`, `ReadAloud` and
 // `SourceLink` draws one item. `source_url` is on it because it is the reader's
 // way out to the source, which is the most important thing on an item after the
 // summary itself.

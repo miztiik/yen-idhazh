@@ -52,6 +52,7 @@
 		read = false,
 		day,
 		onDate = '',
+		todayUtc = null,
 		needle = null,
 		onRead
 	}: {
@@ -76,10 +77,12 @@
 		 * are the same day or one apart, and printing both puts two dates on a
 		 * line that already holds four facts. */
 		day?: { date: string; href: string };
-		/** The date the page is reading, so a stamp from another day gets a date in
-		 * front of its clock. Empty on a search result, which has no one date and
-		 * draws the day link in this slot instead. */
+		/** The edition being read. Empty on a search result, which draws the day
+		 * link in this slot instead of a publication timestamp. */
 		onDate?: string;
+		/** Actual UTC today, supplied by the mounted reading page. Null before
+		 * mount keeps the full date instead of guessing from the edition. */
+		todayUtc?: string | null;
 		/** What the reader's field is narrowing by, already lowercased and trimmed.
 		 * Where it sits in the title and the summary is marked, so a reader who cut
 		 * 431 stories to twelve can see which word did it rather than re-reading
@@ -104,7 +107,7 @@
 	 * label with no fact under it. */
 	const when = $derived.by(() => {
 		if (day || !onDate) return null;
-		const time = itemTime(item.published_at, item.time_source, onDate);
+		const time = itemTime(item.published_at, item.time_source, onDate, todayUtc);
 		return time.form === 'none' ? null : time;
 	});
 	/** The topic this story is read under, published beside `data-vertical`.
@@ -169,11 +172,10 @@
 				{#if kindCopy.showOnItem}<span class="kind">{kindCopy.label}</span>{/if}
 			</span>
 
-			<!-- When, and the slot holds one thing at a time. On a dated page the date
-			     IS the page, so the story's own clock takes it and the day link is a
-			     fact the reader already has from the address. A search result spans
-			     days, so the link back takes it instead and no clock is drawn - two
-			     dates on a line capped at four things.
+			<!-- When, and the slot holds one thing at a time. A story carries its
+			     full publication date unless both it and the edition are UTC today.
+			     A search result spans days, so the link back takes this slot instead
+			     and no clock is drawn - two dates on a line capped at four things.
 
 			     The stamp is printed unattributed where the payload attributes it to
 			     nobody: 3,733 committed items predate `time_source`, and printing
@@ -185,11 +187,11 @@
 					{shortDate(day.date)}
 				</a>
 			{:else if when}
-				<span class="when" data-item-time={when.form}
+				<time class="when" datetime={item.published_at ?? undefined} data-item-time={when.form}
 					>{when.label}{#if when.form === 'first-seen'}&nbsp;<Icon
 							id="clock-alert"
 							size={14}
-						/>{/if}</span
+						/>{/if}</time
 				>
 			{/if}
 		</p>

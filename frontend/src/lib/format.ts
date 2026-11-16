@@ -60,18 +60,12 @@ export interface ItemTime {
 	form: TimeForm;
 }
 
-/** How many calendar days a stamp sits from the day being read. */
-function dayOffset(stamp: string, onDate: string): number {
-	const day = Date.parse(`${stamp.slice(0, 10)}T00:00:00Z`);
-	const anchor = Date.parse(`${onDate}T00:00:00Z`);
-	if (Number.isNaN(day) || Number.isNaN(anchor)) return 0;
-	return Math.round((day - anchor) / 86_400_000);
-}
-
 /** A story's own absolute time, labelled in UTC.
  *
- * A date precedes the clock when it differs from the day being read. Relative
- * time would become stale in a prerendered document.
+ * Only a story published today in today's edition gets a clock alone. Every
+ * other stamp includes its full date, even when it matches an archived edition.
+ * `todayUtc` comes from the mounted reader; null keeps the full date before the
+ * browser clock is available rather than freezing "today" into a static build.
  *
  * **The clock is still only ever attributed where the payload attributes it.**
  * `time_source: first_seen` means the feed's date was absent or rejected as
@@ -85,19 +79,20 @@ function dayOffset(stamp: string, onDate: string): number {
 export function itemTime(
 	publishedAt: string | null | undefined,
 	timeSource: string | null | undefined,
-	onDate: string
+	onDate: string,
+	todayUtc: string | null
 ): ItemTime {
-	if (!publishedAt) return { label: '', form: 'none' };
+	if (!publishedAt || timeSource === 'unknown') return { label: '', form: 'none' };
 	const clock = clockUtc(publishedAt);
-	const offset = dayOffset(publishedAt, onDate);
 	const date = publishedAt.slice(0, 10);
-	const sameYear = date.slice(0, 4) === onDate.slice(0, 4);
-	// The day being read needs no date in front of it; every other day does, and
-	// the year only when it is not the year on the page.
-	const stamp =
-		offset === 0 ? clock : `${sameYear ? date.slice(5) : date} ${clock}`;
+	const clockOnly = onDate === todayUtc && date === todayUtc;
+	// Reuse the shared month vocabulary, retaining the stamp's two-digit day.
+	const month = MONTHS[Number(date.slice(5, 7)) - 1]!.slice(0, 3);
+	const stamp = clockOnly
+		? clock
+		: `${date.slice(8, 10)} ${month} ${date.slice(0, 4)} ${clock}`;
 	if (timeSource === 'first_seen') return { label: stamp, form: 'first-seen' };
-	return { label: stamp, form: offset === 0 ? 'clock' : 'dated' };
+	return { label: stamp, form: clockOnly ? 'clock' : 'dated' };
 }
 
 /** A published block's paragraphs, in order.
