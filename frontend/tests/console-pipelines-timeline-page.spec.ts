@@ -1,18 +1,26 @@
 /** Recorded endpoints, cumulative costs and article inspection survive the real browser handoff. */
 import { expect, test } from './support/door-page';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import type { Row } from '../src/lib/data/ledger';
-import { newestRunRows } from '../src/lib/console/queries/shared';
+import { THROUGH, packedPipelines, servePipelines, timedRow } from './support/pipelines-ledgers';
 
 test('shard timings rank recorded windows and work independently, with articles on demand', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', (error) => errors.push(error.message));
 	page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
 	page.on('response', (response) => { if (response.status() === 404) errors.push(`404 ${response.url()}`); });
-	const answer = JSON.parse(readFileSync(resolve('..', 'tests', 'fixtures', 'console', 'pipelines', 'runTimelineQuery.json'), 'utf8'));
-	const rows = newestRunRows(answer.rows as Row[]);
-	const shards = [...new Set(rows.map((row) => Number(row.machine_shard)))];
+	const shards = [2, 7, 11, 19, 31, 43, 59];
+	const began = Date.parse(`${THROUGH}T00:00:00Z`);
+	const rows = shards.flatMap((shard, index) => [0, 1].map((article) => {
+		const start = began + index * 1000 + article * 2000;
+		const cost = (shards.length - index) * 100;
+		return timedRow(THROUGH, {
+			run_id: `${THROUGH}-2`, item_id: `article-${shard}-${article}`, machine_shard: shard,
+			item_started_at: new Date(start).toISOString(),
+			item_ended_at: new Date(start + (index + 1) * 5000 + article * 1000).toISOString(),
+			item_total_ms: 800 + cost, summarize_ms: 600 + cost, summary_ms: 430 + cost
+		});
+	}));
+	const root = await packedPipelines('timeline-sparse-shards', [{ covers: THROUGH, rows }]);
+	await servePipelines(page, root);
 	const zero = Math.min(...rows.map((row) => Date.parse(String(row.item_started_at))));
 	const end = Math.max(...rows.map((row) => Date.parse(String(row.item_ended_at))));
 	const expected = shards.map((shard) => {
@@ -26,6 +34,8 @@ test('shard timings rank recorded windows and work independently, with articles 
 	await page.goto('/console/');
 	const panel = page.locator('[data-run-timeline]');
 	await expect(panel).toHaveAttribute('data-timeline-view', 'elapsed');
+	await expect(panel).toHaveAttribute('data-timeline-shards', shards.join(' '));
+	await expect(panel).toContainText(`${shards.length} recorded shards`);
 	await expect(panel).toHaveAttribute('data-timeline-span-ms', String(end - zero));
 	await expect(panel.locator('[data-timeline-bar]')).toHaveCount(shards.length);
 	await expect(panel).not.toContainText('Items at once');
