@@ -1351,7 +1351,8 @@ def leading_stories(
     running story crosses desks and sources, so the first three caps do not
     bound it, and two of five about one subject means the day had fewer than
     five distinct stories worth leading. And stories the feed dated to
-    yesterday may hold `lead_max_yesterday`.
+    yesterday may take `lead_max_yesterday` seats ahead of today's; past that
+    they only fill a seat no story dated today could take.
 
     Below `leading_min` the block does not render at all. Four real leads beat
     five with one filler, and a day with too few is a day that goes straight to
@@ -1440,56 +1441,90 @@ def _desk_leads(items: Sequence[DigestItem]) -> dict[str, str]:
 def _take_leads(
     ordered: Sequence[LeadCandidate], *, date: str, ui: UiConfig
 ) -> tuple[list[LeadCandidate], dict[str, str]]:
-    """Walk the order once, take what every cap allows, and say what each cap cost.
+    """Walk the order, take what every cap allows, and say what each cap cost.
+
+    Stories the feed dated to yesterday take at most `lead_max_yesterday` seats
+    in the walk. One it sets aside for that is not refused: once the walk is done
+    it fills a seat left empty, strongest first, under the same desk, source and
+    subject caps, so it can never displace a story dated today. That keeps the
+    block alive in the first hours of a UTC day, when almost everything the feeds
+    carried is dated yesterday.
 
     The refusals come back with the block because a cap that turns a story away
     silently is a cap nobody can audit. Only the notable ones are logged, and
     that filter is the caller's.
     """
-    yesterday = (date_type.fromisoformat(date) - timedelta(days=1)).isoformat()
+    yesterday = _previous_day(date)
     taken: list[LeadCandidate] = []
     refused: dict[str, str] = {}
     per_desk: dict[str, int] = {}
     used_sources: set[str] = set()
     used_subjects: set[str] = set()
-    from_yesterday = 0
-    for candidate in ordered:
+
+    def refusal(candidate: LeadCandidate) -> str | None:
         item = candidate.item
         if len(taken) >= ui.leading_stories:
-            refused[item.item_id] = "block-full"
-            continue
+            return "block-full"
         if per_desk.get(item.vertical, 0) >= ui.leading_per_desk:
-            refused[item.item_id] = f"desk-full:{item.vertical}"
-            continue
+            return f"desk-full:{item.vertical}"
         if item.source_id in used_sources:
-            refused[item.item_id] = f"source-already-leading:{item.source_id}"
-            continue
+            return f"source-already-leading:{item.source_id}"
         # Every subject the title names, not only the one that scored. A story
         # about a subject already leading is the same story twice to a reader,
         # whether or not the cluster cleared the floor.
         clashing = [subject for subject in candidate.subjects if subject in used_subjects]
         if clashing:
-            refused[item.item_id] = f"subject-already-leading:{clashing[0]}"
-            continue
-        dated_yesterday = (item.published_at or "").startswith(yesterday)
-        if dated_yesterday and from_yesterday >= ui.lead_max_yesterday:
-            refused[item.item_id] = "yesterday-full"
-            continue
+            return f"subject-already-leading:{clashing[0]}"
+        return None
+
+    def take(candidate: LeadCandidate) -> None:
         taken.append(candidate)
-        per_desk[item.vertical] = per_desk.get(item.vertical, 0) + 1
-        used_sources.add(item.source_id)
+        per_desk[candidate.item.vertical] = per_desk.get(candidate.item.vertical, 0) + 1
+        used_sources.add(candidate.item.source_id)
         used_subjects.update(candidate.subjects)
+
+    from_yesterday = 0
+    set_aside: list[LeadCandidate] = []
+    for candidate in ordered:
+        reason = refusal(candidate)
+        if reason is not None:
+            refused[candidate.item.item_id] = reason
+            continue
+        dated_yesterday = _dated_to(candidate.item, yesterday)
+        if dated_yesterday and from_yesterday >= ui.lead_max_yesterday:
+            set_aside.append(candidate)
+            continue
+        take(candidate)
         from_yesterday += int(dated_yesterday)
+    for candidate in set_aside:
+        reason = refusal(candidate)
+        if reason is None:
+            take(candidate)
+        else:
+            refused[candidate.item.item_id] = reason
     return taken, refused
 
 
+def _previous_day(date: str) -> str:
+    """The UTC calendar day before `date`, as the `YYYY-MM-DD` a feed date starts with."""
+    return (date_type.fromisoformat(date) - timedelta(days=1)).isoformat()
+
+
+def _dated_to(item: DigestItem, day: str) -> bool:
+    """Whether the feed dated this story to the UTC calendar day `day`."""
+    return (item.published_at or "").startswith(day)
+
+
 def _log_leads(date: str, chosen: Sequence[LeadCandidate], omitted: Mapping[str, str]) -> None:
-    """The two counters this block ships with (section 1b).
+    """The counters this block ships with (section 1b).
 
     Line coverage is the share of leads carrying a real reason rather than the
     desk fallback, and it is a live risk rather than a formality: the matcher
     reads the title alone, and entities fire on 22.1 percent of items on a
     title-plus-body match.
+
+    `from_yesterday` is how many leads the feed dated to the previous day: the
+    catch-up seat plus every seat a thin day let yesterday's stories fill.
 
     The omission log is the other half. No story a reader could see the case
     for - a subject several sources are writing about, or an address more than
@@ -1497,12 +1532,14 @@ def _log_leads(date: str, chosen: Sequence[LeadCandidate], omitted: Mapping[str,
     rule excluded it.
     """
     real = sum(1 for entry in chosen if not entry.from_desk_fallback)
+    yesterday = _previous_day(date)
     LOG.info(
-        "leading stories date=%s block=%s real_reasons=%s coverage=%s",
+        "leading stories date=%s block=%s real_reasons=%s coverage=%s from_yesterday=%s",
         date,
         len(chosen),
         real,
         f"{real / len(chosen):.2f}" if chosen else "n/a",
+        sum(1 for entry in chosen if _dated_to(entry.item, yesterday)),
     )
     for item_id, refusal in sorted(omitted.items()):
         LOG.info("leading stories date=%s omitted item=%s because=%s", date, item_id, refusal)

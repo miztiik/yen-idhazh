@@ -1,6 +1,6 @@
 # Source Discovery
 
-**Last Updated**: 2026-11-06
+**Last Updated**: 2026-11-16
 What the Collect stage consults, how those sources are organised, and how that organisation is changed without breaking a payload an earlier run wrote. Collect is one of the two stages that see the whole day ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape of what it sees.
 
 ## Three primitives, not one
@@ -276,8 +276,8 @@ every story reads null and a null is unknown rather than a claim about a clock.
 
 **Four caps then bound the block**, and each answers a different question: a
 desk may hold `ui.leading_per_desk`, a `source_id` may hold one, a **subject**
-may hold one, and stories the feed dated to the previous day may hold
-`ui.lead_max_yesterday`. The subject cap is the one that is not obvious. A
+may hold one, and stories the feed dated to the previous day may take
+`ui.lead_max_yesterday` seats ahead of today's. The subject cap is the one that is not obvious. A
 running story crosses desks and sources, so the first three do not bound it -
 three of five would clear all of them - and a subject that genuinely deserves
 two of five means the day had fewer than five distinct stories worth leading.
@@ -293,6 +293,15 @@ cannot be gamed and two builds of one day are identical.
 **Below `ui.leading_min` the block does not render.** Four real leads beat five
 with one filler.
 
+**Yesterday's stories fill the seats today has no story for.** The walk takes
+stories dated to the previous day in score order only up to
+`ui.lead_max_yesterday`. A story it sets aside for that is not refused: when the
+walk ends with the block short, the set-aside stories fill the remaining seats,
+strongest first, under the same desk, source and subject caps. They arrive after
+every story dated today has had its turn, so they never displace one, and the
+block still has to reach `ui.leading_min` to render. The build log's
+`from_yesterday` counts how many leads the feed dated to the previous day.
+
 **A full block is a property of a finished day.** The caps only bind when there
 are stories left for them to turn away, and a day is built up over several runs
 into one `date -u +%F`, so the most recent date on disk is a fraction of itself
@@ -304,6 +313,35 @@ it counts the pool from the line the build log already writes for every story a
 cap turned away, rather than running the selection a second time, so a day that
 ran out of stories and a cap that refused them cannot be read as the same
 failure.
+
+#### Why yesterday's stories fill a short block instead of being refused
+
+The cap exists so the block leads with today's stories, and it did, but it also
+removed the whole block in the first hours of a UTC day, when almost every story
+the feeds carry is still dated to the day before. Measured 2026-11-16 by
+replaying the committed config over the first published payload of each of the
+27 days from 2026-10-21: 8 had no block. The one that prompted the change held 58
+stories, 2 of them dated to its own day. The catch-up seat and those left 2
+leads, one under `ui.leading_min`, and four eligible stories were refused only
+for their date.
+
+With the fill, every one of those 8 first payloads gets a full block, and 15 of
+the 27 change in all (the other 7 held 3 or 4 leads and now hold 5). The 25
+finished days from 2026-10-22 to 2026-11-15 each ended on 5 leads, none dated to
+the day before, so a finished day does not change.
+
+The cost is age: of the 35 leads dated to the day before on those 8 first
+payloads, 2 were over 12 hours old at build time and the oldest was 16.9. The
+freshness multiplier already ranks older stories last, so a limit on the fill's
+age is the next lever and is not built.
+
+Rejected alternatives:
+
+| Option | Why rejected |
+| --- | --- |
+| Raise `ui.lead_max_yesterday` to 3 | Fixes the 8 empty days with a 3 or 4 lead block, but also changes the 7 blocks that already existed and lets yesterday's stories outrank today's on every run. |
+| Lower `ui.leading_min` to 2 | Fixes 5 of the 8, with a two-story block. |
+| Retry with the cap lifted when the block is under the minimum | Lets yesterday's stories outrank today's inside that run, which the fill never does. |
 
 #### Why a shared subject is worth less than a second carrier
 

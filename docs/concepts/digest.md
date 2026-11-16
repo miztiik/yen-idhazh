@@ -1,6 +1,6 @@
 # Digest
 
-**Last Updated**: 2026-11-12
+**Last Updated**: 2026-11-16
 
 What a reader actually gets: the published surface, the item, and the rule that decides whether an item gets a picture. This page fixes the vocabulary and the invariants; the concrete layout and typography are Jony's territory and live in [ui-shell.md](ui-shell.md) and [design-system.md](design-system.md).
 
@@ -101,6 +101,11 @@ The day opens on at most five stories, chosen across the whole day, each
 carrying **one sentence saying why it is there**. Below three it does not
 render at all and the day goes straight to the stream: four real leads beat
 five with one filler.
+
+Stories dated to today come first. A story the feed dated to yesterday takes at
+most one seat ahead of them and otherwise only fills a seat no story dated today
+could, so the first hours of a UTC day, when nearly everything is still dated
+yesterday, open on a block rather than none.
 
 The `Top stories` index is a **way into the day and never a version of it**. Every lead is
 still in the stream below, in the published order, and every story a rule kept
