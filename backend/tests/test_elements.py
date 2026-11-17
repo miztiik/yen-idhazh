@@ -37,11 +37,12 @@ from support import canaries
 from support.paths import CONFIG_DIR, FIXTURES_DIR
 
 from idhazh import config, extract
+from idhazh.anchor_mentions import Mention
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import derive_text_digest, derive_url_key
 from idhazh.contracts.element import Element, ElementKind, ElementTable, Extractor
 from idhazh.contracts.feed_health import FetchOutcome
-from idhazh.contracts.knobs.extract import ElementsConfig
+from idhazh.contracts.knobs.extract import ElementsConfig, MentionUse
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.elements import Candidates, date_elements, element_table, quantity_elements, settle
 from idhazh.fetch import FetchResult
@@ -509,13 +510,13 @@ def test_the_settled_table_stays_in_the_article_s_own_order() -> None:
 
 
 def test_the_settle_rule_takes_the_two_pattern_kinds_and_no_other() -> None:
-    """A quote carrying a quantity is the shape the model-pointed kinds need.
+    """A quote carrying a quantity is the shape the name and place kinds need.
 
     This rule drops any element sharing a character with a higher-precedence
     one, so applied to those kinds it would delete one of the two. It ranks by
     `KIND_PRECEDENCE`, which names the two pattern passes and nothing else, so a
-    model-pointed kind raises here rather than being ranked by accident.
-    `classify.calls.anchored` merges them after this has run.
+    kind the text-analysis service labelled raises here rather than being ranked
+    by accident. `element_table` merges them after this has run.
     """
     quote = Element(
         element_id="quote-0-11",
@@ -675,3 +676,116 @@ def test_elements_cut_from_one_text_and_a_table_hashed_over_another_is_caught() 
     )
     assert mismatched.span_drift(pre_cap) is not None
     assert mismatched.span_drift(text) is None, "the elements are true of the text they were cut from"
+
+
+# --- The names and places the text-analysis service labelled ----------------
+
+
+def mentioned(text: str, label: str, words: str, *, nth: int = 0) -> Mention:
+    """One service mention over the `nth` place `words` occur, as the service would report it."""
+    start = -1
+    for _ in range(nth + 1):
+        start = text.index(words, start + 1)
+    return Mention(label, start, start + len(words))
+
+
+def test_a_name_becomes_one_element_cut_from_the_article_and_its_repeats_fold() -> None:
+    """Names and places are rows a chart can cite, and a repeat adds a row nobody needs."""
+    article = prose_article(
+        "Denmark approved 1200 MW of wind. Vestas won the tender in Denmark, and Denmark "
+        "approved 300 MW more."
+    )
+    text = article.text or ""
+    mentions = [
+        mentioned(text, "GPE", "Denmark"),
+        mentioned(text, "ORG", "Vestas"),
+        mentioned(text, "GPE", "Denmark", nth=1),
+        mentioned(text, "GPE", "Denmark", nth=2),
+    ]
+
+    table = element_table(article, config=ELEMENTS, mentions=mentions)
+
+    named = [e for e in table.elements if e.kind in (ElementKind.ENTITY, ElementKind.PLACE)]
+    assert [(e.kind, e.span_excerpt, e.span_start) for e in named] == [
+        (ElementKind.PLACE, "Denmark", text.index("Denmark")),
+        (ElementKind.ENTITY, "Vestas", text.index("Vestas")),
+    ]
+    for element in named:
+        assert element.extractor is Extractor.MODEL
+        assert (element.value, element.unit, element.entity, element.label_source) == (
+            None, None, None, None
+        )
+        assert text[element.span_start : element.span_end] == element.span_excerpt
+    assert table.candidates_found[ElementKind.PLACE] == 3, "every mention counts, kept or folded"
+    assert table.candidates_found[ElementKind.ENTITY] == 1
+    starts = [element.span_start for element in table.elements]
+    assert starts == sorted(starts)
+    assert table.span_drift(text) is None
+
+
+def test_a_date_time_or_ordinal_makes_no_element_and_drops_the_figure_row_it_covers() -> None:
+    """`3rd` and `5 June` read as quantities to the pattern and were never measurements."""
+    article = prose_article("The 3rd round closed on 5 June after 12 awards.")
+    text = article.text or ""
+    pattern_only = element_table(article, config=ELEMENTS)
+    assert [e.span_excerpt for e in pattern_only.elements] == ["3rd", "5 June", "12 awards"]
+
+    table = element_table(
+        article,
+        config=ELEMENTS,
+        mentions=[
+            mentioned(text, "ORDINAL", "3rd"),
+            mentioned(text, "DATE", "5 June"),
+            mentioned(text, "CARDINAL", "12"),
+        ],
+    )
+
+    assert [e.span_excerpt for e in table.elements] == ["12 awards"]
+    assert table.candidates_found == pattern_only.candidates_found, "the pass still matched them"
+
+
+def test_a_mention_that_cannot_be_an_element_is_dropped_alone_and_never_raises() -> None:
+    """The service can be wrong about one article, which costs that article its rows."""
+    article = prose_article("Vestas won in Denmark. " + " ".join(["word"] * 150) + " Siemens followed.")
+    text = article.text or ""
+    wide = text.index("word")
+    mentions = [
+        mentioned(text, "ORG", "Vestas"),
+        Mention("ORG", len(text) + 5, len(text) + 9),
+        Mention("ORG", 7, 7),
+        Mention("ORG", text.index(" "), text.index(" ") + 1),
+        Mention("ORG", wide, wide + 600),
+        Mention("WORK_OF_ART", 0, 6),
+        mentioned(text, "ORG", "Siemens"),
+    ]
+
+    table = element_table(article, config=ELEMENTS, mentions=mentions)
+
+    assert [e.span_excerpt for e in table.elements] == ["Vestas", "Siemens"]
+
+
+def test_the_label_map_decides_what_a_label_becomes_and_unmapped_labels_change_nothing() -> None:
+    """The substitution test: move `elements.label_kinds` and the kind moves with it."""
+    article = prose_article("Vestas won the tender.")
+    text = article.text or ""
+    org = mentioned(text, "ORG", "Vestas")
+    other = Mention("CARDINAL", 0, 6)
+
+    assert element_table(article, config=ELEMENTS, mentions=[other]) == element_table(
+        article, config=ELEMENTS
+    )
+    moved = ElementsConfig(label_kinds={"ORG": MentionUse.PLACE})
+    [element] = element_table(article, config=moved, mentions=[org]).elements
+    assert element.kind is ElementKind.PLACE
+
+
+def test_names_share_the_cap_with_the_pattern_rows_and_the_table_keeps_the_article_s_order() -> None:
+    """One cap over the whole table, so the menu and the window are sized by one number."""
+    article = prose_article("Vestas sold 1 unit, Siemens sold 2 units and Orsted sold 3 units.")
+    text = article.text or ""
+    mentions = [mentioned(text, "ORG", name) for name in ("Vestas", "Siemens", "Orsted")]
+
+    table = element_table(article, config=ElementsConfig(max_per_article=4), mentions=mentions)
+
+    assert [e.span_excerpt for e in table.elements] == ["Vestas", "1 unit", "Siemens", "2 units"]
+    assert table.candidates_found[ElementKind.ENTITY] == 3, "found is taken before the cap"

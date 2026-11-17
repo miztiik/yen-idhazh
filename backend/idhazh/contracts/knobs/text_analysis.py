@@ -58,10 +58,17 @@ class TextAnalysisConfig(Model):
         ),
     )
     request_timeout_seconds: float = Field(
-        default=60.0,
+        default=15.0,
         gt=0.0,
         description=(
-            "Seconds one analysis request may take before the item goes on without it."
+            "Seconds one analysis request may wait on the service before the item goes "
+            "on without its names, and it bounds each wait of the exchange: connecting, "
+            "sending, and the start of the reply. A service that holds a request open "
+            "therefore costs one item about this much, so the busiest shard's 80 items "
+            "cost at most 20 minutes rather than 80. The default is an estimate: about "
+            "five times the 2.7 s a cold first request took on a hosted runner, which is "
+            "the model loading; a warm request took about 16 ms. Raise it only after a "
+            "run shows a healthy service answering later than this."
         ),
     )
 

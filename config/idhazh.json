@@ -383,7 +383,7 @@
   "text_analysis": {
     "base_url": "http://127.0.0.1:3020",
     "language": "en",
-    "request_timeout_seconds": 60.0
+    "request_timeout_seconds": 15.0
   },
   "ui": {
     "archive_page_size": 25,

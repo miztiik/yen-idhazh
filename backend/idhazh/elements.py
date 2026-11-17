@@ -40,6 +40,12 @@ text at every span it is about to return and refuses a table it cannot cut, so
 the hash, the length and every excerpt provably describe one string. That is the
 write-time half of the span-drift invariant; the read-time half degrades one
 item and lives on `ElementTable.span_drift`.
+
+**The names and places arrive as `mentions` and are not found here.** The
+text-analysis service labels them and `anchor_mentions` turns them into elements,
+cutting every excerpt out of the article itself. `element_table` only composes
+the table: what the patterns found, what the mentions added, and which pattern
+rows the mentions show were never figures.
 """
 
 from __future__ import annotations
@@ -47,11 +53,12 @@ from __future__ import annotations
 import re
 from bisect import bisect_right
 from collections import Counter
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Final, NamedTuple
 
+from idhazh.anchor_mentions import Mention, anchor_mentions
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import derive_text_digest, derive_url_key
 from idhazh.contracts.element import (
@@ -400,11 +407,11 @@ def settle(candidates: Iterable[Element]) -> list[Element]:
     spans are equal, nested either way round, or merely crossing.
 
     **It is the rule between the two pattern passes and takes no other kind.**
-    `KIND_PRECEDENCE` names the two it ranks, so a model-pointed kind reaching
-    here raises rather than being ranked by accident - and it must not be ranked
-    at all, because a quote carrying a quantity inside it is the shape those
-    kinds need and this rule would drop one of the two. `classify.calls.anchored`
-    merges them after this has run.
+    `KIND_PRECEDENCE` names the two it ranks, so a kind the text-analysis service
+    labelled reaching here raises rather than being ranked by accident - and it
+    must not be ranked at all, because a name inside a quantity's own words is
+    the shape those kinds need and this rule would drop one of the two.
+    `element_table` merges them after this has run.
 
     Quadratic in one article's candidates and bounded by the cap the caller
     passes, so it cannot grow with the archive (Guardrail #12).
@@ -420,25 +427,36 @@ def settle(candidates: Iterable[Element]) -> list[Element]:
     return sorted(kept, key=lambda item: item.span_start)
 
 
-def element_table(article: Article, *, config: ElementsConfig) -> ElementTable:
+def element_table(
+    article: Article, *, config: ElementsConfig, mentions: Sequence[Mention] = ()
+) -> ElementTable:
     """One article's candidates, and the text every span in them indexes.
 
     A pure function over one payload, so the pass is testable on its own and
     nothing has to be committed for it to be checked (CLAUDE.md section 4).
 
-    `elements.max_per_article` bounds each pass and then the settled table, so
+    `elements.max_per_article` bounds each pass and then the whole table, so
     neither a runaway pattern nor two passes together can put more elements in
     an article than the knob names.
+
+    **`mentions` add the names and the places, and take away figures that were
+    never figures.** They are what the text-analysis service labelled in this
+    same text (`anchor_mentions`): an `entity` or a `place` element for each
+    distinct name, and no element for a date, a time or an ordinal - whose
+    characters drop any regex quantity row they overlap, because `3rd` and `10 a.m.`
+    were never a measurement. Named rows are merged after `settle`, which ranks
+    only the two pattern kinds, and then one cap applies to everything, in the
+    order the article wrote it. A caller that passes none gets the table the
+    patterns alone make, byte for byte.
 
     **The table is re-sliced before it is returned, and that is the write-time
     half of the span-drift invariant.** It is what makes decision 3 mechanical:
     the hash, the length and every excerpt come out of one call against one
     string, and the re-slice proves it rather than the call site promising it.
-    Neither pattern pass can fail it, because each cuts its excerpt at its own
+    Neither pass can fail it, because each cuts its excerpt at its own
     offsets - so the failure it exists for is a caller that builds elements from
     one string and a table over another, which is what happens the first time
-    somebody reaches for the pre-cap body, and what a producer risks on
-    every article once a model proposes the location and code cuts at it.
+    somebody reaches for the pre-cap body.
 
     It raises rather than degrading because at this point the text is in hand
     and it is the string the excerpts came from, so a mismatch is this process's
@@ -448,6 +466,25 @@ def element_table(article: Article, *, config: ElementsConfig) -> ElementTable:
     text = article.text or ""
     dates = date_elements(text, limit=config.max_per_article)
     quantities = quantity_elements(text, limit=config.max_per_article)
+    named = anchor_mentions(
+        text,
+        mentions,
+        label_kinds=config.label_kinds,
+        sentence_starts=sentence_starts(text),
+    )
+    figures = [
+        quantity
+        for quantity in quantities.elements
+        if not any(
+            start < quantity.span_end and quantity.span_start < end
+            for start, end in named.not_figures
+        )
+    ]
+    candidates_found = {
+        ElementKind.QUANTITY: quantities.found,
+        ElementKind.DATE: dates.found,
+    }
+    candidates_found.update({kind: count for kind, count in named.found.items() if count})
     table = ElementTable(
         version=ElementTable.schema_version(),
         item_id=article.item_id,
@@ -455,11 +492,11 @@ def element_table(article: Article, *, config: ElementsConfig) -> ElementTable:
         canonical_url=article.canonical_url,
         source_text_hash=derive_text_digest(text),
         source_text_length=len(text),
-        elements=settle(dates.elements + quantities.elements)[: config.max_per_article],
-        candidates_found={
-            ElementKind.QUANTITY: quantities.found,
-            ElementKind.DATE: dates.found,
-        },
+        elements=sorted(
+            [*settle(dates.elements + figures), *named.elements],
+            key=lambda item: item.span_start,
+        )[: config.max_per_article],
+        candidates_found=candidates_found,
     )
     if (drift := table.span_drift(text)) is not None:
         raise SpanDriftError(f"the pass cannot re-slice its own output: {drift}")
