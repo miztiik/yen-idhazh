@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-11-12
+**Last Updated**: 2026-11-17
 
 Which workflows run, when they run, and what they may publish.
 The [workflow declarations](../../.github/workflows/) are authoritative.
@@ -71,6 +71,19 @@ Assemble after worker failures if planning succeeded and the run was not cancell
 Keep successful items and commit failure records; annotate a planned run that
 publishes nothing. Overlapping runs use distinct writer identities and the
 [commit protocol](../architecture/publishing/committing.md), not a shared queue.
+
+Each work shard also starts the local [text-analysis service](../architecture/text-analysis/text-analysis-api.md)
+before its model server, so the work stage can call it over loopback. The shard
+installs the service's own locked environment with `uv` and one spaCy model
+wheel: the language in `text_analysis.language` and that language's
+`default_profile` from `config/text-analysis/settings.json`. With no language
+configured, the preparation script installs every profile it declares. The
+service binds the loopback address in that same settings file, and the shard
+waits up to 60 seconds for its health route. A stop step ends it after the work
+step, whatever that step did. Nothing is cached, because every shard would save
+the same entry. The service log, events without article text, is uploaded with
+the model server's runtime log. The service only adds to what the work stage can
+do, so a failed install or start never fails the shard.
 
 Pages publication, digest assembly, vector backfill and CI's backend, site and
 browser jobs use the shared `publication-runtime` action. It installs Bun and
@@ -307,6 +320,12 @@ and [weight rules](site-weight.md).
   pushes in all. A quiet cron window cannot replace that lease.
 - Share blocks that must agree, but keep different article-selection rules separate.
   Use approved external action versions; local actions use the checked-out commit.
+- The text-analysis service runs beside the model server in each work job, not as
+  a job of its own. Article text then goes only to a process on the runner that
+  fetched it, at a loopback address committed in config, and never over a network
+  between runners ([CLAUDE.md Guardrail #11](../../CLAUDE.md)). The shard starts
+  the service as optional help, so one that will not start costs the shard's items
+  only what the service adds, not the shard.
 
 ## See also
 

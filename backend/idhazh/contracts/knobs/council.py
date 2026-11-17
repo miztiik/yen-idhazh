@@ -126,11 +126,11 @@ class CouncilConfig(Model):
         le=8,
         description=(
             "How many shards split one night. The workflow reads it to size its own "
-            "matrix, so it is the venue's number rather than a tenant's. 4, because one "
-            "llama-server on the configured weights already peaks at 12.57 to 13.16 GiB "
-            "and reaches 14.31 GiB with the shard's python - 96.0 percent of the 16 GB "
-            "runner, measured 2026-09-08 over four shards of run 2026-08-29-3. A second "
-            "server on one runner does not fit at all. The ceiling of 8 is what a GitHub "
+            "matrix, so it is the venue's number rather than a tenant's. 4, with a "
+            "runner of its own for each: one llama-server on the configured weights and "
+            "the shard's python held at most 10.04 to 11.62 GiB at once, 64 to 74 percent "
+            "of the runner's 15.61 GiB, measured 2026-11-16 over the eight work shards of "
+            "run 2026-11-16-43901478491. The ceiling of 8 is what a GitHub "
             "matrix job costs rather than a measured limit. A tenant may narrow it "
             "downward, so this is the ceiling and the default rather than an instruction."
         ),
