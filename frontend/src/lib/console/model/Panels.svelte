@@ -12,7 +12,6 @@
 	import { callEnding } from './call-ending';
 	import { faithfulness } from './faithfulness';
 	import { summaryLength } from './summary-length';
-	import { RECORDED } from '../eval-instruments';
 	import { median } from './rows';
 	import { completeModelRule } from './model-rule';
 	import { useNumberFormat } from '$lib/number-format-context';
@@ -60,10 +59,6 @@
 	<p data-comparison="each run's median (p50) length against its shortest and longest">Each run's median (p50) length against its shortest and longest.</p>
 	<div data-eval-panel="summary-length">
 		<RunLengths runs={lengths} width={chart.width_px} height={chart.height_px} tickDensity={chart.tick_density} readoutMaxShare={chart.readout_max_share} rule={lengthRule} />
-		<table><caption>{RECORDED.find((i) => i.id === 'compression')?.label}</caption><thead><tr><th>Run</th><th>Median compression</th></tr></thead>
-			<tbody>{#each lengths as run}<tr data-run-compression={run.runId}><th>{run.runId}</th><td data-instrument="compression">{run.compression === null ? 'not measured' : `${Math.round(run.compression * 100)}%`}</td></tr>{/each}</tbody>
-		</table>
-		<p>{RECORDED.find((i) => i.id === 'compression')?.note}</p><p>Nothing acts on these numbers.</p>
 		{#if 'changes' in lengthRule && lengthRule.note !== null}<p data-model-rule-empty={lengthRule.changes.length ? undefined : 'summary-length'} data-model-rule-unread="summary-length">{lengthRule.note}</p>{/if}
 	</div>
 {/if}
