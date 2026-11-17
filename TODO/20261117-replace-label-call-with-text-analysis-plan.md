@@ -27,6 +27,7 @@ Table B - Out of scope and its cost
 | B3 | A language check, a stored analysis, other service features | A non-English article goes through the English model and yields few names; nothing from the service is kept beyond the elements built from it | A consumer that needs it |
 | B4 | A subject link for scatter and bubble | Both stay enabled but cannot validate, because only the first call wrote the link | A code rule that links a figure to its subject |
 | B5 | Counting analysis time where the month fold sums elapsed time (`backend/idhazh/retention.py`, `backend/utilities/measure_ledgers.py`) | A folded month omits analysis time, under 0.1 percent of an item's time (an estimate); the first such month folds in 2028 | The next change to the fold, which needs its own version stamp |
+| B6 | More than two shards on one pipeline-test runner | The service refuses a third simultaneous request (429 BUSY; its settings cap at two), so that item publishes without names; the committed test cases hold one or two shards a runner | A test case that holds more shards a runner |
 
 ## 1. Status Reckoner
 
