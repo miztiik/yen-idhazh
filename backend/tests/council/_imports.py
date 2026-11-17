@@ -57,6 +57,7 @@ MODULE_NAMES = (
     "idhazh.contracts.knobs.run",
     "idhazh.contracts.knobs.similarity",
     "idhazh.contracts.knobs.summarize",
+    "idhazh.contracts.knobs.text_analysis",
     "idhazh.contracts.knobs.ui",
     "idhazh.contracts.knobs.visuals",
     "idhazh.contracts.knobs.windows",
