@@ -186,7 +186,7 @@ def refuse_a_miscounted_census(rows: Sequence[CorpusRow], meta: CorpusMeta) -> N
         raise ValueError(f"the census does not count its own window: {'; '.join(wrong)}")
 
 
-# --- The due checks --------------------------------------------------------
+# --- The due check ---------------------------------------------------------
 
 
 def _days_between(earlier: str, later: str) -> int:
@@ -203,18 +203,6 @@ def harvest_is_due(meta: CorpusMeta, *, date: str, every_days: int) -> bool:
     if meta.harvested_date is None:
         return True
     return _days_between(meta.harvested_date, date) >= every_days
-
-
-def prune_is_due(meta: CorpusMeta, *, date: str, every_days: int) -> bool:
-    """Whether the corpus squash should run today.
-
-    A repository the squash has never run on is due the first time this is
-    asked, which is why the run is recorded even when the squash finds nothing
-    to do - without it the check fires again tomorrow, and every day after that.
-    """
-    if meta.last_run is None:
-        return True
-    return _days_between(meta.last_run, date) >= every_days
 
 
 # --- The harvest -----------------------------------------------------------
