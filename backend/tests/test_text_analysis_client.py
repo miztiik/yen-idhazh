@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import urllib.request
 
 import pytest
 from support.analysis_service import RecordedAnalysis, closed_base_url, entities_reply
@@ -136,7 +137,13 @@ def test_a_closed_port_is_unreachable_and_asks_nothing_of_the_item(article_ok: A
 def test_the_text_goes_to_the_committed_address_and_never_to_a_proxy_the_environment_names(
     article_ok: Article, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """`http_proxy` moves a destination with nobody reading a diff, so the request ignores it."""
+    """`http_proxy` moves a destination with nobody reading a diff, so the request ignores it.
+
+    `urlopen` builds one opener the first time any code in the process uses it and keeps
+    it, so the test clears that one: a client that fell back to `urlopen` would otherwise
+    pass here whenever an earlier test had already used it.
+    """
+    monkeypatch.setattr(urllib.request, "_opener", None, raising=False)
     with RecordedAnalysis() as proxy, RecordedAnalysis() as service:
         for name in ("http_proxy", "HTTP_PROXY", "all_proxy", "ALL_PROXY"):
             monkeypatch.setenv(name, proxy.base_url)
@@ -147,6 +154,20 @@ def test_the_text_goes_to_the_committed_address_and_never_to_a_proxy_the_environ
     assert answer.outcome is Outcome.OK
     assert len(service.sent) == 1
     assert proxy.sent == []
+
+
+def test_a_redirect_is_refused_and_the_address_it_names_is_never_sent_the_text(
+    article_ok: Article,
+) -> None:
+    """307 is the status a client re-sends its body on, so it is the one that could leak."""
+    with RecordedAnalysis() as target:
+        with RecordedAnalysis(location=target.base_url + ANALYZE_PATH) as service:
+            answer = ask_for_mentions(article_ok, TextAnalysisConfig(base_url=service.base_url))
+
+    assert len(service.sent) == 1
+    assert answer.mentions == () and answer.outcome is Outcome.REFUSED
+    assert answer.http_status == 307
+    assert target.sent == []
 
 
 def test_the_client_asks_for_the_route_the_service_declares() -> None:

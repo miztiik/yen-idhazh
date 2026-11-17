@@ -50,9 +50,18 @@ ANALYZE_PATH: Final = "/api/2026-11-08/run-ner-spacy"
 #: The one feature asked for. Its result is the raw mention list this module reads.
 FEATURE: Final = "entities"
 
-#: No proxy, whatever the environment says. `urllib` otherwise honours `http_proxy` for
-#: a loopback address too, which would send the text wherever that value points.
-_OPENER: Final = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+def _open(request: urllib.request.Request, timeout: float) -> http.client.HTTPResponse:
+    """Send `request` with no proxy, whatever the environment says.
+
+    `urllib` otherwise honours `http_proxy` for a loopback address too, which would send
+    the text wherever that value points. The opener is built on every call so the
+    environment of the call is the one a test can set, and so no process-wide opener
+    kept from an earlier request can stand in for this one.
+    """
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    response: http.client.HTTPResponse = opener.open(request, timeout=timeout)
+    return response
 
 
 class Outcome(StrEnum):
@@ -151,7 +160,7 @@ def ask_for_mentions(article: Article, config: TextAnalysisConfig) -> Answer:
         method="POST",
     )
     try:
-        with _OPENER.open(request, timeout=config.request_timeout_seconds) as response:
+        with _open(request, config.request_timeout_seconds) as response:
             body = response.read()
     except urllib.error.HTTPError as error:
         # Before URLError and OSError, which it subclasses: a service that answered

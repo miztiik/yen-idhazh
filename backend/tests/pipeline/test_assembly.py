@@ -30,6 +30,7 @@ from ._builders import (
     plan,
     row,
     summary,
+    with_an_analysis_service,
 )
 
 
@@ -182,10 +183,13 @@ def test_a_dead_model_server_marks_every_item_without_parsing(
     run_plan = plan(item_count=2)
     monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
 
-    with SilentCompletionEndpoint(holds=False) as server:
+    with (
+        with_an_analysis_service(config.load(CONFIG_DIR)) as read,
+        SilentCompletionEndpoint(holds=False) as server,
+    ):
         stage_work(
             run_plan,
-            settings=config.load(CONFIG_DIR),
+            settings=read,
             scorer=None,
             fetcher=captured_article_fetch,
             model_endpoint=server.endpoint,
@@ -235,10 +239,13 @@ def test_a_hung_model_request_costs_one_item_not_the_shard(
     )
     monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
 
-    with SilentCompletionEndpoint(holds=True) as server:
+    with (
+        with_an_analysis_service(fast_settings) as read,
+        SilentCompletionEndpoint(holds=True) as server,
+    ):
         stage_work(
             run_plan,
-            settings=fast_settings,
+            settings=read,
             scorer=None,
             fetcher=captured_article_fetch,
             model_endpoint=server.endpoint,
@@ -300,10 +307,13 @@ def test_a_shard_out_of_clock_stops_itself_instead_of_being_killed(
     )
     monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
 
-    with a_server_that_refuses_every_completion() as server:
+    with (
+        with_an_analysis_service(out_of_time) as read,
+        a_server_that_refuses_every_completion() as server,
+    ):
         stage_work(
             run_plan,
-            settings=out_of_time,
+            settings=read,
             scorer=None,
             fetcher=captured_article_fetch,
             model_endpoint=server.endpoint,
@@ -320,6 +330,6 @@ def test_a_shard_out_of_clock_stops_itself_instead_of_being_killed(
     # The census row is built from this payload, so a skipped item with none
     # beside it reads `unknown` with "summary payload missing" - a throughput
     # problem filed as a mystery.
-    assert all(summary.call_1 is None for summary in refused), (
+    assert all(summary.call_1 is None and summary.call_2 is None for summary in refused), (
         "no item should have been sent to the model on a shard with no clock left"
     )

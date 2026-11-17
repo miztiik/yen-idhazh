@@ -6,14 +6,14 @@ import json
 import shutil
 import subprocess
 import threading
-from collections.abc import Callable, Iterator
-from contextlib import ExitStack, contextmanager
+from collections.abc import Callable, Iterable, Iterator
+from contextlib import AbstractContextManager, ExitStack, contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Final
 
 from pytest import MonkeyPatch
-from support.analysis_service import RecordedAnalysis, first_of, pointed_at
+from support.analysis_service import RecordedAnalysis, Span, first_of, pointed_at
 from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
 from support.server import RecordedEndpoint, render_template_response
 
@@ -97,10 +97,25 @@ WIND_COUNTRIES: Final = ("Denmark", "Germany", "Poland", "Ireland")
 
 
 @contextmanager
-def finding_the_wind_countries(settings: config.Settings) -> Iterator[config.Settings]:
-    """`settings` with the text-analysis service pointed at a stand-in that finds the countries."""
-    with RecordedAnalysis(first_of("ORG", *WIND_COUNTRIES)) as service:
+def with_an_analysis_service(
+    settings: config.Settings, spans_of: Callable[[str], Iterable[Span]] | None = None
+) -> Iterator[config.Settings]:
+    """`settings` with the text-analysis service pointed at a loopback stand-in the test owns.
+
+    Every test that runs the work stage over an article that extracts needs one, because
+    the stage asks the service for each such article: without it the request goes to the
+    committed port, which is whatever this machine happens to have listening there. By
+    default the stand-in finds nothing, so the table is the one the patterns alone make.
+    """
+    with RecordedAnalysis(spans_of) as service:
         yield pointed_at(settings, service.base_url)
+
+
+def finding_the_wind_countries(
+    settings: config.Settings,
+) -> AbstractContextManager[config.Settings]:
+    """The same, with a stand-in that labels the four countries the recorded wind plan cites."""
+    return with_an_analysis_service(settings, first_of("ORG", *WIND_COUNTRIES))
 
 
 def declining_wind_reply() -> bytes:
@@ -378,10 +393,13 @@ def work_then_assemble(run_plan: RunPlan, settings: config.Settings) -> None:
     nothing here is mocked (Guardrail #7). The text-analysis stand-in finds
     nothing, so no run depends on a port this machine happens to have open.
     """
-    with RecordedAnalysis() as service, a_server_that_refuses_every_completion() as server:
+    with (
+        with_an_analysis_service(settings) as read,
+        a_server_that_refuses_every_completion() as server,
+    ):
         stage_work(
             run_plan,
-            settings=pointed_at(settings, service.base_url),
+            settings=read,
             scorer=None,
             fetcher=captured_article_fetch,
             model_endpoint=server.endpoint,
@@ -435,9 +453,7 @@ def _work_stage(
         read = (
             settings
             if settings is not None
-            else pointed_at(
-                config.load(CONFIG_DIR), stack.enter_context(RecordedAnalysis()).base_url
-            )
+            else stack.enter_context(with_an_analysis_service(config.load(CONFIG_DIR)))
         )
         server = stack.enter_context(RecordedEndpoint(200, *replies, hold_s=hold_s))
         stage_work(

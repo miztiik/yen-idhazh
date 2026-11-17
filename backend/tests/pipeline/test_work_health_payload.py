@@ -42,6 +42,7 @@ from ._builders import (
     a_server_that_refuses_every_completion,
     captured_article_fetch,
     plan,
+    with_an_analysis_service,
 )
 from .test_degrade import headless_page_fetch, headless_plan
 
@@ -322,10 +323,13 @@ def test_an_item_the_shard_abandoned_leaves_a_row_too(
     )
     monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
 
-    with a_server_that_refuses_every_completion() as server:
+    with (
+        with_an_analysis_service(out_of_time) as read,
+        a_server_that_refuses_every_completion() as server,
+    ):
         stage_work(
             run_plan,
-            settings=out_of_time,
+            settings=read,
             scorer=None,
             fetcher=captured_article_fetch,
             model_endpoint=server.endpoint,
@@ -415,9 +419,12 @@ def test_controller_identity_reaches_process_fields_only_when_collection_is_enab
     def fetch_article(_url: str) -> FetchResult:
         return FetchResult(FetchOutcome.OK, status=200, body=html)
 
-    with a_server_that_refuses_every_completion() as endpoint:
+    with (
+        with_an_analysis_service(settings) as read,
+        a_server_that_refuses_every_completion() as endpoint,
+    ):
         stage_work(
-            run_plan, settings=settings, scorer=None, fetcher=fetch_article,
+            run_plan, settings=read, scorer=None, fetcher=fetch_article,
             model_endpoint=endpoint.endpoint, server_pid=None if collection == "no-pid" else 742,
         )
 
