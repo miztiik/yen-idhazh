@@ -58,7 +58,7 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 		'console-pipelines-lifecycle', 'console-pipelines-components',
 		'console-pipelines-cold', 'console-pipelines-days', 'console-pipelines-reserved',
 		'console-pipelines-retained-compression', 'console-pipelines-retained-failure',
-		'console-pipelines-retained-failures', 'console-pipelines-retained-item-cost',
+		'console-pipelines-retained-item-cost',
 		'console-pipelines-retained-window', 'console-pipelines-sufficiency',
 		'console-pipelines-timeline-page', 'console-pipelines-window-page'
 	],

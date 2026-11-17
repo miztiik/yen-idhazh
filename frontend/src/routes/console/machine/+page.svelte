@@ -162,6 +162,7 @@
 	const panelAnswers = $derived(groups.flatMap((group) => group.panels.map((id) => {
 		const state = panelState(id); return state === 'loading' ? 'pending' as const : { state } as LedgerReach;
 	})));
+	const routeAnswers = $derived([...panelAnswers, answers.runShardsQuery ?? 'pending']);
 	function complete(names: string[]) { return names.every((name) => ['ok', 'quiet'].includes(answers[name]?.state ?? 'loading')); }
 	const counterReady = $derived(complete(['platformMixQuery', 'articleCostQuery', 'runShardsQuery']));
 	const counters = $derived(countersFrom(counterReady ? rows('platformMixQuery') : [], counterReady ? rows('articleCostQuery') : [], counterReady ? rows('runShardsQuery') : [],
@@ -218,7 +219,7 @@
 </script>
 
 <svelte:head><title>Hardware &mdash; Console &mdash; {data.ui.site_title}</title><meta name="robots" content="noindex" /></svelte:head>
-<RouteStatus route="machine" answers={panelAnswers} days={windowDays} {through} shimmerAfterMs={shared.shimmer_after_ms} onRetry={retry}
+<RouteStatus route="machine" answers={routeAnswers} days={windowDays} {through} shimmerAfterMs={shared.shimmer_after_ms} onRetry={retry}
 	settledSuffix={counterReady ? `${formatNumber(countedRuns, cfg.chart.number_format, { exact: true })} ${countedRuns === 1 ? 'run' : 'runs'} counted.` : ''}>
 <div data-machine-start={start} data-machine-end={end} data-machine-run-count={counterReady ? countedRuns : undefined}>
 	<WindowControlSource route="machine" days={windowDays} {presets} {monthsFor} {ready} onChange={show}

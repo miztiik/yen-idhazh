@@ -1,6 +1,6 @@
 # Agent Notes - Gates and Builds
 
-**Last Updated**: 2026-11-09
+**Last Updated**: 2026-11-17
 
 Checks before trusting a test or build result. Commands belong in [run-the-gates.md](../../how-to/run-the-gates.md).
 
@@ -192,6 +192,16 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
   `frontend` before the run:
   ```powershell
   node node_modules/@sveltejs/kit/svelte-kit.js sync
+  ```
+
+- **A console spec fails on old data on Windows; the spec is right, `frontend/test-results/` is stale.**
+  `packedPipelines` writes fixed paths there and never clears them. DuckDB's
+  `COPY` writes a temp file first when the target exists; on Windows that left a
+  `tmp_*.parquet` beside the old file and the spec read the old one-row day
+  (seen 2026-11-17). The tell: a clean checkout of the same commit passes.
+  Delete the folder, then re-run:
+  ```powershell
+  Remove-Item -Recurse -Force frontend\test-results
   ```
 
 ## Two heavy gates on one box

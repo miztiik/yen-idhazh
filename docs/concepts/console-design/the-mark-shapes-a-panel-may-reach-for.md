@@ -335,6 +335,12 @@ the band. An optional `unit` on the series is printed after each of those
 readings, so a share reads `92%`. Faithfulness is the one caller, with
 `Median (p50)`, `Lower quartile (p25)` and `Upper quartile (p75)`.
 
+The value axis does not read that `unit`. A caller that needs one on its ticks
+passes `valueFormat: (value) => string`, which writes every tick of that axis;
+omitted, a tick uses the shared number style. Hardware prompt reuse is the one
+caller, so its axis reads `0%`, `50%` and `100%`. It is a primary-contract
+option: `LegacyDateSeriesOptions` refuses it, as it refuses `domain`.
+
 For elapsed time, optional `reconciliation: {elapsed, overlap}` supplies two
 named `SeriesInput` readings alongside a duration stack. Every measured day
 must have all its stack parts, elapsed time and a non-negative overlap

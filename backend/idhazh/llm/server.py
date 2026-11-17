@@ -582,6 +582,9 @@ def request_payload(
     The configured `max_tokens` limits the whole reply, including reasoning.
     An omitted limit uses `DEFAULT_MAX_TOKENS`. Reaching the limit remains
     a truncated reply, not a completed document.
+
+    The one caller outside the tests is the summary evaluator's generation step
+    (`tools/summary-eval`), which sends this body to the chat route.
     """
     payload: dict[str, Any] = {
         "model": model_id,

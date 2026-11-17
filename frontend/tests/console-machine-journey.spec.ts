@@ -236,6 +236,11 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 		}));
 	await expect.poll(contextFits).toBe(true);
 	await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+	const reuse = page.locator('[data-console-panel-id="prompt-reuse"]');
+	for (const call of ['summary', 'label']) {
+		await expect(reuse.locator(`[data-chart-name="prompt-reuse-${call}"] text`).filter({ hasText: /^100%$/ }),
+			`the ${call} call's cached-share axis carries a percent sign`).toHaveCount(1);
+	}
 	await page.setViewportSize({ width: 390, height: 844 });
 	await page.evaluate(() => window.scrollTo(0, 0));
 	await expect(page.getByText('Console menu', { exact: true })).toBeVisible();
@@ -331,6 +336,20 @@ test('a failed host index alone is retried while successful article and count fi
 	await settled(page);
 	await expect(page.locator('[data-fleet-shape]')).toHaveCount(1);
 	expect(successfulRequests).toEqual(before);
+	await expect(page.locator('[data-console-retry]')).toHaveCount(0);
+});
+
+test('a failed run-count index alone offers the same retry, and the run count follows it', async ({ page }) => {
+	const countIndex = /\/state\/compact\/run-shards\/index\/[^/]+\.json/;
+	await page.route(countIndex, (route) => route.abort('failed'));
+	await page.goto('/console/machine/');
+	await expect(page.locator('[data-console-panels="machine"]')).toHaveAttribute('data-route-state', 'unreachable');
+	await expect(page.locator('[data-panel-query="memory-held"]')).toHaveAttribute('data-machine-panel-state', 'ok');
+	await expect(page.locator('[data-machine-run-count]')).toHaveCount(0);
+	await page.unroute(countIndex);
+	await page.locator('[data-console-retry]').click();
+	await settled(page);
+	await expect(page.locator('[data-machine-run-count]')).toHaveCount(1);
 	await expect(page.locator('[data-console-retry]')).toHaveCount(0);
 });
 

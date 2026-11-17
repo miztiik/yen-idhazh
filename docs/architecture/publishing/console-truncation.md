@@ -1,6 +1,6 @@
 # What the truncation cap costs
 
-**Last Updated**: 2026-10-06
+**Last Updated**: 2026-11-17
 The truncation cap removes words from an article before the model ever reads
 them, and nothing about a published summary says it happened. The console says
 it in four places across three routes, and this page is what each of them is
@@ -49,10 +49,9 @@ lengths span more than two decades: a 400-word note and a 9,000-word feature sit
 on the same plot, and a linear axis puts every short source on the left edge.
 
 **One rule per cut point, not one rule.** `caps` is one entry per distinct
-post-cap length among the window's cut articles, oldest first - the same rule
-the compression plot reads its own lines by, so two drawings of one fact
-cannot disagree. A thirty-day window over the committed ledger holds two of
-them, 1,923 words and 3,846, because the cap moved on 29 August. Past the widest
+post-cap length among the window's cut articles, oldest first. A thirty-day
+window over the committed ledger holds two of them, 1,923 words and 3,846,
+because the cap moved on 29 August. Past the widest
 of them an article lost text whichever cut was in force, so the emphasised span
 starts there and says the strong thing; the narrower rule is drawn with its own
 dates, so the move is visible rather than averaged away.

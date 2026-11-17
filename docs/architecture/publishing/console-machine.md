@@ -40,6 +40,9 @@ not an answer. Reserved panel frames keep their explicit states: quiet says
 `Nothing recorded.`, missing says
 `Not published yet.`, and an unsuccessful fetch says `Did not arrive.`.
 The route retry re-asks only unsuccessful questions and keeps successful reads.
+The `run-shards` question that supplies the run count belongs to no panel, so
+its own answer joins the route status: a failed read of it offers the same retry
+rather than quietly dropping the count.
 An incompatible index remains unavailable until reload, as the native door requires.
 Changing the window cannot allow a late answer from the old request to replace
 the new one. Redraws and resizes reuse query rows.
@@ -111,7 +114,7 @@ Membership and order live in `config/console/machine.json`.
 | | `memory-held` | Existing memory split and overlapping process brackets, for the newest day |
 | | `context-headroom` | Label and summary request distributions on one logarithmic domain, with recorded context and cut-request rules |
 | What the model spends | `article-cost` | Existing processor-time, model-time and incremental-memory tracks over the chosen window |
-| | `prompt-reuse` | Summary call and label call, each one stacked bar a UTC day from 0 to 100 percent: the day's cached share of the call's prompt tokens at the bottom in the call's own colour, the remainder above it in the same colour tinted |
+| | `prompt-reuse` | Summary call and label call, each one stacked bar a UTC day from 0 to 100 percent, the axis reading 0%, 50% and 100%: the day's cached share of the call's prompt tokens at the bottom in the call's own colour, the remainder above it in the same colour tinted |
 | | `read-against-written` | Two run-sequence token lines; Run total or actual Median per article over one paired cohort, with measured/recorded coverage |
 
 Every settled panel has one largest lede, one comparison,
