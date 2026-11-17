@@ -712,10 +712,12 @@ def test_a_sixteen_column_item_health_row_reads_as_unmeasured() -> None:
     old.pop("fetch_ms")
     old.pop("extract_ms")
     old.pop("summarize_ms")
+    old.pop("analyze_ms")
 
     row = ItemHealthRow.from_csv_row(old)
 
     assert (row.fetch_ms, row.extract_ms, row.summarize_ms) == (None, None, None)
+    assert row.analyze_ms is None
 
 
 def test_unknown_detail_is_sanitized_guarded_and_fitted_to_its_column() -> None:

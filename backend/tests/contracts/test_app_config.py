@@ -6,6 +6,7 @@ import json
 import re
 from pathlib import Path
 from typing import Final
+from urllib.parse import urlsplit
 
 import pytest
 from pydantic import StrictBool, ValidationError
@@ -21,12 +22,14 @@ from idhazh.contracts.call_cost import CallKind
 from idhazh.contracts.knobs import placement
 from idhazh.contracts.knobs.console import ConsoleConfig
 from idhazh.contracts.knobs.evaluation import DriftConfig, EvaluationConfig
+from idhazh.contracts.knobs.extract import ElementsConfig
 from idhazh.contracts.knobs.ledger import LedgerConfig
 from idhazh.contracts.knobs.model_server import ModelServerConfig, is_loopback, resolve_base_url
 from idhazh.contracts.knobs.observability import LoggingConfig, ObservabilityConfig
 from idhazh.contracts.knobs.placement import SameStoryConfig, SimilarityThresholdConfig
 from idhazh.contracts.knobs.retention import PAGES_HARD_CAP_MB, RetentionConfig
 from idhazh.contracts.knobs.similarity import SimilarityConfig
+from idhazh.contracts.knobs.text_analysis import TextAnalysisConfig
 from idhazh.contracts.knobs.ui import UiConfig, VisualSide
 from idhazh.extract import TOKENS_PER_WORD
 from idhazh.llm.server import DEFAULT_MAX_TOKENS, response_limit, window
@@ -260,6 +263,62 @@ def test_only_a_loopback_literal_or_localhost_answers_for_this_machine(
     record, so a wrong yes is a published falsehood rather than a failed call.
     """
     assert is_loopback(ModelServerConfig(base_url=declared).base_url) is this_machine
+
+
+@pytest.mark.parametrize(
+    "declared",
+    [
+        "http://192.168.1.20:3020",
+        "http://a-box:3020",
+        "https://analysis.example:3020",
+        "http://127.0.0.1",
+        "http://127.0.0.1:3020/api",
+        "127.0.0.1:3020",
+    ],
+)
+def test_article_text_goes_to_an_analysis_service_on_this_machine_only(declared: str) -> None:
+    """The recipient of article text is an address a person reads in a diff (Guardrail #11).
+
+    A host that is not loopback is refused where the address is declared, and so
+    is anything that is not a scheme, a host and a port: the service the digest
+    job starts listens on the runner's own loopback and nowhere else. Every
+    string is the test's own, never the committed value.
+    """
+    with pytest.raises(ValidationError, match=r"text_analysis\.base_url"):
+        TextAnalysisConfig(base_url=declared)
+
+
+def test_the_text_analysis_address_is_the_one_the_service_listens_on() -> None:
+    """Two committed files name one port and neither reads the other.
+
+    A port edited in only one of them sends every article to a port nothing
+    listens on, and the run degrades quietly to the regex-only table.
+    """
+    listener = json.loads(read_text(CONFIG_DIR / "text-analysis" / "settings.json"))["listener"]
+    committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).text_analysis
+
+    for address in (committed.base_url, TextAnalysisConfig().base_url):
+        declared = urlsplit(address)
+        assert (declared.hostname, declared.port) == (listener["host"], listener["port"])
+
+
+@pytest.mark.parametrize("language", ["EN", "en-US", "e", "english", ""])
+def test_the_text_analysis_language_is_a_bare_lowercase_code(language: str) -> None:
+    """One value names the wheel the sidecar installs and the language every request asks for.
+
+    A workflow step reads it as a key, so it is a code a step never has to quote.
+    """
+    with pytest.raises(ValidationError, match="language"):
+        TextAnalysisConfig(language=language)
+
+
+def test_a_service_label_becomes_an_entity_a_place_or_not_a_quantity_and_nothing_else() -> None:
+    """A use nobody defined is refused, never ignored.
+
+    Ignoring it would turn a misspelt use into a label that silently does nothing.
+    """
+    with pytest.raises(ValidationError, match="label_kinds"):
+        ElementsConfig.model_validate({"label_kinds": {"PERSON": "person"}})
 
 
 #: What the summarize prompt costs before a word of the article reaches it, and

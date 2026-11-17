@@ -313,18 +313,24 @@ def test_the_gap_is_the_item_minus_the_stages_that_named_themselves() -> None:
     """`stage_gap_ms` is the only cell that can catch a step nobody thought to time.
 
     Signed on purpose, and the arithmetic is asserted rather than described: the
-    four named stages are subtracted from the item's own wall clock and what is
+    five named stages are subtracted from the item's own wall clock and what is
     left is whatever the stage did between them.
     """
     subject = settled(
-        recorder(), fetch_ms=900, extract_ms=120, summarize_ms=475890, faithfulness_ms=1400
+        recorder(),
+        fetch_ms=900,
+        extract_ms=120,
+        analyze_ms=2300,
+        summarize_ms=475890,
+        faithfulness_ms=1400,
     )
 
     row = subject.close()
 
     total = row.item_total_ms
     assert isinstance(total, int)
-    named = 900 + 120 + 475890 + 1400
+    assert row.analyze_ms == 2300
+    named = 900 + 120 + 2300 + 475890 + 1400
     assert row.stage_gap_ms == total - named
 
 

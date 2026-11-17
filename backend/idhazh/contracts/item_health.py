@@ -188,6 +188,7 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
             "item_total_ms",
             "fetch_ms",
             "extract_ms",
+            "analyze_ms",
             "summarize_ms",
             "label_ms",
             "summary_ms",
@@ -630,6 +631,11 @@ class ItemHealthRow(Contract):
     __schema_stem__: ClassVar[str] = "item-health-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-11-17",
+            change="Append analyze_ms; a summary call may be recorded without a label call.",
+            why="The analysis step is a named stage, and an item may make one model call.",
+        ),
+        ChangelogEntry(
             version="2026-10-27T11:32",
             change="Append the visual decision join key.",
             why="A human review label needs to identify the exact decision.",
@@ -643,11 +649,6 @@ class ItemHealthRow(Contract):
             version="2026-10-20",
             change="Source classification accepts open kind and numeric tier identifiers.",
             why="Registry membership can change without invalidating recorded payloads.",
-        ),
-        ChangelogEntry(
-            version="2026-10-14",
-            change="Allow machine pipeline and task identity without a legacy job value.",
-            why="Items resolve shared host rows through separate identity columns.",
         ),
         ChangelogEntry(
             version="2026-09-21",
@@ -1332,6 +1333,16 @@ class ItemHealthRow(Contract):
             "decision was recorded, and on older rows."
         ),
     )
+    analyze_ms: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Wall time of the text-analysis call that names the article's people and "
+            "places, on the same stopwatch as fetch_ms and extract_ms. A named stage, so "
+            "stage_gap_ms is taken after it. Null on every row written before the column "
+            "existed and wherever the call never ran, which is not zero."
+        ),
+    )
 
     @model_validator(mode="after")
     def _visual_outcome_is_complete(self) -> Self:
@@ -1448,6 +1459,10 @@ class ItemHealthRow(Contract):
     def _a_recorded_call_is_recorded_whole(self) -> Self:
         """A slot fills entirely or not at all, and the flat cells are their sum.
 
+        Either slot may stand alone: an item that makes one model call records it in
+        the summary slot and leaves the label slot empty, and rows that fill both
+        stay valid.
+
         The sum rule is what lets every reader that pools these cells -
         `reconcile_prefill`, `publish_day_metrics`, `publish_console_band` and the
         console's own pooled rates - stay correct with no edit of its own the day a
@@ -1469,8 +1484,6 @@ class ItemHealthRow(Contract):
             if self.model_calls is not None:
                 raise ValueError("model_calls is recorded only beside the calls it counts")
             return self
-        if self.label_kind is None:
-            raise ValueError("a second call is recorded only after a first")
         if self.model_calls != filled:
             raise ValueError("model_calls must equal the number of recorded calls")
         for field in COST_FIELDS:

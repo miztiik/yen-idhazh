@@ -116,7 +116,7 @@ test('recorded endpoints determine elapsed geometry; parked costs and nested cal
 	expect(work.bars.map(({ shard, ms, offset, width }) => ({ shard: shard.shard, ms, offset, width })))
 		.toEqual([{ shard: 1, ms: 2000, offset: '0.0000%', width: '100.0000%' },
 			{ shard: 0, ms: 1000, offset: '0.0000%', width: '50.0000%' }]);
-	expect(view.shards[0].breakdown.stages.map((stage) => stage.value)).toEqual([100, 50, 800, 20]);
+	expect(view.shards[0].breakdown.stages.map((stage) => stage.value)).toEqual([100, 50, 0, 800, 20]);
 	expect(view.shards[0].breakdown.unattributed).toBe(30);
 	expect(view.items[0].calls.map((call) => call.ms)).toEqual([250, 550, 100]);
 	expect(view.items[0].planEstimated).toBe(true);
@@ -266,7 +266,7 @@ test('stage clocks, signed gaps and independent cost pairs never fill unknown ce
 	const split = nativeTimeSplit([clock, { ...clock, summary_ms: null }]);
 	expect(split.days[0].recorded).toBe(2);
 	expect(split.days[0].count).toBe(2);
-	expect(split.days[0].stages.map((part) => part.value)).toEqual([100, 20, 600, 30]);
+	expect(split.days[0].stages.map((part) => part.value)).toEqual([100, 20, 0, 600, 30]);
 	expect(split.days[0].stages.reduce((sum, part) => sum + part.value!, 0) + split.days[0].unattributed! - split.days[0].overlap!)
 		.toBe(split.days[0].elapsed);
 	expect(split.days[0].details.find((part) => part.cell === 'summary_ms')).toEqual({
@@ -282,7 +282,7 @@ test('positive gaps and overlap cannot cancel away; calls are never extra durati
 		{ ...clock, fetch_ms: null }, { ...clock, item_total_ms: 1 }], ['2030-06-01', '2030-06-02']);
 	expect(split.days[0]).toMatchObject({ recorded: 4, count: 2, missing: 1, inconsistent: 1,
 		unattributed: 25, overlap: 25, signedGap: 0, elapsed: 750 });
-	expect(split.series.map((series) => series.points[0].value)).toEqual([100, 20, 600, 30, 25]);
+	expect(split.series.map((series) => series.points[0].value)).toEqual([100, 20, 0, 600, 30, 25]);
 	expect(split.days[0].details[0]).toMatchObject({ value: 0, timed: 2 });
 	expect(split.days[1]).toMatchObject({ count: 0, elapsed: null, overlap: null });
 	expect(timeSplitReadout(split, numberFormat).series.find((series) => series.label === 'Overlap')?.values).toEqual(['0.025 s', null]);

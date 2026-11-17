@@ -346,7 +346,7 @@ Ordinary stacks still refuse negative parts.
 
 The item-time caller counts `summarize_ms` once. Its label, summary and visual
 plan readings are non-additive details, not extra stage height. All comparable
-means use one stated cohort with the four named stages, whole clock and signed
+means use one stated cohort with the five named stages, whole clock and signed
 gap recorded and reconciled. Positive gaps supply unnamed duration; negative
 gaps supply overlap deductions. Average these separately, so opposite signed
 rows cannot conceal overlap by cancellation. State the cohort's excluded
@@ -410,6 +410,7 @@ Machine keys still use `machine-colour.ts`; a spread uses its series' stop.
 | --- | --- |
 | fetch; failed-fetch tile | `--chart-1` |
 | extract | `--chart-2` |
+| analyze | `--chart-4`, shared with the label call's detail: analysis replaces that call, so only a day that spans the change shows both |
 | summarize; model time not split into calls | `--chart-3` |
 | label call | `--chart-4` |
 | summary call | `--chart-5` |

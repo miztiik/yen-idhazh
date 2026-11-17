@@ -5,9 +5,11 @@ import type { SeriesInput } from '../charts/d3/dateSeries';
 import { finiteCell } from './rates';
 import { SERIES_TOKENS } from './series-tokens';
 
+/** The stages an item's clock is tiled by, in the order the work happens. */
 export const DURATION_STAGES = [
 	['fetch_ms', 'Fetch', SERIES_TOKENS.fetch],
 	['extract_ms', 'Extract', SERIES_TOKENS.extract],
+	['analyze_ms', 'Analyze', SERIES_TOKENS.analyze],
 	['summarize_ms', 'Summarize', SERIES_TOKENS.summarize],
 	['faithfulness_ms', 'Checking', SERIES_TOKENS.checking]
 ] as const;
@@ -16,6 +18,17 @@ export const DURATION_DETAILS = [
 	['summary_ms', 'Summary call, including visual plan'],
 	['visual_plan_ms', 'Visual plan, inside the summary call']
 ] as const;
+
+/** Stages an older row has no clock for because the step did not exist yet. The
+ * item spent no time there, so a missing clock reads as zero; for every other
+ * stage a missing clock keeps the row out of the cohort. */
+const ZERO_WHEN_THE_STEP_DID_NOT_EXIST: ReadonlySet<string> = new Set(['analyze_ms']);
+
+/** One stage's milliseconds on one row, or null where the row recorded none. */
+export function stageClock(row: Row, cell: string): number | null {
+	const clock = finiteCell(row[cell]);
+	return clock === null && ZERO_WHEN_THE_STEP_DID_NOT_EXIST.has(cell) ? 0 : clock;
+}
 
 export function durationCohort(rows: readonly Row[], calendar: readonly string[]) {
 	if (new Set(calendar).size !== calendar.length || calendar.some((date, index) =>
@@ -33,7 +46,7 @@ export function durationCohort(rows: readonly Row[], calendar: readonly string[]
 		let invalid = 0;
 		let inconsistent = 0;
 		const cohort = own.flatMap((row) => {
-			const values = [...DURATION_STAGES.map(([cell]) => finiteCell(row[cell])),
+			const values = [...DURATION_STAGES.map(([cell]) => stageClock(row, cell)),
 				finiteCell(row.item_total_ms), finiteCell(row.stage_gap_ms)];
 			if (values.some((value) => value === null)) {
 				missing += 1;

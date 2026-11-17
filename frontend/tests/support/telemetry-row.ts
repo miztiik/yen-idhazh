@@ -29,6 +29,7 @@ export function telemetryRow(over: Partial<TelemetryRow> = {}): TelemetryRow {
 		source_words_before_cap: null,
 		fetch_ms: null,
 		extract_ms: null,
+		analyze_ms: null,
 		summarize_ms: null,
 		prefill_ms: null,
 		decode_ms: null,

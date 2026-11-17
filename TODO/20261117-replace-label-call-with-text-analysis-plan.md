@@ -33,7 +33,7 @@ Table C - Status Reckoner
 
 | ID | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| C1 | 1 | Make room for the analysis step | - | A | IN-FLIGHT | - | - | - |
+| C1 | 1 | Make room for the analysis step | - | A | DONE | probable-chainsaw | own pull request | nested session |
 | C2 | 2 | Start the service in the digest job | - | A | IN-FLIGHT | - | - | - |
 | C3 | 3 | Replace the first call with the service | 1, 2 | B | PENDING | - | - | - |
 | C4 | 4 | Delete what the first call served | 3 | C | PENDING | - | - | - |

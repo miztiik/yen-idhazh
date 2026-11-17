@@ -26,7 +26,7 @@
 </script>
 <div use:observeWidth={(next) => measured = next}>
 <p data-lede class="lede">{split.meanMs === null ? 'No whole item clock was measured.' : `${formatNumber(split.meanMs / 1000, numberFormat, { si: false })} seconds per timed article.`}</p>
-<p data-comparison="Summarize against fetching, extracting and checking.">Summarize against fetching, extracting and checking, over the same complete, reconciling clocks. Calls are details, not extra stages.</p>
+<p data-comparison="Summarize against fetching, extracting, analyzing and checking.">Summarize against fetching, extracting, analyzing and checking, over the same complete, reconciling clocks. Calls are details, not extra stages.</p>
 <p data-duration-cohort>{split.count} of {split.recorded} recorded item clocks supply these means. Positive unclaimed time and overlap are averaged separately; the solid marker is elapsed time.</p>
 <DateSeries {geometry} empty={emptyState('quiet', 'No complete reconciling item clock was measured.')}
 	name="item-time-split" label="Daily mean stage durations with separate overlap deduction and elapsed marker"

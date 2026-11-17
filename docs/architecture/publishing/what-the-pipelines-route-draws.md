@@ -1,6 +1,6 @@
 # What the Pipelines route draws
 
-**Last Updated**: 2026-11-16
+**Last Updated**: 2026-11-17
 
 Moved plots use the shared width observer and redraw in the CSS-pixel frame
 their panel actually occupies. Private date axes retain missing days as null,
@@ -206,8 +206,10 @@ run does not fall back when its clocks are missing; measured zero still counts.
 A single measurement or no work above the median gets an explicit empty
 comparison, not a claim that work was unmeasured.
 
-Complete nonnegative fetch, extract, summarize and checking stages stack with a
-positive recorded gap as `Other`. Missing stages or gap and negative overlap
+Complete nonnegative fetch, extract, analyze, summarize and checking stages stack with a
+positive recorded gap as `Other`. A row written before the analysis stage existed
+has no clock for it, and that stage reads as zero rather than as a missing clock.
+Missing stages or gap and negative overlap
 keep the whole recorded-item bar and their original context. Parked queue wait
 is labelled separately, never stacked into work; absent wait remains unrecorded.
 No clock is normalized or inferred.

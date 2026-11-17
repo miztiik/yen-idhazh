@@ -994,9 +994,20 @@ test.describe('the Hardware browser redraws, from stated readings', () => {
 		const baseline = { run_id: row.run_id, item_id: 'short', item_total_ms: 0 };
 		const measured = slowestArticles([row, baseline], numberFormat).rows[0];
 		expect(measured.value).toBe(5);
-		expect(measured.segments?.map((segment) => segment.value)).toEqual([1, 1, 1, 1, 1]);
+		expect(measured.segments?.map((segment) => segment.value)).toEqual([1, 1, 0, 1, 1, 1]);
 		expect(measured.context).toBe('queue wait 2 s');
 		expect(slowestArticles([{ ...row, extract_ms: null }, baseline], numberFormat).rows[0]).not.toHaveProperty('segments');
+	});
+
+	test('an analysis clock is a segment of the work stack, so the stack still closes on the item work', () => {
+		const row = { run_id: '2026-09-01-1', item_id: 'one', item_total_ms: 6000,
+			fetch_ms: 1000, extract_ms: 1000, analyze_ms: 1000, summarize_ms: 1000, faithfulness_ms: 1000,
+			stage_gap_ms: 1000, queue_wait_ms: 2000 };
+		const baseline = { run_id: row.run_id, item_id: 'short', item_total_ms: 0 };
+		const measured = slowestArticles([row, baseline], numberFormat).rows[0];
+		expect(measured.segments?.map((segment) => segment.label)).toEqual(
+			['Fetch', 'Extract', 'Analyze', 'Summarize', 'Checking', 'Other']);
+		expect(measured.segments?.reduce((sum, segment) => sum + segment.value, 0)).toBe(measured.value);
 	});
 
 	test('native host logical, algorithm and model load conflicts preserve whole-run refusal in both orders', () => {

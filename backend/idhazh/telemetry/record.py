@@ -56,7 +56,7 @@ LOG: Final = logging.getLogger("idhazh")
 #: the file is the row the recorder already validated (CLAUDE.md section 11).
 HEALTH_SUFFIX: Final = ".health.json"
 
-#: The stages `stage_gap_ms` subtracts from the item's own wall clock. Four, and
+#: The stages `stage_gap_ms` subtracts from the item's own wall clock. Five, and
 #: they tile the item without overlapping: `label_ms` and `summary_ms` are a
 #: split of `summarize_ms`, so counting them here as well would charge the model
 #: stage twice and drive the gap negative on every item.
@@ -65,7 +65,13 @@ HEALTH_SUFFIX: Final = ".health.json"
 #: evidence write and anything a later row adds without naming it all land in
 #: the gap, which is the only cell that can catch a regression in a step nobody
 #: has thought to time.
-NAMED_STAGE_MS: Final = ("fetch_ms", "extract_ms", "summarize_ms", "faithfulness_ms")
+NAMED_STAGE_MS: Final = (
+    "fetch_ms",
+    "extract_ms",
+    "analyze_ms",
+    "summarize_ms",
+    "faithfulness_ms",
+)
 
 
 @dataclass(frozen=True, slots=True)

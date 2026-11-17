@@ -204,6 +204,19 @@
     "year_over_year_pct": 5.0
   },
   "elements": {
+    "label_kinds": {
+      "DATE": "not_quantity",
+      "EVENT": "entity",
+      "FAC": "place",
+      "GPE": "place",
+      "LOC": "place",
+      "NORP": "entity",
+      "ORDINAL": "not_quantity",
+      "ORG": "entity",
+      "PERSON": "entity",
+      "PRODUCT": "entity",
+      "TIME": "not_quantity"
+    },
     "max_per_article": 256
   },
   "evaluation": {
@@ -367,6 +380,11 @@
     "asks_for_a_visual_plan": true,
     "max_verbatim_words": 20
   },
+  "text_analysis": {
+    "base_url": "http://127.0.0.1:3020",
+    "language": "en",
+    "request_timeout_seconds": 60.0
+  },
   "ui": {
     "archive_page_size": 25,
     "lead_also_covered_weight": 0.0,
@@ -391,7 +409,7 @@
     "tagline": "Daily news summaries, with links to their sources.",
     "theme_default": "dark"
   },
-  "version": "2026-11-16",
+  "version": "2026-11-17",
   "visuals": {
     "asset_base_url": "",
     "downgrade_enabled": false,
