@@ -42,7 +42,9 @@ not an answer. Reserved panel frames keep their explicit states: quiet says
 The route retry re-asks only unsuccessful questions and keeps successful reads.
 The `run-shards` question that supplies the run count belongs to no panel, so
 its own answer joins the route status: a failed read of it offers the same retry
-rather than quietly dropping the count.
+rather than quietly dropping the count. The shared line counts parts of the
+record, never panels, so a failed count alone reads `1 part of the record did
+not arrive.` and claims no blank panel.
 An incompatible index remains unavailable until reload, as the native door requires.
 Changing the window cannot allow a late answer from the old request to replace
 the new one. Redraws and resizes reuse query rows.

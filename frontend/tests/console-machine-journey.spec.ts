@@ -345,6 +345,8 @@ test('a failed run-count index alone offers the same retry, and the run count fo
 	await page.goto('/console/machine/');
 	await expect(page.locator('[data-console-panels="machine"]')).toHaveAttribute('data-route-state', 'unreachable');
 	await expect(page.locator('[data-panel-query="memory-held"]')).toHaveAttribute('data-machine-panel-state', 'ok');
+	await expect(page.locator('[data-console-standing]'), 'the line names a part of the record and claims no blank panel')
+		.toContainText('1 part of the record did not arrive.');
 	await expect(page.locator('[data-machine-run-count]')).toHaveCount(0);
 	await page.unroute(countIndex);
 	await page.locator('[data-console-retry]').click();
