@@ -10,7 +10,7 @@ Table A - Scope and execution
 | ID | Field | Value |
 | --- | --- | --- |
 | A1 | Why this plan exists | The model reads every article twice. On 66 captured articles the first call (labels, proposed figures, named mentions) took 3.67 h of 7.04 h of model time and fed a chart planner that published no chart. The local text-analysis service returns the same names and places with exact offsets in seconds. After this plan the model reads each article once and the first call's code is gone. Dropping the call saves its decode (1.78 h, 25%), because the remaining call then reads the article |
-| A2 | Hard scope - in | The digest job starts the service as a sidecar. The work stage calls its existing API over HTTP once per item and times it like fetch and extract. Names and places become entity and place elements, and regex quantity rows the service labels date, time or ordinal are dropped. One model call per item, prompts cleaned, no sentence address in model-facing text. The first call's code, prompt, settings, tests and present-tense docs are deleted. The run's prompt stamp counts `visuals.enabled_kinds`, and the unused `summarize.asks_for_a_visual_plan` setting is removed |
+| A2 | Hard scope - in | Every workflow that runs the work stage starts the service as a sidecar through one shared action. The work stage calls its existing API over HTTP once per item and times it like fetch and extract. Names and places become entity and place elements, and regex quantity rows the service labels date, time or ordinal are dropped. One model call per item, prompts cleaned, no sentence address in model-facing text. The first call's code, prompt, settings, tests and present-tense docs are deleted. The run's prompt stamp counts `visuals.enabled_kinds`, and the unused `summarize.asks_for_a_visual_plan` setting is removed |
 | A3 | Hard scope - out | Table B |
 | A4 | ESCALATE triggers | 1. Article text sent anywhere but the committed loopback `text_analysis.base_url`. 2. After rows #2 and #3 are live, the first scheduled run shows an out-of-memory kill, lowest free memory under 1 GiB, or two lost shards (before the service, 4 of the last 8 runs lost one shard and none lost two, so one lost shard is not a trigger). 3. A persisted shape beyond those rows #1, #3 and #4 name, or a third model call |
 | A5 | Chosen strategy | Use the service as it is: its existing request and response, three fields read per mention, nothing new persisted. Cells and readers before the writer; the swap (row #3) before the deletion (row #4), so a revert stays cheap |
@@ -37,7 +37,8 @@ Table C - Status Reckoner
 | C1 | 1 | Make room for the analysis step | - | A | DONE | probable-chainsaw | own pull request | nested session |
 | C2 | 2 | Start the service in the digest job | - | A | DONE | miniature-chainsaw | own pull request | nested session |
 | C3 | 3 | Replace the first call with the service | 1, 2 | B | PENDING | - | - | - |
-| C4 | 4 | Delete what the first call served | 3 | C | PENDING | - | - | - |
+| C4 | 4 | Delete what the first call served | 3, 5 | C | PENDING | - | - | - |
+| C5 | 5 | Start the service in every workflow that runs the work stage | - | B | PENDING | - | - | - |
 
 ## 2. Row #1 - Make room for the analysis step
 
@@ -89,7 +90,7 @@ Table E - Row #2 decisions
   - Code: `backend/idhazh/stages/work.py`, `backend/idhazh/classify/calls.py`, `backend/idhazh/classify/dag.py`, `backend/idhazh/classify/plan_visual_request.py`, `backend/idhazh/elements.py`, `backend/idhazh/telemetry/census.py`, `backend/idhazh/telemetry/spans.py`, `backend/idhazh/contracts/summary.py`, `backend/idhazh/contracts/knobs/text_analysis.py`, `backend/utilities/replay_article_calls.py`, `config/idhazh.json`, `config/prompts/write-digest-summary.txt`, `config/prompts/plan-visual.txt`
   - Tests: `backend/tests/test_classify.py`, `backend/tests/test_elements.py`, `backend/tests/test_fingerprint.py`, `backend/tests/test_spans.py`, `backend/tests/test_item_records.py`, `backend/tests/test_telemetry.py`, `backend/tests/test_chart_vocabulary.py`, `backend/tests/test_visual_attempts.py`, `backend/tests/test_capture_root.py`, `backend/tests/test_replay_article_calls.py`, `backend/tests/contracts/test_decoder_grammar.py`, `backend/tests/pipeline/_builders.py`, `backend/tests/pipeline/test_work_records.py`
   - Docs: `docs/architecture/summarize/prompt.md`, `docs/architecture/summarize/model-boundary.md`, `docs/architecture/extraction/elements.md`, `docs/architecture/sources/trust-boundary.md`, `docs/reference/retained-article-verification.md`
-- **Acceptance gates:** Local: the shared selector over the named backend tests; ruff and mypy over `backend/`. Tests drive a loopback server the test owns and a fake model server; nothing reaches a real service. CI: the complete suite. Merge gate, held by the maintainer: row #2's Oracle has been read in a scheduled run, and a run after the memory fix has finished on a host with the AMX instruction set (the model server holds its weights once there), because the loaded service adds about 0.74 GiB (an estimate) to every shard.
+- **Acceptance gates:** Local: the shared selector over the named backend tests; ruff and mypy over `backend/`. Tests drive a loopback server the test owns and a fake model server; nothing reaches a real service. CI: the complete suite. Merge gate, held by the maintainer: row #2's Oracle has been read in a scheduled digest run on the workflow then on main (row #5's, when it merges first). The loaded service adds about 0.74 GiB (an estimate) to every shard; the memory fix leaves hosts with the AMX instruction set 3.79 to 5.01 GiB lowest free (Actions run 44121930049), against 0.20 before.
 - **Oracle:** One item against the stand-ins: exactly one model request, its prompt holds no `[s` sentence address and none of the first call's text; mentions become elements whose excerpts are re-sliced from `Article.text`; quantity rows the service labels date, time or ordinal are gone; a closed port, a hung socket and a malformed reply each publish the item with the regex-only table and a warning; `analyze_ms` is in the item's named time and not in `queue_wait_ms`; the item-health row carries only the `summary` slot; the prompt stamp moves when `visuals.enabled_kinds` moves. It cannot settle whether summaries read as well without the first call's reply (OBS-2).
 - **Observation OBS-2** (the first two scheduled runs after this row; this row is `DONE` only after this reading and OBS-1): read the summary-evaluation columns of `docs/concepts/summary-metrics.md` beside the prior seven days. Revert this row when they fall outside that range; no tolerance is named because day-to-day noise can exceed a small effect.
 - **Decisions:**
@@ -126,3 +127,21 @@ Table G - Row #4 decisions
 | G2 | Keep readable, never written again: the `Element` Tier 2 fields with `label_source` and `ledger_version`, `Extractor.MODEL`, `CallKind.LABEL`, `FailureCode.LABELS_TRUNCATED` and the `label_*` cells |
 | G3 | `prompt_files.generate_labels` and `summarize.asks_for_a_visual_plan` are refused by name, the latter pointing at `visuals.enabled_kinds`. The pipeline-test case flag of the same name stays; only the test-case writer's write into the summarize block goes. The stamp test that used the knob is replaced by row #3's `enabled_kinds` test |
 | G4 | Dated benchmark pages stay as history. `backend/tests/test_labels.py` is the human faithfulness-label suite and is not touched |
+
+## 6. Row #5 - Start the service in every workflow that runs the work stage
+
+- **Scope:** One shared action installs, starts and stops the service. The digest work job and both pipeline-test jobs use it, so a pipeline test walks the path production walks, and the steps row #2 wrote inline in `digest.yml` move into it unchanged.
+- **Files touched:** (from a search of the workflows for the work stage's entry points; the other workflows that start the model server run none)
+  - New: `.github/actions/text-analysis-service/action.yml`
+  - Code: `.github/workflows/digest.yml`, `.github/workflows/idhazh-pipeline-tests.yaml`
+  - Docs: `docs/reference/github-actions.md`
+- **Acceptance gates:** Local: none, as for row #2; parse the YAML and read the diff. Hosted: the action's start and stop on a hosted runner from a throwaway branch, answering one real request, with no digest run (a run writes committed data). CI: the pull request's own checks.
+- **Oracle:** The hosted run shows the start answering and the stop leaving no process, and a service that will not start still lets the job finish. The next scheduled digest run then logs the same start and stop lines as row #2's Oracle. The pipeline-test jobs are read, not run, because a dispatch runs the real model for hours; their first dispatch shows the same lines. It cannot settle that a pipeline test's items now match production's.
+- **Decisions:**
+
+Table H - Row #5 decisions
+
+| ID | Decision |
+| --- | --- |
+| H1 | One action with a `mode` input, `start` or `stop`. A composite action cannot run after its caller's later steps, so each workflow calls it a second time with `if: always()`. Start is setup-uv, install and start, every step `continue-on-error` as row #2 wrote them; stop signals the service's process group. Row #2's rules (E2 to E4) and its log lines move unchanged |
+| H2 | A caller keeps two `uses` lines. The service log goes where the job already collects its logs: the `runtime-log-<shard>` artifact for digest, the test-case and retained output folders for pipeline tests |
