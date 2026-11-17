@@ -1,4 +1,5 @@
-/** Which articles in the newest recorded run took the most recorded work time? */
+/** Which articles in the newest recorded run exceeded its median work time? */
+import { median } from 'd3-array';
 import type { Row } from '../../data/ledger';
 import type { RankedInput } from '../../charts/d3/rankedList';
 import { formatNumber, type NumberFormatConfig } from '../../number-format';
@@ -8,12 +9,15 @@ import { finiteCell } from '../rates';
 export function slowestArticles(
 	rows: readonly Row[],
 	numberFormat: NumberFormatConfig
-): { run: string | null; rows: RankedInput[]; unmeasured: number } {
+): { run: string | null; rows: RankedInput[]; medianSeconds: number | null; measured: number; unmeasured: number } {
 	const selected = newestRunRows(rows);
 	const run = selected.length ? String(selected[0].run_id) : null;
-	const ready = selected.flatMap((row): RankedInput[] => {
-		const elapsed = finiteCell(row.item_total_ms);
-		if (elapsed === null || elapsed < 0) return [];
+	const measured = selected.flatMap((row) => {
+		const workMs = finiteCell(row.item_total_ms);
+		return workMs === null || workMs < 0 ? [] : [{ row, workMs }];
+	});
+	const medianMs = median(measured, ({ workMs }) => workMs) ?? null;
+	const ready = measured.filter(({ workMs }) => medianMs !== null && workMs > medianMs).map(({ row, workMs }): RankedInput => {
 		const gap = finiteCell(row.stage_gap_ms);
 		const wait = finiteCell(row.queue_wait_ms);
 		const clocks = [
@@ -23,16 +27,22 @@ export function slowestArticles(
 		const complete = clocks.every(([, key]) => {
 			const value = finiteCell(row[key]); return value !== null && value >= 0;
 		});
-		return [{
+		return {
 			label: `${row.item_id ?? 'unnamed article'} - ${row.source_id ?? 'source not recorded'}`,
-			value: elapsed / 1000,
-			context: [wait === null ? 'queue wait not recorded' : `waited ${formatNumber(wait / 1000, numberFormat, { si: false })} s first`,
+			value: workMs / 1000,
+			context: [wait === null ? 'queue wait not recorded' : `queue wait ${formatNumber(wait / 1000, numberFormat, { si: false })} s`,
 				gap === null ? 'stage gap not recorded' : gap < 0 ? `stages overlapped by ${formatNumber(-gap / 1000, numberFormat, { si: false })} s` : ''].filter(Boolean).join('; '),
 			...(complete && gap !== null && gap >= 0 ? { segments: [
 				...clocks.map(([label, key, token]) => ({ label, value: finiteCell(row[key])! / 1000, token })),
 				...(gap > 0 ? [{ label: 'Other', value: gap / 1000, token: '--chart-8' }] : [])
 			] } : {})
-		}];
+		};
 	});
-	return { run, rows: ready, unmeasured: selected.length - ready.length };
+	return {
+		run,
+		rows: ready,
+		medianSeconds: medianMs === null ? null : medianMs / 1000,
+		measured: measured.length,
+		unmeasured: selected.length - measured.length
+	};
 }

@@ -298,7 +298,8 @@ test('item-only timing panels share the newest article day despite lagging hardw
 	const view = slowestArticles(answer.rows, numberFormat);
 	expect(view.run).toBe(`${day}-10`);
 	expect(view.unmeasured).toBe(1);
-	expect(view.rows.map((row) => [row.label, row.value]).sort()).toEqual([['long - source', 4], ['short - source', 2]]);
+	expect(view).toMatchObject({ medianSeconds: 3, measured: 2 });
+	expect(view.rows.map((row) => [row.label, row.value])).toEqual([['long - source', 4]]);
 	expect(rankedList(view.rows, { max: 1 })?.rows.map((row) => row.label)).toEqual(['long - source']);
 	expect(view.rows.every((row) => row.segments === undefined)).toBe(true);
 	for (const id of ['machine-cards', 'processor-lost', 'disk-reads', 'slowest-articles']) expect(PANEL_QUERIES).not.toHaveProperty(id);
