@@ -16,9 +16,8 @@ def write_test_case(test_case: object, *, source: Path, root: Path) -> Path:
     """Two files move, and one intention moves both.
 
     `visuals.enabled_kinds` empty is what makes no picture reachable;
-    `summarize.asks_for_a_visual_plan` false is what sizes the window for the
-    call really sent. Apart they disagree, and the disagreement refuses articles
-    that fit.
+    `summarize.asks_for_a_visual_plan` false is what the run's prompt inputs are
+    stamped with. Apart they disagree about what the run asked for.
 
     The test case also names its own child under the shared trial root, so three
     test cases write separate trees without changing their writer identities.

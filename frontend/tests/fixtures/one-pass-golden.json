@@ -2213,9 +2213,7 @@
 			"items": 12,
 			"low": 46,
 			"median": 92,
-			"high": 185,
-			"askLow": 50,
-			"askHigh": 200
+			"high": 185
 		},
 		{
 			"runId": "2026-05-01-2",
@@ -2224,9 +2222,7 @@
 			"items": 12,
 			"low": 47,
 			"median": 130,
-			"high": 193,
-			"askLow": 50,
-			"askHigh": 230
+			"high": 193
 		},
 		{
 			"runId": "2026-05-02-1",
@@ -2235,9 +2231,7 @@
 			"items": 12,
 			"low": 46,
 			"median": 131,
-			"high": 182,
-			"askLow": 50,
-			"askHigh": 200
+			"high": 182
 		},
 		{
 			"runId": "2026-05-02-2",
@@ -2246,9 +2240,7 @@
 			"items": 12,
 			"low": 48,
 			"median": 102,
-			"high": 176,
-			"askLow": 50,
-			"askHigh": 230
+			"high": 176
 		},
 		{
 			"runId": "2026-05-03-1",
@@ -2257,9 +2249,7 @@
 			"items": 12,
 			"low": 55,
 			"median": 153,
-			"high": 183,
-			"askLow": 70,
-			"askHigh": 230
+			"high": 183
 		},
 		{
 			"runId": "2026-05-03-2",
@@ -2268,9 +2258,7 @@
 			"items": 12,
 			"low": 52,
 			"median": 136,
-			"high": 190,
-			"askLow": 50,
-			"askHigh": 230
+			"high": 190
 		},
 		{
 			"runId": "2026-05-04-1",
@@ -2279,9 +2267,7 @@
 			"items": 12,
 			"low": 41,
 			"median": 133,
-			"high": 167,
-			"askLow": 70,
-			"askHigh": 230
+			"high": 167
 		},
 		{
 			"runId": "2026-05-04-2",
@@ -2290,9 +2276,7 @@
 			"items": 12,
 			"low": 67,
 			"median": 145,
-			"high": 190,
-			"askLow": 50,
-			"askHigh": 230
+			"high": 190
 		}
 	],
 	"sourceCuts": {

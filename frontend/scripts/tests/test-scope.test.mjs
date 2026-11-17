@@ -164,7 +164,7 @@ test('named frontend specs map to their declared groups', () => {
 	assert.equal(groupForSpec('console-machine-data.spec.ts'), 'logic');
 	for (const name of [
 		'console-host-spans', 'console-machine-split', 'console-machine', 'tokens',
-		'console-date-axis', 'console-compression-rows', 'console-model-work', 'console-readout-data'
+		'console-date-axis', 'console-model-work', 'console-readout-data'
 	]) {
 		assert.equal(groupForSpec(`${name}.spec.ts`), 'logic', name);
 		assert.deepEqual(selectPaths([`frontend/tests/${name}.spec.ts`]).groups, ['logic'], name);

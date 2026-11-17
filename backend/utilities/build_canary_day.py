@@ -257,8 +257,8 @@ class _Measured(NamedTuple):
     hhem_full: float
     score_ms: int
     #: False where the article's length before the cut was never written down.
-    #: The row still scores and still counts on every table; it has no x on the
-    #: compression plot, so the plot drops it and says how many it dropped.
+    #: The row still scores and still counts on every table, and the console
+    #: cannot say whether it was cut.
     #: Measured over the committed ledger 2026-08-29: 142 of 2,683 rows are in
     #: this state, which is 5.3 percent of them.
     full_length_known: bool = True
@@ -266,39 +266,28 @@ class _Measured(NamedTuple):
 
 #: One measured item per published canary, in the digest's own order.
 #:
-#: The console's compression plot draws source words against summary words on a
-#: log x axis, with the configured target zone behind the marks and a diamond on
-#: anything the scorer flagged as truncated. A day that scored eight items the
-#: same way would leave every one of those states undrawn and so untested.
+#: A day that scored eight items the same way would leave most of the states the
+#: console draws untested: short and long articles, cut and uncut ones, and an
+#: item the scorer flagged as truncated.
 #:
-#: Read down the source-word column: 38 to 6100 words is four decades of x axis
-#: and at least one mark under each of the six configured target zones. Read
-#: down the faithfulness columns: all three confidence bands, and every reason
-#: an item can miss the top one. Two rows record no length before the cut, so
-#: the plot drops them and the sentence under it has a count to print.
-#:
-#: Six zones and six placeable rows is exactly one mark a zone, so no zone can
-#: hold two any more. That is what the sixth rung cost this fixture: until
-#: 2026-09-09 the 60-to-700-word zone carried a second mark, and the row that
-#: carried it is the one moved up to fill the new 5000-word seam. Restoring it
-#: needs a ninth entry in `DAY_CANARIES` and a ninth row here, because the day
-#: publishes one item per named canary.
+#: Read down the source-word column: 38 to 6100 words, from a release note to
+#: articles the model read only part of. Read down the faithfulness columns: all
+#: three confidence bands, and every reason an item can miss the top one. Two
+#: rows record no length before the cut, so the console cannot tell whether they
+#: were cut. The day publishes one item per named canary, so a ninth row needs a
+#: ninth entry in `DAY_CANARIES`.
 SCORED: Final[tuple[_Measured, ...]] = (
-    # A release note. Under the shortest target zone, and left of the 100-word
-    # floor the plot seeds its axis with - the one mark that can say whether the
-    # axis widened to hold it or clamped it onto the edge.
+    # A release note: the shortest article of the day.
     _Measured(
         source_words=38, summary_words=31,
         hhem=0.93, hhem_full=0.92, score_ms=180,
     ),
-    # High confidence, second target zone.
+    # High confidence.
     _Measured(
         source_words=140, summary_words=62,
         hhem=0.86, hhem_full=0.84, score_ms=240,
     ),
-    # Medium on faithfulness alone, and the only mark under the zone the sixth
-    # rung opened on 2026-09-09 - long enough that the model read part of it and
-    # short enough to stay under the top rung's floor.
+    # Medium on faithfulness alone. Long enough that the model read part of it.
     _Measured(
         source_words=4200, summary_words=78,
         hhem=0.71, hhem_full=0.70, score_ms=290,
@@ -311,31 +300,26 @@ SCORED: Final[tuple[_Measured, ...]] = (
         source_words=880, summary_words=96,
         hhem=0.88, hhem_full=0.87, score_ms=330,
     ),
-    # Its length before the cut was never recorded, so it scores and counts but is not on
-    # the plot - the state the sentence under the chart exists to declare.
+    # Its length before the cut was never recorded, so it scores and counts but
+    # the console cannot say whether it was cut.
     _Measured(
         source_words=1320, summary_words=118,
         hhem=0.90, hhem_full=0.89, score_ms=410,
         full_length_known=False,
     ),
-    # Low on faithfulness, in the widest target zone. Longer than SEEN_WORD_CAP,
-    # so it is also the shortest article the day records as cut - and it is the
-    # second row recording no length before that cut, so the count in the
-    # sentence under the plot is a number rather than a one a test could pass by
-    # printing whatever it found. Cut and unplaceable together is the real
-    # historical state: a row written before 2026-08-27 whose article was cut
-    # has no full length anywhere.
+    # Low on faithfulness. Longer than SEEN_WORD_CAP, so it is also the shortest
+    # article the day records as cut - and the second row recording no length
+    # before that cut. Cut and unmeasured together is the real historical state:
+    # a row written before 2026-08-27 whose article was cut has no full length
+    # anywhere.
     _Measured(
         source_words=2450, summary_words=164,
         hhem=0.44, hhem_full=0.43, score_ms=520,
         full_length_known=False,
     ),
-    # Cut: the article is longer than what the model was given, so the plot draws
-    # a diamond rather than a dot. It sits in the second-widest target zone,
-    # which the ladder only gained a ceiling for when the fifth rung landed on
-    # 2026-08-29 - before that this row was 4200 words and the zone above 2000
-    # ran to the edge of the plot. It is also the day's abstract, so it is the
-    # one item whose note has to carry two source limits at once.
+    # Cut: the article is longer than what the model was given. It is also the
+    # day's abstract, so it is the one item whose note has to carry two source
+    # limits at once.
     _Measured(
         source_words=2800, summary_words=205,
         hhem=0.91, hhem_full=0.78, score_ms=610,

@@ -1,6 +1,6 @@
 # How often the truncation cap bites
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-11-17
 How many published items the extractor's truncation cap actually cut, counted
 over one month shard of the item-health ledger.
 
@@ -79,7 +79,7 @@ that could not have shipped apart: at the 8,192 window in force on 2026-09-08 a
 [../../../backend/tests/contracts/](../../../backend/tests/contracts/)
 reads both sides from `config/` and fails on any later pair that does not fit.
 **It sizes the single call, which is the path being retired** - the two-call
-pair sizes at 64,699 of the same window at the 26,000 cap committed now
+pair sizes at 64,403 of the same window at the 26,000 cap committed now
 ([../../architecture/summarize/prompt.md](../../architecture/summarize/prompt.md)).
 
 ### What the wall clock pays

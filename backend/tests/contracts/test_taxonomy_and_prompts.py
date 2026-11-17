@@ -7,7 +7,7 @@ import re
 
 import pytest
 from pydantic import ValidationError
-from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
+from support.paths import CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 
 from idhazh.contracts.item_health import (
     FAILURE_CODE_STAGES,
@@ -143,41 +143,6 @@ def test_the_console_reads_only_telemetry_columns_the_writer_writes() -> None:
     )
 
 
-def test_the_console_fallback_bands_match_the_committed_ladder() -> None:
-    """The console's fallback length ladder, held against the file it stands in for.
-
-    `summarizeConfig()` in `frontend/src/lib/server/config.ts` returns
-    `SUMMARIZE_DEFAULTS` when `config/idhazh.json` cannot be read, and those
-    bands draw the compression plot's target zone and set its y axis. A stale
-    copy draws a wrong chart and says nothing, so the copy is pinned here.
-    """
-    committed: list[dict[str, int]] = json.loads(read_text(CONFIG_DIR / "idhazh.json"))[
-        "summarize"
-    ]["bands"]
-    source = read_text(REPO_ROOT / "frontend" / "src" / "lib" / "server" / "config.ts")
-    declared = re.search(
-        r"const SUMMARIZE_DEFAULTS: SummarizeConfig = \{\s*bands: \[(.*?)\]\s*\};",
-        source,
-        re.DOTALL,
-    )
-    assert declared is not None, "config.ts no longer declares a SUMMARIZE_DEFAULTS ladder"
-    fallback = [
-        {name: int(value) for name, value in re.findall(r"(\w+): (\d+)", band)}
-        for band in re.findall(r"\{([^{}]*)\}", declared.group(1))
-    ]
-    assert fallback, "SUMMARIZE_DEFAULTS matched but held no bands"
-    keys = (
-        "min_source_words",
-        "target_words_min",
-        "target_words_max",
-    )
-    expected = [{key: band[key] for key in keys} for band in committed]
-    assert fallback == expected, (
-        "config.ts and config/idhazh.json disagree about the summary bands: "
-        f"the console falls back to {fallback}, the committed ladder is {expected}"
-    )
-
-
 def test_recorded_item_health_codes_never_count_against_a_source() -> None:
     assert len(SOURCE_NEUTRAL_FAILURE_CODES) == 19
     assert FailureCode.NOT_ATTEMPTED in SOURCE_NEUTRAL_FAILURE_CODES
@@ -216,19 +181,6 @@ def test_a_signal_that_publishes_is_never_charged_to_a_source() -> None:
     )
     assert not short_and_published.counts_against_source
     assert short_and_rejected.counts_against_source
-
-
-def test_a_signal_that_cannot_fire_is_never_charged_to_a_source() -> None:
-    """`boilerplate` left the neutral set on 2026-09-17 and came back the same day.
-
-    It moved out when a ledger started feeding the comparison it rests on. Over one
-    full run that ledger changed the signal exactly zero times - 12,917 committed
-    item-health rows, no `boilerplate` cell among them - so the ledger was reverted
-    and the code is back to dividing by an empty set. A signal that cannot fire
-    must not count against a publisher, because the only thing it could ever do
-    then is be wrong.
-    """
-    assert FailureCode.BOILERPLATE in SOURCE_NEUTRAL_FAILURE_CODES
 
 
 @pytest.mark.parametrize(

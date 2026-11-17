@@ -2,7 +2,7 @@
 	import type { Row } from '../../data/ledger';
 	import type { Range } from '../queries/window';
 	import type { ModelRule } from '../../charts/d3/model-rule';
-	import type { ChartConfig, ConsoleConfig, SummaryBand } from '../../server/config';
+	import type { ChartConfig, ConsoleConfig } from '../../server/config';
 	import Series from './Series.svelte';
 	import ThroughputTrend from '../../components/ThroughputTrend.svelte';
 	import TimeCost from '../TimeCost.svelte';
@@ -18,9 +18,9 @@
 	import { useNumberFormat } from '$lib/number-format-context';
 	import { formatNumber } from '$lib/number-format';
 
-	let { id, rows, range, rule, chart, knobs, bands, thresholds, throughputReference }: {
+	let { id, rows, range, rule, chart, knobs, thresholds, throughputReference }: {
 		id: string; rows: readonly Row[][]; range: Range; rule: ModelRule; chart: ChartConfig;
-		knobs: ConsoleConfig; bands: readonly SummaryBand[]; thresholds: { high: number; low: number };
+		knobs: ConsoleConfig; thresholds: { high: number; low: number };
 		throughputReference: string;
 	} = $props();
 	const numberFormat = useNumberFormat();
@@ -28,7 +28,7 @@
 	const throughputs = $derived(id === 'model-throughput' ? modelThroughput(rows[0], window) : []);
 	const endings = $derived(id === 'call-ending' ? callEnding(rows[0]) : null);
 	const scores = $derived(id === 'faithfulness' ? faithfulness(rows[0], thresholds, { step: knobs.faithfulness_axis_step, floorMax: knobs.faithfulness_axis_floor_max }, numberFormat) : null);
-	const lengths = $derived(id === 'summary-length' ? summaryLength(rows[0], bands) : []);
+	const lengths = $derived(id === 'summary-length' ? summaryLength(rows[0]) : []);
 	const lengthRule = $derived(completeModelRule(rule, lengths.map((run) => run.date)));
 	const speedRule = $derived(completeModelRule(rule, throughputs.map((day) => day.date)));
 </script>

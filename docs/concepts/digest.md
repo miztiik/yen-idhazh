@@ -1,6 +1,6 @@
 # Digest
 
-**Last Updated**: 2026-11-16
+**Last Updated**: 2026-11-17
 
 What a reader actually gets: the published surface, the item, and the rule that decides whether an item gets a picture. This page fixes the vocabulary and the invariants; the concrete layout and typography are Jony's territory and live in [ui-shell.md](ui-shell.md) and [design-system.md](design-system.md).
 
@@ -83,7 +83,7 @@ Note the split this implies, because it is easy to lose: **code finds and cuts e
 
 The system knows source and summary limitations that a reader cannot see. These are surfaced beside the affected story:
 
-- A short or abstract source can publish as a brief item. Brevity is not a confidence band; a 100-word post can be summarized faithfully.
+- A short or abstract source publishes like any other. Brevity is not a confidence band; a 100-word post can be summarized faithfully.
 - A source-limit sentence appears only where the missing context would surprise the reader. A normal short post does not get a label.
 - A low-confidence item **publishes, marked.** Suppressing it would make the digest look better than it is.
 - **The mark names what is missing, not how good the item is.** "Our summary leaves out names or figures from the opening" is something a reader can check when they click through. "Mostly matches the source" is a grade, and a reader can do nothing with it. The published item carries a `band_reason` identifier and the site owns the sentence ([evaluation.md](evaluation.md)).
@@ -182,11 +182,11 @@ pipeline rather than about a story, and the operator console answers it for the
 one person who asks. The day records it beside the two counts and no reading
 surface draws it.
 
-## The reader's budget
+## What a reader can skim
 
-About two minutes. Ten items a reader can skim beats forty they cannot.
+Ten items a reader can skim beats forty they cannot.
 
-That is a design target for the page, not a cap on the pipeline. What a day carries is decided by supply, the score and `run.safety_ceiling_per_run` - lowered to 80 on 2026-09-05 so a day carries fewer but better-chosen stories ([../architecture/sources/freshness.md](../architecture/sources/freshness.md)). The reader's budget is protected by ordering and by hierarchy: the best items are first, and a day that runs long is a scroll rather than a truncation.
+That is a design aim for the page, not a cap on the pipeline. What a day carries is decided by supply, the score and `run.safety_ceiling_per_run` - lowered to 80 on 2026-09-05 so a day carries fewer but better-chosen stories ([../architecture/sources/freshness.md](../architecture/sources/freshness.md)). A reader's time is protected by ordering and by hierarchy: the best items are first, and a day that runs long is a scroll rather than a truncation.
 
 **A long day gets its hierarchy from its leading stories.** 586 items in one queue had no usable first screen - its opening items were whichever vertical id sorted first, which is an accident rather than an edit. The day now opens on at most five stories chosen across the whole day, and the stream below them carries every story in the published order. Nothing is removed, hidden or re-ranked. Until 2026-09-01 that hierarchy came from topic sections instead, and they bought it by hiding: three stories a desk on the page and 416 of 431 behind five links.
 
@@ -200,7 +200,7 @@ The page must also render when its data file is absent or empty. That is a norma
 
 The idea the measurement was taken against was that length is the discriminator: a 30-to-45-word brief has no room for its points to differ, but a 3,000-word article compressed to 200 words leaves things only the points can carry. **The count says length does not discriminate.** Items with an addition have a median summary of 154 words and items with none 146 - eight words apart on a sample of twenty - and the longest summary drawn, at 210 words, produced one addition.
 
-**The one item where the points did real work is the shortest summary in the sample, not the longest.** A 3,195-word source in a band that asked for 150 to 230 words on the day of the draw came back with a 49-word summary, and three of its four points carry claims the summary never made. The points were doing the summary's job because the summary did not. That is a defect in the summary, and the answer that landed on 2026-09-10 is a tolerance around each band's ask plus a rule that no length except a failed-extraction floor may drop an item ([../architecture/summarize/prompt.md](../architecture/summarize/prompt.md)).
+**The one item where the points did real work is the shortest summary in the sample, not the longest.** A 3,195-word source in a band that asked for 150 to 230 words on the day of the draw came back with a 49-word summary, and three of its four points carry claims the summary never made. The points were doing the summary's job because the summary did not. That is a defect in the summary. The answer that landed on 2026-09-10 was a tolerance around each band's ask; the bands and the tolerance have since been deleted, and a summary publishes exactly as the model wrote it ([../architecture/summarize/prompt.md](../architecture/summarize/prompt.md)).
 
 **Read the 18.2 percent as a hazard rather than a rate.** 20 of the 110 eligible items were shorter than their own band's floor on the day of the draw. It is one draw on one day, and the numbers underneath it move whenever the prompt does. It is quoted here because it was the reason the key-points question came up at all, and not as a measurement anything may be tuned against (Guardrail #10).
 
@@ -216,7 +216,7 @@ Until 2026-08-29 every cut item printed one sentence with no number in it: "We c
 
 Raising the cap does not remove the problem, it narrows it. At a 5,000-token cap only four of those 22 items are still cut, and they still lose between 9 and 54 percent.
 
-A percentage of what we read, rather than a count of words, because the reader cannot see the page's true length. "We read 1,923 words" tells them nothing on its own; "23 percent" ranks instantly against every other item on the page, with no arithmetic inside a two-minute budget.
+A percentage of what we read, rather than a count of words, because the reader cannot see the page's true length. "We read 1,923 words" tells them nothing on its own; "23 percent" ranks instantly against every other item on the page, with no arithmetic for the reader to do.
 
 **Rejected wordings:**
 

@@ -66,7 +66,8 @@ EncoderRef = Annotated[
 ]
 
 # The measured eval-row columns this record aggregates one at a time in
-# `instruments`, matching the frontend's `DRAWN_BY` map. Recorded here so the
+# `instruments`: the frontend's `DRAWN_BY` map, plus the two source lengths no
+# panel reads from the score ledger any more. Recorded here so the
 # model documents which columns an instrument pairs against; the set is not
 # validated, so a column added to EvalRow later gains an instrument without a
 # schema break.

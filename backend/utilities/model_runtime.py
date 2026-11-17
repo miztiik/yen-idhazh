@@ -604,7 +604,7 @@ def describe_request(config_root: Path, *, prove_runtime: bool = False) -> None:
 
         prove_the_entry(
             model=entry,
-            output_schema=output_schema(settings.app.summarize),
+            output_schema=output_schema(),
             endpoint=resolve_endpoint(settings.app.model_server.base_url),
             timeout=request_timeout_seconds(entry),
         )

@@ -1,6 +1,6 @@
 # Measured extraction quality
 
-**Last Updated**: 2026-11-07
+**Last Updated**: 2026-11-17
 
 Which article-shape signals did the TypeScript parser measure, and what do
 they change? The shared `parseDocument` stage serves both `/parse` and `/plan`.
@@ -68,10 +68,9 @@ native case where short non-prose text remains admitted when
 An `abstract` is exempt only from the short-text rejection; its short-text
 measurement remains recorded.
 
-The loader requires the existing extraction controls from `config/idhazh.json`.
-It checks that `min_source_words` equals the rounded-up quotient of
-`summarize.bands[0].target_words_min` and
-`evaluation.brief_compression_ceiling`, exactly as `AppConfig` does.
+The loader requires the existing extraction controls from `config/idhazh.json`,
+and `min_source_words` is a plain number it reads as written; nothing is derived
+from it or checked against another setting.
 The committed values are unchanged: `reject_too_short` is true and the other
 three rejection flags are false. Model-default false values are not a reason
 to override authored configuration.

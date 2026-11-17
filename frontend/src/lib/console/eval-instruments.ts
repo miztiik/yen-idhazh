@@ -7,8 +7,8 @@
  * looked like it did nothing.
  *
  * **The map below is the point of this module, not the charts.** `DRAWN_BY`
- * assigns each drawn measurement to exactly one panel, `UNDRAWN` names an
- * intentionally omitted diagnostic, and `NOT_A_MEASUREMENT` names identities. The three
+ * assigns each drawn measurement to exactly one panel, `UNDRAWN` names a
+ * measurement no panel reads from this ledger, and `NOT_A_MEASUREMENT` names identities. The three
  * together must cover the contract exactly - the native frontend-list binding
  * reads `EvalRow` and fails on a column that is in neither,
  * in both, or in a map and not in the contract. So a column added to `EvalRow`
@@ -29,7 +29,7 @@
 
 import { BANDS } from '../bands';
 import { readoutOf, type Readout } from '../charts/readout';
-import { bandFor, grouped, type SummaryBand } from '../charts/series';
+import { grouped } from '../charts/series';
 import { formatNumber, type NumberFormatConfig } from '../number-format';
 import type { StackRule, StackSeries } from '../charts/stack-types';
 import { dayMonth, shortDate } from '../format';
@@ -78,15 +78,15 @@ export const DRAWN_BY: Readonly<Record<string, string>> = {
 	compression: 'summary-length',
 	coherence: 'daily-figures',
 	summary_words: 'summary-length',
-	source_words_before_cap: 'summary-length',
-	source_words: 'summary-length',
 	score_ms: 'score-cost'
 };
 
-/** Recorded measurements deliberately omitted from the console, not replaced by another panel. */
+/** Recorded measurements no panel reads from this ledger. Each says why. */
 export const UNDRAWN: Readonly<Record<string, string>> = {
 	band: 'The mixed historical confidence aggregate is not drawn or reinterpreted as HHEM.',
-	extraction_suspect: 'The extraction class, flag and yield diagnostic is removed; the flag remains recorded.'
+	extraction_suspect: 'The extraction class, flag and yield diagnostic is removed; the flag remains recorded.',
+	source_words_before_cap: 'The article length before the cap. The article record holds the same fact and the console reads cuts from there.',
+	source_words: 'The article length after the cap. The article record holds the same fact and the console reads cuts from there.'
 };
 
 /** Every remaining column, and why no panel owes it a number.

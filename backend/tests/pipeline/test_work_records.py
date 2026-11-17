@@ -277,7 +277,7 @@ def test_a_malformed_visual_decline_keeps_shape_diagnostics_off_the_success_deta
     ).model_dump(mode="json"))
 
     decision = _decide_the_visual(
-        summary, article,
+        summary,
         Completion(content=declining_reply(title="model-only words"), finish_reason="stop"),
         elements.element_table(article, config=settings.app.elements),
         settings=settings, date="2026-08-21",

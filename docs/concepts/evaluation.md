@@ -1,8 +1,8 @@
 # Evaluation
 
-**Last Updated**: 2026-11-16
+**Last Updated**: 2026-11-17
 
-How a published summary is judged, and how the judgement is kept honest. This page fixes the vocabulary; the tunable bands live in [config/summary-length.md](config/summary-length.md).
+How a published summary is judged, and how the judgement is kept honest. This page fixes the vocabulary; the confidence thresholds are `evaluation.band_high_min` and `evaluation.band_medium_min` in `config/idhazh.json`.
 
 **It is one of three, and a person arrives holding one question of the three:**
 
@@ -258,8 +258,8 @@ Not to be done: seeding the queue with model pre-labels for a human to confirm. 
 
 Scores are bucketed into a small number of confidence bands for recorded
 evaluation and operator inspection. Reader pages show neither confidence text
-nor a quality glyph. Bands are tunable
-([config/summary-length.md](config/summary-length.md)) and are re-calibrated
+nor a quality glyph. The thresholds are tunable
+(`evaluation.band_high_min` and `evaluation.band_medium_min`) and are re-calibrated
 against the human spot-checks rather than being fixed by taste.
 
 A low-confidence item still publishes. Its saved band and reason remain
@@ -926,7 +926,6 @@ reading that list.
 - [search-quality.md](search-quality.md) - the other instrument: whether archive search finds the right story.
 - [pipeline-loop.md](pipeline-loop.md) - where the Evaluate stage sits.
 - [digest.md](digest.md) - how a confidence band reaches a reader.
-- [config/summary-length.md](config/summary-length.md) - the band thresholds and retry budget.
 - [../../CLAUDE.md](../../CLAUDE.md) Guardrail #12 - every read must have a fixed-size input.
 - [partitions.md](partitions.md) - what a partition file is called, and what a name the rule does not recognise does.
 - [principles.md](principles.md) - principle 6, the belief this page implements.

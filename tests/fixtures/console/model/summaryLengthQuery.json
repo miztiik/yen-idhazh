@@ -6,8 +6,6 @@
       "run_id": "2026-08-20-1",
       "model_id": "canary",
       "summary_words": 118,
-      "source_words_before_cap": null,
-      "source_words": 1320,
       "compression": 0.089394
     },
     {
@@ -15,8 +13,6 @@
       "run_id": "2026-08-20-1",
       "model_id": "canary",
       "summary_words": 164,
-      "source_words_before_cap": null,
-      "source_words": 2100,
       "compression": 0.066939
     },
     {
@@ -24,8 +20,6 @@
       "run_id": "2026-08-20-1",
       "model_id": "canary",
       "summary_words": 190,
-      "source_words_before_cap": 6100,
-      "source_words": 2100,
       "compression": 0.031148
     },
     {
@@ -33,8 +27,6 @@
       "run_id": "2026-08-20-1",
       "model_id": "canary",
       "summary_words": 205,
-      "source_words_before_cap": 2800,
-      "source_words": 2100,
       "compression": 0.073214
     },
     {
@@ -42,8 +34,6 @@
       "run_id": "2026-08-20-1",
       "model_id": "canary",
       "summary_words": 31,
-      "source_words_before_cap": 38,
-      "source_words": 38,
       "compression": 0.815789
     },
     {
@@ -51,8 +41,6 @@
       "run_id": "2026-08-20-1",
       "model_id": "canary",
       "summary_words": 62,
-      "source_words_before_cap": 140,
-      "source_words": 140,
       "compression": 0.442857
     },
     {
@@ -60,8 +48,6 @@
       "run_id": "2026-08-20-1",
       "model_id": "canary",
       "summary_words": 78,
-      "source_words_before_cap": 4200,
-      "source_words": 2100,
       "compression": 0.018571
     },
     {
@@ -69,8 +55,6 @@
       "run_id": "2026-08-20-1",
       "model_id": "canary",
       "summary_words": 96,
-      "source_words_before_cap": 880,
-      "source_words": 880,
       "compression": 0.109091
     }
   ],

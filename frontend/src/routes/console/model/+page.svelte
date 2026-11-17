@@ -111,7 +111,7 @@
 							onAnswer={(name, answer) => { answers[name] = answer; }}>
 							{#snippet children(rows, range)}
 								<Panels {id} {rows} {range} rule={modelRuleFor(id, shell, range)} chart={data.chart} {knobs}
-									bands={data.summarizeBands} thresholds={data.matchThresholds} throughputReference={data.throughputReference} />
+									thresholds={data.matchThresholds} throughputReference={data.throughputReference} />
 							{/snippet}
 						</Query>
 					{/if}

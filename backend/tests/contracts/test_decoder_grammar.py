@@ -93,7 +93,6 @@ def _decoder_schemas() -> dict[str, dict[str, Any]]:
         ),
         "summarize_and_plan": calls.summarize_and_plan_schema(plan=True),
         "summarize_only": calls.summarize_and_plan_schema(plan=False),
-        "summarize_and_plan_brief": calls.summarize_and_plan_schema(plan=True, brief=True),
         "article_references": calls.summarize_and_plan_schema(table=table),
         "empty_references": calls.summarize_and_plan_schema(table=empty),
     }

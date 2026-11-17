@@ -64,9 +64,9 @@ STAMP: Final = {
 def probe() -> dict[str, Any]:
     """The fixture, refused unless it says where it came from.
 
-    The same three fields `test_summarize.probe_fixture` enforces, checked here
-    too rather than imported: this module has to fail on its own when a later
-    edit strips the provenance out of the file it reads.
+    The fixture, refused unless it says where it came from: this module has to
+    fail on its own when a later edit strips the provenance out of the file it
+    reads.
     """
     loaded: dict[str, Any] = json.loads(read_text(PROBE))
     missing = [key for key in ("recorded", "why_not_recorded", "how_to_record") if key not in loaded]

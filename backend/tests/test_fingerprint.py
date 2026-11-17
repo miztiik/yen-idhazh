@@ -37,6 +37,7 @@ from idhazh.classify import calls
 from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.knobs.model_server import ModelServerConfig
 from idhazh.contracts.knobs.models import ModelRef, ModelsConfig
+from idhazh.contracts.knobs.summarize import SummarizeConfig
 from idhazh.fingerprint import (
     DIGESTED_FLAGS,
     MACHINE_INPUTS,
@@ -192,6 +193,19 @@ def test_the_turn_envelope_reaches_the_stamp_by_both_routes_it_claims() -> None:
 
     assert calls.prompt_inputs(markers=markers) != calls.prompt_inputs(markers=moved)
     assert turn_markers_digest(markers) != turn_markers_digest(moved)
+
+
+def test_a_summarize_knob_no_prompt_file_shows_still_moves_the_stamp() -> None:
+    """The stamp hashes the whole summarize block, not only the bytes it renders.
+
+    `asks_for_a_visual_plan` is named by no prompt file, so only the block itself
+    can carry it into the stamp.
+    """
+    markers = a_built_envelope()
+
+    assert calls.prompt_inputs(
+        SummarizeConfig(asks_for_a_visual_plan=True), markers=markers
+    ) != calls.prompt_inputs(SummarizeConfig(asks_for_a_visual_plan=False), markers=markers)
 
 
 def test_the_envelope_digest_sees_what_a_rendered_prompt_cannot() -> None:

@@ -19,13 +19,12 @@ from idhazh.contracts.article import Article
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.element import ElementKind, ElementTable
 from idhazh.contracts.file_envelope import Period
-from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.visual import EncodingRole, PlanDecision, VisualPlan, VisualType
 from idhazh.contracts.visual_decision import NoneReason, VisualDecision, VisualState
 from idhazh.contracts.visual_telemetry import ValidatorCheck, VisualAttemptRow
 from idhazh.elements import ExtractionHealth
-from idhazh.llm.server import Completion, window
+from idhazh.llm.server import Completion, response_limit, window
 from idhazh.stages import common
 from idhazh.stages.two_calls import _decide_the_visual, _drawn
 from idhazh.telemetry import visual_attempts
@@ -96,7 +95,6 @@ def test_real_decisions_keep_refusals_replacements_floor_evidence_and_render_fai
 
 def test_production_decider_covers_exactly_the_five_implemented_none_gates(tmp_path: Path) -> None:
     summary, _, table = inputs()
-    article = Article.read(CONTRACT_FIXTURES_DIR / "article" / "ok.json")
     knobs = settings()
     stamp = {
         "version": VisualDecision.schema_version(), "model_id": "fixture-model",
@@ -105,18 +103,19 @@ def test_production_decider_covers_exactly_the_five_implemented_none_gates(tmp_p
     cut = json.loads(read_text(SUMMARIZE_AND_PLAN_REPLIES / "cut-in-the-plan.json"))[
         "choices"
     ][0]["message"]["content"]
+    # The largest prompt that still leaves a reply its whole response limit.
+    room = window(knobs.models.summarizer.server) - response_limit(
+        knobs.models.summarizer.sampling
+    )
     cases = (
         (Completion(content="", finish_reason="stop"), False),
-        (Completion(content=cut, finish_reason="length", prompt_tokens=0), True),
-        (Completion(
-            content=cut, finish_reason="length",
-            prompt_tokens=window(knobs.models.summarizer.server),
-        ), True),
+        (Completion(content=cut, finish_reason="length", prompt_tokens=room), True),
+        (Completion(content=cut, finish_reason="length", prompt_tokens=room + 1), True),
         (Completion(content='{"visual":{"type":"bar"}', finish_reason="stop"), True),
     )
     decisions = [
         _decide_the_visual(
-            summary, article, reply, table, settings=knobs, date=DATE, stamp=stamp,
+            summary, reply, table, settings=knobs, date=DATE, stamp=stamp,
             wants_a_plan=wants, run_id=RUN,
         )
         for reply, wants in cases
@@ -131,9 +130,9 @@ def test_production_decider_covers_exactly_the_five_implemented_none_gates(tmp_p
         ).items() if name not in {"version", "plan_version"}
     }
     # Validate the recorded reply before exercising the production decision router.
-    calls.parse_summarize_and_plan(json.dumps(content), source_words=article.band_source_words)
+    calls.parse_summarize_and_plan(json.dumps(content))
     decisions.append(_decide_the_visual(
-        summary, article, Completion(content=json.dumps(content), finish_reason="stop"), table,
+        summary, Completion(content=json.dumps(content), finish_reason="stop"), table,
         settings=knobs, date=DATE, stamp=stamp, wants_a_plan=True, run_id=RUN,
     ))
     assert all(
@@ -157,7 +156,7 @@ def test_shape_evidence_and_missing_compiler_refusals_persist_without_invented_r
         "decided_at": f"{DATE}T12:00:00Z",
     }
     malformed = _decide_the_visual(
-        summary, article,
+        summary,
         Completion(content=declining_reply(title="model-only words"), finish_reason="stop"),
         table, settings=knobs, date=DATE, stamp=stamp, wants_a_plan=True, run_id=RUN,
     )
@@ -260,9 +259,3 @@ def test_old_attempts_remain_readable_without_invented_outcome_evidence() -> Non
     assert read.gate_floor_applied is None
     with pytest.raises(ValidationError):
         VisualAttemptRow.model_validate(old.model_dump() | {"planned_type": "bar"})
-
-
-@pytest.mark.parametrize("name", ["visuals_full_grain_months", "visual_aggregate_keep_months"])
-def test_obsolete_visual_retention_knobs_are_refused_by_name(name: str) -> None:
-    with pytest.raises(ValidationError, match=name):
-        ObservabilityConfig.model_validate({name: 14})

@@ -1,7 +1,7 @@
 """`config/idhazh.json` - the one tree every block hangs from, and the rules that cross two of them.
 
 One block's knobs live in `idhazh.contracts.knobs.<block>`. This file holds the
-aggregate and the five validators no single block can run, because each of them
+aggregate and the validators no single block can run, because each of them
 reads two.
 
 **A rule that reads two blocks is not automatically this file's.** One of them
@@ -28,7 +28,6 @@ Every knob ships a sane default, so a fresh clone runs unconfigured.
 
 from __future__ import annotations
 
-import math
 from collections.abc import Mapping
 from types import MappingProxyType
 from typing import Annotated, Any, ClassVar, Final, Self
@@ -204,26 +203,6 @@ class AppConfig(Contract):
         lines went.
         """
         return refuse_a_removed_knob("config", data, SUPERSEDED_APP_NAMES)
-
-    @model_validator(mode="after")
-    def _the_ladder_and_the_extract_floor_agree(self) -> Self:
-        """The ask and the tolerance now live together, so only one block pair is left.
-
-        Until 2026-09-09 this checked every band against two global word bounds in
-        `evaluation`. That check is gone with the bounds: the tolerance is derived
-        from the band it applies to, so an operator editing the ladder can no
-        longer put the ask outside the gate without seeing both. What remains is
-        the one derivation that genuinely spans two blocks - the shortest ask sets
-        the shortest article worth fetching.
-        """
-        brief_target = self.summarize.bands[0].target_words_min
-        derived_floor = math.ceil(brief_target / self.evaluation.brief_compression_ceiling)
-        if self.extract.min_source_words != derived_floor:
-            raise ValueError(
-                "extract.min_source_words must equal summarize.bands[0].target_words_min "
-                "divided by evaluation.brief_compression_ceiling"
-            )
-        return self
 
     @model_validator(mode="after")
     def _finetune_names_models_that_exist(self) -> Self:

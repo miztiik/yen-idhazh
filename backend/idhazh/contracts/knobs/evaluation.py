@@ -32,15 +32,6 @@ class EvaluationConfig(Model):
     )
     band_high_min: float = Field(default=0.80, ge=0.0, le=1.0)
     band_medium_min: float = Field(default=0.50, ge=0.0, le=1.0)
-    brief_compression_ceiling: float = Field(
-        default=0.5,
-        gt=0.0,
-        le=1.0,
-        description=(
-            "Summary/source ratio that derives extract.min_source_words from the "
-            "first brief ask."
-        ),
-    )
     corpus_compression_ceiling: float = Field(
         default=0.75,
         gt=0.0,
@@ -86,29 +77,6 @@ class EvaluationConfig(Model):
     @classmethod
     def _name_the_retained_corpus_length_limit(cls, data: Any) -> Any:
         return renamed_keys(data, {"verbatim_reject_ceiling": "corpus_compression_ceiling"})
-
-    @model_validator(mode="before")
-    @classmethod
-    def _summary_word_bounds_moved_to_the_ladder(cls, data: Any) -> Any:
-        """Read a config that still names the old global summary word bounds.
-
-        `summary_words_min` and `summary_words_max` were one pair of integers
-        applied to every rung of the ladder, and a reply outside them deleted the
-        item. They are gone: the floor is `summarize.length_policy` and the
-        ceiling is derived per band. `config/` is a persisted surface and every
-        model here forbids unknown keys, so a file written before the move would be
-        refused outright (section 11). The old values are dropped rather than
-        mapped - neither has a counterpart, and carrying 250 forward as a ceiling
-        would reinstate the cap the ladder now sets for itself.
-        """
-        if not isinstance(data, dict):
-            return data
-        if not any(name in data for name in ("summary_words_min", "summary_words_max")):
-            return data
-        migrated = dict(data)
-        migrated.pop("summary_words_min", None)
-        migrated.pop("summary_words_max", None)
-        return migrated
 
     @model_validator(mode="after")
     def _bands_and_ranges_are_ordered(self) -> Self:

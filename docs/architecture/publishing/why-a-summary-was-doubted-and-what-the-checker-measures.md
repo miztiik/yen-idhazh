@@ -1,6 +1,6 @@
 # What the summary console measures
 
-**Last Updated**: 2026-11-16
+**Last Updated**: 2026-11-17
 
 `/console/model/` answers what the model wrote, how long it took, and what it got
 wrong. Its panels are the retained measure cards, throughput, model read/write
@@ -74,8 +74,8 @@ Per-call charging follows
 
 **The inventories describe real readers, not hypothetical receivers.**
 [../../../frontend/src/lib/console/eval-instruments.ts](../../../frontend/src/lib/console/eval-instruments.ts)
-assigns active measurements through `DRAWN_BY`, deliberately omitted diagnostics
-through `UNDRAWN`, and identities through `NOT_A_MEASUREMENT`. Together they
+assigns active measurements through `DRAWN_BY`, measurements no panel reads from
+this ledger through `UNDRAWN`, and identities through `NOT_A_MEASUREMENT`. Together they
 name every native `EvalRow` property exactly once, and nothing else.
 `backend/tests/contracts/test_frontend_console_lists.py` compares the sets;
 [../../../frontend/tests/console-model-instruments.spec.ts](../../../frontend/tests/console-model-instruments.spec.ts)

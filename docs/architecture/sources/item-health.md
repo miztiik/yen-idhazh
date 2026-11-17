@@ -1,6 +1,6 @@
 # Item Health
 
-**Last Updated**: 2026-11-11
+**Last Updated**: 2026-11-17
 
 What every planned item did on every run, where that record lives, and which
 failures count against a source. This is item-grain evidence. Feed health is
@@ -515,7 +515,8 @@ stage that did the work.
 
 `no_title` remains readable on historical failures. New extractions do not
 reject an acceptable body for an absent source headline; the summarizer
-generates the title.
+generates the title. `length_out_of_range` is the same: no run produces it,
+because no reply is judged by its length, and an older row still reads.
 
 **A new code is named in five places, and the fifth only fails at runtime.**
 `FailureCode` itself, `FAILURE_CODE_STAGES`, `SOURCE_NEUTRAL_FAILURE_CODES`,

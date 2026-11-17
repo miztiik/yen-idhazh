@@ -12,7 +12,6 @@
   "generated_at": "2026-08-23T15:04:11Z",
   "input_tokens": 1796,
   "item_id": "ai-01",
-  "length_action": null,
   "model_id": "qwen3-8b-q4-k-m",
   "output_digest": "e353293f6c231a272c020aa6a1a38521bfb276e007664d8e0364057ca6a506fe",
   "output_tokens": 214,

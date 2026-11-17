@@ -12,7 +12,6 @@ import { completeModelRule, ruleEvents } from '../src/lib/charts/d3/model-rule';
 import { failureRuleRows, failureRules } from '../src/lib/console/failure-rules';
 import { settingsRules } from '../src/lib/console/settings-moved';
 import { BAND_UNREAD } from '../src/lib/console/band';
-import { summarizeConfig } from '../src/lib/server/config';
 import type { SliceResult, Row } from '../src/lib/data/ledger';
 
 function recorded(name: string): Row[] {
@@ -38,10 +37,10 @@ test('retained metric trends keep model identities and dated setting changes', (
 	const from = '2030-06-10';
 	const to = '2030-06-14';
 	const score = (date: string, model_id: string, summary_words: number): Row => ({
-		date, run_id: `${date}-1`, model_id, summary_words, source_words_before_cap: 500, compression: 0.2
+		date, run_id: `${date}-1`, model_id, summary_words, compression: 0.2
 	});
 	const scores = [score(from, 'before-model', 100), score(to, 'after-model', 50)];
-	const lengths = summaryLength(scores, summarizeConfig().bands);
+	const lengths = summaryLength(scores);
 	expect(lengths.map(({ model, median }) => ({ model, median }))).toEqual([
 		{ model: 'before-model', median: 100 }, { model: 'after-model', median: 50 }
 	]);
@@ -99,7 +98,7 @@ test('recorded native slices drive all eligible model reducers without broadenin
 	}
 	expect(cost(recorded('writeCostQuery'), 'summarize_ms').times?.n).toBeGreaterThan(0);
 	expect(cost(recorded('scoreCostQuery'), 'score_ms').untimed).toBeGreaterThanOrEqual(0);
-	const lengths = summaryLength(recorded('summaryLengthQuery'), summarizeConfig().bands);
+	const lengths = summaryLength(recorded('summaryLengthQuery'));
 	expect(lengths.length).toBeGreaterThan(0);
 	expect(new Set(lengths.map((r) => r.runId)).size).toBe(lengths.length);
 	expect(modelThroughput(recorded('modelThroughputQuery'), { start: '2026-08-01', end: '2026-08-20' }).length).toBeGreaterThan(0);

@@ -215,7 +215,7 @@ def run_calls(
                 prompt_files=settings.app.prompt_files,
                 config_dir=settings.config_dir,
             ),
-            output_schema=summarize.output_schema_text(settings.app.summarize),
+            output_schema=summarize.output_schema_text(),
             runner_class=runner_class(),
             extractor_version=article.extractor_version,
             sanitizer_version=article.sanitizer_version,

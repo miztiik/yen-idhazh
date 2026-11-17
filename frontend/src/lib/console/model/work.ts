@@ -14,10 +14,8 @@
  * no answer to the question the column asks now; printing any of the three as
  * zero would say the model did nothing.
  *
- * Imports nothing at runtime: the browser suite loads this module in plain
- * Node, where no Vite alias resolves, and it reads the same ledgers the page
- * reads. The one import below is a type, which the compiler erases, and it is
- * written relative for the same reason.
+ * Every import is relative: the browser suite loads this module in plain Node,
+ * where no Vite alias resolves, and it reads the same ledgers the page reads.
  */
 
 import {
@@ -34,7 +32,6 @@ import {
 // console importing a server type back the other way.
 import type { DayScoredCounts } from '../eval-instruments';
 import { itemRates } from '../rates';
-import type { SummaryBand } from '../../server/config';
 
 export { itemRates } from '../rates';
 
@@ -890,40 +887,13 @@ export function throughputWithin(
 		.sort((a, b) => a.date.localeCompare(b.date));
 }
 
-/** The band ladder in ascending order, sorted once for a whole pass.
- *
- * Sorted here rather than inside `askFor`, because `askFor` is asked once per
- * article and the ladder is the same ladder every time. Copied rather than
- * sorted in place: the caller's array is the config block, which is frozen.
- */
-function ladder(bands: readonly SummaryBand[]): SummaryBand[] {
-	return [...bands].sort((a, b) => a.min_source_words - b.min_source_words);
-}
-
-/** The band the summarizer was asked to write to, for an article of this length.
- *
- * The highest band the article clears, which is how `backend/idhazh/summarize.py`
- * picks it. A length nothing covers has no ask, and null says so.
- *
- * `ascending` is a ladder `ladder()` has already sorted. The walk stops at the
- * first rung the article does not reach, because every rung after it is higher.
- */
-function askFor(ascending: readonly SummaryBand[], sourceWords: number): SummaryBand | null {
-	let found: SummaryBand | null = null;
-	for (const band of ascending) {
-		if (sourceWords < band.min_source_words) break;
-		found = band;
-	}
-	return found;
-}
-
 /** How long one run's summaries came out, in three numbers and never in one
  * mark per article.
  *
  * A mark per article draws its dense middle as a solid block, and the marks
  * that block hides are the only ones anybody acts on - a summary of three
- * words, or one twice the length that was asked for. Three marks a run keep
- * both ends and lose the block.
+ * words, or one far longer than the rest. Three marks a run keep both ends and
+ * lose the block.
  */
 export interface RunLength {
 	runId: string;
@@ -936,19 +906,10 @@ export interface RunLength {
 	low: number;
 	median: number;
 	high: number;
-	/** The narrowest and widest the run's own articles were asked for, read
-	 * through each article's own length. Null where no article in the run
-	 * recorded one. */
-	askLow: number | null;
-	askHigh: number | null;
 }
 
 /** One entry per run the score ledger holds a summary for, oldest first. */
-export function runLengths(
-	scores: Record<string, string>[],
-	bands: readonly SummaryBand[]
-): RunLength[] {
-	const rungs = ladder(bands);
+export function runLengths(scores: Record<string, string>[]): RunLength[] {
 	const byRun = new Map<string, Record<string, string>[]>();
 	for (const row of scores) {
 		const runId = row.run_id ?? '';
@@ -965,11 +926,6 @@ export function runLengths(
 			.filter((count): count is number => count !== null)
 			.sort((a, b) => a - b);
 		if (words.length === 0) continue;
-		const asks = rows
-			.map((row) => measured(row.source_words_before_cap) ?? measured(row.source_words))
-			.filter((count): count is number => count !== null)
-			.map((count) => askFor(rungs, count))
-			.filter((band): band is SummaryBand => band !== null);
 		const models = [...new Set(rows.map((row) => row.model_id ?? '').filter((id) => id !== ''))];
 		found.push({
 			runId,
@@ -978,9 +934,7 @@ export function runLengths(
 			items: words.length,
 			low: words[0],
 			median: Math.round(quantile(words, 0.5)),
-			high: words[words.length - 1],
-			askLow: asks.length === 0 ? null : Math.min(...asks.map((band) => band.target_words_min)),
-			askHigh: asks.length === 0 ? null : Math.max(...asks.map((band) => band.target_words_max))
+			high: words[words.length - 1]
 		});
 	}
 	return found.sort((a, b) => a.runId.localeCompare(b.runId));

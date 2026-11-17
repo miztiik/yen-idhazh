@@ -1,6 +1,6 @@
 # Model throughput and why it drifts inside a run
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-11-17
 What the two model rates mean, why the slow half of a run is slow, and what a
 change in either number is allowed to prove.
 
@@ -21,9 +21,10 @@ and what that run has to record is in
 [Recording a current measurement](../../reference/pipeline-cost.md#how-to-add-a-reading).
 What the move to 10,000 cost is measured in
 [How often the truncation cap bites](../../reference/benchmarks/how-often-the-truncation-cap-bites.md).
-**Read is the end that moves.** A longer article is more prompt to take in;
-write does not move at all, because the summary length asked for comes from
-`article.band_source_words`, which is the count from before the cap cut it.
+**Read is the end that moves.** A longer article is more prompt to take in. At
+the cap-2500 measurement write did not move, because the summary length asked
+for followed the article's length from before the cap cut it; the ask has since
+been removed, and no reading has been taken without it.
 
 ## What a thinking span costs, and the one part that is still an estimate
 
@@ -348,7 +349,7 @@ from.
 ## Which stage sends the two calls
 
 Until 2026-09-12 nothing sent them. The two calls, the gate in front of them,
-the ladder below them and the renderer at the end were all built and none of
+the downgrade ladder below them and the renderer at the end were all built and none of
 them was reachable from a stage: `work` made one summarizer call an item and the
 separate `visuals` job drew the pictures on the small model.
 
@@ -383,8 +384,8 @@ for the article and every figure above is wrong. The item-health ledger carries
 `label_input_tokens` and `summary_cached_tokens` side by side from 2026-09-12,
 so the reading is one comparison over that ledger, and
 [the sequence the window holds](#the-sequence-is-declared-once-and-the-window-was-checked-against-it)
-below says what came back. The second is the summarize-and-plan call's decode: its output budget is
-4,735 tokens and the one reply ever measured was 327, and a reply at half the
+below says what came back. The second is the summarize-and-plan call's decode: its output budget was 4,735 tokens when this was
+written (it is now the model file's response limit, 8,192) and the one reply ever measured was 327, and a reply at half that
 budget is 144 minutes of the summarize-and-plan call alone on a 20-item shard. The third is the worst
 `work` shard against the 180-minute bar in the host-fingerprint ledger.
 
@@ -395,7 +396,9 @@ each one's decode budget beside it, and `work` walks that tuple rather than
 writing the two calls out as two statements. **The reason is the window, not
 tidiness.** Every node's reply is paid twice - once as its own decode, and again
 inside the prompt of every node behind it - so what the window has to hold is
-the label call's prompt plus both budgets plus the seam between the turns. A sequence
+the label call's prompt plus both budgets plus the seam between the turns. The
+label call's budget is derived from its reply shape; the summarize-and-plan
+call's is the model file's response limit. A sequence
 assembled a statement at a time is a budget nobody ever checks whole, and
 `dag.sequence_tokens` is that sum in one place: the contract test and the
 production refusal read the same function. A third call raises it by that call's
@@ -431,6 +434,15 @@ made and bought the whole tail. Read once from `ledger.load_item_health` with a
 30-day cover, 2026-09-13; that reader is `ledger.load_days` over the same 30 days
 now.
 
+**The same question with the response limit as the reserve** (computed
+2026-11-17 from the committed window, cap and menu). Behind the prompt the
+sequence now holds a fixed 10,988 tokens - 2,738 for the label call's reply, 58
+for the seam and 8,192 for the summarize-and-plan call's response limit. The
+longest article the extractor passes (26,000 tokens, 256 menu rows) sums to
+64,403 of the 65,536-token window, so no committed article is refused: 1,133
+tokens remain, against a worst prompt of 8,741 tokens in the 2026-09-13
+population above.
+
 ## The write rate still falls through a run, and the cause is the ordering
 
 Measured on run `32742672105`, all four workers, first half of each job against
@@ -445,11 +457,11 @@ its second half:
 
 The read rate stays flat across the same split. Only writing slows.
 
-The cause is our own ordering. `stage_work` sorts a worker's items by prompt
-band before the model loop, so **every worker summarises its shortest articles
-first and its longest last**. By the second half of a job each request is
-carrying a bigger prompt and is asked for a longer summary, and both make
-writing slower per token:
+The cause is our own ordering. `stage_work` sorts a worker's items by source
+length before the model loop (by prompt band until 2026-11-17), so **every worker
+summarises its shortest articles first and its longest last**. By the second half
+of a job each request is carrying a bigger prompt and the summary it writes is
+longer, and both make writing slower per token:
 
 - **A bigger prompt.** Every generated token attends over everything already in
  the context. A 2700-token context costs more per generated token than an
@@ -596,15 +608,16 @@ The two are different measurements and this chart takes only one of them.
 
 ## Design rationale
 
-**Why the band sort stays, even though it makes the run look like it degrades.**
-Grouping same-band prompts together is what lets consecutive requests share a
-prefix, because the band's numbers are substituted into the system prompt. The
-alternative - the original discovery order - breaks the shared prefix at almost
-every item. The ordering is a cache decision that has a reporting side effect,
-and the fix is to explain the side effect rather than to give up the cache.
-The files are addressed by item id, not by processing order, so the ordering
-changes cache locality and never the output
-([`../../concepts/pipeline-loop.md`](../../concepts/pipeline-loop.md)).
+**Why the length sort stays, even though it makes the run look like it degrades.**
+Shortest source first means a shard that runs out of its own clock leaves its
+longest items unworked rather than its quickest, so more items finish in the
+time there is. The files are addressed by item id, not by processing order, so
+the ordering changes what is worked first and never the output
+([`../../concepts/pipeline-loop.md`](../../concepts/pipeline-loop.md)). Until
+2026-11-17 the sort was by prompt band, on the argument that same-band prompts
+share a prefix because the band's numbers were substituted into the system
+prompt. The system turn is the same bytes for every item now, so that argument
+is gone and the order does not touch the cache.
 
 **Why the console draws a spread rather than a line.** A day drawn as one point
 answers "is it faster" and hides "did the two ends move apart". Since the
@@ -647,7 +660,7 @@ at the width it occupies, so one unit is one pixel. The server draws at
 | --- | --- |
 | Plot milliseconds per token on a second axis | It is `1000 / tokens per second`. The same fact, mirrored, for twice the ink. |
 | Encode milliseconds as marker size | Same reciprocal, less legible than a position. |
-| Sort items by discovery order to flatten the drift | Trades a real prefix-cache saving for a prettier chart. |
+| Sort items by discovery order to flatten the drift | Trades the shortest-first order, which leaves a clock-limited shard's longest items unworked rather than its quickest, for a prettier chart. |
 | Keep two requests in flight per worker to overlap read and write | Measured 2026-08-25: aggregate write rises 1.055x for a second sequence, spread 0.022, against a 1.4x gate. That is about 1.9 percent of a run. Four sequences reach 1.133x and oversubscribe the 4 vCPU. Cancelled, not deferred. |
 | Report one blended `summarize_ms` rate | Cannot separate a long-article day from a long-summary day, which is the question the chart exists for. |
 | Average the per-item rates for the day figure | A rate is a ratio. Averaging weighs a 60-word release note the same as a 2000-word feature. |
@@ -664,6 +677,6 @@ at the width it occupies, so one unit is one pixel. The server draws at
 
 - [`../sources/item-health.md`](../sources/item-health.md) - the columns, and how a rate is derived.
 - [`../contracts/schemas.md`](../contracts/schemas.md) - `HostFingerprintRow`, and why a job-grain fact is its own contract.
-- [`prompt.md`](prompt.md) - the bands, and why the ask changes with article length.
+- [`prompt.md`](prompt.md) - the prompt, the reply shape and the output budget.
 - [`../../reference/pipeline-cost.md`](../../reference/pipeline-cost.md) - every number here, with hardware and date.
 - [`../../concepts/pipeline-loop.md`](../../concepts/pipeline-loop.md) - why a worker may reorder inside its shard.

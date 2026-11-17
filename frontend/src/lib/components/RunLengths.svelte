@@ -3,19 +3,13 @@
 	 *
 	 * This replaces a mark per article. Over the committed ledger that was
 	 * thousands of marks, and its dense middle rendered as a solid block - so the
-	 * only marks anybody acts on, a summary of three words or one twice the
-	 * length that was asked for, were the ones it hid. The lowest, the middle and
-	 * the highest of a run keep both ends and lose the block.
+	 * only marks anybody acts on, a summary of three words or one far longer than
+	 * the rest, were the ones it hid. The lowest, the middle and the highest of a
+	 * run keep both ends and lose the block.
 	 *
 	 * Per run and never per day. A day holds up to five runs, and a run is one
 	 * model reading one set of articles under one set of settings, so it is the
 	 * smallest thing on this page that a change can be attributed to.
-	 *
-	 * **The band is what the run's own articles were asked for**, read through
-	 * each article's own length rather than off the setting: an article's length
-	 * picks its band, so a run of short pieces is asked for less than a run of
-	 * long ones. Its two bounds print beside the chart, because a shaded band
-	 * with no printed bound cannot be checked.
 	 *
 	 * Hand-written SVG, so the chart is complete before any script runs.
 	 */
@@ -61,14 +55,7 @@
 	/** Every length the axis must hold, data only. Split from the axis so a
 	 * resize reuses this pass rather than walking the runs again for a new plot
 	 * height. */
-	const runValues = $derived(
-		runs.flatMap((run) => [
-			run.low,
-			run.high,
-			...(run.askLow === null ? [] : [run.askLow]),
-			...(run.askHigh === null ? [] : [run.askHigh])
-		])
-	);
+	const runValues = $derived(runs.flatMap((run) => [run.low, run.high]));
 	const fullRule = $derived(rule === undefined ? undefined : completeModelRule(rule, runs.map((run) => run.date)));
 	const declaration = $derived(fullRule === undefined ? null : ruleDeclaration(runs.length === 0
 		? { declined: 'There are no measured runs on which to place a dated settings change.' }
@@ -108,26 +95,8 @@
 			x: columnX(index),
 			yLow: yAxis.scale(run.low),
 			yMedian: yAxis.scale(run.median),
-			yHigh: yAxis.scale(run.high),
-			band:
-				run.askLow === null || run.askHigh === null
-					? null
-					: { y: yAxis.scale(run.askHigh), height: Math.max(1, yAxis.scale(run.askLow) - yAxis.scale(run.askHigh)) }
+			yHigh: yAxis.scale(run.high)
 		}))
-	);
-
-	/** The narrowest and the widest ask across everything drawn. Printed beside
-	 * the chart, so the shaded region is a number a reader can check. */
-	const askLow = $derived(
-		runs.map((run) => run.askLow).filter((words): words is number => words !== null)
-	);
-	const askHigh = $derived(
-		runs.map((run) => run.askHigh).filter((words): words is number => words !== null)
-	);
-	const ask = $derived(
-		askLow.length === 0 || askHigh.length === 0
-			? null
-			: { low: Math.min(...askLow), high: Math.max(...askHigh) }
 	);
 
 	/** A rule between two neighbouring runs on different models. Everything left
@@ -177,19 +146,11 @@
 		}))
 	);
 
-	/** What a run with no article length says in place of an ask, in the strip and
-	 * in the run's own sentence alike. */
-	const NO_ASK = 'no article in it recorded a length';
-
 	/** One run's sentence, kept on its marks as their name. Every word of it is in
 	 * the strip at that run: the run id names the day, so the date is not said a
 	 * second time. */
 	function sentence(run: RunLength): string {
-		const asked =
-			run.askLow === null || run.askHigh === null
-				? `${NO_ASK.charAt(0).toUpperCase()}${NO_ASK.slice(1)}.`
-				: `Asked for ${run.askLow} to ${run.askHigh} words.`;
-		return `Run ${run.runId}${run.model === null ? '' : `, ${run.model}`}: ${run.items} summaries, shortest ${run.low} words, median (p50) ${run.median}, longest ${run.high}. ${asked}`;
+		return `Run ${run.runId}${run.model === null ? '' : `, ${run.model}`}: ${run.items} summaries, shortest ${run.low} words, median (p50) ${run.median}, longest ${run.high}.`;
 	}
 
 	/** What a model rule says, on the rule and in the strip on the run it opens. */
@@ -199,7 +160,6 @@
 
 	const description = $derived(
 		`Summary length per run over ${runs.length} runs, minimum, median (p50) and maximum of each. ` +
-			(ask === null ? '' : `The shaded band is the ${ask.low} to ${ask.high} words the articles were asked for. `) +
 			placed.map(({ run }) => sentence(run)).join(' ')
 	);
 
@@ -221,14 +181,6 @@
 				{ label: 'Shortest', swatch: 'var(--chart-8)', values: runs.map((run) => run.low), format: words },
 				{ label: 'Middle', swatch: 'var(--chart-8)', values: runs.map((run) => run.median), format: words },
 				{ label: 'Longest', swatch: 'var(--chart-8)', values: runs.map((run) => run.high), format: words },
-				{
-					label: 'Asked for',
-					swatch: null,
-					values: runs.map((run) =>
-						run.askLow === null || run.askHigh === null ? NO_ASK : run.askLow
-					),
-					format: (low: number, column: number) => `${low} to ${runs[column]?.askHigh} words`
-				},
 				{
 					label: 'Model',
 					swatch: null,
@@ -300,22 +252,6 @@
 				>
 					{tick}
 				</text>
-			{/each}
-
-			<!-- The ask, drawn under the marks so a mark sits on top of it. Not on
-			     the confidence ramp: a band is what we asked for, not a fault line. -->
-			{#each placed as column (column.run.runId)}
-				{#if column.band}
-					<rect
-						x={round(column.x - markWidth / 2)}
-						y={round(column.band.y)}
-						width={round(markWidth)}
-						height={round(column.band.height)}
-						fill="var(--chart-1)"
-						opacity="0.18"
-						data-run-band={column.run.runId}
-					/>
-				{/if}
 			{/each}
 
 			{#each swaps as swap (swap.runId)}
@@ -431,37 +367,10 @@
 		restingNote=", the newest run"
 		hint="Point at a run to read all three marks. Left and Right step through the runs, Escape returns to the newest."
 	/>
-
-	<!-- The band's own numbers. A shaded region nobody can read a bound off is a
-	     decoration, and this one is a setting somebody chose. -->
-	{#if ask}		<p class="mt-2 text-[0.75rem] text-text-tertiary" data-run-ask>
-			<span class="band-key" aria-hidden="true"></span>
-			We ask for between <span data-run-ask-low>{ask.low}</span> and
-			<span data-run-ask-high>{ask.high}</span> words. Which end depends on how long the article
-			is, so a run of short pieces is asked for less than a run of long ones.
-		</p>
-	{:else}
-		<p class="mt-2 text-[0.75rem] text-text-tertiary" data-run-ask="unmeasured">
-			No article in these runs recorded a length, so the band we asked for cannot be read.
-		</p>
-	{/if}
 </div>
 
 <style>
 	.plot {
 		margin-top: var(--space-4);
-	}
-
-	/* The same fill the band is drawn in, so the sentence names the region it is
-	   about rather than leaving a reader to guess which shading it means. */
-	.band-key {
-		display: inline-block;
-		width: 0.75rem;
-		height: 0.75rem;
-		margin-inline-end: 0.25rem;
-		border-radius: 2px;
-		background: var(--chart-1);
-		opacity: 0.18;
-		vertical-align: -1px;
 	}
 </style>

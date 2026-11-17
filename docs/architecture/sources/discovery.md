@@ -1,6 +1,6 @@
 # Source Discovery
 
-**Last Updated**: 2026-11-16
+**Last Updated**: 2026-11-17
 What the Collect stage consults, how those sources are organised, and how that organisation is changed without breaking a payload an earlier run wrote. Collect is one of the two stages that see the whole day ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape of what it sees.
 
 ## Three primitives, not one
@@ -352,7 +352,7 @@ second feed carrying one address, so `ui.lead_shared_subject_weight` sits under
 a subject that recurs across a week may not outrank a story two independent feeds
 carried today.
 
-`backend/tests/contracts/test_app_config.py::test_a_shared_subject_is_worth_less_than_a_second_feed_carrying_the_story`
+`backend/tests/test_rank.py::test_the_carriage_step_cannot_outrank_one_tier_step`
 holds it, reading both numbers off the config rather than spelling them, so an
 edit to the step moves the bound with it.
 

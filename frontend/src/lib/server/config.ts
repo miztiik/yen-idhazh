@@ -186,16 +186,6 @@ export interface EvaluationConfig {
 	band_medium_min: number;
 }
 
-export interface SummaryBand {
-	min_source_words: number;
-	target_words_min: number;
-	target_words_max: number;
-}
-
-export interface SummarizeConfig {
-	bands: SummaryBand[];
-}
-
 /** The one visuals knob a console panel prints.
  *
  * How many separate figures of one unit an article has to state before a chart
@@ -642,15 +632,6 @@ const OBSERVABILITY_DEFAULTS: ObservabilityConfig = {
 };
 const COLLECT_DEFAULTS: CollectConfig = { availability_strikes_before_rest: 5 };
 const EVALUATION_DEFAULTS: EvaluationConfig = { band_high_min: 0.8, band_medium_min: 0.5 };
-const SUMMARIZE_DEFAULTS: SummarizeConfig = {
-	bands: [
-		{ min_source_words: 0, target_words_min: 30, target_words_max: 45 },
-		{ min_source_words: 60, target_words_min: 45, target_words_max: 80 },
-		{ min_source_words: 700, target_words_min: 70, target_words_max: 130 },
-		{ min_source_words: 2000, target_words_min: 95, target_words_max: 160 },
-		{ min_source_words: 4000, target_words_min: 120, target_words_max: 200 }
-	]
-};
 const CONSOLE_DEFAULTS: ConsoleConfig = {
 	default_window_days: 14,
 	window_presets: [1, 7, 14, 30, 90],
@@ -805,7 +786,6 @@ interface RawConfig {
 	run?: Partial<RunConfig>;
 	retention?: Partial<RetentionConfig>;
 	collect?: Partial<CollectConfig>;
-	summarize?: Partial<SummarizeConfig>;
 	console?: ConsoleBlock;
 	assist?: Partial<AssistConfig>;
 	evaluation?: Partial<EvaluationConfig>;
@@ -910,11 +890,11 @@ function readJson<T>(...segments: string[]): T | null {
 
 /** Freeze a parsed file whole, not just its top level.
  *
- * A block the merge hands out by reference - `summarize.bands`,
- * `frame.breakpoints_px`, `digest.sections` - is now the same object on every
- * call. A caller that sorted or pushed in place would move a knob for every
- * later reader on the same build, and nothing on the page would look wrong.
- * Freezing turns that into a throw at the line that does it.
+ * A block the merge hands out by reference - `frame.breakpoints_px`,
+ * `digest.sections` - is now the same object on every call. A caller that
+ * sorted or pushed in place would move a knob for every later reader on the
+ * same build, and nothing on the page would look wrong. Freezing turns that
+ * into a throw at the line that does it.
  */
 function frozen<T>(value: T): T {
 	if (value !== null && typeof value === 'object') {
@@ -1193,10 +1173,6 @@ export function collectConfig(): CollectConfig {
  */
 export function evaluationConfig(): EvaluationConfig {
 	return { ...EVALUATION_DEFAULTS, ...(raw().evaluation ?? {}) };
-}
-
-export function summarizeConfig(): SummarizeConfig {
-	return { ...SUMMARIZE_DEFAULTS, ...(raw().summarize ?? {}) };
 }
 
 export function consoleConfig(): ConsoleConfig {

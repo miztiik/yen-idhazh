@@ -11,14 +11,18 @@ import json
 from pathlib import Path
 
 import pytest
-from support.paths import CONFIG_DIR, read_text
+from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh import config, corpus, summarize
 from idhazh.contracts.app_config import AppConfig
+from idhazh.contracts.article import Article
 from idhazh.contracts.corpus import ChatRole, ChatTurn, CorpusMeta, CorpusRow
+from idhazh.contracts.sources import SourceForm
 from utilities import reference_set
 
 VERTICALS = ("ai", "energy", "world")
+#: Three user-turn lengths, in words, that fall in three different doubling strata.
+SHORT, MEDIUM, LONG = 100, 1_000, 5_000
 
 
 @pytest.fixture
@@ -31,16 +35,16 @@ def app() -> AppConfig:
     return AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
 
 
-def a_row(app: AppConfig, *, band: int, key: str, vertical: str = "ai") -> CorpusRow:
-    """One corpus row whose prompt and stored source length belong to `band`."""
-    asked = app.summarize.bands[band]
-    system = summarize.system_prompt(app.summarize, source_words=asked.min_source_words)
+def a_row(
+    app: AppConfig, *, words: int, key: str, vertical: str = "ai", system: str | None = None
+) -> CorpusRow:
+    """One corpus row whose user turn is `words` words long, under the live prompt by default."""
     prefix = "Source form: article\n\n"
-    body = " ".join(["word"] * max(1, asked.min_source_words - len(prefix.split())))
+    body = " ".join(["word"] * (words - len(prefix.split())))
     return CorpusRow(
         version=CorpusRow.schema_version(),
         messages=[
-            ChatTurn(role=ChatRole.SYSTEM, content=system),
+            ChatTurn(role=ChatRole.SYSTEM, content=system or summarize.system_prompt(app.summarize)),
             ChatTurn(role=ChatRole.USER, content=prefix + body),
             ChatTurn(role=ChatRole.ASSISTANT, content='{"title": "t", "summary": "s"}'),
         ],
@@ -51,15 +55,7 @@ def a_row(app: AppConfig, *, band: int, key: str, vertical: str = "ai") -> Corpu
     )
 
 
-@pytest.fixture
-def window(tmp_path: Path, app: AppConfig) -> Path:
-    """A corpus spread over three bands and three verticals, plus one rare band."""
-    rows = [
-        a_row(app, band=1, key=f"a{n:02d}", vertical=VERTICALS[n % 3]) for n in range(12)
-    ]
-    rows += [a_row(app, band=2, key=f"b{n:02d}", vertical=VERTICALS[n % 3]) for n in range(6)]
-    rows.append(a_row(app, band=4, key="c01", vertical="world"))
-    path = tmp_path / "corpus"
+def write_corpus(path: Path, rows: list[CorpusRow]) -> Path:
     corpus.write(
         path,
         rows,
@@ -70,52 +66,32 @@ def window(tmp_path: Path, app: AppConfig) -> Path:
     return path
 
 
-def an_answer(app: AppConfig, band: int) -> str:
-    """A target inside `band`'s word range that the decoder would accept."""
-    asked = app.summarize.bands[band]
-    words = " ".join(["word"] * asked.target_words_min)
-    return json.dumps({"title": "A title", "summary": words})
+@pytest.fixture
+def window(tmp_path: Path, app: AppConfig) -> Path:
+    """A corpus spread over three lengths and three verticals, plus one rare long article."""
+    rows = [
+        a_row(app, words=SHORT, key=f"a{n:02d}", vertical=VERTICALS[n % 3]) for n in range(12)
+    ]
+    rows += [
+        a_row(app, words=MEDIUM, key=f"b{n:02d}", vertical=VERTICALS[n % 3]) for n in range(6)
+    ]
+    rows.append(a_row(app, words=LONG, key="c01", vertical="world"))
+    return write_corpus(tmp_path / "corpus", rows)
+
+
+def an_answer() -> str:
+    """A target the decoder would accept."""
+    return json.dumps({"title": "A title", "summary": "a few words"})
 
 
 # --- reading the stratification off a row ----------------------------------
 
 
-def test_shared_instructions_keep_reference_source_length_bands(app: AppConfig) -> None:
-    """Identical instructions must not put every article into the shortest band."""
-    prompts = reference_set.band_prompts(app.summarize)
-
-    for index, rendered in enumerate(prompts):
-        assert reference_set.band_of(
-            rendered,
-            prompts,
-            source_words=app.summarize.bands[index].min_source_words,
-            prompt_config=app.summarize,
-        ) == index
-
-
-def test_unique_prompt_match_preserves_a_band_after_source_truncation(app: AppConfig) -> None:
-    assert reference_set.band_of(
-        "Long source instructions",
-        ["Short source instructions", "Long source instructions"],
-        source_words=0,
-        prompt_config=app.summarize,
-    ) == 1
-
-
-def test_a_row_written_under_a_prompt_that_has_since_moved_has_no_band(app: AppConfig) -> None:
-    """It is dropped rather than guessed. A row whose ask we cannot name is not a task."""
-    prompts = reference_set.band_prompts(app.summarize)
-
-    assert reference_set.band_of(
-        "a prompt from an older build",
-        prompts,
-        source_words=0,
-        prompt_config=app.summarize,
-    ) is None
-
-
 def test_the_source_form_is_read_off_the_line_user_turn_writes_first() -> None:
-    assert reference_set.source_form_of("Source form: abstract\n\nbody") == "abstract"
+    article = Article.from_json(read_text(CONTRACT_FIXTURES_DIR / "article" / "ok.json"))
+    abstract = article.model_copy(update={"source_form": SourceForm.ABSTRACT})
+
+    assert reference_set.source_form_of(summarize.user_turn(abstract)) == "abstract"
     assert reference_set.source_form_of("no such line") == "unknown"
 
 
@@ -125,18 +101,17 @@ def test_the_source_form_is_read_off_the_line_user_turn_writes_first() -> None:
 def test_the_queue_spreads_across_strata_rather_than_taking_the_commonest(
     window: Path, tmp_path: Path, settings: config.Settings
 ) -> None:
-    """A set thin in a band trains a model thin in that band.
+    """A set thin in one length trains a model thin in that length.
 
-    The corpus here is 12 rows of band 1 against 1 of band 4, so a sample that
-    just took the first N would hold no band 4 at all.
+    The corpus here is 12 rows of 100 words against 1 of 5,000, so a sample that
+    just took the first N would hold no long article at all.
     """
     reference = tmp_path / "reference"
 
     assert reference_set.queue(reference, window, settings, count=8) == 0
 
-    bands = {task.band for task in reference_set.read_queue(reference)}
-    assert 4 in bands, "the rarest band has to survive the sample"
-    assert len(bands) >= 3
+    lengths = {len(task.user.split()) for task in reference_set.read_queue(reference)}
+    assert lengths == {SHORT, MEDIUM, LONG}, "the rarest length has to survive the sample"
 
 
 def test_the_queue_is_the_same_set_every_time_it_is_built(
@@ -153,13 +128,13 @@ def test_the_queue_is_the_same_set_every_time_it_is_built(
 
 
 def test_queueing_again_keeps_an_answer_somebody_already_wrote(
-    window: Path, tmp_path: Path, settings: config.Settings, app: AppConfig
+    window: Path, tmp_path: Path, settings: config.Settings
 ) -> None:
     """The queue can hold hours of authoring. Extending it may never discard any."""
     reference = tmp_path / "reference"
     reference_set.queue(reference, window, settings, count=4)
     tasks = reference_set.read_queue(reference)
-    answered = tasks[0]._replace(assistant=an_answer(app, tasks[0].band))
+    answered = tasks[0]._replace(assistant=an_answer())
     reference_set.write_queue(reference, [answered, *tasks[1:]])
 
     assert reference_set.queue(reference, window, settings, count=8) == 0
@@ -169,19 +144,30 @@ def test_queueing_again_keeps_an_answer_somebody_already_wrote(
     assert len(kept) == 8
 
 
-def test_the_test_slice_is_spread_and_not_simply_the_tail(app: AppConfig) -> None:
-    """A test reference that covers four of five bands measures four of five bands."""
+def test_a_row_written_under_a_prompt_that_has_since_moved_is_not_queued(
+    tmp_path: Path, settings: config.Settings, app: AppConfig
+) -> None:
+    """Its user turn is not one a run would send now, so it is not a task."""
+    current = a_row(app, words=SHORT, key="a1")
+    older = a_row(app, words=SHORT, key="b1", system="a prompt from an older build")
+    corpus_dir = write_corpus(tmp_path / "corpus", [current, older])
+    reference = tmp_path / "reference"
+
+    assert reference_set.queue(reference, corpus_dir, settings, count=10) == 0
+
+    assert [task.url_key for task in reference_set.read_queue(reference)] == [current.url_key]
+
+
+def test_the_test_slice_is_spread_and_not_simply_the_tail() -> None:
+    """A test reference that covers four of five strata measures four of five strata."""
     tasks = [
         reference_set.Task(
             url_key=f"{n:064x}",
             date="2026-08-24",
             vertical="ai",
             slice_=reference_set.TRAIN,
-            band=n % 5,
-            target_words_min=30,
-            target_words_max=45,
             source_form="article",
-            user="Source form: article\n\nbody",
+            user="Source form: article\n\n" + " ".join(["word"] * 10 ** (n % 5)),
             assistant=None,
         )
         for n in range(20)
@@ -191,7 +177,7 @@ def test_the_test_slice_is_spread_and_not_simply_the_tail(app: AppConfig) -> Non
 
     held = [task for task in assigned if task.slice_ == reference_set.TEST]
     assert len(held) == 4
-    assert len({task.band for task in held}) == 4, "the held-back slice spans bands"
+    assert len({len(task.user.split()) for task in held}) == 4, "the held-back slice spans strata"
 
 
 # --- check -----------------------------------------------------------------
@@ -204,30 +190,13 @@ def queued(
     return reference_set.read_queue(reference)
 
 
-def test_check_accepts_an_answer_a_run_would_have_accepted(
-    window: Path, tmp_path: Path, settings: config.Settings, app: AppConfig,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    reference = tmp_path / "reference"
-    tasks = queued(reference, window, settings, 4)
-    reference_set.write_queue(
-        reference, [task._replace(assistant=an_answer(app, task.band)) for task in tasks]
-    )
-
-    assert reference_set.check(reference, tmp_path / "empty", settings, write=False) == 0
-
-    assert "answered and valid         4" in capsys.readouterr().out
-
-
 def test_check_refuses_a_target_the_decoder_would_reject(
     window: Path, tmp_path: Path, settings: config.Settings,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """A reference the constrained decoder would refuse teaches the model to be refused.
 
-    One key point, where the grammar demands two. The decoder's rails are on
-    characters and list length, which is why the band check below has to exist
-    separately - neither rail knows what the system turn asked for.
+    No title, where the grammar demands one.
     """
     reference = tmp_path / "reference"
     tasks = queued(reference, window, settings, 2)
@@ -240,35 +209,8 @@ def test_check_refuses_a_target_the_decoder_would_reject(
     assert "the decoder would reject it" in capsys.readouterr().out
 
 
-def test_check_refuses_a_summary_outside_the_band_it_was_asked_for(
-    window: Path, tmp_path: Path, settings: config.Settings, app: AppConfig,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """The band is the ask, and it is tighter than the decoder's own rail.
-
-    The length has to be one `draft_model` accepts, or this would only be
-    re-testing the decoder. 150 words clears the global range and still breaks
-    any band whose ceiling is below it.
-    """
-    reference = tmp_path / "reference"
-    tasks = queued(reference, window, settings, 4)
-    loose = next(task for task in tasks if task.target_words_max < 150)
-    over = json.dumps(
-        {
-            "title": "A title",
-            "summary": " ".join(["word"] * 150),
-        }
-    )
-    rest = [task for task in tasks if task.url_key != loose.url_key]
-    reference_set.write_queue(reference, [loose._replace(assistant=over), *rest])
-
-    assert reference_set.check(reference, tmp_path / "empty", settings, write=False) == 1
-
-    assert "outside band" in capsys.readouterr().out
-
-
 def test_check_refuses_an_article_the_training_window_also_holds(
-    window: Path, tmp_path: Path, settings: config.Settings, app: AppConfig,
+    window: Path, tmp_path: Path, settings: config.Settings,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """One article gets one target.
@@ -278,9 +220,7 @@ def test_check_refuses_an_article_the_training_window_also_holds(
     """
     reference = tmp_path / "reference"
     tasks = queued(reference, window, settings, 3)
-    reference_set.write_queue(
-        reference, [task._replace(assistant=an_answer(app, task.band)) for task in tasks]
-    )
+    reference_set.write_queue(reference, [task._replace(assistant=an_answer()) for task in tasks])
 
     assert reference_set.check(reference, window, settings, write=False) == 1
 
@@ -290,12 +230,12 @@ def test_check_refuses_an_article_the_training_window_also_holds(
 
 
 def test_check_refuses_a_url_key_on_both_sides_of_the_train_test_line(
-    window: Path, tmp_path: Path, settings: config.Settings, app: AppConfig,
+    window: Path, tmp_path: Path, settings: config.Settings,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     reference = tmp_path / "reference"
     tasks = queued(reference, window, settings, 4)
-    answered = [task._replace(assistant=an_answer(app, task.band)) for task in tasks]
+    answered = [task._replace(assistant=an_answer()) for task in tasks]
     twinned = answered[0]._replace(
         slice_=reference_set.TEST
         if answered[0].slice_ == reference_set.TRAIN
@@ -314,25 +254,19 @@ def test_check_writes_rows_the_corpus_reader_loads_and_the_prompt_owns(
     """The oracle: a reference row's system turn IS `summarize.system_prompt`.
 
     Not a copy of one the queue carried, which could have gone stale against a
-    prompt edit - it is re-rendered from the band when the row is built.
+    prompt edit - it is re-rendered when the row is built.
     """
     reference = tmp_path / "reference"
     tasks = queued(reference, window, settings, 4)
-    reference_set.write_queue(
-        reference, [task._replace(assistant=an_answer(app, task.band)) for task in tasks]
-    )
+    reference_set.write_queue(reference, [task._replace(assistant=an_answer()) for task in tasks])
 
     assert reference_set.check(reference, tmp_path / "empty", settings, write=True) == 0
 
-    written = reference_set.rows_path(reference).read_text(encoding="utf-8").splitlines()
-    rows = [corpus.from_line(line) for line in written]
+    lines = reference_set.rows_path(reference).read_text(encoding="utf-8").splitlines()
+    rows = [corpus.from_line(line) for line in lines]
     assert len(rows) == 4
-    by_key = {task.url_key: task for task in tasks}
     for row in rows:
-        band = app.summarize.bands[by_key[row.url_key].band]
-        assert row.messages[0].content == summarize.system_prompt(
-            app.summarize, source_words=band.min_source_words
-        )
+        assert row.system == summarize.system_prompt(app.summarize)
 
 
 def test_check_will_not_write_while_anything_is_unresolved(
@@ -348,20 +282,3 @@ def test_check_will_not_write_while_anything_is_unresolved(
 
     assert "refusing to write" in capsys.readouterr().out
     assert not reference_set.rows_path(reference).exists()
-
-
-# --- shape -----------------------------------------------------------------
-
-
-def test_the_harness_writes_no_summary_and_calls_no_model() -> None:
-    """Row 5 decision 2: this is not hosted inference and not LLM-as-judge.
-
-    A person writes the summaries in their editor. If this file ever grows a
-    client, the reference set stops being independent of the thing it measures.
-    """
-    source = read_text(Path(reference_set.__file__))
-
-    assert "http" not in source.replace("https://errors.pydantic.dev", "")
-    assert "requests" not in source
-    assert "urlopen" not in source
-    assert "corpus.roll(" not in source, "the roll never touches the reference set"

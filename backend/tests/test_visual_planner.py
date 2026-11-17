@@ -21,11 +21,9 @@ from support.visual_plans import current_plan
 
 from idhazh import config
 from idhazh.classify.calls import (
-    SUPPRESSED_BUDGET_TOKENS,
     build_summarize_and_plan_request,
     parse_summarize_and_plan,
     recovered_completion,
-    summarize_and_plan_budget_tokens,
     summarize_and_plan_schema,
 )
 from idhazh.contracts.article import Article
@@ -243,10 +241,10 @@ class TestTheReachabilityGate:
 
 
 class TestTheGateSuppressesThePlanAndNeverTheCall:
-    def test_the_suppressed_grammar_has_nowhere_to_write_a_plan(self, article_ok: Article) -> None:
-        """O43. The grammar is the control; a smaller budget is only a request."""
-        whole = summarize_and_plan_schema(source_words=article_ok.band_source_words)
-        suppressed = summarize_and_plan_schema(source_words=article_ok.band_source_words, plan=False)
+    def test_the_suppressed_grammar_has_nowhere_to_write_a_plan(self) -> None:
+        """O43. The grammar is the control: a suppressed request cannot carry a plan."""
+        whole = summarize_and_plan_schema()
+        suppressed = summarize_and_plan_schema(plan=False)
 
         assert set(whole["properties"]) == {"summary", "visual"}
         assert "visual" not in suppressed["properties"]
@@ -265,26 +263,16 @@ class TestTheGateSuppressesThePlanAndNeverTheCall:
         reply = read_text(FIXTURES_DIR / "completions" / "label" / "labelled.json")
         markers = a_markers()
         whole = build_summarize_and_plan_request(
-            first, reply, a_table(article_ok),
-            markers=markers, source_words=article_ok.band_source_words
+            first, reply, a_table(article_ok), markers=markers
         )
         suppressed = build_summarize_and_plan_request(
-            first,
-            reply,
-            a_table(article_ok),
-            markers=markers,
-            source_words=article_ok.band_source_words,
-            plan=False,
+            first, reply, a_table(article_ok), markers=markers, plan=False
         )
         shared = first["prompt"] + reply
 
         assert whole["prompt"].startswith(shared)
         assert suppressed["prompt"].startswith(shared)
         assert whole["prompt"][len(shared) :] != suppressed["prompt"][len(shared) :]
-        assert suppressed.get("max_tokens", suppressed.get("n_predict")) == (
-            first.get("max_tokens", SUPPRESSED_BUDGET_TOKENS)
-        )
-
 
     def test_a_suppressed_reply_parses_to_a_summary_and_no_plan(self) -> None:
         """`visual` is `None` because none was asked for, not because one was lost."""
@@ -298,11 +286,11 @@ class TestTheGateSuppressesThePlanAndNeverTheCall:
 
 
 class TestEveryRouteToNoneCarriesItsOwnReason:
-    """The row's oracle. Each gate is driven on its own and the set is collected.
+    """Each route to `none` is driven on its own and records the reason it was driven for.
 
-    An equality rather than a membership: a member nobody can produce is a word
-    nobody can retire, tune or tell from a bug, and a route with no member of its
-    own leaves the largest number an operator reads explaining nothing.
+    A route that records no reason of its own leaves the largest number an
+    operator reads explaining nothing. That the routes cover every reason is
+    asserted through the production router in `test_visual_attempts.py`.
     """
 
     def driven(self, summary_ok: Summary) -> dict[NoneReason, VisualDecision]:
@@ -341,20 +329,7 @@ class TestEveryRouteToNoneCarriesItsOwnReason:
         assert recovered_completion(cut) is not None
         lost = plan_lost_to_the_budget(summary_ok, **stamp)
 
-        # Row #3f. The SAME cut reply, when the window rather than the budget is
-        # the wall. The server cannot tell them apart - both are `length` on an
-        # ordinary 200 - so the discriminator is arithmetic over the prompt the
-        # server counted and the budget the summarize-and-plan call's grammar derived.
-        assert cut.hit_the_budget
-        asked_for = summarize_and_plan_budget_tokens()
-        window = 8192
-        at_the_wall = Completion(
-            content=cut.content,
-            finish_reason="length",
-            prompt_tokens=window - asked_for + 1,
-        )
-        assert cut.prompt_tokens + asked_for <= window, "the recorded reply left room"
-        assert at_the_wall.prompt_tokens + asked_for > window, "this one did not"
+        # The same cut reply, when the window rather than the output limit was the wall.
         walled = plan_lost_to_the_window(summary_ok, **stamp)
 
         return {
@@ -364,13 +339,6 @@ class TestEveryRouteToNoneCarriesItsOwnReason:
             NoneReason.OUTPUT_BUDGET_CUT: lost,
             NoneReason.WINDOW_EXHAUSTED: walled,
         }
-
-    def test_the_collected_set_is_the_enum_exactly(self, summary_ok: Summary) -> None:
-        driven = self.driven(summary_ok)
-        collected = {decision.none_reason for decision in driven.values()}
-
-        assert collected == set(NoneReason)
-        assert len(collected) == len(driven), "two routes recorded one reason"
 
     def test_each_route_records_the_member_it_was_driven_for(self, summary_ok: Summary) -> None:
         for expected, decision in self.driven(summary_ok).items():

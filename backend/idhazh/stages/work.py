@@ -53,6 +53,7 @@ from idhazh.llm.server import (
     props,
     request_timeout_seconds,
     resolve_endpoint,
+    response_limit,
     setting,
     window,
 )
@@ -131,9 +132,10 @@ class _FetchedWorkItem(NamedTuple):
     recorder: ItemRecorder
 
 
-def _summarize_band_sort_key(work: _FetchedWorkItem, settings: config.Settings) -> tuple[int, int]:
-    band = settings.app.summarize.band_for(work.article.band_source_words)
-    return band.min_source_words, work.original_index
+def _work_order(work: _FetchedWorkItem) -> tuple[int, int]:
+    """Shortest source first, so when the shard's own clock runs out the items left
+    unworked are the longest ones. Fetch order settles a tie."""
+    return work.article.source_length_words, work.original_index
 
 
 def _shard_cells(
@@ -173,7 +175,7 @@ def _shard_cells(
         "n_batch": setting(model.server, "n_batch"),
         "weights_pinned": None if load_mode is None else load_mode in ("mlock", "mmap+mlock"),
         "label_budget_tokens": calls.label_budget_tokens(),
-        "summary_budget_tokens": calls.summarize_and_plan_budget_tokens(settings.app.summarize),
+        "summary_budget_tokens": response_limit(model.sampling),
         "temperature": model.sampling.get("temperature"),
     }
 
@@ -358,7 +360,7 @@ def stage_work(
             prompt_files=settings.app.prompt_files,
             config_dir=settings.config_dir,
         ),
-        output_schema=summarize.output_schema_text(settings.app.summarize),
+        output_schema=summarize.output_schema_text(),
         runner_class=runner_class(),
         extractor_version=extract.EXTRACTOR_VERSION,
         sanitizer_version=SANITIZER_VERSION,
@@ -487,7 +489,7 @@ def stage_work(
     )
     slowest_item_s = 0.0
 
-    for work in sorted(ready, key=lambda candidate: _summarize_band_sort_key(candidate, settings)):
+    for work in sorted(ready, key=_work_order):
         left_s = deadline - time.monotonic()
         if left_s < slowest_item_s:
             LOG.warning(

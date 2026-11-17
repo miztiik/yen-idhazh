@@ -12,7 +12,6 @@
   "generated_at": "2026-08-21T06:31:02Z",
   "input_tokens": 2500,
   "item_id": "energy-01",
-  "length_action": null,
   "model_id": "qwen3-4b-q4-k-m",
   "output_digest": "3479b24a453b5da6244fbe90f4d4d1f601f6ed93cafe62bac2398a387eb909f0",
   "output_tokens": 0,

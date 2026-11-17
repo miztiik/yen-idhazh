@@ -277,9 +277,8 @@ jobs:
       # Two files move, and the test case declares one intention that moves both.
       # `visuals.enabled_kinds` empty is what makes no picture reachable, so the
       # gate takes the plan fields off the summarize-and-plan call's grammar;
-      # `summarize.asks_for_a_visual_plan` false is what sizes the window for
-      # the call that is really sent. Apart they disagree, and the disagreement
-      # refuses articles that fit.
+      # `summarize.asks_for_a_visual_plan` false is what the run's prompt inputs
+      # are stamped with. Apart they disagree about what the run asked for.
       - name: Write each test case's config
         run: |
           set -euo pipefail
