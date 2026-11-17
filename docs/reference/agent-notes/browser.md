@@ -1,6 +1,6 @@
 # Agent Notes - Browser
 
-**Last Updated**: 2026-11-12
+**Last Updated**: 2026-11-17
 
 Checks before trusting a browser result. Follow the [browser smoke procedure](../../how-to/run-the-gates.md).
 
@@ -13,6 +13,10 @@ Checks before trusting a browser result. Follow the [browser smoke procedure](..
   not a page returning 404. Exercise absent files with a static server over
   the verified static build. Change only named generated copies, keep the
   original bytes, restore them exactly and recheck the build afterward.
+- Vite preview reads each served file's size once, at startup. A file rewritten
+  under `.svelte-kit/output/client/` keeps its old `Content-Length`, so a longer
+  JSON index reaches the page cut short and reads as "not JSON". Restart the
+  preview after changing any file it serves.
 
 ## Waiting and routing
 

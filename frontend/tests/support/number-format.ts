@@ -31,7 +31,6 @@ import {
 	type MergeTotals
 } from '../../src/lib/console/merge-line';
 import { faithfulness as reduceFaithfulness } from '../../src/lib/console/model/faithfulness';
-import { matchHeadline as writeMatchHeadline, type EvalDay } from '../../src/lib/console/eval-instruments';
 import { numberFormatter } from '../../src/lib/number-format';
 import type { NumberFormatConfig } from '../../src/lib/number-format';
 
@@ -142,10 +141,6 @@ export function faithfulness(
 	options: Parameters<typeof reduceFaithfulness>[2]
 ) {
 	return reduceFaithfulness(rows, thresholds, options, numberFormat);
-}
-
-export function matchHeadline(days: readonly EvalDay[], span: number): string | null {
-	return writeMatchHeadline(days, span, numberFormat);
 }
 
 export type { NumberFormatConfig };

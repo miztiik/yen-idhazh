@@ -30,6 +30,7 @@ const points = [
 	{ date: '2026-09-02', value: 3, spread: { low: 2, high: 5 } },
 	{ date: '2026-09-03', value: 1, spread: { low: 0, high: 2 } }
 ];
+const counted: SeriesInput = { label: 'Count', token: '--chart-1', points, spreadLabels: { low: 'Low', high: 'High' } };
 const options = { frame: box, density: 6, valueTicks: 4, padding: 0.2 };
 const common = { empty: emptyState('quiet', 'Nothing recorded.'), name: 'contract', label: 'Contract rows', width: 390, height: 220 };
 const compiledDrawings = new Map<string, Promise<{ default: Component<Record<string, unknown>> }>>();
@@ -135,7 +136,7 @@ test('settings and checker share a boundary, keep both readout rows, and never p
 		{ date: '2026-09-02', kind: 'checker', words: 'The score checker changed.' },
 		{ date: '2026-09-03', kind: 'checker', words: 'The checker changed again.' }
 	], note: 'Compared with the preceding recorded day.' };
-	const geometry = dateSeries([{ label: 'Count', token: '--chart-1', points }], { ...options, rule, domain: [0, 10], rules: [{ at: 6, label: 'Target' }] });
+	const geometry = dateSeries([counted], { ...options, rule, domain: [0, 10], rules: [{ at: 6, label: 'Target' }] });
 	expect(geometry?.boundaries).toEqual([
 		{ date: '2026-09-02', x: ((geometry?.columns[0] ?? 0) + (geometry?.columns[1] ?? 0)) / 2, kind: 'settings' },
 		{ date: '2026-09-03', x: ((geometry?.columns[1] ?? 0) + (geometry?.columns[2] ?? 0)) / 2, kind: 'checker' }
@@ -163,12 +164,12 @@ test('settings and checker share a boundary, keep both readout rows, and never p
 
 test('a first-column boundary stays inside the frame; no changes print their note; short declines fail', async () => {
 	expect(() => checkedRule({ declined: 'No dates here.' })).toThrow(/five words/);
-	const geometry = dateSeries([{ label: 'Count', token: '--chart-1', points }], { ...options, rule: { changes: [{ date: '2026-09-01', kind: 'settings', words: 'The prompt changed.' }], note: null } });
+	const geometry = dateSeries([counted], { ...options, rule: { changes: [{ date: '2026-09-01', kind: 'settings', words: 'The prompt changed.' }], note: null } });
 	expect(geometry?.boundaries[0].x).toBe(box.left);
-	const none = dateSeries([{ label: 'Count', token: '--chart-1', points }], { ...options, rule: { changes: [], note: 'No settings changed in this window.' } });
+	const none = dateSeries([counted], { ...options, rule: { changes: [], note: 'No settings changed in this window.' } });
 	expect(await draw('DateSeries', { ...common, geometry: none })).toContain('data-model-rule-empty');
-	expect(await draw('DateSeries', { ...common, geometry: dateSeries([{ label: 'Count', token: '--chart-1', points }], { ...options, rule: declined }) })).toContain('data-model-rule="no"');
-	expect(() => dateSeries([{ label: 'Count', token: '--chart-1', points }], { ...options, rule: declined, domain: [0, 2] })).toThrow(/domain/);
+	expect(await draw('DateSeries', { ...common, geometry: dateSeries([counted], { ...options, rule: declined }) })).toContain('data-model-rule="no"');
+	expect(() => dateSeries([counted], { ...options, rule: declined, domain: [0, 2] })).toThrow(/domain/);
 	const stacked = [
 		{ label: 'First', token: '--chart-1' as const, points: [{ date: '2026-09-01', value: 2 }] },
 		{ label: 'Second', token: '--chart-2' as const, points: [{ date: '2026-09-01', value: 6 }] }

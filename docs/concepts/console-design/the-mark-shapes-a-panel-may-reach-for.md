@@ -1,6 +1,6 @@
 # The mark shapes a panel may reach for
 
-**Last Updated**: 2026-11-12
+**Last Updated**: 2026-11-17
 
 Ten chart types, the house style they draw with, five named mark shapes and
 three panel-level controls. **A panel is built from one chart type, and a mark
@@ -201,6 +201,7 @@ panel's height so the page does not jump.
 | 3 | `ordered-colour.ts` | the ordered ramp, which is one token in steps cut at the quantiles of the whole record; the reserved grey; and the hatch for a known thing with no reading | - |
 | 4 | `motion.ts` | one duration and one easing from the motion tokens, and reduced motion as a hard stop | - |
 | 5 | `empty.ts` | the drawing of each nothing a chart can be in. The words are `frontend/src/lib/console/waiting.ts`'s, and it mints none | `EmptyState.svelte` |
+| 6 | `spread-paint.ts` | the paint of a spread band and of the readout swatch that keys its edges: the series' token mixed toward the page surface at `--chart-spread-mix`, in one function so the two cannot drift | - |
 
 **On this console d3 is a maths library, not a drawing library.** Scales and path
 generators only; Svelte owns the page. A `select()` inside a component has left
@@ -322,7 +323,17 @@ are included once, not twice.
 `domain: [low, high]`, and point `spread: {low, high}`. The domain must contain
 all readings, spreads and rules. Stacked domains also contain zero, so every
 segment's start and end stays inside the frame. A spread lies behind its series
-line, in the series colour mixed with the page surface at `--chart-spread-mix: 0.30`.
+line, painted by `spreadPaint(token)`: the series colour mixed with the page
+surface at `--chart-spread-mix: 0.30`.
+
+A series that carries a spread must name its two edges as `spreadLabels: {low,
+high}`. `dateSeries` refuses one that does not, and refuses one drawn as a stack,
+which draws no band. Its readout then holds the series' own row followed by one
+row for each edge, so the tooltip and the strip print the figures that bound the
+band, and the two edge rows take `spreadPaint` as their swatch, one colour with
+the band. An optional `unit` on the series is printed after each of those
+readings, so a share reads `92%`. Faithfulness is the one caller, with
+`Median (p50)`, `Lower quartile (p25)` and `Upper quartile (p75)`.
 
 For elapsed time, optional `reconciliation: {elapsed, overlap}` supplies two
 named `SeriesInput` readings alongside a duration stack. Every measured day
@@ -768,6 +779,13 @@ absence is the one number nobody checks
 drawn, it pulls a line to the floor and puts a reading nobody took in a spread's
 lowest bin. A floor and a figure count what the chart draws, so the panel never
 claims more readings than it shows.
+
+**A band and the key to its edges share one paint.** The band is drawn by
+`DateSeries.svelte` and keyed in a readout `dateSeries` builds, two places that
+would drift the first time the mix moved if each wrote the colour. `spreadPaint`
+is the one place the mix lives, in a module of its own because `ordered-colour.ts`
+answers a different question, the steps of an ordered ramp. What it costs: a
+module of one function, and a series that draws a band must also name its edges.
 
 ## Design rationale
 
