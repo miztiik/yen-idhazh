@@ -52,7 +52,8 @@ subsystems it covers. **What is broken?** A diagnostic panel shows the extreme
 and the individual responsible within one subsystem. Its heading and content
 must answer the same question.
 
-Every route starts with its own status summary before the detail it qualifies.
+Pipelines and Summaries open on a status summary before the detail it
+qualifies; the other routes open on their first comparison.
 Declare the question in `data-panel-question`. No repeated global verdict band
 or cross-route metric sentence sits above those comparisons.
 
@@ -62,8 +63,7 @@ or cross-route metric sentence sits above those comparisons.
 | Pipelines `Run health` | Published against planned, by day and run; the first panel below the glance cards |
 | Remaining Pipelines panels | Stage failures and costs |
 | Summaries, Judgement and Voices | Writing, judgement and source diagnostics below each route's summary |
-| Hardware `Whether the speed numbers can be trusted` | Whether the rates are comparable; the first panel on the route |
-| Remaining Hardware panels | Machine-specific constraints and failures |
+| Hardware panels | Machine-specific constraints and failures |
 
 Keep the first useful chart visible without making an operator scroll through
 diagnostics before reaching the status that explains them. Figures must be

@@ -52,8 +52,8 @@ import { normalizeHostRow } from '../../data/host-fingerprint';
  * 11.09 tokens a second against 19.96 on run `2026-08-25-1`, an 80 percent
  * error.
  *
- * The compatibility server default. The moved panel's tolerance comes from
- * its route configuration.
+ * The only copy of the bound in the frontend: no route configuration carries
+ * a tolerance, because no panel draws the comparison.
  */
 export const CLOCKS_AGREE_WITHIN_PCT = 5;
 

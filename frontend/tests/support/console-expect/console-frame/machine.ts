@@ -1,4 +1,4 @@
-/** Which groups and opening verdict does Hardware draw? */
+/** Hardware draws four groups and has no opening verdict. */
 import type { RouteExpect } from './index';
 export const EXPECT: RouteExpect = {
 	layout: null,
@@ -6,7 +6,7 @@ export const EXPECT: RouteExpect = {
 		{
 			id: 'what-the-machine-was-doing',
 			title: 'What the machine was doing',
-			panels: ['two-clocks', 'slower-machines', 'platform-mix']
+			panels: ['slower-machines', 'platform-mix']
 		},
 		{
 			id: 'where-the-time-went',
@@ -24,7 +24,7 @@ export const EXPECT: RouteExpect = {
 			panels: ['article-cost', 'prompt-reuse', 'read-against-written']
 		}
 	],
-	verdict: { state: 'route', question: 'is it working' },
+	verdict: null,
 	runSquares: false,
 	prerender: true
 };

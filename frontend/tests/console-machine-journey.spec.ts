@@ -4,7 +4,7 @@ import { renderFrameCss } from '../scripts/build-frame-css.mjs';
 import { WINDOW_PREFERENCE_KEY } from '../src/lib/console/window-preference';
 
 const PANELS = [
-	'two-clocks', 'slower-machines',
+	'slower-machines',
 	'platform-mix', 'slower-on-same-work', 'closest-to-memory', 'memory-held',
 	'context-headroom', 'article-cost', 'prompt-reuse', 'read-against-written'
 ];
@@ -73,17 +73,10 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 	expect((await page.locator('#console-route-title svg').boundingBox())!.width).toBeGreaterThan(
 		(await selectedGlyph.locator('svg').boundingBox())!.width);
 	await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#191917');
-	const firstComparison = page.locator('[data-console-panel-id="two-clocks"] [data-lede]');
+	const firstComparison = page.locator('[data-console-panel-id="slower-machines"] [data-lede]');
 	await expect(firstComparison).toBeVisible();
-	await expect(firstComparison).toContainText('max gap;');
 	expect(await firstComparison.evaluate((node) => node.getBoundingClientRect().bottom)).toBeLessThan(900);
 	await page.screenshot({ path: test.info().outputPath('hardware-wide-dark.png') });
-	const rankedRow = page.locator('[data-console-panel-id="two-clocks"] [data-ranked-row]').first();
-	await rankedRow.hover();
-	await expect(page.locator('[data-chart-tooltip]')).toContainText(
-		(await rankedRow.locator('[data-ranked-cell="value"]').textContent())!);
-	await page.locator('#console-route-title').hover();
-	await expect(page.locator('[data-chart-tooltip]')).toHaveCount(0);
 	const evidence = page.locator('[data-machine-evidence]');
 	await expect(evidence.locator('summary')).toContainText('3 runs excluded from run count. Their articles still count.');
 	await expect(page.locator('[data-machine-refused]')).not.toBeVisible();
@@ -104,7 +97,6 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 		expect(arrived.some((url) => url.includes(`/${ledger}/`) && new URL(url).pathname.endsWith('.parquet')),
 			`${ledger} native rows arrived`).toBe(true);
 	}
-	expect(await page.locator('[data-clock-pair]').count(), 'the independent clocks arrived').toBeGreaterThan(0);
 	const fleet = page.locator('[data-fleet-shape]');
 	await expect(fleet).toHaveCount(1);
 	expect(Number(await fleet.getAttribute('data-fleet-placements'))).toBeGreaterThan(0);
@@ -242,16 +234,7 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 			const cell = plot.parentElement!.parentElement!.getBoundingClientRect();
 			return bounds.left >= cell.left && bounds.right <= cell.right + 1;
 		}));
-	const clockLabels = page.locator('[data-console-panel-id="two-clocks"] .ranked-rule-label');
-	await expect(clockLabels).toHaveCount(2);
-	await expect(clockLabels.first()).toHaveText('Allowed disagreement');
-	const clockRulesFit = () => clockLabels.evaluateAll((labels) => labels.every((label) => {
-		const bounds = label.getBoundingClientRect();
-		const track = label.parentElement!.getBoundingClientRect();
-		return bounds.left >= track.left && bounds.right <= track.right + 1;
-	}));
 	await expect.poll(contextFits).toBe(true);
-	await expect.poll(clockRulesFit).toBe(true);
 	await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 	await page.setViewportSize({ width: 390, height: 844 });
 	await page.evaluate(() => window.scrollTo(0, 0));
@@ -265,17 +248,10 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 	await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
 	await page.evaluate(() => Promise.allSettled(document.getAnimations().map((animation) => animation.finished)));
 	expect(await firstComparison.evaluate((node) => node.getBoundingClientRect().bottom)).toBeLessThan(844);
-	expect(await page.locator('[data-console-panel-id="two-clocks"] [data-ranked-cell="value"]').first()
-		.evaluate((node) => node.getBoundingClientRect().bottom)).toBeLessThan(844);
-	expect(await clockLabels.first().evaluate((label) => {
-		const context = label.closest('[data-ranked-row]')!.querySelector('[data-ranked-cell="context"]')!;
-		return label.getBoundingClientRect().top - context.getBoundingClientRect().bottom;
-	}), 'the threshold label must not overlap the source readings on a phone').toBeGreaterThanOrEqual(0);
 	await page.screenshot({ path: test.info().outputPath('hardware-narrow-light.png') });
 	await history.screenshot({ path: test.info().outputPath('hardware-cache-narrow-light.png') });
 	await tokens.screenshot({ path: test.info().outputPath('run-token-lines-narrow.png') });
 	await expect.poll(contextFits).toBe(true);
-	await expect.poll(clockRulesFit).toBe(true);
 	await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 
 	await page.locator('[data-window-select]').selectOption('7');
@@ -353,7 +329,7 @@ test('a failed host index alone is retried while successful article and count fi
 	await page.unroute(/\/state\/compact\/host-fingerprint\/index\/[^/]+\.json/);
 	await page.locator('[data-console-retry]').click();
 	await settled(page);
-	expect(await page.locator('[data-clock-pair]').count()).toBeGreaterThan(0);
+	await expect(page.locator('[data-fleet-shape]')).toHaveCount(1);
 	expect(successfulRequests).toEqual(before);
 	await expect(page.locator('[data-console-retry]')).toHaveCount(0);
 });
@@ -364,12 +340,12 @@ test('unpublished native indexes keep a named absence, not a lost record or inve
 	await page.goto('/console/machine/');
 	await expect(page.locator('[data-console-panels="machine"]')).toHaveAttribute('data-route-state', 'missing');
 	await expect(page.locator('[data-panel-query][data-machine-panel-state="missing"]')).toHaveCount(PANELS.length);
-	await expect(page.locator('[data-panel-query="two-clocks"]')).toContainText('Not published yet.');
-	await expect(page.locator('[data-clock-pair], [data-machine-refused], [data-recording="machine-destroyed"]')).toHaveCount(0);
+	await expect(page.locator('[data-panel-query="slower-machines"]')).toContainText('Not published yet.');
+	await expect(page.locator('[data-machine-refused], [data-recording="machine-destroyed"]')).toHaveCount(0);
 	await expect(page.locator('[data-console-retry]')).toHaveCount(0);
 	await expect(page.locator('#console-route-title')).toHaveText('Hardware');
 	await expect(page.locator('[data-console-nav]')).toBeVisible();
-	await page.locator('[data-panel-query="two-clocks"]').hover();
+	await page.locator('[data-panel-query="slower-machines"]').hover();
 	await expect(page.locator('[data-chart-tooltip]')).toHaveCount(0);
 });
 
@@ -385,7 +361,7 @@ test('actual prerendered Hardware contains words and reserved frames, never ledg
 		await expect(page.locator('[data-panel-query] svg')).toHaveCount(PANELS.length);
 		await expect(page.locator('[data-panel-query] svg rect:not([data-reserved-ground]), [data-panel-query] svg path')).toHaveCount(0);
 		await expect(page.locator('[data-console-standing]')).toHaveText('Loading chart data. Previously loaded windows are reused.');
-		await expect(page.locator('[data-machine-refused], [data-cost-figures], [data-clock-pair], [data-fleet-job]')).toHaveCount(0);
+		await expect(page.locator('[data-machine-refused], [data-cost-figures], [data-fleet-job]')).toHaveCount(0);
 		const html = await response!.text();
 		expect(html).not.toMatch(/machineCounters:|machineRuns:|runShards:|RunManifest|RunPlan/);
 	} finally {

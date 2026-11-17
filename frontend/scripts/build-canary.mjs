@@ -960,10 +960,8 @@ function writeItemHealthCanary() {
 		// fetch and extract are that day's own medians, so neither median moves
 		// and the sixth item only widens the denominator.
 		dropped(date, 2, 'ai-05', 'boilerplate', 1180, 174, 200, 30),
-		// The model read this one whole and refused to answer. It shares shard 0 of
-		// the newest run with ai-03, which is what gives the two clocks panel a
-		// shard whose answer changes when one row's cost goes missing. It is also
-		// the only failed row this fixture writes, so the failed-item list, the
+		// The model read this one whole and refused to answer. It is also the
+		// only failed row this fixture writes, so the failed-item list, the
 		// failure code column and one stage's failure count draw something rather
 		// than their empty states.
 		refused(date, 2, 'ai-09', [200, 30, 700], [64000, 10300, 1700, 60, 100]),
@@ -1022,14 +1020,14 @@ function writeItemHealthCanary() {
  * cells after `measured_at` are the only place the server's own counters and
  * the job clock reach a screen. Every `work` row's `server_prompt_tokens` over
  * its `server_prompt_seconds` lands 1.0 to 1.1 percent from the same shard's
- * rate in the item ledger, inside the 5 percent the two clocks panel allows.
+ * rate in the item ledger, inside the 5 percent `reconcile_prefill.py` allows.
  * Equal figures would pass a check that had never run, so the gap is put there
  * on purpose and every shard carries one.
  *
  * Three states nothing else can reach are written here as well. Shard 1 of the
  * newest run carries the server's counters and neither clock, so the board has
  * a dash to rank last. The two runs forty days back carry both clocks and no
- * server counters, so the two clocks panel has a run it compared nothing on.
+ * server counters, so the counters read a run with no server rate to compare.
  * And the day two days back keeps an empty file, so a quiet day is not an
  * incident.
  */
@@ -1170,7 +1168,7 @@ function writeHostFingerprintCanary() {
 		// Forty days back, on the day the item ledger puts its widest-preset runs.
 		// They carry a job clock and a weights load and no server counters at all,
 		// which is the state every run before the server counters landed is in: the
-		// board draws them and the two clocks panel says it compared nothing.
+		// board draws them and the counters leave the server's read rate unknown.
 		probe(longAgo, 1, 'work', 0, EPYC, { model_load_ms: 2290.5, job_seconds: 780 }),
 		probe(longAgo, 1, 'work', 1, EPYC, { model_load_ms: 2284.9, job_seconds: 774 }),
 		probe(longAgo, 2, 'work', 0, XEON, { model_load_ms: 2602.7, job_seconds: 836 }),

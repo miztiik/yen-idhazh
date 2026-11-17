@@ -8,7 +8,7 @@ export const MACHINE_QUERY_GROUPS = [
 		id: 'native',
 		ledgers: ['item-health', 'host-fingerprint', 'run-shards'],
 		queries: [
-			queries.runShardsQuery, queries.twoClocksQuery, queries.twoClocksHostsQuery,
+			queries.runShardsQuery,
 			queries.slowerMachinesQuery, queries.platformMixQuery, queries.closestToMemoryQuery,
 			queries.memoryHeldQuery, queries.contextHeadroomQuery, queries.articleCostQuery,
 			queries.articleCostHostsQuery, queries.promptReuseQuery, queries.readAgainstWrittenQuery

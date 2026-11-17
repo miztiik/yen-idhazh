@@ -39,7 +39,7 @@ EXPECTED_NAMES: Final = {
     ),
     "machine": (
         "runShardsQuery",
-        "twoClocksQuery", "twoClocksHostsQuery", "slowerMachinesQuery", "platformMixQuery",
+        "slowerMachinesQuery", "platformMixQuery",
         "slowerOnSameWorkQuery", "closestToMemoryQuery", "memoryHeldQuery",
         "contextHeadroomQuery", "articleCostQuery", "articleCostHostsQuery",
         "promptReuseQuery", "readAgainstWrittenQuery",
@@ -65,8 +65,6 @@ EXPECTED_COLUMNS: Final[Mapping[str, tuple[str, ...]]] = {
     "writeCostQuery": ("date", "summarize_ms"),
     "scoreCostQuery": ("date", "score_ms"),
     "summaryLengthQuery": ("date", "run_id", "model_id", "summary_words", "compression"),
-    "twoClocksQuery": ("date", "run_id", "machine_job", "machine_shard", "prefill_ms", "input_tokens", "cached_tokens"),
-    "twoClocksHostsQuery": ("date", "run_id", "job", "shard", "server_prompt_tokens", "server_prompt_seconds"),
     "slowerMachinesQuery": (
         "date", "run_id", "machine_job", "machine_pipeline_name", "machine_task_name", "machine_shard",
         "cpu_model", "prefill_ms", "input_tokens", "cached_tokens", "decode_ms", "output_tokens",
@@ -274,8 +272,6 @@ def test_word_and_machine_renames_are_the_actual_contract_mappings() -> None:
     assert queries["summaryLengthQuery"].columns == (
         "date", "run_id", "model_id", "summary_words", "compression"
     )
-    assert queries["twoClocksQuery"].columns[:4] == ("date", "run_id", "machine_job", "machine_shard")
-    assert queries["twoClocksHostsQuery"].columns[:4] == ("date", "run_id", "job", "shard")
 
 
 def test_query_span_and_fetch_predicate_match_the_panel_contracts() -> None:
@@ -284,7 +280,7 @@ def test_query_span_and_fetch_predicate_match_the_panel_contracts() -> None:
         "runShardsQuery", "platformMixQuery"
     }
     assert {query.name for query in queries if query.span == "newest-day"} == {
-        "runTimelineQuery", "twoClocksQuery", "twoClocksHostsQuery",
+        "runTimelineQuery",
         "slowestArticlesQuery", "memoryHeldQuery", "whyChosenQuery",
     }
     text = read_text(REPO_ROOT / QUERY_ROOT / "voices.ts")

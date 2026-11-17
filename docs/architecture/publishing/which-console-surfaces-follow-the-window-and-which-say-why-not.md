@@ -1,6 +1,6 @@
 # Which console surfaces follow the window, and which say why not
 
-**Last Updated**: 2026-11-16
+**Last Updated**: 2026-11-17
 
 One control at the top of the console sets the span for the whole page. This page
 is the control, and the list of every surface that does not simply follow it -
@@ -182,7 +182,7 @@ recorded shard-count answers supply the arithmetic; unknown counts remain
 unknown instead of being derived from the hosts that happened to answer.
 
 **A newest-day question is a snapshot, not a selected-window aggregate.**
-The Hardware clock check and memory-held panel name
+The Hardware memory-held panel names
 the newest day or its newest recorded run. They do not fall back to an older
 successful run when the newest one was refused. The widest host population
 supplies canonical full-identity palette slots and name qualifiers, so changing
