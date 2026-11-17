@@ -102,6 +102,32 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
   person's own machine choice; an agent does not change machine settings to
   fix this.
 
+- **The partial-assembly recovery test fails with `preparation-failure` and
+  `timed out after 0.1 seconds`; recovery is fine, the box was slow.**
+  `test_real_partial_assembly_and_delivery_keep_source_and_writer_separate`
+  runs the real publisher under its real deadline, `deadline_seconds.default`
+  in `config/push-retry.json` (300 s). On 2026-11-17, on a loaded Windows 11
+  developer box, one run, that test took 333 s and the budget ran out with
+  0.11 s left. The tell is `Status.PREPARATION_FAILURE` carrying a
+  `TimeoutExpired` from a `git` command, not a failed assertion about content.
+  Run it alone on a quiet box, or judge it by CI; do not raise the deadline.
+  ```powershell
+  python -m pytest -n 0 backend/tests/workflows/test_digest_recovery.py -k real_partial
+  ```
+
+- **A test that reads source text stays green when production code is edited
+  in memory; it checks text, not behaviour.** To prove a test removable, apply
+  the production edit it is named for in memory (rewrite the module's source
+  and re-execute it into the module) and see whether the test fails.
+  `inspect.getsource` reads the file through `linecache`, so the code that
+  runs changes and the text the test reads does not. The tell is the same edit
+  leaving the test green until the edited text is registered under the
+  module's file name. Edit a Pydantic field default in place and rebuild the
+  model: re-executing a contract module rebuilds its classes.
+  ```python
+  linecache.cache[module.__file__] = (len(edited), None, edited.splitlines(True), module.__file__)
+  ```
+
 - **A logic spec fails with `ERR_MODULE_NOT_FOUND` in a fresh worktree; the
   spec is fine, the worktree has no `node_modules`.** `npx playwright` then
   loads a cached global copy that cannot import the config. The tell is an
