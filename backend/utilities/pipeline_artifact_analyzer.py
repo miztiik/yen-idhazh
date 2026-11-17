@@ -1,10 +1,10 @@
-"""Read one item's model calls as a report: what they cost, and what came back.
+"""Read one item's model call as a report: what it cost, and what came back.
 
 The census row says a reply was 4,735 tokens where it used to be 279. It cannot
 say what the model was asked. `idhazh.capture` writes that text to a run
-artifact, one file per call per item, and this turns the pair into a document
-read top to bottom: what looks wrong, what the calls cost, what each reply
-actually says, and the raw text last.
+artifact, one file per call per item, and this turns an item's captures into a
+document read top to bottom: what looks wrong, what the call cost, what the
+reply actually says, and the raw text last.
 
 **The raw text is kept whole and is never the first thing on the page.** A
 15,000-character prompt above the numbers is a wall, and the numbers are what a
@@ -17,7 +17,7 @@ so walking a directory here is not a growing read (`CLAUDE.md` section 13).
 
     python backend/utilities/pipeline_artifact_analyzer.py <captures-dir>
     python backend/utilities/pipeline_artifact_analyzer.py <captures-dir> --item india-5tnmq7gb
-    python backend/utilities/pipeline_artifact_analyzer.py <captures-dir> --item india --out pair.md
+    python backend/utilities/pipeline_artifact_analyzer.py <captures-dir> --item india --out item.md
 
 Get the directory from a finished run with:
 
@@ -50,16 +50,15 @@ from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.llm.reasoning import split_reasoning
 
-#: The order the run makes them in. A viewer that sorted these alphabetically
-#: would print the reply before the question on every item.
-CALL_ORDER = ("label", "summary")
+#: The calls a run captures, in the order it makes them. A viewer that sorted
+#: these alphabetically would print the reply before the question on every item.
+CALL_ORDER = ("summary",)
 
-#: What each slot is called in a sentence. The slot says which call ran first
-#: and only this says what it was - the distinction `CallKind` exists to keep -
-#: so a document that names a slot names this beside it.
+#: What each slot is called in a sentence. The slot says which call ran and
+#: only this says what it was - the distinction `CallKind` exists to keep - so a
+#: document that names a slot names this beside it.
 CALL_TITLE = {
-    "label": "the label call",
-    "summary": "the summarize-and-plan call",
+    "summary": "the model call",
 }
 
 #: Longer than this and a value gets its own quoted block instead of a table
@@ -87,7 +86,7 @@ class Cost:
     def served_ms(self) -> int:
         """The server's own clock for this call: prefill and decode together.
 
-        Not the call's duration, which is `label_ms` or `summary_ms` on the item
+        Not the call's duration, which is `summary_ms` on the item
         row and includes the wait. A capture carries the five numbers the server
         reported and no stopwatch, so this is all a capture can answer - and the
         name says so rather than leaving a reader to add a wait that is not in
@@ -363,21 +362,6 @@ def merged(pair: Mapping[str, Capture], row: Row | None) -> dict[str, Capture]:
     return out
 
 
-def shared_prefix_chars(first: str, second: str) -> int:
-    """How much of the second prompt is the first prompt, character for character.
-
-    This is the cache question in one number. The summarize call is built on the
-    label call's prompt, so everything up to here is what `llama-server` can
-    answer from the slot it already holds, and everything after it is prefill it
-    has to pay for.
-    """
-    limit = min(len(first), len(second))
-    for index in range(limit):
-        if first[index] != second[index]:
-            return index
-    return limit
-
-
 def elide(text: str, *, head: int, tail: int) -> str:
     """The front and the back of a long text, with the middle counted not shown.
 
@@ -579,7 +563,7 @@ def value_block(value: Any) -> list[str]:
 
 
 def priced_calls(pair: Mapping[str, Capture]) -> list[tuple[int, str, Capture, Cost]]:
-    """Every call in this pair that says what it cost, in the order they ran."""
+    """Every call in this capture that says what it cost, in the order they ran."""
     found: list[tuple[int, str, Capture, Cost]] = []
     for call in CALL_ORDER:
         capture = pair.get(call)
@@ -591,24 +575,23 @@ def priced_calls(pair: Mapping[str, Capture]) -> list[tuple[int, str, Capture, C
 def cost_section(pair: Mapping[str, Capture], number: int) -> list[str]:
     """The numbers a reader opens this document for: time first, then tokens.
 
-    One row a call and one row for the pair. The clock is the server's own -
-    prefill plus decode - and it is named as that rather than as the item's wall
-    clock, which also holds the queue and the HTTP round trip and is a different
-    number (Guardrail #10).
+    One row a call. The clock is the server's own - prefill plus decode - and it
+    is named as that rather than as the item's wall clock, which also holds the
+    queue and the HTTP round trip and is a different number (Guardrail #10).
     """
     step = count(1)
-    out = [f"## {number}. What the calls cost", ""]
+    out = [f"## {number}. What the call cost", ""]
     priced = priced_calls(pair)
     if not priced:
         return [
             *out,
-            "No call in this pair recorded what it cost. A capture written before "
+            "The call recorded no cost. A capture written before "
             "2026-09-15 carries no cost numbers; pass `--health <YYYY-MM-DD>`, the "
             "run's UTC day, to fill this section from the row that run did write.",
             "",
         ]
 
-    out += [f"### {number}.{next(step)} Time and tokens, one row a call", ""]
+    out += [f"### {number}.{next(step)} Time and tokens", ""]
     rows = [
         [
             str(index),
@@ -625,22 +608,6 @@ def cost_section(pair: Mapping[str, Capture], number: int) -> list[str]:
         ]
         for index, call, capture, money in priced
     ]
-    spent = [money for _, _, _, money in priced]
-    rows.append(
-        [
-            "",
-            f"**{counted(len(spent), 'call', 'calls')}**",
-            f"**{clock(sum(money.served_ms for money in spent))}**",
-            f"**{quantity(sum(money.prefill_ms for money in spent))}**",
-            f"**{quantity(sum(money.decode_ms for money in spent))}**",
-            f"**{quantity(sum(money.input_tokens for money in spent))}**",
-            f"**{quantity(sum(money.cached_tokens for money in spent))}**",
-            f"**{quantity(sum(money.read_tokens for money in spent))}**",
-            f"**{quantity(sum(money.output_tokens for money in spent))}**",
-            "-",
-            "-",
-        ]
-    )
     out += table(
         [
             "#",
@@ -671,35 +638,26 @@ def cost_section(pair: Mapping[str, Capture], number: int) -> list[str]:
 
 
 def cache_block(pair: Mapping[str, Capture], number: int, step: Iterator[int]) -> list[str]:
-    """How much of the second call's prompt the server did not read again."""
-    label, summary = pair.get("label"), pair.get("summary")
+    """How much of the call's prompt the server did not read again."""
+    summary = pair.get("summary")
     if summary is None or summary.cost is None:
         return []
     money = summary.cost
-    out = [f"### {number}.{next(step)} What the cache saved on the second call", ""]
+    out = [f"### {number}.{next(step)} What the cache saved", ""]
     out += [
-        f"The server reused {quantity(money.cached_tokens)} of the summarize-and-plan "
+        f"The server reused {quantity(money.cached_tokens)} of the model "
         f"call's {quantity(money.input_tokens)} prompt tokens "
         f"({share(money.cached_tokens, money.input_tokens)}), so it read "
         f"{quantity(money.read_tokens)} of them and paid {quantity(money.prefill_ms)} ms "
-        "for that. A zero here is a cold slot, and a cold slot means the whole article "
-        "was read twice.",
+        "for that. What it can reuse is the system turn every item shares; a zero here "
+        "is a cold slot, and a cold slot means the whole prompt was read again.",
         "",
     ]
-    if label is not None and label.prompt and summary.prompt:
-        common = shared_prefix_chars(label.prompt, summary.prompt)
-        out += [
-            "In characters rather than tokens: the summarize-and-plan prompt is "
-            f"{quantity(len(summary.prompt))} characters and its first {quantity(common)} "
-            f"({share(common, len(summary.prompt))}) are the label prompt unchanged, which "
-            "is the most the cache could ever have answered.",
-            "",
-        ]
     return out
 
 
 def split_block(pair: Mapping[str, Capture], number: int, step: Iterator[int]) -> list[str]:
-    """Where the second call's decode went: the summary first, the picture after."""
+    """Where the call's decode went: the summary first, the picture after."""
     summary = pair.get("summary")
     if summary is None or summary.split is None:
         return []
@@ -728,7 +686,7 @@ def split_block(pair: Mapping[str, Capture], number: int, step: Iterator[int]) -
     )
     out += [
         "The prompt belongs to neither half, so there are no input or cached tokens to "
-        "split here: both halves were written off the one prefill in row 2 above.",
+        "split here: both halves were written off the one prefill in the row above.",
         "",
     ]
     if split.is_estimate:
@@ -754,7 +712,7 @@ def about_section(pair: Mapping[str, Capture], number: int, *, summary_at: int) 
     text (Guardrail #11) - an autolink cannot say one thing and go to another.
     """
     about = next((c.about for c in pair.values() if c.about.known), About())
-    out = [f"## {number}. The story these calls read", ""]
+    out = [f"## {number}. The story the call read", ""]
     if not about.known:
         return [
             *out,
@@ -844,7 +802,7 @@ def reply_section(
 def findings(
     pair: Mapping[str, Capture], *, reasoning_delimiters: tuple[str, str] | None = None
 ) -> list[str]:
-    """Everything that looks wrong in this pair, ahead of everything that does not."""
+    """Everything that looks wrong in this capture, ahead of everything that does not."""
     said: list[str] = []
     for call in CALL_ORDER:
         name = CALL_TITLE.get(call, call)
@@ -935,7 +893,7 @@ def render(
     tail: int,
     reasoning_delimiters: tuple[str, str] | None = None,
 ) -> str:
-    """One item's calls as a document: the story, what is wrong, the cost, the bytes.
+    """One item's call as a document: the story, what is wrong, the cost, the bytes.
 
     Every heading carries its number, and the numbers run in the order a reader
     needs them rather than the order the run produced them: what was read, the
@@ -950,11 +908,9 @@ def render(
     if said:
         out += [*[f"- {line}" for line in said], ""]
     else:
-        captured = sum(1 for call in CALL_ORDER if call in pair)
         out += [
-            "**Nothing in this pair looks wrong.** "
-            f"{counted(captured, 'call', 'calls')} captured, each finished on its own "
-            "terms, each reply readable as JSON.",
+            "**Nothing in this capture looks wrong.** The call finished on its own "
+            "terms and its reply is readable as JSON.",
             "",
         ]
 
@@ -976,17 +932,14 @@ def render(
 def summarise(found: Mapping[str, Mapping[str, Capture]]) -> str:
     """One line an item, so a reader can pick the one worth opening."""
     header = (
-        f"{'item_id':<30} {'label sent':>10} {'label back':>11} "
-        f"{'summ sent':>10} {'summ back':>10} {'model time':>10} {'out tok':>8}"
+        f"{'item_id':<30} {'sent':>10} {'back':>10} {'model time':>10} {'out tok':>8}"
     )
     rows = [header, "-" * len(header)]
     for item_id, pair in found.items():
-        label, summary = pair.get("label"), pair.get("summary")
+        summary = pair.get("summary")
         spent = [money for _, _, _, money in priced_calls(pair)]
         rows.append(
             f"{item_id:<30} "
-            f"{label.prompt_chars if label else 0:>10,} "
-            f"{label.reply_chars if label else 0:>11,} "
             f"{summary.prompt_chars if summary else 0:>10,} "
             f"{summary.reply_chars if summary else 0:>10,} "
             f"{clock(sum(money.served_ms for money in spent)) if spent else '-':>10} "
