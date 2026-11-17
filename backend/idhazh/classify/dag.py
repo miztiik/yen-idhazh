@@ -13,13 +13,13 @@ because the whole decode is paid for before that reason can be written.
 
 **The prompt term is an estimate, and it is built to sit above the real prompt.**
 The three readings in `idhazh.measured` were taken on the longest prompt this
-project has sent: it carried the labelling instructions, every sentence of the
-article behind an address, and a menu row per element with the sentence it sits
-in. The one call's prompt is those parts without the labelling instructions and
-without the addresses, so the readings bound it from above. The cost is paid by
-an article that would have fitted: it is refused when it needs the margin the
-estimate adds. Use `request_tokens` with the configured tokenizer's complete
-prompt count to diagnose the actual request.
+project has sent: it carried instructions that no longer exist, every sentence of
+the article behind an address, and a menu row per element with the sentence it sits
+in. The one call's prompt is those parts without those instructions and without the
+addresses, so the readings bound it from above. The cost is paid by an article that
+would have fitted: it is refused when it needs the margin the estimate adds. Use
+`request_tokens` with the configured tokenizer's complete prompt count to diagnose
+the actual request.
 """
 
 from __future__ import annotations
@@ -31,14 +31,14 @@ from idhazh.contracts.article import Article
 from idhazh.extract import TOKENS_PER_WORD
 from idhazh.llm.server import response_limit, window
 from idhazh.measured import (
-    LABEL_BODY_TOKENS_A_WORD,
-    LABEL_MENU_TOKENS_A_ROW,
-    LABEL_SCAFFOLD_TOKENS,
+    DIGEST_PROMPT_BODY_TOKENS_A_WORD,
+    DIGEST_PROMPT_MENU_TOKENS_A_ROW,
+    DIGEST_PROMPT_SCAFFOLD_TOKENS,
 )
 
-_SCAFFOLD_TOKENS: Final = int(LABEL_SCAFFOLD_TOKENS.value)
-_BODY_TOKENS_A_WORD: Final = LABEL_BODY_TOKENS_A_WORD.value
-_MENU_TOKENS_A_ROW: Final = LABEL_MENU_TOKENS_A_ROW.value
+_SCAFFOLD_TOKENS: Final = int(DIGEST_PROMPT_SCAFFOLD_TOKENS.value)
+_BODY_TOKENS_A_WORD: Final = DIGEST_PROMPT_BODY_TOKENS_A_WORD.value
+_MENU_TOKENS_A_ROW: Final = DIGEST_PROMPT_MENU_TOKENS_A_ROW.value
 
 
 def response_tokens(request: Mapping[str, object]) -> int:
@@ -97,7 +97,7 @@ def call_tokens(
     window has to hold that whether or not a plan is asked for.
 
     It is a sizing rather than a guarantee, and the reason is stated where each
-    term is: `LABEL_BODY_TOKENS_A_WORD` is the top of an eight-build spread
+    term is: `DIGEST_PROMPT_BODY_TOKENS_A_WORD` is the top of an eight-build spread
     rather than a bound. The seatbelt behind it is `recovered_completion`.
     """
     return prompt_tokens(article_tokens, menu_rows=menu_rows) + response_limit(sampling)

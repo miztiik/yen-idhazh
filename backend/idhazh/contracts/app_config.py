@@ -116,6 +116,8 @@ class AppConfig(Contract):
                 "additive; absent archive controls use defaults; "
                 "absent prompt_files uses the declared task paths; "
                 "absent text_analysis and elements.label_kinds use the declared defaults; "
+                "retired summarize.asks_for_a_visual_plan and prompt_files.generate_labels "
+                "are refused by name; "
                 "retired visual type/kind "
                 "tokens remain readable but never enable production choices; "
                 "retired console.doubt_rows and drift.extractiveness_rise are discarded; "
@@ -127,8 +129,8 @@ class AppConfig(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-11-17",
-            change="Add the text-analysis service block and the label map for its mentions.",
-            why="Absent blocks use the declared defaults, so an older config reads unchanged.",
+            change="Add the text-analysis block and label map; refuse two retired knobs by name.",
+            why="Absent blocks use the declared defaults; a retired knob is refused, not read.",
         ),
         ChangelogEntry(
             version="2026-11-16",

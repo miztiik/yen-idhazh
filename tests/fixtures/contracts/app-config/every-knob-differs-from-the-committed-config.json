@@ -384,7 +384,6 @@
     "holdout_reach_days": 365
   },
   "summarize": {
-    "asks_for_a_visual_plan": false,
     "max_verbatim_words": 15
   },
   "text_analysis": {

@@ -321,21 +321,6 @@ def row_for(code: FailureCode) -> ItemHealthRow:
                 date=plan().date,
                 run_id="2026-08-21-1",
             )
-        case FailureCode.LABELS_TRUNCATED:
-            failed_summary = summarize.to_summary(
-                ok_article,
-                None,
-                model_id="qwen3-8b",
-                generated_at="2026-08-21T06:00:00Z",
-                no_reply=FailureCode.LABELS_TRUNCATED,
-            )
-            return telemetry.classify_item(
-                planned=item(),
-                article=ok_article,
-                summary=failed_summary,
-                date=plan().date,
-                run_id="2026-08-21-1",
-            )
         case FailureCode.BAD_SHAPE:
             failed_summary = summarize.to_summary(
                 ok_article,
@@ -350,7 +335,11 @@ def row_for(code: FailureCode) -> ItemHealthRow:
                 date=plan().date,
                 run_id="2026-08-21-1",
             )
-        case FailureCode.COPIED_SOURCE | FailureCode.LENGTH_OUT_OF_RANGE:
+        case (
+            FailureCode.COPIED_SOURCE
+            | FailureCode.LENGTH_OUT_OF_RANGE
+            | FailureCode.LABELS_TRUNCATED
+        ):
             historical = Summary.model_validate(
                 {
                     **summary().model_dump(mode="json"),

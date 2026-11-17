@@ -257,7 +257,6 @@
     "trial_state_dirname": null
   },
   "summarize": {
-    "asks_for_a_visual_plan": true,
     "max_verbatim_words": 20
   },
   "ui": {

@@ -137,11 +137,10 @@ class PipelineTestCase(Model):
     asks_for_a_visual_plan: bool = Field(
         default=True,
         description=(
-            "Whether the second call may ask for a picture at all. False writes an "
-            "empty `visuals.enabled_kinds`, so no picture is reachable and the gate "
-            "takes the plan fields off the grammar, and it writes "
-            "`summarize.asks_for_a_visual_plan` false so the prompt inputs the run is "
-            "stamped with say the same. One knob, because the two have to agree."
+            "Whether the model call may ask for a picture at all. False writes an "
+            "empty `visuals.enabled_kinds`, so no picture is reachable, the gate "
+            "takes the plan fields off the grammar, and the prompt inputs the run is "
+            "stamped with say the same."
         ),
     )
 
