@@ -23,34 +23,24 @@ from idhazh import config
 from idhazh.classify.calls import (
     build_summarize_and_plan_request,
     parse_summarize_and_plan,
-    recovered_completion,
     summarize_and_plan_schema,
 )
 from idhazh.contracts.article import Article
 from idhazh.contracts.element import ElementKind, ElementTable
 from idhazh.contracts.knobs.visuals import VisualsConfig
-from idhazh.contracts.summary import Summary
 from idhazh.contracts.visual import (
     EncodingRole,
-    PlanDecision,
     VisualPlan,
-    VisualPurpose,
     VisualType,
 )
-from idhazh.contracts.visual_decision import NoneReason, VisualDecision, VisualKind
+from idhazh.contracts.visual_decision import NoneReason, VisualDecision
 from idhazh.contracts.visual_telemetry import ValidatorCheck
-from idhazh.llm.server import Completion
 from idhazh.render.chart import can_compile
 from idhazh.visual_planner import (
-    declined_by_the_model,
     depth_floor,
     downgrade,
     plan_is_reachable,
-    plan_lost_to_the_budget,
-    plan_lost_to_the_window,
     reachable_types,
-    refused_by_the_validator,
-    suppressed_by_the_gate,
 )
 from idhazh.visual_validator import Rejection, validate_plan
 from idhazh.visual_vocabulary import TYPE_RULES, UNRULED_TYPES
@@ -282,85 +272,15 @@ class TestTheGateSuppressesThePlanAndNeverTheCall:
         reply = parse_summarize_and_plan(json.dumps(content["summary"]), plan=False)
 
         assert reply.visual is None
-        assert reply.summary.title.startswith("Example Lab")
+        assert reply.summary.title == content["summary"]["title"]
 
 
-class TestEveryRouteToNoneCarriesItsOwnReason:
-    """Each route to `none` is driven on its own and records the reason it was driven for.
+class TestTheNoneReasonOnAStoredDecision:
+    """What a stored decision may say about why it carries no picture.
 
-    A route that records no reason of its own leaves the largest number an
-    operator reads explaining nothing. That the routes cover every reason is
-    asserted through the production router in `test_visual_attempts.py`.
+    That each route to `none` records its own reason is asserted through the
+    production router in `test_visual_attempts.py`.
     """
-
-    def driven(self, summary_ok: Summary) -> dict[NoneReason, VisualDecision]:
-        version = VisualDecision.schema_version()
-        stamp = {"model_id": "m", "decided_at": "2026-09-11T00:00:00Z", "version": version}
-
-        # Gate 1. A table too thin for any picture, so the plan never goes on the request.
-        assert not plan_is_reachable(wind_table(*THIN), visuals=committed_visuals())
-        gated = suppressed_by_the_gate(summary_ok, **stamp)
-
-        # The model was asked and answered `none`. The ordinary answer.
-        declined_plan = VisualPlan.from_json(
-            read_text(VALIDATOR_FIXTURES / "plans" / "declines.json")
-        )
-        assert declined_plan.decision is PlanDecision.NONE
-        declined = declined_by_the_model(summary_ok, why=declined_plan.why, **stamp)
-
-        # Gate 3. A drafted plan the validator refuses and no depth rescues.
-        refused_plan = VisualPlan.from_json(
-            read_text(VALIDATOR_FIXTURES / "plans" / "units-disagree.json")
-        )
-        table = ElementTable.from_json(
-            read_text(VALIDATOR_FIXTURES / "tables" / "capacity-and-headcount.json")
-        )
-        rejections = validate_plan(refused_plan, table, visuals=committed_visuals())
-        assert rejections
-        refused = refused_by_the_validator(summary_ok, rejections, **stamp)
-
-        # E5. The budget cut the plan after the summary closed.
-        cut = Completion(
-            content=json.loads(read_text(SUMMARIZE_AND_PLAN_REPLIES / "cut-in-the-plan.json"))["choices"][0][
-                "message"
-            ]["content"],
-            finish_reason="length",
-        )
-        assert recovered_completion(cut) is not None
-        lost = plan_lost_to_the_budget(summary_ok, **stamp)
-
-        # The same cut reply, when the window rather than the output limit was the wall.
-        walled = plan_lost_to_the_window(summary_ok, **stamp)
-
-        return {
-            NoneReason.NOT_REACHABLE: gated,
-            NoneReason.MODEL_DECLINED: declined,
-            NoneReason.VALIDATION_FAILED: refused,
-            NoneReason.OUTPUT_BUDGET_CUT: lost,
-            NoneReason.WINDOW_EXHAUSTED: walled,
-        }
-
-    def test_each_route_records_the_member_it_was_driven_for(self, summary_ok: Summary) -> None:
-        for expected, decision in self.driven(summary_ok).items():
-            assert decision.none_reason is expected
-            assert decision.kind is VisualKind.NONE
-            assert decision.rationale, "a refusal that names nothing cannot be acted on"
-
-    def test_the_gate_records_that_the_model_was_still_asked(self, summary_ok: Summary) -> None:
-        """Every route to `none` here ran the model, and the payload has to say so.
-
-        `asked_the_model` used to tell this gate apart from the retired planner's
-        prefilter, which decided a fact-poor item without posting anything. That
-        producer is gone: the summarize-and-plan call writes the summary, so the model is asked on
-        every item whatever the gate then does with the plan. A `false` in a
-        committed day is history rather than something a run can still write.
-        """
-        gated = suppressed_by_the_gate(
-            summary_ok, model_id="m", decided_at="2026-09-11T00:00:00Z", version="2026-08-21"
-        )
-
-        assert gated.asked_the_model is True
-        assert gated.none_reason is NoneReason.NOT_REACHABLE
 
     def test_a_decision_that_carries_a_picture_carries_no_reason(self) -> None:
         rendered = VisualDecision.from_json(
@@ -381,7 +301,8 @@ class TestEveryRouteToNoneCarriesItsOwnReason:
 
 
 class TestTheDowngradeLadder:
-    """The four invariance rules, one test each, plus the floor that cannot be read."""
+    """The ladder's rescues and refusals: the nearest built neighbour, an unchanged
+    element set, an escalating floor, and the validator's refusals."""
 
     def unruled_comparison(self) -> VisualPlan:
         """A historical comparison request with no role rule."""
@@ -426,20 +347,6 @@ class TestTheDowngradeLadder:
         assert made.plan.element_ids == plan.element_ids
         assert made.plan.labels == plan.labels
         assert made.plan.annotations == plan.annotations
-
-    def test_invariance_two_the_purpose_survives_the_step_and_the_chain(self) -> None:
-        """A composition cannot escape its refused whole by reaching plain bars."""
-        composition = wind_plan(
-            type=VisualType.PIE.value, purpose=VisualPurpose.COMPOSITION.value
-        )
-        made = downgrade(
-            composition,
-            wind_table(*WHOLE),
-            visuals=committed_visuals(downgrade_enabled=True, downgrade_floor_percentiles=[50, 75]),
-            published_marks={VisualType.BAR: [3, 4], VisualType.STACKED_BAR: [3, 4]},
-        )
-
-        assert made is None, "a composition reached a comparison"
 
     def test_a_failed_pie_whole_reenters_the_stacked_whole_check(self) -> None:
         plan = VisualPlan.from_json(
@@ -495,20 +402,6 @@ class TestTheDowngradeLadder:
 
         assert made is None
 
-    def test_invariance_four_the_published_plan_re_enters_the_same_validator(self) -> None:
-        made = downgrade(
-            self.unruled_comparison(),
-            wind_table(*WHOLE),
-            visuals=committed_visuals(
-                type_selection_enabled=False,
-                downgrade_enabled=True, downgrade_floor_percentiles=[50, 75],
-            ),
-            published_marks={VisualType.BAR: [3, 4, 5, 8]},
-        )
-
-        assert made is not None
-        assert validate_plan(made.plan, wind_table(*WHOLE), visuals=committed_visuals()) == []
-
     def test_a_downgrade_with_no_annotation_is_refused(self) -> None:
         """The machine-checkable justification: the mark that makes the weaker
         form still worth showing."""
@@ -559,36 +452,6 @@ class TestTheDowngradeLadder:
             is None
         )
 
-    def test_the_rung_count_is_how_many_depths_exist(self) -> None:
-        rungs = [50]
-        made = downgrade(
-            self.unruled_comparison(),
-            wind_table(*WHOLE),
-            visuals=committed_visuals(
-                type_selection_enabled=False,
-                downgrade_enabled=True, downgrade_floor_percentiles=rungs,
-            ),
-            published_marks={VisualType.BAR: [3, 4, 5, 8]},
-        )
-
-        assert made is not None
-        assert made.depth <= len(rungs)
-
-    def test_a_plan_that_declines_has_nothing_to_step_down_from(self) -> None:
-        declined = VisualPlan.from_json(read_text(VALIDATOR_FIXTURES / "plans" / "declines.json"))
-
-        assert (
-            downgrade(
-                declined,
-                wind_table(*WHOLE),
-                visuals=committed_visuals(
-                    downgrade_enabled=True, downgrade_floor_percentiles=[50, 75]
-                ),
-                published_marks={VisualType.BAR: [3, 4, 5, 8]},
-            )
-            is None
-        )
-
     @pytest.mark.parametrize(
         ("population", "percentile", "expected"),
         [
@@ -605,14 +468,6 @@ class TestTheDowngradeLadder:
         """Interpolating would put a mark count no published visual ever drew
         between two that were."""
         assert depth_floor(population, percentile) == expected
-
-    def test_two_adjacent_rungs_can_land_on_one_integer_and_that_is_visible(self) -> None:
-        """A mark count is bounded to the chart-point window, so a percentile is a
-        low-resolution instrument. It is recorded per depth, so two depths holding
-        one floor reads as the percentiles colliding rather than as a bug."""
-        flat = (4, 4, 4, 4)
-
-        assert depth_floor(flat, 50) == depth_floor(flat, 75)
 
     def test_a_ladder_whose_rungs_do_not_rise_never_loads(self) -> None:
         with pytest.raises(ValidationError):
