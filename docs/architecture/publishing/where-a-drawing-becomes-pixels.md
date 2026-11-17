@@ -312,7 +312,7 @@ Table A - Declared types without a direct compiler
 The [text-only proposal rationale](what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md#design-rationale)
 and [diagram boundary](visuals.md#diagrams-deferred) remain relevant.
 Abandonment is distinct from the
-[finalized planner-evidence handoff](../summarize/prompt.md#the-second-call-writes-this-summary-and-the-article-is-read-once):
+[planner-evidence handoff](../summarize/prompt.md#one-call-writes-the-summary-and-plans-the-visual-and-the-article-is-read-once):
 adding a compiler cannot recover a request that was suppressed, declined or
 failed to parse before reaching it.
 
