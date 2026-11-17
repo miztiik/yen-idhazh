@@ -36,7 +36,7 @@ Table C - Status Reckoner
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | 1 | Make room for the analysis step | - | A | DONE | probable-chainsaw | own pull request | nested session |
 | C2 | 2 | Start the service in the digest job | - | A | DONE | miniature-chainsaw | own pull request | nested session |
-| C3 | 3 | Replace the first call with the service | 1, 2 | B | PENDING | - | - | - |
+| C3 | 3 | Replace the first call with the service | 1, 2 | B | IN-FLIGHT | reimagined-system | own pull request | nested session |
 | C4 | 4 | Delete what the first call served | 3 | C | PENDING | - | - | - |
 
 ## 2. Row #1 - Make room for the analysis step
