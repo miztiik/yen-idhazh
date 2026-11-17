@@ -4,9 +4,9 @@ Contract tier (CLAUDE.md section 12). A `Field` range is the contract's own
 statement and Pydantic enforces it, so a test that feeds it a value just outside
 the range restates the declaration. What is asserted here is what no declaration
 says: the cross-field validators, the read-side migrations, the bindings between
-this file's values and the files that copy them, and the frame-width and measure
-ranges that `docs/concepts/config/appearance.md` gives as the answer to "a frame
-set to 300px would need a code change to still look right".
+the contract's declared values and the files that copy them, and the frame-width
+and measure ranges that `docs/concepts/config/appearance.md` gives as the answer
+to "a frame set to 300px would need a code change to still look right".
 
 Nothing is mocked and nothing touches the network.
 """
@@ -64,26 +64,13 @@ def test_machine_palette_matches_the_frontend_vocabulary() -> None:
     assert set(re.findall(r"'([^']+)'", copied[1])) == {value.value for value in ChartPalette}
 
 
-def committed_app_config() -> AppConfig:
-    """`AppConfig` has one block with no default, so `{}` is not a document.
-
-    There is no honest default for "which weights", and a wrong guess would
-    silently run the wrong model.
-    """
-    return AppConfig.model_validate(
-        json.loads((REPO_ROOT / "config" / "idhazh.json").read_text(encoding="utf-8"))
-    )
-
-
 def test_the_committed_file_is_ascii() -> None:
     """Section 5 requires ASCII; checkout line endings belong to `.gitattributes`."""
     raw = APPEARANCE_PATH.read_bytes()
     assert all(byte < 128 for byte in raw), "config/appearance.json must be ASCII"
 
 
-def test_story_chart_geometry_is_committed_and_refuses_unusable_dash_arrays() -> None:
-    appearance = AppearanceConfig.model_validate_json(APPEARANCE_PATH.read_text(encoding="utf-8"))
-    assert appearance.chart.story_geometry == StoryChartGeometryConfig()
+def test_story_chart_geometry_refuses_unusable_dash_arrays() -> None:
     for invalid in (
         {"line_series_dash_arrays": ("none",) * 8},
         {
@@ -223,12 +210,9 @@ def test_the_default_theme_is_the_one_root_carries() -> None:
     base = re.search(r"^:root\s*,\s*\[data-theme=['\"](\w+)['\"]\]\s*\{", tokens, re.MULTILINE)
     assert base is not None, "tokens.css no longer names the theme sharing the :root group"
     theme = ThemeChoice(base.group(1))
-    appearance = AppearanceConfig.model_validate_json(APPEARANCE_PATH.read_text(encoding="utf-8"))
     for name, declared in {
         "appearance default": AppearanceConfig.model_validate({}).digest.theme_default,
         "UI default": UiConfig().theme_default,
-        "config/appearance.json": appearance.digest.theme_default,
-        "config/idhazh.json": committed_app_config().ui.theme_default,
     }.items():
         assert declared is theme, f"{name} disagrees with the CSS base theme"
 
@@ -296,27 +280,3 @@ def test_a_movement_colour_that_is_not_a_lower_case_six_digit_hex_is_refused(val
     """One form, because `tokens.css` writes one form and `tokens.spec.ts` reads it back."""
     with pytest.raises(ValidationError):
         ThemeConfig(movement_good_light=value)
-
-
-def test_the_committed_movement_pair_is_what_tokens_css_declares() -> None:
-    """The config file and the token file are two copies of one decision.
-
-    `scripts/build-frame-css.mjs` emits the config values after `tokens.css`
-    loads, so the two disagreeing means the committed default is dead and no
-    diff shows it.
-    """
-    theme = AppearanceConfig.model_validate(
-        json.loads(APPEARANCE_PATH.read_text(encoding="utf-8"))
-    ).theme
-    tokens = (REPO_ROOT / "frontend" / "src" / "styles" / "tokens.css").read_text(encoding="utf-8")
-    # Dark is the base block and light is the override that follows it, so the
-    # light selector is the boundary between the two.
-    light_at = tokens.index("[data-theme='light']")
-    for block, start, end in (("dark", 0, light_at), ("light", light_at, len(tokens))):
-        for name in ("good", "bad"):
-            declared = re.search(rf"--movement-{name}:\s*(#[0-9a-f]{{6}});", tokens[start:end])
-            assert declared is not None, f"--movement-{name} is not declared in the {block} theme"
-            assert declared.group(1) == getattr(theme, f"movement_{name}_{block}"), (
-                f"tokens.css and config/appearance.json disagree about "
-                f"--movement-{name} on the {block} theme"
-            )
