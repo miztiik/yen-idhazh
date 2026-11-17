@@ -30,11 +30,11 @@
   },
   "compaction_lag_days": 0,
   "covers_through": "2026-11-17",
-  "generated_at": "2026-11-17T03:43:39Z",
+  "generated_at": "2026-11-17T04:48:45Z",
   "routes": [
-    {"carries": "The model spent 6 h 29 m of this.","description": "Did the runs work, and what each stage cost.","href": "/console/","id": "pipelines","label": "Pipelines","severity": 2,"worst": "1 run worth a look"},
-    {"carries": "This day ran as one run, so there is nothing to compare it against.","description": "What the model wrote, how long it took, and what it got wrong.","href": "/console/model/","id": "model","label": "Summaries","severity": 3,"worst": "23 items failed"},
-    {"carries": "57 articles on this day.","description": "The hardware the model ran on, and how much it varied between runs.","href": "/console/machine/","id": "machine","label": "Hardware","severity": 2,"worst": "1 shard reported nothing"},
+    {"carries": "The model spent 14 h 19 m of this.","description": "Did the runs work, and what each stage cost.","href": "/console/","id": "pipelines","label": "Pipelines","severity": 2,"worst": "2 runs worth a look"},
+    {"carries": "This day ran in 2 runs, 1.11x apart on read speed.","description": "What the model wrote, how long it took, and what it got wrong.","href": "/console/model/","id": "model","label": "Summaries","severity": 3,"worst": "45 items failed"},
+    {"carries": "79 articles on this day.","description": "The hardware the model ran on, and how much it varied between runs.","href": "/console/machine/","id": "machine","label": "Hardware","severity": 2,"worst": "1 shard reported nothing"},
     {"carries": "Summary measurements and writing costs are on Summaries.","description": "Which stories the day merged, and where the judge and a person disagreed.","href": "/console/judgement/","id": "judgement","label": "Judgement","severity": 0,"worst": null},
     {"carries": "100 feeds failed on the last ask.","description": "Who supplied the day, and how far each feed is discounted.","href": "/console/voices/","id": "voices","label": "Voices","severity": 2,"worst": "7 feeds discounted to the floor"},
     {"carries": "Every published ledger the other routes draw from, open to a question of your own.","description": "What the ledgers hold, and whatever you ask of them.","href": "/console/data-explorer/","id": "data-explorer","label": "Data explorer","severity": 0,"worst": null}
@@ -184,27 +184,28 @@
     "compared_from": "2026-09-14"
   },
   "size": {
-    "articles_to_cap": 474454,
-    "bytes": 70725489,
-    "cap_fraction": 0.0658682445064187,
-    "left_mb": 956.5509176254272,
+    "articles_to_cap": 474414,
+    "bytes": 70808884,
+    "cap_fraction": 0.06594591215252876,
+    "left_mb": 956.4713859558105,
     "measured_days": 87,
-    "sentence": "67.4 MB of the 1 GB limit - room for about 474,000 more articles."
+    "sentence": "67.5 MB of the 1 GB limit - room for about 474,000 more articles."
   },
   "verdict": {
     "date": "2026-11-17",
     "health": "amber",
     "more_runs": 0,
     "runs": [
-      {"health": "amber","label": "Run 1 is worth a look"}
+      {"health": "amber","label": "Run 1 is worth a look"},
+      {"health": "amber","label": "Run 2 is worth a look"}
     ],
-    "sentence": "2026-11-17 ran 1 run and published 57 of 80 planned items. 23 items failed."
+    "sentence": "2026-11-17 ran 2 runs and published 115 of 160 planned items. 45 items failed."
   },
   "version": "2026-10-11T21:00",
   "worst": {
     "href": "/console/model/",
     "id": "model",
     "label": "Summaries",
-    "sentence": "23 items failed, so they are not in the day the digest published."
+    "sentence": "45 items failed, so they are not in the day the digest published."
   }
 }
