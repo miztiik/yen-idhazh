@@ -13,11 +13,23 @@ function clock(extra: Row = {}): Row {
 
 test('summarization is counted once; its calls are non-additive detail', () => {
 	const result = durationCohort([clock()], ['2026-09-01']);
-	expect(result.series.map((series) => series.points[0].value)).toEqual([1, 2, 6, 1, 0]);
+	expect(result.series.map((series) => series.points[0].value)).toEqual([1, 2, 0, 6, 1, 0]);
 	expect(result.meanMs).toBe(10);
 	expect(result.days[0].details.map((detail) => detail.value)).toEqual([3, 3, 1]);
 	expect(result.series.map((series) => series.label)).not.toContain('Label call');
 	expect(result.days[0]).toMatchObject({ count: 1, recorded: 1, missing: 0, invalid: 0, inconsistent: 0 });
+});
+
+test('an analysis clock is a stage of its own, and its absence on an older row is zero rather than a gap in the cohort', () => {
+	const analysed = clock({ analyze_ms: 4, item_total_ms: 14 });
+	const result = durationCohort([clock(), analysed], ['2026-09-01']);
+	expect(result.days[0]).toMatchObject({ count: 2, recorded: 2, missing: 0, invalid: 0, inconsistent: 0, elapsed: 12 });
+	expect(result.series.map((series) => series.label)).toEqual(
+		['Fetch', 'Extract', 'Analyze', 'Summarize', 'Checking', 'Unattributed duration']);
+	expect(result.series.map((series) => series.points[0].value)).toEqual([1, 2, 2, 6, 1, 0]);
+	// A row that carries the clock counts only when its stages and gap add up to its elapsed time.
+	const stale = durationCohort([clock({ analyze_ms: 4 }), clock({ analyze_ms: -1 })], ['2026-09-01']);
+	expect(stale.days[0]).toMatchObject({ count: 0, inconsistent: 1, invalid: 1 });
 });
 
 test('opposite gaps retain positive unnamed duration and overlap even when their signed mean is zero', () => {
@@ -43,7 +55,7 @@ test('missing and non-reconciling clocks are counted explicitly and excluded fro
 		clock({ fetch_ms: -1, item_total_ms: 8 })
 	], ['2026-09-01']);
 	expect(result.days[0]).toMatchObject({ recorded: 4, count: 1, missing: 1, inconsistent: 1, invalid: 1, elapsed: 10 });
-	expect(result.series.map((series) => series.points[0].value)).toEqual([1, 2, 6, 1, 0]);
+	expect(result.series.map((series) => series.points[0].value)).toEqual([1, 2, 0, 6, 1, 0]);
 });
 
 test('an unknown call detail does not change the stage cohort or become a zero', () => {

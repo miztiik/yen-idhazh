@@ -51,6 +51,7 @@ Knobs, by the surface they tune:
 
 - **Sources** - which feeds or listings are consulted, and the filters a candidate link must survive ([config/source-lifecycle.md](config/source-lifecycle.md)).
 - **Extraction** - the truncation cap, the retry budget, backoff, what counts as an oversized body, shape-signal thresholds, shape enforcement switches, and paywall fallback markers ([config/summary-length.md](config/summary-length.md)).
+- **Text analysis** - the address, language and per-call deadline of the local service that names an article's people and places, and `elements.label_kinds`, which says what each of its labels becomes in the element table. The address is refused unless it names this machine, so article text goes only where the digest job started a service (`CLAUDE.md` Guardrail #11).
 - **Model** - which model reference and quantisation, the context size, thread count, and the sampling parameters that pin determinism ([config/model-file.md](config/model-file.md)).
 - **Summarize** - the quotation cap the prompt states and the picture-plan flag ([config/summary-length.md](config/summary-length.md)). Nothing here asks the model for a length.
 - **Evaluation** - the confidence band thresholds, the copy reject ceiling, the faithfulness window and its overlap, and the spot-check sample size ([evaluation.md](evaluation.md)).

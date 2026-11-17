@@ -238,6 +238,11 @@
     "year_over_year_pct": 4.0
   },
   "elements": {
+    "label_kinds": {
+      "EVENT": "not_quantity",
+      "GPE": "entity",
+      "PERSON": "place"
+    },
     "max_per_article": 64
   },
   "evaluation": {
@@ -381,6 +386,11 @@
   "summarize": {
     "asks_for_a_visual_plan": false,
     "max_verbatim_words": 15
+  },
+  "text_analysis": {
+    "base_url": "http://localhost:3999",
+    "language": "zh",
+    "request_timeout_seconds": 30.0
   },
   "ui": {
     "archive_page_size": 40,

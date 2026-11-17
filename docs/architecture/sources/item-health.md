@@ -135,6 +135,7 @@ prose below turns on, not the complete list defined by the contract:
 | `detail` | <= 2,000 chars, one line of printable ASCII | any failed row, from 2026-09-15 | our own reason, usually the exception message. Never source text |
 | `fetch_ms` | int | once fetch ran | wall-clock for the HTTP read |
 | `extract_ms` | int | once extract ran | wall-clock for text extraction |
+| `analyze_ms` | int | the text-analysis call ran; null on every row before the column existed | wall-clock for the call that names the article's people and places |
 | `summarize_ms` | int | once the model replied | wall-clock for the whole model request |
 | `prefill_ms` | int | when the runtime reports it | the model reading the prompt, added over every call below |
 | `decode_ms` | int | when the runtime reports it | the model writing the reply, added over every call below |
@@ -163,12 +164,17 @@ named stage, and it is the only column that can catch a regression in a stage
 nobody named - every other timing column can only report on work somebody
 already thought to measure. It is signed on purpose: a negative value means two
 named stages overlapped, or two clocks disagreed, and clamping it to zero would
-hide exactly the thing it exists to report.
+hide exactly the thing it exists to report. The named stages are `fetch_ms`,
+`extract_ms`, `analyze_ms`, `summarize_ms` and `faithfulness_ms`
+(`telemetry.record.NAMED_STAGE_MS`); `label_ms` and `summary_ms` split
+`summarize_ms` and are not subtracted again.
 
 **A call slot fills whole or not at all, and the five flat cells are their sum.**
 The contract refuses a row that records one call and leaves the totals at that
 call's numbers, which is what lets every reader that pools these cells stay
-pooled and stay correct. Read the cache per call rather than off the total: a
+pooled and stay correct. **Either slot may stand alone**: an item that makes one
+model call records it in the summary slot and leaves the label slot empty, and a
+row that fills both is as valid as it was. Read the cache per call rather than off the total: a
 second call replays the first call's prompt and is answered for it, so
 `cached_tokens` over the item is non-zero on every item that took two calls and
 says nothing about either
@@ -540,7 +546,7 @@ better enum member".
 
 `http_status` belongs only on `fetch` rows.
 
-`fetch_ms`, `extract_ms`, and `summarize_ms` are nullable. Null means the stage
+`fetch_ms`, `extract_ms`, `analyze_ms` and `summarize_ms` are nullable. Null means the stage
 did not run, or the row predates timing capture. It is not zero. A zero would be
 a measurement.
 
@@ -974,6 +980,19 @@ Authority: Fowler.
 
 The row carries `canonical_url`. About 80 bytes buys back the URL that otherwise
 expires with a run artifact. Authority: Fowler.
+
+**`analyze_ms` is a named stage, and the last column.** The text-analysis call is
+work an item spends time in, so it is timed beside `fetch_ms` and `extract_ms`
+and `stage_gap_ms` takes it out; left unnamed it would fall into the gap, and the
+one column that exists to catch a stage nobody named would carry a cost somebody
+already knew about. Appended last, so an older header stays a readable prefix of
+the new one. A row written before the column reads it as null, which is not
+zero, and the console's stage stacks read that absence as zero so an older row
+still tiles its item; one item's own reading stays "not measured". **The summary
+slot may be filled alone.** The slot rule is that a call is recorded whole, and
+the earlier rule that a second call follows a first described a stage that made
+two calls: it would refuse the row of an item that made one. Rows that fill both
+slots are unchanged. Authority: Fowler.
 
 **How many phases a model call decodes in is a config value, so no column on
 this row is shaped by it.** `_ask_the_model` in

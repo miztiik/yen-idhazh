@@ -1,10 +1,46 @@
-"""How much of an article is read, and how many elements its passes may keep."""
+"""How much of an article is read, how many elements it keeps, and what a mention becomes."""
 
 from __future__ import annotations
+
+from collections.abc import Mapping
+from enum import StrEnum
+from types import MappingProxyType
+from typing import Final
 
 from pydantic import Field
 
 from idhazh.contracts.base import Model
+
+
+class MentionUse(StrEnum):
+    """What one labelled mention from the text-analysis service becomes in the element table."""
+
+    #: A person, an organisation, a product or an event the article names: an `entity` element.
+    ENTITY = "entity"
+    #: A location the article names: a `place` element.
+    PLACE = "place"
+    #: A date, a time or an ordinal. It makes no element, and a regex quantity row it
+    #: overlaps is dropped, because that row was never a figure.
+    NOT_QUANTITY = "not_quantity"
+
+
+#: The service's entity labels for people, groups, products, events, places, dates,
+#: times and ordinals, and what each becomes. Anything else it returns is ignored.
+DEFAULT_LABEL_KINDS: Final[Mapping[str, MentionUse]] = MappingProxyType(
+    {
+        "PERSON": MentionUse.ENTITY,
+        "ORG": MentionUse.ENTITY,
+        "NORP": MentionUse.ENTITY,
+        "PRODUCT": MentionUse.ENTITY,
+        "EVENT": MentionUse.ENTITY,
+        "GPE": MentionUse.PLACE,
+        "LOC": MentionUse.PLACE,
+        "FAC": MentionUse.PLACE,
+        "DATE": MentionUse.NOT_QUANTITY,
+        "TIME": MentionUse.NOT_QUANTITY,
+        "ORDINAL": MentionUse.NOT_QUANTITY,
+    }
+)
 
 
 class ExtractConfig(Model):
@@ -122,13 +158,15 @@ class ExtractConfig(Model):
 
 
 class ElementsConfig(Model):
-    """How many candidate elements one article's passes may keep.
+    """How many candidate elements one article's passes may keep, and what a mention becomes.
 
-    A bound on work, never a judgement about which figures matter. The
+    `max_per_article` is a bound on work, never a judgement about which figures matter. The
     candidate pass keeps every quantity the number pattern matched, in the
     order the article wrote them, and this is the only thing that removes any
     of them - so `ElementTable.candidates_found` ships beside the table and
-    says what the pass matched before this cap applied.
+    says what the pass matched before this cap applied. `label_kinds` is the
+    other half: the one place that says what each label of the text-analysis
+    service is used for.
     """
 
     max_per_article: int = Field(
@@ -148,5 +186,14 @@ class ElementsConfig(Model):
             "says how many the pass matched. That is a bound on work behaving as one, "
             "not a silent loss: news prose front-loads, and the planner reads at most "
             "visuals.max_facts of the table by index."
+        ),
+    )
+    label_kinds: dict[str, MentionUse] = Field(
+        default_factory=lambda: dict(DEFAULT_LABEL_KINDS),
+        description=(
+            "What each label the text-analysis service returns becomes: an `entity` or "
+            "a `place` element, or `not_quantity`, which makes no element and drops any "
+            "regex quantity row the mention overlaps. A label named nowhere here is "
+            "ignored, so a new use is one more line and no code change."
         ),
     )

@@ -59,9 +59,9 @@ test.describe("Pipelines' failure mix and time split draw the window's days, on 
         const split = nativeTimeSplit(rows.map((row) => ({ ...row })), calendar);
         const strip = timeSplitReadout(split, numberFormat);
         expect(split.series.map((band) => band.points.map((point) => point.value))).toEqual(
-            [100, 20, 600, 30, 50].map((value) => [null, null, value]));
-        expect(strip.series.slice(0, 7).map((band) => band.values)).toEqual(
-            ['0.1 s', '0.02 s', '0.6 s', '0.03 s', '0.05 s', '0.8 s', '0 s'].map((value) => [null, null, value]));
+            [100, 20, 0, 600, 30, 50].map((value) => [null, null, value]));
+        expect(strip.series.slice(0, 8).map((band) => band.values)).toEqual(
+            ['0.1 s', '0.02 s', '0 s', '0.6 s', '0.03 s', '0.05 s', '0.8 s', '0 s'].map((value) => [null, null, value]));
         expect(strip.notMeasured).toBe('Not measured for the complete cohort');
     });
 });

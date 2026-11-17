@@ -70,7 +70,7 @@ export const ITEM_HEALTH_COLUMNS = [
 	'run_visual_decision', 'temperature', 'failed_field', 'failed_rule', 'os_mem_available_bytes',
 	'os_mem_total_bytes', 'os_mem_cached_bytes', 'os_swap_free_bytes', 'os_swap_total_bytes',
 	'os_mem_available_min_bytes', 'planned_type', 'rendered_type', 'downgrade_depth', 'marks',
-	'visual_id'
+	'visual_id', 'analyze_ms'
 ] as const;
 
 /** Only the drawn measurements and row identities the console reads.

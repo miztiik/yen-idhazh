@@ -23,6 +23,7 @@ export const TELEMETRY_COLUMNS = [
 	'source_words_before_cap',
 	'fetch_ms',
 	'extract_ms',
+	'analyze_ms',
 	'summarize_ms',
 	'prefill_ms',
 	'decode_ms',
@@ -82,6 +83,10 @@ export interface TelemetryRow {
 	fetch_ms: number | null;
 	/** Milliseconds the extract took. Null where the stage never ran. */
 	extract_ms: number | null;
+	/** Milliseconds the text analysis took, the step that names the article's
+	 * people and places. Null on every row written before the step existed, and
+	 * where it never ran. */
+	analyze_ms: number | null;
 	/** Milliseconds the summarizer held the item. Null where it never ran. */
 	summarize_ms: number | null;
 	/** The part of `summarize_ms` spent reading the prompt. */
@@ -151,7 +156,7 @@ export interface TelemetryRow {
 	 * `queue_wait_ms` taken out. The denominator every stage share is taken
 	 * against. */
 	item_total_ms: number | null;
-	/** `item_total_ms` minus fetch, extract, summarize and faithfulness. The only
+	/** `item_total_ms` minus fetch, extract, analyze, summarize and faithfulness. The only
 	 * cell that can catch a regression in a step nobody named, and signed on
 	 * purpose: negative means two clocks overlapped. */
 	stage_gap_ms: number | null;
@@ -322,6 +327,7 @@ export const FAILURE_STAGES: StageFailureSeries['stage'][] = ['fetch', 'extract'
 export const TIME_BANDS = [
 	{ key: 'fetch', label: 'Fetch' },
 	{ key: 'extract', label: 'Extract' },
+	{ key: 'analyze', label: 'Analyze' },
 	{ key: 'label', label: 'Label call' },
 	{ key: 'summary', label: 'Summary' },
 	{ key: 'plan', label: 'Visual plan' },
@@ -383,6 +389,7 @@ export function itemTimeBands(row: TelemetryRow): number[] {
 	return [
 		msCell(row.fetch_ms),
 		msCell(row.extract_ms),
+		msCell(row.analyze_ms),
 		label,
 		summary - plan,
 		plan,
@@ -554,6 +561,7 @@ export function parseTelemetryCsv(text: string): TelemetryRow[] {
 		source_words_before_cap: figure(cells, 'source_words_before_cap'),
 		fetch_ms: figure(cells, 'fetch_ms'),
 		extract_ms: figure(cells, 'extract_ms'),
+		analyze_ms: figure(cells, 'analyze_ms'),
 		summarize_ms: figure(cells, 'summarize_ms'),
 		prefill_ms: figure(cells, 'prefill_ms'),
 		decode_ms: figure(cells, 'decode_ms'),

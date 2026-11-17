@@ -53,11 +53,11 @@ EXPECTED_COLUMNS: Final[Mapping[str, tuple[str, ...]]] = {
     "runShardsQuery": ("date", "run_id", "shards"),
     "failedRuleQuery": ("date", "stage", "outcome", "code", "failed_rule"),
     "failureMixQuery": ("date", "stage", "outcome", "code", "failed_rule"),
-    "itemTimeSplitQuery": ("date", "item_total_ms", "fetch_ms", "extract_ms", "summarize_ms", "label_ms", "summary_ms", "visual_plan_ms", "faithfulness_ms", "stage_gap_ms"),
+    "itemTimeSplitQuery": ("date", "item_total_ms", "fetch_ms", "extract_ms", "analyze_ms", "summarize_ms", "label_ms", "summary_ms", "visual_plan_ms", "faithfulness_ms", "stage_gap_ms"),
     "slowerOnSameWorkQuery": ("date", "cpu_model", "prefill_ms", "input_tokens", "cached_tokens", "decode_ms", "output_tokens"),
     "stageTimingsQuery": ("date", "fetch_ms", "extract_ms", "summarize_ms"),
     "itemCostQuery": ("date", "prefill_ms", "decode_ms", "input_tokens", "output_tokens", "cached_tokens", "label_input_tokens", "label_cached_tokens"),
-    "runTimelineQuery": ("run_id", "item_id", "source_id", "machine_shard", "item_index", "item_started_at", "item_ended_at", "queue_wait_ms", "fetch_ms", "robots_ms", "extract_ms", "summarize_ms", "label_ms", "summary_ms", "visual_plan_ms", "visual_plan_ms_is_estimate", "faithfulness_ms", "stage_gap_ms", "item_total_ms", "outcome", "stage", "code"),
+    "runTimelineQuery": ("run_id", "item_id", "source_id", "machine_shard", "item_index", "item_started_at", "item_ended_at", "queue_wait_ms", "fetch_ms", "robots_ms", "extract_ms", "analyze_ms", "summarize_ms", "label_ms", "summary_ms", "visual_plan_ms", "visual_plan_ms_is_estimate", "faithfulness_ms", "stage_gap_ms", "item_total_ms", "outcome", "stage", "code"),
     "articleAgeQuery": ("published_at", "time_source", "item_started_at", "outcome"),
     "modelThroughputQuery": ("date", "run_id", "model_id", "prefill_ms", "decode_ms", "input_tokens", "cached_tokens", "output_tokens"),
     "callEndingQuery": ("date", "summary_finish_reason", "label_finish_reason"),
@@ -75,7 +75,7 @@ EXPECTED_COLUMNS: Final[Mapping[str, tuple[str, ...]]] = {
         "server_prompt_tokens", "server_prompt_seconds",
         *LEGACY_HOST_INPUT_COLUMNS,
     ),
-    "slowestArticlesQuery": ("run_id", "item_id", "source_id", "machine_shard", "item_total_ms", "fetch_ms", "extract_ms", "summarize_ms", "faithfulness_ms", "stage_gap_ms", "queue_wait_ms"),
+    "slowestArticlesQuery": ("run_id", "item_id", "source_id", "machine_shard", "item_total_ms", "fetch_ms", "extract_ms", "analyze_ms", "summarize_ms", "faithfulness_ms", "stage_gap_ms", "queue_wait_ms"),
     "tailTrendQuery": ("date", "run_id", "summarize_ms"),
     "closestToMemoryQuery": ("date", "item_id", "source_id", "os_mem_total_bytes", "os_mem_available_min_bytes", "source_words"),
     "memoryHeldQuery": ("date", "item_id", "os_mem_total_bytes", "os_mem_available_bytes", "llama_rss_bytes", "python_rss_bytes", "llama_rss_anon_bytes", "python_rss_anon_bytes", "os_swap_total_bytes", "os_swap_free_bytes"),
@@ -306,7 +306,7 @@ def test_real_unread_map_still_refuses_failed_field_without_rejecting_failed_rul
 
 
 def test_query_registry_tracks_the_current_host_schema() -> None:
-    assert ItemHealthRow.schema_version() == "2026-10-27T11:32"
+    assert ItemHealthRow.schema_version() == "2026-11-17"
     assert HostFingerprintRow.schema_version() == "2026-10-26"
     assert "response headers" in (ItemHealthRow.model_fields["fetch_ttfb_ms"].description or "")
 
@@ -314,7 +314,7 @@ def test_query_registry_tracks_the_current_host_schema() -> None:
 @pytest.mark.parametrize(
     ("model", "expected"),
     (
-        (ItemHealthRow, "d752d2f507b2546061e24d4156eba211e40ab909de9926308bb7d83cb21411c7"),
+        (ItemHealthRow, "8277ea705d03282109621925f5d86e0c6dfea805fa44edd343dd3fdde5d1250c"),
         (HostFingerprintRow, "04a248a34a14c1165e7c19d577b6cf9e9a31e9753e1fcaf7113d9df9b137fc47"),
     ),
 )

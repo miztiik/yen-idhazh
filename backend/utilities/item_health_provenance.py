@@ -208,6 +208,7 @@ GROUPS: Final[tuple[Group, ...]] = (
             "retry_count",
             "retry_total_ms",
             "extract_ms",
+            "analyze_ms",
             "faithfulness_ms",
             "item_total_ms",
             "stage_gap_ms",
