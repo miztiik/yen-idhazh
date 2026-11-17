@@ -13,10 +13,9 @@
  * **The read rate is the server's and the write rate is the ledger's, on
  * purpose.** Reading is the one quantity two instruments measure, so the two
  * are kept apart: the shard's `readTokensPerSecond` is `server_prompt_tokens`
- * over `server_prompt_seconds`, and the item ledger's own answer is pooled
- * beside it. A shard whose read rate was folded from the same item rows the
- * ledger side pools would make both halves of the clock check one expression
- * over one set of rows, and a check that cannot disagree has never run.
+ * over `server_prompt_seconds`, and is never folded from the item rows. The
+ * offline audit `backend/utilities/reconcile_prefill.py` is what compares the
+ * two.
  *
  * **The planned shard count is never counted off the rows that reported.** A
  * denominator taken from the same rows as its numerator is always equal to it,
@@ -38,24 +37,8 @@
  */
 
 // Relative, not `$lib`, for the reason in the module docstring.
-import { itemRead } from '../../charts/machine';
 import { promptRate } from '../../charts/machine-colour';
 import { normalizeHostRow } from '../../data/host-fingerprint';
-
-/** How far the two clocks may sit apart before one of them is wrong, in percent.
- *
- * The same bound `backend/utilities/reconcile_prefill.py` gates its exit code
- * on, restated rather than re-decided: two numbers for one tolerance is how a
- * page starts disagreeing with the audit that is supposed to check it. Five
- * percent is far above millisecond rounding over about 150 rows and far below
- * the failure it exists to catch, which was counting cached tokens as read -
- * 11.09 tokens a second against 19.96 on run `2026-08-25-1`, an 80 percent
- * error.
- *
- * The only copy of the bound in the frontend: no route configuration carries
- * a tolerance, because no panel draws the comparison.
- */
-export const CLOCKS_AGREE_WITHIN_PCT = 5;
 
 /** A figure, and how much of the run it was made from.
  *
@@ -109,7 +92,7 @@ export interface ShardCounters {
 	cachedPct: number | null;
 	/** Tokens the shard's model calls wrote. */
 	writtenTokens: number | null;
-	/** The server's own read rate. The half of the clock check the ledger cannot make. */
+	/** The server's own read rate. */
 	readTokensPerSecond: number | null;
 	writeTokensPerSecond: number | null;
 	/** The longest sequence any of the shard's items reached, prompt plus answer. */
@@ -194,40 +177,6 @@ export interface ShardCounters {
 	queueMaxSeconds: number | null;
 }
 
-/** Tokens and the seconds they took, summed. Never a mean of per-part rates.
- *
- * A rate is a ratio, and averaging ratios weighs a shard that did 20 items the
- * same as one that did 40 (`docs/reference/pipeline-cost.md`). The same shape
- * `reconcile_prefill.Pooled` carries, so one definition serves the audit and
- * the page.
- */
-export interface Pooled {
-	tokens: number;
-	seconds: number;
-	/** Shards on the server side, items on the ledger side. */
-	parts: number;
-	/** Tokens a second. Null where nothing was pooled or no time was spent. */
-	rate: number | null;
-}
-
-/** The item ledger's own reading of a run, against the server's.
- *
- * Both sides count prompt tokens read - `input_tokens` minus `cached_tokens` on
- * the ledger, `server_prompt_tokens` on the machine record - so a disagreement
- * is one of the two instruments being wrong rather than the two measuring
- * different things. Arithmetic over the item ledger cannot check the item
- * ledger, which is why the server half comes off a different file.
- */
-export interface ClockCheck {
-	ledger: Pooled;
-	server: Pooled;
-	/** How far the ledger sits from the server, as a percent of the server.
-	 * Null where either side pooled nothing, which is not a disagreement. */
-	gapPct: number | null;
-	/** Null where nothing was compared. Never `false` by default. */
-	agrees: boolean | null;
-}
-
 /** One run, made of the shards the two ledgers recorded. */
 export interface MachineRun {
 	runId: string;
@@ -276,7 +225,6 @@ export interface MachineRun {
 	/** The slowest shard's load. Read against the same wall clock the job clock
 	 * is read against, so the two are the same shard's worst case. */
 	slowestModelLoadMs: Reading<number>;
-	clocks: ClockCheck;
 }
 
 /** Whether a run carries the model server's own counters.
@@ -574,8 +522,7 @@ function shardCounters(
 		readSeconds,
 		writeSeconds,
 		// The server's read clock against the ledger's write clock. Reading is the
-		// only side two instruments measure, and the panel below says whether they
-		// agree - so the split is read with that answer beside it.
+		// only side two instruments measure, and the split takes the server's.
 		readPct:
 			readSeconds === null || writeSeconds === null
 				? null
@@ -669,49 +616,6 @@ function pooledRate(
 		from: pairs.length,
 		outOf
 	};
-}
-
-/** One run's item-health rows, pooled the way `reconcile_prefill.pool_ledger` pools them.
- *
- * `input_tokens - cached_tokens` is the definition and `itemRead` in
- * `$lib/charts/machine.ts` owns it, so the run figure here and the per-shard
- * figure the machine page draws can never disagree about what a prompt token
- * is. A row missing either required cell predates token capture and is evidence
- * in neither direction, so it is skipped rather than counted as an item that
- * read nothing.
- */
-function poolLedger(health: Record<string, string>[]): Pooled {
-	let tokens = 0;
-	let milliseconds = 0;
-	let parts = 0;
-	for (const row of health) {
-		const read = itemRead(row);
-		if (read === null) continue;
-		tokens += read.tokens;
-		milliseconds += read.ms;
-		parts += 1;
-	}
-	const seconds = milliseconds / 1000;
-	return { tokens, seconds, parts, rate: rate(tokens, seconds) };
-}
-
-function poolServer(shards: ShardCounters[]): Pooled {
-	const counted = shards.filter(
-		(shard) => shard.promptTokens !== null && shard.readSeconds !== null
-	);
-	const tokens = sum(counted.map((shard) => shard.promptTokens ?? 0));
-	const seconds = sum(counted.map((shard) => shard.readSeconds ?? 0));
-	return { tokens, seconds, parts: counted.length, rate: rate(tokens, seconds) };
-}
-
-function clockCheck(shards: ShardCounters[], health: Record<string, string>[]): ClockCheck {
-	const ledger = poolLedger(health);
-	const server = poolServer(shards);
-	if (ledger.rate === null || server.rate === null) {
-		return { ledger, server, gapPct: null, agrees: null };
-	}
-	const gapPct = (Math.abs(ledger.rate - server.rate) / server.rate) * 100;
-	return { ledger, server, gapPct, agrees: gapPct <= CLOCKS_AGREE_WITHIN_PCT };
 }
 
 /** The two ledgers' rows for one run, as one run - or the reason they are not.
@@ -875,8 +779,7 @@ function oneRun(
 		),
 		lowestCpuBusyPct: over((shard) => shard.cpuBusyPct, lowest),
 		peakRssBytes: over((shard) => shard.peakRssBytes, highest),
-		slowestModelLoadMs: over((shard) => shard.modelLoadMs, highest),
-		clocks: clockCheck(reported, health)
+		slowestModelLoadMs: over((shard) => shard.modelLoadMs, highest)
 	};
 }
 

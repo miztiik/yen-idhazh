@@ -221,16 +221,7 @@ def test_real_consumers_and_stamps_follow_two_selected_roots(tmp_path: Path) -> 
             if plan:
                 assert table.elements
                 assert all(element.element_id in str(second["prompt"]) for element in table.elements)
-        summary = summarize.build_request(
-            source,
-            model_id=settings.models.summarizer.id,
-            sampling=settings.models.summarizer.sampling,
-            markers=a_markers(),
-            **options,
-        )
-        assert label in summary["messages"][0]["content"]
-        assert source.title is not None
-        assert source.title not in summary["messages"][0]["content"]
+        assert label in summarize.system_prompt(settings.app.summarize, **options)
         built, fault = reference_set.target_is_shaped_right(
             reference_set.Task(
                 url_key=source.url_key,

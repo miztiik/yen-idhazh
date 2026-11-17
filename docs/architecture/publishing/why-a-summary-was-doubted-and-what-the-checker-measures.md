@@ -94,10 +94,10 @@ missing retained readings stay unknown rather than becoming zero.
 | Summary and article lengths | Per-run shortest, median and longest summary |
 | Runtime | Writing and checking clocks, tokens, failures and call endings from their native records |
 
-`RECORDED` retains the coherence and compression labels and notes. Neither
-receives a new threshold, confidence tint or worst marker. Only coherence's are
-printed, under the daily table; compression is read in the length panel's legend
-and tooltip.
+`RECORDED` words only coherence (a label and a note), printed under the daily
+table; compression keeps its column and unit and is read in the length panel's
+legend and tooltip. Neither receives a new threshold, confidence tint or worst
+marker.
 
 **`hhem_full` and `hhem_delta` are a sentence, not a second chart.** The checker
 scores each summary twice, once against the text the machine was given and once

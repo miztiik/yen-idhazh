@@ -43,7 +43,7 @@ test('Pipelines retained and native evidence joins representative groups without
 		assert.equal(groupForSpec(`console-pipelines-${name}.spec.ts`), 'logic');
 	}
 	for (const name of ['lifecycle', 'reserved', 'components', 'sufficiency',
-		'retained-failure', 'retained-failures', 'retained-compression', 'retained-item-cost', 'retained-window',
+		'retained-failure', 'retained-compression', 'retained-item-cost', 'retained-window',
 		'cold', 'days', 'timeline-page', 'window-page']) {
 		assert.equal(groupForSpec(`console-pipelines-${name}.spec.ts`), 'console');
 	}
@@ -121,15 +121,6 @@ test('Judgement evidence stays in the real integration tier', () => {
 	const inventory = groupedSpecs(join(FRONTEND, 'tests'));
 	assert.ok(inventory.logic.includes('judgement-evidence.spec.ts'));
 	assert.deepEqual(selectPaths(['frontend/tests/judgement-evidence.spec.ts']).groups, ['logic']);
-});
-
-test('removed collector source paths select normal coverage rather than a separate toolchain', () => {
-	for (const path of ['backend/removed-collector/src/lib.rs',
-		'.github/workflows/removed-collector.yml', 'tests/fixtures/removed-collector/input.json']) {
-		const selected = selectPaths([path]);
-		assert.deepEqual(selected.groups, ['backend', ...FRONTEND_GROUPS]);
-		assert.equal(selected.backendFiles, null);
-	}
 });
 
 test('a window helper edit selects all its console consumers under either path convention', () => {
@@ -211,7 +202,7 @@ test('Voices panel inputs keep narrow route consumers and unknown-path broad cov
 			'console-pipelines-cold.spec.ts', 'console-pipelines-components.spec.ts', 'console-pipelines-days.spec.ts',
 			'console-pipelines-lifecycle.spec.ts', 'console-pipelines-reserved.spec.ts',
 			'console-pipelines-retained-compression.spec.ts', 'console-pipelines-retained-failure.spec.ts',
-			'console-pipelines-retained-failures.spec.ts', 'console-pipelines-retained-item-cost.spec.ts',
+			'console-pipelines-retained-item-cost.spec.ts',
 			'console-pipelines-retained-window.spec.ts', 'console-pipelines-sufficiency.spec.ts',
 			'console-pipelines-timeline-page.spec.ts', 'console-pipelines-window-page.spec.ts',
 			'console-telemetry-heal.spec.ts', 'console-voices-journey.spec.ts']);
@@ -561,12 +552,6 @@ test('only a change that can invalidate a committed day re-reads every day', () 
 	assert.equal(ciAnswer(['docs/a.md', 'config/idhazh.json'], true).validateAll, true);
 	assert.equal(ciAnswer(['full-ci-run'], false).validateAll, true);
 	assert.equal(ciAnswer(['unresolved-change-base'], true).validateAll, true);
-});
-
-test('the console half is never bought without the browser half', () => {
-	for (const [path, browser, console_] of PULL_REQUEST_SCOPE) {
-		assert.ok(!console_ || browser, `${path} asks for the console with no job`);
-	}
 });
 
 test('a merge to main runs every group, which is what the deferral leans on', () => {

@@ -94,7 +94,7 @@
 		];
 		const geometry = dateSeries(series, {
 			frame: box, stacked: true, density: chart.tick_density, valueTicks: VALUE_TICKS, padding: PADDING,
-			rule: completeModelRule(rule, dates), domain: DOMAIN, number_format: numberFormat
+			rule: completeModelRule(rule, dates), domain: DOMAIN, valueFormat: percent, number_format: numberFormat
 		});
 		const readout = geometry === null ? null : readoutOf({
 			type: 'dateSeries',

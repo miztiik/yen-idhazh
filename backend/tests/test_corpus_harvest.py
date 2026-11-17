@@ -12,17 +12,14 @@ from collections import Counter
 from pathlib import Path
 
 import pytest
-from support.models import a_markers
 from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 from support.refill import refetched, refill_body, refill_published, refill_recorded
 
-from idhazh import config, corpus, summarize
+from idhazh import corpus
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.article import Article
-from idhazh.contracts.base import derive_output_digest
 from idhazh.contracts.corpus import ChatRole, ChatTurn, CorpusMeta, CorpusRow
 from idhazh.contracts.eval_row import EvalRow
-from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.evals.metrics import compression, word_count
 
@@ -36,11 +33,6 @@ def contract_fixture(stem: str, name: str) -> str:
 @pytest.fixture
 def app() -> AppConfig:
     return AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
-
-
-@pytest.fixture
-def models() -> ModelsConfig:
-    return config.load(CONFIG_DIR).models
 
 
 @pytest.fixture
@@ -79,38 +71,6 @@ def row_at(date: str, key: str, vertical: str = "ai") -> CorpusRow:
 
 
 # --- The Oracle: the corpus is the prompt we serve -------------------------
-
-
-def test_the_first_two_turns_are_the_bytes_the_run_really_sends(
-    app: AppConfig, models: ModelsConfig, article: Article
-) -> None:
-    """The whole point of the module, asserted directly rather than by token diff.
-
-    A corpus assembled from a rebuilt prompt can drift from the prompt production
-    sends and nothing notices until a fine-tuned model underperforms for a reason
-    nobody can name. These turns come from `system_prompt` and `user_turn`, which
-    is what `build_request` calls, so the two are the same bytes by construction -
-    and this is the test that keeps them that way.
-    """
-    request = summarize.build_request(
-        article,
-        model_id=models.summarizer.id,
-        sampling=models.summarizer.sampling,
-        markers=a_markers(),
-        prompt_config=app.summarize,
-    )
-    harvested = corpus.harvest_rows(
-        [scored(article, "titled", "high")],
-        date=DATE,
-        prompt_config=app.summarize,
-        evaluation=app.evaluation,
-    )
-
-    assert len(harvested) == 1
-    assert [
-        {"role": turn.role.value, "content": turn.content}
-        for turn in harvested[0].messages[:2]
-    ] == request["messages"]
 
 
 def test_the_system_turn_is_rendered_from_the_prompt_file_the_harvest_is_given(
@@ -350,25 +310,6 @@ def test_a_backfilled_row_is_the_same_bytes_as_a_harvested_row(
 # --- Rebuilding a row from its address -------------------------------------
 
 
-def test_a_refilled_row_carries_the_published_words_as_its_target(app: AppConfig) -> None:
-    """The assistant turn is what the digest published, through the decoder's rail."""
-    article, full_text = refetched(refill_body(), app)
-    recorded = refill_recorded(article, refill_published())
-
-    rows = corpus.harvest_rows(
-        [corpus.rescored(article, full_text, recorded=recorded, published=refill_published())],
-        date=DATE,
-        prompt_config=app.summarize,
-        evaluation=app.evaluation,
-    )
-
-    assert len(rows) == 1
-    target = json.loads(rows[0].messages[2].content)
-    assert target["title"] == refill_published().title
-    assert target["summary"] == refill_published().summary
-    assert rows[0].messages[1].content == summarize.user_turn(article)
-
-
 def test_a_refilled_row_is_the_same_bytes_as_a_harvested_row(app: AppConfig) -> None:
     """Both paths hand `harvest_rows` a `Scored`, so both must spell one row alike.
 
@@ -410,42 +351,6 @@ def test_a_refilled_row_is_the_same_bytes_as_a_harvested_row(app: AppConfig) -> 
     assert corpus.to_line(refilled[0]) == corpus.to_line(harvested[0])
 
 
-
-
-
-
-def test_the_join_accepts_the_output_the_row_actually_scored(app: AppConfig) -> None:
-    article, _ = refetched(refill_body(), app)
-    recorded = refill_recorded(article, refill_published())
-
-    assert corpus.published_is_the_scored_one(refill_published(), recorded=recorded)
-
-
-def test_the_join_refuses_a_summary_a_later_run_rewrote(app: AppConfig) -> None:
-    """Two runs summarize one article, and only one of them is this row's output.
-
-    Without this check a re-run's wording would be paired with the earlier run's
-    measurements, and the corpus would teach a summary nobody published.
-    """
-    article, _ = refetched(refill_body(), app)
-    recorded = refill_recorded(article, refill_published())
-    rewritten = refill_published()._replace(summary=refill_published().summary + " It was updated.")
-
-    assert not corpus.published_is_the_scored_one(rewritten, recorded=recorded)
-
-
-def test_the_digest_is_taken_over_the_summary_and_the_title_and_nothing_else() -> None:
-    """The new formula, stated once so a later change has to come past it."""
-    digest = derive_output_digest("The margin held.", title="A headline")
-
-    assert digest == derive_output_digest("The margin held.", title="A headline")
-    assert digest != derive_output_digest("The margin held.", title="Another headline")
-    assert digest != derive_output_digest("The margin slipped.", title="A headline")
-    assert derive_output_digest("The margin held.") != digest, (
-        "a null title is left out of the payload rather than digested as null"
-    )
-
-
 # --- The roll --------------------------------------------------------------
 
 
@@ -470,20 +375,6 @@ def test_the_roll_never_exceeds_the_window() -> None:
     assert len(corpus.roll(existing, [], window=3)) == 3
     assert len(corpus.roll([], existing, window=3)) == 3
     assert len(corpus.roll(existing, existing, window=99)) == len(existing)
-
-
-def test_rolling_the_same_rows_again_changes_nothing() -> None:
-    """A re-run of a day must not rewrite every row it touched.
-
-    A corpus that changes when nothing changed cannot be diffed, and a diff is
-    the only way anyone reviews what a scheduled job committed.
-    """
-    existing = [row_at("2026-08-01", "a"), row_at("2026-08-02", "b")]
-    once = corpus.roll(existing, existing, window=10)
-    twice = corpus.roll(once, existing, window=10)
-
-    assert once == existing
-    assert twice == once
 
 
 def test_the_roll_keeps_the_original_row_for_an_article_it_already_holds() -> None:

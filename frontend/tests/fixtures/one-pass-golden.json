@@ -246,22 +246,6 @@
 					"value": 4070,
 					"from": 4,
 					"outOf": 4
-				},
-				"clocks": {
-					"ledger": {
-						"tokens": 40878,
-						"seconds": 813.423,
-						"parts": 12,
-						"rate": 50.25429573542917
-					},
-					"server": {
-						"tokens": 198738,
-						"seconds": 4318,
-						"parts": 4,
-						"rate": 46.02547475683187
-					},
-					"gapPct": 9.188000777698846,
-					"agrees": false
 				}
 			},
 			{
@@ -509,22 +493,6 @@
 					"value": 4047,
 					"from": 4,
 					"outOf": 4
-				},
-				"clocks": {
-					"ledger": {
-						"tokens": 45567,
-						"seconds": 737.839,
-						"parts": 12,
-						"rate": 61.75737525395106
-					},
-					"server": {
-						"tokens": 207464,
-						"seconds": 4750,
-						"parts": 4,
-						"rate": 43.676631578947365
-					},
-					"gapPct": 41.39683629751068,
-					"agrees": false
 				}
 			},
 			{
@@ -772,22 +740,6 @@
 					"value": 4062,
 					"from": 4,
 					"outOf": 4
-				},
-				"clocks": {
-					"ledger": {
-						"tokens": 35523,
-						"seconds": 713.078,
-						"parts": 12,
-						"rate": 49.81642961920014
-					},
-					"server": {
-						"tokens": 191673,
-						"seconds": 4658,
-						"parts": 4,
-						"rate": 41.149205667668525
-					},
-					"gapPct": 21.062919225052187,
-					"agrees": false
 				}
 			},
 			{
@@ -1035,22 +987,6 @@
 					"value": 3934,
 					"from": 4,
 					"outOf": 4
-				},
-				"clocks": {
-					"ledger": {
-						"tokens": 38492,
-						"seconds": 751.631,
-						"parts": 12,
-						"rate": 51.211299161423625
-					},
-					"server": {
-						"tokens": 180715,
-						"seconds": 5006,
-						"parts": 4,
-						"rate": 36.099680383539756
-					},
-					"gapPct": 41.86081044854419,
-					"agrees": false
 				}
 			},
 			{
@@ -1298,22 +1234,6 @@
 					"value": 3994,
 					"from": 4,
 					"outOf": 4
-				},
-				"clocks": {
-					"ledger": {
-						"tokens": 33797,
-						"seconds": 721.683,
-						"parts": 12,
-						"rate": 46.830810757631816
-					},
-					"server": {
-						"tokens": 186829,
-						"seconds": 4888,
-						"parts": 4,
-						"rate": 38.22197217675941
-					},
-					"gapPct": 22.52327153884265,
-					"agrees": false
 				}
 			},
 			{
@@ -1561,22 +1481,6 @@
 					"value": 4250,
 					"from": 4,
 					"outOf": 4
-				},
-				"clocks": {
-					"ledger": {
-						"tokens": 37079,
-						"seconds": 708.537,
-						"parts": 12,
-						"rate": 52.331776604468075
-					},
-					"server": {
-						"tokens": 200148,
-						"seconds": 4373,
-						"parts": 4,
-						"rate": 45.76903727418248
-					},
-					"gapPct": 14.338818819742844,
-					"agrees": false
 				}
 			},
 			{
@@ -1824,22 +1728,6 @@
 					"value": 4083,
 					"from": 4,
 					"outOf": 4
-				},
-				"clocks": {
-					"ledger": {
-						"tokens": 42411,
-						"seconds": 755.843,
-						"parts": 12,
-						"rate": 56.110859001141776
-					},
-					"server": {
-						"tokens": 183691,
-						"seconds": 4956,
-						"parts": 4,
-						"rate": 37.06436642453592
-					},
-					"gapPct": 51.38761137435074,
-					"agrees": false
 				}
 			},
 			{
@@ -2087,22 +1975,6 @@
 					"value": 4074,
 					"from": 4,
 					"outOf": 4
-				},
-				"clocks": {
-					"ledger": {
-						"tokens": 37613,
-						"seconds": 726.893,
-						"parts": 12,
-						"rate": 51.744892301893124
-					},
-					"server": {
-						"tokens": 188370,
-						"seconds": 4615,
-						"parts": 4,
-						"rate": 40.816901408450704
-					},
-					"gapPct": 26.77320060160151,
-					"agrees": false
 				}
 			}
 		],

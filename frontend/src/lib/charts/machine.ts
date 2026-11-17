@@ -53,26 +53,6 @@ export function gib(value: number | null, numberFormat: NumberFormatConfig): str
 	return value === null ? '-' : `${formatNumber(value / 1024 / 1024 / 1024, numberFormat, { si: false })} GiB`;
 }
 
-/** One item row's read tokens and read milliseconds, or nothing.
- *
- * `input_tokens - cached_tokens` is the definition, and it is defined HERE
- * rather than in the reader so there is exactly one of it: the runtime reused
- * the cached ones instead of reading them, so leaving them in reports a rate
- * the machine never ran at. `poolLedger` in the native machine counters
- * calls this, which is why that module imports a chart module rather than the
- * other way round for this one function.
- *
- * A row without either instrument is skipped, not counted as reading nothing.
- */
-export function itemRead(
-	row: Record<string, string>
-): { tokens: number; ms: number } | null {
-	const ms = cell(row.prefill_ms);
-	const input = cell(row.input_tokens);
-	if (ms === null || input === null) return null;
-	return { tokens: input - (cell(row.cached_tokens) ?? 0), ms };
-}
-
 /** An empty cell is absent, never zero. The same rule the reader applies. */
 function cell(value: string | undefined): number | null {
 	if (value === undefined || value === '') return null;

@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Mapping
 from pathlib import Path
 from string import Template
 from typing import Any, Final
@@ -50,7 +49,7 @@ from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.knobs.prompts import PromptFilesConfig
 from idhazh.contracts.knobs.summarize import SummarizeConfig
 from idhazh.contracts.summary import Summary, SummaryStatus
-from idhazh.llm.server import Completion, TurnMarkers, request_payload
+from idhazh.llm.server import Completion
 from idhazh.load_prompt_text import load_prompt_text
 from idhazh.sanitize import LINK_PLACEHOLDER, sanitize, untrusted_block
 
@@ -191,33 +190,6 @@ def user_turn(article: Article) -> str:
     return (
         f"Source form: {article.source_form.value}\n\n"
         + untrusted_block("\n\n".join(parts))
-    )
-
-
-def build_request(
-    article: Article,
-    *,
-    model_id: str,
-    sampling: Mapping[str, Any],
-    markers: TurnMarkers,
-    prompt_config: SummarizeConfig | None = None,
-    prompt_files: PromptFilesConfig | None = None,
-    config_dir: Path = DEFAULT_CONFIG_DIR,
-) -> dict[str, Any]:
-    """One chat-route body. `markers` are the server's own, never a literal here.
-
-    They carry no default for the reason `request_payload` gives: the keyword
-    that turns reasoning on and the marker that declares it wanted are both
-    variables in the model's own chat template, so a default here would send one
-    model's envelope to every model.
-    """
-    return request_payload(
-        model_id=model_id,
-        system=system_prompt(prompt_config, prompt_files=prompt_files, config_dir=config_dir),
-        user=user_turn(article),
-        output_schema=output_schema(),
-        sampling=sampling,
-        markers=markers,
     )
 
 

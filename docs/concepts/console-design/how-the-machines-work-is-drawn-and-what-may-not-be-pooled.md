@@ -275,12 +275,13 @@ is implied by either trace.
 item ledger's read rate with the model server's own counters against a 5 percent
 allowance. Nothing else on the route read its answer: a run is refused by
 identity and count rules (`mergeHost`, `machineCounters`), never by that gap.
-The two readings are still recorded, and
-`backend/utilities/reconcile_prefill.py --run <id>` still compares them by hand;
-a frozen-fixture test guards its arithmetic, and nothing watches the live
-ledger. The count needed to refuse an impossible shard index comes only from the
-recorded manifest count, through the narrow `run-shards` ledger. Unknown remains
-unknown; neither observed machines nor configuration supplies that denominator.
+The two readings are still recorded and `machineCounters` keeps no copy of the
+comparison; `backend/utilities/reconcile_prefill.py --run <id>` still compares
+them by hand, a frozen-fixture test guards its arithmetic, and nothing watches
+the live ledger. The count needed to refuse an impossible shard index comes
+only from the recorded manifest count, through the narrow `run-shards` ledger.
+Unknown remains unknown; neither observed machines nor configuration supplies
+that denominator.
 
 **Requests and memory now answer different questions.** Context draws label and
 summary request distributions against recorded per-slot limits, not a run strip
