@@ -35,22 +35,21 @@ from idhazh.contracts.visual_decision import (
 )
 from idhazh.fetch import FetchResult, FetchTimings
 from idhazh.llm.server import Completion
-from idhazh.stages.two_calls import _decide_the_visual, _silent_recorder
+from idhazh.stages.summarize_one_item import _decide_the_visual, _silent_recorder
 from idhazh.telemetry.record import persist, recorded_row
 
 from ._builders import (
     _work_stage,
     captured_article_fetch,
-    declining_replies,
+    declining_wind_reply,
     drawable_article_fetch,
+    finding_the_wind_countries,
     plan,
     publish_worker_items,
 )
 
 #: Two items prove ordering and totals across siblings.
 PLANNED_ITEMS: Final = 2
-
-LABEL_REPLY: Final = FIXTURES_DIR / "completions" / "label" / "labelled.json"
 
 SUMMARIZE_AND_PLAN_REPLY: Final = (
     FIXTURES_DIR / "completions" / "summarize-and-plan" / "summary-and-plan.json"
@@ -100,10 +99,7 @@ def run_a_shard(
     run_plan, _, _ = _work_stage(
         tmp_path,
         monkeypatch,
-        replies=(
-            LABEL_REPLY.read_bytes(),
-            SUMMARIZE_AND_PLAN_REPLY.read_bytes(),
-        ),
+        replies=(SUMMARIZE_AND_PLAN_REPLY.read_bytes(),),
         run_plan=plan(item_count=item_count),
     )
     return run_plan
@@ -148,7 +144,7 @@ def test_the_gap_is_the_item_minus_the_stages_that_named_themselves(
     for record in named(caplog, "item.done"):
         named_stages = sum(
             int(record[cell] or 0)
-            for cell in ("fetch_ms", "extract_ms", "summarize_ms", "faithfulness_ms")
+            for cell in ("fetch_ms", "extract_ms", "analyze_ms", "summarize_ms", "faithfulness_ms")
         )
         assert abs(record["item_total_ms"] - (named_stages + record["stage_gap_ms"])) <= 1
 
@@ -166,7 +162,7 @@ def test_an_item_that_failed_is_recorded_exactly_as_one_that_passed(
     assert len(named(caplog, "item.done")) == len(named(caplog, "item.start"))
 
 
-def test_each_model_call_says_what_it_was_sent_without_carrying_the_text(
+def test_the_model_call_says_what_it_was_sent_without_carrying_the_text(
     tmp_path: Path, monkeypatch: MonkeyPatch, caplog: LogCaptureFixture
 ) -> None:
     """The digest survives both capture flags being off; the prompt does not."""
@@ -176,7 +172,7 @@ def test_each_model_call_says_what_it_was_sent_without_carrying_the_text(
         record for record in named(caplog, "stage.done") if record.get("call") is not None
     ]
 
-    assert {record["call"] for record in calls_made} == {"label", "summary"}
+    assert {record["call"] for record in calls_made} == {"summary"}
     for record in calls_made:
         assert len(record["prompt_sha256"]) == 64
         assert record["prompt_chars"] > 0
@@ -238,16 +234,18 @@ def test_a_passing_item_carries_no_failure_detail(
     carried it while its outcome said `ok` read as a failure nobody had.
     """
     caplog.set_level(logging.INFO, logger="idhazh")
-    run_plan, items, server = _work_stage(
-        tmp_path / "worker", monkeypatch,
-        replies=declining_replies(),
-        fetcher=drawable_article_fetch,
-        run_plan=plan(item_count=1),
-    )
+    with finding_the_wind_countries(config.load(CONFIG_DIR)) as settings:
+        run_plan, items, server = _work_stage(
+            tmp_path / "worker", monkeypatch,
+            replies=(declining_wind_reply(),),
+            fetcher=drawable_article_fetch,
+            run_plan=plan(item_count=1),
+            settings=settings,
+        )
     item_id = run_plan.items[0].item_id
     decision = VisualDecision.read(items / f"{item_id}{PAYLOAD_SUFFIX}")
     recorded = recorded_row(items, item_id)
-    assert server.served == 2
+    assert server.served == 1
     assert decision.kind is VisualKind.NONE
     assert decision.none_reason is NoneReason.MODEL_DECLINED
     assert decision.asked_the_model is True
@@ -319,7 +317,7 @@ def test_the_fetch_split_the_socket_measured_reaches_the_record(
     _work_stage(
         tmp_path,
         monkeypatch,
-        replies=(LABEL_REPLY.read_bytes(), SUMMARIZE_AND_PLAN_REPLY.read_bytes()),
+        replies=(SUMMARIZE_AND_PLAN_REPLY.read_bytes(),),
         fetcher=reader,
         run_plan=plan(item_count=1),
     )
@@ -345,12 +343,12 @@ def test_every_record_is_one_line_and_parses_as_one_object(
 
 
 def served_calls(caplog: LogCaptureFixture) -> list[dict[str, Any]]:
-    """Every item record whose label call answered.
+    """Every item record whose model call answered.
 
-    An item that died before the first request carries empty call slots, and a
+    An item that died before the request carries an empty call slot, and a
     test about what a call recorded has nothing to say about one.
     """
-    made = [record for record in named(caplog, "item.done") if record["label_kind"] is not None]
+    made = [record for record in named(caplog, "item.done") if record["summary_kind"] is not None]
     assert made, "no item in the shard got a reply, so there is no call to read"
     return made
 
@@ -358,37 +356,43 @@ def served_calls(caplog: LogCaptureFixture) -> list[dict[str, Any]]:
 def test_a_reply_that_named_no_reason_leaves_the_column_empty_and_a_cut_one_says_length(
     tmp_path: Path, monkeypatch: MonkeyPatch, caplog: LogCaptureFixture
 ) -> None:
-    """A missing `finish_reason` is recorded as missing, over a real run and two recorded replies.
+    """A missing `finish_reason` is recorded as missing, over a real run and recorded replies.
 
-    The label reply is the recorded one with its `finish_reason` deleted, which
+    The first reply is the recorded one with its `finish_reason` deleted, which
     is what a runtime that reports none looks like on the wire. Until this was
     fixed that absence was read as `stop` - so the census said the decode ended
     cleanly on the strength of a field nobody had sent, and no reader could ever
     tell the two apart afterwards.
 
-    The summarize-and-plan reply is the recorded one the output budget really
-    cut, so `length` is what the server wrote rather than what a test edited in.
+    The second is the recorded one the output budget really cut, so `length` is
+    what the server wrote rather than what a test edited in.
     """
     caplog.set_level(logging.INFO, logger="idhazh")
-    unreported = json.loads(LABEL_REPLY.read_text(encoding="utf-8"))
+    unreported = json.loads(SUMMARIZE_AND_PLAN_REPLY.read_text(encoding="utf-8"))
     del unreported["choices"][0]["finish_reason"]
     _work_stage(
-        tmp_path,
+        tmp_path / "unreported",
         monkeypatch,
-        replies=(json.dumps(unreported).encode("utf-8"), CUT_IN_THE_PLAN_REPLY.read_bytes()),
+        replies=(json.dumps(unreported).encode("utf-8"),),
         run_plan=plan(item_count=1),
     )
+    reasons = [record["summary_finish_reason"] for record in served_calls(caplog)]
+    caplog.clear()
+    _work_stage(
+        tmp_path / "cut",
+        monkeypatch,
+        replies=(CUT_IN_THE_PLAN_REPLY.read_bytes(),),
+        run_plan=plan(item_count=1),
+    )
+    reasons += [record["summary_finish_reason"] for record in served_calls(caplog)]
 
-    for record in served_calls(caplog):
-        assert record["label_finish_reason"] is None
-        if record["summary_kind"] is not None:
-            assert record["summary_finish_reason"] == "length"
+    assert reasons == [None, "length"]
 
 
 def test_a_call_that_waited_is_clocked_at_more_than_the_server_claimed(
     tmp_path: Path, monkeypatch: MonkeyPatch, caplog: LogCaptureFixture
 ) -> None:
-    """The other half: `label_ms` is a stopwatch, not a sum.
+    """The other half: `summary_ms` is a stopwatch, not a sum.
 
     The server is held for `HELD_S` before it answers, which is a wait no field
     of the reply can report. The recorded replies carry no `timings` block at
@@ -400,15 +404,15 @@ def test_a_call_that_waited_is_clocked_at_more_than_the_server_claimed(
     _work_stage(
         tmp_path,
         monkeypatch,
-        replies=(LABEL_REPLY.read_bytes(), SUMMARIZE_AND_PLAN_REPLY.read_bytes()),
+        replies=(SUMMARIZE_AND_PLAN_REPLY.read_bytes(),),
         hold_s=HELD_S,
         run_plan=plan(item_count=1),
     )
 
     for record in served_calls(caplog):
-        claimed = record["label_prefill_ms"] + record["label_decode_ms"]
-        assert record["label_ms"] > claimed
-        assert record["label_ms"] >= int(HELD_S * 1000)
+        claimed = record["summary_prefill_ms"] + record["summary_decode_ms"]
+        assert record["summary_ms"] > claimed
+        assert record["summary_ms"] >= int(HELD_S * 1000)
 
 
 def test_the_captures_land_beside_the_items_and_never_inside_them(
@@ -426,4 +430,8 @@ def test_the_captures_land_beside_the_items_and_never_inside_them(
     captured = sorted(path.name for path in (run_dir / "captures").glob("*.json"))
 
     assert captured
-    assert list((run_dir / "items").glob("*.label.json")) == []
+    assert [
+        path.name
+        for path in (run_dir / "items").glob("*.json")
+        if "reply_sha256" in path.read_text(encoding="utf-8")
+    ] == []

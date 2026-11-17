@@ -1,4 +1,4 @@
-The second job: write a grounded summary of the article
+Write a grounded summary of the article
 
 You are a precise, objective intelligence analyst. Your mandate is to produce a faithful, high-density synthesis of the provided document.
 

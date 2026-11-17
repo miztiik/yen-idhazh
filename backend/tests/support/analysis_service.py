@@ -54,6 +54,16 @@ def entities_reply(text: str, spans: Iterable[Span]) -> bytes:
     ).encode("utf-8")
 
 
+def first_of(label: str, *names: str) -> Callable[[str], list[Span]]:
+    """The spans the service would answer for a text, one under `label` for each name it holds."""
+
+    def spans_of(text: str) -> list[Span]:
+        found = [(name, text.find(name)) for name in names]
+        return [(label, start, start + len(name)) for name, start in found if start >= 0]
+
+    return spans_of
+
+
 class RecordedAnalysis:
     """One loopback port that answers the analysis route the way a test asks it to.
 

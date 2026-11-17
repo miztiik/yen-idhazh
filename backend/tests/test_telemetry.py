@@ -986,7 +986,7 @@ def test_both_writers_of_the_six_reach_the_same_arithmetic() -> None:
     changes denominator is the day this goes red rather than the day an operator
     notices one day's column reads three times the next.
     """
-    from idhazh.stages.two_calls import _call_cells
+    from idhazh.stages.summarize_one_item import _call_cells
 
     reply = Completion(
         content="{}",
@@ -1048,6 +1048,46 @@ def test_a_refused_reply_reaches_the_census_row_with_what_it_cost() -> None:
     assert row.label_kind is CallKind.SUMMARIZE
     cells = row.csv_row()
     assert cells["prefill_ms"] and cells["input_tokens"], "an empty cell is skipped, not pooled"
+
+
+def test_a_refused_reply_from_the_digest_call_reaches_the_census_row_too() -> None:
+    """The digest's one call is recorded in the second slot, so the first cannot be the test.
+
+    A failed summary rebuilt from its payload carries the cost of the call that
+    returned, whichever slot recorded it. Reading only the first slot would blank
+    the five cells on every refused digest reply, and `reconcile_prefill` would
+    skip the request the server counted.
+    """
+    from idhazh.stages.summarize_one_item import _recorded_as_the_one_call
+
+    ok_article = article()
+    reply = parse_completion(
+        read_text(REPO_ROOT / "tests" / "fixtures" / "completions" / "timed.json")
+    )
+    unreadable = _recorded_as_the_one_call(
+        summarize.to_summary(
+            ok_article,
+            replace(reply, content="{bad"),
+            model_id="qwen3-8b",
+            generated_at="2026-08-21T06:00:00Z",
+        ),
+        reply,
+    )
+    assert unreadable.call_1 is None and unreadable.call_2 is not None
+
+    row = telemetry.classify_item(
+        planned=item(),
+        article=ok_article,
+        summary=unreadable,
+        date=plan().date,
+        run_id="2026-08-21-1",
+    )
+
+    assert row.outcome is ItemOutcome.FAILED
+    assert row.prefill_ms == reply.prefill_ms
+    assert row.input_tokens == reply.prompt_tokens
+    assert row.model_calls == 1
+    assert row.summary_kind is CallKind.SUMMARIZE_AND_PLAN and row.label_kind is None
 
 
 def test_a_summarize_call_that_never_returned_leaves_the_cost_cells_empty() -> None:

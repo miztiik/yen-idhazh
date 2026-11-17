@@ -11,10 +11,10 @@ from pathlib import Path
 
 import pytest
 from pipeline._builders import (
-    DRAWS_LABEL,
     DRAWS_SUMMARIZE_AND_PLAN,
     a_server_that_refuses_every_completion,
     drawable_article_fetch,
+    finding_the_wind_countries,
     isolate_ledgers,
 )
 from pipeline._builders import (
@@ -23,7 +23,7 @@ from pipeline._builders import (
 from support.ledger import seed_item_health
 from support.models import a_markers
 from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
-from support.prompts import a_table, label_payload
+from support.prompts import a_table
 from support.server import RecordedEndpoint
 from support.visual_plans import current_plan
 
@@ -49,7 +49,7 @@ from idhazh.fetch import FetchResult
 from idhazh.render import asset_relpath, can_compile
 from idhazh.stages import common
 from idhazh.stages.record import stage_record
-from idhazh.stages.two_calls import _drawn
+from idhazh.stages.summarize_one_item import _drawn
 from idhazh.stages.work import stage_work
 from idhazh.visual_outcomes import count_visual_outcomes, project_visual_outcome
 from idhazh.visual_planner import reachable_types
@@ -105,21 +105,25 @@ def record(decision: VisualDecision, number: int) -> ItemHealthRow:
     )
 
 
-def test_selection_controls_the_actual_request_grammar_without_changing_its_prefix() -> None:
+def test_selection_controls_the_actual_request_grammar_and_the_stamp() -> None:
     article = Article.read(CONTRACT_FIXTURES_DIR / "article/ok.json")
-    first = label_payload(article)
+    entry = config.load(CONFIG_DIR).models.summarizer
     off = settings(type_selection_enabled=False, enabled_types=["whowhat", "quotecard"]).app.visuals
     selected = settings(
         type_selection_enabled=True, enabled_types=["dot", "whowhat", "quotecard"]
     ).app.visuals
     markers = a_markers()
     full = calls.summarize_and_plan_schema(visuals=off)
-    recorded = json.loads(read_text(DRAWS_LABEL))["choices"][0]["message"]["content"]
-    request = calls.build_summarize_and_plan_request(
-        first, recorded, a_table(article), markers=markers, visuals=selected
+    request = calls.build_summary_request(
+        article,
+        a_table(article),
+        model_id=entry.id,
+        server=entry.server,
+        sampling=entry.sampling,
+        markers=markers,
+        visuals=selected,
     )
     assert request["json_schema"]["$defs"]["VisualType"]["enum"] == ["dot"]
-    assert request["prompt"].startswith(first["prompt"])
     assert full["$defs"]["VisualType"]["enum"] == [
         kind.value for kind in VisualType if can_compile(kind)
     ]
@@ -337,9 +341,12 @@ def test_real_shard_projects_outcomes_before_sealing_and_reuses_its_starting_pop
         return drawable_article_fetch(url)
 
     caplog.set_level(logging.INFO, logger="idhazh")
-    with RecordedEndpoint(200, DRAWS_LABEL.read_bytes(), json.dumps(reply).encode()) as server:
+    with (
+        finding_the_wind_countries(knobs) as read,
+        RecordedEndpoint(200, json.dumps(reply).encode()) as server,
+    ):
         stage_work(
-            run_plan, settings=knobs, scorer=None, fetcher=fetch, model_endpoint=server.endpoint
+            run_plan, settings=read, scorer=None, fetcher=fetch, model_endpoint=server.endpoint
         )
         assert server.sent[-1]["json_schema"]["$defs"]["VisualType"]["enum"] == [
             kind.value for kind in VisualType if can_compile(kind)
@@ -412,10 +419,13 @@ def test_real_shard_keeps_story_when_pie_fallback_parts_do_not_match_its_whole(
         enabled_types=["pie", "stacked_bar"],
     )
 
-    with RecordedEndpoint(200, DRAWS_LABEL.read_bytes(), json.dumps(reply).encode()) as server:
+    with (
+        finding_the_wind_countries(knobs) as read,
+        RecordedEndpoint(200, json.dumps(reply).encode()) as server,
+    ):
         stage_work(
             run_plan,
-            settings=knobs,
+            settings=read,
             scorer=None,
             fetcher=drawable_article_fetch,
             model_endpoint=server.endpoint,
@@ -450,12 +460,13 @@ def test_settled_visuals_survive_a_later_summary_write_failure(
     run_plan = fixture_plan(item_count=2)
     items = common._run_dir(run_plan.date) / "items"
     (items / f"{run_plan.items[1].item_id}.summary.json").mkdir(parents=True)
-    with RecordedEndpoint(
-        200, DRAWS_LABEL.read_bytes(), DRAWS_SUMMARIZE_AND_PLAN.read_bytes()
-    ) as server:
+    with (
+        finding_the_wind_countries(settings()) as read,
+        RecordedEndpoint(200, DRAWS_SUMMARIZE_AND_PLAN.read_bytes()) as server,
+    ):
         with pytest.raises(OSError):
             stage_work(
-                run_plan, settings=settings(), scorer=None, fetcher=drawable_article_fetch,
+                run_plan, settings=read, scorer=None, fetcher=drawable_article_fetch,
                 model_endpoint=server.endpoint, commit_sha="a" * 40,
             )
     attempts = ledger.load_days(
@@ -475,9 +486,12 @@ def test_work_without_a_summary_does_not_invent_a_visual_attempt(
 ) -> None:
     isolate_ledgers(tmp_path, monkeypatch)
     run_plan = fixture_plan(item_count=1)
-    with a_server_that_refuses_every_completion() as server:
+    with (
+        finding_the_wind_countries(settings()) as read,
+        a_server_that_refuses_every_completion() as server,
+    ):
         stage_work(
-            run_plan, settings=settings(), scorer=None, fetcher=drawable_article_fetch,
+            run_plan, settings=read, scorer=None, fetcher=drawable_article_fetch,
             model_endpoint=server.endpoint,
         )
     assert ledger.load_days(

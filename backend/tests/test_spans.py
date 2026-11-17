@@ -36,6 +36,7 @@ from pathlib import Path
 from typing import Any, Final
 
 from pytest import MonkeyPatch
+from support.analysis_service import RecordedAnalysis, first_of, pointed_at
 from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 from support.server import render_template_response
 
@@ -86,19 +87,15 @@ def page_carrying(sentinel: str, *, title: str) -> bytes:
 
 
 def completion_carrying(sentinel: str) -> tuple[bytes, ...]:
-    """The committed two-call pair, with the sentinel written into every prose field.
+    """The committed reply, with the sentinel written into its summary.
 
-    Built from `tests/fixtures/completions/label/labelled.json` and
-    `summarize-and-plan/summary-and-plan.json` rather than typed out here, so each reply
-    keeps the shape its own decoder is constrained to and the work stage runs to
-    the end instead of failing early on a reply it cannot read.
-
-    The label call answers in element ids and carries no prose to plant in, so the
-    sentinel goes into the summarize-and-plan call - which is the reply that becomes the summary, and
-    the summary is the text `summary_attributes` is one line away from sending.
+    Built from `tests/fixtures/completions/summarize-and-plan/summary-and-plan.json`
+    rather than typed out here, so the reply keeps the shape its decoder is
+    constrained to and the work stage runs to the end instead of failing early on a
+    reply it cannot read. It is the reply that becomes the summary, and the summary
+    is the text `summary_attributes` is one line away from sending.
     """
     completions = CONTRACT_FIXTURES_DIR.parent / "completions"
-    one = read_text(completions / "label" / "labelled.json").encode("utf-8")
 
     payload: dict[str, Any] = json.loads(
         read_text(completions / "summarize-and-plan" / "summary-and-plan.json")
@@ -108,7 +105,7 @@ def completion_carrying(sentinel: str) -> tuple[bytes, ...]:
     summary["title"] = "Kumquat lanternfish barometer figures restated by the regulator"
     summary["summary"] = f"{sentinel} {summary['summary']}"
     payload["choices"][0]["message"]["content"] = json.dumps(content)
-    return (one, json.dumps(payload).encode("utf-8"))
+    return (json.dumps(payload).encode("utf-8"),)
 
 
 class RecordedCompletionEndpoint:
@@ -118,8 +115,7 @@ class RecordedCompletionEndpoint:
     is what the pipeline SENDS, and a patched `post` would let a leak hide in the
     code the patch replaced.
 
-    It cycles the bodies it was given, so one item's two calls each get the reply
-    their own decoder can read.
+    It cycles the bodies it was given.
 
     `/apply-template` renders explicit protocol inputs and takes nothing
     from that cycle. The stage reads its turn markers there before its first
@@ -227,6 +223,16 @@ def spans_of(trace_dir: Path) -> list[dict[str, Any]]:
     return records
 
 
+def analysis_that_labels_the_planted_text() -> RecordedAnalysis:
+    """A text-analysis stand-in that names the planted text itself as a mention.
+
+    Whatever the service returns is article text, so a call site that put a mention's
+    words into a span attribute would carry the sentinel out. Giving it the sentinel as
+    a mention is what makes the sweep able to see that.
+    """
+    return RecordedAnalysis(first_of("ORG", SENTINEL_SENTENCE, SENTINEL_TOKEN))
+
+
 def trace_a_run(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,
@@ -239,10 +245,12 @@ def trace_a_run(
     monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
     monkeypatch.setattr(common, "EVIDENCE_ROOT", tmp_path / "evidence")
 
-    with RecordedCompletionEndpoint(*reply) as server:
+    with analysis_that_labels_the_planted_text() as service, RecordedCompletionEndpoint(
+        *reply
+    ) as server:
         stage_work(
             run_plan,
-            settings=traced_settings(),
+            settings=pointed_at(traced_settings(), service.base_url),
             scorer=None,
             fetcher=lambda _url: FetchResult(FetchOutcome.OK, status=200, body=page),
             model_endpoint=server.endpoint,
@@ -309,11 +317,18 @@ def test_the_sweep_reaches_every_span_the_pipeline_opens(
         telemetry.SpanName.FETCH.value,
         telemetry.SpanName.EXTRACT.value,
         telemetry.SpanName.TAG.value,
+        telemetry.SpanName.ANALYZE.value,
         telemetry.SpanName.SUMMARIZE.value,
         telemetry.SpanName.RENDER_PROMPT.value,
         telemetry.SpanName.MODEL_CALL.value,
         telemetry.SpanName.PARSE_REPLY.value,
     } <= seen
+    by_id = {span["span_id"]: span for span in spans}
+    analysed = [span for span in spans if span["name"] == telemetry.SpanName.ANALYZE.value]
+    for span in analysed:
+        assert by_id[span["parent_id"]]["name"] == telemetry.SpanName.ITEM.value
+        assert span["attributes"]["outcome"] == "ok"
+        assert span["attributes"]["mention_count"] >= 1, "the planted mention never crossed"
     generations = [span for span in spans if span["kind"] == telemetry.SpanKind.GENERATION.value]
     assert generations, "the model call must be a generation, not a plain span"
     carried = set(generations[0]["attributes"])
@@ -355,10 +370,12 @@ def test_tracing_off_writes_nothing_at_all(tmp_path: Path, monkeypatch: MonkeyPa
     settings = untraced_settings()
     assert not settings.app.observability.tracing_enabled
 
-    with RecordedCompletionEndpoint(*completion_carrying(SENTINEL_REPLY)) as server:
+    with analysis_that_labels_the_planted_text() as service, RecordedCompletionEndpoint(
+        *completion_carrying(SENTINEL_REPLY)
+    ) as server:
         stage_work(
             run_plan,
-            settings=settings,
+            settings=pointed_at(settings, service.base_url),
             scorer=None,
             fetcher=lambda _url: FetchResult(
                 FetchOutcome.OK,

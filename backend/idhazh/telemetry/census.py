@@ -269,6 +269,9 @@ def classify_item(
         # A reply the stage refused was still read and still written, so this row
         # carries the same five cells an ok row does. They are null only where no
         # call returned, which is what `reconcile_prefill` skips rather than pools.
+        # Either slot says a call returned: the digest's one call is recorded in
+        # the second, and a payload from before records one in the first.
+        returned = summary.call_1 is not None or summary.call_2 is not None
         return _row(
             planned=planned,
             date=date,
@@ -286,11 +289,11 @@ def classify_item(
             fetch_ms=summary.fetch_ms,
             extract_ms=summary.extract_ms,
             summarize_ms=summary.summarize_ms,
-            prefill_ms=summary.prefill_ms if summary.call_1 is not None else None,
-            decode_ms=summary.decode_ms if summary.call_1 is not None else None,
-            input_tokens=summary.input_tokens if summary.call_1 is not None else None,
-            output_tokens=summary.output_tokens if summary.call_1 is not None else None,
-            cached_tokens=summary.cached_tokens if summary.call_1 is not None else None,
+            prefill_ms=summary.prefill_ms if returned else None,
+            decode_ms=summary.decode_ms if returned else None,
+            input_tokens=summary.input_tokens if returned else None,
+            output_tokens=summary.output_tokens if returned else None,
+            cached_tokens=summary.cached_tokens if returned else None,
             calls=(summary.call_1, summary.call_2),
             detail=(
                 detail_cell("summary failure was not typed")

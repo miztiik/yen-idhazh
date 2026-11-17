@@ -45,8 +45,6 @@ from ._builders import (
 )
 from .test_degrade import headless_page_fetch, headless_plan
 
-LABEL_REPLY: Final = FIXTURES_DIR / "completions" / "label" / "labelled.json"
-
 SUMMARIZE_AND_PLAN_REPLY: Final = (
     FIXTURES_DIR / "completions" / "summarize-and-plan" / "summary-and-plan.json"
 )
@@ -63,7 +61,7 @@ def worked(
     run_plan, items_dir, _ = _work_stage(
         tmp_path,
         monkeypatch,
-        replies=(LABEL_REPLY.read_bytes(), SUMMARIZE_AND_PLAN_REPLY.read_bytes()),
+        replies=(SUMMARIZE_AND_PLAN_REPLY.read_bytes(),),
         fetcher=headless_page_fetch if degraded else captured_article_fetch,
         run_plan=headless_plan() if degraded else None,
         server_pid=server_pid,
@@ -296,7 +294,6 @@ def test_a_headless_item_reaches_the_model_and_leaves_a_row(
     for planned in run_plan.items[:2]:
         row = written[planned.item_id]
         assert row.code is not FailureCode.NO_TITLE, planned.item_id
-        assert row.label_ms is not None, planned.item_id
         assert row.summary_ms is not None, planned.item_id
 
 

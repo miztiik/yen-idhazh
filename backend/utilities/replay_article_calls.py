@@ -17,7 +17,7 @@ from pydantic import TypeAdapter
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from idhazh import assemble, atomic_write, config, run_context, summarize
+from idhazh import ask_text_analysis, assemble, atomic_write, config, run_context, summarize
 from idhazh.classify import calls
 from idhazh.command_logging import configure_command_logging
 from idhazh.contracts.article import Article, ArticleStatus
@@ -41,7 +41,7 @@ from idhazh.llm.server import (
     resolve_endpoint,
 )
 from idhazh.stages.common import INPUTS_PAYLOAD
-from idhazh.stages.two_calls import two_calls_one_item
+from idhazh.stages.summarize_one_item import summarize_one_item
 from idhazh.telemetry import host
 from idhazh.telemetry.record import Flags, ItemRecorder, persist
 from idhazh.visual_outcomes import project_visual_outcome
@@ -245,11 +245,14 @@ def run_calls(
             **facts.shard_cells(),
         )
         recorder.start()
+        analysis = ask_text_analysis.ask_for_mentions(article, settings.app.text_analysis)
+        recorder.note(analyze_ms=analysis.elapsed_ms)
         started = time.monotonic()
-        result = two_calls_one_item(
+        result = summarize_one_item(
             article,
             settings,
             date=plan.date,
+            mentions=analysis.mentions,
             run_id=identity.run_id,
             recorder=recorder,
             capture_root=item_root / "captures",
@@ -267,7 +270,7 @@ def run_calls(
             )
             recorder.note(**project_visual_outcome(decision))
         ok = summary.status is SummaryStatus.OK
-        spent = [reply for reply in (result.label_reply, result.answer_reply) if reply is not None]
+        spent = result.reply is not None
         recorder.note(
             summarize_ms=summarize_ms,
             stage=ItemStage.SUMMARIZE.value,
@@ -275,7 +278,7 @@ def run_calls(
             code=None if ok else (summary.failure_code or FailureCode.UNKNOWN).value,
             detail=None if ok else summary.failure_detail,
             summary_words=len((summary.summary or "").split()),
-            model_calls=len(spent) or None,
+            model_calls=1 if spent else None,
             prefill_ms=summary.prefill_ms if spent else None,
             decode_ms=summary.decode_ms if spent else None,
             input_tokens=summary.input_tokens if spent else None,
@@ -286,8 +289,7 @@ def run_calls(
         if (
             not ok
             or decision is None
-            or result.label_reply is None
-            or result.answer_reply is None
+            or result.reply is None
             or decision.visual_state is VisualState.RENDER_FAILED
         ):
             failures.append(article.item_id)
