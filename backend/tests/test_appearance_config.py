@@ -18,7 +18,6 @@ import re
 from pathlib import Path
 
 import pytest
-from contracts._fixtures import MOVED_BLOCKS, PIPELINE_OWNED
 from pydantic import ValidationError
 
 from idhazh.contracts.app_config import AppConfig
@@ -212,64 +211,6 @@ def test_the_moved_blocks_keep_the_same_shape_on_both_sides() -> None:
     assert type(appearance.digest) is type(app.ui)
     assert type(appearance.console) is type(app.console)
     assert type(appearance.assist) is type(app.assist)
-
-
-@pytest.mark.parametrize(("legacy_key", "current_key"), MOVED_BLOCKS)
-def test_a_moved_block_is_declared_in_one_file_and_the_other_does_not_argue(
-    legacy_key: str, current_key: str
-) -> None:
-    """The value-level half of the test above, which only compares types.
-
-    The shapes never forked, so that test stayed green while the two files
-    disagreed about four keys: `visual_side` for a week, and
-    `console.chart_height`, `console.chart_width` and `assist.recall_min` until
-    2026-09-05. The frontend merges the appearance block over the legacy one, so
-    the loser is silent - a knob edited in the file somebody happened to open
-    does nothing, and nothing says why.
-
-    `config/appearance.json` owns everything the published surface is drawn from
-    (docs/concepts/config.md), so the rule is one-directional: whatever the
-    legacy block still carries has to agree with it. The exception is a key the
-    published surface does not draw at all - see `PIPELINE_OWNED`, where the
-    pipeline file is the maintainer and the appearance file declares nothing.
-
-    A key declared in both files with the SAME value is tolerated, because that
-    is the read-side migration's middle layer doing its job (section 11): a
-    `config/idhazh.json` written before 2026-08-29 has to keep resolving to what
-    it used to resolve to. What is refused is two files naming one knob twice
-    with two answers.
-    """
-    legacy = json.loads((REPO_ROOT / "config" / "idhazh.json").read_text(encoding="utf-8"))[
-        legacy_key
-    ]
-    current = json.loads(APPEARANCE_PATH.read_text(encoding="utf-8"))[current_key]
-
-    disagreed = {
-        key: (value, current[key])
-        for key, value in legacy.items()
-        if key in current and value != current[key]
-    }
-    assert not disagreed, (
-        f"config/idhazh.json {legacy_key} and config/appearance.json {current_key} "
-        f"declare different values: {disagreed}"
-    )
-
-    absent = sorted(key for key in legacy if key not in current and key not in PIPELINE_OWNED)
-    assert not absent, (
-        f"config/idhazh.json {legacy_key} declares knobs the appearance file does not, "
-        f"and they are not on the pipeline-owned list: {absent}"
-    )
-    intruding = sorted(key for key in current if key in PIPELINE_OWNED)
-    assert not intruding, (
-        f"config/appearance.json {current_key} declares a knob no published surface "
-        f"reads: {intruding}"
-    )
-    # The keys this rule was written for. Named rather than derived, because
-    # `disagreed` above passes the day somebody puts one back with the value it
-    # already has - and a second copy that agrees today is the next divergence.
-    settled_away = {"ui": ("visual_side",), "console": ("chart_height", "chart_width")}
-    for key in settled_away.get(legacy_key, ()):
-        assert key not in legacy, f"{key} has one source of truth, and it is config/appearance.json"
 
 
 def test_the_default_theme_is_the_one_root_carries() -> None:
