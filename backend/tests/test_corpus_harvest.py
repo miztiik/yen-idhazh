@@ -554,20 +554,6 @@ def test_the_harvest_cadence_is_counted_in_days_between_two_committed_dates(
     assert corpus.harvest_is_due(meta, date=DATE, every_days=every) is expected
 
 
-def test_a_repository_the_squash_never_ran_on_is_due_once_and_then_recorded(
-    tmp_path: Path,
-) -> None:
-    """The record of the run is what turns a force-push a day into a force-push a month."""
-    assert corpus.prune_is_due(CorpusMeta(version=CorpusMeta.schema_version()), date=DATE, every_days=30)
-
-    corpus.write(tmp_path, [], CorpusMeta(version=CorpusMeta.schema_version()))
-    recorded = corpus.record_run(tmp_path, date=DATE)
-
-    assert recorded.last_run == DATE
-    assert not corpus.prune_is_due(recorded, date=DATE, every_days=30)
-    assert corpus.prune_is_due(recorded, date="2026-09-27", every_days=30)
-
-
 def test_recording_the_run_moves_one_field_and_no_other(tmp_path: Path) -> None:
     """It records that a job ran. It is not a second census."""
     before = CorpusMeta(

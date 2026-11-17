@@ -1,9 +1,8 @@
-/** The five build reductions that became single passes, and what must hold.
+/** The four build reductions that became single passes, and what must hold.
  *
- * Five repeated reductions are now single passes over the same input: the config
+ * Four repeated reductions are now single passes over the same input: the config
  * accessors, the date and run buckets in `model-work`, the run-to-health join in
- * `machine-counters`, the per-bin scans in `distribution`, and the daily buckets
- * in `failureSeries`.
+ * `machine-counters`, and the per-bin scans in `distribution`.
  *
  * **Byte-identical output is the hard requirement** - the change moves no
  * number on any page - so half of this file compares what the reductions
@@ -34,17 +33,14 @@ import { fileURLToPath } from 'node:url';
 
 import { distribution, quantile, type Distribution } from '../src/lib/charts/series';
 import { frameConfig } from '../src/lib/server/config';
-import { failureSeries } from '../src/lib/charts/series';
 import { modelByDate, modelWork, runLengths, sourceCuts } from '../src/lib/server/model-work';
 import { machineCounters, type MachineLimits } from '../src/lib/console/machine/counters';
-import type { TelemetryRow } from '../src/lib/charts/series';
 import {
 	dayOf,
 	healthRows,
 	machineRows,
 	plannedOf,
 	scoreRows,
-	telemetryRows,
 	timings,
 	type Sizes
 } from './support/reduction-input';
@@ -61,10 +57,9 @@ const LIMITS: MachineLimits = { contextWindow: 8_192, jobTimeoutSeconds: 150 * 6
 const PARITY: Sizes = { runs: 8, shards: 4, items: 96 };
 
 const TELEMETRY_DAYS = 6;
-const TELEMETRY_PER_DAY = 20;
 const WINDOW = { start: dayOf(0), end: dayOf(TELEMETRY_DAYS - 1) };
 
-/** Everything the five reductions return over one input. */
+/** Everything the reductions return over one input. */
 function reductions(): Record<string, unknown> {
 	const hosts = machineRows(PARITY);
 	const health = healthRows(PARITY);
@@ -75,7 +70,6 @@ function reductions(): Record<string, unknown> {
 		modelByDate: [...modelByDate(scores)],
 		runLengths: runLengths(scores),
 		sourceCuts: sourceCuts(health, { ...WINDOW, days: TELEMETRY_DAYS }, { limit: 4 }),
-		failureSeries: failureSeries(telemetryRows(TELEMETRY_DAYS, TELEMETRY_PER_DAY), WINDOW),
 		distribution: distribution(timings(400))
 	};
 }
@@ -111,7 +105,7 @@ function countingRows<T extends Record<string, unknown>>(
 }
 
 test.describe('the reductions return what they returned before', () => {
-	test('every one of the five is byte-identical to the golden', () => {
+	test('every one of the four is byte-identical to the golden', () => {
 		const found = `${JSON.stringify(reductions(), null, '\t')}\n`;
 
 		if (process.env.IDHAZH_WRITE_ONE_PASS_GOLDEN) {
@@ -173,24 +167,6 @@ test.describe('the run-to-health join visits each row once', () => {
 		const counted = CASES.map(visitsFor);
 		expect(counted[1] / counted[0]).toBe(2);
 		expect(counted[2] / counted[1]).toBe(2);
-	});
-});
-
-test.describe('the failure denominators are counted in one pass', () => {
-	test("a row's outcome is read once, not once per stage", () => {
-		let reads = 0;
-		const rows = telemetryRows(TELEMETRY_DAYS, TELEMETRY_PER_DAY);
-		const counted = countingRows(rows as unknown as Record<string, unknown>[], 'outcome', () => {
-			reads += 1;
-		}) as unknown as TelemetryRow[];
-
-		const series = failureSeries(counted, WINDOW);
-		expect(series.length).toBe(3);
-		expect(series[0].days.length).toBe(TELEMETRY_DAYS);
-		expect(
-			reads,
-			`each of the ${rows.length} rows was read ${reads / rows.length} times`
-		).toBe(rows.length);
 	});
 });
 

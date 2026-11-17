@@ -29,7 +29,7 @@
 
 import { BANDS } from '../bands';
 import { grouped } from '../charts/series';
-import { formatNumber, type NumberFormatConfig } from '../number-format';
+import type { NumberFormatConfig } from '../number-format';
 import type { StackRule } from '../charts/stack-types';
 import { dayMonth } from '../format';
 
@@ -434,53 +434,4 @@ export function widerNote(
 	const totals = evalTotals(days);
 	if (totals.matched === 0 || totals.widerDiffers === 0) return null;
 	return `Scored against the whole article instead of the part the machine read, ${grouped(totals.widerDiffers, numberFormat)} of these ${grouped(totals.matched, numberFormat)} summaries score differently, by up to ${totals.widestGap} points.`;
-}
-
-/** One recorded instrument over the window. */
-export interface RecordedReading extends RecordedInstrument {
-	/** The quietest day, the middle day and the loudest day, each by its own middle summary. */
-	low: number | null;
-	mid: number | null;
-	high: number | null;
-	/** Days in the window that carried a reading at all. */
-	days: number;
-}
-
-/** A day range rather than a window median, because the second cannot be had.
- *
- * A median over the window needs every summary's number, and carrying 6,966 of
- * them into the page to print four figures is not a trade worth making. The
- * middle day's own middle summary, with the quietest and loudest day beside it,
- * is exact, costs one number a day, and says more than a single median would.
- */
-export function recordedReadings(days: readonly EvalDay[]): RecordedReading[] {
-	return RECORDED.map((instrument) => {
-		const known = days
-			.map((day) => day.recorded[instrument.id] ?? null)
-			.filter((value): value is number => value !== null)
-			.sort((a, b) => a - b);
-		return {
-			...instrument,
-			low: known.length === 0 ? null : known[0],
-			mid: known.length === 0 ? null : at(known, 0.5),
-			high: known.length === 0 ? null : known[known.length - 1],
-			days: known.length
-		};
-	});
-}
-
-/** How a recorded reading is written, unit included, or a dash where there is none.
- *
- * A cosine is printed as the number it is, to two places. Multiplying it by a
- * hundred and calling it a percent would read as a share of something, and it
- * is not one - it runs from -1 to 1 and has no denominator.
- */
-export function recordedText(
-	reading: RecordedReading,
-	value: number | null,
-	numberFormat: NumberFormatConfig
-): string {
-	if (value === null) return '-';
-	if (reading.unit === 'percent') return `${formatNumber(value, numberFormat, { si: false })}%`;
-	return formatNumber(value, numberFormat, { si: false });
 }
