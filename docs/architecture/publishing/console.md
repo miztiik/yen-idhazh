@@ -1,6 +1,6 @@
 # Which console panel answers what
 
-**Last Updated**: 2026-11-15
+**Last Updated**: 2026-11-17
 
 The console tells an operator what happened to the pipeline; the digest tells a
 reader what happened in the world. This page owns the routes and panel placement.
@@ -94,9 +94,9 @@ and summary-quality-evals endpoint. Both retain item-health's own first-day
 clamp and print their selected UTC bounds.
 
 Summaries retains model-work cards, throughput, item cost, call endings,
-HHEM faithfulness with its full-article comparison, checking cost and summary
-length. Its daily table retains coherence. Mixed reason breakdowns and source
-doubt rankings have no panel, query or private aggregate.
+HHEM faithfulness with a note where its full-article reading differs, checking
+cost and summary length. Its daily table retains coherence. Mixed reason
+breakdowns and source doubt rankings have no panel, query or private aggregate.
 
 ### Each route owns its config, expectations and gate drivers
 

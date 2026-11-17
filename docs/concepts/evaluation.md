@@ -281,12 +281,12 @@ The HHEM model, revision, weights, window and configured thresholds are unchange
 `/console/model/` - matches its source above the first, may not match below
 the second. They are read from
 config rather than written into the chart, so re-cutting them moves the plot and
-the published band together. The panel spells the two lines out in plain words
-as well: each point is one day's middle summary, meaning half that day's
-summaries scored higher and half lower, and the lower line is the summary a
-quarter of the way up from the bottom. Susan and Andre, 2026-09-25;
+the published band together. Susan and Andre, 2026-09-25;
 [../architecture/publishing/why-a-summary-was-doubted-and-what-the-checker-measures.md](../architecture/publishing/why-a-summary-was-doubted-and-what-the-checker-measures.md)
-carries what that reversed and why.
+carries what that reversed and why. Each rule names its score and band on the
+plot itself, and the plot draws each day's median (p50) as a line with its
+interquartile range (p25 to p75) as a band; the tooltip and the strip print all
+three figures.
 
 **The older lead-coverage rule also remains retired**: whether the names and
 figures in the article's opening survived into the summary. It stopped banding

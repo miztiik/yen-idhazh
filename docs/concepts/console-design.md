@@ -1,6 +1,6 @@
 # Console Design
 
-**Last Updated**: 2026-11-15
+**Last Updated**: 2026-11-17
 
 How a figure on the operator console is worded, coloured, ranked and drawn. This
 page rules the words and the states; four pages under it rule the drawing. It is
@@ -72,7 +72,8 @@ Five rules hold for every number the console prints:
 duration cutoff `p90 (90th percentile)`, not "slowest tenth": about 90% of
 durations lie at or below it, with the slowest tenth above it. For throughput,
 the slow end is instead p10; never relabel a duration percentile as a speed
-percentile. The interquartile range is `p25-p75`. Existing percentile
+percentile. The interquartile range is `p25-p75`; its edges are the
+`lower quartile (p25)` and the `upper quartile (p75)`. Existing percentile
 calculations remain unchanged: observed-rank and interpolated readers retain
 their established conventions.
 

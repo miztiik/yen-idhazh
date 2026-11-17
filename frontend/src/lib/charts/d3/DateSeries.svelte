@@ -25,6 +25,7 @@
 	import type { SeriesGeometry } from './dateSeries';
 	import type { EmptyDrawing } from './empty';
 	import type { AbsentHatch } from './ordered-colour';
+	import { spreadPaint } from '$lib/charts/d3/spread-paint';
 	import { ruleDeclaration } from '$lib/charts/d3/model-rule';
 
 	let {
@@ -201,7 +202,7 @@
 			{/each}
 
 			{#each geometry.lines.filter((series) => series.spread) as series (series.label)}
-				<path d={series.spread} fill="color-mix(in srgb, var({series.token}) calc(var(--chart-spread-mix) * 100%), var(--color-surface))" data-series-spread={series.label} />
+				<path d={series.spread} fill={spreadPaint(series.token)} data-series-spread={series.label} />
 			{/each}
 			<g data-lede={lede ? '' : undefined} data-date-series-marks={name}>
 				{#if geometry.stacked}

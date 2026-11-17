@@ -28,12 +28,10 @@
  */
 
 import { BANDS } from '../bands';
-import { readoutOf, type Readout } from '../charts/readout';
 import { grouped } from '../charts/series';
 import { formatNumber, type NumberFormatConfig } from '../number-format';
-import type { StackRule, StackSeries } from '../charts/stack-types';
-import { dayMonth, shortDate } from '../format';
-import { countDays, nameSpan, openWithSpan } from './span-words';
+import type { StackRule } from '../charts/stack-types';
+import { dayMonth } from '../format';
 
 /** One surface on the console that answers for at least one ledger column.
  *
@@ -155,7 +153,7 @@ export interface EvalDay {
 	scored: number;
 	/** Summaries that day carrying a faithfulness score. */
 	matched: number;
-	/** Faithfulness, whole percent: the lower quarter, the middle, the upper quarter. */
+	/** Faithfulness, whole percent: lower quartile (p25), median (p50), upper quartile (p75). */
 	matchLow: number | null;
 	matchMid: number | null;
 	matchHigh: number | null;
@@ -306,40 +304,8 @@ export function evalWithin(
 	return days.filter((day) => day.date >= span.start && day.date <= span.end);
 }
 
-/** The days that carry a faithfulness reading, which is what the plot draws. */
-export function matchDays(days: readonly EvalDay[]): EvalDay[] {
-	return days.filter((day) => day.matchMid !== null);
-}
-
 export function evalColumnLabels(days: readonly EvalDay[]): string[] {
 	return days.map((day) => dayMonth(day.date));
-}
-
-/** The two faithfulness lines, for `stacked()` in its `lines` shape.
- *
- * Two and not five. The middle summary says the level and a quarter below it
- * says the tail, and the tail is the half of the pair that moves: measured
- * 2026-09-06 over the fifteen committed days, the middle sat between 88 and 95
- * percent while the lower quarter swung from 73 to 94.
- *
- * Never stacked. Adding one percentile to another is not a quantity, so the page
- * fixes the shape to lines and offers no switch - the rule `stacked()` states
- * for carrying that switch is that both shapes read the same array honestly, and
- * these do not.
- */
-export function matchSeries(days: readonly EvalDay[]): StackSeries[] {
-	return [
-		{
-			label: 'Median (p50)',
-			token: '--chart-6',
-			values: days.map((day) => day.matchMid ?? 0)
-		},
-		{
-			label: 'p25',
-			token: '--chart-7',
-			values: days.map((day) => day.matchLow ?? 0)
-		}
-	];
 }
 
 /** The two scores the pipeline bands a published summary on, as whole percents.
@@ -379,7 +345,7 @@ export interface MatchAxis {
  *
  * The lower bound is the doubt edge and the upper is `floorMax`. There is one
  * more rule and it outranks both: **the floor never hides a mark.** A day whose
- * lower quarter fell under the doubt edge is exactly the day an operator opened
+ * lower quartile (p25) fell under the doubt edge is exactly the day an operator opened
  * the panel for, and an axis that clipped it would answer a worse question than
  * the one it was asked.
  */
@@ -408,9 +374,9 @@ export function matchFloor(
  * A rule under the floor is dropped rather than handed over. The floor rises to
  * fill the panel with the range the days hold, and on the committed record that
  * puts it at 65 percent - above the doubt score. The engine clips a rule outside
- * the axis, so passing it anyway draws nothing and leaves the panel's own
- * sentence claiming a line a reader cannot find. The doubt rule appears on the
- * day it matters, because the floor drops to meet a figure beneath it.
+ * the axis, so passing it anyway draws nothing and claims a line a reader cannot
+ * find. The doubt rule appears on the day it matters, because the floor drops to
+ * meet a figure beneath it.
  */
 export function matchRules(thresholds: MatchThresholds, floor: number): StackRule[] {
 	const rules: StackRule[] = [
@@ -428,48 +394,6 @@ export function matchRules(thresholds: MatchThresholds, floor: number): StackRul
 		}
 	];
 	return rules.filter((rule) => rule.at >= floor);
-}
-
-/** How many summaries each drawn day is a reading over.
- *
- * The tooltip's third line. Two percentiles with no denominator is the shape of
- * a figure nobody can act on: a day that put half of four summaries above 95
- * percent and a day that did it over four hundred are not the same day.
- */
-export function matchNotes(days: readonly EvalDay[], numberFormat: NumberFormatConfig): string[] {
-	return days.map((day) => `${grouped(day.matched, numberFormat)} summaries checked`);
-}
-
-export function matchColumns(days: readonly EvalDay[], numberFormat: NumberFormatConfig): Readout {
-	const percent = (value: number) => `${value}%`;
-	return readoutOf({
-		type: 'dateSeries',
-		columns: days.map((day) => shortDate(day.date)),
-		series: [
-			{
-				label: 'Median (p50)',
-				swatch: 'var(--chart-6)',
-				values: days.map((day) => day.matchMid),
-				format: percent
-			},
-			{
-				label: 'p25',
-				swatch: 'var(--chart-7)',
-				values: days.map((day) => day.matchLow),
-				format: percent
-			},
-			{
-				label: 'Summaries checked',
-				// No swatch: nothing on the plot is this entry's mark. A swatch here
-				// would be a key to a series that was never drawn.
-				swatch: null,
-				values: days.map((day) => day.matched),
-				format: (value: number) => grouped(value, numberFormat)
-			}
-		],
-		notMeasured: 'No summary was checked on this day',
-		resting: 'last'
-	});
 }
 
 /** What the whole window holds, so a sentence never re-walks the days itself. */
@@ -495,59 +419,14 @@ export function evalTotals(days: readonly EvalDay[]): EvalTotals {
 	return { days: days.length, scored, matched, widerDiffers, widestGap };
 }
 
-/** The middle day of the window, by its own middle summary. */
-function middleDay(values: readonly (number | null)[]): number | null {
-	const known = values.filter((value): value is number => value !== null).sort((a, b) => a - b);
-	return known.length === 0 ? null : at(known, 0.5);
-}
-
-export function matchHeadline(
-	days: readonly EvalDay[],
-	windowDays: number,
-	numberFormat: NumberFormatConfig
-): string | null {
-	const drawn = matchDays(days);
-	if (drawn.length === 0) return null;
-	const mid = middleDay(drawn.map((day) => day.matchMid));
-	const low = middleDay(drawn.map((day) => day.matchLow));
-	if (mid === null || low === null) return null;
-	const totals = evalTotals(days);
-	const lead =
-		windowDays === 1
-			? `${openWithSpan(windowDays)}: median (p50) ${mid} percent and p25 ${low} percent`
-			: `Over ${nameSpan(windowDays)}: median daily p50 ${mid} percent and median daily p25 ${low} percent`;
-	return `${lead}, on ${grouped(totals.matched, numberFormat)} summaries checked.`;
-}
-
-/** Which day the faithfulness plot's points are, as its intro says it. A
- * window of one day draws one point a line, so the two are that day. */
-export function matchPoints(windowDays: number): string {
-	return windowDays === 1
-		? `Both points are ${nameSpan(windowDays)}.`
-		: `One point is one day over ${nameSpan(windowDays)}.`;
-}
-
-/** The faithfulness plot in words, for a reader who cannot see it. `rulesAt`
- * are the scores of the rules the plot drew. A line needs a second day, so a
- * window of one day names its two points instead. */
-export function matchLabel(windowDays: number, rulesAt: readonly number[]): string {
-	const drawn =
-		windowDays === 1
-			? `Summary faithfulness in ${nameSpan(windowDays)}, as a percentage. One point is the day's median (p50) and the other is p25.`
-			: `Summary faithfulness per day over ${countDays(windowDays)}, as a percentage. One line is each day's median (p50) and the other is p25.`;
-	const rules =
-		rulesAt.length === 0
-			? ''
-			: ` A line crosses the plot at ${rulesAt.join(' and ')} percent, the scores a published story is banded on.`;
-	return `${drawn}${rules}`;
-}
-
-/** What the second faithfulness column says, in words.
+/** What the second faithfulness column says, in words, or null where it says nothing.
  *
  * The checker scores the summary twice - once against the text the machine was
  * given, once against the whole article - and the second column exists so a
  * summary that only looks faithful because the article was cut cannot pass. The
- * gap between them is the reading, so the panel says how often there is one.
+ * gap between them is the reading, so the panel says how often there is one. It
+ * says it only where the two readings part: a sentence that reads "the same" on
+ * nearly every window is one an operator learns to skip.
  */
 export function widerNote(
 	days: readonly EvalDay[],
@@ -555,10 +434,7 @@ export function widerNote(
 	numberFormat: NumberFormatConfig
 ): string | null {
 	const totals = evalTotals(days);
-	if (totals.matched === 0) return null;
-	if (totals.widerDiffers === 0) {
-		return `Scored against the whole article instead of the part the machine read, every one of these ${grouped(totals.matched, numberFormat)} summaries scores the same. The two readings only part when the article was cut.`;
-	}
+	if (totals.matched === 0 || totals.widerDiffers === 0) return null;
 	return `Scored against the whole article instead of the part the machine read, ${grouped(totals.widerDiffers, numberFormat)} of these ${grouped(totals.matched, numberFormat)} summaries score differently, by up to ${totals.widestGap} points.`;
 }
 
