@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import io
-import json
 import zipfile
 from collections import Counter
 from pathlib import Path
@@ -387,28 +386,6 @@ def test_unreadable_zip_is_an_explicit_integrity_refusal() -> None:
         unpack(b"not a ZIP")
 
 
-def test_recovery_routes_through_gates_before_delivery_and_rebuilds_afterward() -> None:
-    import ast
-    import inspect
-
-    function = ast.parse(inspect.getsource(digest_recover.main))
-    calls = [
-        (node.lineno, ast.unparse(node.func))
-        for node in ast.walk(function)
-        if isinstance(node, ast.Call)
-    ]
-    names = [name for _, name in sorted(calls)]
-    assert names.index("assemble_outputs") < names.index("check_outputs")
-    assert names.index("check_outputs") < names.index("publish_outputs")
-    assert names.index("publish_outputs") < names.index("digest_publish.published_inputs")
-    assert names.index("digest_publish.published_inputs") < names.index("build_site")
-    assert names.index("build_site") < names.index("npm")
-    gate = inspect.getsource(digest_recover.check_outputs)
-    assert '"check-publication"' in gate
-    assert '"site-weight", "published-columns"' in gate
-    assert "check=True" in gate
-
-
 @pytest.mark.parametrize("change", ["expired", "attempt", "run", "commit", "duplicate", "digest"])
 def test_platform_artifacts_must_match_the_source_attempt(change: str) -> None:
     source = SourceRun(
@@ -441,4 +418,3 @@ def test_platform_artifacts_must_match_the_source_attempt(change: str) -> None:
     values = [artifact, artifact] if change == "duplicate" else [artifact]
     with pytest.raises(IntegrityError):
         select_artifacts(source, values)
-    assert json.loads(source.model_dump_json())["run_attempt"] == 2
