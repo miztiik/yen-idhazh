@@ -351,6 +351,10 @@ is the sample size, not a series, so it passes no colour, exactly as the
 builder's `notMeasured` word does. A swatch there would be a key to a mark that
 was never drawn, which is the one failure this whole section exists to name.
 
+**A shaded band is keyed by the rows for its two edges.** A band has no mark of
+its own to name, so each edge is a row in the strip and the tooltip, wearing the
+band's tint, and no separate band key is drawn beside the strip.
+
 **A chart of separate records reads one record at a time, in the same strip.** A
 square per run, a bar per shard, a tile per feed-day: these marks share no
 column, so there is no set of series to print together, but each mark still

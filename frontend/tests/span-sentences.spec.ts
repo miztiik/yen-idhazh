@@ -23,7 +23,7 @@ import {
 	type GlanceDay
 } from '../src/lib/charts/glance';
 import { dailyFiguresPointer, dailyFiguresRows, dailyFiguresSummary } from '../src/lib/console/daily-figures';
-import { EVAL_PANELS, matchLabel, matchPoints, matchTitle, type EvalDay } from '../src/lib/console/eval-instruments';
+import { EVAL_PANELS, matchTitle } from '../src/lib/console/eval-instruments';
 import {
 	clampNote,
 	heldNote,
@@ -33,7 +33,7 @@ import {
 	type LineDay
 } from '../src/lib/console/merge-line';
 import { quietSentence } from '../src/lib/console/waiting';
-import { matchHeadline, numberFormat } from './support/number-format';
+import { numberFormat } from './support/number-format';
 
 const coverageSentence = (found: Parameters<typeof coverageSentenceWithFormat>[0], lead: string) =>
 	coverageSentenceWithFormat(found, lead, numberFormat);
@@ -55,21 +55,6 @@ function lineDay(date: string, over: Partial<LineDay> = {}): LineDay {
 		maxDownStep: 0.01,
 		maxUpStep: 0.003,
 		...over
-	};
-}
-
-/** One day of faithfulness scores: half its summaries above 82, a quarter under 70. */
-function evalDay(date: string): EvalDay {
-	return {
-		date,
-		scored: 412,
-		matched: 412,
-		matchLow: 70,
-		matchMid: 82,
-		matchHigh: 91,
-		widerDiffers: 0,
-		widestGap: 0,
-		recorded: {}
 	};
 }
 
@@ -135,18 +120,6 @@ test('a table of daily figures opens on one day, and on seven day by day, newest
 	);
 });
 
-test('the faithfulness plot names its two points at one day, and its lines over seven', () => {
-	const lower = 'the other is p25.';
-	expect(matchLabel(1, [])).toBe(
-		`Summary faithfulness in this one day, as a percentage. One point is the day's median (p50) and ${lower}`
-	);
-	expect(matchLabel(7, [70, 82])).toBe(
-		`Summary faithfulness per day over 7 days, as a percentage. One line is each day's median (p50) and ${lower} A line crosses the plot at 70 and 82 percent, the scores a published story is banded on.`
-	);
-	expect(matchPoints(1)).toBe('Both points are this one day.');
-	expect(matchPoints(7)).toBe('One point is one day over these 7 days.');
-});
-
 test('the per-article measurement names the published articles and payload days it counts', () => {
 	expect(siteCostMeasure(1)).toBe(
 		'Bytes the committed payload tree gained in this one day, over the articles the day published.'
@@ -157,16 +130,6 @@ test('the per-article measurement names the published articles and payload days 
 	// The rate stays a rate at one day; it is that day's own count.
 	expect(horizonRate(300, 1)).toBe("300 articles a published day, this one day's count");
 	expect(horizonRate(334.4, 7)).toBe('a median of 334 articles a published day');
-});
-
-test('the faithfulness headline distinguishes daily percentiles from their window medians', () => {
-	const days = [evalDay('2026-10-06')];
-	expect(matchHeadline(days, 1)).toBe(
-		'This one day: median (p50) 82 percent and p25 70 percent, on 412 summaries checked.'
-	);
-	expect(matchHeadline(days, 7)).toBe(
-		'Over these 7 days: median daily p50 82 percent and median daily p25 70 percent, on 412 summaries checked.'
-	);
 });
 
 test('the merge sentences name the days they counted', () => {

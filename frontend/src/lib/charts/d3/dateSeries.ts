@@ -19,7 +19,8 @@ import type { ChartToken } from '../theme';
 import { valueAxis, type ValueAxis } from './axis';
 import { bandScale } from './scale';
 import { checkedRule, LEGACY_MODEL_RULE, ruleBoundaries, ruleEvents, type ModelRule, type RuleBoundary } from './model-rule';
-import { readoutOf, type Readout, type ReadoutInput } from '../readout';
+import { spreadPaint } from './spread-paint';
+import { readoutOf, type Readout, type ReadoutInput, type ReadoutInputSeries } from '../readout';
 import { formatNumber, type NumberFormatConfig } from '../../number-format';
 
 /** One reading: a calendar year (`YYYY`) or UTC date (`YYYY-MM-DD`), and its
@@ -27,7 +28,15 @@ import { formatNumber, type NumberFormatConfig } from '../../number-format';
 export interface SeriesPoint {
 	date: string;
 	value: number | null;
+	/** The band drawn behind the line on this day, from `low` to `high`. The
+	 * series must name both edges in `spreadLabels`. */
 	spread?: { low: number; high: number };
+}
+
+/** What a band's two edges are called in the readout. */
+export interface SpreadLabels {
+	low: string;
+	high: string;
 }
 
 export interface SeriesInput {
@@ -41,6 +50,13 @@ export interface SeriesInput {
 	gradient?: FillGradient;
 	/** Drawn as the hatch for a known thing with no reading, in place of a fill. */
 	hatched?: boolean;
+	/** Printed after each of this series' readings in the readout, so a share
+	 * reads `92%` and not `92`. */
+	unit?: string;
+	/** Required wherever a point carries a spread. The readout prints one row
+	 * for each edge, keyed by the band's own paint, so a band is never drawn
+	 * without the figures that bound it. */
+	spreadLabels?: SpreadLabels;
 }
 
 export interface FillGradient {
@@ -181,6 +197,23 @@ function byDay(series: readonly SeriesInput[]): Map<string, number | null>[] {
 	});
 }
 
+/** The readout rows for a series' two spread edges, none where it draws no band. */
+function spreadRows(
+	entry: SeriesInput,
+	dates: readonly string[],
+	format: (value: number) => string
+): ReadoutInputSeries[] {
+	const labels = entry.spreadLabels;
+	if (labels === undefined) return [];
+	const byDate = new Map(entry.points.map((point) => [point.date, point.spread]));
+	return (['low', 'high'] as const).map((edge) => ({
+		label: labels[edge],
+		swatch: spreadPaint(entry.token),
+		values: dates.map((date) => byDate.get(date)?.[edge] ?? null),
+		format
+	}));
+}
+
 /** The series over their days, or null where not one day holds a reading. */
 export function dateSeries(series: readonly SeriesInput[], opts: DateSeriesOptions): SeriesGeometry | null;
 export function dateSeries(series: readonly SeriesInput[], opts: LegacyDateSeriesOptions): SeriesGeometry | null;
@@ -219,6 +252,8 @@ export function dateSeries(series: readonly SeriesInput[], opts: DateSeriesOptio
 	}
 	const spreads = series.flatMap((entry) => entry.points.flatMap((point) => {
 		if (point.spread === undefined) return [];
+		if (stacked) throw new Error(`"${entry.label}" carries a spread, and a stacked bar draws none.`);
+		if (entry.spreadLabels === undefined) throw new Error(`"${entry.label}" draws a spread on ${point.date} and does not name its two edges.`);
 		const { low, high } = point.spread;
 		if (point.value === null || !Number.isFinite(low) || !Number.isFinite(high) || low > point.value || high < point.value) throw new Error(`"${entry.label}" has an invalid spread on ${point.date}.`);
 		return [low, high];
@@ -230,12 +265,15 @@ export function dateSeries(series: readonly SeriesInput[], opts: DateSeriesOptio
 		readout: readoutOf({
 			type: 'dateSeries',
 			columns: dates,
-			series: [...series, ...extra].map((entry, index) => ({
-				label: entry.label,
-				swatch: entry.fill ?? `var(${entry.token})`,
-				values: dates.map((date) => allReadings[index].get(date) ?? null),
-				format: (value) => formatNumber(value, opts.number_format)
-			})),
+			series: [...series, ...extra].flatMap((entry, index) => {
+				const format = (value: number) => `${formatNumber(value, opts.number_format)}${entry.unit ?? ''}`;
+				return [{
+					label: entry.label,
+					swatch: entry.fill ?? `var(${entry.token})`,
+					values: dates.map((date) => allReadings[index].get(date) ?? null),
+					format
+				}, ...spreadRows(entry, dates, format)];
+			}),
 			notMeasured: 'Not recorded.',
 			resting: 'last'
 		})

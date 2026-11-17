@@ -106,12 +106,16 @@ differ on **7 of them**, because production hands the same string to both - the
 finding recorded in [../../concepts/evaluation.md](../../concepts/evaluation.md).
 A chart of a number that is flat on 99.9 percent of rows teaches an operator to
 stop looking; a sentence saying how often it parts, and by how much, is the same
-fact at the size it is worth.
+fact at the size it is worth. The sentence prints only on a window where the two
+readings part. Where they agree it prints nothing, because a line that says "the
+same" on nearly every window is read once and then skipped.
 
 **Two bars, and they are the pipeline's own.** The faithfulness plot draws a rule
 at each of the two scores a published story is banded on - `band_high_min` and
 `band_medium_min` in [../../../config/idhazh.json](../../../config/idhazh.json),
-0.80 and 0.50 as committed. No reading is tinted and no day is coloured.
+0.80 and 0.50 as committed. Each rule names its score and the band it decides on
+the plot itself, so no sentence beside the plot repeats them. No reading is
+tinted and no day is coloured.
 The panel explains a flagged summary with "Automated check found a possible
 mismatch. Read the original." This guidance is operator-only; reader pages show
 neither confidence text nor a quality glyph. Scoring and saved bands are
@@ -120,11 +124,10 @@ unchanged.
 **A rule under the axis floor is dropped, not handed over.** The floor rises to
 fill the panel with the range the days hold, and on the committed record it sits
 at 65 percent - above the doubt score. The engine clips a rule outside the axis,
-so passing it anyway draws nothing and leaves the panel's own sentence naming a
-line a reader cannot find. So the plot ships the rules its own scale reaches,
-and the panel says "a line crosses the plot at each one the days on it reach"
-rather than promising two. The doubt rule comes back on the day the floor drops
-to meet a figure beneath it, which is the day an operator opened the panel for.
+so passing it anyway draws nothing and names a line a reader cannot find. So the
+plot ships the rules its own scale reaches, and no sentence promises two. The
+doubt rule comes back on the day the floor drops to meet a figure beneath it,
+which is the day an operator opened the panel for.
 
 The distinction is between a threshold and a verdict. A rule across the scale
 says what a score has to clear before it reaches the recorded high-confidence
@@ -144,11 +147,15 @@ The one threshold this page did draw until 2026-09-24 - the share of an article'
 opening a summary had to keep - stays retired, because plenty of good articles
 open slowly.
 
-**A median line and its quartile spread on faithfulness.** Measured 2026-09-06 over the
-fifteen committed days, the middle summary's faithfulness sat between 88 and 95
-percent while the lower quarter swung from 73 to 94 - so the level and the tail
-are different facts. The median is the line; the lower and upper quarters are
-its spread, not separate percentile lines. The table prints all three readings.
+**A median line and its interquartile band on faithfulness.** Measured 2026-09-06 over the
+fifteen committed days, a day's median (p50) sat between 88 and 95 percent while
+its lower quartile (p25) swung from 73 to 94 - so the level and the tail are
+different facts. The median is the line; the shaded band is the interquartile
+range, p25 to p75: the span holding the middle half of that day's scores. The
+tooltip and the strip under the plot print all three in whole percent, as
+`Median (p50)`, `Lower quartile (p25)` and `Upper quartile (p75)`. The two band
+rows wear the band's own tint as their swatch and the median row the line's
+colour, so the strip is the key to the band as well as to the line.
 
 **A line, and no shape switch.** One percentile added to another is not
 a quantity, and neither is one day's share added to the next day's. The condition
@@ -181,7 +188,7 @@ as a collapse. Susan, 2026-09-25.
 Two bounds and no third. The floor's lower limit is not a knob - it is
 `evaluation.band_medium_min`, because below that score every summary carries the
 same published band and there is nothing left to zoom into. And one rule outranks
-all of them: **the floor never hides a mark.** A day whose lower quarter fell
+all of them: **the floor never hides a mark.** A day whose lower quartile (p25) fell
 through the doubt line is the day an operator opened the panel for, so the floor
 drops to meet it.
 
@@ -263,6 +270,23 @@ names the lost observational comparison. Individual metric trends and their
 dated setting/model-change markers remain, as do the cards and their coverage
 and absence behavior. Historical pipeline-fingerprint identities still support
 the retained markers; removing this view changes no producer or compact contract.
+
+The faithfulness band is the interquartile range, not a one-sigma band. A
+standard deviation assumes a spread that is symmetric about the mean, and these
+scores pile up under a ceiling of 100 and trail off below it, so the band would
+be lopsided, could cross 100 percent and would widen on one bad outlier. The
+quartiles are scores some summary actually got, found by position under the
+nearest-rank rule, so a day's band always sits inside what was scored and one
+outlier cannot move it. What it gives up: the worst quarter of a day's summaries
+sits outside the band, so one very unfaithful summary does not show in it.
+
+The faithfulness panel has no table. It printed the three figures the plot
+already draws, in a second place, while the tooltip and the strip printed only
+the median because they were built from the series alone. A series that draws a
+band now names both edges (`spreadLabels`) and prints them as rows beside its
+own, so the three figures are read where the pointer is. What it gives up: a
+table is a plain list a reader can scan down for every day at once, and the strip
+shows one day at a time.
 
 ## See also
 

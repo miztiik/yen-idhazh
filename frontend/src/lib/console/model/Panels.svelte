@@ -48,15 +48,10 @@
 {:else if scores !== null}
 	<div data-eval-panel="faithfulness" data-match-floor={scores.floor}>
 	<p data-lede>{scores.days.at(-1)?.matchMid == null ? 'Faithfulness was not measured.' : `${scores.days.at(-1)?.matchMid}% median faithfulness`}</p>
-	<p data-comparison="each day's median (p50) against its interquartile range (p25-p75)">Each day's median (p50) against its interquartile range (p25-p75).</p>
+	<p data-comparison="each day's median (p50) against its interquartile range (p25-p75)">Each day's median (p50) against its interquartile range (p25-p75): the span holding the middle half of that day's scores.</p>
 	<Series series={scores.series} {rule} {chart} name="faithfulness" rules={scores.rules} domain={[scores.floor, 100]} />
-	<p>{scores.wider}</p>
-	<p data-model-match-rule>These scores are banded on the site's agreed thresholds.</p>
-	<p data-model-match-intro>{thresholds.high}% clears the high band and {thresholds.low}% clears the middle band. A line crosses the plot at each one the days on it reach.</p>
+	{#if scores.wider !== null}<p>{scores.wider}</p>{/if}
 	<p data-model-match-note>For a flagged summary: Automated check found a possible mismatch. Read the original.</p>
-	<table data-match-days data-model-match-days={range.days}><caption>Faithfulness, in whole percent.</caption><thead><tr><th>Day</th><th>Lower quarter</th><th>Median</th><th>Upper quarter</th></tr></thead>
-		<tbody>{#each scores.days as day}<tr data-match-day={day.date} data-match-mid={day.matchMid} data-match-low={day.matchLow} data-match-high={day.matchHigh} data-match-checked={day.matched}><th>{day.date}</th><td>{day.matchLow}</td><td>{day.matchMid}</td><td>{day.matchHigh}</td></tr>{/each}</tbody>
-	</table>
 	</div>
 {:else if id === 'score-cost'}
 	<TimeCost {id} rows={rows[0]} {range} {chart} />
