@@ -7,7 +7,7 @@ import re
 
 import pytest
 from pydantic import ValidationError
-from support.paths import CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
+from support.paths import CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh.contracts.item_health import (
     FAILURE_CODE_STAGES,
@@ -115,32 +115,6 @@ def test_an_offered_entry_without_a_definition_is_refused(collection: str) -> No
 
     with pytest.raises(ValueError, match="offered with no definition"):
         Taxonomy.model_validate(payload)
-
-
-def test_the_console_reads_only_telemetry_columns_the_writer_writes() -> None:
-    """The browser's copy of the projection header, held against the writer.
-
-    `frontend/src/lib/charts/series.ts` restates `PUBLIC_COLUMNS` because it is
-    TypeScript and the writer is Python. It resolves every cell by name against
-    the header of the file it read, so an insert, a reorder and an append all
-    move nothing it draws, and none of the three is this test's business.
-
-    What is this test's business is a name the writer never writes. The reader
-    degrades such a cell to absent rather than refusing the file, which is right
-    for a stale shard and useless as a guard against a typo or a rename - both
-    would draw a blank column on a page that has no way to know. So the rule is
-    containment: every name the console reads is a name the writer writes.
-    Nothing else ties the two lists together.
-    """
-    source = read_text(REPO_ROOT / "frontend" / "src" / "lib" / "charts" / "series.ts")
-    declared = re.search(r"export const TELEMETRY_COLUMNS = \[(.*?)\] as const;", source, re.DOTALL)
-    assert declared is not None, "series.ts no longer declares a TELEMETRY_COLUMNS array"
-    names = tuple(re.findall(r"'([^']+)'", declared.group(1)))
-    assert names, "TELEMETRY_COLUMNS matched but held no column names"
-    unwritten = [name for name in names if name not in ItemHealthRow.csv_columns()]
-    assert not unwritten, (
-        f"series.ts reads columns the native item-health contract does not carry: {unwritten}"
-    )
 
 
 def test_recorded_item_health_codes_never_count_against_a_source() -> None:

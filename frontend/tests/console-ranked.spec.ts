@@ -76,6 +76,10 @@ test.describe('the tail sentence', () => {
         const r = rank([{ key: 'a', value: 1, row: display('a', '1') }], 10);
         expect(tailSentence(r, nouns)).toBeNull();
     });
+    test('a sum that means something is counted in its unit', () => {
+        const r = rank([9, 8, 7].map((v, i) => ({ key: `k${i}`, value: v, row: display(`k${i}`, `${v}`) })), 1);
+        expect(tailSentence(r, nouns)).toBe('2 more sources had 15 cuts between them.');
+    });
 });
 test.describe('the target geometry', () => {
     test('a value nobody measured draws nothing', () => {

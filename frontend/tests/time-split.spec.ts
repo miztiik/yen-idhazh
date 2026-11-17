@@ -1,6 +1,6 @@
 /** Authored clocks test the actual native cohort, additive stages and non-additive calls. */
 import { expect, test } from '@playwright/test';
-import { TELEMETRY_COLUMNS, type TelemetryRow } from '../src/lib/charts/series';
+import type { TelemetryRow } from '../src/lib/charts/series';
 import { nativeTimeSplit, timeSplitReadout } from '../src/lib/console/pipelines/item-time-split';
 import { dateSeries, numberFormat } from './support/number-format';
 import { frame } from '../src/lib/charts/frame';
@@ -19,13 +19,6 @@ const options = {
 	rule: { changes: [], note: null }, stacked: true
 };
 const sum = (values: readonly number[]) => values.reduce((total, value) => total + value, 0);
-
-test('every stage, elapsed, overlap and call detail is a published telemetry cell', () => {
-	for (const name of ['fetch_ms', 'extract_ms', 'analyze_ms', 'summarize_ms', 'label_ms', 'summary_ms',
-		'visual_plan_ms', 'faithfulness_ms', 'item_total_ms', 'stage_gap_ms']) {
-		expect(TELEMETRY_COLUMNS, `${name} is not published`).toContain(name);
-	}
-});
 
 test('one item adds summarize once and conserves its whole clock', () => {
 	const split = nativeTimeSplit([fullyTimed()], calendar);

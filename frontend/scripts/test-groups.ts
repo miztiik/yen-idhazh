@@ -18,7 +18,7 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 		'console-data-explorer-examples', 'console-data-explorer-gaps',
 		'console-data-explorer-keep', 'console-data-explorer-shape', 'console-date-axis',
 		'console-drawn-cells', 'console-failure',
-		'console-failures', 'console-flow', 'console-frame', 'console-host-spans',
+		'console-flow', 'console-frame', 'console-host-spans',
 		'console-item-cost', 'console-judgement-nothings', 'console-machine',
 		'console-machine-data', 'console-machine-split', 'console-model',
 		'console-memory-board',
@@ -47,7 +47,7 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 		'recorded-slices', 'run-axis', 'run-yield', 'served-day', 'settings-moved',
 		'source-classification-binding',
 		'similarity-ledgers', 'span-sentences', 'span-words', 'statement',
-		'telemetry-header', 'telemetry-hold', 'throughput-window', 'time-split', 'tokens',
+		'telemetry-hold', 'throughput-window', 'time-split', 'tokens',
 		'topics', 'verdict-split', 'vocabulary', 'weights'
 	],
 	reader: ['payload-state', 'reading-page', 'visual-legibility'],

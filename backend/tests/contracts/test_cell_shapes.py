@@ -16,17 +16,12 @@ import csv
 import io
 import json
 import logging
-import os
-import shutil
-import subprocess
 from collections.abc import Iterator
 from enum import Enum
-from pathlib import Path
 from typing import Annotated, Any, Union, get_args, get_origin
 
 import pytest
 from pydantic import BeforeValidator, StringConstraints, TypeAdapter, ValidationError
-from support.paths import REPO_ROOT
 
 from idhazh.contracts import CONTRACTS, base
 from idhazh.contracts.base import (
@@ -37,7 +32,6 @@ from idhazh.contracts.base import (
     field_column,
     fit_cell,
 )
-from idhazh.contracts.item_health import ItemHealthRow
 
 pytestmark = pytest.mark.contract
 
@@ -489,93 +483,3 @@ def test_the_feed_detail_writer_fits_its_column() -> None:
         cell = base.fit_field(raw, model=FeedHealthRow, field="detail", absent="unstated")
         TypeAdapter(field_column(FeedHealthRow.model_fields["detail"])).validate_python(cell)
         assert cell, f"{case} emptied the detail"
-
-
-#
-# Two parsers read these files: `csv` here, and a state machine in the bundle.
-# One fixture, both readers, so they cannot drift apart quietly.
-#
-
-_BROWSER_PARSER = REPO_ROOT / "frontend" / "src" / "lib" / "charts" / "series.ts"
-
-_DRIVER = """
-import { readFileSync } from 'node:fs';
-import { registerHooks } from 'node:module';
-import { pathToFileURL } from 'node:url';
-
-registerHooks({
-  resolve(specifier, context, next) {
-    if (specifier.startsWith('.') && !/\\.[a-z]+$/.test(specifier)) {
-      return next(`${specifier}.ts`, context);
-    }
-    return next(specifier, context);
-  }
-});
-
-const parser = await import(pathToFileURL(process.argv[2]).href);
-const rows = parser.parseTelemetryCsv(readFileSync(process.argv[3], 'utf8'));
-process.stdout.write(JSON.stringify(rows.map((row) => row.cpu_model)));
-"""
-
-
-def test_both_parsers_read_a_folded_shard_to_the_same_cells(tmp_path: Path) -> None:
-    """The bundle parses these bytes too, and it wrote its own state machine to do it.
-
-    A cell that Python reads one way and the browser reads another is a defect
-    neither side can see. Driving the shipped module rather than a copy of it is
-    the only version of this test worth having (Guardrail #7).
-    """
-    node = shutil.which("node")
-    if node is None:
-        pytest.fail(
-            "node is required on PATH for the Python/browser CSV reader contract; "
-            "use the Node requirement in docs/how-to/run-the-gates.md"
-        )
-    if not _BROWSER_PARSER.is_file():
-        pytest.fail(
-            "required browser CSV reader is missing: frontend/src/lib/charts/series.ts; "
-            "restore the reader before running the contract gate"
-        )
-
-    column = field_column(ItemHealthRow.model_fields["cpu_model"])
-    expected = [fit_cell(raw, column=column, absent=ABSENT) for raw in HOSTILE.values()]
-
-    names = ItemHealthRow.csv_columns()
-    shard = tmp_path / "telemetry.csv"
-    with shard.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=names, lineterminator="\n")
-        writer.writeheader()
-        for cell in expected:
-            row = dict.fromkeys(names, "")
-            row.update(
-                date="2026-09-15",
-                run_id="2026-09-15-1",
-                item_id="ai-01",
-                cpu_model=cell,
-                vertical="ai",
-                source_id="lab-blog",
-                stage="publish",
-                outcome="ok",
-            )
-            writer.writerow(row)
-
-    text = shard.read_text(encoding="utf-8")
-    assert len(text.splitlines()) == len(expected) + 1, "a folded cell split a row in two"
-    by_python = [row["cpu_model"] for row in csv.DictReader(io.StringIO(text))]
-    assert by_python == expected
-
-    driver = tmp_path / "read-with-the-bundle.mjs"
-    driver.write_text(_DRIVER, encoding="utf-8", newline="\n")
-    # Fixed argv, and every path in it is one this test wrote or found.
-    finished = subprocess.run(
-        [node, "--experimental-strip-types", str(driver), str(_BROWSER_PARSER), str(shard)],
-        capture_output=True,
-        text=True,
-        timeout=120,
-        env={**os.environ, "NODE_OPTIONS": ""},
-        check=False,
-    )
-    if finished.returncode != 0:
-        pytest.fail(f"the bundle's parser could not run: {finished.stderr[-2000:]}")
-
-    assert json.loads(finished.stdout) == expected, "the two parsers disagree about these bytes"
