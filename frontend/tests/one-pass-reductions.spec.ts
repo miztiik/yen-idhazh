@@ -1,9 +1,9 @@
-/** The six build reductions that became single passes, and what must hold.
+/** The five build reductions that became single passes, and what must hold.
  *
- * Six repeated reductions are now single passes over the same input: the config
+ * Five repeated reductions are now single passes over the same input: the config
  * accessors, the date and run buckets in `model-work`, the run-to-health join in
- * `machine-counters`, the per-article band ladder, the per-bin scans in
- * `distribution`, and the daily buckets in `failureSeries`.
+ * `machine-counters`, the per-bin scans in `distribution`, and the daily buckets
+ * in `failureSeries`.
  *
  * **Byte-identical output is the hard requirement** - the change moves no
  * number on any page - so half of this file compares what the reductions
@@ -33,13 +33,12 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { distribution, quantile, type Distribution } from '../src/lib/charts/series';
-import { frameConfig, summarizeConfig } from '../src/lib/server/config';
+import { frameConfig } from '../src/lib/server/config';
 import { failureSeries } from '../src/lib/charts/series';
 import { modelByDate, modelWork, runLengths, sourceCuts } from '../src/lib/server/model-work';
 import { machineCounters, type MachineLimits } from '../src/lib/console/machine/counters';
-import type { SummaryBand, TelemetryRow } from '../src/lib/charts/series';
+import type { TelemetryRow } from '../src/lib/charts/series';
 import {
-	BANDS,
 	dayOf,
 	healthRows,
 	machineRows,
@@ -65,7 +64,7 @@ const TELEMETRY_DAYS = 6;
 const TELEMETRY_PER_DAY = 20;
 const WINDOW = { start: dayOf(0), end: dayOf(TELEMETRY_DAYS - 1) };
 
-/** Everything the six reductions return over one input. */
+/** Everything the five reductions return over one input. */
 function reductions(): Record<string, unknown> {
 	const hosts = machineRows(PARITY);
 	const health = healthRows(PARITY);
@@ -74,7 +73,7 @@ function reductions(): Record<string, unknown> {
 		machineCounters: machineCounters(hosts, health, plannedOf(PARITY), LIMITS),
 		modelWork: modelWork(scores, health),
 		modelByDate: [...modelByDate(scores)],
-		runLengths: runLengths(scores, BANDS),
+		runLengths: runLengths(scores),
 		sourceCuts: sourceCuts(health, { ...WINDOW, days: TELEMETRY_DAYS }, { limit: 4 }),
 		failureSeries: failureSeries(telemetryRows(TELEMETRY_DAYS, TELEMETRY_PER_DAY), WINDOW),
 		distribution: distribution(timings(400))
@@ -112,7 +111,7 @@ function countingRows<T extends Record<string, unknown>>(
 }
 
 test.describe('the reductions return what they returned before', () => {
-	test('every one of the six is byte-identical to the golden', () => {
+	test('every one of the five is byte-identical to the golden', () => {
 		const found = `${JSON.stringify(reductions(), null, '\t')}\n`;
 
 		if (process.env.IDHAZH_WRITE_ONE_PASS_GOLDEN) {
@@ -195,28 +194,6 @@ test.describe('the failure denominators are counted in one pass', () => {
 	});
 });
 
-test.describe('the band ladder is prepared once', () => {
-	function ladderReads(sizes: Sizes): { reads: number; articles: number } {
-		let reads = 0;
-		const bands = countingRows(BANDS as unknown as Record<string, unknown>[], 'min_source_words', () => {
-			reads += 1;
-		}) as unknown as SummaryBand[];
-		const scores = scoreRows(sizes);
-		runLengths(scores, bands);
-		return { reads, articles: scores.length };
-	}
-
-	test('an extra article costs one look down the ladder and no re-sort', () => {
-		const small = ladderReads({ runs: 2, shards: 2, items: 8 });
-		const large = ladderReads({ runs: 2, shards: 2, items: 16 });
-		const perArticle = (large.reads - small.reads) / (large.articles - small.articles);
-		expect(
-			perArticle,
-			`each extra article read the ladder ${perArticle} times; the ladder holds ${BANDS.length} rungs`
-		).toBeLessThanOrEqual(BANDS.length);
-	});
-});
-
 test.describe('the histogram bins in one pass over the sorted values', () => {
 	test('every bin holds what a full scan would put in it', () => {
 		const values = timings(400);
@@ -244,17 +221,6 @@ test.describe('the config files are read once', () => {
 	test('two calls hand back the same parsed block', () => {
 		// A block the merge passes through by reference. Re-reading the file would
 		// hand back a new array every call.
-		expect(summarizeConfig().bands).toBe(summarizeConfig().bands);
 		expect(frameConfig().breakpoints_px).toBe(frameConfig().breakpoints_px);
-	});
-
-	test('the committed values still resolve', () => {
-		expect(summarizeConfig().bands.length).toBeGreaterThan(0);
-		expect(frameConfig().breakpoints_px).toHaveLength(3);
-		// Ascending, which is the order the ladder readers rely on.
-		const bands = summarizeConfig().bands;
-		for (let index = 1; index < bands.length; index += 1) {
-			expect(bands[index].min_source_words).toBeGreaterThan(bands[index - 1].min_source_words);
-		}
 	});
 });

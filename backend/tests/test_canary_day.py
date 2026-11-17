@@ -1,15 +1,13 @@
-"""The canary day's score ledger - the fixture the console's compression plot draws.
+"""The canary day's score ledger - the fixture the console's pages read.
 
 The browser suite runs against this day, so a state the fixture does not carry
-is a state that suite cannot test. The plot draws source words against summary
-words on a log x axis, shades the configured target zone behind the marks, and
-draws a diamond where the scorer flagged truncation. Each of those needs a row
-of the right shape, and none of them had one while the day carried no scored
-item at all.
+is a state that suite cannot test: a row for every confidence band, a cut
+article beside an uncut one, an item that is both an abstract and cut, and a
+chart the compiler really drew.
 
 These assertions are about the fixture's shape rather than its numbers. A value
 in `SCORED` is a fixture and may be edited; a fixture that stopped exercising a
-state the chart can draw is the defect this file guards against.
+state a page can show is the defect this file guards against.
 """
 
 from __future__ import annotations
@@ -49,11 +47,10 @@ def scored() -> list[EvalRow]:
     return build_canary_day.score_rows(published(), evaluation())
 
 
-def plotted() -> list[EvalRow]:
-    """The rows the compression plot can place.
+def rows_with_a_recorded_length() -> list[EvalRow]:
+    """The rows that recorded the article's length before the cut.
 
-    A row with no recorded article length has no x, so the plot drops it and
-    says how many it dropped.
+    A row without it has no cut to compare, so the cut rule says nothing about it.
     """
     return [row for row in scored() if row.source_words_before_cap is not None]
 
@@ -62,11 +59,10 @@ def source_words(row: EvalRow) -> int:
     """The article's length before the cut, where the fixture recorded one.
 
     `EvalRow.source_words_before_cap` is nullable because a row written before
-    2026-08-27 whose article was truncated has no full length anywhere. Two
-    fixture rows are in that state on purpose - it is the state the sentence
-    under the plot counts - so every caller here reads `plotted()` and a None
-    reaching this function is a broken fixture rather than a row the chart has
-    to survive.
+    2026-08-27 whose article was truncated has no full length anywhere. Some
+    fixture rows are in that state on purpose, so every caller here reads
+    `rows_with_a_recorded_length()` and a None reaching this function is a broken
+    fixture.
     """
     assert row.source_words_before_cap is not None, f"{row.item_id} records no article length"
     return row.source_words_before_cap
@@ -166,19 +162,17 @@ def test_the_fixture_covers_every_confidence_band() -> None:
     assert {row.band for row in scored()} == set(ConfidenceBand)
 
 
-def test_a_truncated_item_is_drawn_and_an_untruncated_one_is_too() -> None:
-    """The plot marks the two differently, so a fixture needs both.
+def test_the_fixture_holds_a_cut_row_and_an_uncut_one() -> None:
+    """The cut rule below passes on rows that never exercise one side of it.
 
-    Counted over the rows the plot can place, not over every row the day scored.
-    A flagged row with no length before the cut has no x, so it is a cut the
-    ledger records and not a diamond the plot draws. The day holds one of those,
-    and over every scored row this test would pass on a fixture whose every
-    flagged row was unplaceable - a plot drawing no diamond at all.
+    Counted over the rows that recorded a length: a cut row with no length before
+    the cut cannot be compared against anything, so over every scored row this
+    would pass on a fixture whose every cut row is unrecorded.
     """
-    placed = plotted()
+    placed = rows_with_a_recorded_length()
     flagged = [row for row in placed if row.truncation_flagged]
-    assert flagged, "no row draws a truncation diamond"
-    assert len(flagged) < len(placed), "every row draws a diamond, so no row draws a dot"
+    assert flagged, "no row that recorded a length is cut"
+    assert len(flagged) < len(placed), "every row that recorded a length is cut"
 
 
 def test_the_truncation_flag_follows_the_configured_rule() -> None:
@@ -190,62 +184,11 @@ def test_the_truncation_flag_follows_the_configured_rule() -> None:
     other. Over the committed ledger it did - the flag was true on exactly one
     row, and that row read 748 words of a 748-word article.
     """
-    for row in plotted():
+    for row in rows_with_a_recorded_length():
         # A cut page is a page the model saw less of. The two columns are the
         # only record of how much less, and a row missing one of them says
         # nothing about the cut either way.
         assert (row.source_words < source_words(row)) == row.truncation_flagged
-
-
-def test_some_rows_record_no_article_length_and_still_score() -> None:
-    """The state the sentence under the plot exists to declare.
-
-    A row without a pre-cap length has no x, so the chart drops it. Dropping it
-    silently is the failure: the plot would under-report its own gaps and every
-    count printed beside it would be over a denominator nobody stated. Two rows,
-    not one, so a page printing whatever number it found cannot pass by luck.
-    """
-    rows = scored()
-    unrecorded = [row for row in rows if row.source_words_before_cap is None]
-    assert len(unrecorded) == 2, "the plot has no unplaceable row to report"
-    assert len(plotted()) == len(rows) - 2
-    # One either side of the cut. Cut and unplaceable together is the real
-    # historical state - a row written before the pre-cap length was persisted
-    # has no full length to recover - and it is the row the day's count holds
-    # while the plot drops it, so the two figures differ on purpose.
-    cut = [row for row in unrecorded if row.truncation_flagged]
-    assert len(cut) == 1, "no unplaceable row is cut, so the two figures cannot differ"
-    for row in unrecorded:
-        # It scored, it banded, and the model read something. Only the length
-        # before the cut is missing.
-        assert row.source_words > 0
-        assert row.summary_words > 0
-
-
-def test_every_configured_target_zone_carries_a_mark() -> None:
-    """The zone is drawn as a step across every band, so every step needs a point.
-
-    A step with nothing under it is a rule the chart states and the fixture
-    never tests it against.
-    """
-    floors = sorted(band.min_source_words for band in config.load().app.summarize.bands)
-    placed = plotted()
-    assert len(floors) > 1, "the config has one target zone, so this asserts nothing"
-    for index, floor in enumerate(floors):
-        ceiling = floors[index + 1] if index + 1 < len(floors) else None
-        under = [
-            row
-            for row in placed
-            if source_words(row) >= floor and (ceiling is None or source_words(row) < ceiling)
-        ]
-        assert under, f"no scored item sits in the target zone above {floor} source words"
-
-
-def test_a_summary_stays_inside_the_axis_the_chart_draws() -> None:
-    """The y domain is zero to the longest summary the ladder can publish."""
-    ceiling = config.load().app.summarize.decoder_words_max()
-    for row in scored():
-        assert 0 < row.summary_words <= ceiling
 
 
 def test_one_published_item_is_both_an_abstract_and_cut() -> None:

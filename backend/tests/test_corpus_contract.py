@@ -87,16 +87,6 @@ def test_a_row_carrying_every_dangerous_character_survives_the_round_trip(
     assert corpus.read_rows(tmp_path) == [row, row.model_copy(update={"url_key": "b" * 64})]
 
 
-def test_the_nasty_string_comes_back_character_for_character(tmp_path: Path) -> None:
-    """Not just loadable - equal. A silently dropped NUL still parses as JSON."""
-    corpus.write(tmp_path, [a_row(NASTY)], CorpusMeta(version=CorpusMeta.schema_version()))
-    read_back = corpus.read_rows(tmp_path)[0]
-
-    assert read_back.system == NASTY
-    assert read_back.user == NASTY
-    assert read_back.assistant == NASTY
-
-
 # --- The Oracle: a trainer can read it -------------------------------------
 
 

@@ -131,79 +131,30 @@ def _template(
     return Template(load_prompt_text(config_dir, files.summarize_article))
 
 
-def draft_model(
-    prompt_config: SummarizeConfig | None = None,
-    *,
-    source_words: int | None = None,
-    brief: bool = False,
-) -> type[SummaryDraft]:
-    """The shape the decoder is held to, which is the same for every article.
-
-    The arguments are taken and not read. The shape carries no length bound, so
-    it does not depend on the config or on which band an article is in. They stay
-    on the signature because the callers that know the article pass them.
-    """
-    return SummaryDraft
-
-
-def output_schema(
-    prompt_config: SummarizeConfig | None = None,
-    *,
-    source_words: int | None = None,
-    brief: bool = False,
-) -> dict[str, Any]:
+def output_schema() -> dict[str, Any]:
     """Generated from the model, never hand-written (Guardrail #3)."""
-    return draft_model(
-        prompt_config, source_words=source_words, brief=brief
-    ).model_json_schema()
+    return SummaryDraft.model_json_schema()
 
 
-def output_schema_text(
-    prompt_config: SummarizeConfig | None = None,
-    *,
-    source_words: int | None = None,
-    brief: bool = False,
-) -> str:
+def output_schema_text() -> str:
     """One serialization, so the fingerprint's schema digest is stable."""
-    return canonical_json(
-        output_schema(prompt_config, source_words=source_words, brief=brief)
-    )
+    return canonical_json(output_schema())
 
 
 def system_prompt(
     prompt_config: SummarizeConfig | None = None,
     *,
-    source_words: int = 0,
-    brief: bool = False,
     prompt_files: PromptFilesConfig | None = None,
     config_dir: Path = DEFAULT_CONFIG_DIR,
 ) -> str:
     """The prompt text with config's numbers substituted in.
 
-    For templates with word-range placeholders, `source_words` picks the length
-    band. The shared generation prompt has no such placeholders and is returned
-    unchanged. The count is the length of the SOURCE BODY, before
-    `extract.truncation_cap_tokens` cut it - which is what the knob's own name,
-    `min_source_words`, says, and what `extract.min_source_words` has always
-    compared against.
-
-    It used to be the post-cap length, on the argument that asking about words
-    the model never saw invites invention. That argument is about content, and
-    a band sets only the target LENGTH: the fenced block still holds the visible
-    text and nothing else. The rule also could not work. The post-cap count
-    cannot pass `int(truncation_cap_tokens / TOKENS_PER_WORD)`, which at the
-    committed cap of 2500 is 1923 words, so the 2000-word band never once fired
-    and its longer target range was dead configuration.
-
     `substitute` and never `safe_substitute`: a renamed knob has to raise here
-    rather than render `$target_words_max` into a live system prompt, where a
+    rather than render `$max_verbatim_words` into a live system prompt, where a
     model would read the placeholder as the instruction it looks like.
     """
     ask = prompt_config or SummarizeConfig()
-    band = ask.band_for(0 if brief else source_words)
-    return _template(prompt_files, config_dir).substitute(
-        {**ask.model_dump(), **band.model_dump()}
-    )
+    return _template(prompt_files, config_dir).substitute(ask.model_dump())
 
 
 def prompt_inputs(
@@ -214,17 +165,8 @@ def prompt_inputs(
 ) -> str:
     """What the fingerprint hashes to stand for the prompt.
 
-    Not one rendered prompt. A configured template can vary with the article's length,
-    and a stamp that moved per item could not answer the question the stamp
-    exists to answer - the ledger is keyed by it, and it means "which pipeline
-    produced this", which is the same pipeline for a release note and a long
-    read.
-
-    So this is the template plus every number that can be substituted into it.
-    Editing the wording or any band changes the stamp exactly once, and a band
-    edit re-summarizes articles in the other bands too. That over-invalidates by
-    design: cheaper than a rule that has to decide which articles an edit
-    reached, and wrong in the safe direction.
+    The template plus every number that can be substituted into it, so editing
+    the wording or a number changes the stamp exactly once.
     """
     ask = prompt_config or SummarizeConfig()
     return _template(prompt_files, config_dir).template + canonical_json(
@@ -271,32 +213,15 @@ def build_request(
     """
     return request_payload(
         model_id=model_id,
-        system=system_prompt(
-            prompt_config,
-            source_words=article.band_source_words,
-            brief=article.brief,
-            prompt_files=prompt_files,
-            config_dir=config_dir,
-        ),
+        system=system_prompt(prompt_config, prompt_files=prompt_files, config_dir=config_dir),
         user=user_turn(article),
-        output_schema=output_schema(
-            prompt_config,
-            source_words=article.band_source_words,
-            brief=article.brief,
-        ),
+        output_schema=output_schema(),
         sampling=sampling,
         markers=markers,
     )
 
 
-def parse_draft(
-    raw: str,
-    *,
-    prompt_config: SummarizeConfig | None = None,
-    source_words: int | None = None,
-    brief: bool = False,
-    thinking: bool = False,
-) -> SummaryDraft:
+def parse_draft(raw: str, *, thinking: bool = False) -> SummaryDraft:
     """Believe the response only after it has proved its shape.
 
     The completion boundary has already separated reasoning using runtime
@@ -307,9 +232,7 @@ def parse_draft(
     fenced = _FENCED_JSON.match(content)
     if fenced:
         content = fenced.group(1)
-    draft = draft_model(
-        prompt_config, source_words=source_words, brief=brief
-    ).model_validate_json(content)
+    draft = SummaryDraft.model_validate_json(content)
     # Normalize paragraph separators and remove control characters before publication.
     draft.summary = normalize_prose(draft.summary)
     if not draft.summary:
@@ -417,7 +340,6 @@ def to_summary(
     *,
     model_id: str,
     generated_at: str,
-    prompt_config: SummarizeConfig | None = None,
     duration_ms: int = 0,
     attempt: int = 1,
     no_reply: FailureCode = FailureCode.MODEL_UNREACHABLE,
@@ -474,13 +396,7 @@ def to_summary(
             failure_code=FailureCode.BAD_SHAPE,
         )
     try:
-        draft = parse_draft(
-            completion.content,
-            prompt_config=prompt_config,
-            source_words=article.band_source_words,
-            brief=article.brief,
-            thinking=thinking,
-        )
+        draft = parse_draft(completion.content, thinking=thinking)
     except (ValidationError, ValueError, json.JSONDecodeError) as error:
         return _failed(
             article,

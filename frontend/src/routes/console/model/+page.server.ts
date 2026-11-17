@@ -1,4 +1,4 @@
-import { chartConfig, consoleConfig, evaluationConfig, observabilityConfig, summarizeConfig, uiConfig } from '$lib/server/config';
+import { chartConfig, consoleConfig, evaluationConfig, observabilityConfig, uiConfig } from '$lib/server/config';
 import { evalDays, type DayScoredCounts } from '$lib/console/eval-instruments';
 import { modelWork, workDates } from '$lib/server/model-work';
 import { evalRows, itemHealthRows } from '$lib/server/ledger-rows';
@@ -52,7 +52,6 @@ export async function load() {
 		cardDays: scores.read.state === 'read' || health.read.state === 'read' ? days : null,
 		cardReads: { article: health.read, score: scores.read },
 		instruments, publishedDates: publishedDates(undefined, widest), windowDay: day, chart: chartConfig(),
-		summarizeBands: summarizeConfig().bands,
 		matchThresholds: { high: Math.round(evaluation.band_high_min * 100), low: Math.round(evaluation.band_medium_min * 100) },
 		recordingNotes: notes, measurementOff: off,
 		recordNotes: recordNotesByWindow([

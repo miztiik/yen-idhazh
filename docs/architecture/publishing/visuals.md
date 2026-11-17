@@ -1,6 +1,6 @@
 # Visual planning and rendering
 
-**Last Updated**: 2026-11-12
+**Last Updated**: 2026-11-17
 
 How an item gets a numeric chart or - most of the time - nothing at
 all: which pass decides, which gate refuses, and what every refusal is called.
@@ -191,7 +191,7 @@ that writes the summary** - so what the gate takes away is the plan's decode, no
 grammar is what takes it: `summarize_and_plan_model(plan=False)` is the summary draft alone, with no `visual`
 property, so the decoder has nowhere to write a plan. A smaller budget on its own would not do it -
 the decoder would start the plan and meet the cap part-way through, which spends the decode the gate
-exists to save and returns a cut reply.
+exists to save and returns a cut reply. So the gate does not touch the budget at all.
 
 `reachable_types` is the predicate, and **it reads the validator's own tables** - `TYPE_RULES`,
 `ROLE_KINDS`, `VALUE_ROLES` and `commensurable`, out of
@@ -223,15 +223,15 @@ expensive.
 | What the gate changes about the summarize-and-plan call | Before | Gated |
 | --- | --- | --- |
 | The decoder shape | `{summary, visual}` | the summary draft alone |
-| The output budget | 3,397 tokens | 371 tokens |
+| The output budget | the model file's response limit | the same |
 | The trailing user turn | finalized evidence and continuation | continuation only |
 | The system turn, the article, the label call's reply | unchanged | unchanged |
 
-Both budgets are derived from the reply shape's own bounds by the same arithmetic rather than one
-being the other minus the plan's - two ways of computing one quantity disagree the first time a
-bound moves, and the one that is wrong is the one nobody reads. Suppression removes
-3,026 tokens from the 3,397-token ceiling, about 89 percent. The summary allowance
-is unchanged.
+The budget is the response limit the model file names (`sampling.max_tokens`, 8,192 in every committed
+model file), gated or not. It used to be derived from the reply shape's own word bounds, 3,397 tokens
+with a plan and 371 without; with no length asked of the model there is no word bound to derive from,
+and a second, smaller number for the gated call would be a cap on the summary a plan-less item may
+write. What suppression saves is the plan's decode, which the grammar removes.
 
 **A ceiling is not a measurement of seconds, so here is one.** The "21 measured seconds" this page
 used to quote was a saving for skipping a whole call, which cannot happen, and that figure is
@@ -537,7 +537,7 @@ can act on unreadable, because the fix for one is not the fix for the other - a 
 reply shape's own arithmetic, and a window cut is `--ctx-size` on the summarize entry against
 `extract.truncation_cap_tokens`. Separating them costs one comparison at the one call site that
 writes either, over numbers already in hand: the server counted the prompt, and the summarize-and-plan call's budget is
-derived from its own grammar. Plan 11 row #3f, 2026-09-13;
+the model file's response limit. Plan 11 row #3f, 2026-09-13;
 [`../summarize/prompt.md`](../summarize/prompt.md) carries the sizing behind it.
 
 **This page became the decision path and an index on 2026-09-23, and five pages came off it.** It
@@ -580,7 +580,6 @@ diagram validation or rendering exists today.
 | Ask the model for a Vega-Lite spec directly | A fabricated axis value becomes reachable, and verifying it afterwards means parsing an arbitrary spec to work out which numbers are data. |
 | Skip the summarize-and-plan call entirely when the gate refuses | The summarize-and-plan call is the call that writes the summary, so skipping it costs the item the thing a reader came for. The gate suppresses the plan fields inside the call and never the call (O43). |
 | Suppress the plan with a smaller budget and leave the grammar whole | The decoder starts the plan and meets the cap part-way through, which spends the decode the gate exists to save and hands back a cut reply. The grammar is the control; a budget is a request. |
-| Derive the suppressed budget as the full one minus the plan's characters | Two ways of computing one quantity, which disagree the first time a bound moves - and the one that is wrong is the one nobody reads. Both come off the same two-half arithmetic over their own schema. |
 | Leave the plan half in the summarize-and-plan prompt when the grammar cannot hold it | Constrained decoding renormalises onto the allowed tokens, so a title, a caption and a reason with nowhere to go end up in the summary a reader reads. |
 | A `none_reason` member for each of the six gates the design record names | Four of the six have no code behind them, so four members would be words nobody can produce, nobody can retire and nobody can tell from a bug. Each arrives with the row that builds its gate. |
 | Put `none_reason` on `VisualPlan` as a third code-stamped field | Two of its four routes fire when no plan object exists at all, so the field would be unwritable on exactly the cases it is for. |

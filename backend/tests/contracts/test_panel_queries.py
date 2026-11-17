@@ -64,7 +64,7 @@ EXPECTED_COLUMNS: Final[Mapping[str, tuple[str, ...]]] = {
     "faithfulnessQuery": ("date", "hhem", "hhem_delta"),
     "writeCostQuery": ("date", "summarize_ms"),
     "scoreCostQuery": ("date", "score_ms"),
-    "summaryLengthQuery": ("date", "run_id", "model_id", "summary_words", "source_words_before_cap", "source_words", "compression"),
+    "summaryLengthQuery": ("date", "run_id", "model_id", "summary_words", "compression"),
     "twoClocksQuery": ("date", "run_id", "machine_job", "machine_shard", "prefill_ms", "input_tokens", "cached_tokens"),
     "twoClocksHostsQuery": ("date", "run_id", "job", "shard", "server_prompt_tokens", "server_prompt_seconds"),
     "slowerMachinesQuery": (
@@ -272,7 +272,7 @@ def test_word_and_machine_renames_are_the_actual_contract_mappings() -> None:
     assert dict(MACHINE_CELLS_RENAMED) == {"job": "machine_job", "shard": "machine_shard"}
     queries = {query.name: query for query in load_queries()}
     assert queries["summaryLengthQuery"].columns == (
-        "date", "run_id", "model_id", "summary_words", "source_words_before_cap", "source_words", "compression"
+        "date", "run_id", "model_id", "summary_words", "compression"
     )
     assert queries["twoClocksQuery"].columns[:4] == ("date", "run_id", "machine_job", "machine_shard")
     assert queries["twoClocksHostsQuery"].columns[:4] == ("date", "run_id", "job", "shard")

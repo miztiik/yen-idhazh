@@ -17,9 +17,8 @@ class ExtractConfig(Model):
         default=60,
         ge=1,
         description=(
-            "Below this the item publishes through the brief tier. It is derived in "
-            "AppConfig from summarize.bands[0].target_words_min divided by "
-            "evaluation.brief_compression_ceiling."
+            "Shortest body, in words, that stops carrying the `too_short` signal. A "
+            "shorter one is also recorded as `brief` on its article."
         ),
     )
     prose_sentence_min: int = Field(

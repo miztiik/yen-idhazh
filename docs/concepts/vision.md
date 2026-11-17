@@ -1,6 +1,6 @@
 # Vision
 
-**Last Updated**: 2026-09-26
+**Last Updated**: 2026-11-17
 
 What yen-idhazh is, what it is not, and the one-sentence product idea every other concept doc serves. This is the top of the concept tier; if a later doc contradicts this page, this page is wrong and gets fixed.
 
@@ -16,7 +16,7 @@ The digest is for **a general reader**, in the sense a newspaper is: no assumed 
 
 The eval dashboard is for **the operator**. It is instrumentation rather than a reading surface: it takes no ornament and spends no reader attention, but it owes the operator the same legibility the digest owes a reader. Being correct is where it starts.
 
-The two audiences are why the two surfaces are held to different standards, and it is worth being explicit about what does *not* follow from it. The evaluation is still the product in the sense of [principles.md](principles.md) principle 6 - it is what makes the digest worth a stranger's two minutes. What the split settles is who each surface is written for, not which one matters.
+The two audiences are why the two surfaces are held to different standards, and it is worth being explicit about what does *not* follow from it. The evaluation is still the product in the sense of [principles.md](principles.md) principle 6 - it is what makes the digest worth a stranger's time. What the split settles is who each surface is written for, not which one matters.
 
 ## The shape
 
@@ -85,7 +85,7 @@ Three, in the order they bite:
 
 Not compute. The order in which limits bite is: how many good articles a day the sources actually supply, then how many summaries a person will read, then artifact storage, then repository growth, and only far behind all of those, concurrency.
 
-Note what is *not* what bounds a day: a reader's clock. The two-minute budget is held by ordering and hierarchy - the best items first, a long day a scroll rather than a truncation ([digest.md](digest.md)) - not by the ceiling. Supply, the score and `max_per_source` decide the shape of a day, and `run.safety_ceiling_per_run` bounds its size - a number that began as a crash guard, was overtaken by supply, and is now knowingly an editorial cap, brought down from 160 to 80 on 2026-09-05 so a day carries fewer but better-chosen stories ([../architecture/sources/freshness.md](../architecture/sources/freshness.md)). Making the day bigger is still a source-diversity question first: the ceiling binds where 27 percent of a run was being spent on sources that could not be read.
+Note what is *not* what bounds a day: a reader's clock. Skimmability is held by ordering and hierarchy - the best items first, a long day a scroll rather than a truncation ([digest.md](digest.md)) - not by the ceiling. Supply, the score and `max_per_source` decide the shape of a day, and `run.safety_ceiling_per_run` bounds its size - a number that began as a crash guard, was overtaken by supply, and is now knowingly an editorial cap, brought down from 160 to 80 on 2026-09-05 so a day carries fewer but better-chosen stories ([../architecture/sources/freshness.md](../architecture/sources/freshness.md)). Making the day bigger is still a source-diversity question first: the ceiling binds where 27 percent of a run was being spent on sources that could not be read.
 
 ## Design rationale
 

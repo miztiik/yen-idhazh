@@ -1,13 +1,12 @@
-# What gets summarized, and at what length
+# What gets summarized
 
-**Last Updated**: 2026-11-16
+**Last Updated**: 2026-11-17
 
 The knobs that decide how much of an article is read, whether it is summarized
-at all, how many words the summary is asked for, and which length ratio a
-training candidate must clear. They are one chain of arithmetic rather than a list: the
-truncation cap bounds what the model sees, the band floor asks for a length, and
-the compression ceiling derives the floor under both. What a knob is, and what
-is not one, is [../config.md](../config.md).
+at all, and which length ratio a training candidate must clear. Nothing here
+asks the model for a length: the truncation cap bounds what the model sees, and
+the summary and the headline publish exactly as the model wrote them. What a
+knob is, and what is not one, is [../config.md](../config.md).
 
 ## What extraction records, and what it refuses
 
@@ -37,7 +36,7 @@ it. What it costs, measured over the 31 days to 2026-09-24: 196 short items
 published, and 159 of them came from three hosts that are now retired. The live
 cost is the other 37 - about one card a day out of 343, from 17 feeds, none of
 them losing more than 5 over the month. Every one of those bodies held between
-35 and 59 words against a brief floor of 60, so the card carried a headline and
+35 and 59 words against `extract.min_source_words` of 60, so the card carried a headline and
 almost no article. None were on a feed declared `abstract`, so the guard below
 spared nothing; it is insurance for a feed nobody has registered yet.
 
@@ -51,19 +50,12 @@ article. The signal is recorded on the row either way; what the form changes is
 the consequence, never the fact. Which feeds declare that form is
 [source-lifecycle.md](source-lifecycle.md#a-curator-may-declare-a-feed-publishes-abstracts).
 
-`extract.min_source_words` marks the brief tier. It does not reject the item.
+`extract.min_source_words` is the shortest body, in words, that stops carrying
+`too_short`. A shorter one is also recorded as `brief` on its article, which
+nothing reads. It is a plain number: nothing derives it from another setting. It
+counts the **source body**, before `extract.truncation_cap_tokens` cuts it.
 
-## The brief floor is derived, not chosen
-
-`extract.min_source_words` is
-`summarize.bands[0].target_words_min / evaluation.brief_compression_ceiling`.
-With the defaults, that is `30 / 0.5 = 60`. An `AppConfig` validator refuses a
-config where the three values disagree.
-
-`config.summarize.bands` starts with the brief band `{0, 30, 45}`. The next band
-starts at 60 words. `evaluation.brief_compression_ceiling` is 0.5 and derives
-the extraction floor above. It is not a copied-text check. The band a summary is
-asked for is chosen by the article's length, not by its quality.
+## What training reads
 
 `evaluation.corpus_compression_ceiling` retains the existing training cutoff:
 a candidate's summary/source word ratio must be strictly below 0.75. Equality
@@ -71,89 +63,46 @@ still fails. This does not reject a published summary or measure copied text.
 Historical `verbatim_reject_ceiling` configuration reads under the new name,
 preserving its value; a current name takes precedence when both are present.
 
-Every `min_source_words` in this file - `extract.min_source_words` and each
-`summarize.bands[].min_source_words` - counts the **source body**, before
-`extract.truncation_cap_tokens` cuts it. One name, one meaning. Reading the top
-band off the post-cap count is what left it empty until 2026-08-26, because at
-the cap of 2500 committed then that count stopped at `int(2500 / 1.3) = 1923`
-words and that band started at 2000
-([../../architecture/summarize/prompt.md](../../architecture/summarize/prompt.md)).
-No rung floor may ever sit above `int(truncation_cap_tokens / 1.3)` - the model
-is handed that many words and a rung above it would ask for a summary of text it
-never saw.
+## No length decides what publishes
 
-## The ladder, and the copy of it the console keeps
-
-**The ladder has five rungs, and the count has moved three times.** It gained a
-fifth rung at 3000 words on 2026-08-29 and a sixth at 5000 on 2026-09-09, and on
-2026-09-10 the two longest collapsed into one that starts at 4000 - so five
-again, at different places. The reshape was editorial rather than mechanical:
-the rungs above 700 were set by asking what an abstract is worth at each source
-length, not by dividing the cut point, and the top of the ladder came down from
-230 words to 200. Above 4000 words every article gets the same evidence anyway,
-because the cut point hands the model 7,692 words whatever the source holds
-([../../architecture/summarize/prompt.md](../../architecture/summarize/prompt.md#one-ask-per-article-length)).
-
-**The same change deleted `evaluation.summary_words_min` and
-`evaluation.summary_words_max`.** They were a single global range every band's
-ask had to fit inside, so the ladder could only ever request what the widest
-global window already allowed, and a summary outside that window was thrown
-away. Length now belongs to the band that asked for it. A config still
-carrying the two old keys loads - an `EvaluationConfig` before-validator drops
-them - so a payload an earlier run wrote is still readable.
-
-**No length decides whether a summary publishes.** A reply is published exactly
-as the model wrote it: nothing trims it, nothing fails it for being short or
-long, and the decoder's grammar bounds neither the summary nor the headline.
-`summarize.length_policy` holds two knobs, `overshoot_ratio` and
-`overshoot_words`, and they only size the room the output budget leaves past a
-band's ask
+A reply is published exactly as the model wrote it. The prompt states no length,
+nothing trims a reply, nothing fails one for being short or long, and the
+decoder's grammar bounds neither the summary nor the headline. A reply ends
+early only at the model file's response limit
 ([../../architecture/summarize/prompt.md](../../architecture/summarize/prompt.md#a-reply-is-published-as-the-model-wrote-it)).
 
-**The published surface keeps a second copy of that ladder, and it drifted.**
-`SUMMARIZE_DEFAULTS` in `frontend/src/lib/server/config.ts` is the value the
-console falls back to when `config/idhazh.json` cannot be read, and those bands
-draw the compression plot's target zone and set its y axis. Until 2026-08-29 it
-carried **three** rungs against the real five, and the first of them started at
-0 words asking for 50 to 90:
+The published console draws how long summaries came out as a plain
+distribution, per run, with no target to measure it against
+([../console-design/what-the-quality-and-source-panels-draw.md](../console-design/what-the-quality-and-source-panels-draw.md)).
 
-| | `config/idhazh.json` on 2026-08-29 | `SUMMARIZE_DEFAULTS` before 2026-08-29 |
-| --- | --- | --- |
-| rungs | 5 | 3 |
-| first rung | 0 words -> 30-45 | 0 words -> 50-90 |
-| brief band | present | **absent** |
-| top rung | 3000 words -> 150-230 | 2000 words -> 110-200 |
+## What the prompt states
 
-So under the fallback a 30-word note was asked for 50 to 90 words - more words
-than the article holds - and the two longest rungs collapsed into one. It had
-never fired, because the file it stands in for is committed and read at build
-time, which is exactly why nothing noticed.
+The one number the summary prompt states is `summarize.max_verbatim_words`, the
+longest quotation it allows. It is an instruction to the model, not a measurement
+of copied text and not a rejection threshold. `summarize.asks_for_a_visual_plan`
+is stamped with the prompt inputs and sizes nothing: a pipeline-test case that
+runs the summary-only path sets it false beside an empty
+`visuals.enabled_kinds`, and that empty list is what takes the plan fields off the
+second call's grammar.
 
-**This is the drift the rejected-alternatives table on
-[../config.md](../config.md#rejected-alternatives) already forbids**, in
-the row that refuses copying config into the published directory because two
-copies of one file are free to drift with nothing gating them. The copy is in
-code rather than in a published file, so no gate caught it. The rungs were
-corrected as of 2026-08-29, went to six on 2026-09-09 and back to five on
-2026-09-10, and the copy is now pinned:
-`backend/tests/contracts/test_taxonomy_and_prompts.py::test_the_console_fallback_bands_match_the_committed_ladder`
-reads the committed bands and the `SUMMARIZE_DEFAULTS` literal and fails when
-they disagree, printing both ladders. The guard sits with the writer because a
-frontend test cannot import that module without dragging in the SvelteKit
-runtime - it reads `node:fs`.
+## Design rationale
 
-**Whether the fallback should exist at all is still open.** Section 1a of
-`CLAUDE.md` says a fresh clone runs on the defaults, so it stays. One question
-settles it: does any build ever run with `config/idhazh.json` unreadable? If the
-answer is no, `summarizeConfig` should throw rather than guess, and the
-defaults go with it - a value pinned to the file it stands in for is a
-consolation prize next to not needing the copy.
+**No length is asked of the model and none is checked.** Replaying one CI run's
+66 real replies through the length rules the build then had (2026-11-16, each
+article's band estimated from its prompt text): 11 were dropped for passing the
+character cap, 38 of the 55 that published were trimmed to a median 47 percent of
+their text, and 7 headlines were replaced for falling outside 6 to 14 words. Each
+cut deleted words the model wrote, and the reader could not see that anything
+was missing. A band nobody asks the model for indicates nothing, so the per-size
+bands, the overshoot policy and the title word range were deleted rather than
+kept as hints. Rejected: keeping the bands as a line on the console, which would
+be a number with no producer behind it.
 
 ## See also
 
 - [../config.md](../config.md) - what a knob is, and what is not one.
-- [../evaluation.md](../evaluation.md) - the bands and thresholds these knobs feed.
+- [../evaluation.md](../evaluation.md) - the confidence bands and the thresholds a summary is scored against.
 - [../summary-metrics.md](../summary-metrics.md) - what a column on the eval row means.
-- [../../architecture/summarize/prompt.md](../../architecture/summarize/prompt.md) - the prompt the ladder is asked through.
+- [../../architecture/summarize/prompt.md](../../architecture/summarize/prompt.md) - the prompt and what it asks.
 - [../../architecture/extraction/](../../architecture/extraction/) - where the signals above are computed.
-- [model-file.md](model-file.md) - the window and the decode settings, which are per model where the ladder is not.
+- [model-file.md](model-file.md) - the window, the response limit and the decode settings, which are per model.

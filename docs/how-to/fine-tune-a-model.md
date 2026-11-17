@@ -1,6 +1,6 @@
 # Fine-tune a summarizer
 
-**Last Updated**: 2026-11-16
+**Last Updated**: 2026-11-17
 
 How the training corpus is built, what maintains it, and what a person does with
 it. Training itself does not happen here: the runner has no GPU, 4 vCPU and a
@@ -58,7 +58,7 @@ first.
 
 ### The assistant turn is the published output, re-validated
 
-Not the model's raw reply. It is rebuilt through `summarize.draft_model`, the
+Not the model's raw reply. It is rebuilt through `summarize.SummaryDraft`, the
 same shape the constrained decoder is held to, and dumped in that model's field
 order - `title`, `summary`. Field order is decode order under a grammar, so a
 target written in sorted order would teach a sequence the decoder is not
@@ -81,7 +81,7 @@ each assistant turn and moved no other byte.
 points.** `messages[0]` is recorded rather than rendered - it is what the run
 actually sent - so rewriting it would make the row a claim about a prompt that
 was never used. The target is the opposite case: it is already re-derived
-through `draft_model` at harvest, so re-deriving it is what the producer itself
+through `SummaryDraft` at harvest, so re-deriving it is what the producer itself
 does. What that leaves is a prompt asking for a section the target no longer
 has, on every row harvested before 2026-09-24, which is what `stats` means by
 "the prompt has moved since this window was harvested". Those rows still have to
@@ -371,12 +371,10 @@ only way they differ:
  rewriting every committed digest is a join of its own, and the window refills
  from days written since.
  2. **Nothing about the page is reconstructed.** The body goes through the same
- extractor a run uses, so `brief`, the source form and the length band are
- computed from the bytes that came back. This is what a rebuild from an
- expired `evidence-*` artifact could not do: `EvidenceItem` carries no
- `brief`, and reconstructing it from the two recoverable terms disagrees with
- the recorded value on 3 of 229 items (measured 2026-08-29) - a guessed
- length band, which is the failure this corpus exists to prevent.
+ extractor a run uses, so the source form is computed from the bytes that came
+ back. This is what a rebuild from an expired `evidence-*` artifact could not
+ do: `EvidenceItem` carries no `source_form`, so the user turn would be a guess,
+ and a guessed turn is the failure this corpus exists to prevent.
  3. **Lengths are measured again** against the body that came back. Its current
  compression ratio must clear the same corpus cutoff. This is not a claim that
  the new body still supports every published sentence; no replacement
@@ -447,25 +445,22 @@ python backend/utilities/reference_set.py check # refuse what a run would refuse
 python backend/utilities/reference_set.py check --write # emit reference.jsonl
 ```
 
-- **`queue`** samples articles out of the committed corpus, stratified by
- word-count band, source form and vertical. It matches the current prompt
- exactly. When bands share identical instructions, it selects among them using
- the stored user-turn word count (`CorpusRow.source_words`), not an inferred
- pre-truncation article length. A unique prompt match retains its recorded band.
- It is deterministic and extends rather than replaces, so running it again after the corpus rolls
- tops the queue up instead of discarding an afternoon of authoring. The test
- slice is a proportional share of every stratum, not the tail: measured
- 2026-08-29 over 500 rows, the 100 held back span all five bands (10, 36, 37,
- 12, 5) and all five verticals.
-- **`check`** holds each answer to the two rails production uses - the shape the
- constrained decoder is allowed to emit, and the selected reference band's word
- range - then refuses a `url_key` on both sides of the train/test line,
- and refuses an article the training window also holds.
+- **`queue`** samples articles out of the committed corpus, stratified by source
+ length (each stratum a doubling of the user turn's word count,
+ `CorpusRow.source_words`), source form and vertical. It keeps only rows written
+ under the current prompt. It is deterministic and extends rather than replaces,
+ so running it again after the corpus rolls tops the queue up instead of
+ discarding an afternoon of authoring. The test slice is a proportional share of
+ every stratum, not the tail.
+- **`check`** holds each answer to the rail production uses - the shape the
+ constrained decoder is allowed to emit - then refuses a `url_key` on both sides
+ of the train/test line, and refuses an article the training window also holds.
+ No length is asked of the model, so none is checked.
 
-**The queue never carries the system prompt.** It carries the band, and `check`
-re-renders the prompt from it when it builds the row. That is the same
-identity-by-construction rule the corpus follows: a copy of the prompt on 500
-lines is 1.9 MB and can outlive a prompt edit, where a band cannot.
+**The queue never carries the system prompt.** `check` re-renders it from the
+live prompt when it builds the row. That is the same identity-by-construction
+rule the corpus follows: a copy of the prompt on 500 lines is 1.9 MB and can
+outlive a prompt edit, where a render cannot.
 
 **One article gets one target.** The reference set and the training window must
 share no `url_key`. Left overlapping, the notebook concatenates both files and
@@ -514,8 +509,9 @@ of 77 MB.
 the pipeline could have sent and an answer it could have returned, and the
 corpus holds single-call rows - so the sum it has to cover is 997 tokens of
 prompt overhead, up to 30,238 for the longest and hardest-tokenizing article
-`extract.truncation_cap_tokens` lets through, and 4,735 of answer: **35,970 of the
-committed 49,152, or 73 percent**. The serving window is wider because it holds
+`extract.truncation_cap_tokens` lets through, and 8,192 of answer, the response
+limit the model file names: **39,427 of the
+committed 49,152, or 80 percent**. The serving window is wider because it holds
 the two-call pair, which nothing trains on. Both windows are still asserted in
 `backend/tests/contracts/` and against the cap, so a later move of the cap fails
 rather than drifts - **against two sums now rather than one**, because the two

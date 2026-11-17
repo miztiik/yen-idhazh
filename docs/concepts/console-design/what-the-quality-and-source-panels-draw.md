@@ -1,6 +1,6 @@
 # What the quality and source panels draw
 
-**Last Updated**: 2026-11-15
+**Last Updated**: 2026-11-17
 
 The panels that report what the model wrote and how the sources behaved: the
 retained cards and measurements on `/console/model/`, and
@@ -59,10 +59,10 @@ the committed truncation cap no prompt can reach the window the machine reads
 with, so the count is zero by arithmetic rather than by luck. It is on the page
 so that the day the cap moves, the number that says the move went too far is
 already being printed. The longest single-call prompt the committed cap can
-produce sizes at 35,970 tokens, 55 percent of the 65,536 window
+produce sizes at 39,427 tokens, 60 percent of the 65,536 window
 ([../../reference/pipeline-cost.md](../../reference/pipeline-cost.md)). **What
 that window is held open for is the two-call pair, which this counter does not
-read** - it sizes at 64,699 tokens
+read** - it sizes at 64,403 tokens
 ([../../architecture/summarize/prompt.md](../../architecture/summarize/prompt.md)),
 and the pair has an assertion of its own.
 
@@ -126,36 +126,30 @@ derive and draw each one after the browser read. Checking happens after writing
 and is not another model-writing clock. Nonpositive or missing readings remain
 counted as untimed, not instant.
 
-## Compression is three marks a run, and the band prints its bounds
+## Summary length is three marks a run
 
 `How long the summaries came out` draws one column per run: the shortest summary
 it wrote, the middle one and the longest.
 
 The declared `summaryLengthQuery` reads the score ledger in the browser.
-`model/summary-length.ts` calls `model/work.ts::runLengths` for those endpoints
-and the requested bounds. Its native middle is the upper-middle recorded length;
-recorded zero remains a length. A run with no measured summary length has no
-column. Different runs remain separate even when they name the same article.
-Recorded compression ratios are a separate measure, not a distance from a band.
+`model/summary-length.ts` calls `model/work.ts::runLengths` for those endpoints.
+Its native middle is the upper-middle recorded length; recorded zero remains a
+length. A run with no measured summary length has no column. Different runs
+remain separate even when they name the same article. Recorded compression
+ratios are a separate measure.
 
 **A mark per summary cannot be drawn, and the block is the reason.** Thousands of
 marks in one colour render their dense middle as a solid area, so the only marks
-anybody acts on - a summary of three words, or one at twice the length that was
-asked for - are the ones the block hides. Three marks a run keep both ends and
-lose the block.
+anybody acts on - a summary of three words, or one far longer than the rest - are
+the ones the block hides. Three marks a run keep both ends and lose the block.
 
 **Per run and never per day.** A day holds up to five runs, and a run is one
 model reading one set of articles under one set of settings, so it is the
 smallest thing on this page that a change can be attributed to.
 
-**The band's bounds print as numbers beside the chart.** A shaded region nobody
-can read a bound off is a decoration, and this one is a setting somebody chose.
-The band drawn behind each column uses the configured ladder through each
-article's measured pre-cap length, falling back to surviving length only when
-pre-cap length is absent. The highest rung that length reaches supplies its
-requested bounds. A missing ladder or an unreached first rung leaves the ask
-unknown, not zero. Those bounds describe the requests, not daily inside/short/
-long bins or a distance-ranked outlier list.
+**Nothing on the chart says what a summary should have been.** The model is asked
+for no length, so the chart draws no target line, no shaded band and no
+short-or-long verdict: it reports what came out, and the reader judges it.
 
 ## A countdown is drawn as an area, never as a fraction in a chip
 

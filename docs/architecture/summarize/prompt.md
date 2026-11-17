@@ -1,14 +1,14 @@
 # The Summarizer Prompt
 
-**Last Updated**: 2026-11-16
+**Last Updated**: 2026-11-17
 
 What the model is asked to produce, how the two calls share context, and what the pipeline validates. Prompt wording is not a security control: sanitization and validated output shapes enforce the boundary.
 
 ## The prompt is a template, not a text
 
-Templates under `config/prompts/` may take their word ranges, title limits and
-quotation limits from configuration. Use strict substitution so a missing or
-renamed value fails rather than reaching the model as an unresolved placeholder.
+Templates under `config/prompts/` may take their quotation limit from
+configuration. Use strict substitution so a missing or renamed value fails
+rather than reaching the model as an unresolved placeholder.
 
 `config/idhazh.json.prompt_files` selects each production task's file, relative
 to the selected config root (`CONFIG_ROOT` in a candidate action). Validate the
@@ -34,11 +34,11 @@ whitespace trimming. The app config's additive reader uses the declared task pat
 authored input omits `prompt_files`; new authored configuration names them all.
 The standalone summary, corpus and reference-set readers use A5, shared with the
 [summary generator's default](../../reference/summary-generator-api.md).
-It emits `title` and `summary` and has no word-band placeholders, so these
-instructions are identical for every article length. Configured templates may
-still use the validated substitution values.
-Reference sampling's length-band handling is described in the
-[reference-set procedure](../../how-to/fine-tune-a-model.md#the-reference-set).
+It emits `title` and `summary`, and its instructions are identical for every
+article. Configured templates may still use the validated substitution values.
+Reference sampling spreads articles by source length, as the
+[reference-set procedure](../../how-to/fine-tune-a-model.md#the-reference-set)
+describes.
 The digest retains its separate A2 and A4 instructions;
 the comparison judge and its stamp use A6's full rendered instructions.
 Offline judge capture and saved-evidence validation use that same selected file,
@@ -53,22 +53,11 @@ upstream question construction.
 
 Keep editorial wording shared across models. Model-specific turn markers and template behavior belong with the model entry, not in a second instruction set. [Model boundary](model-boundary.md) owns compatibility checks.
 
-## One ask per article length
-
-`summarize.bands` is an increasing ladder of source-length thresholds and requested summary lengths. Choose the highest band the source reaches; a brief item uses the first band.
-
-- Start the first band at zero and reject duplicate or descending thresholds.
-- Choose using source-body length before truncation. `Article.band_source_words` falls back to the available text length for an older payload without that count.
-- Keep the extraction floor, brief compression rule and first band's request consistent.
-- Check that configured thresholds remain reachable under the extraction and context rules.
-
-The active values live in `config/idhazh.json`; [summary length](../../concepts/config/summary-length.md) owns their configuration. Do not copy model-specific tuning values into generic tests.
-
 ## A reply is published as the model wrote it
 
-No length decides whether a reply publishes, and nothing shortens one. A reply that holds its shape - a `title` and a `summary`, neither empty - is published word for word, however long or short. Its words meet one check, the [address rule](#the-shape-is-not-the-whole-check); its whitespace is tidied as [the next section](#paragraphs-follow-the-models-prose) says. A summary that is empty once that tidying is done fails the item as `bad_shape`.
+No length decides whether a reply publishes, and nothing shortens one. The prompt asks for no length either. A reply that holds its shape - a `title` and a `summary`, neither empty - is published word for word, however long or short. Its words meet one check, the [address rule](#the-shape-is-not-the-whole-check); its whitespace is tidied as [the next section](#paragraphs-follow-the-models-prose) says. A summary that is empty once that tidying is done fails the item as `bad_shape`.
 
-The decoder's grammar bounds neither field above, so a long reply is neither cut off mid-field nor refused. Only the call's output budget ([below](#the-output-budget-is-derived-not-picked)) ends one early. There is no automatic retry.
+The decoder's grammar bounds neither field above, so a long reply is neither cut off mid-field nor refused. Only the call's response limit ([below](#the-output-budget)) ends one early. There is no automatic retry.
 
 Do not add a cut, a floor or a character limit to a reply. A sentence splitter cannot find a safe cut, because abbreviations, decimals and percentages contain periods, and a reader can see that a summary is long or short but cannot see that part of it was deleted.
 
@@ -91,7 +80,7 @@ The label request restricts quantity references to printed candidate ids.
 New mention and proposal citations contain only exact source text in `surface`;
 code computes their locations. Date rows remain source evidence, but receive no first-pass quantity
 judgments. Empty quantity pools permit only an empty label list; no selection
-is mandatory. Output budgets use the widest current reply shape rather than
+is mandatory. The label call's output budget uses the widest current reply shape rather than
 the narrower request.
 
 ## The second call writes this summary, and the article is read once
@@ -161,7 +150,7 @@ validate their original reference list; the persisted plan shape is unchanged.
 
 ### Every instruction sits in front of the article
 
-Put shared instructions in one stable system turn: element labels, summary rules and visual-plan rules. Keep only item-dependent requests, such as the chosen word range, in the continuation. Derive requested field names from the reply shape.
+Put shared instructions in one stable system turn: element labels, summary rules and visual-plan rules. Keep only item-dependent requests, such as the finalized evidence and the reply fields, in the continuation. Derive requested field names from the reply shape.
 
 Fenced headline and article text remain untrusted data. Do not let either become a system instruction, shell argument, filename or fetch destination. Scope an instruction to the job it governs: a labeling rule against inventing numbers must not forbid the summary from reporting a source figure.
 
@@ -224,17 +213,18 @@ Decode the summary before the visual plan. If output ends during the plan, `reco
 
 Never recover a partially written summary. A visual plan may cite only validated source elements, not a figure invented by the summary it follows.
 
-### The output budget is derived, not picked
+### The output budget
 
-When the model file does not declare `sampling.max_tokens`, derive reply budgets
-from the schema's bounded arrays and strings, and from a word count in config
-for the prose fields, which carry no length bound. An explicit limit replaces
-those budgets on each request, including continuations; see
+The label call's budget is derived from its schema: every array in the shape
+carries a `maxItems` and every decoded string a `maxLength`, so the widest reply
+is arithmetic. The summarize-and-plan call has nothing to derive. Its two prose
+fields carry no length bound, so it runs under the model file's
+`sampling.max_tokens`, or `DEFAULT_MAX_TOKENS` where the file names none, with a
+plan or without one. An explicit `max_tokens` also replaces the label call's
+derived budget on each request, including continuations; see
 [model-file.md](../../concepts/config/model-file.md#design-rationale).
-Both calls use the shared JSON-width calculation, but their character-to-token
-conversions differ because their outputs differ.
 
-The summarize-and-plan reply contains prose and bounded structure. The prose share is a reservation, not a limit: a reply that writes more spends the room the structure leaves. The label reply uses a measured output-density estimate. Name the tokenizer and evidence behind that estimate; it is not a mathematical guarantee for every possible string.
+The label reply uses a measured output-density estimate. Name the tokenizer and evidence behind that estimate; it is not a mathematical guarantee for every possible string.
 
 The label reply also becomes part of the second prompt. Count it in both positions when checking the context window. Do not silently clamp a reply budget to available context. Report a window failure at the call site.
 
@@ -250,14 +240,17 @@ label reply, the shared guide and the finalized evidence menu. Cached tokens
 still occupy context; do not omit them or add the first reply's maximum budget
 again. Check the first call's own prompt and response allowance separately.
 
-An explicit `max_tokens` replaces the shape-derived budget. Summary word ranges
-are editorial requests, not those runtime token limits. The measurement utility
-reports complete-request capacity using the effective cap before applying its
-optional diagnostic decode cap, so a short timing run cannot claim more
-production space than the configured request has.
+The measurement utility reports complete-request capacity using the effective
+cap before applying its optional diagnostic decode cap, so a short timing run
+cannot claim more production space than the configured request has.
 
-The existing pre-label gate remains an estimate over measured word/menu rates
-and derived reply budgets, not a certificate for every finalized request.
+The existing pre-label gate remains an estimate over measured word/menu rates,
+the label call's derived budget and the summary call's response limit, not a
+certificate for every finalized request. At the committed window (65,536 tokens),
+cap (26,000 tokens) and menu (256 rows) it sums to 64,403 tokens for the longest
+article the extractor passes, 1,133 under the window (computed 2026-11-17); a
+model file that names a larger `max_tokens` narrows that margin one token for
+one.
 Conservative byte ceilings are not observed token counts. A bounded check with
 retained production replies and a constructed source-cap input measures those
 requests only; a repeated long source and its historical reply do not establish
@@ -347,7 +340,7 @@ Persisted spans, source hashes and re-slicing checks remain intact: they validat
 the evidence rather than merely help debugging. Summary instructions and the
 shared-prefix continuation are unchanged.
 
-A stable prefix reduces repeated reading without treating prompt wording as a control. Per-band requests fit different source lengths. Summary-first decoding protects the reader's primary content when visual planning cannot finish. Model-specific transport declarations keep shared editorial instructions testable across models.
+A stable prefix reduces repeated reading without treating prompt wording as a control. Summary-first decoding protects the reader's primary content when visual planning cannot finish. Model-specific transport declarations keep shared editorial instructions testable across models.
 
 Task paths belong to the selected configuration so a candidate never reads
 instructions from the original checkout. One directory holds distinct products
@@ -364,5 +357,5 @@ or useful generated visuals; those require both fresh production calls.
 - [model-boundary.md](model-boundary.md) - model and runtime compatibility.
 - [throughput.md](throughput.md) - request scheduling and rates.
 - [../sources/trust-boundary.md](../sources/trust-boundary.md) - untrusted input controls.
-- [../../concepts/config/summary-length.md](../../concepts/config/summary-length.md) - length configuration.
+- [../../concepts/config/summary-length.md](../../concepts/config/summary-length.md) - what gets summarized, and why no length is asked.
 - [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md) - budget measurements.

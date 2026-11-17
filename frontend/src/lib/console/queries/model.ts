@@ -33,6 +33,6 @@ export const scoreCostQuery = {
 
 export const summaryLengthQuery = {
 	name: 'summaryLengthQuery', ledger: 'summary-quality-evals',
-	columns: ['date', 'run_id', 'model_id', 'summary_words', 'source_words_before_cap', 'source_words', 'compression'],
+	columns: ['date', 'run_id', 'model_id', 'summary_words', 'compression'],
 	span: 'window'
 } as const satisfies PanelQuery;

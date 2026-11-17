@@ -9,19 +9,18 @@ have, and commits the result. A reference a model wrote is not a reference.
     python backend/utilities/reference_set.py check --write
 
 `queue` turns an unstructured task into a checked one. It samples articles out of
-the committed corpus, stratified by length band, source form and vertical,
-and writes one line per article carrying the exact system turn and the exact
-user turn a run would have sent. The authoring session fills in `assistant` and
-nothing else, so a reference row cannot be written against a prompt we do not
-serve - the same oracle `idhazh.corpus` uses, for the same reason.
+the committed corpus, stratified by source length, source form and vertical,
+and writes one line per article carrying the exact user turn a run would have
+sent. The authoring session fills in `assistant` and nothing else, so a
+reference row cannot be written against a prompt we do not serve - the same
+oracle `idhazh.corpus` uses, for the same reason.
 
 `check` reads the queue back and refuses what a run would refuse: a target the
-constrained decoder would reject, a summary outside its own band's word range, an
-article that is in the training window as well, or a `url_key` on both sides of
-the train/test line. With `--write` it emits the rows that passed to
-`tests/fixtures/reference/reference.jsonl`, in the same `CorpusRow` shape as
-`corpus/corpus.jsonl` so a notebook can concatenate the two files and nothing has
-to know which is which.
+constrained decoder would reject, an article that is in the training window as
+well, or a `url_key` on both sides of the train/test line. With `--write` it
+emits the rows that passed to `tests/fixtures/reference/reference.jsonl`, in the
+same `CorpusRow` shape as `corpus/corpus.jsonl` so a notebook can concatenate
+the two files and nothing has to know which is which.
 
 **The reference set and the training window must not share an article.** They are
 different files on different lifecycles (plan section 4), but disjointness is a
@@ -63,21 +62,17 @@ TEST: Final = "test"
 class Task(NamedTuple):
     """One article waiting for a summary, plus what the run would have asked for.
 
-    The system turn is deliberately absent: it is 3.8 KB of template that
-    `band` already determines, so carrying it would put a second copy of the
-    prompt on all 500 lines and let a stale copy outlive a prompt edit. `check`
-    re-renders it from `band` at the moment it builds the row - the same
-    identity-by-construction rule `idhazh.corpus` follows. What the author needs
-    from it is the word range, and that is here.
+    The system turn is deliberately absent: it is 3.8 KB of template, so
+    carrying it would put a second copy of the prompt on all 500 lines and let a
+    stale copy outlive a prompt edit. `check` re-renders it at the moment it
+    builds the row - the same identity-by-construction rule `idhazh.corpus`
+    follows.
     """
 
     url_key: str
     date: str
     vertical: str
     slice_: str
-    band: int
-    target_words_min: int
-    target_words_max: int
     source_form: str
     user: str
     assistant: str | None
@@ -88,9 +83,6 @@ class Task(NamedTuple):
             "date": self.date,
             "vertical": self.vertical,
             "slice": self.slice_,
-            "band": self.band,
-            "target_words_min": self.target_words_min,
-            "target_words_max": self.target_words_max,
             "source_form": self.source_form,
             "user": self.user,
             "assistant": self.assistant,
@@ -103,9 +95,6 @@ class Task(NamedTuple):
             date=payload["date"],
             vertical=payload["vertical"],
             slice_=payload["slice"],
-            band=payload["band"],
-            target_words_min=payload["target_words_min"],
-            target_words_max=payload["target_words_max"],
             source_form=payload["source_form"],
             user=payload["user"],
             assistant=payload.get("assistant"),
@@ -155,62 +144,26 @@ def write_queue(reference_dir: Path, tasks: Sequence[Task]) -> None:
 # --- reading the stratification off a row ----------------------------------
 
 
-def band_prompts(
-    prompt_config: SummarizeConfig,
-    *,
-    prompt_files: PromptFilesConfig | None = None,
-    config_dir: Path = config.DEFAULT_CONFIG_DIR,
-) -> list[str]:
-    """The rendered system turn for each band, in band order.
-
-    Match the exact instructions a run would have sent, without parsing prose.
-    A shared prompt without band placeholders produces identical entries.
-    """
-    return [
-        summarize.system_prompt(
-            prompt_config,
-            source_words=band.min_source_words,
-            prompt_files=prompt_files,
-            config_dir=config_dir,
-        )
-        for band in prompt_config.bands
-    ]
-
-
-def band_of(
-    system: str,
-    prompts: Sequence[str],
-    *,
-    source_words: int,
-    prompt_config: SummarizeConfig,
-) -> int | None:
-    """Match live instructions, using stored source length when bands share them.
-
-    The stored user-turn length selects a reference stratum, not a reconstruction
-    of the original pre-truncation word count.
-    """
-    matches = [index for index, rendered in enumerate(prompts) if rendered == system]
-    if not matches:
-        return None
-    return next(
-        (
-            index
-            for index in reversed(matches)
-            if prompt_config.bands[index].min_source_words <= source_words
-        ),
-        matches[0],
-    )
-
-
 def source_form_of(user: str) -> str:
     """The curator-declared form, read off the line `user_turn` writes first."""
     head = user.split("\n", 1)[0]
     return head.removeprefix(_FORM_PREFIX).strip() if head.startswith(_FORM_PREFIX) else "unknown"
 
 
+def length_stratum(user: str) -> int:
+    """Which doubling of length the user turn falls in: 0, 1, 2-3, 4-7, 8-15 words and so on.
+
+    Read off the turn itself, the way `CorpusRow.source_words` counts it, so the
+    stratum cannot disagree with the text the author is about to answer. Doubling
+    spreads a sample across short notes and long reads without a list of cut
+    points to maintain.
+    """
+    return len(user.split()).bit_length()
+
+
 def stratum(task: Task) -> tuple[str, int, str]:
-    """Spread samples across length bands, source forms and verticals."""
-    return (task.vertical, task.band, task.source_form)
+    """Spread samples across source lengths, source forms and verticals."""
+    return (task.vertical, length_stratum(task.user), task.source_form)
 
 
 # --- queue -----------------------------------------------------------------
@@ -223,32 +176,28 @@ def _tasks_from_corpus(
     prompt_files: PromptFilesConfig | None = None,
     config_dir: Path = config.DEFAULT_CONFIG_DIR,
 ) -> list[Task]:
-    """Every corpus row that still matches a live band, as an unassigned task."""
-    prompts = band_prompts(prompt_config, prompt_files=prompt_files, config_dir=config_dir)
-    found: list[Task] = []
-    for row in rows:
-        system, user = row.messages[0].content, row.messages[1].content
-        band = band_of(
-            system, prompts, source_words=row.source_words, prompt_config=prompt_config
+    """Every corpus row written under the live prompt, as an unassigned task.
+
+    A row written under a prompt that has since moved is dropped rather than
+    guessed at: its user turn is not one a run would send now, so it is not a
+    task.
+    """
+    live = summarize.system_prompt(
+        prompt_config, prompt_files=prompt_files, config_dir=config_dir
+    )
+    return [
+        Task(
+            url_key=row.url_key,
+            date=row.date,
+            vertical=row.vertical,
+            slice_=TRAIN,
+            source_form=source_form_of(row.user),
+            user=row.user,
+            assistant=None,
         )
-        if band is None:
-            continue
-        asked = prompt_config.bands[band]
-        found.append(
-            Task(
-                url_key=row.url_key,
-                date=row.date,
-                vertical=row.vertical,
-                slice_=TRAIN,
-                band=band,
-                target_words_min=asked.target_words_min,
-                target_words_max=asked.target_words_max,
-                source_form=source_form_of(user),
-                user=user,
-                assistant=None,
-            )
-        )
-    return found
+        for row in rows
+        if row.system == live
+    ]
 
 
 def spread(candidates: Sequence[Task], *, want: int) -> list[Task]:
@@ -287,7 +236,7 @@ def assign_slices(tasks: Sequence[Task], *, test_rows: int) -> list[Task]:
     Sorted by stratum first, then strided. Striding the arrival order instead
     would alias: `spread` emits round-robin with a period equal to the number of
     strata, so every k-th task can land in the same stratum every time and the
-    held-back slice ends up measuring one band. Sorting first makes the stride
+    held-back slice ends up measuring one stratum. Sorting first makes the stride
     walk through the strata in proportion to their size, which is what a test
     reference has to do to be a test of anything.
     """
@@ -350,7 +299,7 @@ def queue(
 def _print_spread(tasks: Sequence[Task]) -> None:
     for label, counts in (
         ("slice", Counter(task.slice_ for task in tasks)),
-        ("band", Counter(str(task.band) for task in tasks)),
+        ("length", Counter(str(length_stratum(task.user)) for task in tasks)),
         ("source_form", Counter(task.source_form for task in tasks)),
         ("vertical", Counter(task.vertical for task in tasks)),
     ):
@@ -371,10 +320,9 @@ def target_is_shaped_right(
 ) -> tuple[CorpusRow | None, str | None]:
     """The authored answer as a row, or the reason a run would have refused it.
 
-    Held to the same two rails production is: `draft_model` is the shape the
-    constrained decoder is allowed to emit, and the band's word range is what the
-    system turn asked for. A reference the decoder would reject teaches the model
-    to be rejected; a reference outside its band teaches it to ignore the ask.
+    Held to the rail production is: `SummaryDraft` is the shape the constrained
+    decoder is allowed to emit. A reference the decoder would reject teaches the
+    model to be rejected.
     """
     if not task.assistant:
         return None, "not answered yet"
@@ -383,23 +331,13 @@ def target_is_shaped_right(
     except json.JSONDecodeError as error:
         return None, f"assistant is not JSON: {error.msg}"
 
-    shape = summarize.draft_model(settings.app.summarize)
     try:
-        draft = shape(**drafted)
+        draft = summarize.SummaryDraft(**drafted)
     except (ValidationError, TypeError) as error:
         return None, f"the decoder would reject it: {type(error).__name__}"
 
-    band = settings.app.summarize.bands[task.band]
-    words = len((draft.summary or "").split())
-    if not band.target_words_min <= words <= band.target_words_max:
-        return None, (
-            f"{words} words, outside band {task.band}'s "
-            f"{band.target_words_min}-{band.target_words_max}"
-        )
-
     system = summarize.system_prompt(
         settings.app.summarize,
-        source_words=band.min_source_words,
         prompt_files=settings.app.prompt_files,
         config_dir=settings.config_dir,
     )

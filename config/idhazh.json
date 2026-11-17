@@ -209,7 +209,6 @@
   "evaluation": {
     "band_high_min": 0.8,
     "band_medium_min": 0.5,
-    "brief_compression_ceiling": 0.5,
     "chunk_overlap_words": 150,
     "chunk_words": 900,
     "corpus_compression_ceiling": 0.75,
@@ -366,40 +365,7 @@
   },
   "summarize": {
     "asks_for_a_visual_plan": true,
-    "bands": [
-      {
-        "min_source_words": 0,
-        "target_words_max": 45,
-        "target_words_min": 30
-      },
-      {
-        "min_source_words": 60,
-        "target_words_max": 80,
-        "target_words_min": 45
-      },
-      {
-        "min_source_words": 700,
-        "target_words_max": 130,
-        "target_words_min": 70
-      },
-      {
-        "min_source_words": 2000,
-        "target_words_max": 160,
-        "target_words_min": 95
-      },
-      {
-        "min_source_words": 4000,
-        "target_words_max": 200,
-        "target_words_min": 120
-      }
-    ],
-    "length_policy": {
-      "overshoot_ratio": 0.2,
-      "overshoot_words": 25
-    },
-    "max_verbatim_words": 20,
-    "title_words_max": 14,
-    "title_words_min": 6
+    "max_verbatim_words": 20
   },
   "ui": {
     "archive_page_size": 25,

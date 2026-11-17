@@ -280,9 +280,9 @@ def backfill(corpus_dir: Path, settings: config.Settings, *, items_dir: Path) ->
 
     `items-*` carries a 1-day retention, so this reaches the last day or two of
     runs and no further. `evidence-*` lives 14 days but carries neither
-    `source_form` nor `brief` nor the key points, so a row rebuilt from it would
-    have a system prompt that is a guess - which is the one thing this corpus
-    exists to make impossible.
+    `source_form` nor the key points, so a row rebuilt from it would have a user
+    turn that is a guess - which is the one thing this corpus exists to make
+    impossible.
     """
     if not items_dir.is_dir():
         print(f"{items_dir.as_posix()} is not a directory")
@@ -450,8 +450,8 @@ def refill(
     half of a training row except the article body - and the body has an address.
 
     Nothing is assumed about the page that answers. The body is re-extracted
-    through the extractor a run uses, so `brief`, the source form and the length
-    band are computed rather than guessed, and `corpus.rescored` measures every
+    through the extractor a run uses, so the source form and the source
+    length are computed rather than guessed, and `corpus.rescored` measures every
     counterweight again against that body. An article edited past its summary
     fails the same gate a live run applies; an article that has moved, gone
     behind a paywall or started refusing robots is dropped and counted.

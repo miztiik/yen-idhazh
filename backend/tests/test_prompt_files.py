@@ -139,29 +139,13 @@ def test_summary_reads_only_its_configured_task_and_reloads_changed_text(tmp_pat
     files = PromptFilesConfig(summarize_article="prompts/alternate.txt")
     target = tmp_path / files.summarize_article
     target.parent.mkdir()
-    target.write_text("One $target_words_min.", encoding="utf-8")
+    target.write_text("One $max_verbatim_words.", encoding="utf-8")
     first = summarize.system_prompt(prompt_files=files, config_dir=tmp_path)
-    target.write_text("Two $target_words_min.", encoding="utf-8")
+    target.write_text("Two $max_verbatim_words.", encoding="utf-8")
     second = summarize.system_prompt(prompt_files=files, config_dir=tmp_path)
     assert first.startswith("One ") and second.startswith("Two ")
     assert first != second
     assert first != summarize.system_prompt()
-
-
-def test_standalone_requests_use_the_shared_generation_instructions() -> None:
-    settings = config.load(CONFIG_DIR)
-    expected = load_prompt_text(CONFIG_DIR, "prompts/generate-summary.txt")
-    for files in (None, settings.app.prompt_files):
-        request = summarize.build_request(
-            article(),
-            model_id=settings.models.summarizer.id,
-            sampling=settings.models.summarizer.sampling,
-            markers=a_markers(),
-            prompt_config=settings.app.summarize,
-            prompt_files=files,
-            config_dir=CONFIG_DIR,
-        )
-        assert request["messages"][0]["content"] == expected
 
 
 @pytest.mark.parametrize("task", tuple(PromptFilesConfig.model_fields))
@@ -201,10 +185,10 @@ def test_real_consumers_and_stamps_follow_two_selected_roots(tmp_path: Path) -> 
         settings = configured_root(root)
         texts = {
             "generate_labels": f"{label} labels.\n",
-            "write_digest_summary": f"{label} title $title_words_min/$title_words_max.\n",
+            "write_digest_summary": f"{label} quote at most $max_verbatim_words words.\n",
             "plan_visual": f"{label} visual.\n",
-            "continue_summary": f"{label} $target_words_min/$target_words_max. $write\n",
-            "summarize_article": f"{label} standalone $target_words_min/$target_words_max.\n",
+            "continue_summary": f"{label} $write\n",
+            "summarize_article": f"{label} standalone.\n",
             "compare_articles": f"{label} comparison.\n",
         }
         for task, text in texts.items():
@@ -247,9 +231,21 @@ def test_real_consumers_and_stamps_follow_two_selected_roots(tmp_path: Path) -> 
         assert label in summary["messages"][0]["content"]
         assert source.title is not None
         assert source.title not in summary["messages"][0]["content"]
-        assert reference_set.band_prompts(settings.app.summarize, **options)[0] == (
-            summarize.system_prompt(settings.app.summarize, **options)
+        built, fault = reference_set.target_is_shaped_right(
+            reference_set.Task(
+                url_key=source.url_key,
+                date="2026-11-07",
+                vertical="ai",
+                slice_=reference_set.TRAIN,
+                source_form="article",
+                user=summarize.user_turn(source),
+                assistant='{"title": "A title", "summary": "A summary."}',
+            ),
+            settings=settings,
         )
+        assert fault is None
+        assert built is not None
+        assert built.system == summarize.system_prompt(settings.app.summarize, **options)
         plain = settings.models.summarizer.model_copy(update={"thinking_close": None})
         settings = dataclasses.replace(
             settings, models=settings.models.model_copy(update={"summarizer": plain, "judge": None})

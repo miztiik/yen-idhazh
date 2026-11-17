@@ -1,6 +1,6 @@
 # Console Charts
 
-**Last Updated**: 2026-11-13
+**Last Updated**: 2026-11-17
 
 What console charts must share: sizing, interaction, loading states and honest
 marks for missing measurements. Panel placement and the private build-time
@@ -70,8 +70,8 @@ separate from the failure mix's recorded-row divisor.
 
 Summary length belongs to the native Summaries panel: it shows each run's low,
 middle and high lengths, not daily distance bins or an outlier list. Its
-[drawing contract](../../concepts/console-design/what-the-quality-and-source-panels-draw.md#compression-is-three-marks-a-run-and-the-band-prints-its-bounds)
-names the measured lengths and the requested band.
+[drawing contract](../../concepts/console-design/what-the-quality-and-source-panels-draw.md#summary-length-is-three-marks-a-run)
+names the measured lengths.
 
 ## A share under the floor gets no mark
 

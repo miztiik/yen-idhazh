@@ -102,6 +102,16 @@ UNCAPPED_N_PREDICT: Final = -1
 
 DEFAULT_MAX_TOKENS: Final = 8192
 
+
+def response_limit(sampling: Mapping[str, Any]) -> int:
+    """The most tokens one reply may run to under this model file.
+
+    Its `max_tokens`, or `DEFAULT_MAX_TOKENS` where it names none. It is the limit
+    a request carries when no caller sizes the reply itself, so a reader that
+    needs the limit asks here instead of deriving a second one.
+    """
+    return int(sampling.get("max_tokens", DEFAULT_MAX_TOKENS))
+
 #: What span two owns and span one may not inherit. A key here is stripped when
 #: the thinking span is derived from the answer body, and each one is here for
 #: its own reason rather than as a class.

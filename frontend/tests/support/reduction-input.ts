@@ -1,6 +1,6 @@
 /** One deterministic ledger the one-pass build reductions are measured over.
  *
- * Six repeated reductions became single passes and must move no number on any
+ * Five repeated reductions became single passes and must move no number on any
  * page. That is two claims and they share one input. The parity half compares
  * what the reductions return against `../fixtures/one-pass-golden.json`,
  * captured from the implementation they replaced. The counted half doubles the
@@ -12,7 +12,7 @@
  * (Guardrail #12), and these shapes are reachable from a fixture.
  */
 
-import type { SummaryBand, TelemetryRow } from '../../src/lib/charts/series';
+import type { TelemetryRow } from '../../src/lib/charts/series';
 import { telemetryRow } from './telemetry-row';
 
 /** The sizes one case of the counted-visit oracle is built at.
@@ -207,16 +207,3 @@ export function timings(count: number): number[] {
 	}
 	return found;
 }
-
-/** The band ladder, deliberately NOT in ascending order.
- *
- * The reduction sorts it once instead of once per article, so a ladder already
- * sorted would let a reduction that dropped the sort pass anyway.
- */
-export const BANDS: SummaryBand[] = [
-	{ min_source_words: 2_000, target_words_min: 110, target_words_max: 200 },
-	{ min_source_words: 0, target_words_min: 30, target_words_max: 45 },
-	{ min_source_words: 700, target_words_min: 70, target_words_max: 150 },
-	{ min_source_words: 3_000, target_words_min: 150, target_words_max: 230 },
-	{ min_source_words: 60, target_words_min: 50, target_words_max: 90 }
-];

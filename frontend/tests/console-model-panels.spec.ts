@@ -1,11 +1,6 @@
 /** Deterministic model panels rules over bounded fixtures; no browser, build, or layout matrix. */
 import { expect, test } from '@playwright/test';
-import { runLengths, scoreCost, writeTimes, type DayWindow } from '../src/lib/server/model-work';
-const BANDS = [
-    { min_source_words: 0, target_words_min: 30, target_words_max: 45 },
-    { min_source_words: 60, target_words_min: 50, target_words_max: 90 },
-    { min_source_words: 700, target_words_min: 70, target_words_max: 150 }
-];
+import { scoreCost, writeTimes, type DayWindow } from '../src/lib/server/model-work';
 const WEEK: DayWindow = { start: '2026-08-15', end: '2026-08-21', days: 7 };
 function timed(date: string, ms: number): Record<string, string> {
     return { date, summarize_ms: String(ms) };
@@ -82,36 +77,5 @@ test.describe('what checking a summary cost, off the critical path', () => {
         expect(cost.p95).toBeCloseTo(7800, 6);
         expect(cost.fastest).toBe(300);
         expect(cost.slowest).toBe(9000);
-    });
-});
-test.describe('how long the summaries came out', () => {
-    function summary(runId: string, date: string, words: number, sourceWords: number): Record<string, string> {
-        return {
-            run_id: runId,
-            date,
-            model_id: 'a-model',
-            summary_words: String(words),
-            source_words_before_cap: String(sourceWords)
-        };
-    }
-    test('a run is three marks and the ask is read off its own articles', () => {
-        const runs = runLengths([
-            summary('2026-08-20-1', '2026-08-20', 40, 100),
-            summary('2026-08-20-1', '2026-08-20', 90, 100),
-            summary('2026-08-20-1', '2026-08-20', 200, 1000),
-            summary('2026-08-21-1', '2026-08-21', 60, 100)
-        ], BANDS);
-        expect(runs.map((run) => run.runId)).toEqual(['2026-08-20-1', '2026-08-21-1']);
-        const first = runs[0];
-        expect(first.items).toBe(3);
-        expect([first.low, first.median, first.high]).toEqual([40, 90, 200]);
-        expect([first.askLow, first.askHigh]).toEqual([50, 150]);
-        expect([runs[1].askLow, runs[1].askHigh]).toEqual([50, 90]);
-    });
-    test('a run whose articles recorded no length has no ask, and says so', () => {
-        const runs = runLengths([{ run_id: 'r', date: '2026-08-20', summary_words: '70' }], BANDS);
-        expect(runs).toHaveLength(1);
-        expect(runs[0].askLow).toBeNull();
-        expect(runs[0].askHigh).toBeNull();
     });
 });

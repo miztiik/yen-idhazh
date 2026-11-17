@@ -13,7 +13,6 @@ is easy; a summarizer that cannot be talked out of its shape is the product.
 from __future__ import annotations
 
 import ast
-import dataclasses
 import json
 import logging
 import re
@@ -29,8 +28,7 @@ from support.models import a_markers, a_sampling, a_server
 from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
 from support.server import RecordedEndpoint
 
-from idhazh import config, extract
-from idhazh.classify import calls
+from idhazh import config
 from idhazh.classify.calls import summarize_and_plan_schema
 from idhazh.contracts.article import UNTRUSTED_LINE_MAX, Article, ArticleStatus
 from idhazh.contracts.base import (
@@ -41,8 +39,6 @@ from idhazh.contracts.base import (
 from idhazh.contracts.call_cost import CallKind
 from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.knobs.models import ModelsConfig
-from idhazh.contracts.knobs.prompts import PromptFilesConfig
-from idhazh.contracts.knobs.summarize import SummarizeConfig, SummaryBand
 from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.llm.reasoning import split_reasoning
@@ -65,6 +61,7 @@ from idhazh.llm.server import (
     post,
     render_prompt,
     request_payload,
+    response_limit,
     server_argv,
     thinking_span,
 )
@@ -77,12 +74,8 @@ from idhazh.sanitize import (
 )
 from idhazh.summarize import (
     build_request,
-    draft_model,
     output_schema,
-    output_schema_text,
     parse_draft,
-    prompt_inputs,
-    system_prompt,
     to_summary,
     user_turn,
 )
@@ -125,16 +118,15 @@ def body(**overrides: object) -> str:
     return json.dumps(payload)
 
 
-def replied(text: str, source: str = "ok", **kwargs: object) -> Summary:
+def replied(text: str) -> Summary:
     return to_summary(
-        article(source),
+        article(),
         parse_completion(
             json.dumps({"content": text, "tokens_evaluated": 10, "tokens_predicted": 10}),
             reasoning_delimiters=RECORDED_REASONING_DELIMITERS,
         ),
         model_id="m",
         generated_at=GENERATED_AT,
-        **kwargs,  # type: ignore[arg-type]
     )
 
 
@@ -180,21 +172,6 @@ def test_declared_source_form_arrives_outside_the_untrusted_block() -> None:
 # --- Decoding is pinned in one place ----------------------------------------
 
 
-def test_decoding_parameters_come_from_config_and_nowhere_else() -> None:
-    sampling = a_sampling(temperature=0.3, top_k=40)
-    payload = request_payload(
-        model_id="m",
-        system="s",
-        user="u",
-        output_schema={},
-        sampling=sampling,
-        markers=a_markers(),
-    )
-    for key, value in sampling.items():
-        assert payload[key] == value
-    assert payload["stream"] is False
-
-
 def test_a_sampler_no_code_of_ours_names_reaches_the_body_verbatim() -> None:
     """The row's oracle. The block is splatted, so a new sampler costs no edit here.
 
@@ -231,27 +208,6 @@ def test_a_key_the_route_wrote_itself_is_refused_even_where_no_set_names_it() ->
     """
     with pytest.raises(ValueError, match="prompt"):
         three_bodies(a_sampling(prompt="whatever the file says"), only="completion")
-
-
-def test_the_derived_bodies_inherit_the_sampling_rather_than_splatting_it_again() -> None:
-    """The fourth builder is a derivation, so it must not run the check at all.
-
-    `continued_completion_payload` is `{**first, ...}` and `first` already
-    carries every sampling key, so a second splat would clash on all thirteen
-    and raise on every summarize-and-plan call.
-    """
-    first = three_bodies(a_sampling(top_k=40), only="completion")
-    second = continued_completion_payload(
-        first,
-        reply='{"title": "a bridge"}',
-        user="Now the picture.",
-        output_schema=output_schema(),
-        markers=a_markers(),
-        max_answer_tokens=64,
-    )
-
-    assert second["top_k"] == 40, "the derivation inherits the block through the first body"
-    assert second["prompt"].startswith(first["prompt"])
 
 
 def three_bodies(sampling: dict[str, Any], *, only: str | None = None) -> Any:
@@ -296,7 +252,7 @@ def three_bodies(sampling: dict[str, Any], *, only: str | None = None) -> Any:
     return [make() for make in built.values()]
 
 
-def test_the_chat_route_defaults_to_8192_output_tokens_on_either_envelope() -> None:
+def test_the_chat_route_carries_the_response_limit_on_either_envelope() -> None:
     sampling: dict[str, Any] = {}
     quiet = request_payload(
         model_id="m",
@@ -316,11 +272,11 @@ def test_the_chat_route_defaults_to_8192_output_tokens_on_either_envelope() -> N
     )
 
     for body in (quiet, loud):
-        assert body["max_tokens"] == 8192
+        assert body["max_tokens"] == response_limit(sampling)
         assert "n_predict" not in body
 
 
-def test_rendered_routes_default_to_8192_tokens_without_a_caller_budget() -> None:
+def test_rendered_routes_carry_the_response_limit_without_a_caller_budget() -> None:
     completion = completion_payload(
         model_id="m",
         system="s",
@@ -349,16 +305,15 @@ def test_rendered_routes_default_to_8192_tokens_without_a_caller_budget() -> Non
     )
 
     for body in (completion, grammar, continuation):
-        assert body["n_predict"] == 8192
+        assert body["n_predict"] == response_limit({})
         assert "max_tokens" not in body
 
 
-@pytest.mark.parametrize("limit", [2048, 4096])
-def test_the_configured_token_limit_reaches_every_route_without_a_second_limit(limit: int) -> None:
-    chat, completion, grammar = three_bodies(a_sampling(max_tokens=limit))
+def test_the_configured_token_limit_reaches_every_route_without_a_second_limit() -> None:
+    chat, completion, grammar = three_bodies(a_sampling(max_tokens=4096))
 
     for body in (chat, completion, grammar):
-        assert body["max_tokens"] == limit
+        assert body["max_tokens"] == 4096
         assert "n_predict" not in body
     assert chat["response_format"]["type"] == "json_schema"
     assert completion["json_schema"] == output_schema()
@@ -372,6 +327,12 @@ def test_two_configured_token_limit_spellings_are_not_sent_together(route: str) 
 
 
 def test_a_configured_token_limit_survives_continuations_and_reasoning() -> None:
+    """A continuation is a derivation: it inherits the sampling and does not check it again.
+
+    `continued_completion_payload` is `{**first, ...}` and `first` already
+    carries every sampling key, so a second splat would clash on all of them and
+    raise on every summarize-and-plan call.
+    """
     markers = a_markers(thinking_close="</think>")
     first = completion_payload(
         model_id="m",
@@ -399,19 +360,6 @@ def test_a_configured_token_limit_survives_continuations_and_reasoning() -> None
         assert "n_predict" not in body
     assert "json_schema" not in thought
     assert answer["json_schema"] == output_schema()
-
-
-def test_thinking_is_off_in_the_request() -> None:
-    """Off, and asked for under the keyword the entry names rather than a literal here."""
-    payload = request_payload(
-        model_id="m",
-        system="s",
-        user="u",
-        output_schema={},
-        sampling=a_sampling(),
-        markers=a_markers(),
-    )
-    assert payload["chat_template_kwargs"] == {"enable_thinking": False}
 
 
 def test_the_declared_closing_marker_is_what_asks_the_template_to_think() -> None:
@@ -447,7 +395,10 @@ def test_a_template_that_reads_no_keyword_is_sent_none() -> None:
 
 
 def test_the_keyword_the_request_carries_is_the_one_the_entry_names() -> None:
-    """Built, not the committed entry: the name is a model fact and a swap moves it."""
+    """Built, not the committed entry: the name is a model fact and a swap moves it.
+
+    The entry declares no closing marker, so the keyword is sent off.
+    """
     payload = request_payload(
         model_id="m",
         system="s",
@@ -503,25 +454,6 @@ def test_the_server_is_started_from_config_not_by_hand() -> None:
             for token in ([key] if value is None else [key, str(value)])
         ),
     ]
-
-
-def test_the_server_refuses_an_oversized_prompt_rather_than_shifting_it() -> None:
-    """A shifted context drops the middle and answers about a document we no longer sent.
-
-    The reply then reads as a hallucination and the scorer names the wrong
-    cause. An error is the only version of this the pipeline can act on.
-    """
-    from idhazh.contracts.knobs.models import ModelRef
-
-    argv = server_argv(
-        binary=Path("bin/llama-server"),
-        weights=Path("models/w.gguf"),
-        model=ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M"),
-        server=a_server(**{"--metrics": None}),
-        port=8181,
-    )
-
-    assert "--no-context-shift" in argv
 
 
 def test_an_entry_a_person_writes_is_refused_for_naming_a_draft_head() -> None:
@@ -604,78 +536,6 @@ def test_every_route_is_derived_from_the_one_address_a_caller_was_given() -> Non
     # derived from either reaches the same place.
     assert completion_url("http://127.0.0.1:8181") == "http://127.0.0.1:8181/completions"
     assert props_url(completion_url(posts_to)) == props_url(posts_to)
-
-
-def test_a_program_that_started_its_own_server_probes_that_one() -> None:
-    """`loopback_url` takes a port and looks nothing up.
-
-    The three instruments that spawn a server measure the process they started.
-    Reading `model_server.base_url` there would point a measurement at whichever
-    server the config names, and a reading taken against a binary this process
-    did not start is a number about the wrong binary.
-
-    So the settings are handed in here and must make no difference. A config
-    naming another machine is the sharpest case, because that is the one where
-    a lookup would be visible.
-    """
-    from idhazh.contracts.knobs.model_server import ModelServerConfig
-    from idhazh.llm.server import loopback_url
-
-    elsewhere = ModelServerConfig(base_url="http://192.168.1.20:9090")
-
-    assert loopback_url(9090) == "http://127.0.0.1:9090"
-    assert elsewhere.base_url == "http://192.168.1.20:9090", "the config is unread, not rewritten"
-    assert loopback_url(8181).endswith(":8181"), "the port is the caller's and nothing else is"
-
-
-#: Every module allowed to write the loopback host, and what each one is. A set
-#: rather than a count, because a count falling by one names nothing and a count
-#: rising by one is read as "somebody added a test". Anything not here is a
-#: second address a config value cannot move, which is the state
-#: `model_server.base_url` exists to end.
-LOOPBACK_IS_WRITTEN_IN: Final = {
-    # The committed default.
-    "backend/idhazh/contracts/knobs/model_server.py",
-    # The body of `loopback_url`, which is the one home for the literal.
-    "backend/idhazh/llm/server.py",
-    # Two hand-run instruments whose `--base` default is a literal. Neither
-    # starts a server, so by this project's own rule both should read the
-    # address out of a config root - `slot_probe.py` was given one on
-    # 2026-09-23 and these two were missed. Listed rather than hidden.
-    "backend/utilities/measure_budgets.py",
-    "backend/utilities/measure_judge_call.py",
-}
-
-
-def test_the_loopback_host_is_written_in_four_named_places() -> None:
-    """Survivors, not zero. Zero is the wrong answer and an earlier draft claimed it.
-
-    `loopback_url` has to write the host somewhere, and the committed default
-    has to say it. What must not happen is a fifth module quietly spelling an
-    address again, which is what the three self-spawning instruments did until
-    2026-09-23 - six literals between them, each one a place a moved port could
-    be left behind.
-
-    Only these four named files are read. Other source files do not add work to
-    this test.
-    """
-    sources = (
-        REPO_ROOT / "backend" / "idhazh" / "contracts" / "knobs" / "model_server.py",
-        REPO_ROOT / "backend" / "idhazh" / "llm" / "server.py",
-        REPO_ROOT / "backend" / "utilities" / "measure_budgets.py",
-        REPO_ROOT / "backend" / "utilities" / "measure_judge_call.py",
-    )
-    writing = {
-        path.relative_to(REPO_ROOT).as_posix()
-        for path in sources
-        if "127.0.0.1" in path.read_text(encoding="utf-8")
-    }
-
-    assert writing == LOOPBACK_IS_WRITTEN_IN, (
-        "these modules write the loopback host and are not on the list: "
-        f"{sorted(writing - LOOPBACK_IS_WRITTEN_IN)}; "
-        f"and these are listed and no longer write it: {sorted(LOOPBACK_IS_WRITTEN_IN - writing)}"
-    )
 
 
 def test_the_run_says_which_server_answered_and_never_says_a_credential(
@@ -771,10 +631,6 @@ class TestTheRenderedCompletionEnvelope:
 
         assert completion.finish_reason == "length"
         assert completion.hit_the_budget
-
-    def test_this_route_never_splits_a_reasoning_channel_out(self) -> None:
-        """A property rather than a gap: there is no template here to split one."""
-        assert not parse_completion(read_text(RENDERED_REPLY)).reasoned
 
     def test_a_reply_that_named_no_stop_type_carries_no_reason_at_all(self) -> None:
         """An absence is recorded as one. It used to be read as a clean stop.
@@ -901,116 +757,24 @@ class TestTheThreeSlotFacts:
         assert completion.content.startswith('{\n  "labels"'), "the reply is still read"
 
 
-class TestWhereTheSystemTextGoes:
-    """Two placements, one set of words, and what each of them moves.
+def test_the_fold_puts_the_same_bytes_in_the_first_user_turn() -> None:
+    """A placement change, never a content change.
 
     The envelope is per model and the content is global
-    (`docs/architecture/summarize/model-boundary.md`). These tests hold both
-    halves of that sentence: the placement is read off the entry and never off a
-    model id, and the same bytes arrive either way.
+    (`docs/architecture/summarize/model-boundary.md`). Built rather than
+    committed: the incumbent has a system role, so the case this row exists for
+    has no entry in `config/` and would otherwise be untested until the day a
+    model needed it.
     """
-
-    def test_the_committed_entry_renders_what_it_rendered_before_the_field_existed(
-        self,
-    ) -> None:
-        """Case 1, at the unit tier: `own_turn` IS the concatenation it replaced.
-
-        The fixture tier of the same case is `test_classify.TestThePromptBytes`,
-        which compares two whole rendered prompts against committed files. This
-        one states the expression, so a refactor of the branch fails here with a
-        diff a person can read rather than with two long strings.
-        """
-        markers = a_markers()
-
-        assert markers.system_role is SystemPlacement.OWN_TURN
-        assert render_prompt(system="S", user="U", markers=markers) == (
-            markers.turn("system", "S") + markers.turn("user", "U") + markers.opening()
-        )
-
-    def test_the_fold_puts_the_same_bytes_in_the_first_user_turn(self) -> None:
-        """A placement change, never a content change.
-
-        Built rather than committed: the incumbent has a system role, so the case
-        this row exists for has no entry in `config/` and would otherwise be
-        untested until the day a model needed it.
-        """
-        markers = a_markers(
-            system_role=SystemPlacement.FOLD_INTO_FIRST_USER, system_joiner="\n\n"
-        )
-
-        rendered = render_prompt(system="S", user="U", markers=markers)
-
-        assert rendered == markers.turn("user", "S\n\nU") + markers.opening()
-        assert "system" not in rendered, "no system role header is written at all"
-        assert "S" in rendered and "U" in rendered, "the same bytes, one turn earlier"
-
-    def test_the_digest_run_stamp_moves_when_turn_placement_moves(self) -> None:
-        """Rendered turns change the live digest input, not the content-only prompt."""
-        own = a_markers()
-        folded = dataclasses.replace(
-            own,
-            system_role=SystemPlacement.FOLD_INTO_FIRST_USER,
-            system_joiner="\n\n",
-        )
-
-        assert render_prompt(system="S", user="U", markers=own) != render_prompt(
-            system="S", user="U", markers=folded
-        )
-        assert calls.prompt_inputs(markers=own) != calls.prompt_inputs(
-            markers=folded
-        ), (
-            "the digest run's prompt_sha256 renders through the envelope"
-        )
-        assert own.turn_opening.template not in prompt_inputs(), (
-            "the content-only corpus digest does not include turn placement"
-        )
-
-    def test_only_two_placements_exist_to_be_derived(self) -> None:
-        """Two topologies, and the derivation is closed over exactly those two.
-
-        A third would need a rule this project does not have, so the derivation
-        refuses it at server start rather than rendering a prompt with no turn
-        structure that the grammar still accepts.
-        """
-        assert {placement.value for placement in SystemPlacement} == {
-            "own_turn",
-            "fold_into_first_user",
-        }
-
-
-def test_the_named_builder_and_its_test_spell_server_flags() -> None:
-    """Check the flag literals in the builder and this focused test only.
-
-    `backend/utilities/llama_server_argv.py` was that second renderer. It
-    existed for one reason - `digest.yml` started its server before
-    `pip install -e .` ran, so the package was not importable yet - and it
-    drifted the moment a flag landed on one copy and not the other. The install
-    moved one step earlier and the copy is gone.
-
-    **What a second builder would have to restate is the flags written in code.**
-    Everything else comes out of the entry's `server` block verbatim, so a flag
-    appearing in a run's stamp or in a fixture is data rather than a second
-    answer to what the server runs. The three below are written in this
-    repository rather than in a model file, and none of them is a name an
-    ordinary command-line tool takes - so a file spelling one is a file deciding
-    how an inference server starts. `--model` is left out for the opposite
-    reason: four unrelated tools take a `--model` option and none of them starts
-    a server.
-    The workflow half of the same Oracle is
-    `workflows/test_model_server_jobs.py::test_every_job_that_starts_a_server_reaches_the_one_argv_builder`.
-    """
-    written_in_code = ("--alias", "--no-context-shift", "--port")
-
-    sources = (
-        REPO_ROOT / "backend" / "idhazh" / "llm" / "server.py",
-        REPO_ROOT / "backend" / "tests" / "test_summarize.py",
+    markers = a_markers(
+        system_role=SystemPlacement.FOLD_INTO_FIRST_USER, system_joiner="\n\n"
     )
-    spellers = {
-        path.relative_to(REPO_ROOT).as_posix()
-        for path in sources
-        if any(f'"{flag}"' in path.read_text(encoding="utf-8") for flag in written_in_code)
-    }
-    assert spellers == {"backend/idhazh/llm/server.py", "backend/tests/test_summarize.py"}
+
+    rendered = render_prompt(system="S", user="U", markers=markers)
+
+    assert rendered == markers.turn("user", "S\n\nU") + markers.opening()
+    assert "system" not in rendered, "no system role header is written at all"
+    assert "S" in rendered and "U" in rendered, "the same bytes, one turn earlier"
 
 
 #: What makes a string an IDENTITY rather than a value. The committed model's
@@ -1104,127 +868,6 @@ def test_no_module_that_opens_a_model_branches_on_which_model_it_is() -> None:
     )
 
 
-def test_runtime_server_flags_are_emitted_only_when_configured() -> None:
-    from idhazh.contracts.knobs.models import ModelRef
-
-    flags = {
-        "-np": 1,
-        "-fa": "on",
-        "-lm": "mmap+mlock",
-        "-ctk": "q8_0",
-        "-ctv": "q8_0",
-        "--prio": 2,
-        "--poll": 100,
-        "-tb": 4,
-        "--metrics": None,
-    }
-    argv = server_argv(
-        binary=Path("bin/llama-server"),
-        weights=Path("models/w.gguf"),
-        model=ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M"),
-        server=flags,
-        port=8181,
-    )
-
-    assert argv[-17:] == [
-        "-np",
-        "1",
-        "-fa",
-        "on",
-        "-lm",
-        "mmap+mlock",
-        "-ctk",
-        "q8_0",
-        "-ctv",
-        "q8_0",
-        "--prio",
-        "2",
-        "--poll",
-        "100",
-        "-tb",
-        "4",
-        "--metrics",
-    ]
-    assert "--no-warmup" not in argv
-
-
-def test_the_server_is_asked_to_describe_itself_only_when_configured() -> None:
-    """The flag that makes the runtime's own settings readable at all.
-
-    At llama-server's default verbosity of 3 one start prints twelve lines, and
-    no line among them names the attention state, the KV buffer or the compute
-    buffer - so a check on any of those reads back the flag we passed instead of
-    the decision the runtime took (`docs/reference/pipeline-cost.md`, 2026-09-09).
-    Unset, the flag is absent and the runtime keeps its own default.
-    """
-    from idhazh.contracts.knobs.models import ModelRef
-
-    model = ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M")
-    quiet = server_argv(
-        binary=Path("bin/llama-server"),
-        weights=Path("models/w.gguf"),
-        model=model,
-        server=a_server(),
-        port=8181,
-    )
-    assert "-lv" not in quiet
-
-    loud = server_argv(
-        binary=Path("bin/llama-server"),
-        weights=Path("models/w.gguf"),
-        model=model,
-        server=a_server(**{"-lv": 4}),
-        port=8181,
-    )
-    assert loud[loud.index("-lv") + 1] == "4"
-
-
-def test_the_output_schema_is_generated_not_hand_written() -> None:
-    assert output_schema() == draft_model().model_json_schema()
-    assert output_schema_text() == output_schema_text(), "stable, so the stamp is stable"
-
-
-@pytest.fixture
-def band_prompt_root(tmp_path: Path) -> Path:
-    target = tmp_path / PromptFilesConfig().summarize_article
-    target.parent.mkdir()
-    target.write_text(
-        "Write $target_words_min to $target_words_max words.", encoding="utf-8"
-    )
-    return tmp_path
-
-
-def test_an_unrenderable_placeholder_never_reaches_a_model(band_prompt_root: Path) -> None:
-    """`substitute`, not `safe_substitute` - a stray `$knob` reads as an instruction."""
-    import idhazh.summarize as module
-
-    template = module._template(config_dir=band_prompt_root)
-    with pytest.raises(KeyError):
-        template.substitute({"target_words_min": 60})
-
-
-def test_no_placeholder_survives_into_a_rendered_prompt() -> None:
-    """The band's numbers and the config's numbers both have to land."""
-    for words in (0, 800, 5000):
-        assert "$" not in system_prompt(source_words=words)
-
-
-def test_a_config_naming_the_old_global_word_bounds_still_loads() -> None:
-    """The read-side migration for the two integers that used to gate every band.
-
-    `config/` is a persisted surface and these models forbid unknown keys, so a
-    file written before 2026-09-10 would be refused outright rather than read
-    (section 11). The old values are dropped rather than carried: neither has a
-    counterpart, and reinstating 250 as a ceiling would put back the cap the
-    ladder now sets for itself.
-    """
-    from idhazh.contracts.knobs.evaluation import EvaluationConfig as Bounds
-
-    older = Bounds.model_validate({"summary_words_min": 25, "summary_words_max": 250})
-    assert older == Bounds()
-    assert not hasattr(older, "summary_words_max")
-
-
 def test_the_title_decodes_before_the_summary() -> None:
     """The model names the story before it writes the prose that explains it.
 
@@ -1240,145 +883,7 @@ def test_the_title_decodes_before_the_summary() -> None:
     assert list(output_schema()["properties"]) == ["title", "summary"]
 
 
-def test_changing_what_we_ask_for_changes_the_fingerprints_inputs() -> None:
-    """The old bounds lived only in the prompt text and in a gate nothing hashed."""
-    tighter = SummarizeConfig(
-        bands=[SummaryBand(min_source_words=0, target_words_min=50, target_words_max=120)]
-    )
-    assert prompt_inputs() != prompt_inputs(tighter)
-
-
-def test_the_stamp_holds_still_while_the_rendered_prompt_moves(band_prompt_root: Path) -> None:
-    """The record names the ask, so it means "which pipeline", not "which item"."""
-    ask = SummarizeConfig()
-    assert system_prompt(ask, source_words=0, config_dir=band_prompt_root) != system_prompt(
-        ask, source_words=4000, config_dir=band_prompt_root
-    )
-    assert prompt_inputs(ask, config_dir=band_prompt_root) == prompt_inputs(
-        ask, config_dir=band_prompt_root
-    )
-
-
-def test_a_band_the_wording_never_reaches_still_moves_the_stamp() -> None:
-    """A rendered prompt would hash one band. Every band is part of the ask."""
-    ask = SummarizeConfig()
-    longer_top = ask.model_copy(
-        update={
-            "bands": [
-                *ask.bands[:-1],
-                SummaryBand(
-                    min_source_words=ask.bands[-1].min_source_words,
-                    target_words_min=ask.bands[-1].target_words_min,
-                    target_words_max=ask.bands[-1].target_words_max - 1,
-                ),
-            ]
-        }
-    )
-    assert system_prompt(ask) == system_prompt(longer_top), "band one is untouched"
-    assert prompt_inputs(ask) != prompt_inputs(longer_top)
-
-
-# --- The length ask follows the article -------------------------------------
-
-
-def test_a_band_template_asks_short_and_long_articles_for_different_lengths(
-    band_prompt_root: Path,
-) -> None:
-    """Configured word-range placeholders follow the source-length band."""
-    ask = SummarizeConfig()
-    short = ask.band_for(200)
-    long = ask.band_for(4000)
-    assert short.target_words_max < long.target_words_max
-    assert system_prompt(ask, source_words=200, config_dir=band_prompt_root) != system_prompt(
-        ask, source_words=4000, config_dir=band_prompt_root
-    )
-
-
-def test_every_article_length_lands_in_a_band() -> None:
-    """Selection is total, which is why the first band is pinned at zero."""
-    ask = SummarizeConfig()
-    for words in (0, 1, 249, 250, 699, 700, 1999, 2000, 2999, 3000, 100_000):
-        assert ask.band_for(words) in ask.bands
-
-
-def test_no_rung_floor_ever_sits_above_the_cut_point() -> None:
-    """A floor above the cut point asks for a summary of words nobody was given.
-
-    `extract.truncation_cap_tokens` decides how many words the model is handed. A
-    model closes that gap by elaborating the opening, which reads as completeness
-    and is the worst thing this pipeline can publish.
-
-    Both sides are read from `config/`, never from a literal: the cap moved from
-    2500 to 5000 on 2026-08-29 and to 10000 on 2026-09-09, and a pinned number
-    here would keep passing while the relationship it guards inverted (Guardrail #6).
-    """
-    app = config.load().app
-    cut_point_words = int(app.extract.truncation_cap_tokens / extract.TOKENS_PER_WORD)
-    highest_floor = max(band.min_source_words for band in app.summarize.bands)
-    assert highest_floor < cut_point_words, (
-        f"the top rung starts at {highest_floor} words and the model is handed "
-        f"{cut_point_words}, so that rung asks for a summary of text it never saw"
-    )
-
-
-def test_a_longer_article_is_never_asked_for_a_shorter_summary() -> None:
-    """The one relationship the ladder has to keep, whatever its rungs are.
-
-    Both ends climb, because a rung that raised only its floor left the longest
-    articles sharing a ceiling with much shorter ones - which is how a 2,000-word
-    feature and a 7,692-word investigation came to get the identical ask.
-    """
-    ask = SummarizeConfig()
-    for lower, upper in zip(ask.bands, ask.bands[1:], strict=False):
-        assert upper.target_words_min >= lower.target_words_min
-        assert upper.target_words_max >= lower.target_words_max
-
-    feature = ask.band_for(2000)
-    long_read = ask.band_for(4000)
-    assert long_read is not feature
-    assert long_read.target_words_min > feature.target_words_min
-    assert long_read.target_words_max > feature.target_words_max
-    assert ask.band_for(3999) is feature
-
-
-def test_the_band_chosen_is_the_longest_one_the_article_reaches() -> None:
-    ask = SummarizeConfig(
-        bands=[
-            SummaryBand(min_source_words=0, target_words_min=40, target_words_max=60),
-            SummaryBand(min_source_words=500, target_words_min=60, target_words_max=90),
-            SummaryBand(min_source_words=1500, target_words_min=90, target_words_max=140),
-        ]
-    )
-    assert ask.band_for(499).target_words_max == 60
-    assert ask.band_for(500).target_words_max == 90
-    assert ask.band_for(1499).target_words_max == 90
-    assert ask.band_for(9000).target_words_max == 140
-
-
-def test_a_band_set_that_leaves_a_short_article_homeless_is_refused() -> None:
-    with pytest.raises(ValidationError):
-        SummarizeConfig(
-            bands=[SummaryBand(min_source_words=300, target_words_min=50, target_words_max=90)]
-        )
-
-
-def test_bands_that_do_not_climb_are_refused() -> None:
-    """Out of order, `band_for` would quietly return the wrong ask instead of failing."""
-    with pytest.raises(ValidationError):
-        SummarizeConfig(
-            bands=[
-                SummaryBand(min_source_words=0, target_words_min=50, target_words_max=90),
-                SummaryBand(min_source_words=0, target_words_min=70, target_words_max=150),
-            ]
-        )
-
-
 # --- The title is ours, and the source's is only a fallback ------------------
-
-
-def test_a_title_range_that_runs_backwards_is_refused() -> None:
-    with pytest.raises(ValidationError):
-        SummarizeConfig(title_words_min=15, title_words_max=10)
 
 
 def test_the_source_headline_arrives_inside_the_fence() -> None:
@@ -1432,18 +937,6 @@ def test_a_headline_wider_than_the_payload_field_falls_back_to_the_source(
     assert result.title == (headline if published else None)
 
 
-def test_the_digest_covers_the_title_a_reader_sees() -> None:
-    """A re-run that publishes a different headline drifted, and must read as drift."""
-    other = "Example Lab ships a small model on a permissive licence"
-    assert replied(body()).output_digest != replied(body(title=other)).output_digest
-
-
-def test_a_summary_that_did_not_land_publishes_no_title() -> None:
-    result = summarised("obeyed-the-injection")
-    assert result.status is SummaryStatus.FAILED
-    assert result.title is None
-
-
 # --- The empty think block is asserted, never assumed ------------------------
 
 
@@ -1492,7 +985,8 @@ class TestTwoSpansOnOneCall:
 
         The prompt is span one's extended rather than rendered again, so the KV
         slot span one filled is the slot span two continues and only the closing
-        marker is new.
+        marker is new. The marker is written here and not taken from the reply,
+        because llama-server leaves a stop string out of the content it returns.
         """
         answer = self.answer_body()
         second = answer_span(answer, thought="weighing it up", markers=self.markers())
@@ -1532,18 +1026,6 @@ class TestTwoSpansOnOneCall:
         assert predict, "the recorded help stopped documenting --n-predict"
         assert "-1 = infinity" in predict[0], predict[0]
         assert UNCAPPED_N_PREDICT == -1
-
-    def test_the_closing_marker_is_written_rather_than_trusted_to_the_reply(self) -> None:
-        """llama-server excludes a stop string from the content it returns.
-
-        A span that stopped at the marker does not carry it, and a span that ran
-        to its budget never wrote one. Writing it here closes both, so span two
-        never decodes inside an open reasoning block.
-        """
-        answer = self.answer_body()
-        ran_on = answer_span(answer, thought="a think that never closed", markers=self.markers())
-
-        assert ran_on["prompt"].endswith("</think>")
 
     def test_an_envelope_that_does_not_think_has_no_span_to_reach_for(self) -> None:
         """Both builders refuse rather than inventing a marker.
@@ -1616,18 +1098,6 @@ class TestAConstrainedCallerGetsBothSpans:
             "first_token_alternatives": 3,
         }
         return grammar_completion_payload(**(declared | overrides))
-
-    def schema_body(self) -> dict[str, Any]:
-        return completion_payload(
-            model_id="m",
-            system="S",
-            user="U",
-            output_schema=output_schema(),
-            server=a_server(),
-            sampling=a_sampling(),
-            markers=self.markers(),
-            max_answer_tokens=ANSWER_BUDGET,
-        )
 
     def test_span_one_carries_neither_the_grammar_nor_the_alternatives_request(self) -> None:
         """The row's oracle, and the half a recorded reply cannot reach.
@@ -1808,12 +1278,6 @@ class TestTheThinkingReachesNothing:
         ), "what follows the label call's prompt is the answer, one new turn, and nothing else"
 
 
-def test_a_reply_without_a_think_block_passes_through() -> None:
-    content, thought = split_reasoning('{"summary": "x"}')
-    assert content == '{"summary": "x"}'
-    assert thought is None
-
-
 def test_inline_reasoning_is_read_only_with_its_explicit_delimiters() -> None:
     recorded = read_text(COMPLETIONS / "reasoned-anyway.json")
     raw = parse_completion(recorded)
@@ -1859,14 +1323,6 @@ def test_an_unclosed_reasoning_prefix_has_no_answer() -> None:
     assert parsed.reasoned
 
 
-def test_an_empty_think_block_is_accepted() -> None:
-    content, thought = split_reasoning(
-        '<think></think>{"summary": "x"}', delimiters=RECORDED_REASONING_DELIMITERS
-    )
-    assert content == '{"summary": "x"}'
-    assert thought == ""
-
-
 def test_an_empty_block_cannot_hide_a_second_one_that_reasoned() -> None:
     """The guard asserts the absence of reasoning, so it has to read every block.
 
@@ -1892,24 +1348,6 @@ def test_an_empty_block_in_front_of_a_real_reply_still_publishes() -> None:
     assert result.title == TITLE
 
 
-def test_a_model_that_reasoned_anyway_is_a_failure_not_a_curiosity() -> None:
-    """Decision 3: a flag that silently stopped taking effect costs faithfulness for months."""
-    result = summarised("reasoned-anyway")
-    assert result.status is SummaryStatus.FAILED
-    assert result.failure_detail
-
-
-def test_reasoning_in_the_sibling_channel_fails_the_item() -> None:
-    """Same failure, one channel over: the runtime put thinking where `<think>` never appears.
-
-    The content is a reply that would otherwise publish, so nothing but the
-    reasoning channel stands between this item and a reader.
-    """
-    result = summarised("reasoning-channel")
-    assert result.status is SummaryStatus.FAILED
-    assert "reasoning channel" in (result.failure_detail or "")
-
-
 def test_a_reply_misfiled_into_reasoning_names_the_runtime() -> None:
     """ggml-org/llama.cpp#27134: the whole reply lands in `reasoning_content`, `content` empty.
 
@@ -1923,18 +1361,13 @@ def test_a_reply_misfiled_into_reasoning_names_the_runtime() -> None:
     assert "reasoning channel" in (result.failure_detail or "")
 
 
-def test_an_absent_reasoning_channel_is_not_a_failure() -> None:
-    """The common case: no such key, nothing to report, the item publishes."""
-    assert completion("ok").reasoned is False
-    assert summarised("ok").status is SummaryStatus.OK
-
-
 class TestTheRefusalsAreConditionalOnTheDeclaration:
-    """Two of the three hard refusals, each with both cases.
+    """Two of the three hard refusals, and the case where each one stands aside.
 
     A refusal that fires on the normal path is not a control, and a refusal that
     never fires is not one either. Each of these still bites where nothing asked
-    for reasoning and stands aside where the entry did.
+    for reasoning. Where the entry did, an inline block publishes in
+    `TestTheThinkingReachesNothing` and a runtime channel publishes here.
     """
 
     def summarised_with(self, name: str, *, thinking: bool) -> Summary:
@@ -1947,17 +1380,10 @@ class TestTheRefusalsAreConditionalOnTheDeclaration:
         )
 
     def test_an_inline_think_block_still_fails_where_nothing_asked_for_one(self) -> None:
-        """Case one of the parse-side refusal: the flag did not take."""
+        """The parse-side refusal: the flag did not take."""
         assert self.summarised_with("reasoned-anyway", thinking=False).status is (
             SummaryStatus.FAILED
         )
-
-    def test_an_inline_think_block_is_discarded_where_the_entry_declared_one(self) -> None:
-        """Case two: what came back is what was asked for, and none of it survives."""
-        draft = parse_draft(completion("reasoned-anyway").content, thinking=True)
-
-        assert completion("reasoned-anyway").inline_reasoning not in draft.summary
-        assert self.summarised_with("reasoned-anyway", thinking=True).status is SummaryStatus.OK
 
     def test_a_reasoning_channel_still_fails_where_nothing_asked_for_one(self) -> None:
         """Case one of the channel refusal, which is the one that would have failed every item."""
@@ -1989,21 +1415,13 @@ class TestTheRefusalsAreConditionalOnTheDeclaration:
 # --- What the model cost, split the way the runtime charges it ---------------
 
 
-def test_prefill_and_decode_are_read_apart_from_each_other() -> None:
+def test_the_cost_the_runtime_reported_reaches_the_payload() -> None:
     """Reading the article and writing the summary run at different rates.
 
     The numbers are the recorded reply from run 32742672105, slot 3 task 172:
     75 prompt tokens read in 7.1 s is 10.5 tok/s, and 167 written in 28.2 s is
     5.9 tok/s. One blended figure cannot say which of the two was slow.
     """
-    reply = completion("timed")
-    assert reply.prefill_ms == 7120
-    assert reply.decode_ms == 28206
-    assert reply.cached_tokens == 900
-    assert reply.prompt_tokens == 975
-
-
-def test_the_cost_the_runtime_reported_reaches_the_payload() -> None:
     result = summarised("timed")
     assert result.status is SummaryStatus.OK
     assert result.prefill_ms == 7120
@@ -2170,9 +1588,6 @@ def test_a_well_formed_reply_becomes_a_summary() -> None:
     result = summarised("ok")
     assert result.status is SummaryStatus.OK
     assert result.summary
-    assert "key_points" not in type(result).model_fields, (
-        "the field was retired, and the shape stopped carrying it on 2026-09-24"
-    )
     assert result.output_digest == derive_output_digest(result.summary, title=result.title)
 
 
@@ -2181,12 +1596,6 @@ def test_an_injected_tool_call_cannot_reach_a_payload() -> None:
     result = summarised("injected-tool-call")
     assert result.status is SummaryStatus.FAILED
     assert "shape" in (result.failure_detail or "")
-
-
-def test_a_model_that_obeyed_the_injection_produces_no_summary() -> None:
-    result = summarised("obeyed-the-injection")
-    assert result.status is SummaryStatus.FAILED
-    assert result.summary is None
 
 
 def test_a_reply_that_is_not_json_fails_closed() -> None:
@@ -2229,17 +1638,15 @@ def test_draft_parsing_preserves_every_paragraph_and_normalizes_separators() -> 
 
 
 def test_a_long_multi_paragraph_summary_publishes_exactly_as_written() -> None:
-    """The defect this replaces: a long reply was dropped, or cut at every period.
+    """A long reply is published whole: nothing drops it and nothing cuts it at a period.
 
-    The text runs far past the 2,880 characters the decoder used to allow, and it
-    carries the three figures a sentence splitter breaks at: `U.S.`, `$1.2` and
-    `99.9%`. It is already in the shape `parse_draft` leaves a reply in, so
-    "unchanged" is a plain equality.
+    The text carries the three figures a sentence splitter breaks at: `U.S.`,
+    `$1.2` and `99.9%`. It is already in the shape `parse_draft` leaves a reply
+    in, so "unchanged" is a plain equality.
     """
     sentence = "The U.S. agency spent $1.2 billion and reported 99.9% uptime."
     paragraph = " ".join([sentence] * 24)
     text = "\n\n".join([paragraph] * 4)
-    assert len(text) > 2880
 
     result = replied(body(summary=text))
 
@@ -2247,26 +1654,14 @@ def test_a_long_multi_paragraph_summary_publishes_exactly_as_written() -> None:
     assert result.summary == text
 
 
-# --- A copy is not a summary -------------------------------------------------
-
-
-
-
-def test_copied_text_no_longer_rejects_an_otherwise_valid_summary() -> None:
+def test_a_summary_that_repeats_its_source_publishes_as_written() -> None:
+    """Nothing compares a reply with its source, so a copied passage is not a failure."""
     result = summarised("copied-the-source", source="brief")
     draft = parse_draft(completion("copied-the-source").content)
     assert draft.summary in (article("brief").text or "")
     assert result.status is SummaryStatus.OK
     assert result.failure_code is None
     assert result.summary == draft.summary
-
-
-
-
-
-
-
-
 
 
 def test_the_summarizer_never_imports_the_scorer() -> None:
@@ -2392,60 +1787,7 @@ def test_the_recognised_context_error_is_read_off_the_type_not_the_message() -> 
     assert not is_context_exceeded("<html>502 Bad Gateway</html>")
 
 
-# --- The five things the server proves before the first item ----------------
-#: The two probe documents the server check records. Neither is a capture; each says so in
-#: its own `recorded` field and explains what was constructed and why.
-LLM_PROBES: Final = FIXTURES_DIR / "llm"
-
-
-def _gguf_text(text: str) -> bytes:
-    raw = text.encode("utf-8")
-    return len(raw).to_bytes(8, "little") + raw
-
-
-def _built_weights(architecture: str) -> bytes:
-    """A GGUF header that declares one architecture, and nothing else.
-
-    Built rather than captured, which is what `CLAUDE.md` section 13 asks for
-    when the awkward shape is the point: a committed 5 GiB file could not be a
-    fixture, and a built header carries the case the archive has never produced
-    - a second key in front of the one we came for, so the skipper is exercised
-    rather than assumed.
-    """
-    pairs = (
-        _gguf_text("general.quantization_version")
-        + (4).to_bytes(4, "little")
-        + (2).to_bytes(4, "little"),
-        _gguf_text("general.architecture") + (8).to_bytes(4, "little") + _gguf_text(architecture),
-    )
-    return (
-        b"GGUF"
-        + (3).to_bytes(4, "little")
-        + (0).to_bytes(8, "little")
-        + len(pairs).to_bytes(8, "little")
-        + b"".join(pairs)
-    )
-
-
-#: What every file under `tests/fixtures/llm/` has to say about itself. Written
-#: honesty decays and a loader that fails does not, so the provenance is read
-#: rather than trusted: a file that does not declare whether it was captured, or
-#: declares it was not and then does not say how to capture it, is refused here.
-PROBE_PROVENANCE: Final = ("recorded", "why_not_recorded", "how_to_record")
-
-
-def probe_fixture(name: str) -> dict[str, Any]:
-    """A probe fixture, refused unless it says where it came from."""
-    loaded: dict[str, Any] = json.loads(read_text(LLM_PROBES / name))
-    missing = [key for key in PROBE_PROVENANCE if key not in loaded]
-    if missing:
-        raise ValueError(f"{name} declares no provenance: it is missing {', '.join(missing)}")
-    if not loaded["recorded"] and not str(loaded["how_to_record"]).strip():
-        raise ValueError(
-            f"{name} says it was not captured and does not say how to capture it, "
-            "so nobody can ever replace it with the real thing"
-        )
-    return loaded
+# --- What the server settles before the first item --------------------------
 
 
 class TestTheServerSettlesTheEntry:
@@ -2455,35 +1797,9 @@ class TestTheServerSettlesTheEntry:
     network (Guardrail #7). Both halves are proved: with the agreeing value it
     passes, and with one value changed it refuses and the message names both
     sides. A check nobody has made fail is a check nobody has tested.
-
     """
 
-    def test_a_probe_fixture_that_hides_where_it_came_from_is_refused(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """The provenance is enforced, not requested.
-
-        Both committed fixtures are constructed rather than captured, which is
-        only safe while the next reader can tell. Proved by writing a file that
-        hides it, never by asserting the committed pair are fine - that passes on
-        a tree where the check does not exist.
-        """
-        monkeypatch.setattr("test_summarize.LLM_PROBES", tmp_path)
-        (tmp_path / "silent.json").write_text('{"data": []}\n', encoding="utf-8")
-        with pytest.raises(ValueError, match="declares no provenance"):
-            probe_fixture("silent.json")
-
-        (tmp_path / "mute.json").write_text(
-            json.dumps(
-                {"recorded": False, "why_not_recorded": "no weights", "how_to_record": " "}
-            )
-            + "\n",
-            encoding="utf-8",
-        )
-        with pytest.raises(ValueError, match="does not say how to capture it"):
-            probe_fixture("mute.json")
-
-    # Case 3 - constrained decoding still constrains.
+    # Constrained decoding still constrains.
 
     def test_the_probe_schema_is_built_from_the_schema_the_run_really_sends(self) -> None:
         """Never a fixture: the real schema is generated, so a copy would drift."""

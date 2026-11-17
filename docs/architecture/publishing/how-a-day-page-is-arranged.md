@@ -1,6 +1,6 @@
 # How a day page is arranged
 
-**Last Updated**: 2026-11-13
+**Last Updated**: 2026-11-17
 
 A day page from top to bottom: the header that states each publication fact
 once, the controls, the leading block, the story stream and the footer that is
@@ -220,7 +220,7 @@ once any component changes.
 
 ## Design rationale
 
-Grouping the all-topics page by topic is hierarchy, not truncation, and the distinction is the whole argument. [layout.md](layout.md) forbids removing or demoting a published item, and [../../concepts/digest.md](../../concepts/digest.md) says the reader's budget is protected by ordering and hierarchy - so the fix for a 586-item day had to come from typography rather than from a cap. Every item stays published, in its published order, one prerendered click away. The rejected alternative, truncating the day, would have made the page look like a digest by making it stop being one. Authority: Jony, with Reader as the check.
+Grouping the all-topics page by topic is hierarchy, not truncation, and the distinction is the whole argument. [layout.md](layout.md) forbids removing or demoting a published item, and [../../concepts/digest.md](../../concepts/digest.md) says a reader's time is protected by ordering and hierarchy - so the fix for a 586-item day had to come from typography rather than from a cap. Every item stays published, in its published order, one prerendered click away. The rejected alternative, truncating the day, would have made the page look like a digest by making it stop being one. Authority: Jony, with Reader as the check.
 
 ## Rejected alternatives
 
@@ -228,7 +228,7 @@ Grouping the all-topics page by topic is hierarchy, not truncation, and the dist
 | --- | --- | --- |
 | A summary of the day's summaries | The only text on the page with nowhere to click, and three removes from the source. | Reader |
 | A cross-topic "top stories" strip on the day page | The payload carries no cross-vertical rank, so the page would have to invent one at read time. The page renders; it does not think. | Jony |
-| Truncating a long day to protect the two-minute budget | Ordering and hierarchy protect the budget. Dropping items a run published is not a typography fix. | Jony |
+| Truncating a long day to protect the reader's time | Ordering and hierarchy protect it. Dropping items a run published is not a typography fix. | Jony |
 | Grouping a day that ran to a single topic | One heading over the whole page states what the page already says, and it puts items behind a link that leads back to the same list. | Jony |
 | One paragraph per later run in the day notice | Three runs printed three near-identical sentences saying one fact. One total says it once. | Jony |
 | A divider naming the run that added an item | A run is our schedule rather than the reader's, and nobody reading past it can do anything differently for knowing. | Editor |

@@ -9,7 +9,7 @@ change it even if it changes the words (Guardrail #11).
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import ClassVar, Self
+from typing import Any, ClassVar, Self
 
 from pydantic import Field, model_validator
 
@@ -24,6 +24,7 @@ from idhazh.contracts.base import (
     Timestamp,
     UrlKey,
     derive_output_digest,
+    without_retired_keys,
 )
 from idhazh.contracts.call_cost import COST_FIELDS, CallCost
 from idhazh.contracts.item_health import FAILURE_CODE_STAGES, FailureCode, ItemStage
@@ -35,24 +36,16 @@ class SummaryStatus(StrEnum):
     SKIPPED = "skipped"
 
 
-class LengthAction(StrEnum):
-    """What the retired length verdict did with a reply.
-
-    No longer written: a reply is published exactly as the model wrote it. Kept so
-    a payload or ledger row written while the verdict existed still reads.
-    """
-
-    PUBLISH = "publish"
-    PUBLISH_OVER = "publish_over"
-    TRIM = "trim"
-    FAIL = "fail"
-
-
 class Summary(Contract):
     """The Summarize stage's output payload, one per item."""
 
     __schema_stem__: ClassVar[str] = "summary"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-11-17",
+            change="Removed length_action. A payload that still carries it loads.",
+            why="Nothing writes it: a reply is published exactly as the model wrote it.",
+        ),
         ChangelogEntry(
             version="2026-09-24",
             change="Removed key_points, and output_digest no longer digests them.",
@@ -70,11 +63,6 @@ class Summary(Contract):
         ),
         ChangelogEntry(
             version="2026-09-15",
-            change="failure_code may now carry no_title.",
-            why="Extract gained a refusal for an item whose feed carried no headline.",
-        ),
-        ChangelogEntry(
-            version="2026-08-21",
             change="Earlier changes are in this file's git history.",
             why="A changelog says what moved lately; git is the archive.",
         ),
@@ -115,18 +103,6 @@ class Summary(Contract):
         ),
     )
     source_truncated: bool = False
-    length_action: LengthAction | None = Field(
-        default=None,
-        description=(
-            "What the retired length verdict did with this reply. Null on every payload "
-            "written since the verdict was removed, on one written before it existed, and "
-            "on any item that never reached it. `publish` was inside the band's ask or "
-            "inside the tolerance around it; `publish_over` ran long on a band that would "
-            "rather be long than cut a key detail off the end; `trim` was cut at the last "
-            "complete sentence that fit; `fail` did not reach the absolute floor and was a "
-            "failed extraction rather than a summary."
-        ),
-    )
     input_tokens: int = Field(
         default=0, ge=0, description="Prompt tokens, added over every call recorded below."
     )
@@ -197,6 +173,12 @@ class Summary(Contract):
         ),
     )
     failure_detail: UntrustedLine | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _without_the_retired_length_action(cls, data: Any) -> Any:
+        """A payload written while the length verdict existed carries the key."""
+        return without_retired_keys(data, "length_action")
 
     @model_validator(mode="after")
     def _output_digest_is_rebuilt_not_trusted(self) -> Self:

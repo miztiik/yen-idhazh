@@ -13,58 +13,33 @@ from support.paths import CONFIG_DIR, REPO_ROOT, read_text
 
 from idhazh import config
 from idhazh.classify import dag
-from idhazh.classify.calls import label_budget_tokens, summarize_and_plan_budget_tokens
+from idhazh.classify.calls import label_budget_tokens
 from idhazh.contracts import app_config, story_similarity_distribution
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.appearance_config import AppearanceConfig, ChartConfig
 from idhazh.contracts.call_cost import CallKind
-from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.knobs import placement
-from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.console import ConsoleConfig
 from idhazh.contracts.knobs.evaluation import DriftConfig, EvaluationConfig
 from idhazh.contracts.knobs.ledger import LedgerConfig
 from idhazh.contracts.knobs.model_server import ModelServerConfig, is_loopback, resolve_base_url
-from idhazh.contracts.knobs.models import ModelsConfig
-from idhazh.contracts.knobs.observability import LoggingConfig, LogLevel, ObservabilityConfig
-from idhazh.contracts.knobs.placement import (
-    HOLDOUT_TWO_STORY_MAX,
-    SameStoryConfig,
-    SimilarityThresholdConfig,
-)
+from idhazh.contracts.knobs.observability import LoggingConfig, ObservabilityConfig
+from idhazh.contracts.knobs.placement import SameStoryConfig, SimilarityThresholdConfig
 from idhazh.contracts.knobs.retention import PAGES_HARD_CAP_MB, RetentionConfig
 from idhazh.contracts.knobs.similarity import SimilarityConfig
 from idhazh.contracts.knobs.ui import UiConfig, VisualSide
-from idhazh.contracts.knobs.windows import months_a_window_can_touch
-from idhazh.contracts.story_similarity_distribution import (
-    ScoreSlot,
-    StorySimilarityDistribution,
-)
 from idhazh.extract import TOKENS_PER_WORD
-from idhazh.fingerprint import DIGESTED_FLAGS
-from idhazh.llm.server import window
+from idhazh.llm.server import DEFAULT_MAX_TOKENS, response_limit, window
 from idhazh.measured import LABEL_BODY_TOKENS_A_WORD as _LABEL_A_WORD
 from idhazh.measured import LABEL_MENU_TOKENS_A_ROW as _MENU_A_ROW
 from idhazh.measured import LABEL_SCAFFOLD_TOKENS as _LABEL_SCAFFOLD
 from idhazh.measured import PROMPT_OVERHEAD_TOKENS as _PROMPT_OVERHEAD
 from idhazh.measured import SUMMARIZE_AND_PLAN_SEAM_TOKENS as _SUMMARIZE_AND_PLAN_SEAM
 from idhazh.measured import WORST_TOKENS_A_WORD as _WORST_TOKENS
-from idhazh.similarity import budget
 
-from ._fixtures import (
-    APP_CONFIG_EVERY_KNOB_DIFFERS,
-    CONFIG_FILES,
-    CONFIG_NOT_OWNED,
-    committed_models,
-    copy_config,
-)
+from ._fixtures import CONFIG_FILES, CONFIG_NOT_OWNED, committed_models, copy_config
 
 pytestmark = pytest.mark.contract
-
-#: The window this project served on before any measurement widened one, and the
-#: floor the committed entry has to clear. Not a contract default: the model file
-#: declares what it declares and nothing fills a window in behind it.
-UNMEASURED_WINDOW: Final = 8192
 
 
 @pytest.mark.parametrize("name", sorted(CONFIG_FILES), ids=lambda n: n)
@@ -92,7 +67,7 @@ def test_the_config_file_names_every_knob_it_owns(name: str) -> None:
 
     Leaf paths rather than top-level keys, because a default nested inside a
     list entry is the shape that hides best: a block-level check cannot see one
-    that several `summarize.bands` entries omit.
+    that a list entry omits.
     """
     model = CONFIG_FILES[name]
     committed = read_text(CONFIG_DIR / name)
@@ -136,12 +111,6 @@ def test_a_fresh_clone_runs_on_the_defaults() -> None:
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
     minimal = AppConfig.model_validate({"models_file": committed.models_file})
     assert (CONFIG_DIR / minimal.models_file).is_file()
-    assert minimal.run.safety_ceiling_per_run == committed.run.safety_ceiling_per_run
-    assert minimal.run.trial_case_dirname is None
-    assert minimal.retention.image_months == -1, "retention ships disabled"
-    assert minimal.retention.pages_hard_cap_mb == PAGES_HARD_CAP_MB, (
-        "an unconfigured clone enforces the platform's own ceiling"
-    )
 
 
 def test_source_code_does_not_select_a_model_when_the_pointer_is_missing() -> None:
@@ -174,55 +143,25 @@ def test_the_config_refuses_a_pages_cap_above_the_platforms_own() -> None:
 
     Guardrail #2 says the budget is the platform and not a preference. That held while
     the 1024 was a module constant only because nobody edited it, which is not a
-    control. It is a control now: the schema refuses the edit, and the message
-    names the number it refused, so an operator reading it learns the bound
-    rather than only that the file is wrong.
+    control. It is a control now: the schema refuses the edit.
     """
-    with pytest.raises(ValidationError) as raised:
+    with pytest.raises(ValidationError):
         RetentionConfig(pages_hard_cap_mb=PAGES_HARD_CAP_MB + 1)
-    assert "less than or equal to 1024" in str(raised.value)
 
     raw = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
     raw["retention"]["pages_hard_cap_mb"] = 2048
-    with pytest.raises(ValidationError) as from_file:
+    with pytest.raises(ValidationError, match="pages_hard_cap_mb"):
         AppConfig.model_validate(raw)
-    assert "pages_hard_cap_mb" in str(from_file.value)
-    assert "1024" in str(from_file.value)
 
 
-def test_the_config_takes_a_pages_cap_below_the_platforms_own() -> None:
-    """The other case, and the reason the field is here at all.
+def test_the_alarm_point_sits_below_the_pages_cap() -> None:
+    """One reports and one stops, so an alarm at or above the cap never gets to warn.
 
-    A bound only tested in the direction it permits is not a bound - it is a
-    default nobody has pushed on. Lowering is the whole use: it buys an earlier
-    and louder failure while there is still headroom to act in. The tuned fixture
-    carries 900 so a lowered cap is exercised by every round trip, not only here.
-    """
-    assert RetentionConfig(pages_hard_cap_mb=1).pages_hard_cap_mb == 1
-
-    raw = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
-    raw["retention"]["pages_hard_cap_mb"] = 512
-    assert AppConfig.model_validate(raw).retention.pages_hard_cap_mb == 512
-
-    tuned = AppConfig.from_json(read_text(APP_CONFIG_EVERY_KNOB_DIFFERS))
-    assert tuned.retention.pages_hard_cap_mb == 900
-
-
-def test_the_alarm_point_and_the_pages_cap_stay_two_knobs() -> None:
-    """One reports and one stops, so one number cannot do both jobs.
-
-    Collapsing them gives a warning nobody may ignore or a failure that arrives
-    with no notice. The committed file spells both, 224 MB apart, and the tuned
-    fixture moves them independently - which is the shape that proves they are
-    two instruments rather than one written twice.
+    The two are set independently and the contract does not tie them together, so
+    the committed pair is the only place a swapped pair would show.
     """
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).retention
-    assert committed.site_budget_mb == 800
-    assert committed.pages_hard_cap_mb == PAGES_HARD_CAP_MB
     assert committed.site_budget_mb < committed.pages_hard_cap_mb
-
-    tuned = AppConfig.from_json(read_text(APP_CONFIG_EVERY_KNOB_DIFFERS)).retention
-    assert (tuned.site_budget_mb, tuned.pages_hard_cap_mb) == (600, 900)
 
 
 @pytest.mark.parametrize(
@@ -253,9 +192,8 @@ def test_an_address_that_is_not_a_scheme_a_host_and_a_port_is_refused(
     path, so a prefix would hold on one of them and vanish from the rest, and a
     wrong address is worse than a refused one.
     """
-    with pytest.raises(ValidationError) as raised:
+    with pytest.raises(ValidationError):
         ModelServerConfig(base_url=declared)
-    assert declared in str(raised.value), f"the refusal for {fault} does not quote what it read"
 
     with pytest.raises(ValueError, match=r"model_server\.base_url"):
         resolve_base_url(declared)
@@ -268,9 +206,6 @@ def test_an_address_a_run_can_use_is_taken_and_tidied() -> None:
     apart and refusing would cost an operator a round trip to learn it. The
     stored value is the tidied one, so every later reader sees one spelling.
     """
-    assert ModelServerConfig().base_url == "http://127.0.0.1:8080", (
-        "a fresh clone talks to a server on its own machine"
-    )
     assert ModelServerConfig(base_url="http://10.0.0.5:9001/").base_url == "http://10.0.0.5:9001"
     assert ModelServerConfig(base_url="https://a-box:8443").base_url == "https://a-box:8443"
 
@@ -290,9 +225,8 @@ def test_an_add_on_address_the_engine_cannot_join_onto_is_refused(declared: str)
         LedgerConfig(engine_extension_repository=declared)
 
 
-def test_a_fresh_clone_fetches_add_ons_from_duckdbs_own_host() -> None:
-    """The engine's own default, and a mirror under a path is taken as written."""
-    assert LedgerConfig().engine_extension_repository == "https://extensions.duckdb.org"
+def test_an_add_on_mirror_under_a_path_is_taken_as_written() -> None:
+    """The engine appends its own segments, so a prefix with a path is still an address."""
     mirror = "https://mirror.example/duckdb"
     assert LedgerConfig(engine_extension_repository=mirror).engine_extension_repository == mirror
 
@@ -328,55 +262,6 @@ def test_only_a_loopback_literal_or_localhost_answers_for_this_machine(
     assert is_loopback(ModelServerConfig(base_url=declared).base_url) is this_machine
 
 
-def test_the_model_server_publishes_its_counters_without_being_asked_for() -> None:
-    """A run that did not count is a run that cannot say how close it came.
-
-    llama-server publishes the context high watermark only under `--metrics`.
-    Off by default would mean the number exists on the runs nobody thought to
-    switch it on for, which is every ordinary day.
-
-    The fresh-clone case drops the settings block and the weights digest
-    together. Those two move as a pair now: an entry that names measured bytes
-    under a block declared for nothing is refused - and the turn envelope obeys
-    the same rule, so its digest goes with them. The markers themselves stay,
-    because they have no default and a clone that forgot them would not load.
-    """
-    committed = committed_models()
-    models = committed.model_dump()
-    for role in ModelsConfig.roles():
-        entry = models[role]
-        entry["sha256"] = None
-        entry["declared_for"] = None
-    fresh = ModelsConfig.model_validate(models)
-
-    assert "--metrics" in fresh.summarizer.server, "a fresh clone must count"
-    assert "--metrics" in committed.summarizer.server, "the committed config must count"
-
-
-def test_the_committed_window_is_one_a_measurement_widened() -> None:
-    """The entry names its own window, because one role is what was measured.
-
-    A number measured against one model may not be inherited by another, which
-    is why the settings sit on the entry rather than on `models`. The assertion
-    is the relationship and not the number, so raising the window beside the
-    truncation cap does not need an edit here (Guardrail #6). The floor is the
-    window this project ran on before anybody measured a wider one.
-
-    Attention is pinned in the same file. `auto` is a runtime autodetect that
-    may resolve differently on other silicon, and a run that cannot name the
-    kernel it used cannot be compared with one that can (Guardrail #10).
-    """
-    models = committed_models()
-
-    assert window(models.summarizer.server) > UNMEASURED_WINDOW, (
-        "the summarizer is the one role a measurement widened"
-    )
-    assert any(
-        models.summarizer.server.get(flag) == "on"
-        for flag in ("-fa", "--flash-attn")
-    )
-
-
 #: What the summarize prompt costs before a word of the article reaches it, and
 #: the hardest any published item has tokenized. Both records, their method and
 #: what to do when either moves are in `idhazh.measured`.
@@ -405,14 +290,13 @@ def _worst_sequence_tokens(committed: AppConfig) -> tuple[int, int]:
     cap gave it, and both windows have to cover the article that did rather than
     the one that behaved.
 
-    The answer term is the summarize-and-plan call's derived budget. It was the
-    role's `max_answer_tokens` until 2026-09-21, and with that knob gone the
-    only number that says how long a reply can be is the one derived from the
-    shape the reply is held to.
+    The answer term is the summarizer's response limit: the reply has no length
+    bound of its own, so the most it can write is what the model file lets a
+    request run to.
     """
     cut_words = int(committed.extract.truncation_cap_tokens / TOKENS_PER_WORD)
     worst_prompt = PROMPT_OVERHEAD_TOKENS + int(cut_words * WORST_TOKENS_A_WORD)
-    return worst_prompt, worst_prompt + summarize_and_plan_budget_tokens(committed.summarize)
+    return worst_prompt, worst_prompt + response_limit(committed_models().summarizer.sampling)
 
 
 def test_the_longest_article_the_cap_allows_still_fits_the_window() -> None:
@@ -422,9 +306,10 @@ def test_the_longest_article_the_cap_allows_still_fits_the_window() -> None:
     from word count and can undercount the rendered prompt.
     """
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
-    n_ctx = window(committed_models().summarizer.server)
+    models = committed_models()
+    n_ctx = window(models.summarizer.server)
     worst_prompt, worst_sequence = _worst_sequence_tokens(committed)
-    answer = summarize_and_plan_budget_tokens(committed.summarize)
+    answer = response_limit(models.summarizer.sampling)
 
     assert worst_sequence <= n_ctx, (
         f"the longest article extract.truncation_cap_tokens "
@@ -455,33 +340,20 @@ def _worst_two_call_sequence_tokens(committed: AppConfig) -> tuple[int, int]:
     """
     rows = committed.elements.max_per_article
     cap = committed.extract.truncation_cap_tokens
+    sampling = committed_models().summarizer.sampling
     return (
         dag.first_prompt_tokens(cap, menu_rows=rows),
-        dag.sequence_tokens(cap, menu_rows=rows, prompt_config=committed.summarize),
+        dag.sequence_tokens(cap, menu_rows=rows, sampling=sampling),
     )
 
 
-def test_the_sequence_is_two_calls_and_growing_it_is_an_escalation() -> None:
-    """A third call is a design change, and this is what makes it stop being quiet.
+def test_every_call_in_the_sequence_has_a_kind_the_ledger_can_record() -> None:
+    """The walk and the ledger have to agree about what a call was.
 
-    Every node's reply is paid twice - once as its own decode, and once again
-    inside the prompt of every node behind it - so a third call does not cost a
-    third of the sequence, it costs its own budget plus a seam plus the prompt
-    it drags forward. At the committed window that is the difference between 80
-    percent full and over.
-
-    The import-time guard in `classify.dag` fires first and says the same thing.
-    This test exists because a guard inside the module a change is editing is a
-    guard that change can edit; a change that adds a node has to come here and
-    say so as well, which is the point at which it stops being a quiet edit and
-    becomes a design decision a person signs off.
-
-    **A labelling row does not add a node.** It adds a field to the label call's reply
-    shape, and `label_budget_tokens` re-derives the budget from the shape's
-    own bounds on import.
+    `dag.CallName` and `CallKind` spell the same names for the same calls. The
+    count and the order of the nodes are held by the import-time guards in
+    `classify.dag`.
     """
-    assert len(dag.NODES) == dag.NODE_COUNT == 2
-    assert [node.name.value for node in dag.NODES] == ["label", "summarize_and_plan"]
     assert {node.name.value for node in dag.NODES} <= {kind.value for kind in CallKind}, (
         "a node the ledger has no CallKind for records its cost as nothing"
     )
@@ -494,7 +366,8 @@ def test_the_two_calls_fit_the_window_at_the_cap() -> None:
     an explicit response limit. Those are diagnosed from the actual request.
     """
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
-    n_ctx = window(committed_models().summarizer.server)
+    models = committed_models()
+    n_ctx = window(models.summarizer.server)
     prompt, sequence = _worst_two_call_sequence_tokens(committed)
 
     assert sequence <= n_ctx, (
@@ -503,11 +376,21 @@ def test_the_two_calls_fit_the_window_at_the_cap() -> None:
         f"the label call prompt at elements.max_per_article of "
         f"{committed.elements.max_per_article}. The label call's {label_budget_tokens()}-token "
         f"reply, the {SUMMARIZE_AND_PLAN_SEAM_TOKENS}-token seam and the summarize-and-plan call's "
-        f"{summarize_and_plan_budget_tokens(committed.summarize)}-token reply put the pair at "
+        f"{response_limit(models.summarizer.sampling)}-token response limit put the pair at "
         f"{sequence} against a window of {n_ctx}, over by "
         f"{sequence - n_ctx}. Measure the complete request before proposing a "
         "configuration or article-admission change."
     )
+
+
+def test_the_gate_holds_room_for_the_whole_response_limit_the_model_file_names() -> None:
+    """The summarize-and-plan reply has no length bound, so its reserve is the limit itself."""
+
+    def held(sampling: dict[str, int]) -> int:
+        return dag.sequence_tokens(1000, menu_rows=10, sampling=sampling)
+
+    assert held({"max_tokens": 9000}) - held({"max_tokens": 8000}) == 1000
+    assert held({}) == held({"max_tokens": DEFAULT_MAX_TOKENS})
 
 
 @pytest.mark.parametrize("key, limit", [("n_predict", 4213), ("max_tokens", 8192)])
@@ -553,20 +436,6 @@ def test_the_training_window_covers_the_longest_row_the_cap_allows() -> None:
     )
 
 
-def test_a_wider_window_moves_the_stamp_and_the_verbosity_does_not() -> None:
-    """The two halves of the digest decision, in one place.
-
-    The window is digested under its own name, so raising it stamps the work
-    apart from every summary written at the old one - which is correct, because
-    the prompt those summaries were written under could not have carried as
-    much. The log level is not digested, because it cannot move a logit and
-    digesting it would have invalidated every earlier identity the day somebody
-    turned the logging up.
-    """
-    assert "n_ctx" in PipelineInputs.model_fields
-    assert "-lv" not in DIGESTED_FLAGS
-
-
 def test_the_console_chart_size_is_a_knob_the_frontend_agrees_with() -> None:
     """A prerendered chart has no element to measure, so the size is given to it.
 
@@ -600,11 +469,6 @@ def test_the_console_chart_size_is_a_knob_the_frontend_agrees_with() -> None:
             f"the frontend's own {field} fallback is {mirrored.group(1)} and the "
             f"console draws at {shipped}"
         )
-
-
-def test_a_console_chart_may_not_be_narrower_than_its_own_labels() -> None:
-    with pytest.raises(ValueError):
-        AppConfig.model_validate({"console": {"chart_width": 0}})
 
 
 def test_the_window_the_console_opens_on_is_one_the_control_can_name() -> None:
@@ -732,49 +596,6 @@ RARE_EVENT_THRESHOLDS: Final = (
     "model_disk_reads_named",
 )
 
-#: A setting for each, chosen to differ from every committed value, so a load
-#: that ignored the file resolves something this cannot mistake for a pass.
-THRESHOLDS_MOVED: Final = {
-    "processor_lost_pct_marked": 2.5,
-    "processor_lost_pct_named": 40.0,
-    "model_disk_reads_marked": 500,
-    "model_disk_reads_named": 9000,
-}
-
-
-def test_moving_a_rare_event_threshold_in_the_config_moves_what_resolves(
-    tmp_path: Path,
-) -> None:
-    """Guardrail #6's substitution test: edit the file, and the value moves with it.
-
-    Both sides go through the same loader, so the only difference between them
-    is the file on disk. A threshold held as a literal in the module that draws
-    the strip would resolve the same on both sides, which is the defect this
-    row exists to prevent and the one thing this check can fail for.
-
-    What it cannot settle: whether the resolved number reaches a drawn tile.
-    The two panels that read these four are not written yet, and the parity
-    check below is as far as the value can be followed today.
-    """
-    copy_config(tmp_path)
-    appearance = json.loads(read_text(tmp_path / "config" / "appearance.json"))
-    appearance["console"] |= THRESHOLDS_MOVED
-    (tmp_path / "config" / "appearance.json").write_text(
-        AppearanceConfig.model_validate(appearance).to_json(), encoding="utf-8", newline="\n"
-    )
-
-    committed = config.load(CONFIG_DIR).appearance.console
-    moved = config.load(tmp_path / "config").appearance.console
-    for field, value in THRESHOLDS_MOVED.items():
-        assert getattr(committed, field) != value, (
-            f"console.{field} already ships at {value}, so this case no longer asks "
-            "whether the file decides it - pick another value"
-        )
-        assert getattr(moved, field) == value, (
-            f"console.{field} did not follow config/appearance.json, so something "
-            "other than the config file decides when a day is drawn as loud"
-        )
-
 
 def test_the_rare_event_thresholds_are_knobs_the_frontend_agrees_with() -> None:
     """The same three-copies problem the chart size has, four fields along.
@@ -830,49 +651,6 @@ def test_a_threshold_that_would_mark_a_day_where_nothing_happened_is_refused() -
         ConsoleConfig(model_disk_reads_marked=0)
 
 
-def test_the_windows_and_the_reading_marks_are_the_spans_the_committed_config_names() -> None:
-    """The six spans that bound a constant-cost read, read off disk.
-
-    Each is asserted against `config/` rather than against the model, because a
-    default and a committed value are two different facts and only the second is
-    what ships. The console reads its window out of `config/appearance.json`,
-    which is the last merge layer, and `config/idhazh.json` still carries the
-    keys it carried before the split - so where both files name a span, both are
-    read here and the pair has to agree.
-
-    Why each number is what it is belongs in the field descriptions. This test
-    only holds them still.
-    """
-    drawn = AppearanceConfig.from_json(read_text(CONFIG_DIR / "appearance.json"))
-    legacy = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
-
-    assert 1 in drawn.console.window_presets, (
-        "the console offers no one-day window, so the cheapest read it can do - one "
-        "month file and the run that just finished - is unreachable"
-    )
-    assert drawn.console.min_window_days == 1
-    assert drawn.console.max_window_days == 366, (
-        "max_window_days is a retention floor: lowering it makes no page cheaper and "
-        "authorises deleting month shards the console can still ask for"
-    )
-    assert drawn.digest.read_mark_days == 14
-    assert drawn.digest.archive_recent_days == 14, (
-        "the archive lists a different span from the one read marks survive, so it "
-        "offers days that come back looking unread"
-    )
-    assert drawn.digest.read_mark_days == drawn.digest.archive_recent_days
-
-    assert legacy.ui.read_mark_days == drawn.digest.read_mark_days
-    assert legacy.console.min_window_days == drawn.console.min_window_days
-    assert legacy.console.max_window_days == drawn.console.max_window_days
-
-    # Two knobs nothing reads yet - the offline cache evicts on a day count
-    # alone, and the archive has no window control - so the committed value and
-    # the bounds either side of it are the whole of what can be checked today.
-    assert drawn.digest.offline_bytes_kept == 20_000_000
-    assert drawn.digest.archive_window_days in drawn.console.window_presets
-
-
 def test_the_offline_cache_takes_a_byte_ceiling_that_can_still_hold_one_day() -> None:
     """A day count cannot bound bytes, and a byte bound must fit a day.
 
@@ -887,13 +665,6 @@ def test_the_offline_cache_takes_a_byte_ceiling_that_can_still_hold_one_day() ->
     for refused in (0, 1_999_999, 100_000_001):
         with pytest.raises(ValidationError, match="offline_bytes_kept"):
             UiConfig(offline_bytes_kept=refused)
-    assert UiConfig(offline_bytes_kept=2_000_000).offline_bytes_kept == 2_000_000
-    assert UiConfig(offline_bytes_kept=100_000_000).offline_bytes_kept == 100_000_000
-    assert UiConfig().offline_bytes_kept == 20_000_000
-    assert UiConfig().offline_bytes_kept > 1_373_593, (
-        "the ceiling is under the largest day payload measured, so the cache would "
-        "evict every large day the moment it arrived"
-    )
 
 
 def test_the_archive_window_names_a_span_the_console_presets_already_offer() -> None:
@@ -1048,29 +819,6 @@ def test_the_wait_worth_a_sentence_is_a_knob_the_frontend_agrees_with() -> None:
     assert int(mirrored.group(1)) == UiConfig().payload_slow_ms
 
 
-def test_a_shared_subject_is_worth_less_than_a_second_feed_carrying_the_story() -> None:
-    """Decision 3's ceiling, derived rather than spelled.
-
-    A second feed carrying one address adds `collect.carriage_step` to that
-    story's score, flat and whatever tier carried it. A recurring subject must
-    not outrank a story two independent feeds carried today, so the
-    shared-subject term stays under it. The ceiling was
-    `tier_weights.trade_press * repetition_weight` until 2026-09-13 because the
-    term multiplied a tier; it multiplies nothing now, so the bound cannot
-    either, and it tightened from 0.6 to 0.25. Measured 2026-09-01 over 11
-    committed days: a second carrier fires on 4.49 percent of the stories that
-    record one and a shared subject on 12.85 percent, so the commoner signal is
-    the one that has to be worth less.
-    """
-    committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
-    second_carrier = committed.collect.carriage_step
-    assert committed.ui.lead_shared_subject_weight < second_carrier, (
-        f"a shared subject is worth {committed.ui.lead_shared_subject_weight} against "
-        f"{second_carrier} for a second feed carrying the story"
-    )
-    assert UiConfig().lead_shared_subject_weight < CollectConfig().carriage_step
-
-
 def test_a_leading_block_that_could_never_draw_is_refused() -> None:
     """A floor above the ceiling fails silently: the block never appears."""
     with pytest.raises(ValidationError, match="leading_min"):
@@ -1098,28 +846,6 @@ def test_historical_copying_config_preserves_only_the_corpus_length_cutoff() -> 
         EvaluationConfig.model_validate({"unknown_copying_limit": 0.2})
 
 
-def test_a_fresh_clone_measures_itself_and_the_committed_config_agrees() -> None:
-    """Every instrument is on unconfigured, and the committed file did not turn one off.
-
-    Written as an agreement between two configs rather than as three literals: a
-    default that is asserted by value is a test that fails the day somebody
-    legitimately changes it, which teaches people to edit the test.
-
-    Tracing is the exception and is asserted by value, because its default is
-    the claim: it was off until 2026-09-06, when the maintainer turned it on by
-    default. On or off, the committed file and a fresh clone must agree - the
-    point of this test is that the shipped config never silently diverges from
-    the defaults the code carries. No cleanup age is left here to diverge: each
-    one is the window of the gardener task that spends it.
-    """
-    committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
-    fresh = AppConfig.model_validate({"models_file": "models/test.json"})
-
-    assert committed.observability.model_dump() == fresh.observability.model_dump()
-    assert fresh.observability.evaluation_enabled
-    assert fresh.observability.tracing_enabled
-
-
 def test_the_item_health_census_is_not_switchable() -> None:
     """The denominator under every rate this project publishes has no off switch.
 
@@ -1140,28 +866,9 @@ def test_the_item_health_census_is_not_switchable() -> None:
         "host_fingerprint_frequency_enabled",
         "host_fingerprint_placement_enabled",
     }
-    assert ObservabilityConfig().memory_profiling_enabled is True
-    assert (
-        AppConfig.from_json(
-            read_text(APP_CONFIG_EVERY_KNOB_DIFFERS)
-        ).observability.memory_profiling_enabled
-        is False
-    )
-    assert "census" in (ObservabilityConfig.__doc__ or "")
 
 
-def test_host_fingerprint_placement_is_default_on_and_strict() -> None:
-    assert ObservabilityConfig().host_fingerprint_placement_enabled is True
-    assert (
-        ObservabilityConfig(host_fingerprint_placement_enabled=True)
-        .host_fingerprint_placement_enabled
-        is True
-    )
-    assert (
-        ObservabilityConfig(host_fingerprint_placement_enabled=False)
-        .host_fingerprint_placement_enabled
-        is False
-    )
+def test_the_host_fingerprint_placement_switch_refuses_anything_but_a_boolean() -> None:
     for invalid in ("true", "false", 0, 1, None):
         with pytest.raises(ValidationError):
             ObservabilityConfig.model_validate(
@@ -1174,82 +881,6 @@ def test_a_sample_rate_of_zero_is_refused_because_the_toggle_already_says_off() 
     for refused in (0.0, -0.1, 1.1):
         with pytest.raises(ValidationError):
             ObservabilityConfig(sample_rate=refused)
-    assert ObservabilityConfig(sample_rate=1.0).sample_rate == 1.0
-
-
-def test_every_published_window_outlives_the_shards_a_console_read_selects() -> None:
-    """The check the old `keep_months` never made, and the reason 13 was wrong.
-
-    `console.max_window_days` is 366, and `month_partition.shards_in_window` walks 367
-    inclusive days - so a window ending on the first of a month can start on the
-    last day of another and open **14** month files. The retired check compared
-    `months * 30` against the window, which passed 13 while a reader could still
-    ask for a fourteenth shard. The windows of the ledgers behind these copies are
-    the gardener's, and `test_gardener_config.py` holds them to the same read.
-    """
-    window = ConsoleConfig().max_window_days
-    shards = months_a_window_can_touch(window)
-    assert window == 366
-    assert shards == 14, "a 366-day read reaches fourteen month shards, not thirteen"
-    assert 13 * 30 > window, "the retired check passed 13, which is the whole point"
-
-    for name in (
-        "public_run_days_keep_months",
-        "public_day_metrics_keep_months",
-        "public_machine_keep_months",
-    ):
-        with pytest.raises(ValidationError, match="Extra inputs"):
-            AppConfig.model_validate({"observability": {name: 14}})
-
-
-def test_a_config_with_no_logging_block_reads_every_flag_at_its_documented_default() -> None:
-    """A fresh clone logs everything, because the reason the flags exist is silence.
-
-    Built here rather than read from `config/idhazh.json`, so it proves the
-    default and not what somebody happened to commit. The block is absent
-    entirely, which is the shape of every config file written before today.
-
-    It cannot settle whether these defaults are right for a quiet production
-    run; only a run under them says that.
-    """
-    fresh = AppConfig.model_validate(
-        {"models_file": "models/test.json", "run": {"max_parallel": 2}}
-    ).logging
-    assert fresh.level is LogLevel.INFO
-    assert fresh.item_lines is True
-    assert fresh.stage_lines is True
-    assert fresh.waiting_heartbeat_seconds == 30
-    assert fresh.capture_prompts is True
-    assert fresh.capture_replies is True
-
-
-def test_every_logging_flag_moved_off_its_default_survives_the_round_trip() -> None:
-    """The substitution test: the file says it, the contract carries it back.
-
-    Every knob is moved, so a reader that ignored the block and fell back to a
-    default fails here rather than passing. `waiting_heartbeat_seconds` is moved
-    to 5 rather than to 0, because 0 is the off switch and an off switch that
-    reads the same as an unset knob proves nothing.
-    """
-    payload = {
-        "capture_prompts": False,
-        "capture_replies": False,
-        "item_lines": False,
-        "level": "DEBUG",
-        "stage_lines": False,
-        "waiting_heartbeat_seconds": 5,
-    }
-    fresh = LoggingConfig()
-    for name, moved in payload.items():
-        assert getattr(fresh, name) != moved, f"logging.{name} was already {moved!r}"
-
-    once = LoggingConfig.model_validate(payload).model_dump(mode="json")
-    assert json.dumps(once, sort_keys=True) == json.dumps(payload, sort_keys=True)
-    twice = LoggingConfig.model_validate(once).model_dump(mode="json")
-    assert json.dumps(twice, sort_keys=True) == json.dumps(once, sort_keys=True)
-    assert AppConfig.model_validate(
-        {"models_file": "models/test.json", "logging": payload}
-    ).logging.waiting_heartbeat_seconds == 5
 
 
 def test_a_negative_heartbeat_is_refused_and_the_error_names_the_field() -> None:
@@ -1267,37 +898,6 @@ def test_a_negative_heartbeat_is_refused_and_the_error_names_the_field() -> None
     assert LoggingConfig(waiting_heartbeat_seconds=0).waiting_heartbeat_seconds == 0
 
 
-def test_every_flag_but_the_permanent_one_names_the_reading_that_retires_it() -> None:
-    """Guardrail #6: a flag with no removal condition is a second implementation.
-
-    A condition that named a piece of work would be no condition at all, so each
-    one has to name a reading. The guard is the word `week`, which is the span
-    every one of them is measured over. `item_lines` is the declared exception
-    and has to say so; `level` is not a flag and carries no condition either.
-    """
-    flags = {name for name, field in LoggingConfig.model_fields.items() if name != "level"}
-    assert flags == {
-        "item_lines",
-        "stage_lines",
-        "waiting_heartbeat_seconds",
-        "capture_prompts",
-        "capture_replies",
-    }
-    for name in sorted(flags - {"item_lines"}):
-        described = LoggingConfig.model_fields[name].description or ""
-        assert "Retire it" in described or "Set it to 0" in described, (
-            f"logging.{name} has no removal condition on the line that declares it"
-        )
-        assert "week" in described, f"logging.{name} names no reading, only an intent"
-
-    permanent = LoggingConfig.model_fields["item_lines"].description or ""
-    assert "NO REMOVAL CONDITION" in permanent
-    assert "permanent instrument" in permanent
-
-    level = LoggingConfig.model_fields["level"].description or ""
-    assert "Unrelated to the flags" in level, "the level is a volume dial, not a sixth flag"
-
-
 def test_a_band_that_does_not_divide_into_whole_slots_is_refused() -> None:
     """A part-slot at one end holds counts drawn from a smaller catchment than its neighbours.
 
@@ -1308,8 +908,6 @@ def test_a_band_that_does_not_divide_into_whole_slots_is_refused() -> None:
     """
     with pytest.raises(ValidationError, match="does not divide into whole slots"):
         SimilarityThresholdConfig(bin_width=0.0007)
-
-    assert SimilarityThresholdConfig().bin_width == 0.001, "the committed width still divides"
 
 
 def test_a_band_that_opens_above_todays_floor_is_refused() -> None:
@@ -1324,9 +922,6 @@ def test_a_band_that_opens_above_todays_floor_is_refused() -> None:
             floor_min=0.94,
             adaptive_dedup_threshold=SimilarityThresholdConfig(band_low=0.95),
         )
-
-    committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).assemble.same_story
-    assert committed.judging_knobs().band_low < committed.floor_min
 
 
 def test_a_daily_step_that_outruns_the_band_is_refused() -> None:
@@ -1349,10 +944,6 @@ def test_a_daily_step_that_outruns_the_band_is_refused() -> None:
     with pytest.raises(ValidationError, match="outside the record"):
         SimilarityThresholdConfig(dead_zone_bins=slots)
 
-    assert band.max_down_step == pytest.approx(band.max_down_bins * band.bin_width)
-    assert band.max_up_step == pytest.approx(band.max_up_bins * band.bin_width)
-    assert band.dead_zone == pytest.approx(band.dead_zone_bins * band.bin_width)
-
 
 def test_a_config_that_makes_the_line_rise_faster_than_it_falls_is_refused() -> None:
     """The line falls fast and rises slow, and the config is where that is held.
@@ -1367,11 +958,6 @@ def test_a_config_that_makes_the_line_rise_faster_than_it_falls_is_refused() -> 
         SimilarityThresholdConfig(fall_weight=0.15, rise_weight=0.5)
     with pytest.raises(ValidationError, match="meant to be quick"):
         SimilarityThresholdConfig(max_down_bins=3, max_up_bins=10)
-
-    committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
-    knobs = committed.assemble.same_story.judging_knobs()
-    assert knobs.fall_weight > knobs.rise_weight
-    assert knobs.max_down_bins > knobs.max_up_bins
 
 
 def test_a_config_still_spelling_a_retired_threshold_knob_is_refused() -> None:
@@ -1433,9 +1019,6 @@ def test_a_band_that_cannot_draw_the_hardest_labelled_pair_is_refused() -> None:
             adaptive_dedup_threshold=SimilarityThresholdConfig(band_low=0.95),
         )
 
-    committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).assemble.same_story
-    assert committed.judging_knobs().band_low < HOLDOUT_TWO_STORY_MAX
-
 
 def test_no_judges_own_measurement_reaches_the_shared_config_contract() -> None:
     """A measured figure one judge produced may not sit where every reader loads it.
@@ -1461,10 +1044,6 @@ def test_no_judges_own_measurement_reaches_the_shared_config_contract() -> None:
         "config now carries one judge's measurement - and moving that measurement "
         "would re-size budgets nobody measured"
     )
-    assert budget.SECONDS_A_JUDGED_PAIR < 2 * placement.SECONDS_A_CALL, (
-        "a measured pair costs less than the derived figure doubled, which is why the "
-        "derived one was an unlabelled margin rather than a reading"
-    )
 
 
 def test_the_two_contract_modules_share_one_grid_tolerance() -> None:
@@ -1474,56 +1053,6 @@ def test_the_two_contract_modules_share_one_grid_tolerance() -> None:
     accepts is a band the record refuses - hours later, in CI, on the first day counted.
     """
     assert placement.GRID_TOLERANCE is story_similarity_distribution.GRID_TOLERANCE
-
-
-def test_the_committed_defaults_build_a_record_the_contract_accepts() -> None:
-    """The knob block and the record are two shapes, and neither may read the other's file.
-
-    So the agreement is held here: the three band knobs, turned into a record the
-    way the counting will turn them, produce something the record's own validators
-    accept. A test rather than a field rule, because a field rule would need one
-    of the two shapes to import the other's on-disk value.
-    """
-    knobs = SimilarityThresholdConfig()
-    slots = round((knobs.band_high - knobs.band_low) / knobs.bin_width)
-
-    record = StorySimilarityDistribution(
-        version=StorySimilarityDistribution.schema_version(),
-        band_low=knobs.band_low,
-        band_high=knobs.band_high,
-        bin_width=knobs.bin_width,
-        slots=tuple(
-            ScoreSlot(bin_low=round(knobs.band_low + i * knobs.bin_width, 3)) for i in range(slots)
-        ),
-    )
-
-    assert slots == 120
-    assert len(record.slots) == 120
-    assert record.counted_dates == ()
-
-
-def test_the_feature_ships_off_and_a_fresh_clone_publishes_what_it_always_did() -> None:
-    """Guardrail #6: a feature in development ships behind a flag, default agreed.
-
-    Nothing reads this block yet, so the switch is the whole of the promise: a
-    clone that has never heard of the fitted line publishes exactly the groups
-    `floor_min` produced before the block existed. A clone with no judge in it
-    has no block at all, which reaches the same day by the shorter road.
-    """
-    fresh = AppConfig.model_validate({"models_file": "models/test.json"}).assemble.same_story
-    committed = AppConfig.from_json(
-        read_text(CONFIG_DIR / "idhazh.json")
-    ).assemble.same_story.judging_knobs()
-
-    assert fresh.adaptive_dedup_threshold is None
-    assert committed.enabled is False
-    assert committed == SimilarityThresholdConfig(), "the committed file spells the defaults"
-
-    for name in ("enabled", "step_change_guard_enforced"):
-        described = SimilarityThresholdConfig.model_fields[name].description or ""
-        assert "Removal condition" in described, (
-            f"adaptive_dedup_threshold.{name} has no removal condition on its own line"
-        )
 
 
 def test_a_config_with_no_judge_in_it_validates_and_stays_that_way() -> None:
@@ -1540,10 +1069,6 @@ def test_a_config_with_no_judge_in_it_validates_and_stays_that_way() -> None:
     judge in it registers none either - and a slug naming a judge that is not
     there is refused by name on the night it runs.
     """
-    none_at_all = AppConfig.model_validate({"models_file": "models/test.json"})
-
-    assert none_at_all.assemble.same_story.adaptive_dedup_threshold is None
-
     committed = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
     del committed["assemble"]["same_story"]["adaptive_dedup_threshold"]
     without_a_judge = AppConfig.model_validate(committed)

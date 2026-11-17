@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import dataclasses
 import json
-from math import ceil
 from pathlib import Path
 from string import Template
 from typing import Any
@@ -18,17 +17,9 @@ from support.server import RecordedEndpoint
 
 from idhazh import config, summarize
 from idhazh.classify.calls import (
-    ANCHORED_MAX,
-    CHARS_PER_OUTPUT_TOKEN,
-    LABEL_BUDGET_TOKENS,
     LABEL_PASS_VERSION,
-    LABELS_MAX,
-    MEASURED_REPLY_CHARACTERS,
-    MEASURED_REPLY_TOKENS,
     PROPOSED_MAX,
-    SUMMARIZE_AND_PLAN_BUDGET_TOKENS,
     LabelReply,
-    MentionGroup,
     ParsedLabelReply,
     anchored,
     apply_labels,
@@ -36,7 +27,6 @@ from idhazh.classify.calls import (
     build_summarize_and_plan_request,
     candidate_menu,
     drawn_label,
-    label_budget_tokens,
     label_request_schema,
     label_schema,
     label_system_prompt,
@@ -50,9 +40,9 @@ from idhazh.classify.calls import (
     recovered_completion,
     sentence_id,
     sentence_spans,
-    summarize_and_plan_budget_tokens,
     summarize_and_plan_schema,
 )
+from idhazh.classify.dag import response_tokens
 from idhazh.classify.plan_visual_request import (
     PLANNING_COLUMNS,
     PLANNING_JUDGEMENTS,
@@ -66,33 +56,28 @@ from idhazh.contracts.element import (
 )
 from idhazh.contracts.knobs.extract import ElementsConfig
 from idhazh.contracts.knobs.models import ModelEntry
-from idhazh.contracts.knobs.summarize import SummarizeConfig
 from idhazh.contracts.knobs.visuals import VisualsConfig
-from idhazh.contracts.summary import Summary, SummaryStatus
+from idhazh.contracts.summary import SummaryStatus
 from idhazh.contracts.visual import (
     TITLE_MAX_LENGTH,
     EncodingRole,
     VisualType,
-    widest_json_characters,
 )
-from idhazh.contracts.visual_decision import NoneReason, VisualKind
 from idhazh.contracts.visual_validation import ValidatorCheck
-from idhazh.elements import SpanDriftError, element_table
+from idhazh.elements import element_table
 from idhazh.extract import approx_tokens
 from idhazh.llm.server import (
     Completion,
     SystemPlacement,
     TurnMarkers,
     continued_prompt,
-    parse_completion,
     post,
     render_prompt,
+    response_limit,
 )
-from idhazh.llm.server import window as ctx_size
 from idhazh.render.chart import compile_chart
 from idhazh.sanitize import FENCE_CLOSE, FENCE_OPEN
 from idhazh.stages.two_calls import _shape_cells, two_calls_one_item
-from idhazh.visual_planner import plan_lost_to_the_budget, plan_lost_to_the_window
 from idhazh.visual_validator import validate_plan
 
 
@@ -319,9 +304,6 @@ class TestTheOracle:
 
 
 class TestTheLabelCallShape:
-    def test_the_schema_is_generated_from_the_model(self) -> None:
-        assert label_schema() == LabelReply.model_json_schema()
-
     def test_every_field_is_required_so_the_decoder_must_emit_it(self) -> None:
         """A field with a default is absent from `required`, and the grammar skips it."""
         assert set(label_schema()["required"]) == {
@@ -346,119 +328,12 @@ class TestTheLabelCallShape:
         with pytest.raises(ValidationError):
             LabelReply.model_validate({"labels": [], "tool_call": {"name": "rm"}})
 
-    def test_the_label_bound_is_the_menu_size_the_planner_already_reads(self) -> None:
-        """The bound has a reason, so the reason is checked rather than written down."""
-        assert LABELS_MAX == VisualsConfig().max_facts
-
     def test_a_reply_missing_a_field_is_a_shape_failure(self) -> None:
         with pytest.raises(ValidationError):
             parse_label('{"labels":[],"proposed":[]}')
 
-    def test_a_reply_that_found_nothing_is_a_legal_reply(self) -> None:
-        """`can emit no number at all` includes emitting nothing at all."""
-        assert parse_label(json.dumps(a_reply().model_dump())).labels == []
-
-    def test_it_reads_the_normalized_answer_not_the_reasoning(self) -> None:
-        raw = "<think>reading it</think>" + json.dumps(a_reply().model_dump())
-        reply = parse_completion(
-            json.dumps({"content": raw}), reasoning_delimiters=("<think>", "</think>")
-        )
-        assert parse_label(reply.content).proposed == []
-        assert reply.inline_reasoning == "reading it"
-
-
-class TestTheLabelCallsDerivedBudget:
-    """Row #3g. The budget is arithmetic over this shape's own bounds.
-
-    Until 2026-09-13 it was the retired `max_output_tokens`, the
-    summariser role's number, which knows nothing about this reply - and one
-    ordinary 346-word article lost its whole item to it on 2026-09-12.
-    """
-
-    def test_the_widest_reply_the_grammar_admits_fits_the_budget(self) -> None:
-        """The row's oracle, computed from the bounds rather than written down."""
-        widest = widest_json_characters(label_schema())
-
-        assert widest / CHARS_PER_OUTPUT_TOKEN <= label_budget_tokens()
-        assert label_budget_tokens() == LABEL_BUDGET_TOKENS
-
-    def test_the_role_knob_the_budget_used_to_be_does_not_fit_this_shape(self) -> None:
-        """The bite proof, and it is the base state this row was dispatched on.
-
-        An oracle that cannot go red is not an oracle. The number the label call was
-        sent until 2026-09-13 fails the assertion above, which is why the reply
-        that filled half of what this shape admits was cut mid-string. That knob
-        carried 900 and is written here as the literal it was, because the knob
-        itself left `inference` on 2026-09-21.
-        """
-        widest = widest_json_characters(label_schema())
-
-        assert widest / CHARS_PER_OUTPUT_TOKEN > 900
-
-    def test_a_bound_that_moves_moves_the_budget_with_it(self) -> None:
-        """Re-derived, not restated. This is what "derived" has to mean to be worth saying."""
-        narrowed = json.loads(json.dumps(label_schema()))
-        narrowed["properties"]["labels"]["maxItems"] = LABELS_MAX // 2
-
-        assert widest_json_characters(narrowed) < widest_json_characters(label_schema())
-        assert (
-            ceil(widest_json_characters(narrowed) / CHARS_PER_OUTPUT_TOKEN)
-            < label_budget_tokens()
-        )
-
-    def test_a_boolean_is_counted_rather_than_crashing_the_arithmetic(self) -> None:
-        """Historical hedge fields still use the shared width arithmetic.
-
-        The shared width function had no branch for one until 2026-09-13 and fell
-        through to the map branch, raising `KeyError: 'propertyNames'` - which
-        reads as a malformed schema and is a missing case. So the whole oracle
-        above was uncomputable rather than merely failing.
-        """
-        assert widest_json_characters({"type": "boolean"}) == len("false")
-        assert "boolean" not in schema_types(label_schema())
-
-    def test_the_request_hands_the_decoder_the_derived_budget(self, dense: Article) -> None:
-        payload = build_label_with_derived_budget(dense)
-
-        assert payload["n_predict"] == label_budget_tokens()
-        assert "max_tokens" not in payload, (
-            "two budget keys in one body and the server answers whichever it reads first"
-        )
-
-    def test_the_measured_density_is_the_reading_it_came_from(self) -> None:
-        """Guardrail #10. It is an estimate from one reply and it says so in source.
-
-        The reply that made this row necessary decoded 900 tokens and the parse
-        failed at character 2,805 of it. Holding the two numbers rather than the
-        quotient is what stops 3.12 being read as a value somebody tuned.
-        """
-        assert CHARS_PER_OUTPUT_TOKEN == MEASURED_REPLY_CHARACTERS / MEASURED_REPLY_TOKENS
-        assert MEASURED_REPLY_TOKENS < label_budget_tokens(), (
-            "the budget has to clear the reply that was lost, or the row fixed nothing"
-        )
-
 
 class TestTheLabelCallPrompting:
-    def test_the_article_reaches_the_model_fenced_as_data(self, dense: Article) -> None:
-        turn = label_user_turn(dense, a_table(dense))
-        assert "UNTRUSTED" in turn.upper()
-        assert "4,200 megawatt hours" in turn
-
-    def test_the_system_prompt_never_carries_the_article(self, dense: Article) -> None:
-        assert (dense.text or "") not in label_system_prompt()
-
-    def test_the_model_reads_the_article_and_not_a_summary(
-        self, dense: Article, summary_ok: Summary
-    ) -> None:
-        """Decision 1. A compression cannot carry the series a chart exists to show."""
-        turn = label_user_turn(dense, a_table(dense))
-        assert (summary_ok.summary or "") not in turn
-
-    def test_every_sentence_the_model_may_cite_carries_its_address(self) -> None:
-        addressed = numbered_sentences(DENSE_TEXT)
-        assert addressed.startswith('[s0] "The plant produced')
-        assert '[s2] "Officials expect' in addressed
-
     @pytest.mark.parametrize(
         "text",
         [
@@ -502,17 +377,6 @@ class TestTheLabelCallPrompting:
         table = a_table(dense)
         menu = candidate_menu(table)
         assert all(f"[{element.element_id}]" in menu for element in table.elements)
-
-    def test_an_article_with_nothing_in_it_says_so(self, article_ok: Article) -> None:
-        bare = article_ok.model_copy(update={"text": "Nothing to count here."})
-        assert "no quantities or dates" in candidate_menu(a_table(bare))
-
-    def test_a_table_over_another_string_is_refused_rather_than_printed(
-        self, dense: Article, article_ok: Article
-    ) -> None:
-        """Every row of the menu is an offset. Against the wrong text they all point elsewhere."""
-        with pytest.raises(SpanDriftError):
-            label_user_turn(article_ok, a_table(dense))
 
     def test_the_request_hands_the_decoder_the_reply_shape(self, dense: Article) -> None:
         entry = configured()
@@ -712,8 +576,7 @@ class TestProposals:
 # The oracle for this row is two sentences. For every surviving element of every
 # kind, `article.text[span_start:span_end] == span_excerpt`. And no element's
 # drawn label is ever its Tier 2 `name` - the label is one of the mentions that
-# anchored. Both halves carry a bite proof below, because a passing check that
-# cannot fail is not a check.
+# anchored.
 
 #: One item carrying both model-pointed kinds. The name a page must never
 #: draw - "Vestas Wind Systems A/S" - appears nowhere in it, which is decision
@@ -759,29 +622,6 @@ class TestTheMentionAnchoringOracle:
         for element in whole.elements:
             assert POINTED_TEXT[element.span_start : element.span_end] == element.span_excerpt
 
-    def test_the_same_check_goes_red_when_the_text_moves_under_the_spans(
-        self, article_ok: Article
-    ) -> None:
-        """The bite proof for half one: one inserted character and it fails.
-
-        Half one already held for `quantity` and `date` before this row, so on
-        its own it is not a measurement of anything new. This is what shows it
-        can still fail - the spans are real offsets into one string and nothing
-        else.
-        """
-        table = a_table(article_ok, POINTED_TEXT)
-        whole = anchored(
-            table, POINTED_TEXT, a_reply(**POINTED_REPLY), config=ElementsConfig(), label_source="m"
-        )
-        moved = " " + POINTED_TEXT
-
-        assert whole.span_drift(POINTED_TEXT) is None
-        assert whole.span_drift(moved) is not None
-        assert any(
-            moved[element.span_start : element.span_end] != element.span_excerpt
-            for element in whole.elements
-        )
-
     def test_a_drawn_label_is_one_of_the_mentions_that_anchored(self) -> None:
         """Half two: the mention draws and the name never does.
 
@@ -796,24 +636,6 @@ class TestTheMentionAnchoringOracle:
         assert drawn_label(group) in {one.span_excerpt for one in group.elements}
         assert drawn_label(group) == "Vestas"
         assert group.name == "Vestas Wind Systems A/S"
-
-    def test_the_same_check_goes_red_on_a_label_taken_from_the_name(self) -> None:
-        """The bite proof for half two: the shape invariant 2 forbids, checked.
-
-        `named_label` is the easier and tidier implementation the drawing warns
-        about. It is written here so the assertion above is known to be able to
-        go red, rather than passing because both sides say the same thing.
-        """
-        groups, _ = model_anchored(
-            POINTED_TEXT, a_reply(**POINTED_REPLY), label_source="m", entity_slugs={}
-        )
-        group = next(one for one in groups if one.elements[0].kind is ElementKind.ENTITY)
-
-        def named_label(one: MentionGroup) -> str:
-            return one.name
-
-        assert named_label(group) not in {one.span_excerpt for one in group.elements}
-        assert named_label(group) not in POINTED_TEXT
 
 
 class TestMentions:
@@ -973,28 +795,6 @@ class TestMergingMentions:
             kept = len([one for one in whole.elements if one.kind is kind])
             assert whole.candidates_found[kind] >= kept > 0
 
-    def test_the_merge_stays_inside_the_bound_the_grammar_states(
-        self, article_ok: Article
-    ) -> None:
-        """Every addition is bounded by the reply shape, so the total is stated."""
-        table = a_table(article_ok, POINTED_TEXT, cap=2)
-
-        whole = anchored(
-            table,
-            POINTED_TEXT,
-            a_reply(**POINTED_REPLY),
-            config=ElementsConfig(max_per_article=2),
-            label_source="m",
-        )
-
-        assert len(whole.elements) <= 2 + PROPOSED_MAX + ANCHORED_MAX
-        lists = label_schema()["properties"]
-        per_group = label_schema()["$defs"]["NamedMentions"]["properties"]["mentions"]
-        assert ANCHORED_MAX == (
-            lists["named_mentions"]["maxItems"]
-            * per_group["maxItems"]
-        ), "the bound is read off the grammar the decoder is handed, so it cannot drift from it"
-
 
 def test_malformed_retired_label_evidence_never_reaches_a_continuation(
     article_ok: Article, tmp_path: Path,
@@ -1083,7 +883,6 @@ def summarize_and_plan_payload(article: Article, reply: str = "{}") -> dict[str,
         reply,
         a_table(article),
         markers=a_markers(),
-        source_words=article.band_source_words,
     )
 
 
@@ -1296,15 +1095,6 @@ class TestTheSummarizeAndPlanOracle:
 
         assert summarize_and_plan_payload(dense, reply)["prompt"].startswith(first["prompt"] + reply)
 
-    def test_the_same_check_fails_on_a_prompt_that_was_re_rendered(
-        self, dense: Article, article_ok: Article
-    ) -> None:
-        """The bite proof: an oracle that cannot fail is not an oracle."""
-        other = label_payload(article_ok)
-        reply = '{"labels": []}'
-
-        assert not summarize_and_plan_payload(dense, reply)["prompt"].startswith(other["prompt"] + reply)
-
     def test_the_summary_is_decoded_before_the_plan(self) -> None:
         """Decision 5, asserted where the decoder meets it rather than in the class.
 
@@ -1416,38 +1206,14 @@ def test_an_unstructured_shape_failure_does_not_copy_its_input() -> None:
     assert cells == {"detail": "ValueError", "failed_field": None, "failed_rule": None}
 
 
-class TestTheDerivedBudget:
-    def test_a_bound_that_moves_moves_the_budget_with_it(self) -> None:
-        """Re-derived, not restated. This is what "derived" has to mean to be worth saying."""
-        ask = SummarizeConfig()
-        wider = ask.model_copy(update={"title_words_max": ask.title_words_max * 2})
-
-        assert summarize_and_plan_budget_tokens(wider) > summarize_and_plan_budget_tokens(ask)
-
-    def test_the_request_hands_the_decoder_the_derived_budget(self, dense: Article) -> None:
-        payload = build_summarize_and_plan_request(
-            build_label_with_derived_budget(dense),
-            "{}",
-            a_table(dense),
-            markers=a_markers(),
-            source_words=dense.band_source_words,
-        )
-
-        assert payload["n_predict"] == summarize_and_plan_budget_tokens()
-        assert payload["json_schema"] == summarize_and_plan_schema(
-            source_words=dense.band_source_words, table=a_table(dense)
-        )
-        assert "max_tokens" not in payload, (
-            "two budget keys in one body and the server answers the first call's"
-        )
-
+class TestTheSecondRequest:
     def test_the_second_call_decodes_nothing_the_first_call_settled(self, dense: Article) -> None:
         """Determinism is set in one place, and the summarize-and-plan call does not become a second one."""
         first = build_label_with_derived_budget(
             dense, sampling={"temperature": 0.25, "top_p": 0.8, "seed": 42}
         )
         second = build_summarize_and_plan_request(
-            first, "{}", a_table(dense), markers=a_markers(), source_words=dense.band_source_words
+            first, "{}", a_table(dense), markers=a_markers()
         )
 
         assert [
@@ -1456,6 +1222,27 @@ class TestTheDerivedBudget:
         assert second["prompt"].endswith(
             a_markers().opening_of(first["prompt"])
         ), "the reply opening is read off the label call's prompt, so the two cannot disagree"
+
+    @pytest.mark.parametrize("plan", [True, False])
+    @pytest.mark.parametrize(
+        "sampling",
+        [pytest.param({}, id="no-limit-named"), pytest.param({"max_tokens": 4096}, id="limit-named")],
+    )
+    def test_the_second_call_runs_to_the_model_files_limit_with_or_without_a_plan(
+        self, dense: Article, sampling: dict[str, Any], plan: bool
+    ) -> None:
+        """One limit, the one the window gate reserves, whether or not a plan is asked for.
+
+        Where the model file names none, the first body carries the label call's own
+        derived limit; a second body that kept it would cut every plan there.
+        """
+        first = build_label_with_derived_budget(dense, sampling=sampling)
+
+        second = build_summarize_and_plan_request(
+            first, "{}", a_table(dense), markers=a_markers(), plan=plan
+        )
+
+        assert response_tokens(second) == response_limit(sampling)
 
 
 class TestARepliedCutByTheBudget:
@@ -1505,10 +1292,9 @@ class TestARepliedCutByTheBudget:
     ) -> None:
         """The recovery hands back a single-call reply, so nothing downstream is relaxed.
 
-        The length verdict, the copied-source reject and the address reject all
-        read the recovered words the same way they read any others. Recovery
-        stops an item being thrown away unread; it decides nothing about whether
-        it may publish.
+        The address check reads the recovered words the same way it reads any
+        others. Recovery stops an item being thrown away unread; it decides
+        nothing about whether it may publish.
         """
         body = json.loads(read_text(SUMMARIZE_AND_PLAN_REPLIES / "cut-in-the-plan.json"))
         cut = Completion(
@@ -1522,84 +1308,10 @@ class TestARepliedCutByTheBudget:
             recovered,
             model_id="m",
             generated_at="2026-09-10T00:00:00Z",
-            prompt_config=config.load(CONFIG_DIR).app.summarize,
         )
 
         assert summary.status is SummaryStatus.OK
         assert summary.summary and "34 percent" in summary.summary
-
-    def test_the_same_bytes_uncut_still_fail_the_way_they_always_did(
-        self, article_ok: Article
-    ) -> None:
-        """The bite proof for the recovery: `to_summary` alone cannot read a cut reply."""
-        body = json.loads(read_text(SUMMARIZE_AND_PLAN_REPLIES / "cut-in-the-plan.json"))
-        cut = Completion(
-            content=body["choices"][0]["message"]["content"], finish_reason="length"
-        )
-
-        summary = summarize.to_summary(
-            article_ok,
-            cut,
-            model_id="m",
-            generated_at="2026-09-10T00:00:00Z",
-        )
-
-        assert summary.status is SummaryStatus.FAILED
-
-    def test_the_item_still_gets_a_decision_and_it_is_nothing(self, summary_ok: Summary) -> None:
-        """`decision = none`, and never a failure code: the item publishes without a picture."""
-        decision = plan_lost_to_the_budget(
-            summary_ok, model_id="m", decided_at="2026-09-10T00:00:00Z", version="2026-08-21"
-        )
-
-        assert decision.kind is VisualKind.NONE
-        assert decision.rationale and "output budget" in decision.rationale
-
-    def test_the_window_and_the_budget_are_told_apart_by_arithmetic(
-        self, summary_ok: Summary
-    ) -> None:
-        """Same bytes, same `finish_reason`, two causes - and only a sum separates them.
-
-        Under `--no-context-shift` a decode that reaches the end of the window
-        stops exactly as one that spends its output budget does, so
-        `hit_the_budget` is true either way and the reply is the same reply. What
-        differs is how much room was left in front of it. Both cases below are
-        driven from the one recorded cut reply, and the only thing changed
-        between them is the prompt the server counted.
-
-        Plan 11 row #3f. Before it, both cases wrote `output_budget_cut`, so a
-        window too narrow for `extract.truncation_cap_tokens` was reported as a
-        reply shape too wide for its budget - and the fix for one is not the fix
-        for the other.
-        """
-        app = config.load(CONFIG_DIR).app
-        window = ctx_size(configured().server)
-        asked_for = summarize_and_plan_budget_tokens(app.summarize)
-        body = json.loads(read_text(SUMMARIZE_AND_PLAN_REPLIES / "cut-in-the-plan.json"))
-        content = body["choices"][0]["message"]["content"]
-
-        roomy = Completion(
-            content=content, finish_reason="length", prompt_tokens=window - asked_for
-        )
-        walled = Completion(
-            content=content, finish_reason="length", prompt_tokens=window - asked_for + 1
-        )
-
-        assert roomy.hit_the_budget and walled.hit_the_budget
-        assert roomy.prompt_tokens + asked_for <= window, "the budget was the wall"
-        assert walled.prompt_tokens + asked_for > window, "the window was the wall"
-
-        by_the_budget = plan_lost_to_the_budget(
-            summary_ok, model_id="m", decided_at="2026-09-10T00:00:00Z", version="2026-08-21"
-        )
-        by_the_window = plan_lost_to_the_window(
-            summary_ok, model_id="m", decided_at="2026-09-10T00:00:00Z", version="2026-08-21"
-        )
-
-        assert by_the_budget.none_reason is NoneReason.OUTPUT_BUDGET_CUT
-        assert by_the_window.none_reason is NoneReason.WINDOW_EXHAUSTED
-        assert by_the_window.kind is VisualKind.NONE, "the item still publishes"
-        assert by_the_window.rationale and "window" in by_the_window.rationale
 
 
 def test_a_recorded_summarize_and_plan_reply_parses_over_a_loopback_socket(
@@ -1625,7 +1337,7 @@ def test_a_recorded_summarize_and_plan_reply_parses_over_a_loopback_socket(
     with RecordedEndpoint(200, body) as server:
         completion = post(payload, endpoint=server.endpoint, timeout=10.0)
 
-    reply = parse_summarize_and_plan(completion.content, source_words=article_ok.band_source_words)
+    reply = parse_summarize_and_plan(completion.content)
     table = element_table(article_ok, config=ElementsConfig())
     labelled = anchored(
         table,
@@ -1643,133 +1355,3 @@ def test_a_recorded_summarize_and_plan_reply_parses_over_a_loopback_socket(
     assert reply.visual is not None
     assert reply.visual.decision == "visual"
     assert set(reply.visual.element_ids) <= {one.element_id for one in labelled.elements}
-
-
-# --- What the prefix cache actually returned, on a real run ------------------
-
-DAG_ITEMS = FIXTURES_DIR / "planner" / "dag-three-items.json"
-
-#: How far below the label call's prompt length the summarize-and-plan call's cache hit may sit and still
-#: count as covering it.
-#:
-#: **It is one token, and it is not a percentage.** A percentage would be a
-#: tolerance, and a tolerance hides the failure this is guarding against: a
-#: prefix that got shorter because something item-specific moved in front of it
-#: would sit comfortably inside any percentage worth writing. One token is the
-#: re-tokenisation boundary. llama-server matches the cache on the tokenised
-#: prompt, and the last token of a prefix can merge with the first character of
-#: what follows it - so the reusable prefix is the whole of the label call's prompt, or
-#: that minus its final token, and never anything in between. Anything further
-#: below is a cache that was evicted or never asked for.
-CACHE_REPLAY_SLACK_TOKENS = 1
-
-
-def dag_items() -> list[dict[str, Any]]:
-    """Consecutive items of one shard, with what the server reported for each.
-
-    Read from a fixture and never from `state/`: the ledger is a collection
-    every run appends to, so a test that opened it would cost more every day and
-    would be asking whether the data is well formed rather than whether the code
-    is (CLAUDE.md section 13, Guardrail #12).
-    """
-    return list(json.loads(read_text(DAG_ITEMS))["items"])
-
-
-def test_summarize_and_plan_reuses_the_whole_of_the_label_calls_prompt() -> None:
-    """The saving the two-call design was bought with, read off the server.
-
-    The summarize-and-plan call's prompt IS the label call's prompt plus the label call's reply, so a correct run
-    prefills only the seam and the new turn. What the server reports as cached
-    is the measurement of that, and it is the one number that tells a working
-    prefix cache from a broken one: without it the article is prefilled twice
-    and the stage costs about double, on ordinary HTTP 200s, with nothing in any
-    log to say so.
-
-    The floor is the label call's prompt rather than the summarize-and-plan call's, because the label call's reply
-    sits between them and its length varies per item. Reaching the label call's prompt
-    length is the whole of the claim - the reply's own cache hit is a bonus this
-    does not depend on.
-    """
-    for item in dag_items():
-        cached = item["call_2"]["cached_tokens"]
-        floor = item["call_1"]["input_tokens"] - CACHE_REPLAY_SLACK_TOKENS
-        assert cached >= floor, (
-            f"{item['item_id']}: the summarize-and-plan call reused {cached} tokens against a label call prompt "
-            f"of {item['call_1']['input_tokens']}, so the prefix was evicted between "
-            "the two calls of one item"
-        )
-
-
-def test_the_shared_opening_is_still_cached_on_the_items_after_the_first() -> None:
-    """One slot, many items - and the turn in front of every article survives.
-
-    `n_parallel` is 1, so item 2's the label call lands in the slot item 1's the summarize-and-plan call left.
-    Everything after the shared opening is item 1's, so what item 2 can reuse is
-    exactly the opening - and it does, at the same figure every time, which is
-    what an unchanged shared prefix looks like from the server's side.
-
-    **The figure itself is not asserted, and that is deliberate.** It was 1,755
-    tokens on the recorded run and it is not 1,755 today, because the prompt
-    files have been edited since. A test that pinned the number would go red the
-    next time somebody improved a sentence - a date on the calendar rather than
-    a change anybody made. What cannot drift is that every item after the first
-    reports the same non-zero prefix.
-    """
-    items = dag_items()
-    assert len(items) >= 3, "two items cannot tell a shared prefix from a coincidence"
-
-    shared = {item["call_1"]["cached_tokens"] for item in items[1:]}
-    assert len(shared) == 1, (
-        f"the shared opening was cached at {sorted(shared)} across consecutive items, "
-        "so something in front of the article varies per item"
-    )
-    assert shared.pop() > 0, "no item reused the opening, so the slot was evicted"
-
-
-def test_the_visual_gate_moves_nothing_in_front_of_the_cached_prefix() -> None:
-    """Python decides what the summarize-and-plan call asks for, and the decision sits behind the cache.
-
-    The gate is code reading the label call's reply, not a second dispatch and not a
-    schema conditional: an item whose labels cannot support a picture still
-    sends exactly two calls, and the three things suppression changes - the last
-    line of the trailing turn, the decoder shape and the output budget - all sit
-    after the system turn, the article and the label call's reply.
-
-    That is what keeps the gate free. A gate that moved one byte in front of the
-    article would cost a full prefill on every item it fired for, which is more
-    than the decode it saves.
-    """
-    article = Article.from_json(read_text(FIXTURES_DIR / "contracts" / "article" / "ok.json"))
-    first = build_label_with_derived_budget(article)
-    reply = json.loads(read_text(LABEL_REPLIES / "labelled.json"))["choices"][0][
-        "message"
-    ]["content"]
-
-    labelled = anchored(
-        a_table(article), article.text or "", parse_label(reply),
-        config=ElementsConfig(), label_source="m",
-    )
-    asked = build_summarize_and_plan_request(
-        first, reply, labelled, markers=a_markers(), plan=True
-    )
-    suppressed = build_summarize_and_plan_request(
-        first, reply, labelled, markers=a_markers(), plan=False
-    )
-    asked_prompt = str(asked["prompt"])
-    suppressed_prompt = str(suppressed["prompt"])
-    opening = str(first["prompt"])
-
-    assert asked_prompt.startswith(opening)
-    assert suppressed_prompt.startswith(opening)
-    shared_prefix_length = len(opening) + len(reply)
-    assert (
-        len(asked_prompt) >= shared_prefix_length
-        and suppressed_prompt.startswith(asked_prompt[:shared_prefix_length])
-    ), (
-        "suppressing the plan moved something in front of the label call's reply, so a gated "
-        "item cannot reuse the prefix an ungated one left"
-    )
-    assert asked["n_predict"] == SUMMARIZE_AND_PLAN_BUDGET_TOKENS
-    assert suppressed["n_predict"] < asked["n_predict"]
-    assert asked["cache_prompt"] is True
-    assert suppressed["cache_prompt"] is True

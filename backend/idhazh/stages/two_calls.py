@@ -45,6 +45,7 @@ from idhazh.llm.server import (
     derive_turn_markers,
     request_timeout_seconds,
     resolve_endpoint,
+    response_limit,
     window,
 )
 from idhazh.render import (
@@ -495,7 +496,7 @@ def two_calls_one_item(
     guard prices it.
 
     **An article the sequence cannot hold is refused before the label call is sent.**
-    `dag.fits_the_window` sizes the label call's prompt, both decode budgets and the
+    `dag.fits_the_window` sizes the label call's prompt, both calls' decode budgets and the
     seam between the turns against `n_ctx`, and an article over it lands as
     `FailureCode.CONTEXT_EXCEEDED`. Admitting it would cost the picture rather
     than the item: `--no-context-shift` means the decode stops at the wall on an
@@ -560,7 +561,6 @@ def two_calls_one_item(
             None,
             model_id=model_id,
             generated_at=generated_at,
-            prompt_config=settings.app.summarize,
             no_reply=no_reply,
         )
         return _TwoCalls(
@@ -586,7 +586,7 @@ def two_calls_one_item(
                     article,
                     model.server,
                     menu_rows=len(table.elements),
-                    prompt_config=settings.app.summarize,
+                    sampling=model.sampling,
                 ):
                     LOG.warning(
                         "the sequence would not fit the window id=%s tokens=%s menu=%s",
@@ -701,9 +701,6 @@ def two_calls_one_item(
                     one.content,
                     labelled,
                     markers=markers,
-                    prompt_config=settings.app.summarize,
-                    source_words=article.band_source_words,
-                    brief=article.brief,
                     plan=so_far.wants_a_plan,
                     visuals=settings.app.visuals,
                     prompt_files=settings.app.prompt_files,
@@ -778,7 +775,6 @@ def two_calls_one_item(
                         half if half is not None else two,
                         model_id=model_id,
                         generated_at=generated_at,
-                        prompt_config=settings.app.summarize,
                         no_reply=no_reply,
                         thinking=model.thinks,
                     ),
@@ -815,7 +811,6 @@ def two_calls_one_item(
         started = time.monotonic()
         decision = _decide_the_visual(
             summary,
-            article,
             two,
             labelled,
             settings=settings,
@@ -839,7 +834,6 @@ def two_calls_one_item(
 
 def _decide_the_visual(
     summary: Summary,
-    article: Article,
     two: Completion,
     table: ElementTable,
     *,
@@ -864,14 +858,14 @@ def _decide_the_visual(
     exactly as a decode that spends its output budget does, on an ordinary HTTP
     200 with `finish_reason` of `length`. Only the arithmetic tells them apart,
     and it needs nothing this function does not already hold: the server counted
-    the prompt, and the summarize-and-plan call's budget is derived from its own grammar. Less room
-    left than the grammar may write means the window was the wall.
+    the prompt, and the call's response limit is the model file's. Less room
+    left than that limit means the window was the wall.
     """
     if not wants_a_plan:
         return visual_planner.suppressed_by_the_gate(summary, **stamp)
     if two.hit_the_budget:
         n_ctx = window(settings.models.summarizer.server)
-        asked_for = calls.summarize_and_plan_budget_tokens(settings.app.summarize)
+        asked_for = response_limit(settings.models.summarizer.sampling)
         if two.prompt_tokens + asked_for > n_ctx:
             LOG.warning(
                 "the window stopped the plan id=%s prompt=%s budget=%s n_ctx=%s",
@@ -883,12 +877,7 @@ def _decide_the_visual(
             return visual_planner.plan_lost_to_the_window(summary, **stamp)
         return visual_planner.plan_lost_to_the_budget(summary, **stamp)
     try:
-        reply = calls.parse_summarize_and_plan(
-            two.content,
-            settings.app.summarize,
-            source_words=article.band_source_words,
-            brief=article.brief,
-        )
+        reply = calls.parse_summarize_and_plan(two.content)
     except (ValidationError, ValueError, json.JSONDecodeError) as error:
         shape = _shape_cells(error)
         LOG.warning(

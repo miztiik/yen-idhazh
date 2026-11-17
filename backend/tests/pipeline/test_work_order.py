@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -11,8 +10,7 @@ from support.paths import CONFIG_DIR
 
 from idhazh import config
 from idhazh.contracts.article import Article
-from idhazh.contracts.knobs.summarize import SummaryBand
-from idhazh.stages.work import _FetchedWorkItem, _summarize_band_sort_key
+from idhazh.stages.work import _FetchedWorkItem, _work_order
 from idhazh.telemetry.record import Flags, ItemRecorder
 
 from ._builders import (
@@ -21,28 +19,15 @@ from ._builders import (
 )
 
 
-def test_work_items_sort_by_summarize_band_and_keep_in_band_order() -> None:
-    """Band order groups identical system prompts without changing item identity."""
-    base_settings = config.load(CONFIG_DIR)
-    settings = replace(
-        base_settings,
-        app=base_settings.app.model_copy(update={
-            "summarize": base_settings.app.summarize.model_copy(update={
-                "bands": [
-                    SummaryBand(min_source_words=0, target_words_min=20, target_words_max=40),
-                    SummaryBand(min_source_words=400, target_words_min=50, target_words_max=70),
-                    SummaryBand(min_source_words=1200, target_words_min=80, target_words_max=110),
-                ]
-            })
-        }),
-    )
+def test_a_shard_works_its_shortest_sources_first_and_fetch_order_settles_a_tie() -> None:
+    """When the shard's clock runs out, the items left unworked are the longest ones."""
     items = plan().items
     base = article()
 
-    def sized(words: int) -> Article:
-        # Both counts, because the band follows the source body and the sort
-        # has to agree with the prompt it is grouping.
-        return base.model_copy(update={"word_count": words, "source_word_count": words})
+    def sized(words: int, *, before_the_cut: int | None = None) -> Article:
+        return base.model_copy(
+            update={"word_count": words, "source_word_count": before_the_cut or words}
+        )
 
     def quiet() -> ItemRecorder:
         """A recorder the sort never reads. It travels with the item, so it has to exist."""
@@ -57,22 +42,17 @@ def test_work_items_sort_by_summarize_band_and_keep_in_band_order() -> None:
         _FetchedWorkItem(items[0], sized(2000), "", 0, 0, 0.0, 0, quiet()),
         _FetchedWorkItem(items[1], sized(10), "", 0, 0, 0.0, 1, quiet()),
         _FetchedWorkItem(items[2], sized(800), "", 0, 0, 0.0, 2, quiet()),
-        _FetchedWorkItem(items[3], sized(100), "", 0, 0, 0.0, 3, quiet()),
+        _FetchedWorkItem(items[3], sized(800), "", 0, 0, 0.0, 3, quiet()),
+        # The extractor kept 1,000 words of a 9,000-word source: it is a long item.
+        _FetchedWorkItem(items[4], sized(1000, before_the_cut=9000), "", 0, 0, 0.0, 4, quiet()),
     ]
 
     arrival = candidates[::-1]
-    ordered = sorted(arrival, key=lambda candidate: _summarize_band_sort_key(candidate, settings))
+    ordered = sorted(arrival, key=_work_order)
 
     assert [candidate.item.item_id for candidate in ordered] == [
-        candidates[index].item.item_id for index in (1, 3, 2, 0)
+        candidates[index].item.item_id for index in (1, 2, 3, 0, 4)
     ]
-
-
-def test_a_fresh_clone_loads_its_committed_config() -> None:
-    settings = config.load(CONFIG_DIR)
-    assert settings.app.run.safety_ceiling_per_run >= 1
-    assert settings.sources.feeds
-    assert settings.taxonomy.verticals
 
 
 def test_the_config_that_was_read_travels_with_the_run() -> None:

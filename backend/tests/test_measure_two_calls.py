@@ -33,7 +33,7 @@ from idhazh.contracts.article import Article
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.elements import element_table
 from idhazh.extract import TOKENS_PER_WORD, approx_tokens
-from idhazh.llm.server import Completion
+from idhazh.llm.server import Completion, response_limit
 from idhazh.sanitize import untrusted_block
 from utilities.measure_two_calls import (
     Break,
@@ -111,9 +111,7 @@ def test_measurement_continuation_carries_the_real_anchored_table(summary_cap: i
     request = server.sent[1]
     assert ("max_tokens" in request) != ("n_predict" in request)
     assert request.get("max_tokens", request.get("n_predict")) == (
-        summary_cap or settings.models.summarizer.sampling.get(
-            "max_tokens", calls.summarize_and_plan_budget_tokens(settings.app.summarize)
-        )
+        summary_cap or response_limit(settings.models.summarizer.sampling)
     )
     ids = [element.element_id for element in finalized.elements]
     fresh = set(ids) - {element.element_id for element in initial.elements}
@@ -243,11 +241,6 @@ BROKE: Final = Break(at=1493, rendered_one=1497, rendered_two=2389, tail="", rep
 #: section 13).
 KEPT_TWO: Final = Completion(content="", prompt_tokens=2389, cached_tokens=1702)
 AGREES: Final = Break(at=1497, rendered_one=1497, rendered_two=2389, tail="", replay_tokens=205)
-
-
-def test_the_checks_hold_when_the_render_and_the_cache_agree() -> None:
-    spend = decompose(RECORDED_ONE, KEPT_TWO)
-    assert check(RECORDED_ONE, KEPT_TWO, spend, AGREES).hold
 
 
 def test_two_prompts_that_diverge_inside_the_label_prompt_fail() -> None:

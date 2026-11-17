@@ -128,8 +128,9 @@ RETIRED_CELLS: Final[Mapping[str, str]] = MappingProxyType(
 #: `max_output_tokens` recorded the configured ceiling on one decode. The two
 #: settings behind it left `inference` on 2026-09-21 and nothing replaced them:
 #: what actually bounded a decode was `label_budget_tokens` and
-#: `summary_budget_tokens`, which are still here and are derived from each
-#: call's own reply shape.
+#: `summary_budget_tokens`, which are still here: the label call's is derived
+#: from its reply shape and the summarize-and-plan call's is the model file's
+#: response limit.
 DROPPED_CELLS: Final[frozenset[str]] = frozenset(
     {"runner_name", "cgroup_peak_bytes", "max_output_tokens"}
 )

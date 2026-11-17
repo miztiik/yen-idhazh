@@ -130,7 +130,7 @@ class PipelineTestCase(Model):
             "window it is given between its slots, so two slots on the committed "
             "window is a 32,768-token slot rather than the 65,536 the production "
             "gate admits articles against - and the worst article the truncation cap "
-            "admits needs 64,699. Leaving it alone would make the test case a test of a "
+            "admits needs 64,403. Leaving it alone would make the test case a test of a "
             "smaller window wearing a concurrency test case's name."
         ),
     )
@@ -140,9 +140,8 @@ class PipelineTestCase(Model):
             "Whether the second call may ask for a picture at all. False writes an "
             "empty `visuals.enabled_kinds`, so no picture is reachable and the gate "
             "takes the plan fields off the grammar, and it writes "
-            "`summarize.asks_for_a_visual_plan` false so the window is sized for the "
-            "call that is really sent. One knob, because the two have to agree: a "
-            "window sized for a plan that is never asked for refuses articles that fit."
+            "`summarize.asks_for_a_visual_plan` false so the prompt inputs the run is "
+            "stamped with say the same. One knob, because the two have to agree."
         ),
     )
 

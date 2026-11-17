@@ -755,11 +755,6 @@ test("report settings remain available without changing the planning fingerprint
     });
     expect(changed.config_sha256, knob).not.toBe(baseline.config_sha256);
   }
-  expect(() => loadHarvestInputs({
-    config: baseline.config, sources: { feeds: baseline.sources },
-    extraction: { ...baseline.extraction_settings,
-      evaluation: { brief_compression_ceiling: baseline.extraction_settings.evaluation.brief_compression_ceiling / 2 } },
-  })).toThrow("extract.min_source_words");
 });
 
 test("planner inputs ignore catalog tiers and labels while feed lifecycle remains effective", async () => {

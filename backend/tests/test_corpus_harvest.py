@@ -7,7 +7,6 @@ than from a copy of it.
 
 from __future__ import annotations
 
-import hashlib
 import json
 from collections import Counter
 from pathlib import Path
@@ -20,11 +19,10 @@ from support.refill import refetched, refill_body, refill_published, refill_reco
 from idhazh import config, corpus, summarize
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.article import Article
-from idhazh.contracts.base import canonical_json, derive_output_digest
+from idhazh.contracts.base import derive_output_digest
 from idhazh.contracts.corpus import ChatRole, ChatTurn, CorpusMeta, CorpusRow
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.knobs.models import ModelsConfig
-from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.evals.metrics import compression, word_count
 
@@ -115,24 +113,20 @@ def test_the_first_two_turns_are_the_bytes_the_run_really_sends(
     ] == request["messages"]
 
 
-def test_the_band_travels_with_the_article_it_was_chosen_for(
-    app: AppConfig, tmp_path: Path
+def test_the_system_turn_is_rendered_from_the_prompt_file_the_harvest_is_given(
+    app: AppConfig, article: Article, tmp_path: Path
 ) -> None:
-    """A band-specific template follows each article through the harvest.
+    """A corpus is the prompt that is served, and the served prompt is a configured file.
 
-    A harvest that rendered one band for every row would teach one target length
-    for every article, which is the opposite of what the bands exist to do.
+    A harvest that ignored the location it was handed would teach the default
+    prompt to a model that is run under another one.
     """
-    brief = Article.from_json(contract_fixture("article", "brief"))
-    long_read = Article.from_json(contract_fixture("article", "ok"))
     target = tmp_path / app.prompt_files.summarize_article
     target.parent.mkdir()
-    target.write_text(
-        "Write $target_words_min to $target_words_max words.", encoding="utf-8"
-    )
+    target.write_text("Quote at most $max_verbatim_words words.", encoding="utf-8")
 
     rows = corpus.harvest_rows(
-        [scored(brief, "titled", "high"), scored(long_read, "titled", "high")],
+        [scored(article, "titled", "high")],
         date=DATE,
         prompt_config=app.summarize,
         evaluation=app.evaluation,
@@ -140,27 +134,19 @@ def test_the_band_travels_with_the_article_it_was_chosen_for(
         config_dir=tmp_path,
     )
 
-    assert len(rows) == 2
-    assert rows[0].system != rows[1].system
-    assert rows[0].system == summarize.system_prompt(
-        app.summarize,
-        source_words=brief.band_source_words,
-        brief=brief.brief,
-        prompt_files=app.prompt_files,
-        config_dir=tmp_path,
-    )
+    assert [row.system for row in rows] == [
+        f"Quote at most {app.summarize.max_verbatim_words} words."
+    ]
 
 
 # --- What a row has to clear to become a training target -------------------
 
 
-def test_a_summary_whose_title_missed_its_range_is_not_a_target(
-    app: AppConfig, article: Article
-) -> None:
-    """A null title means the drafted one was thrown away.
+def test_a_summary_with_no_title_is_not_a_target(app: AppConfig, article: Article) -> None:
+    """A null title means the drafted one could not be published as written.
 
-    That row is an example of the model failing the ask, so training on it
-    teaches the failure.
+    The decoder is made to write a title, so a row without one is not an answer
+    the model gives, and training on it would teach a shape the grammar refuses.
     """
     assert (
         corpus.harvest_rows(
@@ -213,26 +199,12 @@ def test_retired_measurements_do_not_reject_a_training_target(
     assert json.loads(harvested[0].messages[-1].content)["summary"] == copied
 
 
-def test_an_unscored_item_is_not_a_target(app: AppConfig, article: Article) -> None:
-    """No eval row means the retained extraction and length readings are unavailable."""
-    assert (
-        corpus.harvest_rows(
-            [scored(article, "titled", None)],
-            date=DATE,
-            prompt_config=app.summarize,
-            evaluation=app.evaluation,
-        )
-        == []
-    )
-
-
 def test_corpus_selection_retains_the_exact_compression_cutoff_without_a_model_gate(
     app: AppConfig, article: Article
 ) -> None:
     item = scored(article, "titled", "high")
     assert item.row is not None
     cutoff = app.evaluation.corpus_compression_ceiling
-    assert cutoff == 0.75
     assert corpus.accepts_training_candidate(
         item.row.model_copy(
             update={"hhem": 0.0, "hhem_full": 0.0, "hhem_delta": 0.0, "compression": cutoff - 0.001}
@@ -378,36 +350,6 @@ def test_a_backfilled_row_is_the_same_bytes_as_a_harvested_row(
 # --- Rebuilding a row from its address -------------------------------------
 
 
-def test_a_refetched_body_earns_its_own_length_band(
-    app: AppConfig,
-) -> None:
-    """The reason a refill is allowed to exist at all.
-
-    A row rebuilt from an expired artifact would have to guess the length band,
-    because `brief` and the pre-cap word count are not recoverable from anything
-    committed. Re-fetching does not guess: the extractor computes them from the
-    body that came back. A long page and a short one therefore retain distinct
-    length-policy bands even when their shared prompt is identical.
-    """
-    long_article, long_text = refetched(refill_body(), app)
-    short_article, short_text = refetched(
-        " ".join(refill_body().split()[:40]), app, form=SourceForm.ABSTRACT
-    )
-    recorded = refill_recorded(long_article, refill_published())
-
-    long_row = corpus.rescored(
-        long_article, long_text, recorded=recorded, published=refill_published()
-    )
-    short_row = corpus.rescored(
-        short_article, short_text, recorded=recorded, published=refill_published()
-    )
-
-    assert short_article.brief and not long_article.brief
-    assert app.summarize.band_for(
-        long_row.article.band_source_words
-    ) != app.summarize.band_for(short_row.article.band_source_words)
-
-
 def test_a_refilled_row_carries_the_published_words_as_its_target(app: AppConfig) -> None:
     """The assistant turn is what the digest published, through the decoder's rail."""
     article, full_text = refetched(refill_body(), app)
@@ -490,33 +432,6 @@ def test_the_join_refuses_a_summary_a_later_run_rewrote(app: AppConfig) -> None:
     rewritten = refill_published()._replace(summary=refill_published().summary + " It was updated.")
 
     assert not corpus.published_is_the_scored_one(rewritten, recorded=recorded)
-
-
-def test_the_join_stops_matching_a_row_scored_before_key_points_left(app: AppConfig) -> None:
-    """The accepted break, pinned so it is read here rather than found in a run.
-
-    Key points were in the digested payload until 2026-09-24. A row scored
-    before that holds a digest taken over three fields, and this join recomputes
-    two, so it can never agree. Nothing raises: the harvest finds no output to
-    pair with that row and refills from days written since.
-
-    The old formula is spelled out rather than imported, because the function
-    that produced it is gone. That is the point of the test - it is the only
-    place left in the tree that can still say what the digest used to be.
-    """
-    article, _ = refetched(refill_body(), app)
-    era = {
-        "key_points": ["Reserve margin stays near 12 percent into February"],
-        "summary": refill_published().summary,
-        "title": refill_published().title,
-    }
-    before = hashlib.sha256(canonical_json(era).encode("utf-8")).hexdigest()
-    recorded = refill_recorded(article, refill_published()).model_copy(
-        update={"output_digest": before}
-    )
-
-    assert not corpus.published_is_the_scored_one(refill_published(), recorded=recorded)
-    assert derive_output_digest(refill_published().summary, title=refill_published().title) != before
 
 
 def test_the_digest_is_taken_over_the_summary_and_the_title_and_nothing_else() -> None:

@@ -15,7 +15,7 @@ rows harvested after it move with it and `CorpusMeta.prompt_digest` says which
 side of the move a file is on.
 
 **The assistant turn is the published output, re-validated through the decoder's
-own rail.** `draft_model` is the shape the constrained decoder is held to, so a
+own rail.** `SummaryDraft` is the shape the constrained decoder is held to, so a
 row that would not survive it is dropped rather than taught: a target the
 decoder would reject teaches the model to be rejected. Its field order is the
 order the grammar emits, so the target is spelled the way the model has to spell
@@ -341,23 +341,18 @@ def rescored(
     return Scored(article=article, summary=summary, row=row)
 
 
-def _target(
-    summary: Summary,
-    *,
-    prompt_config: SummarizeConfig,
-) -> str | None:
+def _target(summary: Summary) -> str | None:
     """The assistant turn: the published output, spelled the way the grammar emits it.
 
-    Built through `draft_model` so the row clears the same rail the decoder is
+    Built through `SummaryDraft` so the row clears the same rail the decoder is
     held to, and dumped in field order rather than in sorted order because field
     order IS decode order - a target that puts the summary before the title
     teaches a sequence the model is not allowed to produce.
     """
     if summary.title is None or summary.summary is None:
         return None
-    shape = summarize.draft_model(prompt_config)
     try:
-        draft = shape(
+        draft = summarize.SummaryDraft(
             title=summary.title,
             summary=summary.summary,
         )
@@ -402,13 +397,11 @@ def harvest_rows(
             scored.row, evaluation=evaluation
         ):
             continue
-        target = _target(summary, prompt_config=prompt_config)
+        target = _target(summary)
         if target is None:
             continue
         system = summarize.system_prompt(
             prompt_config,
-            source_words=article.band_source_words,
-            brief=article.brief,
             prompt_files=prompt_files,
             config_dir=config_dir,
         )

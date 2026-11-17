@@ -1,6 +1,6 @@
 # Summary Metrics
 
-**Last Updated**: 2026-11-15
+**Last Updated**: 2026-11-17
 
 What a retained measurement says about a summary, an extraction or a run.
 
@@ -16,10 +16,10 @@ Table A
 | ID | Column | Meaning and limit |
 | --- | --- | --- |
 | A1 | `coherence` | Mean cosine between adjacent summary sentences, using the sentence encoder. Its scale is -1 to 1; fewer than two sentences or unavailable weights produce null. Repeated sentences can score highly, so it is recorded, never a gate. |
-| A2 | `compression` | Summary word count divided by full-source word count. This is a length ratio, not a confidence grade. The corpus alone retains its existing ratio cutoff, defined in [summary length](config/summary-length.md#the-brief-floor-is-derived-not-chosen). |
+| A2 | `compression` | Summary word count divided by full-source word count. This is a length ratio, not a confidence grade. The corpus alone retains its existing ratio cutoff, defined in [summary length](config/summary-length.md#what-training-reads). |
 | A3 | `source_words_before_cap` | The extractor's full body count, or null when an old cut article's original length is unknowable. |
 | A4 | `source_words` | The same extractor counter after the cap. It cannot exceed a known pre-cap count. |
-| A5 | `summary_words` | The summary word count, using the retained word tokenizer. Length asks and tolerance remain the summarizer's own policy. |
+| A5 | `summary_words` | The summary word count, using the retained word tokenizer. The model is asked for no length, so nothing grades this count against a target. |
 | A6 | `score_ms` | The faithfulness scorer's elapsed milliseconds for this item, not the model's writing clock. Historical zeroes can mean unmeasured, not instant. |
 
 Coherence runs where the work stage composes the eval row. Assembly reads that
@@ -86,6 +86,6 @@ were retired; it has no replacement promotion rule.
 ## See also
 
 - [evaluation.md](evaluation.md) - faithfulness, confidence and human labels.
-- [config/summary-length.md](config/summary-length.md) - extraction and summary length policy.
+- [config/summary-length.md](config/summary-length.md) - what gets summarized, and the extraction and training length cutoffs.
 - [../architecture/publishing/why-a-summary-was-doubted-and-what-the-checker-measures.md](../architecture/publishing/why-a-summary-was-doubted-and-what-the-checker-measures.md) - retained console consumers.
 - [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) - native contract and compatibility rules.

@@ -249,7 +249,7 @@ test('the real three-ledger door anchors at the oldest end and asks each ledger 
 	})));
 	expect(score.rows).toEqual([{
 		date: '2026-09-25', run_id: '2026-09-25-10', model_id: 'fixture-model',
-		summary_words: 80, source_words_before_cap: 600, source_words: 400, compression: 0.2
+		summary_words: 80, compression: 0.2
 	}]);
 	expect(machines.rows).toEqual(['2026-09-24', '2026-09-25'].map(host));
 	expect(platformMixQuery.columns).toEqual([

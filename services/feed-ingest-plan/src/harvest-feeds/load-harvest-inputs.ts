@@ -60,14 +60,6 @@ const SourcesSchema = z.object({
 });
 const ExtractionSchema = z.object({
   extract: ExtractionControlsSchema.omit({ semantic_fallback: true, press_release_filter: true }),
-  summarize: z.object({ bands: z.array(z.object({ target_words_min: z.int().min(1) })).min(1) }),
-  evaluation: z.object({ brief_compression_ceiling: z.number().finite().gt(0).max(1) }),
-}).superRefine((value, ctx) => {
-  const floor = Math.ceil(value.summarize.bands[0]!.target_words_min / value.evaluation.brief_compression_ceiling);
-  if (value.extract.min_source_words !== floor) ctx.addIssue({
-    code: "custom", path: ["extract", "min_source_words"],
-    message: "extract.min_source_words must equal ceil(summarize.bands[0].target_words_min / evaluation.brief_compression_ceiling)",
-  });
 });
 export type ConfiguredSource = z.infer<typeof SourceConfigSchema>;
 export type HarvestInputs = ReturnType<typeof loadHarvestInputs>;

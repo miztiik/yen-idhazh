@@ -192,7 +192,10 @@ class Article(Contract):
     token_count: int = Field(default=0, ge=0)
     brief: bool = Field(
         default=False,
-        description="True when the source is short enough that summarize uses the brief tier.",
+        description=(
+            "True when the source is short: an abstract, shorter than "
+            "`extract.min_source_words`, or carrying a recorded shape signal."
+        ),
     )
     truncated: bool = False
     truncated_at_tokens: int | None = Field(default=None, ge=1)
@@ -264,11 +267,10 @@ class Article(Contract):
         return self
 
     @property
-    def band_source_words(self) -> int:
-        """The length a `summarize.bands` tier is chosen from.
+    def source_length_words(self) -> int:
+        """The article's length in words before the extraction cap cut it.
 
-        The read-side migration for `source_word_count`. A payload written
-        before the field existed carries only the post-cap count, which is the
-        number the build that wrote it used, so that is what it keeps reading.
+        The work order sorts on it. A payload written before `source_word_count`
+        existed carries only the post-cap count, so that is what it reports.
         """
         return self.word_count if self.source_word_count is None else self.source_word_count

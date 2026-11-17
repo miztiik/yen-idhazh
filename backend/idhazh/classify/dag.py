@@ -43,9 +43,8 @@ from typing import Any, Final, NamedTuple
 from idhazh.classify import calls
 from idhazh.contracts.article import Article
 from idhazh.contracts.knobs.extract import ElementsConfig
-from idhazh.contracts.knobs.summarize import SummarizeConfig
 from idhazh.extract import TOKENS_PER_WORD
-from idhazh.llm.server import window
+from idhazh.llm.server import response_limit, window
 from idhazh.measured import (
     LABEL_BODY_TOKENS_A_WORD,
     LABEL_MENU_TOKENS_A_ROW,
@@ -73,38 +72,34 @@ class CallName(StrEnum):
 
 
 class CallNode(NamedTuple):
-    """One call in the sequence, with the decode budget its own grammar derives.
+    """One call in the sequence, with the decode budget it reserves.
 
-    `output_tokens` is a callable rather than a number because both budgets are
-    re-derived on import from the reply shapes' own bounds - move a `maxItems`
-    and the budget moves with it, without anybody remembering to. A node that
-    carried a literal would be the one term of this sum that went stale quietly.
+    `output_tokens` is a callable rather than a number because the label call's
+    budget is re-derived on import from its reply shape's own bounds - move a
+    `maxItems` and the budget moves with it, without anybody remembering to - and
+    the summarize-and-plan call's is the model file's response limit, which only
+    that model's `sampling` block can name. Every node takes the block so the
+    nodes stay one shape, whether or not a node reads it.
     """
 
     name: CallName
-    output_tokens: Callable[[SummarizeConfig], int]
+    output_tokens: Callable[[Mapping[str, Any]], int]
 
 
-def _label_output_tokens(_ask: SummarizeConfig) -> int:
-    """The label budget takes no prompt config; the wrapper keeps the node shape one shape."""
+def _label_output_tokens(_sampling: Mapping[str, Any]) -> int:
+    """The label budget is derived from its reply shape and reads no model setting."""
     return calls.label_budget_tokens()
 
 
-def _summary_output_tokens(ask: SummarizeConfig) -> int:
-    """The summarize-and-plan call at its widest, which is with the plan asked for.
+def _summary_output_tokens(sampling: Mapping[str, Any]) -> int:
+    """The summarize-and-plan call reserves the model file's whole response limit.
 
-    The suppressed shape is smaller, so sizing the window on the wider one is
-    the conservative read and it does not depend on how often the visual gate
-    opens. What the gate saves is a decode, and it is measured where it is spent
-    (`docs/architecture/publishing/visuals.md`), not here.
-
-    `ask.asks_for_a_visual_plan` is true in production and is the one case of the
-    pipeline test workflow that turns it off, beside an empty
-    `visuals.enabled_kinds`. The two move together: sizing for a plan that is
-    never asked for reserves room for a decode that never happens, and refuses
-    articles that would have fitted.
+    Its two prose fields carry no length bound, so there is no worst case to
+    derive and no narrower number to defend: the request runs to
+    `sampling.max_tokens`, or to `DEFAULT_MAX_TOKENS` where the file names none,
+    whether or not a plan is asked for, and the window has to hold that.
     """
-    return calls.summarize_and_plan_budget_tokens(ask, plan=ask.asks_for_a_visual_plan)
+    return response_limit(sampling)
 
 
 #: The sequence, in order. **This tuple is the contract.** Adding to it is a
@@ -117,7 +112,7 @@ NODES: Final[tuple[CallNode, ...]] = (
     CallNode(CallName.SUMMARIZE_AND_PLAN, _summary_output_tokens),
 )
 
-#: Written down as well as computed, the same way both output budgets are. A
+#: Written down as well as computed, the same way the label budget is. A
 #: number that only exists as `len(...)` is a number nobody re-derives, and the
 #: sequence could then grow without anybody seeing what it cost.
 NODE_COUNT: Final = 2
@@ -138,17 +133,6 @@ if tuple(node.name for node in NODES) != (CallName.LABEL, CallName.SUMMARIZE_AND
         "its prompt is the label call's prompt "
         f"plus that reply. Got {tuple(node.name.value for node in NODES)}."
     )
-
-
-def output_tokens(prompt_config: SummarizeConfig | None = None) -> int:
-    """Every node's shape-derived decode budget, added up.
-
-    Not the window's answer on its own: the budgets are what the sequence
-    DECODES, and `sequence_tokens` is what it has to HOLD. They differ by the
-    prompt in front of them and by the seams between the turns.
-    """
-    ask = prompt_config or SummarizeConfig()
-    return sum(node.output_tokens(ask) for node in NODES)
 
 
 def response_tokens(request: Mapping[str, object]) -> int:
@@ -198,9 +182,9 @@ def sequence_tokens(
     article_tokens: int,
     *,
     menu_rows: int,
-    prompt_config: SummarizeConfig | None = None,
+    sampling: Mapping[str, Any],
 ) -> int:
-    """The existing pre-label estimate, using measured rates and derived reply budgets.
+    """The existing pre-label estimate, using measured rates and each call's reply budget.
 
     **The peak is the last node's request, not the sum of two independent
     calls.** The summarize-and-plan call opens with the label prompt and replays the
@@ -211,22 +195,25 @@ def sequence_tokens(
     wrote - add a node and this number grows by that node's budget and a seam,
     here, without anybody editing this line.
 
+    `sampling` is the model file's block, because the summarize-and-plan call
+    reserves the response limit it names.
+
     This estimate does not certify the complete continuation: the finalized
-    evidence is not known before labelling, and an explicit sampling limit may
-    replace the derived budgets. Use `request_tokens` with the configured
-    tokenizer's complete prompt count to diagnose the actual request, including
-    the guide, replay, finalized menu and effective response limit.
+    evidence is not known before labelling, and an explicit sampling limit
+    replaces the label call's derived budget on the wire. Use `request_tokens`
+    with the configured tokenizer's complete prompt count to diagnose the actual
+    request, including the guide, replay, finalized menu and effective response
+    limit.
 
     It is a sizing rather than a guarantee, and the reason is stated where each
-    term is: both decode budgets are ceilings over reply shapes whose prose
-    rails are character rails, and `LABEL_BODY_TOKENS_A_WORD` is the top of
-    an eight-build spread rather than a bound. The seatbelt behind it is
+    term is: the label call's decode budget is a ceiling over a reply shape whose
+    rails are character rails, and `LABEL_BODY_TOKENS_A_WORD` is the top of an
+    eight-build spread rather than a bound. The seatbelt behind it is
     `recovered_completion`; the brake is the budgets themselves.
     """
-    ask = prompt_config or SummarizeConfig()
     held = first_prompt_tokens(article_tokens, menu_rows=menu_rows)
     for index, node in enumerate(NODES):
-        held += node.output_tokens(ask)
+        held += node.output_tokens(sampling)
         if index:
             held += _SEAM_TOKENS
     return held
@@ -237,12 +224,12 @@ def fits_the_window(
     server: Mapping[str, Any],
     *,
     menu_rows: int,
-    prompt_config: SummarizeConfig | None = None,
+    sampling: Mapping[str, Any],
 ) -> bool:
     """Whether the existing early estimate admits this article before labelling.
 
     This is the unchanged early gate for the two-call path. It includes
-    both derived reply budgets, because the label reply is paid twice and the
+    both reply budgets, because the label reply is paid twice and the
     candidate menu once. It is not a measured complete-request capacity check.
 
     **Refusing here costs the item and admitting it costs the picture.** An
@@ -257,9 +244,7 @@ def fits_the_window(
     the cap for a live item would refuse articles that fit.
     """
     return (
-        sequence_tokens(
-            article.token_count, menu_rows=menu_rows, prompt_config=prompt_config
-        )
+        sequence_tokens(article.token_count, menu_rows=menu_rows, sampling=sampling)
         <= window(server)
     )
 

@@ -75,7 +75,6 @@ from idhazh.classify.calls import (
     label_system_prompt,
     parse_label,
     sentence_id,
-    summarize_and_plan_budget_tokens,
     summarize_and_plan_user_turn,
 )
 from idhazh.contracts.app_config import AppConfig
@@ -93,6 +92,7 @@ from idhazh.llm.server import (
     loopback_url,
     post,
     props,
+    response_limit,
     server_argv,
     turn_markers_digest,
     window,
@@ -724,19 +724,13 @@ def run_item(
         one.content,
         labelled,
         markers=markers,
-        prompt_config=app.summarize,
         visuals=app.visuals,
-        source_words=article.band_source_words,
-        brief=article.brief,
         plan=plan,
         prompt_files=app.prompt_files,
         config_dir=config_dir,
     )
     question_tokens = tokenizer.count(
         summarize_and_plan_user_turn(
-            app.summarize,
-            source_words=article.band_source_words,
-            brief=article.brief,
             plan=plan,
             table=labelled,
             prompt_files=app.prompt_files,
@@ -921,10 +915,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--config", type=Path, default=config.DEFAULT_CONFIG_DIR)
     parser.add_argument("--binary", type=Path, required=True)
     parser.add_argument("--weights", type=Path, required=True)
-    # Not spelled `--port`. `test_summarize` holds one function as the only
-    # place in `backend/` that writes a llama-server flag as a quoted literal,
-    # and it reads the source rather than the argv, so an option of ours sharing
-    # the name would put this file in that set.
+    # Not spelled `--port`: a flag that reads like the inference server's is a
+    # flag somebody will one day pass to the wrong program.
     parser.add_argument("--server-port", type=int, default=8099)
     parser.add_argument("--corpus", type=Path, default=CORPUS)
     parser.add_argument("--template-article", type=Path, default=ARTICLE)
@@ -1027,7 +1019,7 @@ def main(argv: list[str] | None = None) -> int:
         # marker floor row #3e cannot go below - and measuring the report with
         # the rendered number makes that floor come out negative.
         question = summarize_and_plan_user_turn(
-            app.summarize, prompt_files=app.prompt_files, config_dir=settings.config_dir
+            prompt_files=app.prompt_files, config_dir=settings.config_dir
         )
         rendered_turn = tokenizer.count(markers.turn("user", question))
         question_tokens = tokenizer.tokenize(question)
@@ -1047,9 +1039,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         explicit = model.sampling.get("max_tokens")
         label_decode = label_budget_tokens() if explicit is None else int(explicit)
-        summarize_and_plan_decode = (
-            summarize_and_plan_budget_tokens(app.summarize) if explicit is None else int(explicit)
-        )
+        summarize_and_plan_decode = response_limit(model.sampling)
         n_ctx = window(model.server)
         ceiling = n_ctx - (label_decode + summarize_and_plan_decode + rendered_turn)
         print(

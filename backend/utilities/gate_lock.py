@@ -567,11 +567,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--retry-every",
         type=float,
         default=POLL_SECONDS,
-        # Not `--poll`. `test_summarize.py::test_exactly_one_function_spells_a_
-        # llama_server_flag` holds a closed-world set of the files under
-        # `backend/` that may spell a llama-server flag, and `--poll` is one of
-        # them. A flag that reads like the inference server's is a flag somebody
-        # will one day pass to the wrong program.
+        # Not `--poll`: a flag that reads like the inference server's is a flag
+        # somebody will one day pass to the wrong program.
         help=f"Seconds between attempts while waiting. Default: {POLL_SECONDS}.",
     )
     parser.add_argument(

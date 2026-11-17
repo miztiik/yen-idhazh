@@ -22,21 +22,23 @@ built here and `idhazh.stages.work.stage_work` dispatches them, adjacently per i
 the gate in front of them and the picture they lead to are wired at that same
 call site.
 
-**Each call's output budget is derived from its own grammar.** The summariser
+**The label call's output budget is derived from its own grammar.** The summariser
 role carried one sized for a summary until 2026-09-21, it knew nothing about
 either shape, and it cost one ordinary 346-word article its whole item on
 2026-09-12: the label call's reply passed 900 tokens and was cut mid-string. The
 label call's reply is one flat object, so there is no half to recover
 from a cut; what it has instead is that a cut is reported as one
 (`FailureCode.LABELS_TRUNCATED`) rather than raised as a JSON error several
-frames from the cause.
+frames from the cause. The summarize-and-plan call's two prose fields carry no
+length bound, so there is no worst case to derive: it runs under the model
+file's own response limit (`sampling.max_tokens`, or `llm.server.DEFAULT_MAX_TOKENS`
+where the file names none), and a decode that reaches it is cut in the plan.
 
 **Shared instructions sit in front of the article; finalized evidence follows
 the label reply.** Both jobs are described in the one system turn, which is the same
 bytes on every item and is therefore read once per shard rather than once per
-item. What stays behind the article is what cannot be shared: the band the
-article's own length picked, the finalized source elements, and the fields the
-grammar will hold this reply to.
+item. What stays behind the article is what cannot be shared: the finalized
+source elements and the fields the grammar will hold this reply to.
 The question used to carry both jobs in full and cost 687 tokens an item on
 every item for ever, because the article in front of it differs and a prefix
 cache cannot reach past it - 69.7 s an item at the measured 9.85 tokens a second
@@ -95,7 +97,6 @@ from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.visual import CODE_STAMPED_FIELDS, VisualPlan, widest_json_characters
 from idhazh.contracts.visual_type import VisualType
 from idhazh.elements import NUMBER, SpanDriftError, read_quantity, sentence_starts, settle
-from idhazh.extract import approx_tokens
 from idhazh.llm.server import (
     Completion,
     TurnMarkers,
@@ -288,12 +289,11 @@ def label_budget_tokens() -> int:
 
     **The ceiling is converted at the one measured density**, which
     is what `CHARS_PER_OUTPUT_TOKEN` holds and what makes this a sizing rather
-    than a guarantee - the same thing the summarize-and-plan call's prose half is, and for the same
-    stated reason: the budget is the brake, and a budget large enough to be an
+    than a guarantee: the budget is the brake, and a budget large enough to be an
     unbreakable ceiling would leave no window for the article it is reading.
-    The summarize-and-plan call's seatbelt is `recovered_completion`; the label call's is that a cut
-    is reported as a cut, typed, rather than raised as a JSON error several frames
-    from the cause (`FailureCode.LABELS_TRUNCATED`).
+    The label call's seatbelt is that a cut is reported as a cut, typed, rather
+    than raised as a JSON error several frames from the cause
+    (`FailureCode.LABELS_TRUNCATED`).
 
     The current three-field schema is the only input to that width. Historical
     observations are read-only compatibility and consume no current output or
@@ -302,8 +302,7 @@ def label_budget_tokens() -> int:
     return ceil(widest_json_characters(label_schema()) / CHARS_PER_OUTPUT_TOKEN)
 
 
-#: The budget the committed bounds produce, written down as well as computed.
-#: `SUMMARIZE_AND_PLAN_BUDGET_TOKENS` is the precedent and the reason is the same: a
+#: The budget the committed bounds produce, written down as well as computed: a
 #: number that only exists inside a function is a number nobody re-derives, and
 #: a bound can then move without anybody seeing what it cost.
 LABEL_BUDGET_TOKENS: Final = 2738
@@ -325,13 +324,13 @@ def label_system_prompt(
 ) -> str:
     """Both jobs, in one turn, in front of the article.
 
-    Three files joined here rather than one file holding all of it, and the
-    reason is the two placeholders that may NOT move: `target_words_min/max`
-    are the article's own band and belong in the turn behind it. Appended into
-    one 8.5 KB file a stray one of those is invisible and renders to a model as
-    the literal `$target_words_min`. Kept apart, one test states the whole
-    invariant - the rendered system prompt carries no `$`, and the moved
-    template's placeholder set is exactly the config-level names.
+    Three files joined here rather than one file holding all of it. The turn
+    behind the article is a fourth, and it is not joined here: its `$write`
+    placeholder names the fields one reply's grammar holds, which is not the same
+    on every item, and a stray one in this turn would render to a model as the
+    literal `$write`. Kept apart, one test states the whole invariant - the
+    rendered system prompt carries no `$`, and the moved template's placeholder
+    set is exactly the config-level names.
 
     Elements, then the summary, then the plan, because everything the plan half
     points at - an address, the table - is defined in the elements half, so the
@@ -348,8 +347,6 @@ def label_system_prompt(
         (
             Template(load_prompt_text(config_dir, files.generate_labels)).substitute(),
             _summary_half(files, config_dir).substitute(
-                title_words_min=ask.title_words_min,
-                title_words_max=ask.title_words_max,
                 max_verbatim_words=ask.max_verbatim_words,
             ),
             _plan_half(files, config_dir, visuals or VisualsConfig()),
@@ -474,8 +471,7 @@ def build_label_request(
     The prompt bytes are rendered here rather than by the model's chat
     template, which is what lets the summarize-and-plan call open with them unchanged. The output
     budget is derived from the compatible native reply shape, not the narrower
-    article-specific choices, as the summarize-and-plan call's is from both
-    replies' bounds together. There is no role-level budget behind either: the
+    article-specific choices. There is no role-level budget behind it: the
     settings block carried one until 2026-09-21 and it sized neither shape.
 
     `prompt_config` reaches the label call because the system turn carries both jobs
@@ -922,10 +918,7 @@ def _summarize_and_plan_model(
 
 
 def summarize_and_plan_model(
-    prompt_config: SummarizeConfig | None = None,
     *,
-    source_words: int | None = None,
-    brief: bool = False,
     plan: bool = True,
     legacy_references: bool = False,
 ) -> type[BaseModel]:
@@ -955,25 +948,19 @@ def summarize_and_plan_model(
     part-way through, which spends the decode the gate exists to save and
     returns a cut reply.
     """
-    draft = summarize.draft_model(prompt_config, source_words=source_words, brief=brief)
     if not plan:
-        return draft
-    return _summarize_and_plan_model(draft, legacy_references)
+        return summarize.SummaryDraft
+    return _summarize_and_plan_model(summarize.SummaryDraft, legacy_references)
 
 
 def summarize_and_plan_schema(
-    prompt_config: SummarizeConfig | None = None,
     *,
-    source_words: int | None = None,
-    brief: bool = False,
     plan: bool = True,
     visuals: VisualsConfig | None = None,
     table: ElementTable | None = None,
 ) -> dict[str, Any]:
     """Derive the request grammar from the native model and the operator's selection."""
-    schema = summarize_and_plan_model(
-        prompt_config, source_words=source_words, brief=brief, plan=plan
-    ).model_json_schema()
+    schema = summarize_and_plan_model(plan=plan).model_json_schema()
     if plan:
         schema["$defs"][VisualType.__name__]["enum"] = [
             visual_type.value for visual_type in (visuals or VisualsConfig()).select_types()
@@ -984,16 +971,13 @@ def summarize_and_plan_schema(
 
 
 def summarize_and_plan_user_turn(
-    prompt_config: SummarizeConfig | None = None,
     *,
-    source_words: int | None = None,
-    brief: bool = False,
     plan: bool = True,
     table: ElementTable | None = None,
     prompt_files: PromptFilesConfig | None = None,
     config_dir: Path = DEFAULT_CONFIG_DIR,
 ) -> str:
-    """The finalized evidence, then the requested band and reply fields.
+    """The finalized evidence, then the reply fields.
 
     The article stays in the first turn. Only the exact post-anchoring table
     is added: its new source ids and labels were not visible to the first call.
@@ -1001,17 +985,12 @@ def summarize_and_plan_user_turn(
     requires one. Evidence is attached independently of the selected template
     so a custom wording cannot silently remove the ids the grammar offers.
 
-    Shared instructions stay in the system turn. The band is selected from the
-    article's source length and configured ranges. The last line names fields
+    Shared instructions stay in the system turn. The last line names fields
     from the reply model so it cannot ask for a suppressed visual. Suppression
     removes the evidence menu too, without moving the reusable prefix.
     """
-    ask = prompt_config or SummarizeConfig()
-    band = ask.band_for(0) if brief else ask.band_for(source_words or 0)
-    shape = summarize_and_plan_model(ask, source_words=source_words, brief=brief, plan=plan)
+    shape = summarize_and_plan_model(plan=plan)
     question = _pointer_template(prompt_files or PromptFilesConfig(), config_dir).substitute(
-        target_words_min=band.target_words_min,
-        target_words_max=band.target_words_max,
         write="Write " + ", then ".join(f'"{name}"' for name in shape.model_fields) + ".",
     )
     if not plan or table is None:
@@ -1022,97 +1001,6 @@ def summarize_and_plan_user_turn(
     )
 
 
-def summarize_and_plan_prose_words(prompt_config: SummarizeConfig | None = None) -> int:
-    """The words the output budget reserves for the reply's prose fields.
-
-    The union over bands rather than one band's figure, because the budget is a
-    property of the reply shape and not of the article in front of it. A
-    reservation and not a limit: neither prose field carries a length bound.
-    """
-    ask = prompt_config or SummarizeConfig()
-    return ask.title_words_max + ask.decoder_words_max()
-
-
-def summarize_and_plan_budget_tokens(
-    prompt_config: SummarizeConfig | None = None, *, plan: bool = True
-) -> int:
-    """The summarize-and-plan call's output budget, derived from the reply shape's own bounds.
-
-    **Not picked.** Every array in the shape carries a `maxItems` and every
-    decoded string but the two prose fields a `maxLength`, so everything in the
-    longest reply the grammar admits except its prose is arithmetic, and the
-    arithmetic runs again on every import - move a bound and this number moves
-    with it, without anybody remembering to.
-
-    Two halves, converted differently, because they are two different kinds of
-    text and one rule would be wrong about one of them.
-
-    - **The prose** is `title` and the summary. They have no length bound, so
-      the honest unit for them is words: `extract.approx_tokens` at 1.3 tokens a
-      word is what the truncation cap already spends, and using a second ratio
-      here would put two answers in the repository to one question.
-    - **The structure** is everything else: the keys, the punctuation, the
-      element addresses and the closed vocabularies. A token spans at least one
-      character, so its character count is a hard ceiling on its token count and
-      is used unconverted.
-
-    **What this guarantees, and what it does not.** The structural half is a
-    true ceiling. The prose half is a sizing: nothing in the grammar stops a
-    reply from writing more words than it reserves, and one that does spends the
-    room the structure leaves. That is deliberate and it is why
-    `recovered_completion` exists - section 11.3's wording is that the budget is
-    the brake and the recovery is the seatbelt. A budget large enough to be an
-    unbreakable ceiling would leave no window for the article it is summarising.
-
-    The committed bounds give a 3,397-token budget for the full reply and 371
-    tokens for the summary-only reply. The shape and both budgets are derived
-    below; the measure is the current computed value, not a historical reading.
-
-    **The suppressed budget is the same arithmetic over the narrower shape**,
-    not that number minus the plan's. Subtracting would be a second way of
-    computing one quantity, and the two disagree the first time a bound moves.
-    It loses the plan's slack with the plan: today the picture's 3,004
-    structural characters sit behind the summary and absorb a prose overrun the
-    prose half's sizing did not predict, and with them gone a cut can land
-    inside the summary, where `recovered_completion` has nothing to recover.
-    """
-    ask = prompt_config or SummarizeConfig()
-    words = summarize_and_plan_prose_words(ask)
-    structure = widest_json_characters(
-        summarize_and_plan_schema(ask, plan=plan), free_text_characters=0
-    )
-    return approx_tokens(words) + structure
-
-
-#: The budget the committed bounds produce, written down as well as computed.
-#: `visual.WORST_CASE_REPLY_CHARACTERS` is the precedent and the reason is the
-#: same: a number that only exists inside a function is a number nobody
-#: re-derives, and a bound can then move without anybody seeing what it cost.
-SUMMARIZE_AND_PLAN_BUDGET_TOKENS: Final = 3397
-#: The same arithmetic with the plan off the grammar. The gap between the two is
-#: what the reachability gate saves per item, and it is a decode rather than a
-#: call: 3,026 tokens off a 3,397-token ceiling.
-#: A ceiling is not a measurement of seconds - an ordinary reply's plan half was
-#: measured at 176 tokens of 327, which is 29.3 s at the summarizer's decode
-#: rate. The working is in `docs/architecture/publishing/visuals.md`.
-#:
-#: Both fell on 2026-09-24, when the reply shape stopped carrying key points:
-#: the ceiling by 575 tokens and the summary-alone figure by the same 575, which
-#: is what five key points of 80 words each were reserving.
-SUPPRESSED_BUDGET_TOKENS: Final = 371
-
-if summarize_and_plan_budget_tokens() != SUMMARIZE_AND_PLAN_BUDGET_TOKENS:
-    raise TypeError(
-        "a bound moved and the summarize-and-plan call's output budget did not follow it - the "
-        f"reply shape now needs {summarize_and_plan_budget_tokens()} tokens against a recorded "
-        f"{SUMMARIZE_AND_PLAN_BUDGET_TOKENS}; re-derive it in `summarize_and_plan_budget_tokens`"
-    )
-if summarize_and_plan_budget_tokens(plan=False) != SUPPRESSED_BUDGET_TOKENS:
-    raise TypeError(
-        "a bound moved and the suppressed output budget did not follow it - the summary "
-        f"alone now needs {summarize_and_plan_budget_tokens(plan=False)} tokens against a recorded "
-        f"{SUPPRESSED_BUDGET_TOKENS}; re-derive it in `summarize_and_plan_budget_tokens`"
-    )
 if tuple(summarize_and_plan_model().model_fields) != ("summary", "visual"):
     raise TypeError(
         "field order is decode order, and the summary has to close before the plan "
@@ -1127,9 +1015,6 @@ def build_summarize_and_plan_request(
     table: ElementTable,
     *,
     markers: TurnMarkers,
-    prompt_config: SummarizeConfig | None = None,
-    source_words: int | None = None,
-    brief: bool = False,
     plan: bool = True,
     visuals: VisualsConfig | None = None,
     prompt_files: PromptFilesConfig | None = None,
@@ -1157,27 +1042,24 @@ def build_summarize_and_plan_request(
 
     `table` is the exact post-anchoring table used by reachability and validation.
     Its menu and reference choices are request-local; the native plan stays
-    unchanged. Suppression removes the menu, plan grammar and output budget
-    after the shared prefix, never from that prefix.
+    unchanged. Suppression removes the menu and the plan grammar after the
+    shared prefix, never from that prefix.
+
+    **The reply is held to the model file's response limit and to nothing
+    narrower.** `first` carries it as `max_tokens` where the file names one, and
+    `continued_completion_payload` sends `DEFAULT_MAX_TOKENS` where it does not.
     """
     return continued_completion_payload(
         first,
         reply=reply,
         user=summarize_and_plan_user_turn(
-            prompt_config,
-            source_words=source_words,
-            brief=brief,
             plan=plan,
             table=table,
             prompt_files=prompt_files,
             config_dir=config_dir,
         ),
-        output_schema=summarize_and_plan_schema(
-            prompt_config, source_words=source_words, brief=brief, plan=plan, visuals=visuals,
-            table=table,
-        ),
+        output_schema=summarize_and_plan_schema(plan=plan, visuals=visuals, table=table),
         markers=markers,
-        max_answer_tokens=summarize_and_plan_budget_tokens(prompt_config, plan=plan),
     )
 
 
@@ -1226,9 +1108,7 @@ def prompt_inputs(
     rendered = continued_prompt(
         first,
         reply="",
-        user=summarize_and_plan_user_turn(
-            ask, prompt_files=prompt_files, config_dir=config_dir
-        ),
+        user=summarize_and_plan_user_turn(prompt_files=prompt_files, config_dir=config_dir),
         markers=markers,
     )
     selection = (
@@ -1239,14 +1119,7 @@ def prompt_inputs(
     return rendered + canonical_json(ask.model_dump(mode="json")) + selection
 
 
-def parse_summarize_and_plan(
-    raw: str,
-    prompt_config: SummarizeConfig | None = None,
-    *,
-    source_words: int | None = None,
-    brief: bool = False,
-    plan: bool = True,
-) -> SummarizeAndPlanReply:
+def parse_summarize_and_plan(raw: str, *, plan: bool = True) -> SummarizeAndPlanReply:
     """A whole reply, held to the shape the decoder was given, as the two contracts it stands for.
 
     The decoder shape is an implementation detail of the grammar and stops here.
@@ -1263,9 +1136,10 @@ def parse_summarize_and_plan(
     fenced = _FENCED_JSON.match(content)
     if fenced:
         content = fenced.group(1)
-    draft_shape = summarize.draft_model(prompt_config, source_words=source_words, brief=brief)
     if not plan:
-        return SummarizeAndPlanReply(summary=draft_shape.model_validate_json(content), visual=None)
+        return SummarizeAndPlanReply(
+            summary=summarize.SummaryDraft.model_validate_json(content), visual=None
+        )
     data = json.loads(content)
     legacy_references = (
         isinstance(data, dict)
@@ -1273,10 +1147,9 @@ def parse_summarize_and_plan(
         and "element_ids" in data["visual"]
     )
     body = summarize_and_plan_model(
-        prompt_config, source_words=source_words, brief=brief,
-        legacy_references=legacy_references,
+        legacy_references=legacy_references
     ).model_validate(data).model_dump(mode="json")
-    draft = draft_shape.model_validate(body["summary"])
+    draft = summarize.SummaryDraft.model_validate(body["summary"])
     if not legacy_references:
         visual = body["visual"]
         groups = [*visual["encodings"].values(), visual["labels"], visual["annotations"]]
