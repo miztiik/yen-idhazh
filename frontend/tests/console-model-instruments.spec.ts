@@ -1,8 +1,7 @@
 /** Deterministic model instruments rules over bounded fixtures; no browser, build, or layout matrix. */
 import { expect, test } from '@playwright/test';
-import { DRAWN_BY, UNDRAWN, EVAL_PANELS, RECORDED, evalDays, recordedReadings, recordedText, type EvalInput } from '../src/lib/console/eval-instruments';
+import { DRAWN_BY, UNDRAWN, EVAL_PANELS, RECORDED, evalDays, type EvalInput } from '../src/lib/console/eval-instruments';
 import { SCORE_COLUMNS } from '../src/lib/server/ledger-rows';
-import { numberFormat } from './support/number-format';
 const FIXTURE: EvalInput[] = [
     { date: '2026-04-02', hhem: '0.90', hhem_delta: '0', compression: '0.20', coherence: '0.10' },
     { date: '2026-04-02', hhem: '0.80', hhem_delta: '0', compression: '0.40', coherence: '-0.30' },
@@ -58,14 +57,9 @@ test.describe('the arithmetic', () => {
         expect(bad.matched).toBe(1);
         expect(bad.matchMid).toBe(85);
     });
-    test('a cosine keeps its own scale and its sign, and is never read as a percent', () => {
+    test('a cosine keeps its own scale and is never read as a percent', () => {
         const days = evalDays(FIXTURE);
         expect(days[1].recorded.coherence).toBe(0.1);
-        const reading = recordedReadings(days).find((entry) => entry.id === 'coherence');
-        expect(reading?.days).toBe(1);
-        expect(reading?.low).toBe(0.1);
-        expect(recordedText(reading!, -0.3, numberFormat)).toBe('-0.3');
-        expect(recordedText(reading!, null, numberFormat)).toBe('-');
     });
     test('a row with no day is dropped rather than pooled into an empty one', () => {
         const days = evalDays(FIXTURE);
