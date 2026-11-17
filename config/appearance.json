@@ -4,7 +4,7 @@
     "result_limit": 10,
     "search_min_days": 7,
     "search_months": 1,
-    "similarity_floor": 0.70
+    "similarity_floor": 0.35
   },
   "chart": {
     "height_px": 220,
