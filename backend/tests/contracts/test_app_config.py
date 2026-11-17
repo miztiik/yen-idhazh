@@ -63,10 +63,7 @@ def test_the_config_file_names_every_knob_it_owns(name: str) -> None:
 
     **Owns, not declares.** Three blocks sit on two models and only one file is
     their source; `CONFIG_NOT_OWNED` names the other side. Padding a legacy
-    block out to its model would give one knob two answers in two files, which
-    is exactly what `test_a_moved_block_is_declared_in_one_file_and_the_other_
-    does_not_argue` exists to refuse - it caught this test's first draft doing
-    it.
+    block out to its model would give one knob two answers in two files.
 
     Leaf paths rather than top-level keys, because a default nested inside a
     list entry is the shape that hides best: a block-level check cannot see one

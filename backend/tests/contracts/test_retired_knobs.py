@@ -21,11 +21,11 @@ pytestmark = pytest.mark.contract
         ("zoom_factor", 1.5),
         ("band_outlier_rows", 10),
         ("plot_min_fill_share", 0.85),
+        ("panel_groups", []),
+        ("judged_panel_ids", []),
     ],
 )
-def test_a_console_knob_with_no_surviving_reader_is_refused(
-    removed: str, value: int | float
-) -> None:
+def test_a_console_knob_with_no_surviving_reader_is_refused(removed: str, value: object) -> None:
     with pytest.raises(ValidationError) as raised:
         ConsoleConfig.model_validate({removed: value})
     assert raised.value.errors()[0]["loc"] == (removed,)
