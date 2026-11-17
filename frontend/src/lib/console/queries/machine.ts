@@ -78,7 +78,7 @@ export const articleCostHostsQuery = {
 
 export const promptReuseQuery = {
 	name: 'promptReuseQuery', ledger: 'item-health',
-	columns: ['date', 'label_input_tokens', 'label_cached_tokens', 'label_cache_pct', 'label_prefill_tokens_per_s', 'summary_input_tokens', 'summary_cached_tokens', 'summary_cache_pct', 'summary_prefill_tokens_per_s'],
+	columns: ['date', 'label_input_tokens', 'label_cached_tokens', 'summary_input_tokens', 'summary_cached_tokens'],
 	span: 'window'
 } as const satisfies PanelQuery;
 

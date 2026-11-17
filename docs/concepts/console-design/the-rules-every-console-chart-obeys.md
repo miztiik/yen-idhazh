@@ -35,8 +35,10 @@ which shape a panel reaches for is
     than from the limit it is measured against.
   - **A share or a cumulative percentage runs 0 to 100**, because a curve that
     stops short of its own top reads as a curve that has not finished. Shipped in
-    `TimeHistogram.svelte`. Native failure mix draws stage counts, not rate
-    lines. Its failed-row share stays in words with its recorded-row divisor.
+    `TimeHistogram.svelte`, and in `PromptReusePanel.svelte` on
+    `/console/machine/`, whose stacked bars run 0 to 100 percent of each day's
+    prompt tokens. Native failure mix draws stage counts, not rate lines. Its
+    failed-row share stays in words with its recorded-row divisor.
   - **A ratio against a baseline is symmetric about that baseline and carries a
     minimum width**, or a two percent change fills the plot and reads as a rout.
     Shipped as `swapScale` in `series.ts`: no change is 100 percent and that

@@ -87,7 +87,7 @@ EXPECTED_COLUMNS: Final[Mapping[str, tuple[str, ...]]] = {
         "version", "date", "run_id", "job", "pipeline_name", "task_name", "shard", "cpu_logical_processors",
         *LEGACY_HOST_INPUT_COLUMNS,
     ),
-    "promptReuseQuery": ("date", "label_input_tokens", "label_cached_tokens", "label_cache_pct", "label_prefill_tokens_per_s", "summary_input_tokens", "summary_cached_tokens", "summary_cache_pct", "summary_prefill_tokens_per_s"),
+    "promptReuseQuery": ("date", "label_input_tokens", "label_cached_tokens", "summary_input_tokens", "summary_cached_tokens"),
     "readAgainstWrittenQuery": ("date", "run_id", "item_id", "input_tokens", "output_tokens", "prefill_ms", "decode_ms"),
     "feedsFailedQuery": ("date", "source_id", "stage", "outcome", "code", "http_status", "source_form", "tier"),
     "fetchTimeQuery": ("source_id", "fetch_ms", "fetch_connect_ms", "fetch_ttfb_ms", "robots_ms", "retry_total_ms", "retry_count"),

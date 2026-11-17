@@ -1,7 +1,7 @@
 /** Native item cost and per-call reuse over bounded rows, with independent numeric oracles. */
 import { expect, test } from '@playwright/test';
 import { nativeItemCost } from '../src/lib/console/model/item-cost';
-import { labelHeldMedian, reuseChecks, reuseSeries } from '../src/lib/console/machine/records';
+import { reuseDays } from '../src/lib/console/machine/prompt-reuse';
 import { itemCostQuery } from '../src/lib/console/queries/model';
 import { rangeFor, type RouteReach } from '../src/lib/console/queries/window';
 import type { Row } from '../src/lib/data/ledger';
@@ -41,19 +41,6 @@ test.describe('what one item cost, as native arithmetic', () => {
 		expect(cost.writeCostRatio).toBeNull();
 	});
 
-	test('a window pooled share and the middle request are two different measurements', () => {
-		const rows = [
-			row({ label_input_tokens: 90000, label_cached_tokens: 0, label_cache_pct: 0 }),
-			row({ label_input_tokens: 1000, label_cached_tokens: 900, label_cache_pct: 90 }),
-			row({ label_input_tokens: 1000, label_cached_tokens: 900, label_cache_pct: 90 })
-		];
-		const check = reuseChecks(rows)[0];
-		expect(check.count).toBe(3);
-		expect(check.ours, '1800 held tokens out of 92000 requested tokens').toBeCloseTo(100 * 1800 / 92000, 10);
-		expect(check.server, 'the middle request reused 90 percent').toBe(90);
-		expect(labelHeldMedian(rows)).toBe(900);
-	});
-
 	test('rates pool their own complete pairs instead of averaging item rates or sharing divisors', () => {
 		const cost = nativeItemCost([
 			row({ prefill_ms: 1000, input_tokens: 10, cached_tokens: 0, decode_ms: 2000, output_tokens: 10 }),
@@ -90,29 +77,21 @@ test.describe('what one item cost, as native arithmetic', () => {
 		expect(cost.readPairs).toBe(1);
 		expect(cost.msPerReadToken, '400872 milliseconds over 2393 fresh tokens across both calls')
 			.toBeCloseTo(400872 / 2393, 10);
-		expect(labelHeldMedian(calls)).toBe(0);
-		expect(reuseSeries(calls).map((series) => series.points[0].value)).toEqual([0, 896]);
-		const checks = reuseChecks(calls);
-		expect(checks[0]).toEqual({ call: 'label', ours: 0, server: 0, count: 1 });
-		expect(checks[1].ours).toBeCloseTo(100 * 1493 / 2389, 10);
-		expect(checks[1]).toMatchObject({ call: 'summary', server: 62.49, count: 1 });
+		expect(reuseDays(calls, 'label').map((day) => day.share)).toEqual([0]);
+		expect(reuseDays(calls, 'summary')[0].share).toBeCloseTo(100 * 1493 / 2389, 10);
 	});
 
-	test('an absent per-call reading is unknown even when item totals exist, and the server remains independent', () => {
+	test('an absent per-call reading is unknown even when item totals exist', () => {
 		const rows = [row({
 			input_tokens: 1000, cached_tokens: 400,
 			label_input_tokens: null, label_cached_tokens: '', label_cache_pct: 40,
 			summary_input_tokens: 1000, summary_cached_tokens: null
 		})];
-		expect(labelHeldMedian(rows)).toBeNull();
-		expect(reuseChecks(rows)).toEqual([
-			{ call: 'label', ours: null, server: 40, count: 0 },
-			{ call: 'summary', ours: null, server: null, count: 0 }
-		]);
-		expect(reuseSeries(rows).map((series) => series.points[0].value)).toEqual([null, null]);
+		expect(reuseDays(rows, 'label')).toEqual([]);
+		expect(reuseDays(rows, 'summary')).toEqual([]);
 	});
 
-	test('even token and held-text cohorts use the native upper middle, not a half token', () => {
+	test('even token cohorts use the native upper middle, not a half token', () => {
 		const rows = [
 			row({ input_tokens: 1687, output_tokens: 10, label_cached_tokens: 843 }),
 			row({ input_tokens: 1688, output_tokens: 11, label_cached_tokens: 845 })
@@ -120,7 +99,6 @@ test.describe('what one item cost, as native arithmetic', () => {
 		const cost = nativeItemCost(rows);
 		expect(cost.promptTokens).toBe(1688);
 		expect(cost.writtenTokens).toBe(11);
-		expect(labelHeldMedian(rows)).toBe(845);
 	});
 
 	test('invalid pairs and a fully cached prompt cannot provide a fresh-token rate', () => {

@@ -64,9 +64,9 @@ clamps to item-health's own first day. Its compact note prints the actual UTC
 bounds. Request epochs discard stale answers, retry retains the successful
 endpoint, and missing, quiet and unreachable stay distinct.
 
-Prompt reuse remains on Hardware, linked from the panel. Its per-call held
-tokens, fresh tokens, pooled shares and recorded cache percentages remain
-separate readings; an unknown cache count cannot become a whole-prompt read.
+The cached share of each prompt remains on Hardware, linked from the panel. Each
+call's pooled cached share is its own reading of its own prompt tokens; an
+unknown cache count cannot become a whole-prompt read.
 Per-call charging follows
 [the model's contract](../summarize/throughput.md#each-call-is-charged-on-its-own-and-the-item-is-their-sum).
 

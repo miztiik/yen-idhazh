@@ -1,21 +1,17 @@
 <script lang="ts">
 	import Panel from '$lib/components/Panel.svelte';
 	import RankedList from '$lib/components/RankedList.svelte';
-	import DateSeries from '$lib/charts/d3/DateSeries.svelte';
 	import Distribution from '$lib/charts/d3/Distribution.svelte';
 	import MachinePhases from './MachinePhases.svelte';
 	import { rankedList } from '$lib/charts/d3/rankedList';
-	import { dateSeries } from '$lib/charts/d3/dateSeries';
 	import { distribution } from '$lib/charts/d3/distribution';
 	import { emptyState } from '$lib/charts/d3/empty';
 	import { AXIS_LABEL_GAP_PX, chartWidth, labelWidth, MARGIN, observeWidth } from '$lib/charts/frame';
 	import { useChartFrame, useChartLabels } from '$lib/charts/label-context';
 	import { clockAgreement, clocksChart } from '$lib/charts/machine';
 	import { formatNumber } from '$lib/number-format';
-	import { settingsRules } from '$lib/console/settings-moved';
 	import { nameSpan } from '$lib/console/span-words';
-	import { shortDate } from '$lib/format';
-	import { closestToMemory, contextReadings, labelHeldMedian, reuseChecks, reuseSeries, slowerMachines, textRows } from './records';
+	import { closestToMemory, contextReadings, slowerMachines, textRows } from './records';
 	import type { ConsoleShell } from '$lib/console/band';
 	import type { Row } from '$lib/data/ledger';
 	import type { ChartConfig } from '$lib/server/config';
@@ -31,11 +27,9 @@
 	const frame = useChartFrame(() => chart);
 	const labels = useChartLabels();
 	let width = $state<number | null>(null);
-	const box = $derived(frame(chartWidth(width, chart.width_px), chart.height_px));
 	const contextBox = $derived(frame(chartWidth(width, chart.width_px), chart.height_px,
 		{ ...MARGIN, right: Math.ceil(labelWidth('100%', labels()) + AXIS_LABEL_GAP_PX) }));
 	const declined = { declined: 'This compares records within one run or kind, not a change over days.' };
-	const rule = $derived(settingsRules(shell, { from: start, to: end }, 'none'));
 	const slower = $derived(slowerMachines(id === 'slower-machines' ? rows : []));
 	const comparableKinds = $derived(new Set([...slower.reading, ...slower.writing]
 		.filter((row) => (row.range?.count ?? 0) >= knobs.slower_machines_min_articles).map((row) => row.label)));
@@ -47,46 +41,26 @@
 	const widestGap = $derived(gaps.length ? Math.max(...gaps) : null);
 	const readingLeader = $derived([...slower.reading].filter((row) => (row.range?.count ?? 0) >= knobs.slower_machines_min_articles)
 		.sort((a, b) => b.value - a.value)[0]);
-	const reuseMedian = $derived(labelHeldMedian(rows));
 	const comparison = $derived(id === 'two-clocks' ? "Each shard's gap against the tolerance"
 		: id === 'slower-machines' ? "Each machine kind's typical time against the reference machine's"
 		: id === 'closest-to-memory' ? "Memory held at each article's lowest point against the machine's total"
-		: id === 'context-headroom' ? 'Each prompt against the reading limit'
-		: 'Text held for the label call against text the summary call reads fresh');
+		: 'Each prompt against the reading limit');
 	const clockRows = $derived(clocksChart(clocks.pairs, knobs.clocks_agree_within_pct, numberFormat));
 	const context = $derived(contextReadings(rows));
 	const contextDomain = $derived([
 		Math.min(1, ...context.label, ...context.summary, ...context.rules.map((one) => one.at)),
 		Math.max(10, ...context.label, ...context.summary, ...context.rules.map((one) => one.at))
 	] as [number, number]);
-	const series = $derived(reuseSeries(rows));
-	const drawing = $derived(dateSeries(series, {
-		frame: box,
-		density: chart.tick_density,
-		valueTicks: 4,
-		padding: 0.2,
-		rule,
-		number_format: numberFormat
-	}));
-	const ruleNote = $derived.by(() => {
-		if (!('changes' in rule)) return rule.declined;
-		const dates = new Set(series.flatMap((one) => one.points.map((point) => point.date)));
-		const undrawn = rule.changes.filter((change) => !dates.has(change.date));
-		return [rule.note, ...undrawn.map((change) =>
-			`${change.words} (${change.date}), but this chart has no measured column on that day; a comparison across it crosses an undrawn settings change.`)]
-			.filter(Boolean).join(' ');
-	});
-	const reuse = $derived(reuseChecks(rows));
 </script>
 
-<div data-windowed={{ 'context-headroom': 'machine-context', 'prompt-reuse': 'machine-prompt-reuse' }[id]}
+<div data-windowed={{ 'context-headroom': 'machine-context' }[id]}
 	data-window-days={windowDays}>
 <Panel {id} {title} heading="h3" verdict={id === 'two-clocks'} note={id === 'two-clocks' ? `Newest run ${newestRunId ?? newest?.runId ?? 'not recorded'}, by shard.`
 	: `Read from the published record when you open this page - over ${nameSpan(windowDays)}.`}>
 	<div data-panel-question="is it working"
-		data-model-rule-name={id === 'prompt-reuse' ? undefined : id}
-		data-model-rule={id === 'prompt-reuse' ? undefined : 'no'}
-		data-model-rule-none={id === 'prompt-reuse' ? undefined : declined.declined}>
+		data-model-rule-name={id}
+		data-model-rule="no"
+		data-model-rule-none={declined.declined}>
 		{#if id !== 'two-clocks'}<p data-comparison={comparison}>{comparison}.</p>{/if}
 		{#if id === 'two-clocks'}
 			<p class="lede" data-lede data-comparison={comparison}>{widestGap === null ? 'Neither instrument recorded a comparison.'
@@ -144,15 +118,6 @@
 			</div>
 			<p>{context.cut ? `${context.cut} articles were cut.` : 'No article was cut in this window.'}
 				{context.limits.length > 1 ? ` Other request-slot limits: ${context.limits.slice(1).join(', ')} tokens.` : ''}</p>
-		{:else}
-			<p class="lede" data-lede>{reuseMedian === null ? 'No label request recorded held text.' : `${formatNumber(reuseMedian, numberFormat)} median (p50) cached tokens per label request.`}</p>
-			<div use:observeWidth={(px) => (width = px)}><DateSeries geometry={drawing}
-				readout={drawing === null ? null : { ...drawing.readout, columns: drawing.dates.map(shortDate) }}
-				empty={emptyState('quiet', 'Nothing recorded for this comparison.')}
-				name={id} label={title} width={box.width} height={box.height} readoutMaxShare={chart.readout_max_share} /></div>
-			{#if ruleNote}<p data-model-rule-empty={id}>{ruleNote}</p>{/if}
-			{#each reuse as check}<p>{check.call}: our pooled held share {check.ours === null ? 'not recorded' : formatNumber(check.ours, numberFormat, { si: false })}%;
-				server's median (p50) cached share {check.server === null ? 'not recorded' : formatNumber(check.server, numberFormat, { si: false })}%; {formatNumber(check.count, numberFormat, { exact: true, si: false })} complete article readings.</p>{/each}
 		{/if}
 	</div>
 </Panel>

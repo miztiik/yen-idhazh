@@ -34,7 +34,7 @@
 <p class="note" data-item-cost-pairs>
 	Reading: {cost.readPairs} paired clocks and fresh-token counts; writing: {cost.writePairs} paired clocks and output counts.
 	{cost.unknownCache} prompts have no recorded cache count and are not treated as read whole.
-	Prompt reuse is on <a href="{base}/console/machine/">Hardware</a>.
+	The cached share of each prompt is on <a href="{base}/console/machine/">Hardware</a>.
 </p>
 <style>
 	.lede { font-size: var(--text-2xl); font-variant-numeric: tabular-nums; }
