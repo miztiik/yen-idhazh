@@ -43,8 +43,8 @@ class Summary(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-11-17",
-            change="Removed length_action. A payload that still carries it loads.",
-            why="Nothing writes it: a reply is published exactly as the model wrote it.",
+            change="Removed length_action; the digest records its one call in call_2.",
+            why="Nothing writes length_action, and the call that remains is the second of two.",
         ),
         ChangelogEntry(
             version="2026-09-24",
@@ -154,13 +154,19 @@ class Summary(Contract):
     call_1: CallCost | None = Field(
         default=None,
         description=(
-            "What the stage's first model call cost, and which call it was. Null on a "
-            "payload written before 2026-09-12, which recorded a total and no split."
+            "What the stage's first model call cost, and which call it was. Null where "
+            "the stage recorded only its second call, which every digest payload written "
+            "from 2026-11-17 does, and on a payload written before 2026-09-12, which "
+            "recorded a total and no split."
         ),
     )
     call_2: CallCost | None = Field(
         default=None,
-        description="The same for the second call, or null where the stage made only one.",
+        description=(
+            "What the digest's own call cost: the second of two calls until 2026-11-17 "
+            "and the only one since. Null where the standalone summarizer made one call "
+            "and recorded it in call_1."
+        ),
     )
 
     generated_at: Timestamp

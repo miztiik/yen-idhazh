@@ -16,6 +16,15 @@ from .paths import CONFIG_DIR, FIXTURES_DIR
 LABEL_REPLIES: Final = FIXTURES_DIR / "completions" / "label"
 SUMMARIZE_AND_PLAN_REPLIES: Final = FIXTURES_DIR / "completions" / "summarize-and-plan"
 
+#: Words only the retired first call's prompt and reply shape used. A request to the model
+#: that carries any of them is still asking that call's question.
+THE_FIRST_CALLS_WORDS: Final = (
+    '"named_mentions"',
+    '"proposed"',
+    "Extract quantity meanings",
+    "supplied quantity table",
+)
+
 
 def a_table(
     article: Article,

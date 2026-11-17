@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 from typing import Any, Final
 
-from idhazh.classify.label_request import sentence_id
 from idhazh.contracts.element import (
     ELEMENT_ID_PATTERN,
     ElementTable,
@@ -15,24 +14,20 @@ from idhazh.contracts.visual import EncodingRole, VisualType
 from idhazh.sanitize import untrusted_block
 from idhazh.visual_vocabulary import ROLE_KINDS, TYPE_RULES, VALUE_ROLES
 
-PLANNING_COLUMNS: Final = (
-    "element_id", "kind", "span_excerpt", "value", "unit", "sentence_id"
-)
-PLANNING_JUDGEMENTS: Final = ("measure", "entity")
+#: What the model is shown of each element: its address, what kind of fact it is, the
+#: article's own words and the reading code took from them. No sentence address, and
+#: no judgement: nothing in the pipeline labels an element any more, so the menu is
+#: the table and nothing the table does not hold.
+PLANNING_COLUMNS: Final = ("element_id", "kind", "span_excerpt", "value", "unit")
 
 
 def planning_menu(table: ElementTable) -> str:
-    """Project the exact finalized table into compact, fenced item data."""
+    """Project the exact table into compact, fenced item data."""
     rows = []
-    labels = {}
     for element in table.elements:
         cells = element.model_dump(mode="json")
-        cells["sentence_id"] = sentence_id(element.sentence_index)
         rows.append([cells[name] for name in PLANNING_COLUMNS])
-        judged = {name: cells[name] for name in PLANNING_JUDGEMENTS if cells[name] is not None}
-        if judged:
-            labels[element.element_id] = judged
-    data = {"columns": PLANNING_COLUMNS, "rows": rows, "labels": labels}
+    data = {"columns": PLANNING_COLUMNS, "rows": rows}
     return untrusted_block(json.dumps(data, ensure_ascii=False, separators=(",", ":")))
 
 

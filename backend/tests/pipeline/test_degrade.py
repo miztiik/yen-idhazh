@@ -37,8 +37,6 @@ from idhazh.telemetry.record import HEALTH_SUFFIX
 
 from ._builders import _work_stage, captured_article_fetch, plan
 
-LABEL_REPLY: Final = FIXTURES_DIR / "completions" / "label" / "labelled.json"
-
 SUMMARIZE_AND_PLAN_REPLY: Final = (
     FIXTURES_DIR / "completions" / "summarize-and-plan" / "summary-and-plan.json"
 )
@@ -80,7 +78,7 @@ def worked_a_headless_day(tmp_path: Path, monkeypatch: MonkeyPatch) -> tuple[Run
     run_plan, items, _ = _work_stage(
         tmp_path,
         monkeypatch,
-        replies=(LABEL_REPLY.read_bytes(), SUMMARIZE_AND_PLAN_REPLY.read_bytes()),
+        replies=(SUMMARIZE_AND_PLAN_REPLY.read_bytes(),),
         fetcher=headless_page_fetch,
         run_plan=headless_plan(),
     )
@@ -143,7 +141,7 @@ def test_a_feed_that_named_nothing_publishes_under_the_page_s_own_headline(
     run_plan, items, _ = _work_stage(
         tmp_path,
         monkeypatch,
-        replies=(LABEL_REPLY.read_bytes(), SUMMARIZE_AND_PLAN_REPLY.read_bytes()),
+        replies=(SUMMARIZE_AND_PLAN_REPLY.read_bytes(),),
         run_plan=headless_plan(),
         fetcher=headed_page,
     )
@@ -203,7 +201,7 @@ def test_an_interrupted_article_records_failure_and_finishes_its_shard_siblings(
         run_plan, items, _ = _work_stage(
             tmp_path,
             monkeypatch,
-            replies=(LABEL_REPLY.read_bytes(), SUMMARIZE_AND_PLAN_REPLY.read_bytes()),
+            replies=(SUMMARIZE_AND_PLAN_REPLY.read_bytes(),),
             run_plan=day,
             fetcher=common.live_fetcher(settings),
         )
@@ -219,6 +217,7 @@ def test_an_interrupted_article_records_failure_and_finishes_its_shard_siblings(
     assert failed_row.detail == ("TimeoutError" if failure == "timeout" else "IncompleteRead")
     assert failed_row.retry_count == 1
     assert failed_row.fetch_ttfb_ms is not None
+    assert failed_row.analyze_ms is None, "an article that never arrived is never sent to the service"
     assert not (items / f"{failed.item_id}.summary.json").exists()
     for sibling in (before, after):
         article = Article.from_json(read_text(items / f"{sibling.item_id}.article.json"))

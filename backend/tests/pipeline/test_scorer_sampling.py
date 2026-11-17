@@ -26,6 +26,7 @@ from ._builders import (
     plan,
     row,
     score_one_item,
+    with_an_analysis_service,
     work_then_assemble,
 )
 
@@ -177,10 +178,13 @@ def test_a_scored_run_names_the_instrument_that_wrote_its_rows(
     isolate_ledgers(tmp_path, monkeypatch)
     items_dir = tmp_path / "run" / run_plan.date / "items"
 
-    with a_server_that_refuses_every_completion() as server:
+    with (
+        with_an_analysis_service(settings) as read,
+        a_server_that_refuses_every_completion() as server,
+    ):
         stage_work(
             run_plan,
-            settings=settings,
+            settings=read,
             scorer=None,
             fetcher=captured_article_fetch,
             model_endpoint=server.endpoint,

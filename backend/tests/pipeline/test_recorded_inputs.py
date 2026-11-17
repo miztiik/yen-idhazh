@@ -25,6 +25,7 @@ from ._builders import (
     isolate_ledgers,
     plan,
     score_one_item,
+    with_an_analysis_service,
     work_then_assemble,
 )
 
@@ -44,10 +45,13 @@ def test_the_work_stage_leaves_its_inputs_where_assemble_can_reach_them(
     isolate_ledgers(tmp_path, monkeypatch)
     items_dir = tmp_path / "run" / run_plan.date / "items"
 
-    with a_server_that_refuses_every_completion() as server:
+    with (
+        with_an_analysis_service(settings) as read,
+        a_server_that_refuses_every_completion() as server,
+    ):
         stage_work(
             run_plan,
-            settings=settings,
+            settings=read,
             scorer=None,
             fetcher=captured_article_fetch,
             model_endpoint=server.endpoint,
@@ -182,10 +186,13 @@ def test_a_traced_work_shard_writes_separate_item_passes_and_their_children(
         ),
     )
 
-    with a_server_that_refuses_every_completion() as server:
+    with (
+        with_an_analysis_service(settings) as read,
+        a_server_that_refuses_every_completion() as server,
+    ):
         stage_work(
             run_plan,
-            settings=settings,
+            settings=read,
             scorer=None,
             fetcher=captured_article_fetch,
             model_endpoint=server.endpoint,

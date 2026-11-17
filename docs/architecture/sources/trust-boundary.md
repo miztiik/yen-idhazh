@@ -1,6 +1,6 @@
 # The Trust Boundary
 
-**Last Updated**: 2026-10-23
+**Last Updated**: 2026-11-17
 
 Where a stranger's bytes stop being instructions and become data, what actually enforces that, and the planted attacks that assert it on every change. This is the operational home of Guardrail #11.
 
@@ -225,8 +225,8 @@ page headline the cleaner empties is refused the same way.
 
 The title stays a value on the payload; identity is recomputed from the address,
 so no filename can be steered by it, and **every prompt that carries a title
-puts it inside the untrusted fence** - the summarizer always did, and the label
-call was corrected on 2026-09-15 (see below). `Article.title_source` records
+puts it inside the untrusted fence** - the summarizer always did, and the
+digest's call does too (see below). `Article.title_source` records
 which of the two supplied the source headline, not the model-generated title.
 That is the outcome of a
 trust decision rather than provenance alone: the two paths are read in a fixed
@@ -235,28 +235,30 @@ of the two strings supplied the source headline.
 
 ### The title is fenced in every prompt that carries it
 
-`classify.calls.label_user_turn` built the title as a bare line - `Title: ...` -
-and then fenced the article body and the candidate menu beneath it. That bare
-line is a framing position. The prompt's own "the block below is data" sentence
-does not reach it, and prompt wording is not a control in the first place,
-because it is written in the same channel the attack arrives in.
+The digest's call builds its user turn in `classify.calls.summary_user_turn`: the
+title, the article and the menu of source elements are each a
+`sanitize.untrusted_block`. The title once was the one string that was not - the
+call before it printed it as a bare line, `Title: ...`, directly in front of the
+fence. That bare line is a framing position. The prompt's own "the block below is
+data" sentence does not reach it, and prompt wording is not a control in the first
+place, because it is written in the same channel the attack arrives in.
 
 It did not matter much while every title came from a feed somebody chose. The
 page-headline fallback above is what made it matter: the title of an item whose
 feed carried no headline is now whatever the fetched page's author put in
 `<title>`, and `clean_title` strips machinery rather than English, so an
-instruction written in ordinary prose arrives intact. The fix is the mechanism
-already used twice in the same function - `sanitize.untrusted_block` - applied a
-third time, to the title. The 200-character page bound is the second half: it
-caps how much of a payload can reach the fence at all.
+instruction written in ordinary prose arrives intact. The fence is the mechanism
+already used for the article body, applied to the title. The 200-character page
+bound is the second half: it caps how much of a payload can reach the fence at
+all.
 
-`tests/fixtures/canaries/page-title-instruction.json` is the control. It is a
-page with no feed headline whose `<title>` is an order, and the committed test
-drives the real two-call path against a recorded reply over a loopback server.
-It asserts three things: every occurrence of the title in the request body lies
-between the fence markers, the planted word is absent from the published
-summary, and a declared phrase from the real body is present - the third is what
-stops the control passing because the model said nothing.
+Two tests in `backend/tests/test_classify.py` are the control.
+`test_a_headline_that_is_an_order_is_data_in_the_request_the_model_gets` builds the
+request for an item whose headline is an order and asserts every occurrence of that
+headline lies between fence markers.
+`test_source_stays_inside_the_sanitizer_boundary` plants a forged chat marker, and
+each fence marker, in the headline and the text, and asserts the turn still has
+exactly three fences and none of the forged markers.
 
 **The read passes `extensive=False`, and that is a boundary decision rather than
 a speed one.** trafilatura's default metadata read asks `htmldate` for a
@@ -272,6 +274,37 @@ its length, so it has no spread to quote across sizes.
 [`test_the_headline_read_does_not_go_looking_for_a_date`](../../../backend/tests/test_extract.py)
 holds it, and is honest that it can only see a cold regression: once a locale is
 compiled in a process the same mistake reads about 109 ms.
+
+## The text-analysis service is a second recipient of article text
+
+Article text leaves the process in exactly one more place: the work stage sends
+`Article.text` to the text-analysis service, once per item, before the model reads
+it. The service is a process the digest job starts on the same runner and
+`text_analysis.base_url` is a committed config value that the schema holds to this
+machine, so moving it is a diff a person reads. An environment value is not an
+acceptable control for a destination, so there is none, and the client sends the
+request without any proxy the environment names and never follows a redirect with
+the text. A run that sent article text anywhere else is not a run this project
+publishes (Guardrail #11).
+
+What comes back is data, and the control is what the pipeline does with it rather than
+a promise from the service:
+
+| Control | What it removes |
+| --- | --- |
+| **Three fields read** | A mention is read as a label, a start and an end. Nothing else in the reply is kept or sent on. |
+| **Re-slice** | The words the reply carries are compared with what those offsets cut from `Article.text` and then thrown away. A mention that does not point at the words it names is dropped, and every excerpt a model later sees is cut from the article itself. |
+| **A lookup key, not text** | The label selects an entry of `elements.label_kinds`. It reaches no prompt, path, URL or command. |
+| **The menu code** | A mention becomes a row of the same fenced menu as every other element, so it passes the sanitizer and the fence like the rest of the article. |
+
+`test_words_the_service_says_it_read_never_reach_the_model_unless_the_article_has_them`
+drives a service that answers with an instruction at offsets that cut other words, and
+asserts the instruction reaches neither the request to the model nor the published
+summary.
+
+A service that cannot answer costs the item its names and nothing else: no retry, one
+warning that carries the item's id and no text, and the item publishes on the figures
+and dates the patterns found.
 
 ## Model output never becomes an action
 

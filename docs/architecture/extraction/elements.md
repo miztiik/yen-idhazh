@@ -1,20 +1,22 @@
 # Elements: every fact in an article, with the characters that prove it
 
-**Last Updated**: 2026-11-15
+**Last Updated**: 2026-11-17
 
 The extraction subsystem's fact table. This page owns the element shape - the
 six kinds, the two tiers, and the span that makes a drawn figure checkable - the
 candidate pass that fills it, the rule that settles two passes claiming one
-stretch of characters, the call that labels what the pass found, and the
+stretch of characters, the labels the text-analysis service adds, and the
 invariant that says when a span has stopped pointing where it did.
 
 Two passes write into this table from the article's own bytes with no model at
 all: [`backend/idhazh/elements.py`](../../../backend/idhazh/elements.py) finds
-quantities and it finds absolute dates. A third asks a model, and it is two
-sections below: it labels what the two patterns found, points at a figure they
-missed, and points at the two kinds no pattern can reach - an organisation or a
-place. It types nothing a reader sees. Historical quote/claim kinds remain
-readable, but have no current producer or reader-facing visual.
+quantities and it finds absolute dates. A third is the local
+[text-analysis service](../text-analysis/text-analysis-api.md), asked once per
+article before the model reads it: it labels the organisations, people and places
+the patterns cannot reach, and the figures that are really dates, times or
+ordinals. It types nothing a reader sees, and the model is never asked for any of
+it. Historical quote/claim kinds remain readable, but have no current producer or
+reader-facing visual.
 
 ## What an element is
 
@@ -140,7 +142,9 @@ reaches them, on any kind.
 **Tier 2 is what a labeller said about it**: `entity`, `time`, `measure`,
 `measure_canonical`, `dimension`, `salience`, `attribution`, `hedge`, plus
 `label_source` and `ledger_version`, which record who said it and under which
-pass.
+pass. Nothing writes it today: the elements the text-analysis service adds leave
+every Tier 2 field unset, and a table written while a model labelled quantities
+stays readable.
 
 The split is enforced three ways, not described:
 
@@ -179,9 +183,10 @@ producer can write one by accident.
 The value is pinned as **text** for the reason a timestamp is: one spelling, and
 no float formatting that can drift underneath a committed file.
 
-Six kinds shipped in one changelog entry and all six have a producer. The two
-pattern passes write `quantity` and `date`; the label call points at the other four and
-code cuts them.
+Four kinds have a producer today. The two pattern passes write `quantity` and
+`date`; the text-analysis labels become `entity` and `place`, and code cuts them.
+`quote` and `claim` stay in the contract so a table written while they had a
+producer still loads.
 
 ## The candidate pass
 
@@ -192,7 +197,10 @@ pattern. Each emits one element per match, in the order the article wrote them.
 matched, and `element_table(article, config=...)` wraps the result in the table,
 with the article's identity and the hash of the text every span indexes. All
 four are pure functions over one payload: nothing is committed, and the passes
-are proved by re-slicing their own output.
+are proved by re-slicing their own output. `element_table` also takes the
+mentions the text-analysis service returned for the article and merges them after
+`settle`, as [the two kinds a labeller finds](#the-two-kinds-only-a-labeller-can-find)
+says.
 
 **The offsets are not new work.** The retired planner's `numeric_facts`
 computed `match.start` and `match.end`, and threw them away.
@@ -298,187 +306,72 @@ equal as strings or pinning the value as text buys nothing. The pass writes the
 plain decimal form with no exponent and no trailing zeros: `4200000000` for
 both. `span_excerpt` still holds whichever of the two the article wrote.
 
-## The label call: what the model may say about a candidate
+## The two kinds only a labeller can find
 
-The candidate pass says where every figure is. It cannot say what any of them
-means, because meaning is not in the bytes. The label call is the pass that asks, and it
-lives in
-[`backend/idhazh/classify/calls.py`](../../../backend/idhazh/classify/calls.py).
+No pattern reaches an organisation, a person or a place, and none can tell that "3rd" or
+"10 am" is not a figure. The text-analysis service can, and the work stage asks it once per
+article, after extraction and before the model: `Article.text` goes out and a list of
+labelled spans comes back. The client is
+[`backend/idhazh/ask_text_analysis.py`](../../../backend/idhazh/ask_text_analysis.py) and the
+conversion is [`backend/idhazh/anchor_mentions.py`](../../../backend/idhazh/anchor_mentions.py);
+the request and the reply are the service's own, [described with it](../text-analysis/text-analysis-api.md).
 
-One sentence governs it: **code finds and cuts every character a reader will
-see, and the model points at where to cut and says what the cut means.**
+One sentence governs it: **the service says where and what, and code cuts every character a
+reader will see.** The pipeline reads three fields of each mention - `label`, `start_char` and
+`end_char`. The words the reply carries are only a check: the excerpt is re-sliced from
+`Article.text`, and a mention whose returned words differ from that slice is dropped. Nothing
+else the service returns is read, stored or sent on (Guardrail #11).
 
-The model is given the item's title, the whole article one addressed JSON
-sentence string per physical line, and the candidate table addressed by `element_id` - the article rather
-than a summary of it, because a compression cannot carry a series it dropped and
-judging what an item is about against text that lost the figures is judging the
-wrong document. Both blocks are fenced as untrusted data (Guardrail #11). The
-addresses are ours; the sentences are a stranger's web page.
-[Sentence presentation](../summarize/prompt.md#sentence-addresses-identify-source-sentences-not-physical-line-counts)
-is reversible and does not change the original source spans.
+Table A - What a label becomes
 
-**No field of the reply has a numeric JSON type.** Quantity labels copy printed
-candidate ids. Mentions and proposals copy exact source words only; their text
-may contain digits. Code requires a unique source match, then computes offsets,
-sentence indices and element ids and re-reads quantity values and units.
-
-Table A - Current chart evidence
-
-| ID | Reply field | Purpose and consumer |
+| ID | The label's configured use (`elements.label_kinds`) | Result |
 | --- | --- | --- |
-| A1 | `labels[]` | A printed quantity id, its source-stated measure and named subject. Measures guide planning; known-subject links also support scatter/bubble validation. |
-| A2 | `proposed[]` | An exact source phrase containing one missed digit-written quantity. Code locates it uniquely in the article and re-reads its value and unit. |
-| A3 | `named_mentions[]` | Exact citations, an `entity` or `place` kind and a source-given group name. Code supplies source-backed chart categories and resolves known identities. |
+| A1 | `entity` (PERSON, ORG, NORP, PRODUCT, EVENT by default) | An `entity` element with `extractor` `model`, and no value or unit |
+| A2 | `place` (GPE, LOC, FAC by default) | A `place` element of the same shape |
+| A3 | `not_quantity` (DATE, TIME, ORDINAL by default) | No element: the span only drops any regex `quantity` row that overlaps it |
+| A4 | Any other label | Ignored. Using a new label is a config line |
 
-The typed named collection preserves the former collections' combined capacity.
-Date rows retain their source values but receive no quantity labels. The label
-call no longer emits dimension, time, attribution, hedge or salience judgments.
-Those optional native element fields remain readable in historical tables.
-Chart framing must still preserve estimates, forecasts, attribution and scope.
-The [prompt contract](../summarize/prompt.md#design-rationale) owns this reduction.
+**A mention is dropped on its own and never takes the item with it.** A blank span, one over
+500 characters, one whose offsets leave the text or whose returned words differ from the slice
+is dropped, and one warning line says how many. A service that cannot answer at all - a closed
+port, a timeout, a malformed or refused reply - gives no mentions, and the item goes on with the
+table the two patterns make (`CLAUDE.md` section 1a).
 
-**The current decoder contains only the three consumed collections.**
-`LabelReply` forbids unknown keys, and its citation shape contains only `surface`.
-The parsed internal representation may retain a validated historical sentence
-address, but that representation never supplies the request grammar or budget.
+**One element for each distinct name, not each occurrence.** An article repeats a name many
+times, and every row is read by the model again on every item. So the first occurrence of each
+kind and text stands, with whitespace folded and case ignored, and the repeats are dropped.
+`candidates_found` for `entity` and `place` still counts every mention taken, before the repeats
+and before the cap, which is what keeps it able to say how many the service found.
 
-**Named mentions supply chart labels, not an article inventory.** The pattern
-passes produce only `QUANTITY` and `DATE`. Named entity/place spans supply the
-other category and series labels; scatter/bubble also need known identity links.
-Combining the collections does not combine these meanings or discard source
-anchoring.
+**The mention draws, and there is no group name.** An element's drawn label is its own excerpt,
+the item's characters at an offset code computed. No producer writes a name beside its mentions,
+and no `Element.entity` link to the watchlist is made.
 
-**Retired observations are read-only compatibility.** The current reply no
-longer requests claims, quotes, keyphrases or lede addresses. Saved replies
-must pass their original required structure and bounds before those fields
-are discarded, because the continuation replays the first raw reply. Unknown
-keys still fail. The [prompt contract](../summarize/prompt.md#the-second-call-writes-this-summary-and-the-article-is-read-once)
-owns this compatibility boundary.
+**The settle rule never sees these kinds.** It drops any element sharing a character with a
+higher-precedence one, which is right for two patterns reading one stretch of digits and wrong for
+a name containing a figure: both spans must survive. So `element_table` runs the settle rule over
+the pattern candidates first, drops the `quantity` rows a `not_quantity` mention overlaps, and
+merges the named kinds after, under one `max_per_article` cap over the whole table. The cap keeps
+the first rows in article order, so the window sizing that reads `max_per_article` stays a bound.
 
-**Named mentions do not choose reader-facing tags.** Code cuts the exact
-source phrases, and group names resolve only against known watchlist aliases.
-The deterministic tagger emits only ids from its configured vocabulary.
-These are validated behavior boundaries, not checks for particular words in a
-prompt.
+### One failure no re-slice can see, recorded rather than papered over
 
-**`entity` groups under a slug the watchlist holds, and this pass mints none.**
-The model names the organisation in the item's words; code matches that name
-against the entities we already track. An unknown name is one we do not track
-yet, and inventing a slug for it would put two spellings of one company in two
-groups for ever. Alias normalization is outside the current scope. The current
-pass matches only names already on the watchlist and does not normalize
-aliases; no alias map, version-stamped score or rescoring path is delivered.
-
-### What `proposed` is for, now that the candidate pass exists
-
-It is the escape hatch for a figure the pattern missed, and after the candidate
-pass landed there are two ways left to miss one.
-
-**The bound on work.** `elements.max_per_article` keeps the first 256 figures in
-article order, and a dense long article states more than that. The figures after
-the cap are exactly the ones nobody can label. So the merged table is bounded by
-`max_per_article` **plus** the proposal cap rather than by `max_per_article`
-alone: spending the recovery out of the pattern's budget would make the escape
-hatch unreachable on the articles that need it. There are at most four
-proposals, so the total is still a stated bound, and the merge only ever adds -
-nothing the pattern found is evicted.
-
-**A character the pattern cannot start on.** The number pattern refuses a run of
-digits glued to a word or a hyphen, which is what keeps `COVID-19` from reading
-as a quantity. A proposal is re-read in the article's own context, with that
-refusal still in force, so a figure the pattern structurally cannot reach stays
-unreachable. That is the conservative half of the trade and it is deliberate.
-
-These refusals never trigger a fuzzy or first-occurrence fallback:
-
-- **An invalid historical sentence address.** Nothing to search.
-- **A surface that occurs twice in its source scope, or not at all.** This is the
- mis-pointing failure no span check can see - the span would be real, just the
- wrong one - so ambiguity is refused rather than guessed.
-- **A surface holding two figures, or none.** Same rule, one level down.
-- **A number spelled out in words, and a relative change.** "About a third" and
- "doubled" have nothing for the pattern to parse, and a figure worked out from
- them is a derived value rather than a found one.
-
-**A proposal over characters the pass already read is dropped before anything is
-settled.** A second reading of a stretch of characters code already read is not
-a recovery, and leaving it to `settle` would let the later pass take a span off
-the earlier one on nothing better than which offset came first.
-
-`candidates_found` counts every proposal that read as a figure, including the
-ones dropped next. It is one count per pass taken before the rules that remove,
-which is what keeps it able to say the cap bit and by how much.
-
-## The two kinds only a model can find
-
-No pattern reaches an organisation or a place. The label call
-points at both, and code cuts every character. The producers are in
-[`backend/idhazh/classify/calls.py`](../../../backend/idhazh/classify/calls.py)
-beside `proposed`, because they read the same reply.
-
-**Current mentions contain only source text.** Code searches the one article
-and requires exactly one match, including overlapping occurrences. It computes
-the span and sentence index itself. Historical addressed citations retain their
-original sentence-local scope after strict validation.
-
-**A name is never searched for.** An item writes "Vestas Wind Systems A/S" once
-and "Vestas" four times, and the fullest form may appear nowhere verbatim - so
-searching for it would reject the thing it was meant to find. Resolving a name to
-its mentions is what a semantic model is good at and string matching is bad at,
-which is why the model does that half and code does the cutting.
-
-**Coverage must preserve what a mention means.** Distinct people do not become
-one group merely because their surnames match. Geographic markets and countries
-are place mentions; an age or life-stage phrase cannot stand in for a market.
-A repeated bare surface needs a different exact unique occurrence or a minimal
-exact qualifying noun phrase within the existing bound, otherwise it is omitted.
-The locator never searches a group name, normalizes source spelling or picks the
-first of several matches. A bad historical address cannot select global search.
-
-**The mention draws; the name never does.** `drawn_label(group)` answers with the
-longest mention that anchored, and a page has nothing else to show: the name is
-model-authored words with no span, and a mention is the item's own characters at
-an offset code computed. That is the invariant an implementer is most likely to
-lose, because drawing the name is easier and looks tidier, so it is the second
-half of this row's oracle and it is asserted with a counter-implementation beside
-it.
-
-**The name lands only as a slug this project already tracks.** An unknown name is
-one we do not track yet, and minting a slug for it would put two spellings of one
-organisation in two groups for ever. Grouping the rest is the alias ledger's job
-and it is separate work.
-
-**A rejection is per element, never per article.** A mention that will not anchor
-drops itself; a group that anchored none of its mentions drops itself. Every sibling stands and the item
-still publishes (`CLAUDE.md` section 1a).
-
-**The settle rule never sees these kinds.** It drops any element sharing a
-character with a higher-precedence one, which is right for two patterns reading
-one stretch of digits and wrong for a name containing a figure: both source spans
-must survive. So `anchored` runs the settle rule over the pattern
-candidates first and merges the model-pointed kinds after it, and two of them
-claiming one address is settled by keeping the first.
-
-### Two failures no anchoring check can see, recorded rather than papered over
-
-This is permanent and it is stated so that nobody later reads the span check as
-covering more than it does.
+This is permanent and it is stated so that nobody later reads the span check as covering more
+than it does.
 
 | Failure | Why no check sees it | What the design does instead |
 | --- | --- | --- |
-| **Mis-pointing** - the model means one `"5"` and the anchor lands on another | The span is real. `text[span_start:span_end] == span_excerpt` passes, the write-time re-slice passes and the read-time one passes | Require one exact occurrence in the article, or in the validated historical sentence. Ambiguous source phrases are rejected rather than assigned a first hit. |
-| **Mis-labelling** - right span, wrong `measure` or `entity` | Tier 2 is a judgement and no string search reaches it | A judgement is only ever attached to an address, so it is checkable against that element's own kind, unit and magnitude. A judgement attached to a free string is checkable against nothing |
+| **Mislabelling** - right span, wrong label (a country the service calls an organisation) | The span is real. `text[span_start:span_end] == span_excerpt` passes at write and at read | The label only chooses between `entity` and `place`, and the planner's category, series and entity channels accept either. The model reads the excerpt beside the article, and the validator still checks every reference it cites |
 
-Neither is closed and neither is closable by anchoring. What anchoring buys is
-that a wrong answer is still *a fact the item states*, at a location a reader can
-check, rather than a sentence the model wrote.
+What re-slicing buys is that a wrong answer is still a fact the item states, at a location a
+reader can check, rather than a sentence a model wrote.
 
-### What the label call is not asked for
+### What the service is not asked for
 
-The call returns no events, relations or reader-facing tags. Its `kind` only
-chooses the existing entity/place element kinds, not a finer taxonomy or a
-geographical classification. Generic categories and age/cohort labels are not
-silently treated as named people, products or places.
+It returns no events, relations or reader-facing tags, and a mention's label only chooses the
+existing `entity` and `place` kinds, not a finer taxonomy. Nothing from it is kept beyond the
+elements built from it: no analysis is stored, and a non-English article goes through an English
+model and yields few names.
 
 ## The span-drift invariant
 
@@ -606,8 +499,8 @@ loses - "the survey drew 1994 responses" yields a date and no quantity. Write
 publishes a figure the article never stated. A test carries the case.
 
 The rule lives in the producer, not the shape: `ElementTable` allows overlap on
-purpose, because a `quote` holding a `quantity` is the shape the model-pointed
-kinds need.
+purpose, because an `entity` holding a `quantity` ("Boeing 737") is a shape the labelled
+kinds make.
 
 ### The verbatim slice is `span_excerpt`
 
@@ -651,28 +544,25 @@ either is fixed.
 `_TRIVIAL_MAX` and the context window stayed with the planner. They are its
 judgements about what makes a bar, and the candidate pass does not share them.
 
-### Named mentions do not assign tags
+### Mentions do not assign tags
 
-The control protects the tag vocabulary. A typed `named_mentions` collection
-points at source characters and selects an existing element kind; it chooses
-no reader-facing tag. Source mentions remain Tier 1 and the known group identity
-remains Tier 2.
-
-The matcher and closed reply contracts enforce this separation. Prompt-content
-assertions and full-request text snapshots are not substitutes for those checks.
+The control protects the tag vocabulary. A labelled span selects an existing element kind
+through a configured map; it chooses no reader-facing tag. Source mentions are Tier 1 and
+nothing fills Tier 2. The map and the re-slice enforce this separation, not a check for
+particular words in a prompt.
 
 ### A mention uses the existing element contract
 
-A mention's span is its own characters, and several mentions of one organisation
-are several elements. The grouping key is `Element.entity`, which already exists,
-is already a slug, and is filled by matching the watchlist rather than by minting.
-Historical quote/claim kinds remain readable without keeping their retired
-range producers or changing the meaning of old elements.
+A mention's span is its own characters, and the repeats of one name fold to the first. The
+contract's `Element.entity` slug stays unset: nothing here matches the watchlist, and minting a
+slug for an unknown name would put two spellings of one organisation in two groups for ever.
+Historical quote/claim kinds remain readable without keeping their retired range producers or
+changing the meaning of old elements.
 
 ### `extractor` is `model`
 
-The contract carries `model` for source-backed entity/place mentions as well
-as proposed quantities. The field names **who found it**, not what shape was asked for.
+The contract carries `model` for the spans a statistical model labelled, as it did for the spans
+a language model once pointed at. The field names **who found it**, not what shape was asked for.
 
 ## Rejected alternatives
 
@@ -698,11 +588,10 @@ as proposed quantities. The field names **who found it**, not what shape was ask
 | Resolve a relative date | "Three years ago" resolves against a publication date the article never wrote, on the very plan that establishes the trust boundary | Andre, O45 |
 | Duplicate the number pattern in the new pass | Two definitions of one concept, and the first fix to either would land in one of them | Fowler |
 | Raise on a 200-digit run or a 600-character unit word | Degrade, do not fail (`CLAUDE.md` section 1a). A pattern over fetched bytes will meet both, and one hostile page must not take an article's whole table down | Andre |
-| Exact-search a name to find its mentions | It confuses a location with a label. The fullest form may appear nowhere verbatim, so the search rejects the very thing it was written to find | Andre, row 2 decision 1 |
 | Ask the model for coreference chains | Exact and prefix matching over spans code already holds does most of it, and the model's version cannot be span-validated | Andre, pseudo-plan 10.6 |
-| Draw the group name instead of a mention | The name has no span, so a page would show a string the item may not contain. The mention is the item's own characters at an offset code computed | Andre, invariant 2 |
-| Run the settle rule over the model-pointed kinds | A quote holds every figure inside it, so precedence would delete one of the two. The rule is between the two patterns and the merge happens after it | Fowler |
-| One flat mention list carrying the name on every entry | The name and the band are then repeated per mention, and output tokens are the expensive direction on this runner | Andre, pseudo-plan 10.6 |
+| Run the settle rule over the labelled kinds | A quote holds every figure inside it, so precedence would delete one of the two. The rule is between the two patterns and the merge happens after it | Fowler |
+| Keep every mention as its own element | An article repeats a name many times and each row is read by the model again on every item, at about 34 tokens a row and so about 3.5 seconds an item on the configured weights (an estimate from 9.85 tokens a second). A chart cites a name by id and draws its words, so a repeat adds a row and no chart | Andre |
+| Keep only the names near a figure | It needs a distance, which is a new knob and so a design question; `elements.max_per_article` already bounds the menu | Andre |
 
 ### Why the schema stem is `element-table`
 
@@ -710,19 +599,11 @@ One `source_text_hash` per article, never per element, needs a per-article
 container. The contract is `ElementTable` and its stem mirrors its class, the way
 every other stem here does.
 
-### The label call is built and nothing dispatches it
-
-The request, the reply shape, the parser and every anchoring path ship; no stage
-calls them. The label call alone produces a labelled table and no page - the call
-that turns it into a summary and a visual appends to this call's message array,
-so the article prefills once. Wiring it in alone would spend a model call per item
-for an answer nothing reads. There is no flag and no dead knob: production
-behaviour is byte-identical until the second call lands.
-
 ## See also
 
 - [../contracts/schemas.md](../contracts/schemas.md) - the contract subsystem: the base model, the registry, and what binds the frontend's hand copy.
 - [../publishing/visuals.md](../publishing/visuals.md) - the picture, which is decided from this table.
 - [../../../CLAUDE.md](../../../CLAUDE.md) Guardrail #12 - every read must have a fixed-size input.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #3 (contracts before logic), Guardrail #6 (no hardcoding), Guardrail #11 (fetched text is data), section 11 (schema versioning).
-- [../summarize/prompt.md](../summarize/prompt.md) - the second call that reads this table, and why it is shaped as it is.
+- [../summarize/prompt.md](../summarize/prompt.md) - the call that reads this table, and why it is shaped as it is.
+- [../text-analysis/text-analysis-api.md](../text-analysis/text-analysis-api.md) - the service whose labels become the entity and place elements.

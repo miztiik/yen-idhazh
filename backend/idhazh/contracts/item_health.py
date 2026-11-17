@@ -905,8 +905,8 @@ class ItemHealthRow(Contract):
         default=None,
         ge=0,
         description=(
-            "How long the item waited before its worker started it - its own fetch "
-            "and extract subtracted, because both are work rather than waiting. "
+            "How long the item waited before its worker started it - its own fetch, "
+            "extract and analysis subtracted, because all three are work rather than waiting. "
             "Discounted from item_total_ms, so a shard's items do not each count "
             "the queue ahead of them."
         ),

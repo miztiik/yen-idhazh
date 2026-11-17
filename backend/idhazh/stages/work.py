@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 from idhazh import (
+    ask_text_analysis,
     assemble,
     atomic_write,
     config,
@@ -21,6 +22,7 @@ from idhazh import (
     summarize,
     telemetry,
 )
+from idhazh.anchor_mentions import Mention
 from idhazh.classification import load_context as load_classification_context
 from idhazh.classify import calls
 from idhazh.contracts.article import Article, ArticleStatus
@@ -67,7 +69,7 @@ from idhazh.stages.common import (
     _run_dir,
     shard_of,
 )
-from idhazh.stages.two_calls import two_calls_one_item
+from idhazh.stages.summarize_one_item import summarize_one_item
 from idhazh.telemetry import census, host, visual_attempts
 from idhazh.telemetry.host_control import enabled as host_telemetry_enabled
 from idhazh.telemetry.item_heartbeat import ItemHeartbeat
@@ -130,6 +132,14 @@ class _FetchedWorkItem(NamedTuple):
     #: cells have to travel with the item rather than sitting in a list the
     #: second loop indexes by position.
     recorder: ItemRecorder
+    #: The names and places the text-analysis service labelled in this article,
+    #: asked for in the fetch loop and held for the model loop. Empty when the
+    #: service could not answer, and the item goes on without them.
+    mentions: tuple[Mention, ...] = ()
+    #: How long that request took, or zero where it was never made. It is carried
+    #: apart from the recorder's cell because the model loop subtracts it from the
+    #: item's wait, and a wait is read in whole milliseconds like the other two.
+    analyze_ms: int = 0
 
 
 def _work_order(work: _FetchedWorkItem) -> tuple[int, int]:
@@ -174,7 +184,6 @@ def _shard_cells(
         "n_threads": setting(model.server, "n_threads"),
         "n_batch": setting(model.server, "n_batch"),
         "weights_pinned": None if load_mode is None else load_mode in ("mlock", "mmap+mlock"),
-        "label_budget_tokens": calls.label_budget_tokens(),
         "summary_budget_tokens": response_limit(model.sampling),
         "temperature": model.sampling.get("temperature"),
     }
@@ -349,10 +358,10 @@ def stage_work(
         truncation_cap_tokens=settings.app.extract.truncation_cap_tokens,
         runtime_build=runtime_build(base_url=settings.app.model_server.base_url),
         chat_template=str(observed.get("chat_template") or UNRECORDED_TEMPLATE),
-        # The two calls render their own bytes, so the chat template above no
-        # longer reaches what the model reads and the markers the server derived
-        # do. Handing over the rendered pair is what digests the envelope, all
-        # four prompt files and the turn order together.
+        # The call renders its own bytes, so the chat template above no longer
+        # reaches what the model reads and the markers the server derived do.
+        # Handing over the rendered prompt is what digests the envelope, the
+        # prompt files and the turn order together, and the settings beside it.
         prompt=calls.prompt_inputs(
             settings.app.summarize,
             markers=markers,
@@ -423,6 +432,19 @@ def stage_work(
         ):
             telemetry.item_attributes(span, item, run_id=plan.run_id, shard=shard)
             fetched = _fetch_one(item, settings, read_url, classification, tracer)
+            # Asked for here, after the article is known to be readable and before
+            # the model is, so a hung service costs this loop and never overlaps a
+            # decode. One call, no retry: a failure of any kind leaves the item
+            # with the names the patterns alone can find, and it publishes.
+            analysis: ask_text_analysis.Answer | None = None
+            if fetched.article.status is ArticleStatus.OK:
+                with tracer.span(telemetry.SpanName.ANALYZE) as analyze_span:
+                    analysis = ask_text_analysis.ask_for_mentions(
+                        fetched.article, settings.app.text_analysis
+                    )
+                    analyze_span.set(telemetry.AttrKey.OUTCOME, analysis.outcome.value)
+                    analyze_span.set(telemetry.AttrKey.HTTP_STATUS, analysis.http_status)
+                    analyze_span.set(telemetry.AttrKey.MENTION_COUNT, len(analysis.mentions))
         article, source_text = fetched.article, fetched.source_text
         fetch_ms, extract_ms = fetched.fetch_ms, fetched.extract_ms
         # One reading of the pair, split across the two cells the stage records
@@ -436,6 +458,8 @@ def stage_work(
             **fetched.timings.cells(),
             **_article_cells(article),
         )
+        if analysis is not None:
+            recorder.note(analyze_ms=analysis.elapsed_ms)
         recorder.stage_done(ItemStage.FETCH, fetch_ms)
         recorder.stage_done(ItemStage.EXTRACT, extract_ms)
         atomic_write.write_atomic(items_dir / f"{item.item_id}.article.json", article.to_json())
@@ -471,6 +495,8 @@ def stage_work(
                 started=started,
                 original_index=original_index,
                 recorder=recorder,
+                mentions=() if analysis is None else analysis.mentions,
+                analyze_ms=0 if analysis is None else analysis.elapsed_ms,
             )
         )
 
@@ -508,11 +534,15 @@ def stage_work(
         # The gap between the fetch loop finishing this item and the model loop
         # reaching it. The two loops run in different orders, so this is real
         # time an item spent on a list and it is the only place it is visible.
-        # Its own fetch and extract are subtracted because both are work rather
-        # than waiting, and `parked` takes the same number back out of the item
-        # clock so a shard's items do not each count the queue ahead of them.
+        # Its own fetch, extract and analysis are subtracted because all three
+        # are work rather than waiting, and `parked` takes the same number back
+        # out of the item clock so a shard's items do not each count the queue
+        # ahead of them. The analysis stays in the item's time as `analyze_ms`.
         queue_wait_ms = (
-            int((time.monotonic() - work.started) * 1000) - work.fetch_ms - work.extract_ms
+            int((time.monotonic() - work.started) * 1000)
+            - work.fetch_ms
+            - work.extract_ms
+            - work.analyze_ms
         )
         recorder.note(queue_wait_ms=queue_wait_ms)
         recorder.parked(queue_wait_ms)
@@ -535,10 +565,11 @@ def stage_work(
         ):
             telemetry.item_attributes(item_span, item, run_id=plan.run_id, shard=shard)
             model_started = time.monotonic()
-            summary, decision, _, _ = two_calls_one_item(
+            summary, decision, _ = summarize_one_item(
                 article,
                 settings,
                 date=plan.date,
+                mentions=work.mentions,
                 endpoint=model_endpoint,
                 run_id=plan.run_id,
                 tracer=tracer,
@@ -562,24 +593,17 @@ def stage_work(
                     extraction=common._extraction_health(article, settings),
                 )
             # What the stage spent NOT being served: the window check, the
-            # prompt render, the parse, the element anchoring and the draw,
-            # plus the transport around each request. The server's own two
-            # clocks are what it claims for itself, so anything left is not the
-            # decoder, and a regression in one looks nothing like a regression
-            # in the other.
+            # prompt render, the parse, the element table and the draw, plus the
+            # transport around the request. The server's own two clocks are what
+            # it claims for itself, so anything left is not the decoder, and a
+            # regression in one looks nothing like a regression in the other.
             #
-            # The four slot cells and not `label_ms` plus `summary_ms`: those
-            # two became our stopwatch around each request on 2026-09-16, and
-            # subtracting them would leave this cell holding local work alone
-            # under a name that says model wait.
+            # The two slot cells and not `summary_ms`: that one became our
+            # stopwatch around the request on 2026-09-16, and subtracting it
+            # would leave this cell holding local work alone under a name that
+            # says model wait.
             served = sum(
-                _ms(recorder.get(cell))
-                for cell in (
-                    "label_prefill_ms",
-                    "label_decode_ms",
-                    "summary_prefill_ms",
-                    "summary_decode_ms",
-                )
+                _ms(recorder.get(cell)) for cell in ("summary_prefill_ms", "summary_decode_ms")
             )
             recorder.note(summarize_ms=summarize_ms, model_wait_ms=max(summarize_ms - served, 0))
             recorder.stage_done(ItemStage.SUMMARIZE, summarize_ms)

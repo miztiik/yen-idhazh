@@ -247,10 +247,10 @@ def test_a_call_slot_with_numbers_and_no_kind_is_half_a_call() -> None:
     `ItemHealthRow` holds a slot to filling whole or not at all, so five numbers
     under `label_*` and no `label_kind` is a row nothing can build - and while
     `close` handed back a mapping, that was a row nobody tried to build. Both
-    calls are driven through the work stage's own cell builder.
+    slots are driven through the work stage's own cell builder.
     """
     from idhazh.llm.server import Completion
-    from idhazh.stages.two_calls import _call_cells
+    from idhazh.stages.summarize_one_item import _call_cells
 
     label = Completion(
         content="{}", prompt_tokens=1497, completion_tokens=205,
@@ -294,7 +294,7 @@ def test_a_calls_clock_is_the_stopwatch_and_not_the_two_cells_beside_it() -> Non
     own number and not a figure this test chose (Guardrail #7).
     """
     from idhazh.llm.server import parse_completion
-    from idhazh.stages.two_calls import _call_cells
+    from idhazh.stages.summarize_one_item import _call_cells
 
     reply = parse_completion(
         (FIXTURES_DIR / "completions" / "rendered" / "label.json").read_text(encoding="utf-8")

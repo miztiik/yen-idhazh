@@ -45,8 +45,6 @@ from ._builders import _work_stage, isolate_ledgers
 
 pytestmark = pytest.mark.slow
 
-LABEL_REPLY: Final = FIXTURES_DIR / "completions" / "label" / "labelled.json"
-
 SUMMARIZE_AND_PLAN_REPLY: Final = (
     FIXTURES_DIR / "completions" / "summarize-and-plan" / "summary-and-plan.json"
 )
@@ -58,7 +56,7 @@ def worked(tmp_path: Path, monkeypatch: MonkeyPatch) -> tuple[RunPlan, Path]:
     run_plan, items_dir, _ = _work_stage(
         tmp_path,
         monkeypatch,
-        replies=(LABEL_REPLY.read_bytes(), SUMMARIZE_AND_PLAN_REPLY.read_bytes()),
+        replies=(SUMMARIZE_AND_PLAN_REPLY.read_bytes(),),
     )
     assert run_plan.items, "an empty plan would exercise no census rows"
     return run_plan, items_dir

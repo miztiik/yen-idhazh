@@ -26,7 +26,7 @@ from idhazh.contracts.visual_telemetry import ValidatorCheck, VisualAttemptRow
 from idhazh.elements import ExtractionHealth
 from idhazh.llm.server import Completion, response_limit, window
 from idhazh.stages import common
-from idhazh.stages.two_calls import _decide_the_visual, _drawn
+from idhazh.stages.summarize_one_item import _decide_the_visual, _drawn
 from idhazh.telemetry import visual_attempts
 from idhazh.visual_validator import validate_plan
 from utilities.digest_publish import permissions

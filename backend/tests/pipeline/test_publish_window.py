@@ -46,6 +46,7 @@ from ._builders import (
     row,
     score_one_item,
     summary,
+    with_an_analysis_service,
 )
 
 
@@ -72,10 +73,13 @@ def test_a_crash_before_the_published_ledger_costs_the_replay_nothing(
     items_dir = tmp_path / "run" / run_plan.date / "items"
     state = tmp_path / "state"
 
-    with a_server_that_refuses_every_completion() as server:
+    with (
+        with_an_analysis_service(settings) as read,
+        a_server_that_refuses_every_completion() as server,
+    ):
         stage_work(
             run_plan,
-            settings=settings,
+            settings=read,
             scorer=None,
             fetcher=captured_article_fetch,
             model_endpoint=server.endpoint,
@@ -121,10 +125,13 @@ def test_a_paused_fragment_family_files_no_block_and_the_day_still_assembles(
     settings = config.load(CONFIG_DIR)
     isolate_ledgers(tmp_path, monkeypatch)
     items_dir = tmp_path / "run" / run_plan.date / "items"
-    with a_server_that_refuses_every_completion() as server:
+    with (
+        with_an_analysis_service(settings) as read,
+        a_server_that_refuses_every_completion() as server,
+    ):
         stage_work(
             run_plan,
-            settings=settings,
+            settings=read,
             scorer=None,
             fetcher=captured_article_fetch,
             model_endpoint=server.endpoint,
@@ -498,10 +505,13 @@ def test_a_run_that_dies_before_assemble_keeps_what_its_workers_measured(
     isolate_ledgers(tmp_path, monkeypatch)
     state = tmp_path / "state"
 
-    with a_server_that_refuses_every_completion() as server:
+    with (
+        with_an_analysis_service(settings) as read,
+        a_server_that_refuses_every_completion() as server,
+    ):
         stage_work(
             run_plan,
-            settings=settings,
+            settings=read,
             scorer=None,
             fetcher=captured_article_fetch,
             model_endpoint=server.endpoint,
@@ -533,10 +543,13 @@ def test_the_assemble_that_follows_appends_nothing_the_worker_already_recorded(
     settings = config.load(CONFIG_DIR)
     isolate_ledgers(tmp_path, monkeypatch)
     state = tmp_path / "state"
-    with a_server_that_refuses_every_completion() as server:
+    with (
+        with_an_analysis_service(settings) as read,
+        a_server_that_refuses_every_completion() as server,
+    ):
         stage_work(
             run_plan,
-            settings=settings,
+            settings=read,
             scorer=None,
             fetcher=captured_article_fetch,
             model_endpoint=server.endpoint,
@@ -569,10 +582,13 @@ def test_replaying_a_day_the_worker_already_recorded_appends_no_duplicate(
     settings = config.load(CONFIG_DIR)
     isolate_ledgers(tmp_path, monkeypatch)
     state = tmp_path / "state"
-    with a_server_that_refuses_every_completion() as server:
+    with (
+        with_an_analysis_service(settings) as read,
+        a_server_that_refuses_every_completion() as server,
+    ):
         stage_work(
             run_plan,
-            settings=settings,
+            settings=read,
             scorer=None,
             fetcher=captured_article_fetch,
             model_endpoint=server.endpoint,
@@ -661,10 +677,13 @@ def test_a_shard_records_its_own_items_and_nobody_else_s(
     run_plan = plan()
     settings = config.load(CONFIG_DIR)
     isolate_ledgers(tmp_path, monkeypatch)
-    with a_server_that_refuses_every_completion() as server:
+    with (
+        with_an_analysis_service(settings) as read,
+        a_server_that_refuses_every_completion() as server,
+    ):
         stage_work(
             run_plan,
-            settings=settings,
+            settings=read,
             scorer=None,
             fetcher=captured_article_fetch,
             shard=0,
@@ -736,10 +755,13 @@ def test_the_two_ledgers_agree_about_which_shards_ran(
             captured.replace(token_line, f"llamacpp:prompt_tokens_total {expected_tokens[shard]}"),
             encoding="utf-8",
         )
-        with a_server_that_refuses_every_completion() as server:
+        with (
+            with_an_analysis_service(settings) as read,
+            a_server_that_refuses_every_completion() as server,
+        ):
             stage_work(
                 run_plan,
-                settings=settings,
+                settings=read,
                 scorer=None,
                 fetcher=captured_article_fetch,
                 shard=shard,
@@ -788,10 +810,13 @@ def test_the_census_assemble_adds_names_no_machine(
     settings = config.load(CONFIG_DIR)
     isolate_ledgers(tmp_path, monkeypatch)
     state = tmp_path / "state"
-    with a_server_that_refuses_every_completion() as server:
+    with (
+        with_an_analysis_service(settings) as read,
+        a_server_that_refuses_every_completion() as server,
+    ):
         stage_work(
             run_plan,
-            settings=settings,
+            settings=read,
             scorer=None,
             fetcher=captured_article_fetch,
             shard=0,

@@ -1,8 +1,10 @@
-"""How does one article become a summary and a picture, in two adjacent calls?
+"""How does one article become a summary and a picture, in one call?
 
-This is the path the digest and pipeline tests use. The order is declared in
-`classify.dag.NODES`, the budget is sized there, and the two calls stay adjacent
-per item because the server holds one cache slot.
+This is the path the digest and pipeline tests use. The model reads the item once: its
+summary and, when code finds a chart reachable, its visual plan come back in the one
+reply. The names and places the picture may cite arrive as `mentions` from the
+text-analysis service, asked for before this runs, so the model is not asked to find
+them.
 """
 
 
@@ -10,10 +12,9 @@ from __future__ import annotations
 
 import json
 import time
-from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Final, NamedTuple
+from typing import Any, NamedTuple
 
 from pydantic import ValidationError
 
@@ -27,6 +28,7 @@ from idhazh import (
     telemetry,
     visual_planner,
 )
+from idhazh.anchor_mentions import Mention
 from idhazh.classify import calls, dag
 from idhazh.contracts.article import Article
 from idhazh.contracts.call_cost import COST_FIELDS, CallCost, CallKind
@@ -63,11 +65,12 @@ from idhazh.stages.common import (
 from idhazh.telemetry.record import Flags, ItemRecorder
 from idhazh.visual_validator import Rejection, validate_plan
 
-#: The column prefix the item's FIRST call writes under. `ItemHealthRow` names
-#: its two call slots after the calls this stage happens to make, and
-#: `label_kind` is documented as "which call the stage made first" - so the slot
-#: is the ordinal, and this is the name of ordinal one.
-FIRST_CALL: Final = "label"
+#: The column prefix the one call writes under. `ItemHealthRow` names its two call
+#: slots after the calls the stage once made: `label_*` for the first and `summary_*`
+#: for the second. The call that remains is the second one, so the `summary_*` series
+#: stays one continuous series across the change and `label_*` stays empty.
+CALL_SLOT = "summary"
+
 
 
 def _call_cells(slot: str, kind: CallKind, reply: Completion, *, wall_ms: int) -> dict[str, Any]:
@@ -101,28 +104,11 @@ def _call_cells(slot: str, kind: CallKind, reply: Completion, *, wall_ms: int) -
     evaluating 52 real tokens in 6.2 seconds, which is 8.4. The cache share is
     the column that says how much was skipped, so a rate that also claims it is
     the same number twice (Guardrail #10).
-
-    **Three more cells belong to the ITEM rather than to the call**, and the row
-    holds one set of them for a stage that makes two calls, so they are carried
-    off the first call and no other. The first call is the only one whose slot
-    was last touched by the item BEFORE this one; the second call's prompt is
-    literally the first one's extended, so its reuse is true by construction and
-    would say nothing about anything. They are read straight off the reply -
-    `server.parse_completion` derives them, this carries them.
     """
     prefill_s = reply.prefill_ms / 1000
     decode_s = reply.decode_ms / 1000
     cached = min(reply.cached_tokens, reply.prompt_tokens)
     evaluated = reply.prompt_tokens - cached
-    item_cells: dict[str, Any] = (
-        {
-            "slot_id": reply.slot_id,
-            "kv_tokens_at_start": reply.slot_tokens_held,
-            "prefix_shared_with_previous": reply.prefix_reused,
-        }
-        if slot == FIRST_CALL
-        else {}
-    )
     return {
         f"{slot}_kind": kind.value,
         f"{slot}_prefill_ms": reply.prefill_ms,
@@ -141,46 +127,46 @@ def _call_cells(slot: str, kind: CallKind, reply: Completion, *, wall_ms: int) -
         f"{slot}_decode_tokens_per_s": (
             round(reply.completion_tokens / decode_s, 2) if decode_s > 0 else None
         ),
-        **item_cells,
     }
 
 
-class _TwoCalls(NamedTuple):
-    """What one item's pair of calls settled: the summary, and the picture or none.
+def _item_cells(reply: Completion) -> dict[str, Any]:
+    """The three cells that belong to the ITEM rather than to its call.
+
+    Which prefix-cache slot served the item, what that slot held once the item's
+    prompt had been prefilled, and whether the call read anything out of it. The
+    row holds one set of them, and the item's one call is the only call whose slot
+    was last touched by the item BEFORE this one, so its reuse says how the system
+    turn the items share fared across the boundary between two items. They are
+    read straight off the reply - `server.parse_completion` derives them, this
+    carries them.
+    """
+    return {
+        "slot_id": reply.slot_id,
+        "kv_tokens_at_start": reply.slot_tokens_held,
+        "prefix_shared_with_previous": reply.prefix_reused,
+    }
+
+
+class _ItemResult(NamedTuple):
+    """What one item's call settled: the summary, and the picture or none.
 
     `decision` is None when the summary is not publishable. The pipeline has
     never written a decision for an item that carries no summary - `plannable_items`
     skips one - and a decision about a story no reader will see is a payload
     `assemble` would have to throw away.
 
-    **The two replies come back with it, for the caller that is measuring this
-    path rather than publishing from it.** `_split_the_cost` folds the pair's
+    **The reply comes back with it, for the caller that is measuring this path
+    rather than publishing from it.** `_recorded_as_the_one_call` folds the call's
     five numbers into the summary, which is the right shape for a ledger row and
     the wrong one for a gate: a sum cannot say whether a decode was cut, and the
-    reasoning channel leaves no trace in it at all. Either reply is None when
-    its call never happened, so a caller reads what ran and never a zero for a
-    call that did.
+    reasoning channel leaves no trace in it at all. It is None when the call never
+    happened, so a caller reads what ran and never a zero for a call that did.
     """
 
     summary: Summary
     decision: VisualDecision | None
-    label_reply: Completion | None = None
-    answer_reply: Completion | None = None
-
-
-def _watchlist_slugs(settings: config.Settings) -> dict[str, str]:
-    """Every alias this project tracks, folded to the id it groups under.
-
-    The label call names an entity in the item's own words and this is what turns that
-    into the slug `Element.entity` groups by. A name the watchlist does not
-    carry is a name we do not track yet, and `_judgements` drops it rather than
-    minting one.
-    """
-    return {
-        alias.casefold(): slug
-        for slug, aliases in settings.watchlist.entity_terms().items()
-        for alias in aliases
-    }
+    reply: Completion | None = None
 
 
 def _cost(kind: CallKind, reply: Completion) -> CallCost:
@@ -199,37 +185,29 @@ def _cost(kind: CallKind, reply: Completion) -> CallCost:
     )
 
 
-def _split_the_cost(summary: Summary, one: Completion, two: Completion | None) -> Summary:
-    """The item's five numbers, recorded as the calls that really spent them.
+def _recorded_as_the_one_call(summary: Summary, reply: Completion) -> Summary:
+    """The item's five numbers, recorded as the call that really spent them.
 
-    `to_summary` sizes one call and records it in slot 1, because the stage it
-    was written for makes one. Here the calls are in hand, so the slots are
-    rewritten and the flat five become their sum - which `Summary` enforces, so
-    this goes through the contract rather than around it with `model_copy`.
+    `to_summary` sizes one call and records it in slot 1 under the kind the
+    standalone summarizer has. Here the call is the digest's own, and it is
+    recorded in slot 2 with slot 1 empty: the call that remains is the second one
+    of the two this stage used to make, so the `summary_*` series stays continuous
+    across the change and `label_*` goes quiet. The flat five are that call's, and
+    `Summary` enforces that, so this goes through the contract rather than around
+    it with `model_copy`.
 
-    **A failed summary is stamped too, and the single call does not do that.**
-    Both calls really spent what they spent, and an item that failed on its
-    length or its shape is exactly the item whose cost a reader of the ledger
-    wants: leaving it at zero would make a bad day look like a cheap one.
-
-    **`two` is None when the item died between the calls.** The label call still ran, so
-    slot 2 is left empty and the flat five are the label call's alone. The alternative -
-    the zeros an unstamped failure records - reads as an item that cost nothing,
-    and the items that die here are the expensive ones: a labelling reply is cut
-    off precisely because the article was long.
+    **A failed summary is stamped too.** The call really spent what it spent, and
+    an item that failed on its shape is exactly the item whose cost a reader of
+    the ledger wants: leaving it at zero would make a bad day look like a cheap
+    one. An item whose call never returned has no reply and is not stamped at all.
     """
-    first = _cost(CallKind.LABEL, one)
-    spent = [first]
-    if two is not None:
-        spent.append(_cost(CallKind.SUMMARIZE_AND_PLAN, two))
+    cost = _cost(CallKind.SUMMARIZE_AND_PLAN, reply)
     return Summary.model_validate(
         summary.model_dump(mode="json")
         | {
-            "call_1": first.model_dump(mode="json"),
-            "call_2": spent[1].model_dump(mode="json") if len(spent) > 1 else None,
-            **{
-                field: sum(getattr(call, field) for call in spent) for field in COST_FIELDS
-            },
+            "call_1": None,
+            "call_2": cost.model_dump(mode="json"),
+            **{field: getattr(cost, field) for field in COST_FIELDS},
         }
     )
 
@@ -325,44 +303,10 @@ def _drawn(
     )
 
 
-@dataclass(slots=True)
-class _Progress:
-    """What one item has produced so far, as the walk moves through the nodes.
-
-    Mutable and opened per item on purpose: the sequence is item-major, so
-    nothing here outlives the article it was opened for. Each node reads what
-    the node before it left, which is the dependency the order exists to honour
-    - the summarize-and-plan prompt IS the label prompt plus the label reply,
-    so that call cannot be built until the label call has answered and its reply
-    has been held to a schema.
-
-
-
-    `table` is written twice: the element table the extractor cut, and then the
-    same table with the label call's labels anchored into it. One field rather than two
-    because the second is the first, corrected - and a node behind this one that
-    read the unlabelled copy would be reading a table the model has already
-    improved on.
-    """
-
-    first: dict[str, Any] | None = None
-    one: Completion | None = None
-    two: Completion | None = None
-    table: ElementTable | None = None
-    wants_a_plan: bool = False
-    summary: Summary | None = None
-
-
-#: One node of the sequence, run. It returns nothing when the item may go on,
-#: and the answer that ends the item when it may not - which is what `dag.walk`
-#: stops on.
-_NodeBody = Callable[[dag.CallNode], "_TwoCalls | None"]
-
-
 def _silent_recorder() -> ItemRecorder:
     """A recorder that collects cells and emits nothing.
 
-    `two_calls_one_item` is called directly by tests and by the canary runner,
+    `summarize_one_item` is called directly by tests and by the replay utility,
     which have no shard around them to open a real one. Every flag off rather
     than a null object, so the same code path runs and there is no second
     implementation to keep in step (Guardrail #7).
@@ -473,11 +417,12 @@ def _kept_call(
     recorder.call_done(call, kept.cells())
 
 
-def two_calls_one_item(
+def summarize_one_item(
     article: Article,
     settings: config.Settings,
     *,
     date: str,
+    mentions: Sequence[Mention] = (),
     endpoint: str | None = None,
     run_id: str | None = None,
     tracer: telemetry.Tracer | None = None,
@@ -485,48 +430,37 @@ def two_calls_one_item(
     capture_root: Path | None = None,
     render_root: Path | None = None,
     published_marks: Mapping[VisualType, Sequence[int]] | None = None,
-) -> _TwoCalls:
-    """One article read once, labelled, summarized and drawn - in two adjacent calls.
+) -> _ItemResult:
+    """One article read once by the model, summarized and drawn - in one call.
 
-    **The order is `classify.dag.NODES` and this function does not own it.** The
-    sequence is declared once, as data, with each node's decode budget beside
-    it, because the window has to hold the whole thing and a sequence assembled
-    a statement at a time is a budget nobody ever checks whole. Adding a call
-    here is not possible without adding a node there, where the import-time
-    guard prices it.
+    **The table the call is built over comes from the patterns and from the
+    service.** `mentions` are the labelled spans the text-analysis service found
+    in `Article.text`, asked for before this runs; `elements.element_table` turns
+    them into the item's names and places and drops the figures they show were
+    never figures. A caller with none - the service was down, or this is a replay
+    with no service - gets the table the patterns alone make, and the item still
+    publishes.
 
-    **An article the sequence cannot hold is refused before the label call is sent.**
-    `dag.fits_the_window` sizes the label call's prompt, both calls' decode budgets and the
-    seam between the turns against `n_ctx`, and an article over it lands as
-    `FailureCode.CONTEXT_EXCEEDED`. Admitting it would cost the picture rather
-    than the item: `--no-context-shift` means the decode stops at the wall on an
-    ordinary HTTP 200, `recovered_completion` salvages the summary, and the item
-    publishes with `window_exhausted` recorded where the picture would have been.
-    Refusing it up front is still the better answer, because the whole decode is
-    paid for before that reason can be written.
+    **An article the call cannot hold is refused before it is sent.**
+    `dag.fits_the_window` sizes the prompt and the model file's response limit
+    against `n_ctx`, and an article over it lands as `FailureCode.CONTEXT_EXCEEDED`.
+    Admitting it would cost the picture rather than the item: `--no-context-shift`
+    means the decode stops at the wall on an ordinary HTTP 200,
+    `recovered_completion` salvages the summary, and the item publishes with
+    `window_exhausted` recorded where the picture would have been. Refusing it up
+    front is still the better answer, because the whole decode is paid for before
+    that reason can be written.
 
-    **Adjacent per item, and that is a correctness rule rather than a layout
-    taste.** the summarize entry pins `n_parallel` to 1, so the server
-    holds one cache slot: every label call first and every summarize-and-plan call
-    afterwards would evict the prefix before it was reused, on every item, with nothing in any
-    log to say so. The summarize-and-plan prompt IS the label prompt plus the label
-    reply,
-    so the slot answers for the system turn, the article and the reply, and only
-    the new turn is prefilled.
+    **The reply is read whole, and the summary survives the plan.** The summary
+    is decoded first and closed before the plan starts, so a decode the output
+    budget cuts is cut in the plan and the summary behind it is recovered; the
+    picture is lost either way. A reply this build cannot read costs the item as
+    `bad_shape`, and one the budget cut inside the summary as `output_truncated`.
+    Both are a cell in the census rather than a silence.
 
-    **A labelling reply this build cannot read costs the item rather than
-    degrading it, and that is deliberate.** The summarize-and-plan call's prompt replays the label
-    call's reply verbatim, and the reason that is safe is that the reply has already
-    been held to a closed schema. A reply that did not parse has not been, so
-    sending it would put unchecked model text into a prompt on the argument that
-    it is probably fine.
-
-    **The two ways that happens are two codes, because they are two fixes.** A
-    reply the output budget cut is read off `finish_reason` before anything
-    tries to parse it and lands as `labels_truncated`; the budget it met is
-    derived from the label call's own grammar. A reply that answered inside its budget
-    and still could not be read lands as `bad_shape`. Both lose the item, and
-    both are a cell in the census rather than a silence.
+    **No call is made for the names.** The first of the two calls this stage used
+    to make read the article only to find them, and the service finds them in
+    seconds and with exact offsets, so the model reads the article once.
     """
     if settings.app.visuals.downgrade_enabled and published_marks is None:
         raise ValueError("enabled visual downgrade requires the shard's published mark population")
@@ -535,7 +469,7 @@ def two_calls_one_item(
     kept = recorder if recorder is not None else _silent_recorder()
     model = settings.models.summarizer
     model_id = model.id
-    # Both calls render their own prompt bytes, so they go to the completions
+    # The call renders its own prompt bytes, so it goes to the completions
     # route and never to the chat one - which accepts `response_format` and
     # ignores it, losing the only control that survives an injection.
     rendered_endpoint = completion_url(endpoint)
@@ -548,271 +482,152 @@ def two_calls_one_item(
         "version": VisualDecision.schema_version(),
     }
 
-    def failed(no_reply: FailureCode, one: Completion | None = None) -> _TwoCalls:
-        """The item, lost, with whatever the run really spent on it.
-
-        `one` is the labelling reply when there was one. Three of the four ways
-        this item can die happen after the label call answered, so without it the ledger
-        records a zero for a call that ran - and the three are truncation, a
-        reply that would not parse, and a second call that never came back.
-        """
-        summary = summarize.to_summary(
-            article,
+    def failed(no_reply: FailureCode) -> _ItemResult:
+        """The item, lost before a reply came back, and so carrying no cost."""
+        return _ItemResult(
+            summarize.to_summary(
+                article,
+                None,
+                model_id=model_id,
+                generated_at=generated_at,
+                no_reply=no_reply,
+            ),
             None,
-            model_id=model_id,
-            generated_at=generated_at,
-            no_reply=no_reply,
-        )
-        return _TwoCalls(
-            summary if one is None else _split_the_cost(summary, one, None), None, one, None
         )
 
     with trace.span(telemetry.SpanName.SUMMARIZE) as stage_span:
         stage_span.set(telemetry.AttrKey.MODEL_ID, model_id)
-        so_far = _Progress()
-
-        def label(_node: dag.CallNode) -> _TwoCalls | None:
-            """The label call: the element table, and every label and score over it."""
-            with trace.span(telemetry.SpanName.RENDER_PROMPT) as span:
-                # A table that cannot re-slice its own output raises here rather
-                # than degrading, which is `elements.element_table`'s own ruling:
-                # at this point the text is in hand and it is the string the
-                # excerpts came from, so a mismatch is this process's arithmetic
-                # being wrong on every article that took the same path, not this
-                # item being odd.
-                table = elements.element_table(article, config=settings.app.elements)
-                so_far.table = table
-                if not dag.fits_the_window(
-                    article,
-                    model.server,
-                    menu_rows=len(table.elements),
-                    sampling=model.sampling,
-                ):
-                    LOG.warning(
-                        "the sequence would not fit the window id=%s tokens=%s menu=%s",
-                        article.item_id,
-                        article.token_count,
-                        len(table.elements),
-                    )
-                    return failed(FailureCode.CONTEXT_EXCEEDED)
-                first = calls.build_label_request(
-                    article,
-                    table,
-                    model_id=model_id,
-                    server=model.server,
-                    sampling=model.sampling,
-                    markers=markers,
-                    prompt_config=settings.app.summarize,
-                    visuals=settings.app.visuals,
-                    prompt_files=settings.app.prompt_files,
-                    config_dir=settings.config_dir,
-                )
-                so_far.first = first
-                rendered = str(first["prompt"])
-                first_digest = text_digest(rendered)
-                span.set(telemetry.AttrKey.PROMPT_DIGEST, first_digest)
-                span.set(telemetry.AttrKey.PROMPT_CHARS, len(rendered))
-            kept.calling("label")
-            # The stopwatch starts before the request and stops when the reply
-            # is in hand, so the wait is inside it. The server's own two clocks
-            # are recorded beside it and the difference is what they cannot say.
-            asked_at = time.monotonic()
-            one, no_reply = _ask_the_model(
-                first,
-                article,
-                model_id=model_id,
-                endpoint=rendered_endpoint,
-                timeout=timeout,
-                prompt_digest=first_digest,
-                run_id=run_id,
-                trace=trace,
-                markers=markers,
+        with trace.span(telemetry.SpanName.RENDER_PROMPT) as span:
+            # A table that cannot re-slice its own output raises here rather
+            # than degrading, which is `elements.element_table`'s own ruling:
+            # at this point the text is in hand and it is the string the
+            # excerpts came from, so a mismatch is this process's arithmetic
+            # being wrong on every article that took the same path, not this
+            # item being odd.
+            table = elements.element_table(
+                article, config=settings.app.elements, mentions=mentions
             )
-            label_ms = int((time.monotonic() - asked_at) * 1000)
-            if one is None:
-                _kept_call(
-                    kept,
-                    date,
-                    article,
-                    call="label",
-                    kind=CallKind.LABEL,
-                    prompt=rendered,
-                    reply=None,
-                    capture_root=capture_root,
+            if not dag.fits_the_window(
+                article,
+                model.server,
+                menu_rows=len(table.elements),
+                sampling=model.sampling,
+            ):
+                LOG.warning(
+                    "the call would not fit the window id=%s tokens=%s menu=%s",
+                    article.item_id,
+                    article.token_count,
+                    len(table.elements),
                 )
-                return failed(no_reply)
-            so_far.one = one
-            kept.note(**_call_cells(FIRST_CALL, CallKind.LABEL, one, wall_ms=label_ms))
+                return failed(FailureCode.CONTEXT_EXCEEDED)
+            wants_a_plan = visual_planner.plan_is_reachable(table, visuals=settings.app.visuals)
+            request = calls.build_summary_request(
+                article,
+                table,
+                model_id=model_id,
+                server=model.server,
+                sampling=model.sampling,
+                markers=markers,
+                plan=wants_a_plan,
+                prompt_config=settings.app.summarize,
+                visuals=settings.app.visuals,
+                prompt_files=settings.app.prompt_files,
+                config_dir=settings.config_dir,
+            )
+            rendered = str(request["prompt"])
+            digest = text_digest(rendered)
+            span.set(telemetry.AttrKey.PROMPT_DIGEST, digest)
+            span.set(telemetry.AttrKey.PROMPT_CHARS, len(rendered))
+        kept.calling(CALL_SLOT)
+        # The stopwatch starts before the request and stops when the reply is
+        # in hand, so the wait is inside it. The server's own two clocks are
+        # recorded beside it and the difference is what they cannot say.
+        asked_at = time.monotonic()
+        reply, no_reply = _ask_the_model(
+            request,
+            article,
+            model_id=model_id,
+            endpoint=rendered_endpoint,
+            timeout=timeout,
+            prompt_digest=digest,
+            run_id=run_id,
+            trace=trace,
+            markers=markers,
+        )
+        summary_ms = int((time.monotonic() - asked_at) * 1000)
+        if reply is None:
             _kept_call(
                 kept,
                 date,
                 article,
-                call="label",
-                kind=CallKind.LABEL,
-                prompt=rendered,
-                reply=one,
-                capture_root=capture_root,
-            )
-            if one.hit_the_budget:
-                LOG.warning(
-                    "the labelling reply ran out of its output budget id=%s tokens=%s",
-                    article.item_id,
-                    one.completion_tokens,
-                )
-                return failed(FailureCode.LABELS_TRUNCATED, one)
-
-            text = article.text or ""
-            try:
-                so_far.table = calls.anchored(
-                    table,
-                    text,
-                    calls.parse_label(one.content),
-                    config=settings.app.elements,
-                    label_source=model_id,
-                    entity_slugs=_watchlist_slugs(settings),
-                )
-            except (ValidationError, ValueError, json.JSONDecodeError) as error:
-                shape = _shape_cells(error)
-                LOG.warning(
-                    "the labelling reply did not hold its shape id=%s reason=%s detail=%s",
-                    article.item_id,
-                    type(error).__name__,
-                    shape["detail"],
-                )
-                kept.note(**shape)
-                return failed(FailureCode.BAD_SHAPE, one)
-            return None
-
-        def summarize_and_plan(_node: dag.CallNode) -> _TwoCalls | None:
-            """The summary and the visual plan, on the label call's own prompt."""
-            first, one, labelled = so_far.first, so_far.one, so_far.table
-            if first is None or one is None or labelled is None:
-                raise TypeError(
-                    "the summary node ran without the label call's prompt, reply and anchored "
-                    "table - `dag.walk` stops at the first node that ends the item, so "
-                    "reaching here means a node returned None after a failure"
-                )
-            so_far.wants_a_plan = visual_planner.plan_is_reachable(
-                labelled, visuals=settings.app.visuals
-            )
-            with trace.span(telemetry.SpanName.RENDER_PROMPT) as span:
-                second = calls.build_summarize_and_plan_request(
-                    first,
-                    one.content,
-                    labelled,
-                    markers=markers,
-                    plan=so_far.wants_a_plan,
-                    visuals=settings.app.visuals,
-                    prompt_files=settings.app.prompt_files,
-                    config_dir=settings.config_dir,
-                )
-                second_rendered = str(second["prompt"])
-                span.set(telemetry.AttrKey.PROMPT_CHARS, len(second_rendered))
-            kept.calling("summary")
-            asked_at = time.monotonic()
-            two, no_reply = _ask_the_model(
-                second,
-                article,
-                model_id=model_id,
-                endpoint=rendered_endpoint,
-                timeout=timeout,
-                prompt_digest=text_digest(second_rendered),
-                run_id=run_id,
-                trace=trace,
-                markers=markers,
-            )
-            summary_ms = int((time.monotonic() - asked_at) * 1000)
-            if two is None:
-                _kept_call(
-                    kept,
-                    date,
-                    article,
-                    call="summary",
-                    kind=CallKind.SUMMARIZE_AND_PLAN,
-                    prompt=second_rendered,
-                    reply=None,
-                    capture_root=capture_root,
-                )
-                return failed(no_reply, one)
-            so_far.two = two
-            split = calls.split_the_decode(two)
-            kept.note(
-                run_visual_decision=so_far.wants_a_plan,
-                **_call_cells("summary", CallKind.SUMMARIZE_AND_PLAN, two, wall_ms=summary_ms),
-                **_split_cells(split),
-            )
-            _kept_call(
-                kept,
-                date,
-                article,
-                call="summary",
+                call=CALL_SLOT,
                 kind=CallKind.SUMMARIZE_AND_PLAN,
-                prompt=second_rendered,
-                reply=two,
-                split=split,
+                prompt=rendered,
+                reply=None,
                 capture_root=capture_root,
             )
+            return failed(no_reply)
+        split = calls.split_the_decode(reply)
+        kept.note(
+            run_visual_decision=wants_a_plan,
+            **_call_cells(CALL_SLOT, CallKind.SUMMARIZE_AND_PLAN, reply, wall_ms=summary_ms),
+            **_item_cells(reply),
+            **_split_cells(split),
+        )
+        _kept_call(
+            kept,
+            date,
+            article,
+            call=CALL_SLOT,
+            kind=CallKind.SUMMARIZE_AND_PLAN,
+            prompt=rendered,
+            reply=reply,
+            split=split,
+            capture_root=capture_root,
+        )
 
-            with trace.span(telemetry.SpanName.PARSE_REPLY) as span:
-                half = calls.recovered_completion(two)
-                if two.hit_the_budget and half is not None:
-                    # The seatbelt the reply shape's field order buys, spent. The
-                    # picture is gone either way; without this the summary went
-                    # with it.
-                    LOG.warning(
-                        "the summarize-and-plan reply was cut and its summary recovered "
-                        "id=%s tokens=%s",
-                        article.item_id,
-                        two.completion_tokens,
-                    )
-                # Filled on every item and not only on the cut ones, because
-                # `recovered` answers "was this summary salvaged" and an empty
-                # cell makes an ordinary item and an unmigrated row look alike.
-                kept.note(recovered=bool(two.hit_the_budget and half is not None))
-                so_far.summary = _split_the_cost(
-                    summarize.to_summary(
-                        article,
-                        half if half is not None else two,
-                        model_id=model_id,
-                        generated_at=generated_at,
-                        no_reply=no_reply,
-                        thinking=model.thinks,
-                    ),
-                    one,
-                    two,
+        with trace.span(telemetry.SpanName.PARSE_REPLY) as span:
+            half = calls.recovered_completion(reply)
+            if reply.hit_the_budget and half is not None:
+                # The seatbelt the reply shape's field order buys, spent. The
+                # picture is gone either way; without this the summary went
+                # with it.
+                LOG.warning(
+                    "the reply was cut and its summary recovered id=%s tokens=%s",
+                    article.item_id,
+                    reply.completion_tokens,
                 )
-                telemetry.summary_attributes(span, so_far.summary)
-            return None
-
-        bodies: Mapping[dag.CallName, _NodeBody] = {
-            dag.CallName.LABEL: label,
-            dag.CallName.SUMMARIZE_AND_PLAN: summarize_and_plan,
-        }
-        lost = dag.walk(lambda node: bodies[node.name](node))
-        if lost is not None:
-            return lost
-        summary, two, labelled = so_far.summary, so_far.two, so_far.table
-        wants_a_plan = so_far.wants_a_plan
-        if summary is None or two is None or labelled is None:
-            raise TypeError(
-                "every node of the sequence answered and the item is still empty - "
-                "a node returned None without leaving its product behind"
+            # Filled on every item and not only on the cut ones, because
+            # `recovered` answers "was this summary salvaged" and an empty
+            # cell makes an ordinary item and an unmigrated row look alike.
+            kept.note(recovered=bool(reply.hit_the_budget and half is not None))
+            summary = _recorded_as_the_one_call(
+                summarize.to_summary(
+                    article,
+                    half if half is not None else reply,
+                    model_id=model_id,
+                    generated_at=generated_at,
+                    no_reply=no_reply,
+                    thinking=model.thinks,
+                ),
+                reply,
             )
+            telemetry.summary_attributes(span, summary)
         telemetry.summary_attributes(stage_span, summary)
 
     if summary.status is not SummaryStatus.OK:
-        return _TwoCalls(summary, None, so_far.one, two)
+        return _ItemResult(summary, None, reply)
 
     with trace.span(telemetry.SpanName.VISUAL_PLANNER) as span:
-        # The picture's own clock, and never the pair's. `decision_ms` means the
+        # The picture's own clock, and never the call's. `decision_ms` means the
         # planner call plus the render, and under this flag the planner call is
-        # the summarize-and-plan call - which also wrote the summary. Charging the picture for that
-        # would make the console's slowest-decision reading the slowest ITEM.
+        # the one call - which also wrote the summary. Charging the picture for
+        # that would make the console's slowest-decision reading the slowest ITEM.
         started = time.monotonic()
         decision = _decide_the_visual(
             summary,
-            two,
-            labelled,
+            reply,
+            table,
             settings=settings,
             date=date,
             stamp=stamp,
@@ -829,12 +644,12 @@ def two_calls_one_item(
         span.set(telemetry.AttrKey.DRAFTED_CHART, decision.drafted_chart)
         span.set(telemetry.AttrKey.VISUAL_KIND, decision.kind.value)
         span.set(telemetry.AttrKey.VISUAL_STATE, decision.visual_state.value)
-    return _TwoCalls(summary, decision, so_far.one, two)
+    return _ItemResult(summary, decision, reply)
 
 
 def _decide_the_visual(
     summary: Summary,
-    two: Completion,
+    completion: Completion,
     table: ElementTable,
     *,
     settings: config.Settings,
@@ -863,21 +678,21 @@ def _decide_the_visual(
     """
     if not wants_a_plan:
         return visual_planner.suppressed_by_the_gate(summary, **stamp)
-    if two.hit_the_budget:
+    if completion.hit_the_budget:
         n_ctx = window(settings.models.summarizer.server)
         asked_for = response_limit(settings.models.summarizer.sampling)
-        if two.prompt_tokens + asked_for > n_ctx:
+        if completion.prompt_tokens + asked_for > n_ctx:
             LOG.warning(
                 "the window stopped the plan id=%s prompt=%s budget=%s n_ctx=%s",
                 summary.item_id,
-                two.prompt_tokens,
+                completion.prompt_tokens,
                 asked_for,
                 n_ctx,
             )
             return visual_planner.plan_lost_to_the_window(summary, **stamp)
         return visual_planner.plan_lost_to_the_budget(summary, **stamp)
     try:
-        reply = calls.parse_summarize_and_plan(two.content)
+        reply = calls.parse_summarize_and_plan(completion.content)
     except (ValidationError, ValueError, json.JSONDecodeError) as error:
         shape = _shape_cells(error)
         LOG.warning(

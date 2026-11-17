@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 from pytest import MonkeyPatch
-from support.paths import read_text
+from support.paths import CONFIG_DIR, read_text
 
-from idhazh import assemble
+from idhazh import assemble, config
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.visual_data import VisualData
 from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX, VisualDecision, VisualKind
@@ -16,12 +16,12 @@ from idhazh.publication import read_inventory
 from idhazh.render.write import asset_relpath
 
 from ._builders import (
-    DRAWS_LABEL,
     DRAWS_SUMMARIZE_AND_PLAN,
     _work_stage,
     assert_planning_references,
     assert_reader_accepts,
     drawable_article_fetch,
+    finding_the_wind_countries,
     plan,
     publish_worker_items,
 )
@@ -42,13 +42,15 @@ def test_assemble_publishes_a_chart_from_its_decision_alone(
     if assemble stops writing it.
     """
     worker = tmp_path / "worker"
-    run_plan, items, server = _work_stage(
-        worker,
-        monkeypatch,
-        replies=(DRAWS_LABEL.read_bytes(), DRAWS_SUMMARIZE_AND_PLAN.read_bytes()),
-        fetcher=drawable_article_fetch,
-        run_plan=plan(item_count=1),
-    )
+    with finding_the_wind_countries(config.load(CONFIG_DIR)) as settings:
+        run_plan, items, server = _work_stage(
+            worker,
+            monkeypatch,
+            replies=(DRAWS_SUMMARIZE_AND_PLAN.read_bytes(),),
+            fetcher=drawable_article_fetch,
+            run_plan=plan(item_count=1),
+            settings=settings,
+        )
     item_id = run_plan.items[0].item_id
     decision = VisualDecision.read(items / f"{item_id}{PAYLOAD_SUFFIX}")
     relpath = asset_relpath(run_plan.date, item_id)
