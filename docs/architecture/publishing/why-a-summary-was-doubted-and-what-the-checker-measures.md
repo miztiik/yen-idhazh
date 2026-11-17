@@ -88,15 +88,16 @@ missing retained readings stay unknown rather than becoming zero.
 
 | Instrument | Receiver and reading |
 | --- | --- |
-| Compression | Summary length: median percent on the run's row, no mark of its own |
+| Compression | Summary length: each run's median percent against its article, a row in the legend and the tooltip, no mark of its own |
 | Coherence | Daily figures: median signed cosine to two decimal places |
 | Extraction cuts | Model cards and daily figures: real count and share, with the historical flag-meaning boundary |
-| Summary and article lengths | Per-run shortest, median and longest summary against the requested length bounds |
+| Summary and article lengths | Per-run shortest, median and longest summary |
 | Runtime | Writing and checking clocks, tokens, failures and call endings from their native records |
 
 `RECORDED` retains the coherence and compression labels and notes. Neither
-receives a new threshold, confidence tint or worst marker. The cards and length
-panel each say once: **Nothing acts on these numbers.**
+receives a new threshold, confidence tint or worst marker. Only coherence's are
+printed, under the daily table; compression is read in the length panel's legend
+and tooltip.
 
 **`hhem_full` and `hhem_delta` are a sentence, not a second chart.** The checker
 scores each summary twice, once against the text the machine was given and once
@@ -199,9 +200,9 @@ what to do when one fires is
 
 ## How long the summaries came out
 
-The compression chart draws three marks a run - the shortest summary, the middle
-one and the longest - against the band its own articles were asked for. The
-drawing rules are in
+The length chart draws three marks a run - the shortest summary, the median (p50)
+and the longest - and its legend and tooltip add the run's median length against
+its article. The drawing rules are in
 [../../concepts/console-design/what-the-quality-and-source-panels-draw.md](../../concepts/console-design/what-the-quality-and-source-panels-draw.md);
 three refusals are specific to this plot.
 
@@ -288,10 +289,19 @@ own, so the three figures are read where the pointer is. What it gives up: a
 table is a plain list a reader can scan down for every day at once, and the strip
 shows one day at a time.
 
+The summary-length panel has no table either. It printed one number a run, the
+median summary length against its article, under a caption and two sentences,
+beside a strip that already prints every other reading of that run. The number is
+now one more row of the strip and the tooltip, so it is read where the pointer
+is, and the pointer and the Left and Right keys step through the runs. What it
+gives up: a plain list to scan down for every run at once; the strip shows one
+run at a time. The panel's colours are in
+[the drawing rationale](../../concepts/console-design/what-the-quality-and-source-panels-draw.md#design-rationale).
+
 ## See also
 
 - [console.md](console.md) - which panel is on which route, and which question it answers.
-- [../../concepts/console-design/what-the-quality-and-source-panels-draw.md](../../concepts/console-design/what-the-quality-and-source-panels-draw.md) - how the measure cards, the distributions and the compression chart are allowed to draw.
+- [../../concepts/console-design/what-the-quality-and-source-panels-draw.md](../../concepts/console-design/what-the-quality-and-source-panels-draw.md) - how the measure cards, the distributions and the length chart are allowed to draw.
 - [../../concepts/evaluation.md](../../concepts/evaluation.md) - what the checker measures and what a verdict means.
 - [which-console-surfaces-follow-the-window-and-which-say-why-not.md](which-console-surfaces-follow-the-window-and-which-say-why-not.md) - the control these panels answer to.
 - [../../reference/site-weight.md](../../reference/site-weight.md#page-and-payload-guardrails) - how route and fetched-payload costs are bounded.

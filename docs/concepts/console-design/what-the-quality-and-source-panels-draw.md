@@ -134,14 +134,23 @@ counted as untimed, not instant.
 ## Summary length is three marks a run
 
 `How long the summaries came out` draws one column per run: the shortest summary
-it wrote, the middle one and the longest.
+it wrote, the median (p50) and the longest. One quantity, so one colour,
+`--chart-1`: the median is a solid tick and the span from shortest to longest is a
+bar as wide as the tick, in the same colour tinted by `spreadPaint`. The strip's
+swatches for the two ends and the median are those same paints.
 
 The declared `summaryLengthQuery` reads the score ledger in the browser.
 `model/summary-length.ts` calls `model/work.ts::runLengths` for those endpoints.
 Its native middle is the upper-middle recorded length; recorded zero remains a
 length. A run with no measured summary length has no column. Different runs
-remain separate even when they name the same article. Recorded compression
-ratios are a separate measure.
+remain separate even when they name the same article.
+
+**A run's length against its article is a number in the strip and the tooltip,
+never a table.** It is the median of the run's summary words over article words,
+which the ledger spells `compression` and the screen calls `Median (p50) length
+against article`. It has no mark, so its row has no swatch. A run whose rows hold
+no ratio prints `not recorded` there, a window where no run has one prints no row,
+and the run's spoken sentence carries it too.
 
 **A mark per summary cannot be drawn, and the block is the reason.** Thousands of
 marks in one colour render their dense middle as a solid area, so the only marks
@@ -268,6 +277,17 @@ Individual metric trends, summary cards and dated setting/model-change markers
 remain, but they are not an equivalent replacement. The cut deletes local
 comparison work, not measurements, producer or compact contracts, historical
 records or their read compatibility.
+
+**The summary-length marks are `--chart-1`, not the grey.** The marks and their
+swatches were `--chart-8`, the grey this console keeps for `other` and `not
+recorded`, so a measured length read as a missing one. One unnamed quantity takes
+`--chart-1`
+([a colour belongs to a quantity](the-mark-shapes-a-panel-may-reach-for.md#a-colour-belongs-to-a-quantity-not-its-position));
+`--chart-2` to `--chart-5` are not used because the light theme renders them as
+near-identical greys. The range is a bar as wide as the median tick, because a
+1.5 px line in the 30 percent tint would not be seen. The table that printed the
+length against the article is gone for the reason in
+[the summary-console rationale](../../architecture/publishing/why-a-summary-was-doubted-and-what-the-checker-measures.md#design-rationale).
 
 **A panel belongs to the question it answers, not to the route it was written
 on.** Four panels left `/console/` for `/console/voices/` - the census, the

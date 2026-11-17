@@ -26,7 +26,6 @@ test('the integrated Summaries route reads the native record and keeps all panel
 	await expect(page.locator('[data-instrument="coherence"]')).not.toHaveCount(0);
 	await expect(page.locator('[data-model-cards-note]')).toContainText('Newest recorded day: 2026-08-20 UTC.');
 	await expect(page.locator('[data-kpi="Published summaries checked"]')).toBeVisible();
-	await expect(page.locator('[data-console-panel-id="summary-length"]')).toContainText('Nothing acts on these numbers.');
 	await page.locator('[data-window-preset="7"]').click();
 	await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-days', '7');
 	const queries = page.locator('[data-model-query]');

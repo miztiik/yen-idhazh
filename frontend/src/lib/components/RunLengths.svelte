@@ -11,6 +11,12 @@
 	 * model reading one set of articles under one set of settings, so it is the
 	 * smallest thing on this page that a change can be attributed to.
 	 *
+	 * One quantity, so one colour: the median is a solid tick and the shortest
+	 * to longest range is a bar of the same colour in the tint every spread on
+	 * the console wears, so the strip's swatches key both marks. The run's
+	 * median length against its article is a number in the strip and the
+	 * tooltip; it has no mark and no table.
+	 *
 	 * Hand-written SVG, so the chart is complete before any script runs.
 	 */
 	import {
@@ -26,6 +32,11 @@
 	import ChartReadout from './ChartReadout.svelte';
 	import type { RunLength } from '../../routes/console/model/+page.server';
 	import { completeModelRule, ruleDeclaration, ruleEvents, type ModelRule } from '$lib/charts/d3/model-rule';
+	import { spreadPaint } from '$lib/charts/d3/spread-paint';
+
+	/** A run with the median of its summary-over-article word ratios, where the
+	 * ledger holds one. */
+	type Run = RunLength & { compression?: number | null };
 
 	let {
 		runs,
@@ -36,7 +47,7 @@
 		rule
 	}: {
 		/** Oldest first. The chart reads left to right. */
-		runs: RunLength[];
+		runs: Run[];
 		width: number;
 		height: number;
 		tickDensity: number;
@@ -87,6 +98,14 @@
 
 	/** The widest each mark may be without two runs touching. */
 	const markWidth = $derived(Math.max(3, Math.min(14, pitch - 3)));
+
+	/** The median is the solid colour; the range between the ends is the same
+	 * colour tinted, and the strip's swatches use these same two paints. */
+	const MEDIAN_PAINT = 'var(--chart-1)';
+	const RANGE_PAINT = spreadPaint('--chart-1');
+
+	/** Summary words over article words, as the whole percent the page prints. */
+	const percent = (ratio: number) => `${Math.round(ratio * 100)}%`;
 
 	const placed = $derived(
 		runs.map((run, index) => ({
@@ -149,8 +168,9 @@
 	/** One run's sentence, kept on its marks as their name. Every word of it is in
 	 * the strip at that run: the run id names the day, so the date is not said a
 	 * second time. */
-	function sentence(run: RunLength): string {
-		return `Run ${run.runId}${run.model === null ? '' : `, ${run.model}`}: ${run.items} summaries, shortest ${run.low} words, median (p50) ${run.median}, longest ${run.high}.`;
+	function sentence(run: Run): string {
+		const against = run.compression == null ? '' : ` Median length against article: ${percent(run.compression)}.`;
+		return `Run ${run.runId}${run.model === null ? '' : `, ${run.model}`}: ${run.items} summaries, shortest ${run.low} words, median (p50) ${run.median}, longest ${run.high}.${against}`;
 	}
 
 	/** What a model rule says, on the rule and in the strip on the run it opens. */
@@ -166,10 +186,13 @@
 	/** The column a pointer or an arrow key has picked. */
 	let selected = $state<number | null>(null);
 
-	/** Three marks a run, printed together. The whole point of the shape is that
-	 * the ends move while the middle does not, and reading three marks off one
-	 * column by eye against a shared y axis is what the strip removes. It rests on
-	 * the newest run, which is the one an operator came for. */
+	/** Three marks a run, printed together with the run's length against its
+	 * article. The whole point of the shape is that the ends move while the
+	 * middle does not, and reading three marks off one column by eye against a
+	 * shared y axis is what the strip removes. It rests on the newest run, which
+	 * is the one an operator came for. A run whose ledger rows hold no ratio
+	 * prints the not-recorded word, and a window where no run has one prints no
+	 * row. */
 	const readout = $derived.by(() => {
 		const words = (value: number) => `${value} words`;
 		return readoutOf({
@@ -178,9 +201,15 @@
 				(run) => `${run.runId} - ${run.items} ${run.items === 1 ? 'summary' : 'summaries'}`
 			),
 			series: [
-				{ label: 'Shortest', swatch: 'var(--chart-8)', values: runs.map((run) => run.low), format: words },
-				{ label: 'Middle', swatch: 'var(--chart-8)', values: runs.map((run) => run.median), format: words },
-				{ label: 'Longest', swatch: 'var(--chart-8)', values: runs.map((run) => run.high), format: words },
+				{ label: 'Shortest', swatch: RANGE_PAINT, values: runs.map((run) => run.low), format: words },
+				{ label: 'Median (p50)', swatch: MEDIAN_PAINT, values: runs.map((run) => run.median), format: words },
+				{ label: 'Longest', swatch: RANGE_PAINT, values: runs.map((run) => run.high), format: words },
+				{
+					label: 'Median (p50) length against article',
+					swatch: null,
+					values: runs.map((run) => run.compression ?? null),
+					format: percent
+				},
 				{
 					label: 'Model',
 					swatch: null,
@@ -296,13 +325,12 @@
 					data-run-high={column.run.high}
 					data-run-items={column.run.items}
 				>
-					<line
-						x1={round(column.x)}
-						x2={round(column.x)}
-						y1={round(column.yHigh)}
-						y2={round(column.yLow)}
-						stroke="var(--chart-8)"
-						stroke-width="1.5"
+					<rect
+						x={round(column.x - markWidth / 2)}
+						y={round(column.yHigh)}
+						width={markWidth}
+						height={round(column.yLow - column.yHigh)}
+						fill={RANGE_PAINT}
 						data-run-cell="range"
 					/>
 					<line
@@ -310,7 +338,7 @@
 						x2={round(column.x + markWidth / 2)}
 						y1={round(column.yMedian)}
 						y2={round(column.yMedian)}
-						stroke="var(--chart-8)"
+						stroke={MEDIAN_PAINT}
 						stroke-width="2.5"
 						data-run-cell="median"
 					/>
@@ -365,7 +393,7 @@
 		name="run-lengths"
 		maxShare={readoutMaxShare}
 		restingNote=", the newest run"
-		hint="Point at a run to read all three marks. Left and Right step through the runs, Escape returns to the newest."
+		hint="Point at a run to read it. Left and Right step through the runs, Escape returns to the newest."
 	/>
 </div>
 
