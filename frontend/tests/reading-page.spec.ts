@@ -51,6 +51,7 @@ test('a reader can load stories, filter the day and keep the layout usable on a 
 		const geometry = await stories.first().evaluate((article) => {
 			const body = article.querySelector<HTMLElement>('.item-body')!;
 			const prose = article.querySelector<HTMLElement>('.prose')!;
+			const rail = article.querySelector<HTMLElement>('.item-rail')!;
 			const stream = article.closest<HTMLElement>('.day-stream')!;
 			const day = article.closest<HTMLElement>('.day')!;
 			const style = getComputedStyle(article);
@@ -60,6 +61,8 @@ test('a reader can load stories, filter the day and keep the layout usable on a 
 				card: article.getBoundingClientRect().width,
 				body: body.getBoundingClientRect().width,
 				prose: prose.getBoundingClientRect().width,
+				bodyBottom: body.getBoundingClientRect().bottom,
+				footerTop: rail.getBoundingClientRect().top,
 				rightInset: article.getBoundingClientRect().right - body.getBoundingClientRect().right,
 				expectedInset: Number.parseFloat(style.paddingRight) + Number.parseFloat(style.borderRightWidth)
 			};
@@ -68,6 +71,7 @@ test('a reader can load stories, filter the day and keep the layout usable on a 
 		expect(Math.abs(geometry.stream - geometry.card)).toBeLessThanOrEqual(1);
 		expect(Math.abs(geometry.body - geometry.prose)).toBeLessThanOrEqual(1);
 		expect(Math.abs(geometry.rightInset - geometry.expectedInset)).toBeLessThanOrEqual(1);
+		expect(geometry.footerTop).toBeGreaterThanOrEqual(geometry.bodyBottom);
 	}
 	await expectFullArticleWidth();
 	await expect(page.locator('[data-time-note]')).toHaveCount(0);
