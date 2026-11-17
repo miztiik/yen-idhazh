@@ -1,6 +1,6 @@
 # The model's own file
 
-**Last Updated**: 2026-11-11
+**Last Updated**: 2026-11-17
 
 What `config/` says about a set of weights: which model runs, what runtime
 settings are declared for those exact bytes, how a turn is written for it, and
@@ -138,7 +138,7 @@ changes the settings that travel with it:
 - `startup_warmup`
 - `metrics`
 - `flash_attention`
-- `load_mode`
+- `load_mode`, `repack`
 - `cache_type_k`, `cache_type_v`
 - `priority`, `poll`
 - `checkpoint_min_step`, `ctx_checkpoints`, `cache_ram`
@@ -216,6 +216,47 @@ settings remain labelled unmeasured until a runner measurement records their
 hardware, date and spread in
 [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md). Setting a value
 claims no speed, memory or quality gain on its own.
+
+### The server holds the weights once and leaves memory to grow into
+
+A hosted runner has 15.3 to 15.6 GiB of RAM and 3 GiB of swap, and the platform
+chooses its CPU. Two settings in the `server` block decide whether the model
+server stays inside that memory, and neither may depend on the CPU a job draws.
+
+**Repacking is off, so the weights sit in memory once.** On a CPU that exposes
+AMX, llama.cpp copies the weights into a separate AMX buffer (5.4 of the 6.0 GiB
+of this file), and `--load-mode mmap+mlock` keeps the original file mapping
+locked as well. A job on such a host starts with the server at 12.0 GiB resident
+and 2.3 GiB of memory available; every other host starts at 7.3 GiB resident and
+7.2 GiB available (pinned build, Q5_K_M weights, first reading after load). Over
+a long shard the available figure falls by 1.7 to 4.1 GiB on an ordinary host,
+so an AMX host runs out of memory and the platform reports the runner as lost,
+with no log and no artifact. `--no-repack` keeps the weights in the one mapping
+on every CPU.
+
+For a Q5_K or Q6_K file the flag changes nothing on an x86 host without AMX,
+because llama.cpp's CPU repacking covers those types on ARM only. AMX hosts give
+up their prompt-processing lead (24 to 28 tokens a second against 6 to 10 on the
+AMD hosts) and become ordinary hosts. That costs wall time on hosts that were
+never the slowest, and the shard time bounds were sized from the slowest. A
+Q4_0, Q4_K or Q2_K file also repacks on ordinary x86 hosts, so the flag would
+slow every host for it: that file needs its own measurement before it carries
+the flag.
+
+**The prompt cache is a memory ceiling.** `--cache-ram` is the most that saved
+prompt states may occupy, beside the weights, the live context and the worker.
+It has to fit in what is free after the model loads, less the worker's growth
+(the Python worker reaches about 1.9 GiB). With 7.2 GiB free on an ordinary
+host, 4096 MiB leaves room for that growth and 8192 MiB does not. Across 60
+digest shards the cache peaked at a median of 1.9 GiB and a maximum of 2.9 GiB,
+so 4096 MiB evicts nothing the pipeline reuses.
+
+`--ctx-checkpoints` and `--checkpoint-min-step` are not memory settings to trim.
+A recurrent model reuses a prompt prefix only through its checkpoints, and fewer
+of them multiplies prompt-processing time on the slowest hosts.
+
+Re-check any of these figures by joining the `item-health` memory columns to the
+host fingerprint's `flags` on `amx_tile`.
 
 ### A model swap can no longer inherit settings nothing declared for it
 
