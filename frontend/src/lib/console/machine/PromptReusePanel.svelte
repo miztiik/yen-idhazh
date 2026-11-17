@@ -13,6 +13,7 @@
 	import { dateSeries, type SeriesInput } from '$lib/charts/d3/dateSeries';
 	import { emptyState } from '$lib/charts/d3/empty';
 	import { completeModelRule } from '$lib/charts/d3/model-rule';
+	import { spreadPaint } from '$lib/charts/d3/spread-paint';
 	import { chartWidth, observeWidth } from '$lib/charts/frame';
 	import { useChartFrame } from '$lib/charts/label-context';
 	import { readoutOf } from '$lib/charts/readout';
@@ -85,7 +86,7 @@
 
 	const charts = $derived(reads.map(({ call, name, token, byDate }) => {
 		const readings = dates.map((date) => ({ date, day: byDate.get(date) }));
-		const tint = `color-mix(in srgb, var(${token}) calc(var(--chart-spread-mix) * 100%), var(--color-surface))`;
+		const tint = spreadPaint(token);
 		const series: SeriesInput[] = [
 			{ label: 'Cached', token, points: readings.map(({ date, day }) => ({ date, value: day?.share ?? null })) },
 			{ label: 'Read fresh', token, fill: tint, points: readings.map(({ date, day }) =>
