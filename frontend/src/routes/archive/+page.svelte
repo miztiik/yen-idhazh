@@ -148,7 +148,7 @@
 								day={{ date: entry.date, href }} />
 						{:else}
 							<div class="story-row">
-								<div class="story-prose measure">
+								<div class="story-prose">
 									<a {href} class="story-title">{entry.title}</a>
 									<p class="caption">{shortDate(entry.date)}</p>
 								</div>

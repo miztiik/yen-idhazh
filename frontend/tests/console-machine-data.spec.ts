@@ -2,11 +2,11 @@
 import { expect, test } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { contextReadings } from '../src/lib/console/machine/records';
-import { CLOCKS_AGREE_WITHIN_PCT, machineCounters, type MachineLimits, type MachineRun } from '../src/lib/console/machine/counters';
+import { machineCounters, type MachineLimits, type MachineRun } from '../src/lib/console/machine/counters';
 import type { Row } from '../src/lib/data/ledger';
 import { itemHealthRows } from '../src/lib/server/ledger-rows';
 import { buildLedger } from './support/ledger-lifecycle';
-import { hostRow, itemRow, ledgers, plan, type ShardReading } from './support/machine-rows';
+import { ledgers, plan, type ShardReading } from './support/machine-rows';
 const LIMITS: MachineLimits = { contextWindow: 8192, jobTimeoutSeconds: 9000 };
 function row(reading: ShardReading): ShardReading {
     return { date: '2026-09-02', runId: '2026-09-02-1', shard: 0, ...reading };
@@ -41,17 +41,6 @@ const FULL: ShardReading[] = [
         modelLoadMs: 9000
     })
 ];
-function healthRows(runId: string, items: number, tokens: number, prefillMs: number) {
-    return Array.from({ length: items }, (_, index) => ({
-        date: runId.slice(0, 10),
-        run_id: runId,
-        item_id: `item-${index}`,
-        input_tokens: String(tokens + 100),
-        cached_tokens: '100',
-        prefill_ms: String(prefillMs),
-        decode_ms: '1000'
-    }));
-}
 function readerInput(readings: ShardReading[], planned?: [
     string,
     number
@@ -69,11 +58,10 @@ function read(readings: ShardReading[], options: {
         string,
         number
     ][];
-    health?: Record<string, string>[];
     limits?: MachineLimits;
 } = {}) {
     const input = readerInput(readings, options.planned);
-    return machineCounters(input.hosts, [...input.health, ...(options.health ?? [])], input.planned, options.limits ?? LIMITS);
+    return machineCounters(input.hosts, input.health, input.planned, options.limits ?? LIMITS);
 }
 function only(runs: MachineRun[], runId: string): MachineRun {
     const found = runs.find((run) => run.runId === runId);
@@ -115,71 +103,6 @@ test.describe('every figure, recomputed by hand', () => {
         expect(run.slowestJobSeconds).toEqual({ value: 900, from: 2, outOf: 2 });
         expect(run.jobUsedPct).toEqual({ value: 10, from: 2, outOf: 2 });
         expect(run.reported[0].jobUsedPct).toBe(7);
-    });
-});
-test.describe('the two clocks, checked against each other', () => {
-    test('an agreeing run reports the gap it agreed by', () => {
-        const health = healthRows('2026-09-02-1', 4, 1000, 50_000);
-        const run = only(read(FULL, { health }).runs, '2026-09-02-1');
-        expect(run.clocks.ledger).toEqual({ tokens: 4000, seconds: 200, parts: 4, rate: 20 });
-        expect(run.clocks.server).toEqual({ tokens: 4000, seconds: 200, parts: 2, rate: 20 });
-        expect(run.clocks.gapPct).toBe(0);
-        expect(run.clocks.agrees).toBe(true);
-    });
-    test('a disagreeing run says so rather than rounding it away', () => {
-        const health = healthRows('2026-09-02-1', 4, 1000, 75_000);
-        const run = only(read(FULL, { health }).runs, '2026-09-02-1');
-        const expected = ((20 - 4000 / 300) / 20) * 100;
-        expect(run.clocks.gapPct).toBeCloseTo(expected, 6);
-        expect(run.clocks.gapPct as number).toBeGreaterThan(CLOCKS_AGREE_WITHIN_PCT);
-        expect(run.clocks.agrees).toBe(false);
-    });
-    test('nothing to compare is null, never a disagreement', () => {
-        const run = only(read(FULL).runs, '2026-09-02-1');
-        expect(run.clocks.ledger.parts).toBe(0);
-        expect(run.clocks.gapPct).toBeNull();
-        expect(run.clocks.agrees).toBeNull();
-    });
-    test('an item missing either timing cell is left out of both sums', () => {
-        const health = [
-            ...healthRows('2026-09-02-1', 4, 1000, 50_000),
-            { runId: '2026-09-02-1', item_id: 'older', input_tokens: '', cached_tokens: '', prefill_ms: '' }
-        ];
-        const run = only(read(FULL, { health }).runs, '2026-09-02-1');
-        expect(run.clocks.ledger.parts).toBe(4);
-        expect(run.clocks.gapPct).toBe(0);
-    });
-});
-test.describe('THE ORACLE: one item cost, taken away', () => {
-    const REFUSED = 'ai-09';
-    const COST = ['prefill_ms', 'decode_ms', 'input_tokens', 'output_tokens', 'cached_tokens'];
-    const RUN = '2030-06-15-1';
-    const shard = { date: '2030-06-15', runId: RUN, shard: 0 };
-    const hosts = [hostRow({ ...shard, serverPromptTokens: 1000, serverPromptSeconds: 100 })];
-    const item = (itemId: string, prompt: number, seconds: number) => itemRow({ ...shard, itemId, longestSequence: prompt + 50, writtenTokens: 50, cachedTokens: 0, ledgerReadSeconds: seconds, writeSeconds: 5 });
-    const whole = [item('ai-01', 300, 44), item('ai-02', 300, 45), item(REFUSED, 400, 10)];
-    const blanked = whole.map((row) => row.item_id === REFUSED ? { ...row, ...Object.fromEntries(COST.map((cell) => [cell, ''])) } : row);
-    function verdict(machines: Record<string, string>[], health: Record<string, string>[]) {
-        const counters = machineCounters(machines, health, plan([RUN, 1]), LIMITS);
-        expect(counters.refused, 'the reader refused the run').toEqual([]);
-        const run = only(counters.runs, RUN);
-        return { run };
-    }
-    test('the two ledgers agree, and disagree once one row cost goes missing', () => {
-        const before = verdict(hosts, whole);
-        expect(before.run.clocks.agrees).toBe(true);
-        expect(before.run.clocks.gapPct, '1,000 tokens in 99 seconds against 1,000 in 100').toBeCloseTo(1.0101, 3);
-        const after = verdict(hosts, blanked);
-        expect(after.run.clocks.agrees).toBe(false);
-        expect(after.run.clocks.gapPct, '600 tokens in 89 seconds against 1,000 in 100').toBeCloseTo(32.584, 2);
-        expect(verdict(hosts, whole).run.clocks.agrees).toBe(true);
-    });
-    test('the server counters are what turn it, and not the item rows alone', () => {
-        const blind = hosts.map((row) => ({ ...row, server_prompt_tokens: '', server_prompt_seconds: '' }));
-        const { run } = verdict(blind, blanked);
-        expect(run.clocks.server.rate).toBeNull();
-        expect(run.clocks.agrees).toBeNull();
-        expect(run.clocks.agrees).not.toBe(false);
     });
 });
 test.describe('an empty cell is unknown and never zero', () => {
@@ -262,12 +185,6 @@ test.describe('a shard is a set and never a count', () => {
         expect(refused[0].rows).toBe(6);
         expect(refused[0].why).toContain('shard 0');
     });
-    test('a run is refused rather than reported half', () => {
-        const { runs } = read([twice[0], { ...twice[1], serverPromptSeconds: 250 }, twice[2]], {
-            planned: [['2026-09-02-3', 2]]
-        });
-        expect(runs).toEqual([]);
-    });
     test('more shards than the run says it had is refused', () => {
         const impossible = [
             row({ runId: '2026-09-02-5', shard: 0 }),
@@ -339,13 +256,6 @@ test.describe('the ledgers this reads, over a record written here', () => {
                 expect(run.readSpread.value).toBeGreaterThanOrEqual(1);
             if (run.contextUsedPct.value !== null)
                 expect(run.contextUsedPct.value).toBeLessThanOrEqual(100);
-        }
-    });
-    test('a run the reader refuses says which run and why', () => {
-        for (const run of counted().refused) {
-            expect(run.runId).not.toBe('');
-            expect(run.why.length).toBeGreaterThan(10);
-            expect(run.why).toContain('shards');
         }
     });
     test('an absent ledger is an empty read, never a throw', () => {

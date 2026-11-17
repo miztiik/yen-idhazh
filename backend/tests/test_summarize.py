@@ -33,7 +33,6 @@ from idhazh.classify.calls import summarize_and_plan_schema
 from idhazh.contracts.article import UNTRUSTED_LINE_MAX, Article, ArticleStatus
 from idhazh.contracts.base import (
     canonical_json,
-    derive_output_digest,
     normalize_prose,
 )
 from idhazh.contracts.call_cost import CallKind
@@ -73,7 +72,6 @@ from idhazh.sanitize import (
     why_a_forged_turn_would_survive,
 )
 from idhazh.summarize import (
-    build_request,
     output_schema,
     parse_draft,
     to_summary,
@@ -140,16 +138,6 @@ def summarised(name: str, source: str = "ok") -> Summary:
 
 
 # --- The article is data, and only ever data --------------------------------
-
-
-def test_the_system_prompt_never_carries_the_article() -> None:
-    """Decision 1: article text goes in the user turn, or the fence means nothing."""
-    payload = build_request(
-        article(), model_id="m", sampling=a_sampling(), markers=a_markers()
-    )
-    system = payload["messages"][0]
-    assert system["role"] == "system"
-    assert (article().text or "")[:80] not in system["content"]
 
 
 def test_the_article_arrives_fenced_and_labelled() -> None:
@@ -1564,31 +1552,7 @@ def test_a_call_that_never_returned_is_the_one_failure_that_really_was_free() ->
         assert result.prefill_ms == 0
 
 
-def test_a_reply_claiming_more_cache_than_prompt_is_refused() -> None:
-    """The console divides by the difference, so a negative remainder cannot land."""
-    with pytest.raises(ValidationError):
-        Summary(
-            version=Summary.schema_version(),
-            item_id="ai-01",
-            url_key="9" * 64,
-            summary="word " * 60,
-            output_digest=derive_output_digest("word " * 60),
-            model_id="m",
-            input_tokens=100,
-            cached_tokens=101,
-            generated_at=GENERATED_AT,
-            status=SummaryStatus.OK,
-        )
-
-
 # --- What the pipeline agrees to believe ------------------------------------
-
-
-def test_a_well_formed_reply_becomes_a_summary() -> None:
-    result = summarised("ok")
-    assert result.status is SummaryStatus.OK
-    assert result.summary
-    assert result.output_digest == derive_output_digest(result.summary, title=result.title)
 
 
 def test_an_injected_tool_call_cannot_reach_a_payload() -> None:

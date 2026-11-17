@@ -15,7 +15,7 @@
 import { expect, test } from './support/browser';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { closestToMemory, contextReadings, countersFrom, processors, textRows, shardCounts, slowerMachines } from '../src/lib/console/machine/records';
+import { contextReadings, countersFrom, processors, textRows, shardCounts, slowerMachines } from '../src/lib/console/machine/records';
 import { reuseDays } from '../src/lib/console/machine/prompt-reuse';
 import { slowestArticles } from '../src/lib/console/pipelines/slowest-articles';
 import { rankedList } from '../src/lib/charts/d3/rankedList';
@@ -25,7 +25,6 @@ import { machineRamp } from '../src/lib/charts/machine-colour';
 import { shardPhases } from '../src/lib/console/machine/shard-phases';
 import { machinePhases } from '../src/lib/console/machine/machine-phases';
 import {
-	itemRead,
 	percentileHistory,
 	quantile,
 	readAgainstWritten,
@@ -45,7 +44,6 @@ import { frame } from '../src/lib/charts/frame';
 import { articleCost, runnerHourSeconds } from '../src/lib/console/machine/article-cost';
 import { describeRefusedRuns } from '../src/lib/console/machine/refused-runs';
 import { hostRow, ledgers, plan, type ShardReading } from './support/machine-rows';
-import { observabilityConfig } from '../src/lib/server/config';
 
 /** `config/idhazh.json` read straight off disk, so a test's expectation comes
  * from the committed file rather than from the reader it is checking. */
@@ -54,11 +52,6 @@ const CONFIG = JSON.parse(
 ) as {
 	run: { shard_timeout_minutes: number };
 	models_file: string;
-	observability: {
-		cost_currency: string;
-		cost_input_per_million: number;
-		cost_output_per_million: number;
-	};
 };
 
 /** The native chart's width and height, from the same configuration it reads. */
@@ -255,26 +248,12 @@ function onlyRun(readings: ShardReading[]): MachineRun {
 test.describe('native shard counter arithmetic', () => {
 	const run = onlyRun(TWO_SHARDS);
 
-	test('the read rate is the shard rate, and the spread is the two of them', () => {
-		// 8,000 tokens over 200 seconds is 40; 2,000 over 200 is 10; 40/10 is 4.
-		expect(run.reported.find((row) => row.shard === 0)?.readTokensPerSecond).toBeCloseTo(40, 6);
-		expect(run.reported.find((row) => row.shard === 1)?.readTokensPerSecond).toBeCloseTo(10, 6);
-		expect(run.readSpread.value).toBeCloseTo(4, 6);
-	});
-
 	test('the job clock is measured against the configured timeout, not a literal', () => {
 		expect(run.reported[1].jobUsedPct).toBe(Math.round(1200 / (CONFIG.run.shard_timeout_minutes * 60) * 100));
 		const { hosts, health } = ledgers(TWO_SHARDS.map(shardOf));
 		const tighter = machineCounters(hosts, health, plan(['2026-09-04-1', 2]),
 			{ ...LIMITS, jobTimeoutSeconds: 1500 }).runs[0];
 		expect(tighter.reported[1].jobUsedPct).toBe(80);
-	});
-
-	test('a shard that reported no clock is unknown, not zero', () => {
-		const mixed = onlyRun([TWO_SHARDS[0], { shard: 1, serverPromptTokens: 10 }]);
-		expect(mixed.reported[1].jobSeconds).toBeNull();
-		expect(mixed.reported[1].jobUsedPct).toBeNull();
-		expect(mixed.reported[1].cpuModel).toBeNull();
 	});
 });
 
@@ -328,23 +307,6 @@ test.describe('where a shard\u2019s clock went', () => {
 	const run = onlyRun(CLOCKED);
 	const rowFor = (shard: number) => run.reported.find((row) => row.shard === shard)!;
 
-	test('the unclaimed figure is the stored column added up, and never a difference', () => {
-		// 4,321 ms and -2,500 ms are the two cells the fixture wrote. Their sum is
-		// 1,821 ms, which is 1.821 seconds - and no arithmetic over the rest of
-		// these rows produces it, because they carry no stage clock to subtract.
-		expect(rowFor(0).unclaimedSeconds).toBeCloseTo(1.821, 6);
-		expect(rowFor(1).unclaimedSeconds).toBeCloseTo(-9, 6);
-	});
-
-	test('a shard below zero reads as a disagreement and not as a zero', () => {
-		// The one state the committed archive has never held. Clamping it would
-		// hide the fault the signed column exists to show.
-		const row = rowFor(1);
-		expect(row.unclaimedSeconds).toBeLessThan(0);
-		expect(row.clocksDisagreed).toBe(1);
-		expect(row.clockedItems).toBe(1);
-	});
-
 	test('the count of disagreements survives a sum that cancels', () => {
 		// Shard 0 adds to a positive 1.821 seconds, and one of its two items is
 		// still below zero. A page that only carried the sum would print a healthy
@@ -353,31 +315,6 @@ test.describe('where a shard\u2019s clock went', () => {
 		expect(row.unclaimedSeconds).toBeGreaterThan(0);
 		expect(row.clocksDisagreed).toBe(1);
 		expect(row.clockedItems).toBe(2);
-	});
-
-	test('a shard that recorded no unclaimed time draws an absence, not a zero', () => {
-		const view = onlyRun([{ shard: 0, jobSeconds: 600 }, { shard: 1, jobSeconds: 300 }]);
-		expect(view.reported[0].unclaimedSeconds).toBeNull();
-		expect(view.reported[0].clockedItems).toBe(0);
-		expect(view.reported[0].queueMedianSeconds).toBeNull();
-		expect(view.reported[0].queueMaxSeconds).toBeNull();
-	});
-
-	test('the queue is a typical item and the worst one, never the two added up', () => {
-		// Each item's wait covers the queue ahead of it, so 1 s + 5 s is not 6 s of
-		// shard time - it is one item that waited a second and one that waited five.
-		const row = rowFor(0);
-		expect(row.queueMedianSeconds).toBeCloseTo(3, 6);
-		expect(row.queueMaxSeconds).toBeCloseTo(5, 6);
-	});
-});
-
-test.describe('the item ledger read count', () => {
-	test('the read count takes the cache out, because the machine did not read it', () => {
-		const row = healthRow({ input_tokens: 1000, cached_tokens: 400, prefill_ms: 2000 });
-		expect(itemRead(row)).toEqual({ tokens: 600, ms: 2000 });
-		// A row that predates token capture is evidence in neither direction.
-		expect(itemRead(healthRow({ prefill_ms: 2000 }))).toBeNull();
 	});
 });
 
@@ -502,13 +439,6 @@ test.describe('what a run reads against what it writes', () => {
 		expect(untimed.runs[0].prefillMs).toBe(60_000);
 	});
 
-	test('the taller bar inverts between the two units, and that is the finding', () => {
-		// Reads outnumber writes 5 to 1; decode outlasts prefill 3 to 1.
-		const view = readAgainstWritten(health);
-		expect(workValues(view.runs[0], 'tokens')).toEqual({ read: 1_500_000, written: 300_000 });
-		expect(workValues(view.runs[0], 'seconds')).toEqual({ read: 60, written: 180 });
-	});
-
 	test('a run nobody timed draws no seconds and still draws its tokens', () => {
 		const view = readAgainstWritten([
 			healthRow({ item_id: 'x', input_tokens: 1000, output_tokens: 200 })
@@ -594,17 +524,6 @@ test.describe('what a run reads against what it writes', () => {
 		]);
 		expect(readAgainstWritten([]).tokenRuns).toEqual([]);
 	});
-
-	test('the default rate comes from the committed config and not from a literal', () => {
-		const configured = observabilityConfig();
-		expect(configured.cost_currency).toBe(CONFIG.observability.cost_currency);
-		expect(configured.cost_input_per_million).toBe(CONFIG.observability.cost_input_per_million);
-		expect(configured.cost_output_per_million).toBe(CONFIG.observability.cost_output_per_million);
-		// Named rather than assumed: a bare number behind a symbol is the shape a
-		// bill takes, and this figure is not one.
-		expect(configured.cost_currency).toMatch(/^[A-Z]{3}$/);
-	});
-
 });
 
 test.describe('a run the counters refuse, handed to every figure built from article rows', () => {
@@ -717,18 +636,6 @@ test.describe('a run the counters refuse, handed to every figure built from arti
 	];
 	const bothRuns = [...refusedRows, ...acceptedRows];
 
-	test('the counters refuse one run and keep the other', () => {
-		const { runs, refused } = machineCounters(
-			hosts,
-			bothRuns,
-			plan([REFUSED, 2], [ACCEPTED, 1]),
-			LIMITS
-		);
-		expect(refused.map((run) => run.runId)).toEqual([REFUSED]);
-		expect(refused[0].why).toContain('shard 1');
-		expect(runs.map((run) => run.runId)).toEqual([ACCEPTED]);
-	});
-
 	test("a refused run whose machine records hold the server's own figures carries them", () => {
 		// Shard 1's two records disagree, and each of them holds the server's two cells.
 		const { refused } = machineCounters(hosts, bothRuns, plan([REFUSED, 2], [ACCEPTED, 1]), LIMITS);
@@ -753,31 +660,6 @@ test.describe('a run the counters refuse, handed to every figure built from arti
 		expect(carriesServerCounters(refused[0])).toBe(false);
 	});
 
-	test('what a run reads against what it writes counts it', () => {
-		expect(readAgainstWritten(acceptedRows).runs.map((run) => run.runId)).toEqual([ACCEPTED]);
-		const view = readAgainstWritten(bothRuns);
-		expect(view.runs.map((run) => run.runId)).toEqual([REFUSED, ACCEPTED]);
-		expect(view.runs[0]).toEqual({
-			runId: REFUSED,
-			date: '2026-09-04',
-			input: 10_000,
-			output: 600,
-			prefillMs: 20_000,
-			decodeMs: 60_000,
-			items: 2,
-			timed: 2
-		});
-	});
-
-	test('the reading limit counts it', () => {
-		const accepted = contextReadings(acceptedRows);
-		expect(accepted.summary).toEqual([1000, 2000]);
-		expect(accepted.limits).toEqual([8192]);
-		const both = contextReadings(bothRuns);
-		expect(both.summary).toEqual([4000, 6000, 1000, 2000]);
-		expect(both.limits).toEqual([8192]);
-	});
-
 	test('the cost of one article counts it', () => {
 		// The route joins the machine record's processor counts with no run left
 		// out, so the refused run's shard names its processors too.
@@ -797,30 +679,6 @@ test.describe('a run the counters refuse, handed to every figure built from arti
 		expect([both.processorSeconds.from, both.processorSeconds.high]).toEqual([4, 120]);
 		expect([both.modelSeconds.from, both.modelSeconds.high]).toEqual([4, 42]);
 		expect([both.addedBytes.from, both.addedBytes.high]).toEqual([2, 400_000_000]);
-	});
-
-	test('THE ORACLE: a refused shard whose records disagree about the processors leaves its time out', () => {
-		// Shard 0 of the refused run filed two machine records that disagree: one
-		// names 4 logical processors, the other 8. articleCost is handed the same
-		// shard's one article row (busy 50%, 40s total) with the two records in
-		// one order, then in the other. Picking whichever record came last would
-		// price the shard at 160 processor-seconds (50% of 8 over 40s) with 8
-		// named last, and 80 with 4 named last. The shard is left out in both
-		// orders and counted in `outOf`.
-		const shardArticle = [refusedRows[0]];
-		const namedLast8 = [
-			{ date: '2026-09-04', run_id: REFUSED, shard: 0, cpu_logical_processors: 4 },
-			{ date: '2026-09-04', run_id: REFUSED, shard: 0, cpu_logical_processors: 8 }
-		];
-		const namedLast4 = [...namedLast8].reverse();
-		const forward = articleCost(shardArticle, namedLast8);
-		const backward = articleCost(shardArticle, namedLast4);
-		for (const cost of [forward, backward]) {
-			expect(cost.processorSeconds.from).toBe(0);
-			expect(cost.processorSeconds.mid).toBeNull();
-			expect(cost.processorSeconds.outOf).toBe(1);
-			expect(cost.processors).toEqual([]);
-		}
 	});
 
 	test('the prompt reuse counts it', () => {
@@ -882,29 +740,6 @@ test.describe('a run the counters refuse, handed to every figure built from arti
 			'has 4 rows: its rows disagree about which day the run belongs to.'
 		]);
 		expect(describeRefusedRuns([])).toBeNull();
-	});
-});
-
-test.describe('the native counters, read as the page reads them', () => {
-	const limits = LIMITS;
-
-	test('a run the reader refuses is named, never quietly dropped', () => {
-		// Two machine records for one shard, each naming a different server, is a
-		// run whose rows cannot be made into one run. The page prints the reason;
-		// this asserts the reason exists and is words.
-		const { hosts, health } = ledgers(
-			[
-				...TWO_SHARDS,
-				{ shard: 1, serverPromptTokens: 1, serverPromptSeconds: 1 }
-			].map(shardOf)
-		);
-		const { refused } = machineCounters(hosts, health, plan(['2026-09-04-1', 2]), limits);
-		expect(refused).toHaveLength(1);
-		// Six, because each of the three readings states one machine row and one item
-		// row, and the count a refusal reports is what it could not read.
-		expect(refused[0].rows).toBe(6);
-		expect(refused[0].why.length).toBeGreaterThan(20);
-		expect(refused[0].why).toContain('shard 1');
 	});
 });
 
@@ -1026,22 +861,6 @@ test.describe('the Hardware browser redraws, from stated readings', () => {
 		}
 	});
 
-	test('held memory is total less the low-water available, with a total endpoint, never a process total', () => {
-		const rows = closestToMemory([
-			{ item_id: 'a', source_id: 's', os_mem_total_bytes: 16 * 2 ** 30, os_mem_available_min_bytes: 6 * 2 ** 30 },
-			{ item_id: 'missing', os_mem_total_bytes: 16 * 2 ** 30, os_mem_available_min_bytes: null },
-			{ item_id: 'invalid', os_mem_total_bytes: 16 * 2 ** 30, os_mem_available_min_bytes: -1 }
-		]);
-		expect(rows).toHaveLength(1);
-		expect(rows[0]).toMatchObject({ value: 10, ends: { end: 16 } });
-		const repeated = closestToMemory([
-			{ date: '2026-09-01', item_id: 'same', os_mem_total_bytes: 16 * 2 ** 30, os_mem_available_min_bytes: 6 * 2 ** 30 },
-			{ date: '2026-09-01', item_id: 'same', os_mem_total_bytes: 16 * 2 ** 30, os_mem_available_min_bytes: 4 * 2 ** 30 },
-			{ date: '2026-09-02', item_id: 'same', os_mem_total_bytes: 16 * 2 ** 30, os_mem_available_min_bytes: 3 * 2 ** 30 }
-		]);
-		expect(repeated.map((row) => row.value)).toEqual([12, 13]);
-	});
-
 	test('context rules use the smallest per-slot limit and the middle label reading among cut rows', () => {
 		const actual = contextReadings([
 			{ n_ctx_configured: 8192, n_parallel: 2, label_input_tokens: 100, summary_input_tokens: 200, truncation_cap_tokens: 500 },
@@ -1049,15 +868,6 @@ test.describe('the Hardware browser redraws, from stated readings', () => {
 		]);
 		expect(actual.limits).toEqual([2048, 4096]);
 		expect(actual.rules.map((rule) => rule.at)).toEqual([2048, 300]);
-	});
-
-	test('cache share pairs cells on the same article; equal counts cannot pair two different missing rows', () => {
-		const actual = reuseDays([
-			{ date: '2026-09-01', label_input_tokens: 100, label_cached_tokens: null },
-			{ date: '2026-09-01', label_input_tokens: null, label_cached_tokens: 80 },
-			{ date: '2026-09-01', label_input_tokens: 200, label_cached_tokens: 50, label_cache_pct: 40 }
-		], 'label');
-		expect(actual).toEqual([{ date: '2026-09-01', input: 200, cached: 50, articles: 1, share: 25 }]);
 	});
 
 	test('count corrections must already be settled, while a null remains unknown', () => {

@@ -251,7 +251,8 @@ test('a reader can load stories, filter the day and keep the layout usable on a 
 	const archiveProse = page.locator('.story-prose').first();
 	await expect(archiveProse).toBeVisible();
 	expect(await archiveProse.evaluate((node) =>
-		node.getBoundingClientRect().width <= Number.parseFloat(getComputedStyle(node).maxWidth) + 1
+		Math.abs(node.getBoundingClientRect().width -
+			node.closest('.story-row')!.getBoundingClientRect().width) <= 1
 	)).toBe(true);
 	if (chartCase) {
 		await page.setViewportSize({ width: 390, height: 844 });

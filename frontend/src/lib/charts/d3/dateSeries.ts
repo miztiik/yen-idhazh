@@ -73,6 +73,9 @@ export interface DateSeriesOptions {
 	density: number;
 	/** How many ticks the value axis aims for. */
 	valueTicks: number;
+	/** How the value axis writes a tick, where a unit has to print with it.
+	 * Without it a tick uses the shared number style. */
+	valueFormat?: (value: number) => string;
 	number_format: NumberFormatConfig;
 	/** The share of each day's column left empty beside its bar, 0 to 1. */
 	padding: number;
@@ -87,8 +90,8 @@ export interface DateSeriesOptions {
 }
 
 /** Old callers keep their drawing; new chart options require a declared rule. */
-export type LegacyDateSeriesOptions = Omit<DateSeriesOptions, 'rule' | 'rules' | 'domain' | 'reconciliation'> & {
-	rule?: never; rules?: never; domain?: never; reconciliation?: never;
+export type LegacyDateSeriesOptions = Omit<DateSeriesOptions, 'rule' | 'rules' | 'domain' | 'reconciliation' | 'valueFormat'> & {
+	rule?: never; rules?: never; domain?: never; reconciliation?: never; valueFormat?: never;
 };
 
 export interface PlacedPoint {
@@ -282,6 +285,7 @@ export function dateSeries(series: readonly SeriesInput[], opts: DateSeriesOptio
 		const axis = valueAxis([...readings, ...spreads, ...rules.map((named) => named.at)], box, {
 			along: 'y',
 			ticks: opts.valueTicks,
+			format: opts.valueFormat,
 			number_format: opts.number_format
 		});
 		if (opts.domain === undefined) return axis;
@@ -291,6 +295,7 @@ export function dateSeries(series: readonly SeriesInput[], opts: DateSeriesOptio
 			along: 'y',
 			ticks: opts.valueTicks,
 			zero: false,
+			format: opts.valueFormat,
 			number_format: opts.number_format
 		});
 		const scale = (value: number) => box.bottom - (value - low) / (high - low) * box.innerHeight;

@@ -12,7 +12,7 @@ Table A - Scope and execution
 | A1 | Why this plan exists | The model reads every article twice. On 66 captured articles the first call (labels, proposed figures, named mentions) took 3.67 h of 7.04 h of model time and fed a chart planner that published no chart. The local text-analysis service returns the same names and places with exact offsets in seconds. After this plan the model reads each article once and the first call's code is gone. Dropping the call saves its decode (1.78 h, 25%), because the remaining call then reads the article |
 | A2 | Hard scope - in | The digest job starts the service as a sidecar. The work stage calls its existing API over HTTP once per item and times it like fetch and extract. Names and places become entity and place elements, and regex quantity rows the service labels date, time or ordinal are dropped. One model call per item, prompts cleaned, no sentence address in model-facing text. The first call's code, prompt, settings, tests and present-tense docs are deleted. The run's prompt stamp counts `visuals.enabled_kinds`, and the unused `summarize.asks_for_a_visual_plan` setting is removed |
 | A3 | Hard scope - out | Table B |
-| A4 | ESCALATE triggers | 1. Article text sent anywhere but the committed loopback `text_analysis.base_url`. 2. After rows #2 and #3 are live, the first scheduled run shows an out-of-memory kill, a lost shard, or lowest free memory under 1 GiB. 3. A persisted shape beyond those rows #1, #3 and #4 name, or a third model call |
+| A4 | ESCALATE triggers | 1. Article text sent anywhere but the committed loopback `text_analysis.base_url`. 2. After rows #2 and #3 are live, the first scheduled run shows an out-of-memory kill, lowest free memory under 1 GiB, or two lost shards (before the service, 4 of the last 8 runs lost one shard and none lost two, so one lost shard is not a trigger). 3. A persisted shape beyond those rows #1, #3 and #4 name, or a third model call |
 | A5 | Chosen strategy | Use the service as it is: its existing request and response, three fields read per mention, nothing new persisted. Cells and readers before the writer; the swap (row #3) before the deletion (row #4), so a revert stays cheap |
 | A6 | Execution | Autonomous orchestrator per `docs/how-to/execute-a-plan.md`. Parallel N = 4 |
 
@@ -34,7 +34,7 @@ Table C - Status Reckoner
 | ID | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | 1 | Make room for the analysis step | - | A | DONE | probable-chainsaw | own pull request | nested session |
-| C2 | 2 | Start the service in the digest job | - | A | IN-FLIGHT | - | - | - |
+| C2 | 2 | Start the service in the digest job | - | A | DONE | miniature-chainsaw | own pull request | nested session |
 | C3 | 3 | Replace the first call with the service | 1, 2 | B | PENDING | - | - | - |
 | C4 | 4 | Delete what the first call served | 3 | C | PENDING | - | - | - |
 
@@ -66,7 +66,7 @@ Table D - Row #1 decisions
 - **Files touched:** `.github/workflows/digest.yml`, `.github/actions/model-server/action.yml`, `backend/idhazh/contracts/knobs/council.py`, `docs/reference/github-actions.md`
 - **Acceptance gates:** Local: none; a workflow declaration cannot be run, and the project has no workflow linter or workflow-file test. CI: the pull request's own checks.
 - **Oracle:** The next scheduled run's log shows the service ready before the model server and stopped after the work step, and a shard whose service failed to start still completes its work step. It cannot settle memory under real articles (OBS-1).
-- **Observation OBS-1** (after rows #2 and #3 are live; row #3 is `DONE` only after this reading and OBS-2): per shard, read from "What memory this shard used" the lowest free memory and the service's peak memory, and read mean `analyze_ms` from the item-health rows. Baseline before the sidecar: 3.66 GiB lowest free memory on the worst shard of Actions run 43901478491. An out-of-memory kill, a lost shard, or lowest free memory under 1 GiB (an estimate) stops the plan (trigger 2); the choices are the service's `sm` profile (one line in `config/text-analysis/settings.json`) or splitting the work stage.
+- **Observation OBS-1** (after rows #2 and #3 are live; row #3 is `DONE` only after this reading and OBS-2): per shard, read from "What memory this shard used" the lowest free memory and the service's peak memory, and read mean `analyze_ms` from the item-health rows. Baseline before the sidecar: 3.66 GiB lowest free memory on the worst shard of Actions run 43901478491. An out-of-memory kill, lowest free memory under 1 GiB (an estimate), or two lost shards in one run (before the service, 4 of the last 8 runs lost one and none lost two) stops the plan (trigger 2); the choices are the service's `sm` profile (one line in `config/text-analysis/settings.json`) or splitting the work stage.
 - **Decisions:**
 
 Table E - Row #2 decisions

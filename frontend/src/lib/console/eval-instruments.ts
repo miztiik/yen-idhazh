@@ -119,20 +119,18 @@ export type EvalInput = Readonly<Record<string, string | undefined>>;
 export interface RecordedInstrument {
 	/** The ledger column. */
 	id: string;
-	label: string;
 	unit: 'percent' | 'cosine';
-	/** What the number is, and which way is bad, in the reader's words. */
-	note: string;
+	/** What the daily table calls it. Absent where another panel draws the
+	 * instrument in its own words. */
+	label?: string;
+	/** What the number is, and which way is bad, in the reader's words. Printed
+	 * with `label`. */
+	note?: string;
 }
 
-/** The retained recorded instruments, each with its own unit and explanation. */
+/** The retained recorded instruments, each with its own unit. */
 export const RECORDED: readonly RecordedInstrument[] = [
-	{
-		id: 'compression',
-		label: 'How long the summary came out against its article',
-		unit: 'percent',
-		note: 'A length and not a mark. It is here to read the other lines against: a summary that scores badly at a tenth of the article length is a different problem from one that scores badly at half.'
-	},
+	{ id: 'compression', unit: 'percent' },
 	{
 		id: 'coherence',
 		label: 'Summary sentences that follow one another',

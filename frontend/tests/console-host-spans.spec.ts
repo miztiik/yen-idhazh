@@ -39,10 +39,6 @@ test.describe('the actual native host and article readers', () => {
 		expect(run.reported[0].logicalProcessors).toBe(4);
 		expect(run.readTokensPerSecond).toEqual({ value: 10, from: 1, outOf: 4 });
 		expect(run.writeTokensPerSecond).toEqual({ value: 2, from: 1, outOf: 4 });
-		expect(run.clocks.server).toEqual({ tokens: 1000, seconds: 100, parts: 1, rate: 10 });
-		expect(run.clocks.ledger).toEqual({ tokens: 1000, seconds: 200, parts: 1, rate: 5 });
-		expect(run.clocks.gapPct).toBe(50);
-		expect(run.clocks.agrees).toBe(false);
 		const cost = articleCost(textRows(items), processors(hosts));
 		expect(cost.processors).toEqual([4]);
 		expect(cost.processorSeconds).toEqual({ low: 2, mid: 2, high: 2, from: 1, outOf: 1 });

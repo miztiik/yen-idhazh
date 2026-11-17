@@ -94,6 +94,32 @@ test('one click downloads the encoder and answers the question already typed', a
     const wanted = titleOf(expect_canary).replace(/<[^>]*>/g, '').split(' ').slice(0, 4).join(' ');
     expect(top, `${query} -> wanted "${wanted}" in the top three`).toContain(wanted);
     await expect(page.locator('[data-search-block="archive"]')).toHaveCount(0);
+    const story = page.locator('[data-story-list="rows"] article').first();
+    await expect(story.locator('[data-item-summary]').first()).toBeVisible();
+    for (const viewport of [{ width: 1920, height: 1080 }, { width: 390, height: 844 }]) {
+        await page.setViewportSize(viewport);
+        const layout = await story.evaluate((article) => {
+            const body = article.querySelector('.item-body')!.getBoundingClientRect();
+            const prose = article.querySelector('.prose')!.getBoundingClientRect();
+            const footer = article.querySelector('.item-rail')!.getBoundingClientRect();
+            const card = article.getBoundingClientRect();
+            const style = getComputedStyle(article);
+            return {
+                bodyWidth: body.width,
+                proseWidth: prose.width,
+                bodyBottom: body.bottom,
+                footerTop: footer.top,
+                rightInset: card.right - body.right,
+                padding: parseFloat(style.paddingRight) + parseFloat(style.borderRightWidth),
+                pageWidth: document.documentElement.scrollWidth,
+                viewportWidth: document.documentElement.clientWidth
+            };
+        });
+        expect(layout.proseWidth).toBeCloseTo(layout.bodyWidth, 0);
+        expect(layout.rightInset).toBeCloseTo(layout.padding, 0);
+        expect(layout.footerTop).toBeGreaterThanOrEqual(layout.bodyBottom);
+        expect(layout.pageWidth).toBe(layout.viewportWidth);
+    }
 });
 test('a failed download offers a way to try again', async ({ page }) => {
     // One flaky connection must not turn the feature off for the rest of the

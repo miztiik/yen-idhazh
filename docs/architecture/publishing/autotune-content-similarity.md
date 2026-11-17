@@ -1,6 +1,6 @@
 # Autotuning the similarity line that groups one story
 
-**Last Updated**: 2026-11-06
+**Last Updated**: 2026-11-17
 
 A day runs the same story from more than one of our feeds. This page owns the
 line that decides when two items are one story, how that line fits itself once a
@@ -715,10 +715,12 @@ catch. The record is the whole input, so the fit's cost is set by the band and
 the slot width and by nothing that accumulates.
 
 **The shards are CI jobs, not processes on one runner.** The runner is 2 physical
-cores behind 4 logical CPUs, and one `llama-server` on the configured weights
-peaks near the runner's whole memory
-([../../concepts/config/model-file.md](../../concepts/config/model-file.md)).
-A second server on one runner does not fit at all, never mind four. The shards also
+cores behind 4 logical CPUs, and one `llama-server` on the configured weights and
+the shard's python held at most 10.04 to 11.62 GiB at once, 64 to 74 percent of
+the runner's 15.61 GiB, measured 2026-11-16 over the eight digest work shards of
+run 2026-11-16-43901478491
+([../../concepts/config/model-file.md](../../concepts/config/model-file.md) has
+how the server uses memory). The shards also
 commit nothing: one job downloads every shard's verdicts and makes one push, so
 there is no merge driver to trust, no union stacking to census afterwards, and no
 shard that can die having pushed half its rows.

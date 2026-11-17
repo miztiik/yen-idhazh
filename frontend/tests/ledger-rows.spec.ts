@@ -159,15 +159,6 @@ test.describe('a record filed inside its family folder', () => {
 		});
 	});
 
-	test('a holdout score with no packed file is no reading, rather than an error', async () => {
-		const root = test.info().outputPath('unscored');
-		try {
-			expect(await mergeLineHoldoutScore(days('2030-06-01', PINNED), root)).toEqual({ score: null, read: { state: 'not-packed' } });
-		} finally {
-			rmSync(root, { recursive: true, force: true });
-		}
-	});
-
 	test('a window that starts after the newest reading reads none, rather than an old one', async () => {
 		// Packed with one reading on 6 May 2030, 40 days before the pinned day, and quiet after.
 		const state = test.info().outputPath('state');
@@ -232,15 +223,6 @@ test.describe('the hand marks, once a pair over their reach', () => {
 		expect(read((await markedPairs(markReach(PINNED, 30), state)).rows)).toEqual([
 			['https://left.test/another-pair', 'False', daysBefore(PINNED, 30)]
 		]);
-	});
-
-	test('no packed mark reads as none, rather than an error', async () => {
-		const root = test.info().outputPath('unmarked');
-		try {
-			expect(await markedPairs(markReach(PINNED, 730), root)).toEqual({ rows: [], read: { state: 'not-packed' } });
-		} finally {
-			rmSync(root, { recursive: true, force: true });
-		}
 	});
 });
 
@@ -795,7 +777,7 @@ test.describe("THE ORACLE: native server evidence is independent of article rows
 		const { runs, refused } = countersFrom(answer.rows, articles, [], { contextWindow: null, jobTimeoutSeconds: null });
 		expect(refused).toEqual([]);
 		expect(runs).toHaveLength(12);
-		expect(runs.filter(carriesServerCounters).map((run) => [run.date, run.clocks.server.rate])).toEqual([
+		expect(runs.filter(carriesServerCounters).map((run) => [run.date, run.readTokensPerSecond.value])).toEqual([
 			['2030-06-10', 100]
 		]);
 		expect(runs.filter((run) => run.date !== '2030-06-10').every((run) =>

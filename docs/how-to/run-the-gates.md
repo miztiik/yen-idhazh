@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-11-16
+**Last Updated**: 2026-11-17
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -1507,13 +1507,11 @@ ledger door, which validates every row against its contract. The fixture then
 packs the item-health, summary-quality-evals, host-fingerprint and feed-health
 ledgers with their own compaction tasks turned live, because the console reads
 only packed days. The
-score rows are shaped for the compression plot rather than picked at random -
-eight items from 38 to 6100 source words, so the log x axis spans four decades,
-and each of the five configured target zones has at least one mark under it.
-Four rows carry the truncation flag and three of those have a source word count,
-so the plot draws three diamonds; the other two rows have no source count and
-cannot be placed. A chart state the fixture does not reach is a chart state this
-suite cannot test.
+score rows are shaped rather than picked at random - eight items from 38 to 6100
+source words, cut and uncut, across all three confidence bands, and two of them
+record no length before the cut, so the console cannot say whether they were
+cut. A chart state the fixture does not reach is a chart state this suite cannot
+test.
 
 **The preview port derives from the checkout, so two worktrees cannot share one
 server.** `playwright.config.ts` hashes its own directory into a port between

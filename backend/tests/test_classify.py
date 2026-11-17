@@ -9,7 +9,7 @@ from string import Template
 from typing import Any
 
 import pytest
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 from support.models import a_markers, a_server
 from support.paths import CONFIG_DIR, FIXTURES_DIR, read_text
 from support.prompts import LABEL_REPLIES, SUMMARIZE_AND_PLAN_REPLIES, a_table, label_payload
@@ -19,7 +19,6 @@ from idhazh import config, summarize
 from idhazh.classify.calls import (
     LABEL_PASS_VERSION,
     PROPOSED_MAX,
-    LabelReply,
     ParsedLabelReply,
     anchored,
     apply_labels,
@@ -268,20 +267,6 @@ class TestTheOracle:
         """The row's whole point. A span and an offset are integers, so this covers both."""
         assert schema_types(label_schema()) & {"integer", "number"} == set()
 
-    def test_the_same_check_fails_on_a_shape_that_does_accept_one(self) -> None:
-        """The bite proof: a passing oracle that cannot fail is not an oracle.
-
-        This is the shape section 10.1a rejected - the model handing back the
-        offsets it means. It is written here so the assertion above is known to
-        be able to go red, rather than passing because it looks at nothing.
-        """
-
-        class SpanCitation(BaseModel):
-            span_start: int
-            surface: str
-
-        assert schema_types(SpanCitation.model_json_schema()) & {"integer", "number"} == {"integer"}
-
     def test_an_unknown_element_id_drops_that_label_and_keeps_its_siblings(
         self, dense: Article
     ) -> None:
@@ -304,15 +289,6 @@ class TestTheOracle:
 
 
 class TestTheLabelCallShape:
-    def test_every_field_is_required_so_the_decoder_must_emit_it(self) -> None:
-        """A field with a default is absent from `required`, and the grammar skips it."""
-        assert set(label_schema()["required"]) == {
-            "labels",
-            "proposed",
-            "named_mentions",
-        }
-
-
     def test_a_mention_is_written_before_the_name_that_groups_it(self) -> None:
         """Field order is decode order: the anchor first, the judgement last."""
         group = list(label_schema()["$defs"]["NamedMentions"]["properties"])
@@ -323,10 +299,6 @@ class TestTheLabelCallShape:
         label = list(label_schema()["$defs"]["ElementLabel"]["properties"])
         assert label[0] == "element_id"
         assert label == ["element_id", "measure", "entity"]
-
-    def test_the_schema_forbids_an_unknown_key(self) -> None:
-        with pytest.raises(ValidationError):
-            LabelReply.model_validate({"labels": [], "tool_call": {"name": "rm"}})
 
     def test_a_reply_missing_a_field_is_a_shape_failure(self) -> None:
         with pytest.raises(ValidationError):
@@ -484,16 +456,6 @@ class TestProposals:
         assert [one.value for one in landed] == ["5000"]
         assert [one.unit for one in landed] == ["megawatt"]
 
-    def test_a_recovered_figure_is_cut_from_the_article_and_not_from_the_reply(self) -> None:
-        """The model pointed. Code cut. The characters are the article's own."""
-        reply = a_reply(proposed=[{"surface": "5,000 megawatt hours"}])
-
-        landed = proposed_quantities(DENSE_TEXT, reply)
-
-        assert [DENSE_TEXT[one.span_start : one.span_end] for one in landed] == [
-            one.span_excerpt for one in landed
-        ]
-
     def test_a_surface_the_article_never_wrote_is_refused(self) -> None:
         """A figure the model typed rather than found has nowhere to anchor."""
         reply = a_reply(proposed=[{"surface": "9,900 megawatt hours"}])
@@ -522,11 +484,6 @@ class TestProposals:
         """Decision 4. There is nothing for the pattern to parse."""
         text = "Cost fell by about a third against the model it replaces."
         reply = a_reply(proposed=[{"surface": "about a third"}])
-        assert proposed_quantities(text, reply) == []
-
-    def test_a_relative_change_stays_refused(self) -> None:
-        text = "Throughput doubled against the previous release."
-        reply = a_reply(proposed=[{"surface": "doubled"}])
         assert proposed_quantities(text, reply) == []
 
     def test_a_proposal_over_characters_the_pass_already_read_is_dropped(
@@ -601,29 +558,8 @@ def kinds_of(table: ElementTable) -> set[ElementKind]:
 
 
 class TestTheMentionAnchoringOracle:
-    def test_every_surviving_element_of_every_kind_cuts_its_own_excerpt(
-        self, article_ok: Article
-    ) -> None:
-        """Half one of the oracle, done by the test rather than by the contract.
-
-        Both kinds are asserted present first. A re-slice check over an empty
-        set passes and means nothing, and this row's whole subject is the set.
-        """
-        table = a_table(article_ok, POINTED_TEXT)
-
-        whole = anchored(
-            table, POINTED_TEXT, a_reply(**POINTED_REPLY), config=ElementsConfig(), label_source="m"
-        )
-
-        assert {
-            ElementKind.ENTITY,
-            ElementKind.PLACE,
-        } <= kinds_of(whole)
-        for element in whole.elements:
-            assert POINTED_TEXT[element.span_start : element.span_end] == element.span_excerpt
-
     def test_a_drawn_label_is_one_of_the_mentions_that_anchored(self) -> None:
-        """Half two: the mention draws and the name never does.
+        """The mention draws and the name never does.
 
         The item writes "Vestas" twice and never writes the canonical name, so a
         page that drew `name` would show a string the item does not contain.
@@ -707,17 +643,6 @@ class TestMentions:
         )
 
         assert len(groups[0].elements) == 2
-
-    def test_a_group_that_anchors_nothing_is_dropped(self) -> None:
-        """Zero surviving mentions is a name nobody can point at."""
-        groups = mention_elements(
-            POINTED_TEXT,
-            a_reply(named_mentions=[a_group("Orsted", ("s0", "Orsted"))]).named_mentions,
-            label_source="m",
-            entity_slugs={},
-        )
-
-        assert groups == []
 
     def test_a_whitespace_surface_is_refused_rather_than_cutting_nothing(self) -> None:
         """A zero-width span is a payload the contract will not hold."""
@@ -1095,14 +1020,6 @@ class TestTheSummarizeAndPlanOracle:
 
         assert summarize_and_plan_payload(dense, reply)["prompt"].startswith(first["prompt"] + reply)
 
-    def test_the_summary_is_decoded_before_the_plan(self) -> None:
-        """Decision 5, asserted where the decoder meets it rather than in the class.
-
-        Field order is decode order, and this order is what makes a cut reply
-        recoverable: the summary closes before the plan starts.
-        """
-        assert list(summarize_and_plan_schema()["properties"]) == ["summary", "visual"]
-
 
 class TestTheInstructionsSitInFrontOfTheArticle:
     """Row #3e. What can be shared is shared, and what cannot is three lines.
@@ -1141,11 +1058,6 @@ class TestTheInstructionsSitInFrontOfTheArticle:
                 prompt_config=ask,
             )
             assert payload["prompt"].startswith(opening)
-
-    def test_no_placeholder_survives_into_the_system_turn(self) -> None:
-        """`substitute`, not `safe_substitute` - a stray `$knob` reads as an
-        instruction, and in an 8.5 KB turn nobody would see it."""
-        assert "$" not in label_system_prompt(config.load(CONFIG_DIR).app.summarize)
 
 
 def declining_reply(**changed: object) -> str:

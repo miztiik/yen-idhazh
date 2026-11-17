@@ -491,8 +491,8 @@ export interface CutCost {
 
 /** One cut point, and the days it was the cut in force.
  *
- * The same shape the compression plot's cap lines carry, so one label writer
- * serves both drawings.
+ * The same shape as `CapLine`, which `capLabel` writes each cap rule's label
+ * from.
  */
 export interface CapPoint {
 	words: number;
@@ -516,11 +516,10 @@ export interface SourceCuts {
 	cost: CutCost | null;
 	/** Where the cut fell, read off the articles that were cut.
 	 *
-	 * One entry per distinct post-cap length in the window, oldest first - the
-	 * same rule the compression plot reads its own lines by, so the two
-	 * drawings of one fact cannot disagree. A window can span a change to
-	 * `extract.truncation_cap_tokens`, and over the committed ledger a thirty-day
-	 * one does: rows cut at 1,923 words sit beside rows cut at 3,846.
+	 * One entry per distinct post-cap length in the window, oldest first. A
+	 * window can span a change to `extract.truncation_cap_tokens`, and over the
+	 * committed ledger a thirty-day one does: rows cut at 1,923 words sit beside
+	 * rows cut at 3,846.
 	 *
 	 * Derived from the same two cells `cutWords` compares and never from the
 	 * setting behind them. The direction that matters is the other one - a
@@ -646,10 +645,7 @@ export function sourceCuts(
 
 /** One entry per distinct post-cap length among the cut articles, oldest first.
  *
- * Read straight off the articles rather than off the compression plot's points.
- * It is written out here rather than imported because this module imports
- * nothing at runtime, and so that retiring that plot cannot take this rule with
- * it.
+ * Read straight off the articles.
  */
 function capPoints(articles: Article[]): CapPoint[] {
 	const spans = new Map<number, { first: string; last: string }>();
