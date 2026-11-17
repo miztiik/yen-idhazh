@@ -5,7 +5,6 @@ import type { MachineProcessors } from './article-cost';
 import { machineCounters, type MachineLimits } from './counters';
 import { finiteCell, nearestRank, qualifyingWork, referenceWork, typicalSeconds } from '../rates';
 import type { RankedInput } from '../../charts/d3/rankedList';
-import type { SeriesInput } from '../../charts/d3/dateSeries';
 import * as queries from '../queries/machine';
 import type { PanelQuery } from '../queries/window';
 
@@ -136,44 +135,4 @@ export function contextReadings(rows: readonly Row[]) {
 	];
 	return { label: values('label_input_tokens'), summary: values('summary_input_tokens'), rules,
 		limits: [...new Set(slots)], cut: cut.length };
-}
-
-export function labelHeldMedian(rows: readonly Row[]): number | null {
-	return nearestRank(rows.flatMap((row) => {
-		const held = finiteCell(row.label_cached_tokens);
-		return held === null || held < 0 ? [] : [held];
-	}), 0.5);
-}
-
-export function reuseSeries(rows: readonly Row[]): SeriesInput[] {
-	const days = [...new Set(rows.map((row) => String(row.date)))].sort();
-	const median = (date: string, value: (row: Row) => number | null) =>
-		nearestRank(rows.filter((row) => row.date === date).flatMap((row) => {
-			const measured = value(row);
-			return measured === null ? [] : [measured];
-		}), 0.5);
-	return [
-		{ label: 'Label text held', token: '--chart-4', points: days.map((date) =>
-			({ date, value: median(date, (row) => finiteCell(row.label_cached_tokens)) })) },
-		{ label: 'Summary text read fresh', token: '--chart-5', points: days.map((date) =>
-			({ date, value: median(date, (row) => {
-				const input = finiteCell(row.summary_input_tokens), cached = finiteCell(row.summary_cached_tokens);
-				return input === null || cached === null || cached < 0 || input < cached ? null : input - cached;
-			}) })) }
-	];
-}
-
-export function reuseChecks(rows: readonly Row[]) {
-	return ['label', 'summary'].map((call) => {
-		const pairs = rows.flatMap((row) => {
-			const input = finiteCell(row[`${call}_input_tokens`]), cached = finiteCell(row[`${call}_cached_tokens`]);
-			return input === null || cached === null || input <= 0 || cached < 0 || cached > input ? [] : [{ input, cached }];
-		});
-		const input = pairs.reduce((n, pair) => n + pair.input, 0);
-		const server = nearestRank(rows.flatMap((row) => {
-			const value = finiteCell(row[`${call}_cache_pct`]);
-			return value === null || value < 0 || value > 100 ? [] : [value];
-		}), 0.5);
-		return { call, ours: input > 0 ? 100 * pairs.reduce((n, pair) => n + pair.cached, 0) / input : null, server, count: pairs.length };
-	});
 }

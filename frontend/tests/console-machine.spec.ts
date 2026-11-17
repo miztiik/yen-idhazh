@@ -15,7 +15,8 @@
 import { expect, test } from './support/browser';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { closestToMemory, contextReadings, countersFrom, processors, textRows, labelHeldMedian, reuseChecks, shardCounts, slowerMachines } from '../src/lib/console/machine/records';
+import { closestToMemory, contextReadings, countersFrom, processors, textRows, shardCounts, slowerMachines } from '../src/lib/console/machine/records';
+import { reuseDays } from '../src/lib/console/machine/prompt-reuse';
 import { slowestArticles } from '../src/lib/console/pipelines/slowest-articles';
 import { rankedList } from '../src/lib/charts/d3/rankedList';
 import { fleetJobs } from '../src/lib/charts/fleet';
@@ -894,13 +895,12 @@ test.describe('a run the counters refuse, handed to every figure built from arti
 	});
 
 	test('the prompt reuse counts it', () => {
-		const accepted = reuseChecks(acceptedRows).find((one) => one.call === 'summary')!;
-		// Native independent percentages use the upper middle of [80, 90].
-		expect([accepted.count, accepted.server]).toEqual([2, 90]);
-		expect(accepted.ours).toBeCloseTo(100 * 2600 / 3000, 12);
-		const both = reuseChecks(bothRuns).find((one) => one.call === 'summary')!;
-		expect([both.count, both.server]).toEqual([4, 80]);
-		expect(both.ours).toBeCloseTo(100 * 2800 / 13000, 12);
+		const accepted = reuseDays(acceptedRows, 'summary');
+		expect(accepted).toHaveLength(1);
+		expect([accepted[0].input, accepted[0].cached, accepted[0].articles]).toEqual([3000, 2600, 2]);
+		const both = reuseDays(bothRuns, 'summary');
+		expect(both).toHaveLength(1);
+		expect([both[0].input, both[0].cached, both[0].articles]).toEqual([13000, 2800, 4]);
 	});
 
 	test("the box says what leaves the run out and what still counts it, in Reader's words", () => {
@@ -1112,22 +1112,12 @@ test.describe('the Hardware browser redraws, from stated readings', () => {
 	});
 
 	test('cache share pairs cells on the same article; equal counts cannot pair two different missing rows', () => {
-		const actual = reuseChecks([
-			{ label_input_tokens: 100, label_cached_tokens: null },
-			{ label_input_tokens: null, label_cached_tokens: 80 },
-			{ label_input_tokens: 200, label_cached_tokens: 50, label_cache_pct: 40 }
-		]);
-		expect(actual[0]).toMatchObject({ ours: 25, server: 40, count: 1 });
-	});
-
-	test('the held-text lede quotes the middle request, not a median of unequal daily medians', () => {
-		expect(labelHeldMedian([
-			{ date: '2026-09-01', label_cached_tokens: 1000 },
-			...([10, 20, 30].map((label_cached_tokens) => ({ date: '2026-09-02', label_cached_tokens }))),
-			{ date: '2026-09-02', label_cached_tokens: null }
-		])).toBe(30);
-		expect(labelHeldMedian([{ label_cached_tokens: null }])).toBeNull();
-		expect(labelHeldMedian([{ label_cached_tokens: 0 }])).toBe(0);
+		const actual = reuseDays([
+			{ date: '2026-09-01', label_input_tokens: 100, label_cached_tokens: null },
+			{ date: '2026-09-01', label_input_tokens: null, label_cached_tokens: 80 },
+			{ date: '2026-09-01', label_input_tokens: 200, label_cached_tokens: 50, label_cache_pct: 40 }
+		], 'label');
+		expect(actual).toEqual([{ date: '2026-09-01', input: 200, cached: 50, articles: 1, share: 25 }]);
 	});
 
 	test('count corrections must already be settled, while a null remains unknown', () => {

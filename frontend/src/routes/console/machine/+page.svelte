@@ -29,6 +29,7 @@
 	import ArticleCostPanel from '$lib/console/machine/ArticleCostPanel.svelte';
 	import MemoryHeldPanel from '$lib/console/machine/MemoryHeldPanel.svelte';
 	import PlatformMixPanel from '$lib/console/machine/PlatformMixPanel.svelte';
+	import PromptReusePanel from '$lib/console/machine/PromptReusePanel.svelte';
 	import SlowerOnSameWork from '$lib/console/machine/SlowerOnSameWork.svelte';
 	import ReadWritePanel from '$lib/console/machine/ReadWritePanel.svelte';
 
@@ -222,7 +223,7 @@
 		'slower-on-same-work': 'Whether a run is getting slower on the same work',
 		'closest-to-memory': 'Which articles left the machine least memory', 'memory-held': "What is holding the machine's memory",
 		'context-headroom': 'How much of the reading limit an article takes', 'article-cost': 'What one article costs the machine',
-		'prompt-reuse': 'How much text the model reads again', 'read-against-written': 'What a run reads against what it writes'
+		'prompt-reuse': 'How much of each prompt was already cached', 'read-against-written': 'What a run reads against what it writes'
 	};
 </script>
 
@@ -273,6 +274,9 @@
 						<ReadWritePanel rows={rows('readAgainstWrittenQuery')} chart={cfg.chart} shell={data}
 							initialMetric={readWriteMetricDefault(knobs.read_write_default_metric)}
 							history={tokenHistory} historyRange={tokenHistoryRange} {deviationRules}
+							{start} {end} {windowDays} />
+					{:else if id === 'prompt-reuse'}
+						<PromptReusePanel rows={rows('promptReuseQuery')} title={titles[id]} chart={cfg.chart} shell={data}
 							{start} {end} {windowDays} />
 					{:else if id === 'slower-on-same-work'}
 						<Panel {id} title={titles[id]} heading="h3">

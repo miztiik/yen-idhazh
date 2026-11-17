@@ -1,6 +1,6 @@
 # The mark shapes a panel may reach for
 
-**Last Updated**: 2026-11-12
+**Last Updated**: 2026-11-17
 
 Ten chart types, the house style they draw with, five named mark shapes and
 three panel-level controls. **A panel is built from one chart type, and a mark
@@ -622,7 +622,8 @@ strongest form of it is mechanical and is the one to prefer: pass the identical
 `console-chrome.spec.ts` compares native lines and stacks against the same dates,
 values and readout. This is a shared shape contract, not a claim that current
 FailureMix or Hardware prompt reuse offers a shape switch. FailureMix draws one
-stack of failed-row counts; native prompt reuse draws its dated call readings.
+stack of failed-row counts; native prompt reuse draws one stacked bar a day per
+call, the cached share of its prompt tokens.
 
 One control per panel, never one per series and never a preference that follows
 the reader across the site. A Sankey is not a line and a histogram is not a

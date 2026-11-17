@@ -239,11 +239,7 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
             "n_parallel",
             "truncation_cap_tokens",
             "cpu_busy_pct",
-            "label_cache_pct",
-            "label_prefill_tokens_per_s",
             "summary_cached_tokens",
-            "summary_cache_pct",
-            "summary_prefill_tokens_per_s",
         ),
         "frontend/src/lib/console/queries/voices.ts": (
             "url_key",
@@ -326,6 +322,10 @@ UNREAD_CELLS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
         ),
         "how a call ended, and how much of its prompt the server already held": (
             "recovered",
+            "label_cache_pct",
+            "label_prefill_tokens_per_s",
+            "summary_cache_pct",
+            "summary_prefill_tokens_per_s",
         ),
         "how shard size and processor load explain a slow item": (
             "shard_item_count",
