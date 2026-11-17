@@ -38,7 +38,7 @@ Table C - Status Reckoner
 | C2 | 2 | Start the service in the digest job | - | A | DONE | miniature-chainsaw | own pull request | nested session |
 | C3 | 3 | Replace the first call with the service | 1, 2 | B | PENDING | - | - | - |
 | C4 | 4 | Delete what the first call served | 3, 5 | C | PENDING | - | - | - |
-| C5 | 5 | Start the service in every workflow that runs the work stage | - | B | PENDING | - | - | - |
+| C5 | 5 | Start the service in every workflow that runs the work stage | - | B | DONE | cautious-couscous | own pull request | nested session |
 
 ## 2. Row #1 - Make room for the analysis step
 

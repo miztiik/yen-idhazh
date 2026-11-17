@@ -1,6 +1,6 @@
 # Retained article verification
 
-**Last Updated**: 2026-11-12
+**Last Updated**: 2026-11-17
 
 Which inputs and native artifacts establish a fixed-input production-call
 observation without publishing or fetching an article again.
@@ -34,8 +34,11 @@ gh run view <verification-run> --json headSha,jobs,status,conclusion
 ```
 
 This workflow's existing model-server action starts and checks the committed
-runtime and weights. The replay job takes its timeout from the existing
-`budget_minutes` setting, not a separate verification budget.
+runtime and weights. The shared text-analysis-service action starts the local
+text-analysis service before it, as production does, and stops it after the
+replay; a service that will not start does not fail the job. The replay job
+takes its timeout from the existing `budget_minutes` setting, not a separate
+verification budget.
 
 ## Source validation
 
@@ -76,6 +79,7 @@ retention window. All replay files stay below the private directory
 - `outputs/<item-id>/assets/`: compiled numeric chart data at the native
   relative asset path. This directory is not a publication tree.
 - `llama-server.log`: the owned runtime's log.
+- `text-analysis.log`: the text-analysis service's log, events without article text.
 
 The adapter supplies a configured `ItemRecorder` and explicit capture/render
 roots to the real `two_calls_one_item()`. Configured prompt and reply capture
