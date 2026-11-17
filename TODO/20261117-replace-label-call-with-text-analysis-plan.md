@@ -16,7 +16,7 @@ Table A - Scope and execution
 | A5 | Chosen strategy | Use the service as it is: its existing request and response, three fields read per mention, nothing new persisted. Cells and readers before the writer; the swap (row #3) before the deletion (row #4), so a revert stays cheap |
 | A6 | Execution | Autonomous orchestrator per `docs/how-to/execute-a-plan.md`. Parallel N = 4 |
 
-Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
+Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0.
 
 Table B - Out of scope and its cost
 
@@ -33,8 +33,8 @@ Table C - Status Reckoner
 
 | ID | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| C1 | 1 | Make room for the analysis step | - | A | PENDING | - | - | - |
-| C2 | 2 | Start the service in the digest job | - | A | PENDING | - | - | - |
+| C1 | 1 | Make room for the analysis step | - | A | IN-FLIGHT | - | - | - |
+| C2 | 2 | Start the service in the digest job | - | A | IN-FLIGHT | - | - | - |
 | C3 | 3 | Replace the first call with the service | 1, 2 | B | PENDING | - | - | - |
 | C4 | 4 | Delete what the first call served | 3 | C | PENDING | - | - | - |
 
@@ -66,7 +66,7 @@ Table D - Row #1 decisions
 - **Files touched:** `.github/workflows/digest.yml`, `.github/actions/model-server/action.yml`, `backend/idhazh/contracts/knobs/council.py`, `docs/reference/github-actions.md`
 - **Acceptance gates:** Local: none; a workflow declaration cannot be run, and the project has no workflow linter or workflow-file test. CI: the pull request's own checks.
 - **Oracle:** The next scheduled run's log shows the service ready before the model server and stopped after the work step, and a shard whose service failed to start still completes its work step. It cannot settle memory under real articles (OBS-1).
-- **Observation OBS-1** (after rows #2 and #3 are live; this row is `DONE` only after the reading): per shard, read from "What memory this shard used" the lowest free memory and the service's peak memory, and read mean `analyze_ms` from the item-health rows. Baseline before the sidecar: 3.66 GiB lowest free memory on the worst shard of Actions run 43901478491. An out-of-memory kill, a lost shard, or lowest free memory under 1 GiB (an estimate) stops the plan (trigger 2); the choices are the service's `sm` profile (one line in `config/text-analysis/settings.json`) or splitting the work stage.
+- **Observation OBS-1** (after rows #2 and #3 are live; row #3 is `DONE` only after this reading and OBS-2): per shard, read from "What memory this shard used" the lowest free memory and the service's peak memory, and read mean `analyze_ms` from the item-health rows. Baseline before the sidecar: 3.66 GiB lowest free memory on the worst shard of Actions run 43901478491. An out-of-memory kill, a lost shard, or lowest free memory under 1 GiB (an estimate) stops the plan (trigger 2); the choices are the service's `sm` profile (one line in `config/text-analysis/settings.json`) or splitting the work stage.
 - **Decisions:**
 
 Table E - Row #2 decisions
@@ -90,7 +90,7 @@ Table E - Row #2 decisions
   - Docs: `docs/architecture/summarize/prompt.md`, `docs/architecture/summarize/model-boundary.md`, `docs/architecture/extraction/elements.md`, `docs/architecture/sources/trust-boundary.md`, `docs/reference/retained-article-verification.md`
 - **Acceptance gates:** Local: the shared selector over the named backend tests; ruff and mypy over `backend/`. Tests drive a loopback server the test owns and a fake model server; nothing reaches a real service. CI: the complete suite.
 - **Oracle:** One item against the stand-ins: exactly one model request, its prompt holds no `[s` sentence address and none of the first call's text; mentions become elements whose excerpts are re-sliced from `Article.text`; quantity rows the service labels date, time or ordinal are gone; a closed port, a hung socket and a malformed reply each publish the item with the regex-only table and a warning; `analyze_ms` is in the item's named time and not in `queue_wait_ms`; the item-health row carries only the `summary` slot; the prompt stamp moves when `visuals.enabled_kinds` moves. It cannot settle whether summaries read as well without the first call's reply (OBS-2).
-- **Observation OBS-2** (the first two scheduled runs after this row; this row is `DONE` only after the reading): read the summary-evaluation columns of `docs/concepts/summary-metrics.md` beside the prior seven days. Revert this row when they fall outside that range; no tolerance is named because day-to-day noise can exceed a small effect.
+- **Observation OBS-2** (the first two scheduled runs after this row; this row is `DONE` only after this reading and OBS-1): read the summary-evaluation columns of `docs/concepts/summary-metrics.md` beside the prior seven days. Revert this row when they fall outside that range; no tolerance is named because day-to-day noise can exceed a small effect.
 - **Decisions:**
 
 Table F - Row #3 decisions
