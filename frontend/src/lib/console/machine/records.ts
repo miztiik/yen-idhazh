@@ -9,7 +9,6 @@ import * as queries from '../queries/machine';
 import type { PanelQuery } from '../queries/window';
 
 export const PANEL_QUERIES: Readonly<Record<string, readonly PanelQuery[]>> = {
-	'two-clocks': [queries.twoClocksQuery, queries.twoClocksHostsQuery, queries.platformMixQuery, queries.runShardsQuery],
 	'slower-machines': [queries.slowerMachinesQuery],
 	'platform-mix': [queries.platformMixQuery],
 	'slower-on-same-work': [queries.slowerOnSameWorkQuery],

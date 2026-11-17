@@ -303,8 +303,6 @@ test('item-only timing panels share the newest article day despite lagging hardw
 	expect(rankedList(view.rows, { max: 1 })?.rows.map((row) => row.label)).toEqual(['long - source']);
 	expect(view.rows.every((row) => row.segments === undefined)).toBe(true);
 	for (const id of ['machine-cards', 'processor-lost', 'disk-reads', 'slowest-articles']) expect(PANEL_QUERIES).not.toHaveProperty(id);
-	expect(PANEL_QUERIES['two-clocks'].map((query) => query.name))
-		.toEqual(['twoClocksQuery', 'twoClocksHostsQuery', 'platformMixQuery', 'runShardsQuery']);
 	expect(PANEL_QUERIES['article-cost'].map((query) => query.name)).toEqual(['articleCostQuery', 'articleCostHostsQuery']);
 });
 

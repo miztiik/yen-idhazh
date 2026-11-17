@@ -1,7 +1,6 @@
 /** Deterministic machine data rules over bounded fixtures; no browser, build, or layout matrix. */
 import { expect, test } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
-import { clockAgreement } from '../src/lib/charts/machine';
 import { contextReadings } from '../src/lib/console/machine/records';
 import { CLOCKS_AGREE_WITHIN_PCT, machineCounters, type MachineLimits, type MachineRun } from '../src/lib/console/machine/counters';
 import type { Row } from '../src/lib/data/ledger';
@@ -164,20 +163,15 @@ test.describe('THE ORACLE: one item cost, taken away', () => {
         const counters = machineCounters(machines, health, plan([RUN, 1]), LIMITS);
         expect(counters.refused, 'the reader refused the run').toEqual([]);
         const run = only(counters.runs, RUN);
-        return { run, view: clockAgreement(run, health, CLOCKS_AGREE_WITHIN_PCT) };
+        return { run };
     }
     test('the two ledgers agree, and disagree once one row cost goes missing', () => {
         const before = verdict(hosts, whole);
         expect(before.run.clocks.agrees).toBe(true);
         expect(before.run.clocks.gapPct, '1,000 tokens in 99 seconds against 1,000 in 100').toBeCloseTo(1.0101, 3);
-        expect(before.view.grain).toBe('shard');
-        expect(before.view.disagreeing).toBe(0);
-        expect(before.view.pairs.every((pair) => pair.agrees === true)).toBe(true);
         const after = verdict(hosts, blanked);
         expect(after.run.clocks.agrees).toBe(false);
         expect(after.run.clocks.gapPct, '600 tokens in 89 seconds against 1,000 in 100').toBeCloseTo(32.584, 2);
-        expect(after.view.disagreeing).toBeGreaterThan(0);
-        expect(after.view.pairs.some((pair) => pair.agrees === false)).toBe(true);
         expect(verdict(hosts, whole).run.clocks.agrees).toBe(true);
     });
     test('the server counters are what turn it, and not the item rows alone', () => {

@@ -4,13 +4,12 @@ import type { RouteExpect } from './index';
 export const EXPECT: RouteExpect | null = {
 	scope: 'route',
 	doorPanels: {
-		'two-clocks': '',
 		'slower-machines': '', 'platform-mix': '', 'slower-on-same-work': '',
 		'closest-to-memory': '', 'memory-held': '', 'context-headroom': '', 'article-cost': '',
 		'prompt-reuse': '', 'read-against-written': ''
 	},
 	reservedPanels: [
-		'two-clocks', 'slower-machines',
+		'slower-machines',
 		'platform-mix', 'slower-on-same-work', 'closest-to-memory', 'memory-held',
 		'context-headroom', 'article-cost', 'prompt-reuse', 'read-against-written'
 	],

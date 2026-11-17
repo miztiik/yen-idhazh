@@ -25,11 +25,8 @@ import { machineRamp } from '../src/lib/charts/machine-colour';
 import { shardPhases } from '../src/lib/console/machine/shard-phases';
 import { machinePhases } from '../src/lib/console/machine/machine-phases';
 import {
-	clockAgreement,
-	clocksChart,
 	itemRead,
 	percentileHistory,
-	pooledReadRate,
 	quantile,
 	readAgainstWritten,
 	workSeries,
@@ -375,80 +372,12 @@ test.describe('where a shard\u2019s clock went', () => {
 	});
 });
 
-test.describe('do the two clocks agree', () => {
-	/** Four items a shard, whose summed tokens and milliseconds put the ledger's
-	 * rate exactly on the server's 40 and 10 tokens a second. */
-	function items(shard: number, tokens: number, prefillMs: number) {
-		return Array.from({ length: 4 }, (_, index) =>
-			healthRow({
-				item_id: `s${shard}-${index}`,
-				machine_shard: shard,
-				input_tokens: tokens + 50,
-				cached_tokens: 50,
-				prefill_ms: prefillMs
-			})
-		);
-	}
-
-	test('per shard where the ledger names one, and the gap is a percentage', () => {
-		// Shard 0: 4 x 2,000 read tokens over 4 x 50,000 ms is 8,000 over 200 s -
-		// 40 a second, the server's own figure. Shard 1: 4 x 500 over the same time
-		// is 2,000 over 200 s, or 10, likewise.
-		const health = [...items(0, 2000, 50_000), ...items(1, 500, 50_000)];
-		const view = clockAgreement(onlyRun(TWO_SHARDS), health, 5);
-		expect(view.grain).toBe('shard');
-		expect(view.pairs.map((pair) => pair.label)).toEqual(['shard 0', 'shard 1']);
-		expect(view.pairs[0].ledger).toBeCloseTo(40, 6);
-		expect(view.pairs[0].server).toBeCloseTo(40, 6);
-		expect(view.pairs[1].ledger).toBeCloseTo(10, 6);
-		expect(view.pairs[1].server).toBeCloseTo(10, 6);
-		expect(view.pairs[0].gapPct).toBeCloseTo(0, 6);
-		expect(view.pairs.every((pair) => pair.agrees)).toBe(true);
-		expect(view.disagreeing).toBe(0);
-	});
-
-	test('a disagreement is reported as one, not rounded away', () => {
-		// Half the tokens in the same time is half the rate, which is 50 percent
-		// below the server and ten times the tolerance. Only shard 0 is moved, so
-		// the count of disagreeing shards is a count and not a total.
-		const health = [...items(0, 1000, 50_000), ...items(1, 500, 50_000)];
-		const view = clockAgreement(onlyRun(TWO_SHARDS), health, 5);
-		expect(view.pairs[0].gapPct).toBeCloseTo(50, 6);
-		expect(view.pairs[0].agrees).toBe(false);
-		expect(view.pairs[1].agrees).toBe(true);
-		expect(view.disagreeing).toBe(1);
-	});
-
-	test('native ranked gaps keep the independent readings, rule and unknown state', () => {
-		const view = clockAgreement(onlyRun(TWO_SHARDS),
-			[...items(0, 1000, 50_000), ...items(1, 500, 50_000)], 5);
-		const geometry = clocksChart(view.pairs, 5, numberFormat);
-		expect(geometry?.rows.map((row) => row.value)).toEqual([50, 0]);
-		expect(geometry?.rules.map((rule) => [rule.at, rule.label])).toEqual([[5, 'Allowed disagreement']]);
-		expect(geometry?.rows[0].row).toMatchObject({
-			status: 'disagrees', context: 'item ledger 20; server 40 tokens a second'
-		});
-		expect(clocksChart([{ label: 'shard 0', ledger: null, server: 40, gapPct: null, agrees: null }], 5, numberFormat)).toBeNull();
-	});
-
-	test('a ledger with no shard falls back to the run and says which grain it used', () => {
-		const health = Array.from({ length: 4 }, (_, index) =>
-			healthRow({ item_id: `i${index}`, input_tokens: 1050, cached_tokens: 50, prefill_ms: 50_000 })
-		);
-		const view = clockAgreement(onlyRun(TWO_SHARDS), health, 5);
-		expect(view.grain).toBe('run');
-		expect(view.pairs).toHaveLength(1);
-		expect(view.shardRows).toBe(0);
-		expect(view.itemRows).toBe(4);
-	});
-
+test.describe('the item ledger read count', () => {
 	test('the read count takes the cache out, because the machine did not read it', () => {
 		const row = healthRow({ input_tokens: 1000, cached_tokens: 400, prefill_ms: 2000 });
 		expect(itemRead(row)).toEqual({ tokens: 600, ms: 2000 });
-		expect(pooledReadRate([row, row])).toBeCloseTo(1200 / 4, 6);
 		// A row that predates token capture is evidence in neither direction.
 		expect(itemRead(healthRow({ prefill_ms: 2000 }))).toBeNull();
-		expect(pooledReadRate([healthRow({})])).toBeNull();
 	});
 });
 

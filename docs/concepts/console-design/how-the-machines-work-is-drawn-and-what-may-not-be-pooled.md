@@ -1,6 +1,6 @@
 # How the machine's work is drawn, and what may not be pooled
 
-**Last Updated**: 2026-11-14
+**Last Updated**: 2026-11-17
 
 The Hardware route and the run timeline draw one machine's work. One measurement
 shapes all of it: **a run does not get one machine.** Measured 2026-09-17 over
@@ -271,10 +271,14 @@ even when unmeasured. Run total and actual Median per article are radios over
 one in-memory answer. No anomaly threshold, baseline or failure-colour verdict
 is implied by either trace.
 
-**The two independent clocks open Hardware.** The item ledger and the server
-measurement can disagree. A ranked percentage gap, with its allowed-gap rule,
-decides whether a quoted speed can be trusted before any speed drawing follows.
-The count needed to refuse an impossible shard index comes only from the
+**Hardware has no opening verdict.** The Clock agreement panel compared the
+item ledger's read rate with the model server's own counters against a 5 percent
+allowance. Nothing else on the route read its answer: a run is refused by
+identity and count rules (`mergeHost`, `machineCounters`), never by that gap.
+The two readings are still recorded, and
+`backend/utilities/reconcile_prefill.py --run <id>` still compares them by hand;
+a frozen-fixture test guards its arithmetic, and nothing watches the live
+ledger. The count needed to refuse an impossible shard index comes only from the
 recorded manifest count, through the narrow `run-shards` ledger. Unknown remains
 unknown; neither observed machines nor configuration supplies that denominator.
 

@@ -2,8 +2,8 @@
 
 **Last Updated**: 2026-11-17
 
-`/console/machine/` asks what machine the work actually got, whether its two
-clocks agree, and how much resource headroom that work left.
+`/console/machine/` asks what machine the work actually got and how much
+resource headroom that work left.
 [The shared shell](what-sits-above-every-console-route.md) owns navigation,
 the route title/window and on-demand UTC date metadata;
 [console-charts.md](console-charts.md) owns chart frames and readouts.
@@ -16,7 +16,7 @@ The prerendered page carries configuration and words only. Its route load return
 `machineConfig`; the shared layout supplies navigation, the route title/window
 and the closed `Data dates (UTC)` disclosure. That metadata keeps native record
 reach and the last console update distinct. The shared payload retains
-settings-change metadata for the dated panel rules. With scripts off, all ten
+settings-change metadata for the dated panel rules. With scripts off, all nine
 titled panels remain, each with an empty
 reserved axis frame. No run, host, article, cost or refusal is embedded in HTML
 or route page data.
@@ -98,14 +98,13 @@ again records its newer plan's count, and settlement keeps the newer numeric
 count. A manifest written before 2026-10-12 keeps the count assembly recomputed
 from its plan. This is the maintainer's ruling of 2026-10-12.
 
-## Four groups, ten comparisons
+## Four groups, nine comparisons
 
 Membership and order live in `config/console/machine.json`.
 
 | Group | Panel id | Drawing and grain |
 | --- | --- | --- |
-| What the machine was doing | `two-clocks` | One ranked gap percentage per shard of the newest recorded run, with the allowed-disagreement rule; the item and independent server readings are printed together |
-| | `slower-machines` | Separate Reading and Writing rankings of comparable work by machine kind |
+| What the machine was doing | `slower-machines` | Separate Reading and Writing rankings of comparable work by machine kind |
 | | `platform-mix` | Recorded jobs grouped across vendors by exact reported L3 capacity: one square a job below the configured floor, otherwise stacked day bars; never unique physical-machine counts or a probability of the next draw |
 | Where the time went | `slower-on-same-work` | One dated seconds reading for a fixed typical article on one reference machine |
 | How close we are to the limits | `closest-to-memory` | Dated articles ranked by memory held; the empty remainder ends at total machine memory |
@@ -115,8 +114,7 @@ Membership and order live in `config/console/machine.json`.
 | | `prompt-reuse` | Summary call and label call, each one stacked bar a UTC day from 0 to 100 percent: the day's cached share of the call's prompt tokens at the bottom in the call's own colour, the remainder above it in the same colour tinted |
 | | `read-against-written` | Two run-sequence token lines; Run total or actual Median per article over one paired cohort, with measured/recorded coverage |
 
-The two clocks open the route because a disagreement decides whether the rates
-below may be quoted. Every settled panel has one largest lede, one comparison,
+Every settled panel has one largest lede, one comparison,
 one model-rule declaration and a plot on the panel's own ground.
 
 ### What may not be pooled
@@ -320,7 +318,7 @@ the Pipelines tab. Machine hover projects the UTC day, qualified machine name
 and exact count out of that day's recorded jobs. Selecting the day exposes all
 machine counts, including known zeros, speed context and actual job identities.
 Its two context distributions must contain readings and fit
-their cells; the clock-rule names and whole document must fit at desktop and
+their cells; the whole document must fit at desktop and
 390 pixels. Independent cases check failed-host-only retry, unpublished
 indexes, and the actual scriptless prerendered document. Pure native oracles in
 `console-machine.spec.ts` retain count refusal, unknowns, identity, signed

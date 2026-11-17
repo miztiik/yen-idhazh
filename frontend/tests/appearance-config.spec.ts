@@ -39,7 +39,7 @@ test.describe('route-owned console configuration', () => {
 		const routes = routeConsoles();
 		expect(Object.keys(routes).sort()).toEqual(BAND_UNREAD.routes.map(({ id }) => id).sort());
 		expect(routes.machine.judged).toEqual([
-			'two-clocks', 'slower-machines', 'platform-mix',
+			'slower-machines', 'platform-mix',
 			'slower-on-same-work', 'closest-to-memory', 'memory-held', 'context-headroom',
 			'article-cost', 'prompt-reuse', 'read-against-written'
 		]);

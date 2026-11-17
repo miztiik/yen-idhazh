@@ -27,8 +27,6 @@ export interface RouteExpect {
 		readonly minimumEmptyLength: number;
 		readonly newestRunExemption: string;
 		readonly newestRunWords: string;
-		readonly twoClocksSubtitle: string;
-		readonly twoClocksWords: string;
 	} | null;
 }
 

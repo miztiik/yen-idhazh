@@ -117,8 +117,8 @@ which shape a panel reaches for is
   whose title asks one question and whose shape answers the other is the
   commonest defect on this console: of the eight panels that failed review on
   2026-09-17, five failed on this rule and only three on their drawing. **What a
-  scattered verdict costs the operator:** he reads ten Hardware panels and only
-  then reaches the panel that tells him whether the instruments agree.
+  scattered verdict costs the operator:** he reads every panel on a route and
+  only then reaches the one that tells him whether to trust the readings.
 
 Which surface answers which of the two questions is
 [../../architecture/publishing/console.md](../../architecture/publishing/console.md);

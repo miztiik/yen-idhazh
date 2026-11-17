@@ -7,18 +7,6 @@ export const runShardsQuery = {
 	span: 'widest'
 } as const satisfies PanelQuery;
 
-export const twoClocksQuery = {
-	name: 'twoClocksQuery', ledger: 'item-health',
-	columns: ['date', 'run_id', 'machine_job', 'machine_shard', 'prefill_ms', 'input_tokens', 'cached_tokens'],
-	span: 'newest-day'
-} as const satisfies PanelQuery;
-
-export const twoClocksHostsQuery = {
-	name: 'twoClocksHostsQuery', ledger: 'host-fingerprint',
-	columns: ['date', 'run_id', 'job', 'shard', 'server_prompt_tokens', 'server_prompt_seconds'],
-	span: 'newest-day'
-} as const satisfies PanelQuery;
-
 export const slowerMachinesQuery = {
 	name: 'slowerMachinesQuery', ledger: 'item-health',
 	columns: ['date', 'run_id', 'machine_job', 'machine_pipeline_name', 'machine_task_name', 'machine_shard',
