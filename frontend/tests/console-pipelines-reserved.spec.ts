@@ -426,7 +426,7 @@ test('MISSING: a ledger that was never published is not drawn as a quiet zero', 
 	await expect(surface).toHaveAttribute('data-route-state', 'missing');
 
 	const standing = page.locator('[data-console-standing]');
-	await expect(standing).toContainText('a record this site has not published yet');
+	await expect(standing).toContainText(/of the record (?:is|are) not published yet\./);
 	await expect(page.locator('[data-reserved="failure-mix"]')).toContainText('Not published yet.');
 	await expect(page.locator('[data-reserved="failure-mix"] svg text')).toHaveCount(0);
 	// No alarm and no retry: nothing went wrong and there is nothing to fetch.

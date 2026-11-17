@@ -33,6 +33,7 @@ from idhazh.classify.calls import summarize_and_plan_schema
 from idhazh.contracts.article import UNTRUSTED_LINE_MAX, Article, ArticleStatus
 from idhazh.contracts.base import (
     canonical_json,
+    derive_output_digest,
     normalize_prose,
 )
 from idhazh.contracts.call_cost import CallKind
@@ -1550,6 +1551,34 @@ def test_a_call_that_never_returned_is_the_one_failure_that_really_was_free() ->
         assert result.call_1 is None
         assert result.input_tokens == 0
         assert result.prefill_ms == 0
+
+
+def test_a_reply_claiming_more_cache_than_prompt_is_refused() -> None:
+    """The console divides by the difference, so a negative remainder cannot land.
+
+    The words go in already normalised: `Summary` rebuilds the digest from the
+    normalised text before it reads the cache, so a trailing space is refused
+    for the digest and the cache rule is never reached.
+    """
+    words = normalize_prose("word " * 60)
+
+    def claiming(cached: int) -> Summary:
+        return Summary(
+            version=Summary.schema_version(),
+            item_id="ai-01",
+            url_key="9" * 64,
+            summary=words,
+            output_digest=derive_output_digest(words),
+            model_id="m",
+            input_tokens=100,
+            cached_tokens=cached,
+            generated_at=GENERATED_AT,
+            status=SummaryStatus.OK,
+        )
+
+    assert claiming(100).cached_tokens == 100, "a prompt read wholly from the cache is legal"
+    with pytest.raises(ValidationError, match="cached_tokens cannot exceed input_tokens"):
+        claiming(101)
 
 
 # --- What the pipeline agrees to believe ------------------------------------

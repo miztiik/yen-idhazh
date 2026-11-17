@@ -1,6 +1,6 @@
 # How a console chart gets its data
 
-**Last Updated**: 2026-11-14
+**Last Updated**: 2026-11-17
 
 Seven rules about where a panel's bytes come from, and what a panel may never do to
 get them. **They are settled by what the formats do, not by a benchmark**, and none
@@ -127,8 +127,13 @@ Ledger panels name their settled nothing inside the reserved frame:
 `Nothing recorded.`, `Not published yet.`, or `Did not arrive.` Waiting has no
 answer, number or fabricated bar. Only a failed read takes warning colour.
 The route has one reserved standing and one delayed shimmer; retry asks only
-for the failed record, not already usable siblings. Existing month-based
-callers retain their settled-state treatment; waiting uses the shared frame.
+for the failed record, not already usable siblings. Its failure and absence
+lines count parts of the record and never panels, because a route's answers are
+not all panels: Hardware's run count belongs to none, and a Pipelines panel can
+ask twice. `3 parts of the record did not arrive.` is true on every route; a
+count of panels would name blank panels that may not exist.
+Existing month-based callers retain their settled-state treatment; waiting uses
+the shared frame.
 
 The standing immediately says `Loading chart data. Previously loaded windows
 are reused.` Each reserved chart also says `Loading chart data...`; a pending
