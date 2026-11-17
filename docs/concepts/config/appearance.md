@@ -74,7 +74,7 @@ The rule the two shapes of mirror follow:
 
 ### Why a frame width is a knob, when a 2026-08-28 ruling said it should not be
 
-The objection was that a config able to set the frame to 300px would need a code change to still look right. That is true of an unvalidated number and false of a validated one. **`frame.reading_max_px` cannot be set below 960 or above 1600; `measure_ch` cannot leave 52 to 80; `breakpoints_px` must be exactly three ascending, distinct widths; and a numeric `console_max_px` may not be narrower than `reading_max_px`.** A validator refuses a document that breaks any of them, so no reachable value breaks the design. The contract is the answer to the objection rather than a refusal of the knob, and `backend/tests/test_appearance_config.py` asserts every bound in both directions.
+The objection was that a config able to set the frame to 300px would need a code change to still look right. That is true of an unvalidated number and false of a validated one. **`frame.reading_max_px` cannot be set below 960 or above 1600; `measure_ch` cannot leave 52 to 80; `breakpoints_px` must be exactly three ascending, distinct widths; and a numeric `console_max_px` may not be narrower than `reading_max_px`.** A validator refuses a document that breaks any of them, so no reachable value breaks the design. The contract is the answer to the objection rather than a refusal of the knob, and `backend/tests/test_appearance_config.py` asserts that each of the four is refused.
 
 One cross-block rule keeps the initial coordinate frame within the shared shell:
 `chart.width_px` may not exceed a numeric `frame.console_max_px`. Null is the
