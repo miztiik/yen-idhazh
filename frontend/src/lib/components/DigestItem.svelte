@@ -196,7 +196,6 @@
 			{/if}
 		</p>
 
-		<!-- Title and summary share one measure where the reading route uses one. -->
 		<div class="prose">
 			<svelte:element
 				this={`h${level}`}
@@ -232,21 +231,7 @@
 </article>
 
 <style>
-	/* One measure for the whole prose block, set once at the prose size.
-
-	   `--measure` is `68ch` and a `ch` is a property of the element it lands on,
-	   so putting it on the title and the summary separately gave one card two
-	   right edges: measured 2026-09-17 in Chromium at 1536px, the summary stopped
-	   at 659.81px and the title ran to 1025.33px, 147.13px further. The title was
-	   not held to a narrower measure - it was held to no measure at all, because
-	   68 characters of 28px type is 1057px and the card body is 806.93px.
-
-	   `font-size` here exists to resolve that `ch`, and every child sets its own
-	   size over it. The display face makes the arithmetic moot as well as wrong:
-	   a `ch` of Inter is not a `ch` of the reading stack, so a per-element cap
-	   could not have agreed with itself even at one size. */
 	.prose {
-		max-width: var(--measure);
 		font-size: var(--text-lg);
 		/* The text comes off the open web: one unbroken token - a URL, a chemical
 		   name, a German compound - is wider than the measure and pushes a
@@ -258,24 +243,14 @@
 		text-wrap: pretty;
 	}
 
-	:global([data-surface='reading']) .prose {
-		max-width: none;
-	}
-
 	/* The display face, on the one line of this card that is a headline. It is
 	   already fetched and preloaded for the wordmark, so a title in it costs no
-	   byte the reader was not already paying. `balance` rather than `pretty`
-	   because a heading is short enough for the browser to even out every line
-	   rather than only rescue the last one. */
+	   byte the reader was not already paying. */
 	.title {
 		font-family: var(--font-display);
 		font-size: var(--text-2xl);
 		line-height: var(--leading-2xl);
 		letter-spacing: 0;
-		text-wrap: balance;
-	}
-
-	:global([data-surface='reading']) .title {
 		text-wrap: wrap;
 	}
 
@@ -299,14 +274,7 @@
 		color: inherit;
 	}
 
-	/* Below the side-rail breakpoint the item is one column and the rail simply
-	   follows the body, which is what a phone should do.
-
-	   Every column here is a `rem` token from config/appearance.json, so a
-	   reader who set their browser text larger gets wider furniture with it -
-	   measured 2026-09-02, a 22px root moved the mark column 28 -> 38.5px and
-	   the rail 224 -> 308px, both 1.375x, which is what proves no zone is a
-	   pixel count. */
+	/* All reading surfaces keep the footer below full-width prose. */
 	.item {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr);
@@ -392,50 +360,10 @@
 		box-shadow: var(--shadow-md);
 	}
 
-	/* In archive results, the footer moves beside the summary.
-	   It is still after the summary in the document, which is what the split
-	   promises; what moves is where it is painted. The value matches
-	   frame.breakpoints_px[1] in config/appearance.json; a media query cannot
-	   read a custom property, which is the one place this duplication is
-	   unavoidable. */
+	/* Matches frame.breakpoints_px[1]; media queries cannot read CSS tokens. */
 	@media (min-width: 1024px) {
 		.item {
-			grid-template-columns: minmax(0, 1fr) var(--zone-rail);
 			padding: var(--space-5);
 		}
-
-		.item.has-mark {
-			grid-template-columns: var(--zone-mark) minmax(0, 1fr) var(--zone-rail);
-		}
-
-		.item.has-mark > .item-rail {
-			grid-column: 3;
-		}
-
-		/* The rail sits further from the prose than the mark does, and one grid
-		   gap cannot say both. */
-		.item-rail {
-			position: sticky;
-			top: var(--space-4);
-			margin-inline-start: var(--space-3);
-		}
-
-		:global([data-surface='reading']) .item {
-			grid-template-columns: minmax(0, 1fr);
-		}
-
-		:global([data-surface='reading']) .item.has-mark {
-			grid-template-columns: var(--zone-mark) minmax(0, 1fr);
-		}
-
-		:global([data-surface='reading']) .item.has-mark > .item-rail {
-			grid-column: 2;
-		}
-
-		:global([data-surface='reading']) .item-rail {
-			position: static;
-			margin-inline-start: 0;
-		}
 	}
-
 </style>
