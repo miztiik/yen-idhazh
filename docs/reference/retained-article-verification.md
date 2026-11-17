@@ -79,11 +79,11 @@ retention window. All replay files stay below the private directory
 
 The adapter supplies a configured `ItemRecorder` and explicit capture/render
 roots to the real `summarize_one_item()`, after asking the text-analysis service
-for the article's mentions as the work stage does. This workflow starts no such
-service, so a replay finds no names or places: the table is the one the patterns
-alone make, each item logs one `text analysis gave no mentions` warning, and
-`analyze_ms` records what the refused connection cost. Judge a replay by its
-summary and its health row, not by whether a chart that needs a name was drawn.
+for the article's mentions as the work stage does. Where no service answers, the
+replay finds no names or places: the table is the one the patterns alone make, the
+item logs one `text analysis gave no mentions` warning, and `analyze_ms` records
+what the failed request cost. Judge such a replay by its summary and its health
+row, not by whether a chart that needs a name was drawn.
 Configured prompt and reply capture
 must both be enabled. Existing source and output paths reject traversal,
 symlinks and junctions. A pre-existing output directory refuses a replay rather
