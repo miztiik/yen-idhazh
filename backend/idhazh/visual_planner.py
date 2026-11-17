@@ -9,8 +9,8 @@ the oracle for this stage is a contract test rather than a hope.
 "Nothing" is the common and correct answer. Two items in three carry no visual,
 so `none` is the default that everything else has to earn its way past.
 
-The two calls that read the article are `idhazh.classify.calls`. This module
-holds what happens to their answer: the gate that refuses before a plan is
+The call that reads the article is built in `idhazh.classify.calls`. This module
+holds what happens to its answer: the gate that refuses before a plan is
 drafted, the ladder that steps a plan down, and the reason every `none` carries.
 """
 
@@ -121,7 +121,7 @@ def plan_lost_to_the_window(
         summary,
         model_id=model_id,
         reason=(
-            "the article and the labelling reply filled the window, so the reply "
+            "the prompt filled the window, so the reply "
             "was cut at the wall before the plan was written"
         ),
         decided_at=decided_at,

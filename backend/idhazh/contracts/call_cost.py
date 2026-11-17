@@ -1,9 +1,10 @@
 """What one model call cost, as the call itself reported it.
 
-An item is read by more than one model call, and the five numbers below are
-per request: the server reports them when that request returns. Folded into one
-set they stop being readable - two calls whose `cached_tokens` are 0 and 1,493
-fold to 1,493 against 3,886 prompt tokens, which is neither call's answer.
+An item is read by one model call, and the five numbers below are per request:
+the server reports them when that request returns. Rows written while an item was
+read by two calls kept one set per call, because folded into one set they stop
+being readable - two calls whose `cached_tokens` are 0 and 1,493 fold to 1,493
+against 3,886 prompt tokens, which is neither call's answer.
 
 The kind is carried beside the numbers rather than inferred from the slot the
 cost sits in. A slot says which call ran first; only the kind says what that
@@ -25,21 +26,23 @@ class CallKind(StrEnum):
     """Which model call these numbers came from.
 
     Four members and not two, because the call structure moves under this
-    vocabulary rather than beside it. `summarize` and `visual_plan` are what the
-    pipeline dispatches today, on two different models in two different jobs.
-    `label` and `summarize_and_plan` are the pair `idhazh.classify.calls` builds,
-    which lands behind a flag first and then becomes the only pair. A reading
-    that spans the flip needs all four names, or the step change in every series
-    reads as a regression rather than as the design change it is.
+    vocabulary rather than beside it. `summarize` is the standalone summarizer's
+    call and `summarize_and_plan` is the digest's one call, which writes the summary
+    and then the plan. `visual_plan` and `label` are historical: the small-model visual
+    plan and the first call of the two-call design are no longer made, and rows
+    that carry them stay readable. A reading that spans the change needs all four
+    names, or the step change in every series reads as a regression rather than
+    as the design change it is.
     """
 
-    #: Today's summarizer call: one article in, one summary out.
+    #: The standalone summarizer's call: one article in, one summary out.
     SUMMARIZE = "summarize"
-    #: Today's small-model visual plan, dispatched in the separate visuals job.
+    #: Historical: the small-model visual plan, dispatched in a separate visuals job.
     VISUAL_PLAN = "visual_plan"
-    #: The label call of the two-call planner: labels what the candidate pass found.
+    #: Historical: the first call of the two-call design, which labelled what the
+    #: candidate pass found. The text-analysis service finds the names now.
     LABEL = "label"
-    #: The summarize-and-plan call of the two-call planner: writes the summary and then the plan.
+    #: The digest's one call: writes the summary and then the plan.
     SUMMARIZE_AND_PLAN = "summarize_and_plan"
 
 

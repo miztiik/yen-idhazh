@@ -40,7 +40,8 @@ from idhazh.contracts.taxonomy import SourceTier
 from idhazh.contracts.visual_outcome import validate_visual_outcome
 from idhazh.contracts.visual_type import VisualType
 
-#: The two call slots, named for what each call does rather than for its turn.
+#: The two call slots, named for the calls that filled them while an item took two.
+#: The second slot holds the one call an item takes now, and the first stays empty.
 #: Every per-call cell is this prefix plus the quantity, so a reader that pools
 #: them needs one list and not two.
 CALL_SLOTS: Final = ("label", "summary")
@@ -128,9 +129,8 @@ RETIRED_CELLS: Final[Mapping[str, str]] = MappingProxyType(
 #: `max_output_tokens` recorded the configured ceiling on one decode. The two
 #: settings behind it left `inference` on 2026-09-21 and nothing replaced them:
 #: what actually bounded a decode was `label_budget_tokens` and
-#: `summary_budget_tokens`, which are still here: the label call's is derived
-#: from its reply shape and the summarize-and-plan call's is the model file's
-#: response limit.
+#: `summary_budget_tokens`, which are still here: the first call's was derived
+#: from its reply shape and the digest call's is the model file's response limit.
 DROPPED_CELLS: Final[frozenset[str]] = frozenset(
     {"runner_name", "cgroup_peak_bytes", "max_output_tokens"}
 )
@@ -514,11 +514,11 @@ class FailureCode(StrEnum):
     MODEL_TIMED_OUT = "model_timed_out"
     CONTEXT_EXCEEDED = "context_exceeded"
     OUTPUT_TRUNCATED = "output_truncated"
-    #: The two-call path's labelling reply ran out of its own output budget, so
-    #: the call that writes the summary was never sent and the item is lost
-    #: whole. `output_truncated` is the summary-writing call meeting its budget,
-    #: which is a different derivation over a different grammar and a different
-    #: number to move.
+    #: Historical outcome only: the first call of the two-call design ran out of its
+    #: own output budget, so the call that writes the summary was never sent and the
+    #: item was lost whole. `output_truncated` is the summary-writing call meeting its
+    #: budget, which is a different derivation over a different grammar and a
+    #: different number to move.
     LABELS_TRUNCATED = "labels_truncated"
     BAD_SHAPE = "bad_shape"
     #: Historical outcome only; a reply is no longer rejected for its length.
@@ -765,7 +765,11 @@ class ItemHealthRow(Contract):
     )
     label_kind: CallKind | None = Field(
         default=None,
-        description="Which call the stage made first. Empty where no split was recorded.",
+        description=(
+            "Which call the stage made first, on a row written while an item took two "
+            "calls. Empty where no split was recorded and on every row written since the "
+            "model reads an item once."
+        ),
     )
     label_prefill_ms: int | None = Field(default=None, ge=0)
     label_decode_ms: int | None = Field(default=None, ge=0)
@@ -775,12 +779,18 @@ class ItemHealthRow(Contract):
         default=None,
         ge=0,
         description=(
-            "Prompt tokens the first call reused. Zero here is the cold-slot answer and "
-            "is a measurement; empty means no split was recorded at all."
+            "Prompt tokens the first call reused, on a row written while an item took two "
+            "calls. Zero here is the cold-slot answer and is a measurement; empty means "
+            "no split was recorded at all, or the model read the item once."
         ),
     )
     summary_kind: CallKind | None = Field(
-        default=None, description="Which call the stage made second, or empty where it made one."
+        default=None,
+        description=(
+            "Which call this slot records: the second call on a row written while an item "
+            "took two, and the one call on every row since. Empty where the stage made no "
+            "model call that returned."
+        ),
     )
     summary_prefill_ms: int | None = Field(default=None, ge=0)
     summary_decode_ms: int | None = Field(default=None, ge=0)
@@ -932,29 +942,30 @@ class ItemHealthRow(Contract):
         default=None,
         ge=0,
         description=(
-            "Wall time of the label call: our own stopwatch around the request, so the "
-            "wait is inside it. Subtract label_prefill_ms and label_decode_ms to get "
-            "what the server did not claim for itself - transport, and any queue."
+            "Wall time of the first call of the two-call design: our own stopwatch around "
+            "the request, so the wait is inside it. Subtract label_prefill_ms and "
+            "label_decode_ms to get what the server did not claim for itself - transport, "
+            "and any queue. Empty on every row written since the model reads an item once."
         ),
     )
     summary_ms: int | None = Field(
         default=None,
         ge=0,
-        description="Wall time of the summarize-and-plan call, on the same stopwatch.",
+        description="Wall time of the digest's model call, on the same stopwatch.",
     )
     visual_plan_ms: int | None = Field(
         default=None,
         ge=0,
         description=(
             "Wall time attributed to producing the visual plan. The plan is decoded "
-            "inside the summarize-and-plan call, so this is an apportionment and not "
+            "inside the digest's model call, so this is an apportionment and not "
             "a separate clock - visual_plan_ms_is_estimate says which."
         ),
     )
     visual_plan_ms_is_estimate: bool | None = Field(
         default=None,
         description=(
-            "True where visual_plan_ms was apportioned out of the second call rather "
+            "True where visual_plan_ms was apportioned out of the model call rather "
             "than timed on its own. An estimate that does not say it is one is the "
             "failure this column exists to prevent (Guardrail #10)."
         ),
@@ -995,7 +1006,7 @@ class ItemHealthRow(Contract):
         default=None,
         ge=0,
         description=(
-            "Output tokens of the second call that belong to the visual plan rather "
+            "Output tokens of the digest's model call that belong to the visual plan rather "
             "than to the summary. Null where the run asked for no plan."
         ),
     )
@@ -1006,7 +1017,8 @@ class ItemHealthRow(Contract):
         description=(
             "label_cached_tokens as a percentage of label_input_tokens. Recorded "
             "rather than derived so a reader pooling rows does not have to weight "
-            "the ratio itself and get it wrong."
+            "the ratio itself and get it wrong. Empty on every row written since the "
+            "model reads an item once."
         ),
     )
     summary_cache_pct: float | None = Field(
@@ -1020,64 +1032,69 @@ class ItemHealthRow(Contract):
         ge=0,
         description=(
             "Which llama-server prefix-cache slot served this item, from id_slot on the "
-            "reply to its FIRST model call. The row holds one set of these three columns "
-            "for a stage that makes two calls, and the first call is the only one whose "
-            "slot was last touched by the item before this one. Null where the reply "
-            "named no slot, which is not the same as slot 0."
+            "reply to its model call. The row holds one set of these three columns, and "
+            "they describe the call whose slot was last touched by the item before this "
+            "one: the item's one call, or the first of two on a row written while an item "
+            "took two calls. Null where the reply named no slot, which is not the same "
+            "as slot 0."
         ),
     )
     kv_tokens_at_start: int | None = Field(
         default=None,
         ge=0,
         description=(
-            "What that slot held once the item's first call had been prefilled, from "
-            "tokens_cached on the same reply. It is where the item's second call starts "
-            "from, and then the next item. label_cached_tokens is the other half of the "
-            "pair and answers the opposite question: what the call read back out."
+            "What that slot held once the item's call had been prefilled, from "
+            "tokens_cached on the same reply. It is where the next item starts from. "
+            "The call's cached-token cell is the other half of the pair and answers the "
+            "opposite question: what the call read back out."
         ),
     )
     prefix_shared_with_previous: bool | None = Field(
         default=None,
         description=(
-            "Did the item's first call read anything at all out of the slot? Taken from "
-            "the same timings.cache_n that label_cached_tokens is, so the boolean and "
-            "the count cannot disagree about one reply. The second call is excluded on "
-            "purpose: its prompt IS the first one's extended, so it reuses a prefix on "
-            "every row and says nothing about the item before it. Null where the reply "
-            "carried no cache_n at all."
+            "Did the item's call read anything at all out of the slot? Taken from "
+            "the same timings.cache_n that the call's cached-token cell is, so the boolean "
+            "and the count cannot disagree about one reply. On a row written while an item "
+            "took two calls it describes the first call only: the second call's prompt "
+            "was the first one's extended, so it reused a prefix on every row and said "
+            "nothing about the item before it. Null where the reply carried no cache_n "
+            "at all."
         ),
     )
     label_prefill_tokens_per_s: float | None = Field(
         default=None,
         ge=0.0,
         description=(
-            "Prefill throughput of the label call, over the tokens the server really "
-            "evaluated - label_input_tokens minus label_cached_tokens. Counting the "
-            "cached ones as work makes this and label_cache_pct the same number "
-            "twice, and reads as a fast server rather than as a cache hit."
+            "Prefill throughput of the first call of the two-call design, over the tokens "
+            "the server really evaluated - label_input_tokens minus label_cached_tokens. "
+            "Counting the cached ones as work makes this and label_cache_pct the same "
+            "number twice, and reads as a fast server rather than as a cache hit."
         ),
     )
     label_decode_tokens_per_s: float | None = Field(
-        default=None, ge=0.0, description="Decode throughput of the label call."
+        default=None,
+        ge=0.0,
+        description="Decode throughput of the first call of the two-call design.",
     )
     summary_prefill_tokens_per_s: float | None = Field(
         default=None,
         ge=0.0,
         description=(
-            "Prefill throughput of the summarize-and-plan call, over the tokens the "
-            "server really evaluated. This call reuses the label call's prompt almost "
-            "whole, so the two readings differ by two orders of magnitude: on "
+            "Prefill throughput of the digest's model call, over the tokens the "
+            "server really evaluated. A call whose slot answers most of its prompt reads "
+            "two orders of magnitude apart over the two denominators: on "
             "2026-09-14 one item read 787 tokens a second over the whole prompt and "
             "8.4 over the 52 tokens that were new."
         ),
     )
     summary_decode_tokens_per_s: float | None = Field(
-        default=None, ge=0.0, description="Decode throughput of the summarize-and-plan call."
+        default=None, ge=0.0, description="Decode throughput of the digest's model call."
     )
     label_finish_reason: Token | None = Field(
         default=None,
         description=(
-            "Why the label decode stopped, as the server reported it - stop, length, "
+            "Why the first call's decode stopped, on a row written while an item took two "
+            "calls, as the server reported it - stop, length, "
             "and whatever else the runtime mints. A token and not an enum: the "
             "vocabulary belongs to llama-server rather than to this project, and a "
             "row that could not be written because the runtime added a reason would "
@@ -1086,7 +1103,7 @@ class ItemHealthRow(Contract):
         ),
     )
     summary_finish_reason: Token | None = Field(
-        default=None, description="Why the summarize-and-plan decode stopped, on the same terms."
+        default=None, description="Why the digest's model call stopped decoding, on the same terms."
     )
     recovered: bool | None = Field(
         default=None,
@@ -1229,16 +1246,21 @@ class ItemHealthRow(Contract):
         ),
     )
     label_budget_tokens: int | None = Field(
-        default=None, ge=1, description="The output budget the label call ran under."
+        default=None,
+        ge=1,
+        description=(
+            "The output budget the first call of the two-call design ran under. Empty on "
+            "every row written since the model reads an item once."
+        ),
     )
     summary_budget_tokens: int | None = Field(
-        default=None, ge=1, description="The output budget the summarize-and-plan call ran under."
+        default=None, ge=1, description="The output budget the digest's model call ran under."
     )
     run_visual_decision: bool | None = Field(
-        default=None, description="Did this run ask the second call for a visual plan?"
+        default=None, description="Did this run ask the model call for a visual plan?"
     )
     temperature: float | None = Field(
-        default=None, ge=0.0, description="The sampling temperature both calls ran at."
+        default=None, ge=0.0, description="The sampling temperature the item's calls ran at."
     )
 
     # --- What broke --------------------------------------------------------

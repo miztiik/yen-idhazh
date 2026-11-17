@@ -89,7 +89,7 @@ class NoneReason(StrEnum):
     #: was never written. The item publishes; the picture is what was lost.
     OUTPUT_BUDGET_CUT = "output_budget_cut"
     #: The reply was cut at the end of the context window rather than at the end
-    #: of its budget: the article and the label call's reply in front of it left less room
+    #: of its budget: the prompt in front of it left less room
     #: than the summarize-and-plan call's grammar may write. Separate from `output_budget_cut`
     #: because the two ask an operator for different things - a budget cut says look at
     #: the reply shape, and this one says look at
