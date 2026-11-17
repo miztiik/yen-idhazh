@@ -250,7 +250,7 @@ test('lagging native endpoints do not move private published-day evidence', asyn
 	await expect(page.locator('[data-window-status]')).toHaveText(`Main packed window: ${shortDate(nativeThrough)} UTC.`);
 	await expect(page.locator('[data-windowed="item-time-split"] [data-native-window]'))
 		.toContainText(`${nativeThrough} through ${nativeThrough} UTC`);
-	await expect(page.locator('[data-console-panel-id="article-age"] h2')).toHaveText('Source age at work start');
+	await expect(page.locator('[data-console-panel-id="article-age"] h2')).toHaveText('Article age when processing began');
 	await page.locator('a[href*="/console/model/"]').first().click();
 	await expect(page.locator('[data-console-panels="model"]')).not.toHaveAttribute('data-route-state', 'loading');
 	await expect(page.locator('[data-private-window]')).toHaveAttribute('data-range-from', publishedDay);

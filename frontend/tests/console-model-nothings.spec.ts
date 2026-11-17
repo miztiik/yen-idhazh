@@ -123,13 +123,13 @@ for (const [id, name] of PANELS) {
 				expect(minutes).toContain('Nothing here measured that day');
 				expect(minutes).toContain('2030-06-12');
 				expect(minutes).not.toContain('data-model-rule-line="2030-06-12"');
-				const summaries = cards.split('data-kpi="Summaries today"')[1].split('data-kpi=')[0];
+				const summaries = cards.split('data-kpi="Published summaries checked"')[1].split('data-kpi=')[0];
 				expect(summaries).toContain('data-model-rule-line="2030-06-12"');
 				expect(summaries).not.toContain('data-model-rule-kind="checker"');
 				expect(populated).toContain('No measured days for this card.');
 				expect(populated).toContain('Only one measured day; no trend yet.');
 				const readout = summaries.split('data-readout="model-summaries"')[1].split('</dl>')[0];
-				expect(words(readout)).not.toContain('Summaries today');
+				expect(words(readout)).not.toContain('Published summaries checked');
 				expect(words(readout)).toContain('14 Jun 2030');
 				expect(readout).toContain('>20<');
 			}

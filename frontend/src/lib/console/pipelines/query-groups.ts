@@ -13,8 +13,8 @@ export const PIPELINES_QUERY_GROUPS = [
 		]
 	},
 	{
-		id: 'hardware-timing',
-		ledgers: ['item-health', 'host-fingerprint', 'run-shards'],
+		id: 'article-timing',
+		ledgers: ['item-health'],
 		queries: [queries.slowestArticlesQuery, queries.tailTrendQuery]
 	},
 	{

@@ -99,7 +99,7 @@
 		<PanelGroup id={group.id} title={group.title} panels={group.panels.length}>
 			{#each group.panels as id (id)}
 				<Panel {id} title={titles[id]} verdict={id === 'model-cards'}
-					note={id === 'model-cards' ? "What the model wrote for the day's own articles, how long it took, and what it got wrong." : null}>
+					note={id === 'model-cards' ? "Model work and summary checks for each recorded day's articles." : null}>
 					<div data-panel-question={titles[id]}>
 					{#if id === 'model-cards'}
 						<Cards days={data.cardDays} reads={data.cardReads} instruments={data.instruments} start={cardSpan.start} end={cardSpan.end}

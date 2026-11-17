@@ -97,17 +97,23 @@ test('removed visual diagnostics neither mount nor ask for evaluator data', asyn
 	expect(evaluatorRequests.sort()).toEqual(['index/daily.json', 'index/monthly.json', 'index/yearly.json']);
 });
 
-test('the run-wide article ranking keeps lagging host/count evidence separate from the current timeline', async ({ page }) => {
+test('article timing panels follow the newest item record despite lagging host/count evidence', async ({ page }) => {
 	const older = dayBefore(THROUGH, 1);
 	const state = await packedPipelines('ranking-endpoint', [
 		{ covers: older, rows: [
 			timedRow(older, { item_id: 'older-short', machine_shard: 0 }),
 			timedRow(older, { item_id: 'older-long', machine_shard: 1, item_total_ms: 1600, stage_gap_ms: 850 })
 		] },
-		{ covers: THROUGH, rows: [timedRow(THROUGH, {
-			item_id: 'latest-clock', machine_shard: 0,
-			item_started_at: `${THROUGH}T00:00:00Z`, item_ended_at: `${THROUGH}T00:00:02Z`
-		})] }
+		{ covers: THROUGH, rows: [
+			timedRow(THROUGH, {
+				item_id: 'latest-clock', machine_shard: 0, item_total_ms: 1600, stage_gap_ms: 850,
+				item_started_at: `${THROUGH}T00:00:00Z`, item_ended_at: `${THROUGH}T00:00:02Z`
+			}),
+			timedRow(THROUGH, {
+				item_id: 'latest-short', machine_shard: 1,
+				item_started_at: `${THROUGH}T00:00:00Z`, item_ended_at: `${THROUGH}T00:00:01Z`
+			})
+		] }
 	]);
 	await buildRows(state, 'host-fingerprint', [{ covers: older, rows: [{ date: older, run_id: `${older}-1`, job: 'work', shard: 0 }] }]);
 	await buildRows(state, 'run-shards', [{ covers: older, rows: [{ date: older, run_id: `${older}-1`, shards: 2 }] }]);
@@ -118,14 +124,22 @@ test('the run-wide article ranking keeps lagging host/count evidence separate fr
 	await hydrated(page);
 	await settled(page);
 	await expect(page.locator('[data-run-timeline]')).toHaveAttribute('data-run-timeline', `${THROUGH}-1`);
+	await expect(page.locator('[data-run-timeline]')).toContainText('2 recorded shards.');
 	const ranking = page.locator('[data-console-panel-id="slowest-articles"]');
 	await expect(ranking).toHaveCount(1);
-	await expect(ranking.locator('[data-slowest-run]')).toHaveAttribute('data-slowest-run', `${older}-1`);
-	await expect(ranking.locator('[data-native-window]')).toContainText(`${older} through ${older} UTC`);
+	await expect(ranking.locator('[data-slowest-run]')).toHaveAttribute('data-slowest-run', `${THROUGH}-1`);
+	await expect(ranking.locator('[data-native-window]')).toContainText(`${THROUGH} through ${THROUGH} UTC`);
 	await expect(page.locator('[data-console-panel-id="stage-timings"] [data-native-window]'))
 		.toHaveText(`Native record: ${older} through ${THROUGH} UTC.`);
-	await expect(ranking.locator('[data-ranked-row]').first()).toContainText('older-long');
-	await expect(ranking).not.toContainText('latest-clock');
+	await expect(page.locator('[data-console-panel-id="tail-trend"] [data-native-window]'))
+		.toHaveText(`Native record: ${older} through ${THROUGH} UTC.`);
+	await expect(ranking.locator('[data-ranked-row]').first()).toContainText('latest-clock');
+	await expect(ranking.locator('[data-ranked-row]')).toHaveCount(1);
+	await expect(ranking.locator('.ranked-rule')).toHaveAttribute('aria-label', 'Run median: 1.2');
+	await expect(ranking).toContainText('Run median: 1.2 s of item work.');
+	await expect(ranking).toContainText('Showing 1 of 1 articles above the median, from 2 measured articles.');
+	await expect(ranking).not.toContainText('latest-short');
+	await expect(ranking).not.toContainText('older-long');
 });
 
 test('integrated actual canary smoke: narrow viewport, with cross-page navigation', async ({ page }) => {

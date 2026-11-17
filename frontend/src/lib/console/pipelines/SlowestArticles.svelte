@@ -1,5 +1,5 @@
 <script lang="ts">
-	/** Rank recorded article work across every shard of the newest run. */
+	/** Rank above-median article work across every recorded shard of the newest run. */
 	import RankedList from '$lib/components/RankedList.svelte';
 	import { rankedList } from '$lib/charts/d3/rankedList';
 	import { slowestArticles } from './slowest-articles';
@@ -9,21 +9,33 @@
 
 	let { rows, chart, limit }: { rows: readonly Row[]; chart: ChartConfig; limit: number } = $props();
 	const slowest = $derived(slowestArticles(rows, chart.number_format));
-	const geometry = $derived(rankedList(slowest.rows, { max: limit }));
+	const geometry = $derived(rankedList(slowest.rows, {
+		max: limit,
+		rules: slowest.medianSeconds === null ? [] : [{ at: slowest.medianSeconds, label: 'Run median' }]
+	}));
+	const shown = $derived(geometry?.rows.length ?? 0);
+	const hidden = $derived(slowest.rows.length - shown);
+	const emptyNote = $derived(slowest.measured === 0
+		? 'No article recorded item work.'
+		: slowest.measured === 1
+			? 'Only one article has a recorded work time; there is no above-median comparison.'
+			: 'No article work time exceeds the run median.');
 	const seconds = (value: number) => formatNumber(value, chart.number_format, { si: false });
 </script>
 
 <div data-slowest-run={slowest.run ?? ''} data-model-rule-name="slowest-articles"
 	data-model-rule="no" data-model-rule-none="This ranks recorded article work within one run, not a change over days."
 	data-panel-question="is it working">
-	<p>Across all shards of newest run {slowest.run ?? 'not recorded'}. Queue wait is outside recorded item time.</p>
-	<p data-comparison="Each article's longest stage against its other stages">Each article's longest stage against its other stages.</p>
-	<p class="lede" data-lede>{geometry?.rows.length
-		? `${seconds(geometry.rows[0].value)} seconds for the slowest article.`
-		: 'No article recorded elapsed time.'}</p>
-	<RankedList {geometry} caption="Longest articles" maxText={`${geometry === null ? '0' : seconds(geometry.max)} seconds`}
-		unmeasuredNote="No elapsed time recorded." emptyNote="No elapsed time recorded." />
-	<p>{slowest.unmeasured} articles did not record elapsed time.</p>
+	<p>Run {slowest.run ?? 'not recorded'} (UTC), across recorded shards. Parked queue wait is excluded from item work and listed separately.</p>
+	<p class="lede" data-lede data-comparison="Article work above the whole-run median">{slowest.medianSeconds === null
+		? 'No article recorded item work.'
+		: `Run median: ${seconds(slowest.medianSeconds)} s of item work.`}</p>
+	<p>Showing {shown} of {slowest.rows.length} articles above the median, from {slowest.measured} measured articles.</p>
+	<RankedList {geometry} caption="Above-median article work, longest first"
+		maxText={`${geometry === null ? '0' : seconds(geometry.max)} seconds`} fitRuleLabels
+		unmeasuredNote="No item work recorded." {emptyNote}
+		tail={hidden > 0 ? `${hidden} more above-median articles are not shown (configured row limit: ${limit}).` : null} />
+	<p>{slowest.unmeasured} articles did not record item work.</p>
 </div>
 
 <style>

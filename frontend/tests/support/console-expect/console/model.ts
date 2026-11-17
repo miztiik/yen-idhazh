@@ -26,7 +26,7 @@ export const EXPECT: RouteExpect | null = {
 		'output_tokens',
 		'cached_tokens'
 	],
-	sectionHeading: 'What the model did',
+	sectionHeading: 'Model figures by recorded day',
 	chartHeading: 'Model tokens per second',
 	throughputLink: {
 		label: 'why the range is wide',

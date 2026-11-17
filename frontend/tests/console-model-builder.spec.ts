@@ -21,7 +21,7 @@ for (const evidence of ['missing', 'quiet', 'populated'] as const) {
 				}
 			} else {
 				// Two score measurements of one published summary remain one distinct card count.
-				await expect(page.locator('[data-kpi="Summaries today"] [data-kpi-value]')).toHaveText('1');
+				await expect(page.locator('[data-kpi="Published summaries checked"] [data-kpi-value]')).toHaveText('1');
 				await expect(page.locator('[data-model-cards] [data-kpi]')).toHaveCount(7);
 				await page.locator('[data-model-table-control] > summary').click();
 				await expect(page.locator('[data-instrument="coherence"]').first()).toHaveText('-0.25');
@@ -31,7 +31,7 @@ for (const evidence of ['missing', 'quiet', 'populated'] as const) {
 				await expect(page.locator('[data-model-cards]')).toHaveAttribute('data-model-cards-from', '2030-06-14');
 				await expect(page.locator('[data-model-cards]')).toHaveAttribute('data-model-cards-to', '2030-06-14');
 				await expect(page.locator('[data-private-window]')).toHaveAttribute('data-range-to', '2030-06-15');
-				await expect(page.locator('[data-kpi="Summaries today"] [data-kpi-value]')).toHaveText('1');
+				await expect(page.locator('[data-kpi="Published summaries checked"] [data-kpi-value]')).toHaveText('1');
 			}
 		} finally { await fixture.close(); }
 	});
