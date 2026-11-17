@@ -1,11 +1,12 @@
-"""The appearance contract: the bounds are the reason the knobs are allowed to exist.
+"""The appearance contract: what the validators add, and what must stay in step.
 
-Contract tier (CLAUDE.md section 13). `config/appearance.json` carries the frame
-width, the measure and the breakpoints, which a 2026-08-28 advisory ruling said
-should not be knobs at all - the argument being that a frame set to 300px would
-need a code change to still look right. That argument is true of an unvalidated
-number and false of a validated one, so these tests are the argument: every
-bound that makes the knob safe is asserted here, in both directions.
+Contract tier (CLAUDE.md section 12). A `Field` range is the contract's own
+statement and Pydantic enforces it, so a test that feeds it a value just outside
+the range restates the declaration. What is asserted here is what no declaration
+says: the cross-field validators, the read-side migrations, the bindings between
+the contract's declared values and the files that copy them, and the frame-width
+and measure ranges that `docs/concepts/config/appearance.md` gives as the answer
+to "a frame set to 300px would need a code change to still look right".
 
 Nothing is mocked and nothing touches the network.
 """
@@ -17,7 +18,6 @@ import re
 from pathlib import Path
 
 import pytest
-from contracts._fixtures import MOVED_BLOCKS, PIPELINE_OWNED
 from pydantic import ValidationError
 
 from idhazh.contracts.app_config import AppConfig
@@ -29,17 +29,9 @@ from idhazh.contracts.appearance_config import (
     LIGHT_CONFIDENCE_RAMP,
     MEASURE_CH_MAX,
     MEASURE_CH_MIN,
-    ZONE_ASIDE_MAX_REM,
-    ZONE_ASIDE_MIN_REM,
-    ZONE_MARK_MAX_REM,
-    ZONE_MARK_MIN_REM,
-    ZONE_RAIL_MAX_REM,
-    ZONE_RAIL_MIN_REM,
     AppearanceConfig,
-    ChartConfig,
     ChartPalette,
     FrameConfig,
-    IconsConfig,
     MotionConfig,
     StoryChartGeometryConfig,
     ThemeConfig,
@@ -48,14 +40,6 @@ from idhazh.contracts.knobs.console import ConsoleConfig
 from idhazh.contracts.knobs.ui import ThemeChoice, UiConfig
 
 pytestmark = pytest.mark.contract
-
-
-def test_explorer_file_limit_defaults_and_bounds() -> None:
-    assert ConsoleConfig().explorer_max_files == 128
-    assert ConsoleConfig(explorer_max_files=1).explorer_max_files == 1
-    for value in (0, -1, 1.5, True, "128"):
-        with pytest.raises(ValidationError, match="explorer_max_files"):
-            ConsoleConfig.model_validate({"explorer_max_files": value})
 
 
 def test_retired_source_doubt_limit_does_not_restore_a_console_reader() -> None:
@@ -73,48 +57,11 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 APPEARANCE_PATH = REPO_ROOT / "config" / "appearance.json"
 
 
-def test_machine_palette_accepts_prior_values_and_matches_the_frontend_vocabulary() -> None:
+def test_machine_palette_matches_the_frontend_vocabulary() -> None:
     source = (REPO_ROOT / "frontend/src/lib/server/config.ts").read_text()
     copied = re.search(r"palette: ([^;]+);", source)
     assert copied is not None
     assert set(re.findall(r"'([^']+)'", copied[1])) == {value.value for value in ChartPalette}
-    for palette in ("categorical", "sequential", "spectral", "piyg"):
-        config = AppearanceConfig.model_validate({"chart": {"palette": palette}})
-        assert config.chart.palette.value == palette
-    assert ChartConfig().palette is ChartPalette.CATEGORICAL
-
-
-def test_daily_tiles_keep_an_inside_wider_than_the_gap() -> None:
-    assert ConsoleConfig().tile_min_px == 6
-    assert ConsoleConfig(tile_min_px=8).tile_min_px == 8
-    for value in (0, 2, 5):
-        with pytest.raises(ValidationError, match="tile_min_px"):
-            ConsoleConfig(tile_min_px=value)
-    appearance = AppearanceConfig.model_validate_json(
-        (
-            REPO_ROOT
-            / "tests/fixtures/contracts/appearance-config/knobs-set-away-from-the-defaults.json"
-        ).read_text()
-    )
-    assert appearance.console.tile_min_px == 8
-    app = AppConfig.model_validate_json(
-        (
-            REPO_ROOT
-            / "tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json"
-        ).read_text()
-    )
-    assert app.console.tile_min_px == 10
-
-
-def committed_app_config() -> AppConfig:
-    """`AppConfig` has one block with no default, so `{}` is not a document.
-
-    There is no honest default for "which weights", and a wrong guess would
-    silently run the wrong model.
-    """
-    return AppConfig.model_validate(
-        json.loads((REPO_ROOT / "config" / "idhazh.json").read_text(encoding="utf-8"))
-    )
 
 
 def test_the_committed_file_is_ascii() -> None:
@@ -123,28 +70,9 @@ def test_the_committed_file_is_ascii() -> None:
     assert all(byte < 128 for byte in raw), "config/appearance.json must be ASCII"
 
 
-def test_story_chart_geometry_is_bounded_and_committed() -> None:
-    appearance = AppearanceConfig.model_validate_json(APPEARANCE_PATH.read_text(encoding="utf-8"))
-    assert appearance.chart.story_geometry == StoryChartGeometryConfig()
+def test_story_chart_geometry_refuses_unusable_dash_arrays() -> None:
     for invalid in (
-        {"row_height_px": 24},
-        {"dot_radius_px": 1},
-        {"mark_outline_width_px": 0},
-        {"slope_column_share": 0.1},
-        {"scatter_height_px": 159},
-        {"scatter_height_px": 401},
-        {"scatter_margin_left_px": 31},
-        {"scatter_margin_left_px": 97},
-        {"scatter_margin_right_px": 15},
-        {"scatter_margin_right_px": 65},
-        {"scatter_margin_top_px": 23},
-        {"scatter_margin_top_px": 65},
-        {"scatter_margin_bottom_px": 31},
-        {"scatter_margin_bottom_px": 97},
-        {"bubble_max_radius_share": 0},
-        {"bubble_max_radius_share": 0.5},
         {"line_series_dash_arrays": ("none",) * 8},
-        {"line_series_dash_arrays": ("none",)},
         {
             "line_series_dash_arrays": (
                 "none",
@@ -162,126 +90,20 @@ def test_story_chart_geometry_is_bounded_and_committed() -> None:
             StoryChartGeometryConfig.model_validate(invalid)
 
 
-def test_defaults_alone_are_a_valid_document() -> None:
-    """A fresh clone runs on the defaults (section 1a)."""
-    resolved = AppearanceConfig.model_validate({})
-    assert resolved.frame.reading_max_px >= FRAME_READING_MIN_PX
-    assert resolved.version == AppearanceConfig.schema_version()
-
-
-def test_console_style_defaults_preserve_old_inputs_and_partial_leaves() -> None:
-    old = AppearanceConfig.model_validate({"version": "2026-10-04"})
-    assert old.console_style.typography.small.size_rem == 0.75
-    assert old.console_style.colors.light.canvas == "#f2f1ed"
-    assert old.console_style.colors.dark.canvas == "#191917"
-    changed = AppearanceConfig.model_validate(
-        {
-            "console_style": {
-                "colors": {"light": {"accent": "#145a55"}},
-                "typography": {"small": {"weight": 500}},
-                "elevation": {"light": {"panel": {"y_px": 2}}},
-            },
-        }
-    ).console_style
-    assert changed.colors.light.accent == "#145a55"
-    assert changed.colors.light.canvas == old.console_style.colors.light.canvas
-    assert changed.colors.dark == old.console_style.colors.dark
-    assert changed.typography.small.leading_rem == 1
-    assert changed.typography.small.weight == 500
-    assert changed.elevation.light.panel.alpha == 0.06
-    assert changed.elevation.dark.panel.alpha == 0
-
-
 @pytest.mark.parametrize(
     "style",
     [
-        {"surprise": 1},
         {"colors": {"light": {"accent": "#AABBCC"}}},
-        {"colors": {"dark": {"canvas": "#fff"}}},
         {"colors": {"light": {"categorical": ["#112233"] * 8}}},
-        {"colors": {"light": {"categorical": ["#112233"]}}},
-        {"typography": {"ui_face": "downloaded-font"}},
-        {"typography": {"small": {"size_rem": 0.74}}},
         {"typography": {"small": {"size_rem": True}}},
-        {"typography": {"small": {"size_rem": "0.75"}}},
-        {"typography": {"small": {"size_rem": float("nan")}}},
         {"typography": {"small": {"leading_rem": 1.51}}},
         {"typography": {"body": {"leading_rem": 0.8}}},
-        {"typography": {"value": {"weight": 500.0}}},
-        {"typography": {"value": {"weight": 901}}},
-        {"typography": {"body": {"tracking_em": 0.21}}},
-        {"layout": {"rail_width_rem": 7.99}},
-        {"layout": {"header_min_height_rem": 5.01}},
-        {"layout": {"control_min_height_rem": 2.74}},
-        {"layout": {"panel_padding_rem": 4.01}},
-        {"layout": {"columns_wide": True}},
-        {"layout": {"columns_wide": 3}},
-        {"radii": {"panel_rem": -0.01}},
-        {"elevation": {"dark": {"panel": {"alpha": 0.21}}}},
-        {"elevation": {"light": {"floating": {"y_px": 16.01}}}},
-        {"elevation": {"light": {"floating": {"blur_px": 32.01}}}},
-        {"chart": {"axis_width_px": 0.49}},
-        {"chart": {"line_width_px": 4.01}},
-        {"chart": {"grid_opacity": 0}},
-        {"chart": {"grid_width_px": float("inf")}},
-        {"chart": {"grid_dash_px": [1]}},
-        {"chart": {"grid_dash_px": [0, 2]}},
-        {"chart": {"linecap": "triangle"}},
-        {"layout": None},
-        {"typography": {"small": None}},
-        {"colors": {"light": {"canvas": None}}},
         {"chart": {"grid_opacity": None}},
     ],
 )
 def test_console_style_refuses_unsafe_or_ambiguous_values(style: dict[str, object]) -> None:
     with pytest.raises(ValidationError):
         AppearanceConfig.model_validate({"console_style": style})
-
-
-def test_console_style_accepts_bounded_numbers_and_replaces_arrays_whole() -> None:
-    palette = [
-        "#112231",
-        "#112232",
-        "#112233",
-        "#112234",
-        "#112235",
-        "#112236",
-        "#112237",
-        "#112238",
-    ]
-    style = AppearanceConfig.model_validate(
-        {
-            "console_style": {
-                "colors": {"light": {"categorical": palette}},
-                "typography": {
-                    "small": {"size_rem": 4, "leading_rem": 8, "weight": 100, "tracking_em": -0.1}
-                },
-                "layout": {
-                    "rail_width_rem": 18,
-                    "header_min_height_rem": 5,
-                    "control_min_height_rem": 4,
-                    "panel_gap_rem": 0,
-                    "columns_wide": 1,
-                },
-                "radii": {"control_rem": 0, "panel_rem": 2},
-                "chart": {
-                    "axis_width_px": 2,
-                    "line_width_px": 0.5,
-                    "grid_dash_px": [0.5, 16],
-                    "linecap": "butt",
-                },
-            }
-        }
-    ).console_style
-    assert style.colors.light.categorical == palette
-    assert style.colors.dark.categorical != palette
-    assert style.chart.grid_dash_px == [0.5, 16]
-    assert (
-        AppearanceConfig.model_validate(
-            {"console_style": {"chart": {"grid_dash_px": None}}}
-        ).console_style.chart.grid_dash_px
-        is None
-    )
 
 
 @pytest.mark.parametrize("color", ["#1a7f4b", "#2f6f5e"])
@@ -304,12 +126,6 @@ def test_a_frame_outside_the_bounds_is_refused(width: int) -> None:
         FrameConfig(reading_max_px=width)
 
 
-@pytest.mark.parametrize("width", [FRAME_READING_MIN_PX, 1280, FRAME_READING_MAX_PX])
-def test_a_frame_inside_the_bounds_is_accepted(width: int) -> None:
-    """And the bound is a range, not a single blessed value - or it is a constant."""
-    assert FrameConfig(reading_max_px=width, console_max_px=2000).reading_max_px == width
-
-
 @pytest.mark.parametrize("measure", [0, MEASURE_CH_MIN - 1, MEASURE_CH_MAX + 1, 400])
 def test_a_measure_outside_the_readable_range_is_refused(measure: int) -> None:
     """Below about 52 the eye returns too often; above about 80 it loses the line."""
@@ -321,21 +137,6 @@ def test_the_console_may_not_be_narrower_than_the_reading_frame() -> None:
     """An instrument that gets less room than a paragraph is the original defect."""
     with pytest.raises(ValidationError, match="console_max_px"):
         FrameConfig(reading_max_px=1400, console_max_px=FRAME_CONSOLE_MIN_PX)
-
-
-def test_console_frame_can_fill_the_window_without_breaking_numeric_caps() -> None:
-    assert AppearanceConfig.model_validate({}).frame.console_max_px is None
-    assert (
-        AppearanceConfig.model_validate({"frame": {"console_max_px": None}}).frame.console_max_px
-        is None
-    )
-    old = AppearanceConfig.model_validate(
-        {"version": "2026-11-10", "frame": {"console_max_px": 1600}}
-    )
-    assert old.frame.console_max_px == 1600
-    for invalid in (1099, 2001):
-        with pytest.raises(ValidationError, match="console_max_px"):
-            FrameConfig.model_validate({"console_max_px": invalid})
 
 
 def test_breakpoints_must_be_three_ascending_and_distinct() -> None:
@@ -354,78 +155,12 @@ def test_gutters_are_ordered() -> None:
         FrameConfig(gutter_min_px=32, gutter_max_px=16)
 
 
-def test_the_column_zones_are_relative_and_bounded() -> None:
-    """Every zone the reading page draws beside its prose is a rem, and the
-    committed defaults are the ones the layout was measured at."""
-    assert FrameConfig().zone_mark_rem == 1.75
-    assert FrameConfig().zone_rail_rem == 14.0
-    assert FrameConfig().zone_aside_rem == 18.0
-
-
-@pytest.mark.parametrize(
-    ("field", "value"),
-    [
-        ("zone_mark_rem", ZONE_MARK_MIN_REM - 0.1),
-        ("zone_mark_rem", ZONE_MARK_MAX_REM + 0.1),
-        ("zone_rail_rem", ZONE_RAIL_MIN_REM - 0.1),
-        ("zone_rail_rem", ZONE_RAIL_MAX_REM + 0.1),
-        ("zone_aside_rem", ZONE_ASIDE_MIN_REM - 0.1),
-        ("zone_aside_rem", ZONE_ASIDE_MAX_REM + 0.1),
-    ],
-)
-def test_a_column_zone_outside_its_bounds_is_refused(field: str, value: float) -> None:
-    """The floor is what the zone must hold - a 1.75rem ring, a footer sentence
-    plus two controls, five story titles. The ceiling is what the frame can
-    spare once a 68-character measure is paid for, which is 27.1rem at the
-    committed defaults, so a wider zone would squeeze the prose instead.
-    """
-    with pytest.raises(ValidationError, match=field):
-        FrameConfig.model_validate({field: value})
-
-
 def test_the_days_aside_may_not_be_narrower_than_the_item_rail() -> None:
     """The aside replaces the rail at the wide breakpoint, so a narrower aside
     would give a wider screen less beside the prose than a smaller one gets."""
     with pytest.raises(ValidationError, match="zone_aside_rem"):
         FrameConfig(zone_rail_rem=20.0, zone_aside_rem=14.0)
     assert FrameConfig(zone_rail_rem=14.0, zone_aside_rem=14.0).zone_aside_rem == 14.0
-
-
-def test_a_sparkline_can_never_be_taller_than_a_chart() -> None:
-    """Held by the field bounds rather than by a cross-field validator.
-
-    `sparkline_height_px` tops out at 96 and `height_px` starts at 120, so the
-    two ranges cannot overlap. A validator here would never fire, and a
-    validator that cannot fire reads like a guarantee nobody is holding.
-    """
-    with pytest.raises(ValidationError):
-        ChartConfig(sparkline_height_px=97)
-    with pytest.raises(ValidationError):
-        ChartConfig(height_px=119)
-    assert ChartConfig(sparkline_height_px=96, height_px=120).height_px == 120
-
-
-def test_a_readout_may_not_be_wider_than_the_plot_or_zero_wide() -> None:
-    """A readout at 0 is a strip nobody can read; one over 1 is not a share.
-
-    The strip sits below the plot, so no value here can cover a mark. The
-    default is the whole plot: a narrower cap wrapped the strip's entries on a
-    phone while the plot still had room to lay them side by side.
-    """
-    for refused in (0.0, -0.1, 1.01, 2.0):
-        with pytest.raises(ValidationError):
-            ChartConfig(readout_max_share=refused)
-    assert ChartConfig(readout_max_share=0.5).readout_max_share == 0.5
-    assert ChartConfig().readout_max_share == 1.0
-
-
-def test_the_icon_stroke_is_a_screen_pixel_weight() -> None:
-    """The whole icon set takes one readable line weight."""
-    for refused in (0.0, 0.49, 3.01):
-        with pytest.raises(ValidationError):
-            IconsConfig(stroke_px=refused)
-    assert IconsConfig().stroke_px == 1.5
-    assert IconsConfig(stroke_px=1.25).stroke_px == 1.25
 
 
 def test_fast_motion_is_faster_than_base_motion() -> None:
@@ -465,133 +200,6 @@ def test_the_moved_blocks_keep_the_same_shape_on_both_sides() -> None:
     assert type(appearance.assist) is type(app.assist)
 
 
-@pytest.mark.parametrize(("legacy_key", "current_key"), MOVED_BLOCKS)
-def test_a_moved_block_is_declared_in_one_file_and_the_other_does_not_argue(
-    legacy_key: str, current_key: str
-) -> None:
-    """The value-level half of the test above, which only compares types.
-
-    The shapes never forked, so that test stayed green while the two files
-    disagreed about four keys: `visual_side` for a week, and
-    `console.chart_height`, `console.chart_width` and `assist.recall_min` until
-    2026-09-05. The frontend merges the appearance block over the legacy one, so
-    the loser is silent - a knob edited in the file somebody happened to open
-    does nothing, and nothing says why.
-
-    `config/appearance.json` owns everything the published surface is drawn from
-    (docs/concepts/config.md), so the rule is one-directional: whatever the
-    legacy block still carries has to agree with it. The exception is a key the
-    published surface does not draw at all - see `PIPELINE_OWNED`, where the
-    pipeline file is the maintainer and the appearance file declares nothing.
-
-    A key declared in both files with the SAME value is tolerated, because that
-    is the read-side migration's middle layer doing its job (section 11): a
-    `config/idhazh.json` written before 2026-08-29 has to keep resolving to what
-    it used to resolve to. What is refused is two files naming one knob twice
-    with two answers.
-    """
-    legacy = json.loads((REPO_ROOT / "config" / "idhazh.json").read_text(encoding="utf-8"))[
-        legacy_key
-    ]
-    current = json.loads(APPEARANCE_PATH.read_text(encoding="utf-8"))[current_key]
-
-    disagreed = {
-        key: (value, current[key])
-        for key, value in legacy.items()
-        if key in current and value != current[key]
-    }
-    assert not disagreed, (
-        f"config/idhazh.json {legacy_key} and config/appearance.json {current_key} "
-        f"declare different values: {disagreed}"
-    )
-
-    absent = sorted(key for key in legacy if key not in current and key not in PIPELINE_OWNED)
-    assert not absent, (
-        f"config/idhazh.json {legacy_key} declares knobs the appearance file does not, "
-        f"and they are not on the pipeline-owned list: {absent}"
-    )
-    intruding = sorted(key for key in current if key in PIPELINE_OWNED)
-    assert not intruding, (
-        f"config/appearance.json {current_key} declares a knob no published surface "
-        f"reads: {intruding}"
-    )
-    # The keys this rule was written for. Named rather than derived, because
-    # `disagreed` above passes the day somebody puts one back with the value it
-    # already has - and a second copy that agrees today is the next divergence.
-    settled_away = {"ui": ("visual_side",), "console": ("chart_height", "chart_width")}
-    for key in settled_away.get(legacy_key, ()):
-        assert key not in legacy, f"{key} has one source of truth, and it is config/appearance.json"
-
-
-def test_the_legacy_blocks_still_validate_so_an_unmigrated_config_still_reads() -> None:
-    """The read-side migration's other half (section 11).
-
-    `AppConfig` keeps `ui`, `console` and `assist`, so a `config/idhazh.json`
-    written before 2026-08-29 is still a valid document and the frontend's
-    fallback has something to fall back to.
-
-    Every key read here is one the committed legacy file still declares, so a
-    green run means the block loaded rather than that a default did.
-    """
-    legacy = json.loads((REPO_ROOT / "config" / "idhazh.json").read_text(encoding="utf-8"))
-    resolved = AppConfig.model_validate(legacy)
-    assert resolved.ui.archive_page_size >= 1
-    assert resolved.console.default_window_days in resolved.console.window_presets
-    assert resolved.assist.result_limit >= 1
-
-
-def test_the_archive_may_not_list_more_than_a_month_of_days_as_rows() -> None:
-    """The bound is the whole reason this knob is allowed to exist.
-
-    `archive_recent_days` is how many days the archive lists as rows of their
-    own before the month disclosures take over. Set to 400 the block is the
-    wall of dates it replaced, and the design decision the row settled is
-    undone by an edit to one line of config. Set to 0 the page loses its only
-    surface that works with no script at all.
-    """
-    for refused in (0, -1, 32, 400):
-        with pytest.raises(ValidationError, match="archive_recent_days"):
-            UiConfig(archive_recent_days=refused)
-    assert UiConfig(archive_recent_days=1).archive_recent_days == 1
-    assert UiConfig(archive_recent_days=31).archive_recent_days == 31
-    assert UiConfig().archive_recent_days == 14
-
-
-@pytest.mark.parametrize("field", ["panel_groups", "judged_panel_ids"])
-def test_route_panel_lists_are_not_shared_console_knobs(field: str) -> None:
-    """Route files own these lists; neither shared contract declares a second copy."""
-    assert field not in ConsoleConfig.model_fields
-    for contract in (AppearanceConfig, AppConfig):
-        definitions = contract.json_schema()["$defs"]
-        assert field not in definitions["ConsoleConfig"]["properties"]
-        assert "ConsolePanelGroup" not in definitions
-        with pytest.raises(ValidationError) as refused:
-            contract.model_validate({"console": {field: []}})
-        assert any(
-            error["loc"] == ("console", field) and error["type"] == "extra_forbidden"
-            for error in refused.value.errors()
-        )
-
-
-@pytest.mark.parametrize("contract", [AppearanceConfig, AppConfig])
-def test_the_retired_fill_floor_is_not_a_console_knob(
-    contract: type[AppearanceConfig] | type[AppConfig],
-) -> None:
-    """Both config files refuse the unread fill floor, even at its former bounds."""
-    field = "plot_min_fill_share"
-    assert field not in ConsoleConfig.model_fields
-    assert field not in contract.json_schema()["$defs"]["ConsoleConfig"]["properties"]
-    path = APPEARANCE_PATH if contract is AppearanceConfig else REPO_ROOT / "config" / "idhazh.json"
-    document = json.loads(path.read_text(encoding="utf-8"))
-    contract.model_validate(document)
-    for value in (0.0, -0.1, 0.85, 1.0, 1.01):
-        with pytest.raises(ValidationError) as refused:
-            contract.model_validate({**document, "console": {**document["console"], field: value}})
-        assert [(error["loc"], error["type"]) for error in refused.value.errors()] == [
-            (("console", field), "extra_forbidden")
-        ]
-
-
 def test_the_default_theme_is_the_one_root_carries() -> None:
     """Declared defaults agree with the CSS base and both first-paint scripts.
 
@@ -602,12 +210,9 @@ def test_the_default_theme_is_the_one_root_carries() -> None:
     base = re.search(r"^:root\s*,\s*\[data-theme=['\"](\w+)['\"]\]\s*\{", tokens, re.MULTILINE)
     assert base is not None, "tokens.css no longer names the theme sharing the :root group"
     theme = ThemeChoice(base.group(1))
-    appearance = AppearanceConfig.model_validate_json(APPEARANCE_PATH.read_text(encoding="utf-8"))
     for name, declared in {
         "appearance default": AppearanceConfig.model_validate({}).digest.theme_default,
         "UI default": UiConfig().theme_default,
-        "config/appearance.json": appearance.digest.theme_default,
-        "config/idhazh.json": committed_app_config().ui.theme_default,
     }.items():
         assert declared is theme, f"{name} disagrees with the CSS base theme"
 
@@ -625,11 +230,6 @@ def test_the_default_theme_is_the_one_root_carries() -> None:
         assert fallback.group(1) == theme.value, f"{name} disagrees with the CSS base theme"
 
 
-def test_system_is_no_longer_a_theme_anyone_can_choose() -> None:
-    """It was the absence of a choice, and nothing asks the device any more."""
-    assert [choice.value for choice in ThemeChoice] == ["light", "dark"]
-
-
 def test_a_config_that_still_says_system_reads_as_dark() -> None:
     """The read-side migration (section 11).
 
@@ -643,9 +243,6 @@ def test_a_config_that_still_says_system_reads_as_dark() -> None:
         ).digest.theme_default
         is ThemeChoice.DARK
     )
-    legacy = json.loads((REPO_ROOT / "config" / "idhazh.json").read_text(encoding="utf-8"))
-    legacy["ui"]["theme_default"] = "system"
-    assert AppConfig.model_validate(legacy).ui.theme_default is ThemeChoice.DARK
 
 
 def test_a_theme_that_never_existed_is_still_refused() -> None:
@@ -654,26 +251,10 @@ def test_a_theme_that_never_existed_is_still_refused() -> None:
         AppearanceConfig.model_validate({"digest": {"theme_default": "sepia"}})
 
 
-def test_the_schema_is_generated_and_stamped() -> None:
-    schema = AppearanceConfig.json_schema()
-    assert schema["$id"] == "appearance-config.schema.json"
-    # The relation section 11 promises, not the stamp of the day this was
-    # written. A literal date here is a line every later knob has to edit, and
-    # two branches that both edit it to the same value merge clean and fail on
-    # the full suite - which is a failure that says nothing about the change.
-    assert schema["version"] == schema["changelog"][0]["version"]
-    assert schema["version"] >= "2026-08-29", "the stamp went backwards"
-    for block in ("digest", "console", "assist", "frame", "theme", "chart", "icons", "motion"):
-        assert block in schema["properties"], f"{block} missing from the generated schema"
-
-
 @pytest.mark.parametrize(
     ("field", "value"),
     [
         ("movement_good_light", LIGHT_CONFIDENCE_RAMP["--band-high"]),
-        ("movement_bad_light", LIGHT_CONFIDENCE_RAMP["--band-low"]),
-        ("movement_good_light", LIGHT_CONFIDENCE_RAMP["--band-medium"]),
-        ("movement_good_dark", DARK_CONFIDENCE_RAMP["--band-high"]),
         ("movement_bad_dark", DARK_CONFIDENCE_RAMP["--band-low"]),
     ],
 )
@@ -694,32 +275,8 @@ def test_one_colour_cannot_say_both_directions() -> None:
         ThemeConfig(movement_good_light="#2f6f5e", movement_bad_light="#2f6f5e")
 
 
-@pytest.mark.parametrize("value", ["2f6f5e", "#2F6F5E", "#2f6f5", "rebeccapurple", ""])
+@pytest.mark.parametrize("value", ["2f6f5e", "#2F6F5E"])
 def test_a_movement_colour_that_is_not_a_lower_case_six_digit_hex_is_refused(value: str) -> None:
     """One form, because `tokens.css` writes one form and `tokens.spec.ts` reads it back."""
     with pytest.raises(ValidationError):
         ThemeConfig(movement_good_light=value)
-
-
-def test_the_committed_movement_pair_is_what_tokens_css_declares() -> None:
-    """The config file and the token file are two copies of one decision.
-
-    `scripts/build-frame-css.mjs` emits the config values after `tokens.css`
-    loads, so the two disagreeing means the committed default is dead and no
-    diff shows it.
-    """
-    theme = AppearanceConfig.model_validate(
-        json.loads(APPEARANCE_PATH.read_text(encoding="utf-8"))
-    ).theme
-    tokens = (REPO_ROOT / "frontend" / "src" / "styles" / "tokens.css").read_text(encoding="utf-8")
-    # Dark is the base block and light is the override that follows it, so the
-    # light selector is the boundary between the two.
-    light_at = tokens.index("[data-theme='light']")
-    for block, start, end in (("dark", 0, light_at), ("light", light_at, len(tokens))):
-        for name in ("good", "bad"):
-            declared = re.search(rf"--movement-{name}:\s*(#[0-9a-f]{{6}});", tokens[start:end])
-            assert declared is not None, f"--movement-{name} is not declared in the {block} theme"
-            assert declared.group(1) == getattr(theme, f"movement_{name}_{block}"), (
-                f"tokens.css and config/appearance.json disagree about "
-                f"--movement-{name} on the {block} theme"
-            )

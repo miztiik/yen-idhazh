@@ -10,7 +10,7 @@ Table A - Scope and execution
 | ID | Field | Value |
 | --- | --- | --- |
 | A1 | Why this plan exists | The model reads every article twice. On 66 captured articles the first call (labels, proposed figures, named mentions) took 3.67 h of 7.04 h of model time and fed a chart planner that published no chart. The local text-analysis service returns the same names and places with exact offsets in seconds. After this plan the model reads each article once and the first call's code is gone. Dropping the call saves its decode (1.78 h, 25%), because the remaining call then reads the article |
-| A2 | Hard scope - in | The digest job starts the service as a sidecar. The work stage calls its existing API over HTTP once per item and times it like fetch and extract. Names and places become entity and place elements, and regex quantity rows the service labels date, time or ordinal are dropped. One model call per item, prompts cleaned, no sentence address in model-facing text. The first call's code, prompt, settings, tests and present-tense docs are deleted. The run's prompt stamp counts `visuals.enabled_kinds`, and the unused `summarize.asks_for_a_visual_plan` setting is removed |
+| A2 | Hard scope - in | Every workflow that runs the work stage starts the service as a sidecar through one shared action. The work stage calls its existing API over HTTP once per item and times it like fetch and extract. Names and places become entity and place elements, and regex quantity rows the service labels date, time or ordinal are dropped. One model call per item, prompts cleaned, no sentence address in model-facing text. The first call's code, prompt, settings, tests and present-tense docs are deleted. The run's prompt stamp counts `visuals.enabled_kinds`, and the unused `summarize.asks_for_a_visual_plan` setting is removed |
 | A3 | Hard scope - out | Table B |
 | A4 | ESCALATE triggers | 1. Article text sent anywhere but the committed loopback `text_analysis.base_url`. 2. After rows #2 and #3 are live, the first scheduled run shows an out-of-memory kill, lowest free memory under 1 GiB, or two lost shards (before the service, 4 of the last 8 runs lost one shard and none lost two, so one lost shard is not a trigger). 3. A persisted shape beyond those rows #1, #3 and #4 name, or a third model call |
 | A5 | Chosen strategy | Use the service as it is: its existing request and response, three fields read per mention, nothing new persisted. Cells and readers before the writer; the swap (row #3) before the deletion (row #4), so a revert stays cheap |
@@ -26,6 +26,7 @@ Table B - Out of scope and its cost
 | B2 | Why no chart has published in production | Charts stay near zero | The pending row of `20261110-restore-visual-publication-plan.md` |
 | B3 | A language check, a stored analysis, other service features | A non-English article goes through the English model and yields few names; nothing from the service is kept beyond the elements built from it | A consumer that needs it |
 | B4 | A subject link for scatter and bubble | Both stay enabled but cannot validate, because only the first call wrote the link | A code rule that links a figure to its subject |
+| B5 | Counting analysis time where the month fold sums elapsed time (`backend/idhazh/retention.py`, `backend/utilities/measure_ledgers.py`) | A folded month omits analysis time, under 0.1 percent of an item's time (an estimate); the first such month folds in 2028 | The next change to the fold, which needs its own version stamp |
 
 ## 1. Status Reckoner
 
@@ -36,7 +37,8 @@ Table C - Status Reckoner
 | C1 | 1 | Make room for the analysis step | - | A | DONE | probable-chainsaw | own pull request | nested session |
 | C2 | 2 | Start the service in the digest job | - | A | DONE | miniature-chainsaw | own pull request | nested session |
 | C3 | 3 | Replace the first call with the service | 1, 2 | B | PENDING | - | - | - |
-| C4 | 4 | Delete what the first call served | 3 | C | PENDING | - | - | - |
+| C4 | 4 | Delete what the first call served | 3, 5 | C | PENDING | - | - | - |
+| C5 | 5 | Start the service in every workflow that runs the work stage | - | B | PENDING | - | - | - |
 
 ## 2. Row #1 - Make room for the analysis step
 
@@ -66,7 +68,7 @@ Table D - Row #1 decisions
 - **Files touched:** `.github/workflows/digest.yml`, `.github/actions/model-server/action.yml`, `backend/idhazh/contracts/knobs/council.py`, `docs/reference/github-actions.md`
 - **Acceptance gates:** Local: none; a workflow declaration cannot be run, and the project has no workflow linter or workflow-file test. CI: the pull request's own checks.
 - **Oracle:** The next scheduled run's log shows the service ready before the model server and stopped after the work step, and a shard whose service failed to start still completes its work step. It cannot settle memory under real articles (OBS-1).
-- **Observation OBS-1** (after rows #2 and #3 are live; row #3 is `DONE` only after this reading and OBS-2): per shard, read from "What memory this shard used" the lowest free memory and the service's peak memory, and read mean `analyze_ms` from the item-health rows. Baseline before the sidecar: 3.66 GiB lowest free memory on the worst shard of Actions run 43901478491. An out-of-memory kill, lowest free memory under 1 GiB (an estimate), or two lost shards in one run (before the service, 4 of the last 8 runs lost one and none lost two) stops the plan (trigger 2); the choices are the service's `sm` profile (one line in `config/text-analysis/settings.json`) or splitting the work stage.
+- **Observation OBS-1** (after rows #2 and #3 are live; row #3 is `DONE` only after this reading and OBS-2): per shard, read the lowest free memory (`os_mem_available_min_bytes` in its item-health rows), the most the model server and Python held at once (the "What memory this shard used" step) and the mean `analyze_ms`. Baseline: the same readings for Actions run 44121930049, the first scheduled run after the memory fix of 2026-11-17 and before row #2. An out-of-memory kill, lowest free memory under 1 GiB (an estimate), or two lost shards in one run (before the service, 4 of the last 8 runs lost one and none lost two) stops the plan (trigger 2); the choices are the service's `sm` profile (one line in `config/text-analysis/settings.json`) or splitting the work stage.
 - **Decisions:**
 
 Table E - Row #2 decisions
@@ -85,10 +87,10 @@ Table E - Row #2 decisions
 - **Files touched:**
   - New: `backend/idhazh/ask_text_analysis.py`, `backend/tests/test_text_analysis_client.py`
   - Renamed to say what it does: `backend/idhazh/stages/two_calls.py`
-  - Code: `backend/idhazh/stages/work.py`, `backend/idhazh/classify/calls.py`, `backend/idhazh/classify/dag.py`, `backend/idhazh/classify/plan_visual_request.py`, `backend/idhazh/elements.py`, `backend/idhazh/telemetry/census.py`, `backend/idhazh/telemetry/spans.py`, `backend/idhazh/contracts/summary.py`, `backend/utilities/replay_article_calls.py`, `config/prompts/write-digest-summary.txt`, `config/prompts/plan-visual.txt`
+  - Code: `backend/idhazh/stages/work.py`, `backend/idhazh/classify/calls.py`, `backend/idhazh/classify/dag.py`, `backend/idhazh/classify/plan_visual_request.py`, `backend/idhazh/elements.py`, `backend/idhazh/telemetry/census.py`, `backend/idhazh/telemetry/spans.py`, `backend/idhazh/contracts/summary.py`, `backend/idhazh/contracts/knobs/text_analysis.py`, `backend/utilities/replay_article_calls.py`, `config/idhazh.json`, `config/prompts/write-digest-summary.txt`, `config/prompts/plan-visual.txt`
   - Tests: `backend/tests/test_classify.py`, `backend/tests/test_elements.py`, `backend/tests/test_fingerprint.py`, `backend/tests/test_spans.py`, `backend/tests/test_item_records.py`, `backend/tests/test_telemetry.py`, `backend/tests/test_chart_vocabulary.py`, `backend/tests/test_visual_attempts.py`, `backend/tests/test_capture_root.py`, `backend/tests/test_replay_article_calls.py`, `backend/tests/contracts/test_decoder_grammar.py`, `backend/tests/pipeline/_builders.py`, `backend/tests/pipeline/test_work_records.py`
   - Docs: `docs/architecture/summarize/prompt.md`, `docs/architecture/summarize/model-boundary.md`, `docs/architecture/extraction/elements.md`, `docs/architecture/sources/trust-boundary.md`, `docs/reference/retained-article-verification.md`
-- **Acceptance gates:** Local: the shared selector over the named backend tests; ruff and mypy over `backend/`. Tests drive a loopback server the test owns and a fake model server; nothing reaches a real service. CI: the complete suite.
+- **Acceptance gates:** Local: the shared selector over the named backend tests; ruff and mypy over `backend/`. Tests drive a loopback server the test owns and a fake model server; nothing reaches a real service. CI: the complete suite. Merge gate, held by the maintainer: row #2's Oracle has been read in a scheduled digest run on the workflow then on main (row #5's, when it merges first). The loaded service adds about 0.74 GiB (an estimate) to every shard; the memory fix leaves hosts with the AMX instruction set 3.79 to 5.01 GiB lowest free (Actions run 44121930049), against 0.20 before.
 - **Oracle:** One item against the stand-ins: exactly one model request, its prompt holds no `[s` sentence address and none of the first call's text; mentions become elements whose excerpts are re-sliced from `Article.text`; quantity rows the service labels date, time or ordinal are gone; a closed port, a hung socket and a malformed reply each publish the item with the regex-only table and a warning; `analyze_ms` is in the item's named time and not in `queue_wait_ms`; the item-health row carries only the `summary` slot; the prompt stamp moves when `visuals.enabled_kinds` moves. It cannot settle whether summaries read as well without the first call's reply (OBS-2).
 - **Observation OBS-2** (the first two scheduled runs after this row; this row is `DONE` only after this reading and OBS-1): read the summary-evaluation columns of `docs/concepts/summary-metrics.md` beside the prior seven days. Revert this row when they fall outside that range; no tolerance is named because day-to-day noise can exceed a small effect.
 - **Decisions:**
@@ -98,7 +100,7 @@ Table F - Row #3 decisions
 | ID | Decision |
 | --- | --- |
 | F1 | The request is the existing `POST {base_url}/api/2026-11-08/run-ner-spacy` with `text` = `Article.text`, `language` and `features` = `["entities"]`. The pipeline reads `label`, `start_char` and `end_char` of each mention; the excerpt is re-sliced from `Article.text`, and a mention whose returned text differs is dropped. No new contract and no stored analysis |
-| F2 | One synchronous call per item in the fetch loop, after the article is known OK, inside an `analyze` span; `_FetchedWorkItem` carries the mentions to the model loop. Any failure (closed port, timeout, malformed reply) degrades the item to the regex-only table and logs why. No retry, no thread. `analyze_ms` is subtracted from `queue_wait_ms` so it stays in the item's time |
+| F2 | One synchronous call per item in the fetch loop, after the article is known OK, inside an `analyze` span; `_FetchedWorkItem` carries the mentions to the model loop. Any failure (closed port, timeout, malformed reply) degrades the item to the regex-only table and logs why. No retry, no thread. The deadline is `text_analysis.request_timeout_seconds`, lowered from 60 to 15 (an estimate: about five times the 2.7 s cold request measured on a hosted runner), so a hung service costs at most 15 s an item, 20 minutes over the busiest shard's 80 items rather than 80. `analyze_ms` is subtracted from `queue_wait_ms` so it stays in the item's time |
 | F3 | `element_table` takes the mentions: entity and place elements (`Extractor.MODEL`, as the first call's mentions used; `Element.entity` unset) and regex quantity rows that overlap a `not_quantity` mention dropped. Callers that pass none are unchanged |
 | F4 | One call per item. System turn: the summary half, the plan half and the type guide. User turn: fenced title, fenced plain article, the planning menu without its `sentence_id` column and labels map when a chart is reachable, the closing question. No sentence address in any model-facing text (Andre) |
 | F5 | The call is recorded in `call_2` so the `summary_*` series stays continuous; the census reads "any slot recorded". `dag.py` keeps only the one-call window check |
@@ -125,3 +127,21 @@ Table G - Row #4 decisions
 | G2 | Keep readable, never written again: the `Element` Tier 2 fields with `label_source` and `ledger_version`, `Extractor.MODEL`, `CallKind.LABEL`, `FailureCode.LABELS_TRUNCATED` and the `label_*` cells |
 | G3 | `prompt_files.generate_labels` and `summarize.asks_for_a_visual_plan` are refused by name, the latter pointing at `visuals.enabled_kinds`. The pipeline-test case flag of the same name stays; only the test-case writer's write into the summarize block goes. The stamp test that used the knob is replaced by row #3's `enabled_kinds` test |
 | G4 | Dated benchmark pages stay as history. `backend/tests/test_labels.py` is the human faithfulness-label suite and is not touched |
+
+## 6. Row #5 - Start the service in every workflow that runs the work stage
+
+- **Scope:** One shared action installs, starts and stops the service. The digest work job and both pipeline-test jobs use it, so a pipeline test walks the path production walks, and the steps row #2 wrote inline in `digest.yml` move into it unchanged.
+- **Files touched:** (from a search of the workflows for the work stage's entry points; the other workflows that start the model server run none)
+  - New: `.github/actions/text-analysis-service/action.yml`
+  - Code: `.github/workflows/digest.yml`, `.github/workflows/idhazh-pipeline-tests.yaml`
+  - Docs: `docs/reference/github-actions.md`
+- **Acceptance gates:** Local: none, as for row #2; parse the YAML and read the diff. Hosted: the action's start and stop on a hosted runner from a throwaway branch, answering one real request, with no digest run (a run writes committed data). CI: the pull request's own checks.
+- **Oracle:** The hosted run shows the start answering and the stop leaving no process, and a service that will not start still lets the job finish. The next scheduled digest run then logs the same start and stop lines as row #2's Oracle. The pipeline-test jobs are read, not run, because a dispatch runs the real model for hours; their first dispatch shows the same lines. It cannot settle that a pipeline test's items now match production's.
+- **Decisions:**
+
+Table H - Row #5 decisions
+
+| ID | Decision |
+| --- | --- |
+| H1 | One action with a `mode` input, `start` or `stop`. A composite action cannot run after its caller's later steps, so each workflow calls it a second time with `if: always()`. Start is setup-uv, install and start, every step `continue-on-error` as row #2 wrote them; stop signals the service's process group. Row #2's rules (E2 to E4) and its log lines move unchanged |
+| H2 | A caller keeps two `uses` lines. The service log goes where the job already collects its logs: the `runtime-log-<shard>` artifact for digest, the test-case and retained output folders for pipeline tests |

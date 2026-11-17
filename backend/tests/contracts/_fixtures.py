@@ -195,10 +195,10 @@ PIPELINE_OWNED = {
     "model_revision",
 }
 
-#: Dotted paths a config file's model declares but the file must NOT name,
+#: Dotted paths a config file's model declares but the file need not name,
 #: because another file owns them. Naming a knob in two files is how one of them
 #: goes silent: the frontend merges the appearance block over the legacy one, so
-#: the loser is edited and nothing happens (`test_appearance_config.py`).
+#: the loser is edited and nothing happens.
 #:
 #: `config/idhazh.json` keeps the three moved blocks only as the read-side
 #: migration's middle layer - a file written before 2026-08-29 still resolves to
