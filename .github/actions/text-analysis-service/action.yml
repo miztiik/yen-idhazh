@@ -10,10 +10,12 @@ inputs:
       fails the step: a misspelt mode would otherwise do nothing and say nothing.
     required: true
 
-# The service only adds to what the work stage can do, so no step in this
-# action may fail the job: without the service the work stage still runs. Each
-# step that can fail is `continue-on-error`, and the steps after it read what it
-# concluded instead of assuming it worked.
+# The service only adds to what the work stage can do, so no step that runs it
+# may fail the job: without the service the work stage still runs. Each step
+# that can fail is `continue-on-error`, and the steps after it read what it
+# concluded instead of assuming it worked. The one step that does fail the job
+# refuses a misspelt mode, which is a mistake in the caller's workflow and not a
+# failure of the service.
 #
 # One action holds both halves because a composite action cannot run after its
 # caller's later steps. The caller names it twice: `start` before the model
