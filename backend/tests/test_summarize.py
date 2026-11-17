@@ -51,7 +51,6 @@ from idhazh.llm.server import (
     TurnMarkers,
     answer_span,
     completion_payload,
-    continued_completion_payload,
     decoding_still_constrains,
     grammar_completion_payload,
     is_context_exceeded,
@@ -285,15 +284,8 @@ def test_rendered_routes_carry_the_response_limit_without_a_caller_budget() -> N
         markers=a_markers(),
         first_token_alternatives=3,
     )
-    continuation = continued_completion_payload(
-        completion,
-        reply="{}",
-        user="Continue.",
-        output_schema=output_schema(),
-        markers=a_markers(),
-    )
 
-    for body in (completion, grammar, continuation):
+    for body in (completion, grammar):
         assert body["n_predict"] == response_limit({})
         assert "max_tokens" not in body
 
@@ -315,15 +307,14 @@ def test_two_configured_token_limit_spellings_are_not_sent_together(route: str) 
         three_bodies(a_sampling(max_tokens=4096, n_predict=2048), only=route)
 
 
-def test_a_configured_token_limit_survives_continuations_and_reasoning() -> None:
-    """A continuation is a derivation: it inherits the sampling and does not check it again.
+def test_a_configured_token_limit_survives_reasoning() -> None:
+    """A span is a derivation: it inherits the configured limit and adds no second spelling.
 
-    `continued_completion_payload` is `{**first, ...}` and `first` already
-    carries every sampling key, so a second splat would clash on all of them and
-    raise on every summarize-and-plan call.
+    `thinking_span` and `answer_span` start from the answer body, which already
+    carries every sampling key, so neither sets the limit again.
     """
     markers = a_markers(thinking_close="</think>")
-    first = completion_payload(
+    answer = completion_payload(
         model_id="m",
         system="s",
         user="u",
@@ -333,22 +324,14 @@ def test_a_configured_token_limit_survives_continuations_and_reasoning() -> None
         markers=markers,
         max_answer_tokens=64,
     )
-    second = continued_completion_payload(
-        first,
-        reply='{"title": "a bridge"}',
-        user="Now the picture.",
-        output_schema=output_schema(),
-        markers=markers,
-        max_answer_tokens=128,
-    )
-    thought = thinking_span(second, markers=markers)
-    answer = answer_span(second, thought="Considering the facts.", markers=markers)
+    thought = thinking_span(answer, markers=markers)
+    closed = answer_span(answer, thought="Considering the facts.", markers=markers)
 
-    for body in (first, second, thought, answer):
+    for body in (answer, thought, closed):
         assert body["max_tokens"] == 4096
         assert "n_predict" not in body
     assert "json_schema" not in thought
-    assert answer["json_schema"] == output_schema()
+    assert closed["json_schema"] == output_schema()
 
 
 def test_the_declared_closing_marker_is_what_asks_the_template_to_think() -> None:
@@ -593,7 +576,7 @@ def test_one_server_is_named_once_however_many_items_are_sent(
 class TestTheRenderedCompletionEnvelope:
     """The second shape `parse_completion` reads, from a reply a server really sent.
 
-    Recorded 2026-09-12 by posting the committed label prompt to llama-server
+    Recorded 2026-09-12 by posting the label prompt committed that day to llama-server
     build b10444-5f754ea0e on the weights `models.summarizer` declares, over its
     rendered-completion route. Nothing is hand-written: the route names its
     fields differently from the chat route, and a fake would agree with whatever
@@ -715,7 +698,7 @@ class TestTheThreeSlotFacts:
     def test_the_boolean_and_the_count_are_read_off_one_field(self) -> None:
         """`prefix_reused` and `cached_tokens` cannot disagree about one reply.
 
-        `label_cached_tokens` on the census row is this count, and
+        `summary_cached_tokens` on the census row is this count, and
         `prefix_shared_with_previous` is this boolean. Deriving the second from
         anything but the first is how a ledger comes to hold a reading twice and
         then hold it two ways (Guardrail #10).
@@ -1197,7 +1180,7 @@ class TestAConstrainedCallerGetsBothSpans:
 class TestTheThinkingReachesNothing:
     """The hard rule, on a recorded thinking reply rather than a constructed one.
 
-    Model-written text that reached a reader-facing surface or a replayed prompt
+    Model-written text that reached a reader-facing surface or a persisted payload
     would be exactly the injection channel Guardrail #11 exists to close, and it
     is not evidence of anything.
     """
@@ -1226,45 +1209,6 @@ class TestTheThinkingReachesNothing:
         for phrase in ("Let me reason", "several framings", "before I answer"):
             assert phrase in self.thought()
             assert phrase not in persisted
-
-    def test_the_reply_replayed_into_the_second_call_is_cut_at_the_answer_boundary(self) -> None:
-        """The second prompt opens with the label prompt and the label ANSWER.
-
-        What the slot holds behind that prompt also includes what span one
-        thought, and none of it is replayed: a prompt is the one place a model's
-        own words could steer the next decode.
-        """
-        markers = a_markers(thinking_close="</think>")
-        first = completion_payload(
-            model_id="m",
-            system="S",
-            user="U",
-            output_schema=output_schema(),
-            server=a_server(),
-            sampling=a_sampling(),
-            markers=markers,
-            max_answer_tokens=900,
-        )
-        answer = self.recorded().content
-
-        second = continued_completion_payload(
-            first,
-            reply=answer,
-            user="and then?",
-            output_schema=output_schema(),
-            markers=markers,
-            max_answer_tokens=900,
-        )
-
-        assert answer in second["prompt"]
-        assert self.thought() not in second["prompt"]
-        appended = second["prompt"][len(str(first["prompt"])) :]
-        assert appended == (
-            answer
-            + markers.turn_closing
-            + markers.turn("user", "and then?")
-            + markers.reply_opening_thinking
-        ), "what follows the label call's prompt is the answer, one new turn, and nothing else"
 
 
 def test_inline_reasoning_is_read_only_with_its_explicit_delimiters() -> None:

@@ -6,7 +6,6 @@ import dataclasses
 import json
 import re
 from pathlib import Path
-from string import Template
 from typing import Any
 
 import pytest
@@ -52,9 +51,6 @@ from idhazh.elements import SpanDriftError, element_table
 from idhazh.extract import approx_tokens
 from idhazh.llm.server import (
     Completion,
-    SystemPlacement,
-    TurnMarkers,
-    continued_prompt,
     post,
     render_prompt,
     response_limit,
@@ -68,25 +64,6 @@ from idhazh.visual_validator import validate_plan
 def configured() -> ModelEntry:
     """Read the validated summarizer entry selected by config."""
     return config.load(CONFIG_DIR).models.summarizer
-
-
-def markers_from(recorded: dict[str, Any]) -> TurnMarkers:
-    """The markers a set of recorded bodies was rendered with.
-
-    Read off the fixture rather than off a running server, so the byte oracle
-    below says what this code renders rather than what a model's template
-    happens to write today.
-    """
-    return TurnMarkers(
-        turn_opening=Template(recorded["turn_opening"]),
-        turn_closing=recorded["turn_closing"],
-        reply_opening=recorded["reply_opening"],
-        reply_opening_thinking=recorded["reply_opening_thinking"],
-        system_role=SystemPlacement(recorded.get("system_role", "own_turn")),
-        system_joiner=recorded.get("system_joiner") or "",
-        thinking_close=recorded["thinking_close"],
-        thinking_kwarg=recorded.get("thinking_kwarg"),
-    )
 
 
 CHAT_TEMPLATE_RENDERING = FIXTURES_DIR / "prompts" / "chat-template.json"
@@ -115,42 +92,6 @@ class TestThePromptBytes:
             recorded["generation_prompt_thinking"]
         )
 
-    def test_the_chat_template_breaks_the_property_our_renderer_keeps(self) -> None:
-        """Why this row exists, as a paired assertion rather than a paragraph.
-
-        The template writes an empty reasoning block into a generation prompt
-        and drops it when the same turn comes back as history, so its second
-        rendering stops matching its first four tokens early and everything
-        behind the break is read again. Ours cannot: the second prompt is the
-        first one extended.
-        """
-        recorded = json.loads(read_text(CHAT_TEMPLATE_RENDERING))
-        markers = a_markers(
-            reply_opening="<|im_start|>assistant\n<think>\n\n</think>\n\n"
-        )
-        opening = recorded["generation_prompt"] + recorded["reply"]
-        ours = continued_prompt(
-            render_prompt(
-                system=recorded["system"], user=recorded["user"], markers=markers
-            ),
-            reply=recorded["reply"],
-            user=recorded["question"],
-            markers=markers,
-        )
-
-        assert not recorded["continued_prompt"].startswith(opening)
-        assert ours.startswith(opening)
-
-    def test_a_prompt_that_does_not_end_on_a_reply_opening_is_refused(self) -> None:
-        """Nothing may be appended to a prompt whose end nobody recognises."""
-        with pytest.raises(ValueError, match="reply opening"):
-            continued_prompt(
-                "a prompt that stops mid-sentence",
-                reply="{}",
-                user="and then?",
-                markers=a_markers(),
-            )
-
     def test_turn_rendering_uses_the_supplied_markers(self) -> None:
         """The substitution test: move the markers and the bytes move with them."""
         markers = a_markers()
@@ -158,29 +99,6 @@ class TestThePromptBytes:
 
         assert markers.turn("user", "hello").endswith(markers.turn_closing)
         assert moved.turn("user", "hello").endswith("<<END>>")
-
-    def test_a_shorter_reply_opening_cannot_shadow_a_longer_one(self) -> None:
-        """Built rather than derived, because the incumbent is safe by luck.
-
-        `opening_of` matches on a suffix. Here the plain opening IS a suffix of
-        the thinking one, so a first-match-wins reader would splice a thinking
-        continuation with the plain opening and break the prefix the two calls
-        exist to keep. Longest-first makes that unreachable.
-        """
-        markers = markers_from(
-            {
-                "turn_opening": "<turn $role>",
-                "turn_closing": "</turn>",
-                "reply_opening": "<turn assistant>",
-                "reply_opening_thinking": "<thinking><turn assistant>",
-                "thinking_close": None,
-            }
-        )
-
-        assert markers.opening_of("..." + markers.reply_opening_thinking) == (
-            markers.reply_opening_thinking
-        )
-        assert markers.opening_of("..." + markers.reply_opening) == markers.reply_opening
 
 
 #: Five figures, two sentences apart, one of them a date. Small enough that a
