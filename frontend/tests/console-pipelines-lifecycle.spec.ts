@@ -97,7 +97,7 @@ test('removed visual diagnostics neither mount nor ask for evaluator data', asyn
 	expect(evaluatorRequests.sort()).toEqual(['index/daily.json', 'index/monthly.json', 'index/yearly.json']);
 });
 
-test('the run-wide article ranking keeps lagging host/count evidence separate from the current timeline', async ({ page }) => {
+test('article timing panels follow the newest item record despite lagging host/count evidence', async ({ page }) => {
 	const older = dayBefore(THROUGH, 1);
 	const state = await packedPipelines('ranking-endpoint', [
 		{ covers: older, rows: [
@@ -118,14 +118,17 @@ test('the run-wide article ranking keeps lagging host/count evidence separate fr
 	await hydrated(page);
 	await settled(page);
 	await expect(page.locator('[data-run-timeline]')).toHaveAttribute('data-run-timeline', `${THROUGH}-1`);
+	await expect(page.locator('[data-run-timeline]')).toContainText('1 recorded shard.');
 	const ranking = page.locator('[data-console-panel-id="slowest-articles"]');
 	await expect(ranking).toHaveCount(1);
-	await expect(ranking.locator('[data-slowest-run]')).toHaveAttribute('data-slowest-run', `${older}-1`);
-	await expect(ranking.locator('[data-native-window]')).toContainText(`${older} through ${older} UTC`);
+	await expect(ranking.locator('[data-slowest-run]')).toHaveAttribute('data-slowest-run', `${THROUGH}-1`);
+	await expect(ranking.locator('[data-native-window]')).toContainText(`${THROUGH} through ${THROUGH} UTC`);
 	await expect(page.locator('[data-console-panel-id="stage-timings"] [data-native-window]'))
 		.toHaveText(`Native record: ${older} through ${THROUGH} UTC.`);
-	await expect(ranking.locator('[data-ranked-row]').first()).toContainText('older-long');
-	await expect(ranking).not.toContainText('latest-clock');
+	await expect(page.locator('[data-console-panel-id="tail-trend"] [data-native-window]'))
+		.toHaveText(`Native record: ${older} through ${THROUGH} UTC.`);
+	await expect(ranking.locator('[data-ranked-row]').first()).toContainText('latest-clock');
+	await expect(ranking).not.toContainText('older-long');
 });
 
 test('integrated actual canary smoke: narrow viewport, with cross-page navigation', async ({ page }) => {

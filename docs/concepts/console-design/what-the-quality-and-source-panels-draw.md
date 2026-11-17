@@ -1,6 +1,6 @@
 # What the quality and source panels draw
 
-**Last Updated**: 2026-11-15
+**Last Updated**: 2026-11-16
 
 The panels that report what the model wrote and how the sources behaved: the
 retained cards and measurements on `/console/model/`, and
@@ -28,24 +28,29 @@ minute.
 The section leads with one card per retained measure on an
 `auto-fit minmax(220px, 1fr)` grid. Each keeps **its documented label and
 explanation**, bound by `frontend/tests/console-model.spec.ts`;
-**the newest day's figure**, with its day printed once above the grid;
+**the newest recorded day's figure**, with its UTC day printed once above the grid;
 **a line over at most the newest
 fourteen days inside the selected window**, drawn
 as markup by `Sparkline`, so each card's line needs no chart instance;
 and **the change across that line**, painted from the measure's own declared
 polarity.
 
-The label set for `What the model did`, with the sentence each one carries:
+The label set for `Model figures by recorded day`, with the sentence each one carries:
 
 | Label | The line under it |
 | --- | --- |
-| Summaries today | - |
+| Published summaries checked | - |
 | Article read only in part | The article was too long, so the machine read the start and stopped. |
 | Read only in part, as a percent | The same articles, against the day's own count, so a busy day and a quiet one compare. |
 | Time to write one | How long the machine takes on one article. The second figure is the articles it read only the start of. |
 | Model minutes | - |
 | Too long to send | The article and the instructions together did not fit, so the machine was never asked. |
 | Failed | - |
+
+`Published summaries checked` counts distinct published items with a
+faithfulness score, from the day metrics written by the telemetry publisher.
+It is not the number of score rows or a live count for today. Missing day
+metrics leave the count unmeasured, even when score rows exist.
 
 Two of those carry a rule the others do not. **The share divides by the rows its
 own flag answers for**, never by the day: `truncation_flagged` changed meaning on

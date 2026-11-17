@@ -72,7 +72,7 @@
 				</dd>
 			</div>
 		</dl>
-		<p class="note">Run <strong>{view.runId}</strong> (UTC): {count(view.itemCount)} items, {count(view.shards.length)} recorded shards.</p>
+		<p class="note">Run <strong>{view.runId}</strong> (UTC): {count(view.itemCount)} items, {count(view.shards.length)} recorded {view.shards.length === 1 ? 'shard' : 'shards'}.</p>
 		<div class="controls">
 			<ShapeSwitch bind:shape={measure} name="timeline-view" label="Which timing to compare" options={VIEWS} />
 			<span class="note">Longest first</span>

@@ -26,9 +26,9 @@
 		? setAsideSentence('article record', runTimelineQuery.ledger, answer.setAside, 'this run') : null);
 </script>
 
-<Reserved record {panelState} height={knobs.chart_height} width={knobs.chart_width} name="run-timeline" label="The newest run's own clock">
-	<p class="comparison" data-comparison="Elapsed windows and cumulative work are separate.">
-		Elapsed windows and cumulative work are separate. Longest first, not a measure of efficiency.
+<Reserved record {panelState} height={knobs.chart_height} width={knobs.chart_width} name="run-timeline" label="Recorded article timings by shard">
+	<p class="comparison" data-comparison="Recorded shard timings in the latest run">
+		Newest run on the latest recorded article day; only shards with item records appear.
 	</p>
 	<RunTimelinePanel view={native} {chart} width={knobs.chart_width} />
 	{#if native.unassigned > 0}

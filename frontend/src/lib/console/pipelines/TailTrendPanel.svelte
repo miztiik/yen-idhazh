@@ -20,8 +20,6 @@
 		linearAxis,
 		modelRuleRow,
 		modelRuleTitle,
-		MODEL_RULE_LABEL,
-		MODEL_RULE_NOTE,
 		modelRules,
 		noModelRuleNote,
 		observeWidth,
@@ -172,7 +170,7 @@
 	 * lowest and the highest percentile drawn, so a change to `PERCENTILES`
 	 * moves the sentence with the plots. */
 	const newest = $derived(tailRuns.at(-1) ?? null);
-	const slowestTenth = $derived(newest?.ms[PERCENTILES.indexOf(90)] ?? null);
+	const p90 = $derived(newest?.ms[PERCENTILES.indexOf(90)] ?? null);
 	const spread = $derived.by(() => {
 		const middle = newest?.ms[0] ?? 0;
 		const slowest = newest?.ms.at(-1) ?? 0;
@@ -187,18 +185,17 @@
 	<Panel
 		heading="h2"
 		id="tail-trend"
-		title="Whether the slowest articles are getting slower"
-		note="A slow end that keeps drifting is the one that eventually runs a job past its limit - one mark a run, over {nameSpan(windowDays)}."
+		title="Model processing time by run"
+		note="One point per run over {nameSpan(windowDays)}. All plots share one scale."
 	>
 		<div data-model-rule={tailRuns.length > 1 ? 'yes' : 'no'}
 			data-model-rule-name="machine-latency"
 			data-model-rule-none={tailRuns.length > 1 ? undefined : 'Fewer than two measured runs leave no edge between runs to mark.'}
 			data-model-rule-from={tailRuns[0]?.date ?? ''} data-model-rule-to={tailRuns.at(-1)?.date ?? ''}>
-		<p class="lede" data-lede>
-			{slowestTenth === null ? 'No slowest-tenth reading was recorded.'
-				: `${formatNumber(slowestTenth / 1000, chart.number_format, { si: false })} seconds at p90 (90th percentile) of the newest measured run.`}
+		<p class="lede" data-lede data-comparison="Model-duration percentiles across recorded runs">
+			{p90 === null ? 'No 90th-percentile reading was recorded.'
+				: `Latest measured run: 90th percentile ${formatNumber(p90 / 1000, chart.number_format, { si: false })} s.`}
 		</p>
-		<p data-comparison="p90 duration against median (p50)">p90 duration against median (p50).</p>
 		{#if tailRuns.length === 0}
 			<div data-readout-none="No run timed enough articles to draw a percentile; agreed with Susan"
 				use:observeWidth={(px) => (tailWidth = px)}>
@@ -309,20 +306,12 @@
 								y2={tailBox(PERCENTILES.length - 1).bottom}
 								stroke="var(--chart-change)"
 								stroke-width="1.5"
-								stroke-dasharray="3 3"
+								stroke-dasharray="1 3"
+								stroke-linecap="round"
 								role="img"
 								aria-label={modelRuleTitle(rule.date, namesMoved(movedOn.get(rule.date) ?? []))}
 								data-model-rule-line={rule.date}
 							/>
-							<text
-								x={rule.x + 3}
-								y={tailBox(0).top + 9}
-								fill="var(--chart-change)"
-								font-size={labels().fontSize}
-								data-model-rule-label={rule.date}
-							>
-								{MODEL_RULE_LABEL}
-							</text>
 						{/each}
 
 						{#if tailAt !== null && tailX[tailAt] !== undefined}
@@ -372,12 +361,9 @@
 				/>
 			</div>
 
-			<!-- The dashed-rule sentence, then what a score read that did not read cost
-			     the rules. While that line prints, the chart never says nothing changed:
-			     it cannot see the days the line names. -->
 			{#if tailRules.length > 0}
 				<p class="reads">
-					<span data-model-rule-note="machine-latency">{MODEL_RULE_NOTE}</span>
+					<span data-model-rule-note="machine-latency">Dotted lines mark recorded settings changes.</span>
 				</p>
 			{/if}
 			{#if missingMarkers !== null}
@@ -394,30 +380,28 @@
 
 			<p class="reads" data-latency-note>
 				{tailRuns.length}
-				{tailRuns.length === 1 ? 'run' : 'runs'} of {nameSpan(days)}. The value is
-				<code>summarize_ms</code>, the whole model call for one item, and a percentile is
-				interpolated linearly between the two nearest ranks - at about a hundred items the
-				nearest-rank rule and this one disagree by more than the difference between two runs, so
-				the rule is named rather than assumed. Runs are never pooled: two runs of one day draw
-				different processors.
-				{#if tooFew.length > 0}
+				{tailRuns.length === 1 ? 'run' : 'runs'} shown. Percentiles use linear interpolation; runs are not pooled.
+			</p>
+			{#if tooFew.length > 0}
+				<p class="reads" data-latency-exclusions>
 					{tooFew.length}
 					{tooFew.length === 1 ? 'run' : 'runs'} timed fewer than
-					{floor} items and {tooFew.length === 1 ? 'is' : 'are'} printed
-					rather than drawn:
+					{floor} items and {tooFew.length === 1 ? 'is' : 'are'} excluded:
 					{tooFew.map((run) => `${run.runId} (${run.items})`).join(', ')}.
-				{/if}
-			</p>
+				</p>
+			{/if}
 
 			{#if spread !== null}
 				<p class="reads" data-latency-spread={spread.times.toFixed(2)}>
-					On {spread.run.runId}, the newest run drawn, the slowest articles took
-					<strong>{formatNumber(spread.times, chart.number_format, { si: false })} times as long</strong>
-					as the median (p50): {seconds(spread.slowest / 1000, chart.number_format)} against
-					{seconds(spread.middle / 1000, chart.number_format)}. That is how wide the spread is today; the plots above
-					are whether it is widening.
+					Latest measured run: 99th percentile {seconds(spread.slowest / 1000, chart.number_format)};
+					median {seconds(spread.middle / 1000, chart.number_format)} -
+					<strong>{formatNumber(spread.times, chart.number_format, { si: false })} times as long.</strong>
 				</p>
 			{/if}
+			<details class="console-disclosure">
+				<summary class="console-summary">What is timed</summary>
+				<p class="reads">Each duration is an article's complete recorded model call, not its full processing window.</p>
+			</details>
 
 			<ul class="sr-only" data-latency-values>
 				{#each tailRuns as run (run.runId)}

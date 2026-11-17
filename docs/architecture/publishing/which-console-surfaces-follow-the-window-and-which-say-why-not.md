@@ -1,6 +1,6 @@
 # Which console surfaces follow the window, and which say why not
 
-**Last Updated**: 2026-11-15
+**Last Updated**: 2026-11-16
 
 One control at the top of the console sets the span for the whole page. This page
 is the control, and the list of every surface that does not simply follow it -
@@ -97,10 +97,11 @@ write-cost earlier without backshifting either route or changing item-cost.
 Recording-start notes use the ledger's actual first day, not the selected
 slice's first day; narrowing a preset does not claim that earlier records vanished.
 
-Pipelines' `tail-trend` keeps the common item-health/host-fingerprint/run-shards
-endpoint, shared with the slowest ranking but using the selected preset rather
-than a newest-day snapshot. Hardware's `slower-on-same-work` keeps item-health
-alone, independently of its ordinary three-family native reach. Both queries
+Pipelines' `tail-trend` uses item-health alone, shared with the timeline and
+slowest ranking but using the selected preset rather than a newest-day snapshot.
+Unused host and dispatch-count records cannot backdate article-only readings.
+Hardware's `slower-on-same-work` keeps item-health alone, independently of its
+ordinary three-family native reach. Both queries
 clamp their start to item-health's own first day and print compact UTC bounds.
 The tail's settings markers still cover the full selected preset at its own
 endpoint; the fixed-work trend's rules follow its clamped query range.
@@ -187,9 +188,8 @@ successful run when the newest one was refused. The widest host population
 supplies canonical full-identity palette slots and name qualifiers, so changing
 the selected span cannot recolour or rename a machine.
 
-Pipelines' run-wide slowest-article list is also a newest-run snapshot. It keeps
-Hardware's item-health + host-fingerprint + run-shards endpoint group, separate
-from ordinary Pipelines item-health reads, and prints its own evidence day.
+Pipelines' run-wide slowest-article list is also a newest-run snapshot. It uses
+the newest item-health day, like the timeline, and prints its evidence day.
 
 Panel-specific rules live in [console-machine.md](console-machine.md), beside
 the questions and missing-data meanings they protect. They do not require
