@@ -285,6 +285,15 @@ jobs:
           python3 backend/utilities/pipeline_test_case_config.py \
             --config-root backend/var/candidate-config
 
+      # The service the production work stage calls, started the way production
+      # starts it: before the model server, while the runner's memory is still
+      # free. It is optional there and here, so a runner whose service will not
+      # start still runs its shards.
+      - name: Start the text-analysis service
+        uses: ./.github/actions/text-analysis-service
+        with:
+          mode: start
+
       # The cache, the fetch, the digest check, the server and the health probe,
       # as production's work job runs them - one action, so this runner's server
       # is started, checked and proven to hold the declared weights exactly as a
@@ -327,6 +336,14 @@ jobs:
             "$TEST_CASE" "$RUN_DATE" --runner "$RUNNER" --execution "$RUN_EXECUTION" \
             --commit "$RUN_COMMIT"
 
+      # Stop the service whatever the test case did. The next step saves its log
+      # beside the model server's.
+      - name: Stop the text-analysis service
+        if: always()
+        uses: ./.github/actions/text-analysis-service
+        with:
+          mode: stop
+
       - name: Stop the model
         if: always()
         env:
@@ -339,6 +356,7 @@ jobs:
           fi
           mkdir -p "backend/var/test-cases/${TEST_CASE}/runner-${RUNNER}"
           cp llama-server.log "backend/var/test-cases/${TEST_CASE}/runner-${RUNNER}/" 2>/dev/null || true
+          cp text-analysis.log "backend/var/test-cases/${TEST_CASE}/runner-${RUNNER}/" 2>/dev/null || true
 
       # Ninety days, because a model is often argued about weeks after the
       # dispatch that checked it.
@@ -411,6 +429,15 @@ jobs:
           name: pipeline-tests-retained-inputs-${{ github.run_id }}
           path: backend/var/retained-article-verification/
 
+      # The service the production work stage calls, started the way production
+      # starts it: before the model server, while the runner's memory is still
+      # free, and optional, so a service that will not start leaves the replay
+      # to run without it.
+      - name: Start the text-analysis service
+        uses: ./.github/actions/text-analysis-service
+        with:
+          mode: start
+
       - uses: ./.github/actions/model-server
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -439,10 +466,22 @@ jobs:
             --source-commit "$RETAINED_SOURCE_COMMIT" \
             --execution "$RUN_EXECUTION"
 
+      # Stop the service whatever the replay did. The next step saves its log
+      # with the model server's.
+      - name: Stop the text-analysis service
+        if: always()
+        uses: ./.github/actions/text-analysis-service
+        with:
+          mode: stop
+
       - name: Stop the owned model and retain its log
         if: always()
         run: |
           set -euo pipefail
+          if [ -f text-analysis.log ]; then
+            mkdir -p backend/var/retained-article-verification
+            cp text-analysis.log backend/var/retained-article-verification/
+          fi
           if [ -f llama-server.pid ]; then
             kill "$(cat llama-server.pid)"
           fi

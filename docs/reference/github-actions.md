@@ -73,17 +73,20 @@ publishes nothing. Overlapping runs use distinct writer identities and the
 [commit protocol](../architecture/publishing/committing.md), not a shared queue.
 
 Each work shard also starts the local [text-analysis service](../architecture/text-analysis/text-analysis-api.md)
-before its model server, so the work stage can call it over loopback. The shard
-installs the service's own locked environment with `uv` and one spaCy model
-wheel: the language in `text_analysis.language` and that language's
-`default_profile` from `config/text-analysis/settings.json`. With no language
-configured, the preparation script installs every profile it declares. The
-service binds the loopback address in that same settings file, and the shard
-waits up to 60 seconds for its health route. A stop step ends it after the work
-step, whatever that step did. Nothing is cached, because every shard would save
-the same entry. The service log, events without article text, is uploaded with
-the model server's runtime log. The service only adds to what the work stage can
-do, so a failed install or start never fails the shard.
+before its model server, so the work stage can call it over loopback. The shared
+[`text-analysis-service` action](../../.github/actions/text-analysis-service/action.yml)
+does both halves: `mode: start` before the model server, and `mode: stop` after
+the work step, called a second time under `if: always()`. Start installs the
+service's own locked environment with `uv` and one spaCy model wheel: the
+language in `text_analysis.language` and that language's `default_profile` from
+`config/text-analysis/settings.json`. With no language configured, the
+preparation script installs every profile it declares. The service binds the
+loopback address in that same settings file, and start waits up to 60 seconds
+for its health route. Stop ends it whatever the work step did. Nothing is
+cached, because every shard would save the same entry. The service log, events
+without article text, is uploaded with the model server's runtime log. The
+service only adds to what the work stage can do, so a failed install or start
+never fails the shard.
 
 Pages publication, digest assembly, vector backfill and CI's backend, site and
 browser jobs use the shared `publication-runtime` action. It installs Bun and
@@ -274,6 +277,13 @@ Every runner names the checked-out commit in its ledger identity, so the commit
 job rejects a result made from a different code version.
 Never write reader-facing payloads.
 
+Each runner of a test case starts the same text-analysis service through the
+shared action, before its model server and with the same optional behaviour, and
+stops it after the test case; the retained-input job does likewise. So a pipeline
+test walks the path production walks. The service log is saved beside the model
+server's log, in the case's `runner-<runner>/` folder and in the retained
+verification folder.
+
 Optional `retained_source_run` and `retained_item_ids` inputs instead select
 bounded native Articles from one completed Content refresh attempt. This mode
 uses the committed production model and both real calls, with fresh private
@@ -320,12 +330,16 @@ and [weight rules](site-weight.md).
   pushes in all. A quiet cron window cannot replace that lease.
 - Share blocks that must agree, but keep different article-selection rules separate.
   Use approved external action versions; local actions use the checked-out commit.
-- The text-analysis service runs beside the model server in each work job, not as
-  a job of its own. Article text then goes only to a process on the runner that
-  fetched it, at a loopback address committed in config, and never over a network
-  between runners ([CLAUDE.md Guardrail #11](../../CLAUDE.md)). The shard starts
-  the service as optional help, so one that will not start costs the shard's items
-  only what the service adds, not the shard.
+- The text-analysis service runs beside the model server in each job that runs
+  the work stage - the digest work shards, each pipeline-test runner and the
+  retained-input job - not as a job of its own. Article text then goes only to a
+  process on the runner that fetched it, at a loopback address committed in
+  config, and never over a network between runners
+  ([CLAUDE.md Guardrail #11](../../CLAUDE.md)). A job starts the service as
+  optional help, so one that will not start costs the job's items only what the
+  service adds, not the job. One action starts and stops it, so those jobs cannot
+  drift apart; a composite action cannot run after its caller's later steps, so a
+  caller names it twice and the second call carries `if: always()`.
 
 ## See also
 

@@ -1,0 +1,144 @@
+name: Text-analysis service
+description: Start the local text-analysis service beside the model server, or stop it. A service that will not start never fails the job.
+
+inputs:
+  mode:
+    description: >-
+      `start` installs the service's locked environment and one model wheel,
+      starts the service on the loopback address in its settings file and waits
+      for its health route. `stop` ends what `start` began. Any other value
+      fails the step: a misspelt mode would otherwise do nothing and say nothing.
+    required: true
+
+# The service only adds to what the work stage can do, so no step in this
+# action may fail the job: without the service the work stage still runs. Each
+# step that can fail is `continue-on-error`, and the steps after it read what it
+# concluded instead of assuming it worked.
+#
+# One action holds both halves because a composite action cannot run after its
+# caller's later steps. The caller names it twice: `start` before the model
+# server, while the runner's memory is still free, and `stop` after the work
+# stage with `if: always()`. The service's log is `text-analysis.log` in the
+# workspace root; each caller saves it where the job already saves its other
+# logs.
+#
+# The action takes no address and no language. The service binds the loopback
+# address in its own settings file and the install reads the language from
+# `config/idhazh.json`, so where article text can go is a committed value and
+# not a workflow input (CLAUDE.md Guardrail #11).
+runs:
+  using: composite
+  steps:
+    - name: Refuse a mode this action does not know
+      if: always() && inputs.mode != 'start' && inputs.mode != 'stop'
+      shell: bash
+      env:
+        MODE: ${{ inputs.mode }}
+      run: |
+        echo "::error title=Text analysis::mode must be start or stop, not '${MODE}'"
+        exit 1
+
+    # Every shard would save the same entry, and the repository's cache budget
+    # is shared with the weights.
+    - uses: astral-sh/setup-uv@v7
+      id: setup_uv
+      if: inputs.mode == 'start'
+      continue-on-error: true
+      with:
+        version: '0.9.7'
+        enable-cache: false
+
+    # One model wheel: the language the pipeline asks for and that language's
+    # own default profile. With no language configured, the preparation script
+    # installs every profile it declares.
+    - name: Install the text-analysis service
+      id: text_analysis_install
+      if: steps.setup_uv.outcome == 'success'
+      continue-on-error: true
+      shell: bash
+      run: |
+        set -euo pipefail
+        ANALYSIS_LANGUAGE=$(jq -r '.text_analysis.language // empty' config/idhazh.json)
+        if [ -n "$ANALYSIS_LANGUAGE" ]; then
+          ANALYSIS_PROFILE=$(jq -r --arg language "$ANALYSIS_LANGUAGE" \
+            '.languages[$language].default_profile // empty' config/text-analysis/settings.json)
+          if [ -z "$ANALYSIS_PROFILE" ]; then
+            echo "::warning title=Text analysis::the service declares no default profile for language ${ANALYSIS_LANGUAGE}"
+            exit 1
+          fi
+          export TEXT_ANALYSIS_LANGUAGE="$ANALYSIS_LANGUAGE"
+          export TEXT_ANALYSIS_PROFILE="$ANALYSIS_PROFILE"
+        fi
+        uv sync --project services/text_analysis/spacy --frozen
+        uv run --project services/text_analysis/spacy --no-sync \
+          python services/text_analysis/spacy/scripts/prepare-selected-model.py
+
+    # The service binds the loopback address in its own settings file, and this
+    # step asks that same address. It starts in a session of its own with all
+    # three streams redirected, so it neither holds this step open nor dies with
+    # this shell. The wait is bounded because the service is optional.
+    - name: Start the text-analysis service
+      if: steps.text_analysis_install.outcome == 'success'
+      continue-on-error: true
+      shell: bash
+      env:
+        READY_WITHIN_SECONDS: '60'
+      run: |
+        set -euo pipefail
+        HOST=$(jq -er '.listener.host' config/text-analysis/settings.json)
+        PORT=$(jq -er '.listener.port' config/text-analysis/settings.json)
+        setsid uv run --project services/text_analysis/spacy --no-sync \
+          python -m text_analysis --root "$GITHUB_WORKSPACE" \
+          < /dev/null > text-analysis.log 2>&1 &
+        PID=$!
+        echo "$PID" > text-analysis.pid
+        WAITING_SINCE=$SECONDS
+        until curl -sf --max-time 5 "http://${HOST}:${PORT}/api/2026-11-08/get-spacy-health" > /dev/null; do
+          if ! kill -0 "$PID" 2>/dev/null; then
+            STATUS=0
+            wait "$PID" || STATUS=$?
+            rm -f text-analysis.pid
+            echo "::warning title=Text analysis::the service exited with status ${STATUS} before it answered"
+            tail -n 50 text-analysis.log
+            exit 1
+          fi
+          if [ $((SECONDS - WAITING_SINCE)) -ge "$READY_WITHIN_SECONDS" ]; then
+            echo "::warning title=Text analysis::the service did not answer within ${READY_WITHIN_SECONDS} s"
+            tail -n 50 text-analysis.log
+            exit 1
+          fi
+          sleep 1
+        done
+        echo "the text-analysis service answered on ${HOST}:${PORT} as pid ${PID} after $((SECONDS - WAITING_SINCE)) s"
+
+    # Stop the service whatever the work step did: the whole process group, the
+    # service and its pool workers, gets the service's own shutdown deadline plus
+    # a grace period before a kill.
+    - name: Stop the text-analysis service
+      if: always() && inputs.mode == 'stop'
+      continue-on-error: true
+      shell: bash
+      env:
+        STOP_GRACE_SECONDS: '5'
+      run: |
+        set -euo pipefail
+        if [ ! -s text-analysis.pid ]; then
+          echo "no text-analysis service is running"
+          exit 0
+        fi
+        PID=$(cat text-analysis.pid)
+        if ! pgrep -g "$PID" > /dev/null; then
+          echo "::warning title=Text analysis::the service was no longer running when the work step ended"
+          exit 0
+        fi
+        kill -s TERM -- "-$PID" || true
+        WAIT_SECONDS=$(( $(jq -er '.listener.shutdown_timeout_ms' config/text-analysis/settings.json) / 1000 + STOP_GRACE_SECONDS ))
+        for _ in $(seq 1 "$WAIT_SECONDS"); do
+          if ! pgrep -g "$PID" > /dev/null; then
+            echo "the text-analysis service stopped"
+            exit 0
+          fi
+          sleep 1
+        done
+        kill -s KILL -- "-$PID" || true
+        echo "::warning title=Text analysis::the service did not stop within ${WAIT_SECONDS} s and was killed"
