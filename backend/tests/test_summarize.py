@@ -16,6 +16,7 @@ import ast
 import json
 import logging
 import re
+import urllib.request
 from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
@@ -24,6 +25,7 @@ from typing import Any, Final
 import pytest
 from contracts._fixtures import committed_models_raw
 from pydantic import ValidationError
+from support.analysis_service import closed_base_url
 from support.models import a_markers, a_sampling, a_server
 from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
 from support.server import RecordedEndpoint
@@ -58,6 +60,7 @@ from idhazh.llm.server import (
     one_reply,
     parse_completion,
     post,
+    props,
     render_prompt,
     request_payload,
     response_limit,
@@ -571,6 +574,36 @@ def test_one_server_is_named_once_however_many_items_are_sent(
     assert served.endpoint.startswith(origins[0].split("origin=")[-1]), (
         f"the record does not name the server that answered: {origins[0]}"
     )
+
+
+def test_a_request_to_the_model_server_never_goes_through_a_proxy_the_environment_names(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An item and the server's answer about itself reach the endpoint, never a proxy.
+
+    `http_proxy` moves a destination with nobody reading a diff (Guardrail #11), and
+    `urllib` obeys it for a loopback address too. The proxy named here is a port nothing
+    listens on, so a request that obeyed it would fail rather than reach `served`. Each of
+    the module's three senders is asked: `post`, `props` and the start-up `_ask`.
+    `urlopen` keeps the first opener it builds, so the test clears it: a request that fell
+    back to `urlopen` would otherwise pass whenever an earlier test had already used one.
+    """
+    from idhazh.llm.server import _ask, props_url
+
+    monkeypatch.setattr(urllib.request, "_opener", None, raising=False)
+    reply = read_text(RENDERED_REPLY).encode("utf-8")
+    with RecordedEndpoint(200, reply) as served:
+        for name in ("http_proxy", "HTTP_PROXY", "all_proxy", "ALL_PROXY"):
+            monkeypatch.setenv(name, closed_base_url())
+        monkeypatch.delenv("no_proxy", raising=False)
+        monkeypatch.delenv("NO_PROXY", raising=False)
+
+        post({"item": "text"}, endpoint=served.endpoint, timeout=5.0)
+        template = props(served.endpoint, timeout=5.0)
+        probed = _ask(props_url(served.endpoint), None, timeout=5.0)
+
+    assert served.sent == [{"item": "text"}]
+    assert template == probed == {"chat_template": "fixture-template"}
 
 
 class TestTheRenderedCompletionEnvelope:

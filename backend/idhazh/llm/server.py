@@ -46,6 +46,7 @@ from idhazh.contracts.knobs.models import CompanionFile, ModelEntry, ModelRef
 from idhazh.llm.reasoning import split_reasoning
 from idhazh.llm.server_flags import SETTING_KEYS as SETTING_KEYS
 from idhazh.llm.server_flags import interpret_server_flags
+from idhazh.open_without_proxy import open_without_proxy
 from idhazh.sanitize import why_a_forged_turn_would_survive
 
 LOG: Final = logging.getLogger("idhazh")
@@ -1053,7 +1054,9 @@ def post(
     One address for the whole run, and `_note_origin` says once which one. The
     scheme, host and port are read apart rather than taken as the authority,
     because the authority carries userinfo and would write a credential into a
-    log line verbatim (Guardrail #11).
+    log line verbatim (Guardrail #11). The request goes out through
+    `open_without_proxy`, as every request in this module does, so no proxy the
+    environment names ever holds an item.
 
     Two other functions in this module send. `_ask` carries only this module's
     own probe constants to routes derived from an address a caller already
@@ -1067,7 +1070,7 @@ def post(
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with request.urlopen(outbound, timeout=timeout) as response:
+    with open_without_proxy(outbound, timeout=timeout) as response:
         return parse_completion(
             response.read().decode("utf-8"),
             answer_at=answer_at,
@@ -1139,7 +1142,7 @@ def props(endpoint: str, *, timeout: float) -> dict[str, Any]:
     the stage a knob somebody can turn rather than a number in this file.
     """
     try:
-        with request.urlopen(props_url(endpoint), timeout=timeout) as response:
+        with open_without_proxy(props_url(endpoint), timeout=timeout) as response:
             payload = json.loads(response.read().decode("utf-8"))
     except (OSError, ValueError):
         return {}
@@ -1267,7 +1270,7 @@ def _ask(url: str, payload: Mapping[str, Any] | None, *, timeout: float) -> Any:
         )
     )
     try:
-        with request.urlopen(outbound, timeout=timeout) as response:
+        with open_without_proxy(outbound, timeout=timeout) as response:
             return json.loads(response.read().decode("utf-8"))
     except (OSError, ValueError) as unreachable:
         raise ProbeRefusedError(

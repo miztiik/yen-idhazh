@@ -4,9 +4,9 @@ One synchronous POST of `Article.text` to the service the digest job started on 
 runner, answered by the labelled spans it found. The address is the committed
 `text_analysis.base_url`, which the schema holds to this machine, so article text goes
 nowhere else (`CLAUDE.md` Guardrail #11). Two more things keep it there. The request
-is sent without any proxy named by the environment, because an environment value is the
-one setting that moves a destination with nobody reading a diff, and a redirect is
-never followed with the text.
+is sent through `open_without_proxy`, so no proxy named by the environment sees it, because
+an environment value is the one setting that moves a destination with nobody reading a diff,
+and a redirect is never followed with the text.
 
 **Nothing the service returns becomes anything but a number and a lookup key.** A
 mention comes back as a label, two offsets and the words it covers. The words are only
@@ -38,6 +38,7 @@ from pydantic import BaseModel, ConfigDict, StrictInt, StrictStr, ValidationErro
 from idhazh.anchor_mentions import Mention
 from idhazh.contracts.article import Article
 from idhazh.contracts.knobs.text_analysis import TextAnalysisConfig
+from idhazh.open_without_proxy import open_without_proxy
 
 LOG: Final = logging.getLogger("idhazh")
 
@@ -49,19 +50,6 @@ ANALYZE_PATH: Final = "/api/2026-11-08/run-ner-spacy"
 
 #: The one feature asked for. Its result is the raw mention list this module reads.
 FEATURE: Final = "entities"
-
-
-def _open(request: urllib.request.Request, timeout: float) -> http.client.HTTPResponse:
-    """Send `request` with no proxy, whatever the environment says.
-
-    `urllib` otherwise honours `http_proxy` for a loopback address too, which would send
-    the text wherever that value points. The opener is built on every call so the
-    environment of the call is the one a test can set, and so no process-wide opener
-    kept from an earlier request can stand in for this one.
-    """
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-    response: http.client.HTTPResponse = opener.open(request, timeout=timeout)
-    return response
 
 
 class Outcome(StrEnum):
@@ -160,7 +148,7 @@ def ask_for_mentions(article: Article, config: TextAnalysisConfig) -> Answer:
         method="POST",
     )
     try:
-        with _open(request, config.request_timeout_seconds) as response:
+        with open_without_proxy(request, timeout=config.request_timeout_seconds) as response:
             body = response.read()
     except urllib.error.HTTPError as error:
         # Before URLError and OSError, which it subclasses: a service that answered

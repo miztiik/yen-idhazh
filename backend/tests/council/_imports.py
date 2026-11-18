@@ -113,6 +113,7 @@ MODULE_NAMES = (
     "idhazh.ledger.raw_files",
     "idhazh.ledger.rows",
     "idhazh.ledger.staging",
+    "idhazh.open_without_proxy",
     "idhazh.run_context",
     "idhazh.llm.reasoning",
     "idhazh.llm.server",
