@@ -50,6 +50,7 @@ from idhazh.visual_vocabulary import (
     ROLE_KINDS,
     TYPE_RULES,
     VALUE_ROLES,
+    DowngradeEdge,
     commensurable,
 )
 
@@ -143,15 +144,11 @@ def _drawable(table: ElementTable) -> list[Element]:
     same function is what keeps the gate from drifting away from the thing it
     predicts.
     """
-    seen: set[str] = set()
-    kept: list[Element] = []
-    for element in table.elements:
-        if element.element_id in seen:
-            continue
-        seen.add(element.element_id)
-        if read_value(element.kind, element.span_excerpt) == element.value:
-            kept.append(element)
-    return kept
+    return [
+        element
+        for element in table.elements
+        if read_value(element.kind, element.span_excerpt) == element.value
+    ]
 
 
 def _widest_agreeing(elements: Sequence[Element]) -> int:
@@ -272,54 +269,30 @@ def declined_by_the_model(
     )
 
 
-def refused_by_the_validator(
-    summary: Summary,
-    rejections: Sequence[Rejection],
-    *,
-    model_id: str,
-    decided_at: str,
-    version: str,
-) -> VisualDecision:
-    """The `none` an item gets when a plan was drafted and no depth of it validates.
-
-    The rationale names the checks rather than restating them, because a
-    `Rejection`'s detail is built out of element ids, role names and digits and
-    a rationale is a published cell.
-    """
-    return _nothing(
-        summary,
-        model_id=model_id,
-        reason=(
-            "the plan was refused on "
-            + ", ".join(sorted({rejection.check.value for rejection in rejections}))
-            + ", and the ladder reached no form that passes"
-        ),
-        decided_at=decided_at,
-        version=version,
-        drafted_chart=True,
-        none_reason=NoneReason.VALIDATION_FAILED,
-    )
-
-
 def not_drawable_here(
     summary: Summary, *, why: str, model_id: str, decided_at: str, version: str
 ) -> VisualDecision:
     """The `none` an item gets when a plan was drafted and this build drew nothing.
 
-    Its sibling above is for a plan the validator refused by name. This one is
-    for the two ways a drafted plan reaches no picture with no rejection to
-    quote, and both are reachable only from a stage that dispatches the summarize-and-plan call:
+    The one answer for every route from a drafted plan to no picture, and `why` -
+    ours rather than the model's - says which route it was. All of them are
+    reachable only from a stage that dispatches the summarize-and-plan call:
 
     - the reply's plan half will not hold `VisualPlan`'s own rules, which a
       grammar cannot enforce because they read one field against another;
+    - the plan names a type the operator did not select;
+    - the validator refused the plan, or its type has no compiler, and no
+      replacement cleared validation and its floor;
     - every check passed and the compiler still could not draw it.
 
-    One `none_reason` between them, and the same one the validator's refusal
-    records. `decided_without_the_model` states the rule this follows: one
-    member per gate, never one per call site - what an operator acts on is the
-    gate, and the gate here is "a plan was drafted and this build refuses it".
-    `why` is ours rather than the model's, so the rationale says which of the
-    two it was.
+    **`why` names the checks that refused a plan and never restates a
+    `Rejection`'s detail**, because a detail is built out of element ids, role
+    names and digits and a rationale is a published cell.
+
+    One `none_reason` between them. `decided_without_the_model` states the rule
+    this follows: one member per gate, never one per call site - what an
+    operator acts on is the gate, and the gate here is "a plan was drafted and
+    this build refuses it".
     """
     return _nothing(
         summary,
@@ -436,6 +409,7 @@ def downgrade(
     *,
     visuals: VisualsConfig,
     published_marks: Mapping[VisualType, Sequence[int]],
+    edges: Mapping[VisualType, tuple[DowngradeEdge, ...]] = DOWNGRADE_EDGES,
     rejected: list[Rejection] | None = None,
     evidence: DowngradeEvidence | None = None,
 ) -> Downgrade | None:
@@ -462,7 +436,10 @@ def downgrade(
     next depth is made of, which is what "falls to the next depth" means.
 
     The separate activation switch leaves this path off without reading history.
-    The percentile list bounds the permitted replacement depths.
+    The percentile list bounds the permitted replacement depths. `edges` is a
+    parameter so that a table other than the shipped one can be driven, and
+    every candidate still re-validates, so an injected table can only change
+    which forms are tried.
     """
     rungs = visuals.downgrade_floor_percentiles
     if (
@@ -482,7 +459,7 @@ def downgrade(
     for depth, percentile in enumerate(rungs, start=1):
         onward: list[VisualType] = []
         for source in frontier:
-            for edge in DOWNGRADE_EDGES.get(source, ()):
+            for edge in edges.get(source, ()):
                 if edge.target in walked or plan.purpose not in edge.purposes:
                     continue
                 walked.add(edge.target)

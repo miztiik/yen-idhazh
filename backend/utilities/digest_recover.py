@@ -11,7 +11,9 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
+from typing import Final
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -28,6 +30,22 @@ from utilities.publication_git import Repository
 from utilities.publish_to_repo import PublicationResult
 
 LOG = logging.getLogger(__name__)
+
+#: The exit status of a recovery that refused to go on: a bad input, a wrong place or a failed gate.
+EXIT_REFUSED: Final = 2
+
+type FetchSourceRun = Callable[[str], tuple[SourceRun, dict[str, bytes], frozenset[int]]]
+
+
+@dataclasses.dataclass(frozen=True)
+class CheckedDay:
+    """The day whose assembled outputs passed the mandatory precommit gates.
+
+    Only `check_outputs` returns one, and `publish_outputs` requires one, so recovery cannot
+    deliver a day that was not checked.
+    """
+
+    date: str
 
 
 def assemble_outputs(
@@ -61,7 +79,7 @@ def assemble_outputs(
             publication_evidence.save(repo, identity, "harvest", harvested)
 
 
-def check_outputs(repo: Path, date: str) -> None:
+def check_outputs(repo: Path, date: str) -> CheckedDay:
     """Run the normal mandatory precommit gates over the actual assembled day and site."""
     subprocess.run(
         [sys.executable, "-m", "idhazh", "check-publication", "--day", date],
@@ -75,6 +93,7 @@ def check_outputs(repo: Path, date: str) -> None:
             cwd=repo / "frontend",
             check=True,
         )
+    return CheckedDay(date)
 
 
 def npm(repo: Path, script: str) -> None:
@@ -91,6 +110,7 @@ def build_site(repo: Path) -> None:
 def publish_outputs(
     repo: Path,
     restored: RestoredInputs,
+    checked: CheckedDay,
     *,
     source: SourceRun,
     identity: WriterIdentity,
@@ -99,7 +119,7 @@ def publish_outputs(
     request = digest_publish.request_for(
         repo=repo,
         identity=identity,
-        date=restored.plan.date,
+        date=checked.date,
         source_plan=restored.plan,
         source_commit=source.head_sha,
     )
@@ -119,7 +139,7 @@ def publish_outputs(
     return digest_publish.deliver(repo, request)
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, *, fetch: FetchSourceRun = download) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("source_run", help="Completed Content refresh run ID; latest attempt only")
     parser.add_argument("--execution", default=os.environ.get("GITHUB_RUN_ID"), required=False)
@@ -137,7 +157,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if repo.resolve() != config.REPO_ROOT.resolve():
             raise ValueError("run recovery from its own repository root")
-        source, archives, failed = download(args.source_run)
+        source, archives, failed = fetch(args.source_run)
         (repo / "backend" / "var").mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(dir=repo / "backend" / "var") as temporary:
             restored = restore(
@@ -180,12 +200,13 @@ def main(argv: list[str] | None = None) -> int:
         print(identity.model_dump_json())
         settings = config.load()
         assemble_outputs(repo, plan, source=source, identity=identity, settings=settings)
-        check_outputs(repo, plan.date)
+        checked = check_outputs(repo, plan.date)
         if args.check_only:
             return 0
         result = publish_outputs(
             repo,
             restored,
+            checked,
             source=source,
             identity=identity,
         )
@@ -207,7 +228,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     except (OSError, ValueError, RuntimeError, subprocess.CalledProcessError) as error:
         LOG.error("assembly recovery refused: %s", error)
-        return 2
+        return EXIT_REFUSED
 
 
 if __name__ == "__main__":
