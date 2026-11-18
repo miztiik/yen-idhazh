@@ -180,8 +180,8 @@ function writeItemHealthCanary() {
 	// account - what the machine has, what was left at the item's worst moment
 	// and what was left when it ended - written row by row instead. That is the
 	// shape the committed archive has: the three columns landed late, so most
-	// days carry none of them. The memory board leads with that account, so a
-	// fixture without it could only ever reach the board's empty state.
+	// days carry none of them. The memory panels lead with that account, so a
+	// fixture without it could only ever reach their empty states.
 	//
 	// The fault count, the pinning setting and the disk copies are filled on three
 	// named days as well, and `memory` below says exactly which and why. They are
@@ -241,8 +241,8 @@ function writeItemHealthCanary() {
 	 * panel must never clamp - the two own-memory readings exceeding what the
 	 * kernel says is held - has no real row to render on.
 	 *
-	 * The newest day is left blank on purpose. The memory ceiling board reads the
-	 * newest run's rows, and a fixture that filled them would move that panel
+	 * The newest day is left blank on purpose. The memory-held panel reads the
+	 * newest day's rows, and a fixture that filled them would move that panel
 	 * while answering a different question.
 	 */
 	const READINGS = {
@@ -545,14 +545,14 @@ function writeItemHealthCanary() {
 		const waitMs = spread % 900;
 		const seat = place(rowDate, run, id, totalMs, waitMs);
 		// The one shard the machine record reached with no processor on it. Its item
-		// rows name none either, so the fallback cannot quietly fill the cell in and
-		// the board has a row that says "Not recorded".
+		// rows name none either, so the two records agree that its machine is not
+		// recorded, and no reading from it can be attributed to a processor.
 		const unrecorded = `${rowDate}-${run}-${seat.machine_shard}` === `${date}-2-1`;
 		// The kernel's own account, on the newest day and on every row of it but
 		// the refused one. `gapMs` is set by the refused builder and by nothing
 		// else, so it is what marks the row this fixture uses to carry states no
-		// committed day holds - here, an item drawn with no kernel reading, which
-		// is the memory board's hatched mark and its printed skip count.
+		// committed day holds - here, an item with no kernel reading, which the
+		// memory panels must leave out rather than read as zero.
 		const kernelRecorded = rowDate === date && gapMs === undefined;
 		// A day `READINGS` already answers is left alone below. An empty cell beats
 		// the reading spread in by `line`, so writing one here would draw a day that
@@ -674,8 +674,8 @@ function writeItemHealthCanary() {
 	};
 
 	/** An item the extractor threw away. Not a failure: dropping a page that is
-	 * not an article is the job, so the row is `ok` and it is not on the
-	 * failed-item list. It fetched and it parsed, so those two stages have a
+	 * not an article is the job, so the row is `ok` and no failure panel counts
+	 * it. It fetched and it parsed, so those two stages have a
 	 * number. The model never saw it, so summarize has none.
 	 *
 	 * It carries an item clock all the same, because it really did occupy a shard
@@ -952,8 +952,8 @@ function writeItemHealthCanary() {
 		// and the sixth item only widens the denominator.
 		dropped(date, 2, 'ai-05', 'boilerplate', 1180, 174, 200, 30),
 		// The model read this one whole and refused to answer. It is also the
-		// only failed row this fixture writes, so the failed-item list, the
-		// failure code column and one stage's failure count draw something rather
+		// only failed row this fixture writes, so the failure mix and the run
+		// timeline's stage-and-code line for a failed item draw something rather
 		// than their empty states.
 		refused(date, 2, 'ai-09', [200, 30, 700], [64000, 10300, 1700, 60, 100]),
 		...sourceCutRows()
@@ -995,17 +995,16 @@ function writeItemHealthCanary() {
 	return [date, longAgo];
 }
 
-/** The machines the canary's jobs drew, so the machine panels have cards to draw.
+/** The machines the canary's jobs drew, so the machine panels have machines to tell apart.
  *
  * `build_canary_day.py` fabricates a day rather than running the pipeline, so
  * nothing probes a processor and the panels would only ever show their empty
  * state - which is the state that needs the least proving.
  *
- * **The rows are chosen for the two things a browser cannot check any other
- * way.** One machine reports none of the watched AVX-512 entries and one
- * reports every watched flag, so the absent chips have to be drawn rather than
- * omitted; and one probe used a buffer smaller than that machine's L3, so the
- * reading has to say it measured cache rather than memory.
+ * **The two machines are chosen so they cannot be mistaken for one.** The
+ * processors differ in name, in L3 capacity and in fingerprint, so the platform
+ * mix has more than one group to draw and the speed colour has more than one
+ * machine kind to rank.
  *
  * **This file is also the machine half of the Hardware page.** Of the cells
  * after `measured_at`, `job_seconds` is a job's Seconds, and
@@ -1046,8 +1045,8 @@ function writeHostFingerprintCanary() {
 	// its two tail runs on.
 	const longAgo = back(40);
 
-	// The EPYC reports none of the watched AVX-512 entries, which is what the
-	// fleet's most common machine really does.
+	// The fleet's most common machine: an EPYC that reports none of the watched
+	// AVX-512 flags. The flags are part of what the fingerprint hashes.
 	const EPYC = {
 		cpu_model: 'AMD EPYC 7763 64-Core Processor',
 		cpu_vendor: 'AuthenticAMD',
@@ -1057,9 +1056,8 @@ function writeHostFingerprintCanary() {
 		memcpy_gib_s: 12.4, memcpy_probe_mib: 512,
 		vm_size: 'Standard_D4ads_v5', vm_location: 'eastus', vm_zone: '1', vm_fault_domain: '0'
 	};
-	// Every watched flag, and a probe buffer only 1.97 times its own L3 - the
-	// shape nine of the committed rows carry, and under the margin that proves
-	// the copy left the cache. So this card has to withhold its copy speed.
+	// Every watched flag and a much larger L3, so it hashes to its own
+	// fingerprint and takes its own L3 group.
 	const XEON = {
 		cpu_model: 'INTEL(R) XEON(R) PLATINUM 8573C',
 		cpu_vendor: 'GenuineIntel',
