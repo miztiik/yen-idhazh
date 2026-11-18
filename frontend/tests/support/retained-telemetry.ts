@@ -4,9 +4,8 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { clientCode, drawClient } from './console-window/client-render';
 import { windowOfDays, type TimeWindow } from '../../src/lib/charts/viewport';
-import type { TelemetryRow } from '../../src/lib/charts/series';
 import type { PanelState } from '../../src/lib/console/waiting';
-import { telemetryRow } from './telemetry-row';
+import { telemetryRow, type TelemetryRow } from './telemetry-row';
 import { chartConfig } from '../../src/lib/server/config';
 export { dayBefore } from './pipelines-ledgers';
 

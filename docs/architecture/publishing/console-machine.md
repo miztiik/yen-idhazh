@@ -1,6 +1,6 @@
 # What the Hardware route draws
 
-**Last Updated**: 2026-11-17
+**Last Updated**: 2026-11-18
 
 `/console/machine/` asks what machine the work actually got and how much
 resource headroom that work left.
@@ -124,7 +124,7 @@ one model-rule declaration and a plot on the panel's own ground.
 
 ### What may not be pooled
 
-Refusal is still the existing `mergeHost`/`machineCounters` rule: disagreeing
+Refusal is the `hostHalvesConflict`/`machineCounters` rule: disagreeing
 dates, missing or invalid shard identities, unreadable host versions, conflicting
 host cells, too many reported shards, and an index outside the recorded count
 refuse the run rather than publish half of it. The bounded widest host question

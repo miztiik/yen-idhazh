@@ -23,7 +23,6 @@ import {
 	type GlanceDay
 } from '../src/lib/charts/glance';
 import { dailyFiguresPointer, dailyFiguresRows, dailyFiguresSummary } from '../src/lib/console/daily-figures';
-import { EVAL_PANELS, matchTitle } from '../src/lib/console/eval-instruments';
 import {
 	clampNote,
 	heldNote,
@@ -79,12 +78,6 @@ test('a sparse chart counts its measured days over the days it drew', () => {
 	);
 	// One day measured in full is never sparse, so no sentence is printed.
 	expect(coverageSentence(coverage([true]), 'We timed')).toBeNull();
-});
-
-test('one-day titles name one day, while seven-day words stay unchanged', () => {
-	expect(matchTitle(1)).toBe('Summary faithfulness for this one day');
-	expect(matchTitle(7)).toBe('Summary faithfulness, day by day');
-	expect(EVAL_PANELS.find((panel) => panel.id === 'faithfulness')?.title).toBe(matchTitle(7));
 });
 
 test('the chart-drawing verdict names the one day, since one day has no median day', () => {

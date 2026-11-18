@@ -28,7 +28,7 @@ export async function load() {
 		const settled = counts.get(row.day.date);
 		return [{ ...row.day, models: [], summaries: settled?.scored ?? null }];
 	});
-	const instruments = evalDays(scores.rows, counts).map((value) => ({
+	const instruments = evalDays(scores.rows).map((value) => ({
 		date: value.date,
 		recorded: {
 			coherence: value.recorded.coherence ?? null

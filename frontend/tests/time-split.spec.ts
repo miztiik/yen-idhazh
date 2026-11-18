@@ -1,10 +1,9 @@
 /** Authored clocks test the actual native cohort, additive stages and non-additive calls. */
 import { expect, test } from '@playwright/test';
-import type { TelemetryRow } from '../src/lib/charts/series';
 import { nativeTimeSplit, timeSplitReadout } from '../src/lib/console/pipelines/item-time-split';
 import { dateSeries, numberFormat } from './support/number-format';
 import { frame } from '../src/lib/charts/frame';
-import { telemetryRow } from './support/telemetry-row';
+import { telemetryRow, type TelemetryRow } from './support/telemetry-row';
 
 function fullyTimed(over: Partial<TelemetryRow> = {}) {
 	return { ...telemetryRow({

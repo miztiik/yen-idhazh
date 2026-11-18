@@ -19,7 +19,6 @@ import { checkedRequest } from '../src/lib/data/slice-shapes';
 import { daysBetween } from '../src/lib/data/slice';
 import { sliceFromDisk } from '../src/lib/server/ledger-disk';
 import { datedFirst, evalRows, itemHealthRows, ITEM_HEALTH_COLUMNS, SCORE_COLUMNS, windowRows } from '../src/lib/server/ledger-rows';
-import { carriesServerCounters } from '../src/lib/console/machine/counters';
 import { countersFrom } from '../src/lib/console/machine/records';
 import { normalizeHostRows } from '../src/lib/data/host-fingerprint';
 import { platformMixQuery } from '../src/lib/console/queries/machine';
@@ -774,14 +773,13 @@ test.describe("THE ORACLE: native server evidence is independent of article rows
 			machine_job: 'work',
 			machine_shard: 0
 		}));
-		const { runs, refused } = countersFrom(answer.rows, articles, [], { contextWindow: null, jobTimeoutSeconds: null });
+		const { runs, refused } = countersFrom(answer.rows, articles, []);
 		expect(refused).toEqual([]);
 		expect(runs).toHaveLength(12);
-		expect(runs.filter(carriesServerCounters).map((run) => [run.date, run.readTokensPerSecond.value])).toEqual([
-			['2030-06-10', 100]
+		expect(answer.rows.map((host) => [host.date, Number(host.server_prompt_tokens), Number(host.server_prompt_seconds)])).toEqual([
+			['2030-06-10', 900, 9],
+			['2030-06-10', 900, 9]
 		]);
-		expect(runs.filter((run) => run.date !== '2030-06-10').every((run) =>
-			run.promptTokens.value === null && run.readSeconds.value === null)).toBe(true);
 	});
 });
 

@@ -6,7 +6,6 @@ import type { Row } from '../src/lib/data/ledger';
 
 const DATE = '2030-06-15';
 const RUN = '2030-06-15-1';
-const LIMITS = { contextWindow: 8192, jobTimeoutSeconds: 9000 };
 
 function host(cells: Row = {}): Row {
 	return {
@@ -32,13 +31,9 @@ test.describe('the actual native host and article readers', () => {
 			input_tokens: 1100, cached_tokens: 100, prefill_ms: 200000,
 			output_tokens: 10, decode_ms: 5000
 		})];
-		const counters = countersFrom(hosts, items, [{ run_id: RUN, shards: 4 }], LIMITS);
+		const counters = countersFrom(hosts, items, [{ run_id: RUN, shards: 4 }]);
 		expect(counters.refused).toEqual([]);
 		expect(counters.runs).toHaveLength(1);
-		const run = counters.runs[0];
-		expect(run.reported[0].logicalProcessors).toBe(4);
-		expect(run.readTokensPerSecond).toEqual({ value: 10, from: 1, outOf: 4 });
-		expect(run.writeTokensPerSecond).toEqual({ value: 2, from: 1, outOf: 4 });
 		const cost = articleCost(textRows(items), processors(hosts));
 		expect(cost.processors).toEqual([4]);
 		expect(cost.processorSeconds).toEqual({ low: 2, mid: 2, high: 2, from: 1, outOf: 1 });
@@ -92,10 +87,8 @@ test.describe('the actual native host and article readers', () => {
 			expect(named).toEqual([{ date: DATE, run_id: RUN, job: 'work', shard: 0, cpu_logical_processors: null }]);
 			const cost = articleCost(textRows([item()]), named);
 			expect(cost.processorSeconds).toEqual({ low: null, mid: null, high: null, from: 0, outOf: 1 });
-			const counters = countersFrom(hosts, [], [{ run_id: RUN, shards: 1 }], LIMITS);
+			const counters = countersFrom(hosts, [], [{ run_id: RUN, shards: 1 }]);
 			expect(counters.refused).toEqual([]);
-			expect(counters.runs[0].reported[0].logicalProcessors).toBeNull();
-			expect(counters.runs[0].readTokensPerSecond).toEqual({ value: 10, from: 1, outOf: 1 });
 		}
 		expect(processors([host({ version: '2099-01-01' })])).toEqual([]);
 	});
@@ -110,7 +103,7 @@ test.describe('the actual native host and article readers', () => {
 		]) {
 			expect(articleCost(health, processors(hosts)).processorSeconds)
 				.toEqual({ low: null, mid: null, high: null, from: 0, outOf: 1 });
-			expect(countersFrom(hosts, [], [{ run_id: RUN, shards: 1 }], LIMITS).runs).toEqual([]);
+			expect(countersFrom(hosts, [], [{ run_id: RUN, shards: 1 }]).runs).toEqual([]);
 		}
 	});
 

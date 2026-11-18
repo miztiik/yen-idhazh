@@ -31,38 +31,6 @@ import { BANDS } from '../bands';
 import { grouped } from '../charts/series';
 import type { NumberFormatConfig } from '../number-format';
 import type { StackRule } from '../charts/stack-types';
-import { dayMonth } from '../format';
-
-/** One surface on the console that answers for at least one ledger column.
- *
- * `id` is the `data-eval-panel` value the page carries, so the map is a claim
- * about the built page and not only about this file.
- */
-export interface EvalPanel {
-	id: string;
-	/** The heading a reader sees, verbatim. */
-	title: string;
-	/** The published route the panel lives on. */
-	route: string;
-}
-
-export const EVAL_PANELS: readonly EvalPanel[] = [
-	{ id: 'daily-figures', title: 'Model figures by recorded day', route: '/console/model/' },
-	{
-		id: 'faithfulness',
-		title: matchTitle(),
-		route: '/console/model/'
-	},
-	{ id: 'summary-length', title: 'How long summaries came out', route: '/console/model/' },
-	{ id: 'score-cost', title: 'What checking one summary cost', route: '/console/model/' }
-];
-
-/** Name the faithfulness panel for the days its window can show. */
-export function matchTitle(windowDays?: number): string {
-	return windowDays === 1
-		? 'Summary faithfulness for this one day'
-		: 'Summary faithfulness, day by day';
-}
 
 /** Which panel answers for which ledger column.
  *
@@ -147,8 +115,6 @@ export const RECORDED: readonly RecordedInstrument[] = [
  */
 export interface EvalDay {
 	date: string;
-	/** Summaries the ledger holds for that day. */
-	scored: number;
 	/** Summaries that day carrying a faithfulness score. */
 	matched: number;
 	/** Faithfulness, whole percent: lower quartile (p25), median (p50), upper quartile (p75). */
@@ -166,9 +132,8 @@ export interface EvalDay {
 /** The distinct-published counts a run settled for one day.
  *
  * A re-score or scored-then-dropped item inflates the ledger row count.
- * Publication counts its distinct set once. Keyed by date in the map `evalDays`
- * and `modelWork` take. Defined in the console layer both reducers already reach,
- * so neither has to import a server type to name the shape it is handed.
+ * Publication counts its distinct set once. Keyed by date in the map
+ * `modelWork` takes.
  */
 export interface DayScoredCounts {
 	/** Distinct published items the checker scored - replaces the row count. */
@@ -214,22 +179,10 @@ function toTwoPlaces(value: number): number {
 
 /** Every day the ledger holds, oldest first, reduced.
  *
- * `counts` carries the distinct-published counts a run settled for a day, keyed
- * by date. Where a day is present, the scored count comes from it instead of the
- * ledger rows: the ledger dedupes by measurement, so a re-scored item keeps two
- * rows and a scored-then-dropped item keeps one, and either runs the row count
- * high. Every measurement distribution beside them still reads every row, so a
- * re-score still counts twice in a median where it belongs. Omitted, the counts
- * come off the rows exactly as before, which is what the browser oracle and the
- * shared console layout pass.
- *
  * Rows carrying no date are dropped rather than pooled into an empty day: a
  * ledger row with no day is a broken row, and giving it a column would draw it.
  */
-export function evalDays(
-	rows: readonly EvalInput[],
-	counts?: ReadonlyMap<string, DayScoredCounts>
-): EvalDay[] {
+export function evalDays(rows: readonly EvalInput[]): EvalDay[] {
 	const byDate = new Map<string, EvalInput[]>();
 	for (const row of rows) {
 		const date = (row.date ?? '').trim();
@@ -263,7 +216,6 @@ export function evalDays(
 		}
 
 		match.sort((a, b) => a - b);
-		const settled = counts?.get(date);
 		const recorded: Record<string, number | null> = {};
 		for (const instrument of RECORDED) {
 			const values = (recordedValues.get(instrument.id) ?? []).sort((a, b) => a - b);
@@ -278,11 +230,6 @@ export function evalDays(
 
 		days.push({
 			date,
-			// The distinct-published count where the run settled one, the ledger-row
-			// count otherwise. A re-scored item keeps two rows and a scored-then-
-			// dropped item keeps one, so the row count is not the count of summaries
-			// the day published (backend/idhazh/telemetry/publish/day_metrics.py).
-			scored: settled?.scored ?? group.length,
 			matched: match.length,
 			matchLow: match.length === 0 ? null : pct(at(match, 0.25)),
 			matchMid: match.length === 0 ? null : pct(at(match, 0.5)),
@@ -293,17 +240,6 @@ export function evalDays(
 		});
 	}
 	return days;
-}
-
-export function evalWithin(
-	days: readonly EvalDay[],
-	span: { start: string; end: string }
-): EvalDay[] {
-	return days.filter((day) => day.date >= span.start && day.date <= span.end);
-}
-
-export function evalColumnLabels(days: readonly EvalDay[]): string[] {
-	return days.map((day) => dayMonth(day.date));
 }
 
 /** The two scores the pipeline bands a published summary on, as whole percents.
@@ -396,25 +332,21 @@ export function matchRules(thresholds: MatchThresholds, floor: number): StackRul
 
 /** What the whole window holds, so a sentence never re-walks the days itself. */
 export interface EvalTotals {
-	days: number;
-	scored: number;
 	matched: number;
 	widerDiffers: number;
 	widestGap: number;
 }
 
 export function evalTotals(days: readonly EvalDay[]): EvalTotals {
-	let scored = 0;
 	let matched = 0;
 	let widerDiffers = 0;
 	let widestGap = 0;
 	for (const day of days) {
-		scored += day.scored;
 		matched += day.matched;
 		widerDiffers += day.widerDiffers;
 		widestGap = Math.max(widestGap, day.widestGap);
 	}
-	return { days: days.length, scored, matched, widerDiffers, widestGap };
+	return { matched, widerDiffers, widestGap };
 }
 
 /** What the second faithfulness column says, in words, or null where it says nothing.
@@ -428,7 +360,6 @@ export function evalTotals(days: readonly EvalDay[]): EvalTotals {
  */
 export function widerNote(
 	days: readonly EvalDay[],
-	windowDays: number,
 	numberFormat: NumberFormatConfig
 ): string | null {
 	const totals = evalTotals(days);

@@ -4,7 +4,7 @@
  * file, never from the module's own output - otherwise the assertion only
  * proves the module agrees with itself. Where a figure is read off the
  * committed ledger, the assertion is a structural one (segments sum to their
- * total, a ceiling comes from config) rather than a literal, because the
+ * total) rather than a literal, because the
  * pipeline publishes several times a day and a literal would rot by morning.
  *
  * Pure functions and committed ledgers only. No browser, no SvelteKit alias, no
@@ -33,26 +33,12 @@ import {
 	PERCENTILES,
 	type RunWork
 } from '../src/lib/charts/machine';
-import {
-	carriesServerCounters,
-	machineCounters,
-	type MachineLimits,
-	type MachineRun
-} from '../src/lib/console/machine/counters';
+import { machineCounters } from '../src/lib/console/machine/counters';
 import { dateSeries, numberFormat } from './support/number-format';
 import { frame } from '../src/lib/charts/frame';
 import { articleCost, runnerHourSeconds } from '../src/lib/console/machine/article-cost';
 import { describeRefusedRuns } from '../src/lib/console/machine/refused-runs';
-import { hostRow, ledgers, plan, type ShardReading } from './support/machine-rows';
-
-/** `config/idhazh.json` read straight off disk, so a test's expectation comes
- * from the committed file rather than from the reader it is checking. */
-const CONFIG = JSON.parse(
-	readFileSync(resolve(process.cwd(), '..', 'config', 'idhazh.json'), 'utf8')
-) as {
-	run: { shard_timeout_minutes: number };
-	models_file: string;
-};
+import { hostRow, plan } from './support/machine-rows';
 
 /** The native chart's width and height, from the same configuration it reads. */
 const CHART_WIDTH = (
@@ -67,16 +53,6 @@ const CHART_HEIGHT = (
 		readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')
 	) as { chart: { height_px: number } }
 ).chart.height_px;
-
-/** The active model, reached through the pointer and never by filename. */
-const MODELS = JSON.parse(
-	readFileSync(resolve(process.cwd(), '..', 'config', CONFIG.models_file), 'utf8')
-) as { summarizer: { server: { '--ctx-size': number } } };
-
-const LIMITS: MachineLimits = {
-	contextWindow: MODELS.summarizer.server['--ctx-size'],
-	jobTimeoutSeconds: CONFIG.run.shard_timeout_minutes * 60
-};
 
 test('phase totals and weighted rates keep shards separate and exclude incomplete identities or timings', () => {
 	const row = { date: '2026-11-01', run_id: '2026-11-01-1', machine_job: 'work', machine_shard: 0,
@@ -177,11 +153,6 @@ function drawingOptions(stacked = false) {
 	};
 }
 
-/** One shard of the fixture run, with the day and run every figure sits under. */
-function shardOf(reading: ShardReading): ShardReading {
-	return { date: '2026-09-04', runId: '2026-09-04-1', ...reading };
-}
-
 function healthRow(cells: Partial<Record<string, string | number>>): Record<string, string> {
 	const blank: Record<string, string> = {
 		date: '2026-09-04',
@@ -199,124 +170,6 @@ function healthRow(cells: Partial<Record<string, string | number>>): Record<stri
 	for (const [name, value] of Object.entries(cells)) blank[name] = String(value);
 	return blank;
 }
-
-/** Two shards whose figures were chosen so every derived number can be checked
- * with a pencil: shard 0 reads 4x as fast as shard 1 and finishes sooner. */
-const TWO_SHARDS: ShardReading[] = [
-	{
-		shard: 0,
-		serverPromptTokens: 8000,
-		serverPromptSeconds: 200,
-		cachedTokens: 2000,
-		writtenTokens: 1000,
-		writeSeconds: 200,
-		longestSequence: 4096,
-		jobSeconds: 600,
-		cpuModel: 'INTEL(R) XEON(R) PLATINUM 8573C',
-		cpuBusyPct: 95,
-		peakRssBytes: 8_000_000_000,
-		modelLoadMs: 3000
-	},
-	{
-		shard: 1,
-		serverPromptTokens: 2000,
-		serverPromptSeconds: 200,
-		cachedTokens: 2000,
-		writtenTokens: 1000,
-		writeSeconds: 400,
-		longestSequence: 2048,
-		jobSeconds: 1200,
-		cpuModel: 'AMD EPYC 7763 64-Core Processor',
-		cpuBusyPct: 88,
-		peakRssBytes: 9_000_000_000,
-		modelLoadMs: 4000
-	}
-];
-
-function runsOf(readings: ShardReading[], planned: [string, number][] = [['2026-09-04-1', 2]]) {
-	const { hosts, health } = ledgers(readings.map(shardOf));
-	return machineCounters(hosts, health, plan(...planned), LIMITS);
-}
-
-function onlyRun(readings: ShardReading[]): MachineRun {
-	const { runs, refused } = runsOf(readings);
-	expect(refused, 'the fixture was refused').toEqual([]);
-	expect(runs).toHaveLength(1);
-	return runs[0];
-}
-
-test.describe('native shard counter arithmetic', () => {
-	const run = onlyRun(TWO_SHARDS);
-
-	test('the job clock is measured against the configured timeout, not a literal', () => {
-		expect(run.reported[1].jobUsedPct).toBe(Math.round(1200 / (CONFIG.run.shard_timeout_minutes * 60) * 100));
-		const { hosts, health } = ledgers(TWO_SHARDS.map(shardOf));
-		const tighter = machineCounters(hosts, health, plan(['2026-09-04-1', 2]),
-			{ ...LIMITS, jobTimeoutSeconds: 1500 }).runs[0];
-		expect(tighter.reported[1].jobUsedPct).toBe(80);
-	});
-});
-
-/** The native counters read stored gaps separately from queue waits.
- *
- * The unclaimed figure is the one that matters. It is `stage_gap_ms` added over
- * the shard's items and nothing else - a page that worked it out from the stage
- * clocks would agree with them by construction, so it could never flag the one
- * thing the column exists to flag. The rows below carry NO stage clocks at all,
- * only the stored column, so an implementation that recomputed would have
- * nothing to recompute from and would draw an absence.
- */
-test.describe('where a shard\u2019s clock went', () => {
-	/** Two items on one shard, one of them with its clocks in disagreement. */
-	const CLOCKED: ShardReading[] = [
-		{
-			shard: 0,
-			itemId: 'item-0-a',
-			serverPromptTokens: 8000,
-			serverPromptSeconds: 200,
-			cachedTokens: 2000,
-			writtenTokens: 1000,
-			writeSeconds: 200,
-			jobSeconds: 600,
-			modelLoadMs: 3000,
-			unclaimedMs: 4321,
-			queueWaitMs: 1000
-		},
-		{
-			shard: 0,
-			itemId: 'item-0-b',
-			cachedTokens: 2000,
-			writtenTokens: 1000,
-			unclaimedMs: -2500,
-			queueWaitMs: 5000
-		},
-		{
-			shard: 1,
-			itemId: 'item-1-a',
-			serverPromptTokens: 2000,
-			serverPromptSeconds: 200,
-			cachedTokens: 2000,
-			writtenTokens: 1000,
-			writeSeconds: 100,
-			jobSeconds: 1200,
-			unclaimedMs: -9000,
-			queueWaitMs: 60000
-		}
-	];
-
-	const run = onlyRun(CLOCKED);
-	const rowFor = (shard: number) => run.reported.find((row) => row.shard === shard)!;
-
-	test('the count of disagreements survives a sum that cancels', () => {
-		// Shard 0 adds to a positive 1.821 seconds, and one of its two items is
-		// still below zero. A page that only carried the sum would print a healthy
-		// shard and lose the item that disagreed.
-		const row = rowFor(0);
-		expect(row.unclaimedSeconds).toBeGreaterThan(0);
-		expect(row.clocksDisagreed).toBe(1);
-		expect(row.clockedItems).toBe(2);
-	});
-});
 
 test.describe('the percentile curve', () => {
 	test('the newest measured run follows the numeric run suffix, not lexical order', () => {
@@ -636,28 +489,19 @@ test.describe('a run the counters refuse, handed to every figure built from arti
 	];
 	const bothRuns = [...refusedRows, ...acceptedRows];
 
-	test("a refused run whose machine records hold the server's own figures carries them", () => {
-		// Shard 1's two records disagree, and each of them holds the server's two cells.
-		const { refused } = machineCounters(hosts, bothRuns, plan([REFUSED, 2], [ACCEPTED, 1]), LIMITS);
-		expect(refused.map((run) => [run.runId, run.serverCountersWritten])).toEqual([[REFUSED, true]]);
-		expect(carriesServerCounters(refused[0])).toBe(true);
-	});
-
-	test('a refused run whose records disagree only about the machine carries no server figure', () => {
-		// Shard 0 filed two records that name two machines, and neither holds a cell the server wrote.
+	test('a run whose records disagree only about the machine is refused', () => {
+		// Shard 0 filed two records that name two machines, and no other cell differs.
 		const { runs, refused } = machineCounters(
 			[
 				hostRow({ date: '2026-09-04', runId: REFUSED, shard: 0, fingerprint: 'f00d' }),
 				hostRow({ date: '2026-09-04', runId: REFUSED, shard: 0, fingerprint: 'beef' })
 			],
 			refusedRows,
-			plan([REFUSED, 2]),
-			LIMITS
+			plan([REFUSED, 2])
 		);
 		expect(runs).toEqual([]);
-		expect(refused.map((run) => [run.runId, run.serverCountersWritten])).toEqual([[REFUSED, false]]);
+		expect(refused.map((run) => run.runId)).toEqual([REFUSED]);
 		expect(refused[0].why).toContain('shard 0 filed two machine records that disagree');
-		expect(carriesServerCounters(refused[0])).toBe(false);
 	});
 
 	test('the cost of one article counts it', () => {
@@ -694,11 +538,9 @@ test.describe('a run the counters refuse, handed to every figure built from arti
 		const { runs, refused } = machineCounters(
 			hosts,
 			bothRuns,
-			plan([REFUSED, 2], [ACCEPTED, 1]),
-			LIMITS
+			plan([REFUSED, 2], [ACCEPTED, 1])
 		);
 		expect(runs).toHaveLength(1);
-		expect(runs.filter(carriesServerCounters)).toHaveLength(1);
 		expect(describeRefusedRuns(refused)).toEqual({
 			head:
 				'1 run has records that do not fit together. The run count above does not include it. ' +
@@ -720,15 +562,13 @@ test.describe('a run the counters refuse, handed to every figure built from arti
 				runId: REFUSED,
 				date: '2026-09-04',
 				rows: 1,
-				why: 'neither ledger holds a shard for this run',
-				serverCountersWritten: false
+				why: 'neither ledger holds a shard for this run'
 			},
 			{
 				runId: '2026-09-03-1',
 				date: '2026-09-03',
 				rows: 4,
-				why: 'its rows disagree about which day the run belongs to',
-				serverCountersWritten: false
+				why: 'its rows disagree about which day the run belongs to'
 			}
 		]);
 		expect(box?.head).toBe(
@@ -849,11 +689,10 @@ test.describe('the Hardware browser redraws, from stated readings', () => {
 		const host = { version: '2026-10-10', date: '2026-09-01', run_id: '2026-09-01-1', job: 'work', shard: 0,
 			fingerprint: '0123456789abcdef', fingerprint_version: 2,
 			cpu_model: 'A', cpu_logical_processors: 8, model_load_ms: 1000 };
-		const limits = { contextWindow: 8192, jobTimeoutSeconds: 9000 };
 		for (const conflicting of [{ ...host, cpu_logical_processors: 16 }, { ...host, model_load_ms: 2000 },
 			{ ...host, fingerprint_version: 1 }]) {
 			for (const hosts of [[host, conflicting], [conflicting, host]]) {
-			const result = countersFrom(hosts, [], [{ run_id: host.run_id, shards: 1 }], limits);
+			const result = countersFrom(hosts, [], [{ run_id: host.run_id, shards: 1 }]);
 			expect(result.runs).toEqual([]);
 			expect(result.refused).toHaveLength(1);
 			expect(result.refused[0].why).toContain('two machine records that disagree');
@@ -877,13 +716,13 @@ test.describe('the Hardware browser redraws, from stated readings', () => {
 		}
 		expect(() => shardCounts([{ run_id: 'one', shards: 1 }, { run_id: 'one', shards: 2 }])).toThrow('unsettled corrections');
 		const hosts = [0, 1].map((shard) => ({ version: '2026-10-10', date: '2026-09-01', run_id: 'one', job: 'work', shard, cpu_model: 'A' }));
-		const limits = { contextWindow: 8192, jobTimeoutSeconds: 9000 };
-		expect(countersFrom(hosts, [], [{ run_id: 'one', shards: 1 }], limits).refused).toHaveLength(1);
-		expect(countersFrom(hosts, [], [{ run_id: 'one', shards: null }], limits).runs[0].shards).toBeNull();
+		expect(countersFrom(hosts, [], [{ run_id: 'one', shards: 1 }]).refused).toHaveLength(1);
+		const unknown = countersFrom(hosts, [], [{ run_id: 'one', shards: null }]);
+		expect(unknown.refused).toEqual([]);
+		expect(unknown.runs).toHaveLength(1);
 	});
 
 	test.describe('native current-host compatibility', () => {
-		const limits = { contextWindow: 8192, jobTimeoutSeconds: 9000 };
 		const modern = {
 			version: '2026-10-10', date: '2026-09-01', run_id: 'one', job: 'work', shard: 0,
 			fingerprint: '0123456789abcdef', fingerprint_version: 2, cpu_model: 'A',
@@ -895,24 +734,24 @@ test.describe('the Hardware browser redraws, from stated readings', () => {
 		const busy = { date: modern.date, run_id: modern.run_id, machine_shard: 0,
 			cpu_busy_pct: 50, item_total_ms: 2000 };
 		test('physical, logical, allowed, quota and frozen readings stay separate from whole-host cost', () => {
-			const held = countersFrom([modern], [], [{ run_id: 'one', shards: 1 }], limits);
+			const held = countersFrom([modern], [], [{ run_id: 'one', shards: 1 }]);
 			expect(held.refused).toEqual([]);
-			expect(held.runs[0].reported[0]).toMatchObject({ logicalProcessors: 8, fingerprintVersion: 2, readTokensPerSecond: 0 });
+			expect(held.runs).toHaveLength(1);
 			const cost = articleCost(textRows([busy]), processors([modern]));
 			expect(cost.processorSeconds).toMatchObject({ from: 1, outOf: 1, mid: 8 });
 			expect(runnerHourSeconds(cost.processors)).toBe(28800);
 			const unknown = { ...modern, cpu_logical_processors: null };
 			expect(articleCost(textRows([busy]), processors([unknown])).processorSeconds).toMatchObject({ from: 0, outOf: 1, mid: null });
 		});
-		test('legacy measurements remain unknown, observed MHz migrates and manifest coverage never comes from hosts', () => {
+		test('legacy measurements remain unknown and observed MHz migrates', () => {
 			const legacy = { ...modern, version: '2026-09-20', shard: 1, fingerprint_version: null,
 				cores: 4, threads: 8, mhz_max: 4000, mhz_at_probe: 2400 };
 			const rows = [modern, legacy];
-			const known = countersFrom(rows, [], [{ run_id: 'one', shards: 4 }], limits);
-			expect(known.runs[0].slowestJobSeconds).toMatchObject({ from: 2, outOf: 4 });
-			expect(known.runs[0].reported[1]).toMatchObject({ logicalProcessors: null, fingerprintVersion: 1 });
-			const unknown = countersFrom(rows, [], [{ run_id: 'one', shards: null }], limits);
-			expect(unknown.runs[0].slowestJobSeconds).toMatchObject({ from: 2, outOf: null });
+			for (const shards of [4, null]) {
+				const held = countersFrom(rows, [], [{ run_id: 'one', shards }]);
+				expect(held.refused).toEqual([]);
+				expect(held.runs).toHaveLength(1);
+			}
 			expect(articleCost(textRows([{ ...busy, machine_shard: 1 }]), processors([legacy])).processorSeconds)
 				.toMatchObject({ from: 0, outOf: 1, mid: null });
 			const jobs = fleetJobs(textRows(rows));
@@ -922,37 +761,35 @@ test.describe('the Hardware browser redraws, from stated readings', () => {
 		test('unsupported or inconsistent host algorithms refuse the run rather than vanish; raw day and shard faults survive', () => {
 			for (const bad of [{ ...modern, version: '2099-01-01' }, { ...modern, fingerprint_version: 3 },
 				{ ...modern, fingerprint: null }, { ...modern, version: null }]) {
-				expect(countersFrom([modern, bad], [], [{ run_id: 'one', shards: 4 }], limits).refused[0].why).toContain('unreadable host');
+				expect(countersFrom([modern, bad], [], [{ run_id: 'one', shards: 4 }]).refused[0].why).toContain('unreadable host');
 			}
 			const unsupported = { ...modern, version: '2099-01-01' };
-			expect(countersFrom([modern, { ...unsupported, date: '2026-09-02' }], [], [], limits).refused[0].why).toContain('day');
+			expect(countersFrom([modern, { ...unsupported, date: '2026-09-02' }], [], []).refused[0].why).toContain('day');
 			for (const shard of [null, '', ' ', -1, 0.5, 'bad']) {
-				const held = countersFrom([{ ...unsupported, shard }], [], [], limits);
+				const held = countersFrom([{ ...unsupported, shard }], [], []);
 				expect(held.runs).toEqual([]);
 				expect(held.refused[0].why).toContain('shard');
 				expect(processors([{ ...modern, shard }])).toEqual([]);
 			}
 		});
-		test('complementary current half-rows and equal duplicates retain zeros in either order', () => {
+		test('complementary current half-rows and equal duplicates merge without a conflict in either order', () => {
 			const identity = { ...modern, model_load_ms: null, job_seconds: null, server_prompt_tokens: null, server_prompt_seconds: null };
 			const clocks = { ...modern, fingerprint: null, fingerprint_version: null, cpu_model: null, cpu_logical_processors: null,
 				model_load_ms: 0, job_seconds: 0, server_prompt_tokens: 0, server_prompt_seconds: 2 };
 			for (const rows of [[identity, clocks, identity], [clocks, identity, clocks]]) {
-				const held = countersFrom(rows, [], [{ run_id: 'one', shards: 1 }], limits);
+				const held = countersFrom(rows, [], [{ run_id: 'one', shards: 1 }]);
 				expect(held.refused).toEqual([]);
-				expect(held.runs[0].reported).toHaveLength(1);
-				expect(held.runs[0].reported[0]).toMatchObject({ logicalProcessors: 8, fingerprintVersion: 2,
-					modelLoadMs: 0, jobSeconds: 0, promptTokens: 0, readTokensPerSecond: 0 });
+				expect(held.runs).toHaveLength(1);
 			}
 		});
 		test('run-level model-clock refusal does not disqualify independent article cost or hide ambiguous logical coverage', () => {
 			const badClock = { ...modern, model_load_ms: 2000 };
-			expect(countersFrom([modern, badClock], [], [{ run_id: 'one', shards: 1 }], limits).refused).toHaveLength(1);
+			expect(countersFrom([modern, badClock], [], [{ run_id: 'one', shards: 1 }]).refused).toHaveLength(1);
 			expect(articleCost(textRows([busy]), processors([modern, badClock])).processorSeconds)
 				.toMatchObject({ from: 1, outOf: 1, mid: 8 });
 			const badCount = { ...modern, cpu_logical_processors: 16 };
 			for (const rows of [[modern, badCount], [badCount, modern]]) {
-				expect(countersFrom(rows, [], [{ run_id: 'one', shards: 1 }], limits).refused).toHaveLength(1);
+				expect(countersFrom(rows, [], [{ run_id: 'one', shards: 1 }]).refused).toHaveLength(1);
 				expect(articleCost(textRows([busy]), processors(rows)).processorSeconds)
 					.toMatchObject({ from: 0, outOf: 1, mid: null });
 			}

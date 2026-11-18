@@ -1,25 +1,20 @@
-/** Fixture rows for the two ledgers the machine route reads.
+/** Fixture rows for the two ledgers the Hardware route's run count reads.
  *
- * One shard's figures used to live in one row of one file, so a spec wrote one
- * object. They now live in two files that no stage derives from the other -
+ * One shard's record lives in two files that no stage derives from the other -
  * `state/host-fingerprint/` for what the model server and the job clock said,
- * `state/item-health/` for what the items cost - and a fixture that wrote only
- * one of them would drive half the reader.
+ * `state/item-health/` for which shard took each item - and a fixture that wrote
+ * only one of them would drive half the reader.
  *
- * So a spec states a shard's figures once, here, and gets back both rows. The
- * numbers a spec asks for are the numbers the reader must produce: this builder
- * inverts the folds rather than restating them, so it cannot quietly agree with
- * a broken fold. `longestSequence` minus `writtenTokens` is the item's prompt,
- * and the read tokens the item ledger reports are that prompt minus the cache.
+ * So a spec states a shard once, here, and gets back both rows.
  *
  * Real rows in the packed files' shapes, not a stand-in for one (Guardrail #7):
  * every cell below is a column the contract declares, and the reader is given
  * exactly what a packed day would hand it.
  */
 
-/** One shard's figures, stated the way a person checking the page would state
- * them. Every field may be `''`, which is the ledger's own way of saying a cell
- * was never filled - and which the reader must not read as zero. */
+/** One shard, stated the way a person checking the page would state it. Every
+ * figure may be `''`, which is the ledger's own way of saying a cell was never
+ * filled. */
 export interface ShardReading {
 	date?: string;
 	runId?: string;
@@ -33,57 +28,9 @@ export interface ShardReading {
 	cpuModel?: string;
 	/** The machine record's digest of the host. Empty where the probe missed it. */
 	fingerprint?: string;
-	/** Validated online logical processors. What a load reading is read against. */
+	/** Validated online logical processors. */
 	logicalProcessors?: number | '';
 	modelLoadMs?: number | '';
-	/** Prompt tokens the item reused instead of reading. */
-	cachedTokens?: number | '';
-	/** Tokens the item's model call wrote. */
-	writtenTokens?: number | '';
-	/** Seconds the item ledger charged to decode. */
-	writeSeconds?: number | '';
-	/** Prompt plus answer, which is what the context ceiling is a share of. */
-	longestSequence?: number | '';
-	cpuBusyPct?: number | '';
-	/** The busiest the processor got over the item's model window. */
-	cpuBusyMax?: number | '';
-	/** The one-minute load when the item ended. */
-	load?: number | '';
-	/** Swap left when the item ended, and swap the host has. */
-	swapFree?: number | '';
-	swapTotal?: number | '';
-	peakRssBytes?: number | '';
-	/** The model server when the item ended. The figure the memory board draws
-	 * as a bracket, and a different reading from the high-water mark above. */
-	serverRssBytes?: number | '';
-	/** The worker process when the item ended. A second process on the box. */
-	workerRssBytes?: number | '';
-	/** The kernel's own account: what the machine has, what was left at the
-	 * item's worst moment, and what was left when it ended. Not namespaced, so
-	 * inside a container these are the HOST's figures. */
-	memTotal?: number | '';
-	memAvailable?: number | '';
-	memAvailableMin?: number | '';
-	/** The quietest the processor got over the item's model window. */
-	cpuBusyMin?: number | '';
-	/** When this item's work began. What run order is taken from. */
-	startedAt?: string;
-	/** Items this item's shard was given. The denominator for coverage. */
-	shardItemCount?: number | '';
-	/** This item's own name. One row a shard is the default, so a spec that
-	 * wants several items on one shard names each of them. */
-	itemId?: string;
-	/** Seconds the item ledger charged to read. The other clock. */
-	ledgerReadSeconds?: number | '';
-	/** The processor the item ledger recorded, where the machine record missed
-	 * the shard. Left empty unless a spec is checking that fallback. */
-	itemCpuModel?: string;
-	/** Milliseconds of this item no named step claimed. **Signed**: below zero
-	 * says the named steps claim more time than the item took, which is two
-	 * clocks disagreeing and is a state the committed archive has never held. */
-	unclaimedMs?: number | '';
-	/** Milliseconds this item waited before its worker started it. */
-	queueWaitMs?: number | '';
 }
 
 const DATE = '2026-09-02';
@@ -112,46 +59,15 @@ export function hostRow(reading: ShardReading): Record<string, string> {
 	};
 }
 
-/** The item ledger's row for one shard.
- *
- * One row a shard, because every figure the reader folds off this ledger is a
- * sum, a maximum or a minimum - and one row states each of them exactly. A spec
- * that needs the fold itself checked passes several readings for one shard.
- */
+/** The item ledger's row for one shard: which shard took the item, and nothing
+ * else, because that is all the run count reads off this ledger. */
 export function itemRow(reading: ShardReading): Record<string, string> {
-	const written = reading.writtenTokens;
-	const longest = reading.longestSequence;
-	const prompt =
-		typeof longest === 'number' && typeof written === 'number' ? longest - written : '';
 	return {
 		version: '2026-09-18',
 		date: reading.date ?? DATE,
 		run_id: reading.runId ?? RUN,
-		item_id: reading.itemId ?? `item-${reading.shard ?? 0}`,
-		machine_shard: cell(reading.shard ?? 0),
-		input_tokens: cell(prompt),
-		cached_tokens: cell(reading.cachedTokens),
-		output_tokens: cell(written),
-		prefill_ms:
-			typeof reading.ledgerReadSeconds === 'number' ? String(reading.ledgerReadSeconds * 1000) : '',
-		decode_ms: typeof reading.writeSeconds === 'number' ? String(reading.writeSeconds * 1000) : '',
-		cpu_busy_pct: cell(reading.cpuBusyPct),
-		cpu_busy_max: cell(reading.cpuBusyMax),
-		cpu_busy_min: cell(reading.cpuBusyMin),
-		load_1m: cell(reading.load),
-		os_swap_free_bytes: cell(reading.swapFree),
-		os_swap_total_bytes: cell(reading.swapTotal),
-		os_mem_total_bytes: cell(reading.memTotal),
-		os_mem_available_bytes: cell(reading.memAvailable),
-		os_mem_available_min_bytes: cell(reading.memAvailableMin),
-		llama_rss_peak_bytes: cell(reading.peakRssBytes),
-		llama_rss_bytes: cell(reading.serverRssBytes),
-		python_rss_bytes: cell(reading.workerRssBytes),
-		item_started_at: cell(reading.startedAt),
-		shard_item_count: cell(reading.shardItemCount),
-		cpu_model: cell(reading.itemCpuModel),
-		stage_gap_ms: cell(reading.unclaimedMs),
-		queue_wait_ms: cell(reading.queueWaitMs)
+		item_id: `item-${reading.shard ?? 0}`,
+		machine_shard: cell(reading.shard ?? 0)
 	};
 }
 

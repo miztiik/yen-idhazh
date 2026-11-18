@@ -165,8 +165,7 @@
 	const routeAnswers = $derived([...panelAnswers, answers.runShardsQuery ?? 'pending']);
 	function complete(names: string[]) { return names.every((name) => ['ok', 'quiet'].includes(answers[name]?.state ?? 'loading')); }
 	const counterReady = $derived(complete(['platformMixQuery', 'articleCostQuery', 'runShardsQuery']));
-	const counters = $derived(countersFrom(counterReady ? rows('platformMixQuery') : [], counterReady ? rows('articleCostQuery') : [], counterReady ? rows('runShardsQuery') : [],
-		{ contextWindow: cfg.contextWindow, jobTimeoutSeconds: cfg.jobTimeoutSeconds }));
+	const counters = $derived(countersFrom(counterReady ? rows('platformMixQuery') : [], counterReady ? rows('articleCostQuery') : [], counterReady ? rows('runShardsQuery') : []));
 	const countedRuns = $derived(counters.runs.filter((run) => run.date >= start && run.date <= end).length);
 	const refused = $derived(describeRefusedRuns(counters.refused.filter((run) => run.date >= start && run.date <= end)));
 	const jobs = $derived(fleetJobs(rows('platformMixQuery')));

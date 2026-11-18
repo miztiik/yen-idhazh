@@ -5,7 +5,7 @@ import { dateSeries } from './support/number-format';
 import { readoutCapStyle } from '../src/lib/charts/readout';
 import { describeMissingMarkers, measurementOff, recordDestroyed, recordingNotes, recordingStarted, sampledAt, type OfferedWindow, type RecordingNotes, type RecordRead } from '../src/lib/console/recording';
 import { daysBetween, type HeldPeriod } from '../src/lib/data/slice';
-import { carriesServerCounters, machineCounters } from '../src/lib/console/machine/counters';
+import { machineCounters } from '../src/lib/console/machine/counters';
 import { listManifestDays } from '../src/lib/server/model-work';
 /** Native shape choices preserve measured values; recording words preserve absence and loss. */
 test.describe('the shape switch draws one array two ways', () => {
@@ -534,7 +534,11 @@ test.describe('what the recording was doing, in fixed words', () => {
             machine_shard: '0'
         });
         /** The runs `machineCounters` forms from the two records' rows. */
-        const runsOf = (machine: Record<string, string>[], articles: Record<string, string>[]) => machineCounters(machine, articles, new Map(), { contextWindow: null, jobTimeoutSeconds: null }).runs;
+        const runsOf = (machine: Record<string, string>[], articles: Record<string, string>[]) => machineCounters(machine, articles, new Map()).runs;
+        /** The days whose machine record holds both cells the server itself wrote, as the page reads them. */
+        const serverDays = (machine: Record<string, string>[]): string[] => [...new Set(machine
+            .filter((row) => row.server_prompt_tokens !== '' && row.server_prompt_seconds !== '')
+            .map((row) => row.date))];
         /** Every line the notes print, whichever field holds it. */
         const printed = (notes: RecordingNotes): string[] => Object.values(notes).filter((line): line is string => line !== null);
         /** The window of `days` days the control offers. */
@@ -544,22 +548,25 @@ test.describe('what the recording was doing, in fixed words', () => {
          *  clocks and no server cell, from 6 Jun its rows carried the server's two cells, and on 12 Jun
          *  it filed no row, so that day's run is article rows alone. */
         const ARTICLE_DAYS = daysBetween('2030-05-20', '2030-06-14');
-        const HISTORY = runsOf([
+        const MACHINE_ROWS = [
             machineRow('2030-06-05', false),
             ...daysBetween('2030-06-06', '2030-06-14')
                 .filter((day) => day !== '2030-06-12')
                 .map((day) => machineRow(day, true))
-        ], daysBetween('2030-05-25', '2030-06-14').map((day) => articleRow(day)));
-        test("the native counter population counts only the server's own evidence", () => {
+        ];
+        const HISTORY = runsOf(MACHINE_ROWS, daysBetween('2030-05-25', '2030-06-14').map((day) => articleRow(day)));
+        const SERVER_DAYS = serverDays(MACHINE_ROWS);
+        test("a run is counted whether or not its machine record holds the server's own evidence", () => {
             expect(OFFERED.map((open) => {
                 const runs = HISTORY.filter((run) => run.date >= open.start && run.date <= open.end);
-                return [open.days, runs.length, runs.filter(carriesServerCounters).length];
+                const served = SERVER_DAYS.filter((day) => day >= open.start && day <= open.end);
+                return [open.days, runs.length, served.length];
             })).toEqual([
                 [1, 0, 0], [7, 6, 5], [14, 13, 8], [30, 21, 8], [90, 21, 8]
             ]);
         });
         test("the server's figures are dated from the first run that carried them, never from article rows alone", () => {
-            const recorded = HISTORY.filter(carriesServerCounters).map((run) => run.date);
+            const recorded = SERVER_DAYS;
             expect([...recorded].sort()[0]).toBe('2030-06-06');
             expect(OFFERED.map((open) => [open.days, recordingNotes({
                 enabled: true, recorded, window: ARTICLE_DAYS,
@@ -576,7 +583,7 @@ test.describe('what the recording was doing, in fixed words', () => {
         test('a day of article rows alone, after the server figures started, is named as a day without them', () => {
             const line = 'No server figures were written down for 12 Jun 2030. The speed figures for that day come from the summariser, not the server.';
             const facts = {
-                enabled: true, recorded: HISTORY.filter(carriesServerCounters).map((run) => run.date),
+                enabled: true, recorded: SERVER_DAYS,
                 window: ARTICLE_DAYS, reads: [begun('2030-06-01', '2030-06-14')],
                 from: offered(90).start, coveredElsewhere: ARTICLE_DAYS,
                 missing: 'server-counters' as const
@@ -590,7 +597,7 @@ test.describe('what the recording was doing, in fixed words', () => {
         test("with measurement off, nothing is said to be recorded after the newest run that carried the server's figures", () => {
             // Switched off after 11 Jun 2030: the machine record filed nothing more, and article rows
             // kept forming runs to 14 Jun.
-            const runs = runsOf(daysBetween('2030-06-06', '2030-06-11').map((day) => machineRow(day, true)), daysBetween('2030-06-06', '2030-06-14').map((day) => articleRow(day)));
+            const recorded = serverDays(daysBetween('2030-06-06', '2030-06-11').map((day) => machineRow(day, true)));
             const stopped: RecordRead = {
                 state: 'read',
                 through: '2030-06-14',
@@ -599,7 +606,6 @@ test.describe('what the recording was doing, in fixed words', () => {
                 lostDays: [],
                 setAside: {}
             };
-            const recorded = runs.filter(carriesServerCounters).map((run) => run.date);
             expect(measurementOff({ enabled: false, recorded, read: stopped, open: offered(7), offered: OFFERED }))
                 .toBe('Measurement is off. Nothing has been recorded since 11 Jun 2030. Turn it on in config/idhazh.json.');
             // The off line speaks for the days after it, so no other line names them.

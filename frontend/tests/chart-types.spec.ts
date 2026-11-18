@@ -352,10 +352,10 @@ test('identity-free rule rankings count rows and unknown rules, never sources or
 test('stage timings preserve structured rule availability and both kinds of readout event without changing legacy defaults', async () => {
 	const props = {
 		days: [
-			{ date: '2026-09-01', items: 1, fetch: { ms: 20, timed: 1, total: 1 },
-				extract: { ms: 0, timed: 1, total: 1 }, summarize: { ms: 1000, timed: 1, total: 1 } },
-			{ date: '2026-09-02', items: 1, fetch: { ms: 30, timed: 1, total: 1 },
-				extract: { ms: null, timed: 0, total: 1 }, summarize: { ms: 2000, timed: 1, total: 1 } }
+			{ date: '2026-09-01', items: 1, fetch: { ms: 20, timed: 1 },
+				extract: { ms: 0, timed: 1 }, summarize: { ms: 1000, timed: 1 } },
+			{ date: '2026-09-02', items: 1, fetch: { ms: 30, timed: 1 },
+				extract: { ms: null, timed: 0 }, summarize: { ms: 2000, timed: 1 } }
 		],
 		span: { start: '2026-09-01', end: '2026-09-02' },
 		height: 220, width: 390, tickDensity: 6, readoutMaxShare: 1

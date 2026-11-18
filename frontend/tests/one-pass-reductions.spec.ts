@@ -34,7 +34,7 @@ import { fileURLToPath } from 'node:url';
 import { distribution, quantile, type Distribution } from '../src/lib/charts/series';
 import { frameConfig } from '../src/lib/server/config';
 import { modelByDate, modelWork, runLengths, sourceCuts } from '../src/lib/server/model-work';
-import { machineCounters, type MachineLimits } from '../src/lib/console/machine/counters';
+import { machineCounters } from '../src/lib/console/machine/counters';
 import {
 	dayOf,
 	healthRows,
@@ -47,10 +47,6 @@ import {
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const GOLDEN = join(HERE, 'fixtures', 'one-pass-golden.json');
-
-/** The two ceilings the machine page reads a counter against. Fixed here so a
- * config edit cannot move the golden. */
-const LIMITS: MachineLimits = { contextWindow: 8_192, jobTimeoutSeconds: 150 * 60 };
 
 /** One ledger big enough that a repeated reduction and a single pass disagree
  * about the work, and small enough to read in a diff. */
@@ -65,7 +61,7 @@ function reductions(): Record<string, unknown> {
 	const health = healthRows(PARITY);
 	const scores = scoreRows(PARITY);
 	return {
-		machineCounters: machineCounters(hosts, health, plannedOf(PARITY), LIMITS),
+		machineCounters: machineCounters(hosts, health, plannedOf(PARITY)),
 		modelWork: modelWork(scores, health),
 		modelByDate: [...modelByDate(scores)],
 		runLengths: runLengths(scores),
@@ -144,7 +140,7 @@ test.describe('the run-to-health join visits each row once', () => {
 		const health = countingRows(healthRows(sizes), 'run_id', () => {
 			visits += 1;
 		});
-		const found = machineCounters(machineRows(sizes), health, plannedOf(sizes), LIMITS);
+		const found = machineCounters(machineRows(sizes), health, plannedOf(sizes));
 		// Every run has to be accepted, or a lower count would be the refusal
 		// rather than the reduction.
 		expect(found.refused, `refused runs at ${sizes.runs} runs`).toEqual([]);
