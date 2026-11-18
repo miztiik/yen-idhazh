@@ -71,11 +71,14 @@ def wind_table(*element_ids: str) -> ElementTable:
     return ElementTable.model_validate(payload)
 
 
+def wind_plan_payload() -> dict[str, Any]:
+    """The committed four-bar plan as a payload, read and validated on each call."""
+    return current_plan(VALIDATOR_FIXTURES / "plans" / "passes.json").model_dump(mode="json")
+
+
 def wind_plan(**changed: Any) -> VisualPlan:
     """The committed four-bar plan over that table, with these fields moved."""
-    payload = current_plan(VALIDATOR_FIXTURES / "plans" / "passes.json").model_dump(mode="json")
-    payload.update(changed)
-    return VisualPlan.model_validate(payload)
+    return VisualPlan.model_validate(wind_plan_payload() | changed)
 
 
 #: Two entities and two quantities. Every ruled type wants at least three marks
@@ -117,6 +120,7 @@ class TestTheReachabilityGate:
             for picked in itertools.combinations(ids, size)
         ]
 
+        base = wind_plan_payload()  # Read once: the loop below builds a plan per assignment.
         checked = 0
         for visual_type, rules in TYPE_RULES.items():
             roles = sorted(rules.required, key=lambda role: role.value)
@@ -127,12 +131,15 @@ class TestTheReachabilityGate:
                     encodings[role.value] = list(picked)
                     cited |= set(picked)
                 try:
-                    plan = wind_plan(
-                        type=visual_type.value,
-                        encodings=encodings,
-                        element_ids=sorted(cited),
-                        labels=[],
-                        annotations=[],
+                    plan = VisualPlan.model_validate(
+                        base
+                        | {
+                            "type": visual_type.value,
+                            "encodings": encodings,
+                            "element_ids": sorted(cited),
+                            "labels": [],
+                            "annotations": [],
+                        }
                     )
                 except ValidationError:
                     continue  # The contract refused it, which is also a refusal.
