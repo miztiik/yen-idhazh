@@ -94,7 +94,7 @@ Table G - Status Reckoner
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | G1 | 1 | Judge only new pairs | - | A | PENDING | - | - | - |
-| G2 | 2 | Version the judge's config files | - | A | PENDING | - | - | - |
+| G2 | 2 | Version the judge's config files | - | A | DONE | urban-memory | - | - |
 | G3 | 3 | Declare the two new ledgers | - | A | PENDING | - | - | - |
 | G4 | 4 | Draw by weighted slice and file pair verdicts | 1, 2, 3 | B | PENDING | - | - | - |
 | G5 | 5 | Find and move both thresholds | 4 | C | PENDING | - | - | - |
@@ -148,9 +148,10 @@ Table I - Row 1 rejected alternatives
   - `backend/idhazh/contracts/knobs/content_similarity_judge.py`
   - `backend/idhazh/content_similarity_judge/settings.py`
   - `backend/tests/contracts/test_content_similarity_judge_config.py`
+  - `backend/tests/test_similarity_budget.py`
   - `docs/concepts/config.md`
 - **Acceptance gates:**
-  - Local: the config contract test (a missing, malformed or future `version` is refused; `config_versions()` returns the one-line ASCII JSON of Table E for the files it was handed); ruff and mypy; doc check.
+  - Local: the config contract test (a missing, malformed or future `version` is refused; `config_versions()` returns the one-line ASCII JSON of Table E for the config directory it was handed); ruff and mypy; doc check.
   - CI: the required checks are authoritative.
 - **Oracle:** a hand-built config directory returns exactly the expected JSON text. It cannot settle that a maintainer bumps `version` when a value changes; the rule lives in `docs/concepts/config.md`.
 - **Decisions:**
@@ -162,6 +163,7 @@ Table J - Row 2 decisions
 | J1 | `version` is the UTC date of the last edit that changed a value, bumped in the same commit. A date, never an integer | Fowler |
 | J2 | `config_versions` is one JSON text (Table E) naming every judge-owned config file the night read: one now, two after row 6. A new config file then needs no new column | Fowler |
 | J3 | `docs/concepts/config.md` states the rule for the judge's files and says the other files do not carry it yet (B4) | Fowler |
+| J4 | `version` is a required field of the judge's model, so the loader refuses a missing or malformed one at its first read. That it is a real calendar date no later than today (UTC) is checked in `settings.py`, the only place the clock is read, so the contract stays the same on every day. `config_versions()` takes the config directory and builds its text from the loader, naming the file by one module constant that row 6's canary loader reuses beside the same date check | Fowler |
 
 - **Rejected alternatives:**
 
