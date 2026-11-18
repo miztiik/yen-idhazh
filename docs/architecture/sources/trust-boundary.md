@@ -282,10 +282,11 @@ Article text leaves the process in exactly one more place: the work stage sends
 it. The service is a process the digest job starts on the same runner and
 `text_analysis.base_url` is a committed config value that the schema holds to this
 machine, so moving it is a diff a person reads. An environment value is not an
-acceptable control for a destination, so there is none, and the client sends the
-request without any proxy the environment names and never follows a redirect with
-the text. A run that sent article text anywhere else is not a run this project
-publishes (Guardrail #11).
+acceptable control for a destination, so there is none: this client and the
+model-server client open their requests through `open_without_proxy`, which ignores any
+proxy the environment names, and this client never follows a redirect with the text. A
+run that sent article text anywhere else is not a run this project publishes
+(Guardrail #11).
 
 What comes back is data, and the control is what the pipeline does with it rather than
 a promise from the service:
@@ -326,6 +327,15 @@ Accepting that prose instructions survive - and saying so - is the honest positi
 An **article body** is never republished to a reader. The article is only
 hashed, the prompt that contains it stays behind its own flag, and the source
 is a link.
+
+**No client of a server this run controls obeys a proxy from the environment.**
+`urllib` follows `http_proxy` for a loopback address too, so a machine that sets one
+would send an item to that proxy before the model server saw it. The model-server client
+and the text-analysis client both open their requests through `open_without_proxy`, which
+names no proxy. What this gives up is a model server on another machine that can be
+reached only through a proxy: `model_server.base_url` allows another host, though nothing
+committed uses one. If one ever does, the way back is a committed setting a person reads
+in a diff, as the address is, and not an environment one.
 
 ## Rejected alternatives
 
