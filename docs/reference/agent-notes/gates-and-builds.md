@@ -1,6 +1,6 @@
 # Agent Notes - Gates and Builds
 
-**Last Updated**: 2026-11-17
+**Last Updated**: 2026-11-18
 
 Checks before trusting a test or build result. Commands belong in [run-the-gates.md](../../how-to/run-the-gates.md).
 
@@ -82,6 +82,23 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
   does. Text matches alone do not prove rendering.
 - Adding a persisted contract or retiring a task changes named test inputs too. Update the explicit fixture-path list, task declaration and module lists, and transitive-import lists beside the implementation. A committed fixture that the named fixture list omits is still untested.
 - Generated test payloads are contract writers too. Build valid controls through the native model with its authoritative version and renderer stamps; then make one deliberate invalid change per refusal case. Check the changed helper with mypy as well as pytest.
+- **A refusal test that catches `(IntegrityError, ValueError)` passes on any `ValueError`, pydantic's `ValidationError` included; it pins nothing.**
+  `IntegrityError` subclasses `ValueError`, so the tuple is no narrower than
+  `ValueError` alone. A "corrupt payload" recovery case stayed green on an
+  accidental `ValidationError` (seen 2026-11-18). The tell is a case that still
+  passes after the check it names is switched off. Give the refusal a typed
+  reason and assert that, never the message text:
+  ```python
+  with pytest.raises(RecoveryRefusalError) as caught:
+      worker_files(plan, archives)
+  assert caught.value.reason is RefusalReason.WORKER_PAYLOAD_INVALID
+  ```
+- **A ZIP test for a backslash in an entry name never reaches the backslash check on Windows.**
+  `zipfile` rewrites the OS separator to `/` both when it writes a name and when
+  it reads one, so `folder\escape` reaches the code as `folder/escape` and the
+  slash check refuses it first (seen 2026-11-18, Python 3.14). The tell is the
+  case passing with the backslash clause removed. Keep the case, which must
+  refuse on both systems; only Linux, so CI, proves the clause.
 - Standalone server-rendered and browser component mounts need the settings normal pages provide. Supply canonical config through shared test helpers and complete chart props; do not hide missing context with a production fallback. For formatting expectations, keep counts, divisors and clocks independent, deriving only the displayed string from the approved formatter.
 - Check platform-specific Python APIs with mypy's CI target platform. Guard Windows-only code directly with `sys.platform == "win32"`; an intermediate boolean can prevent the checker from excluding that branch on Linux. Include the shared fixture module when checking a test file in isolation.
 - A passing race test must reproduce the production changes: file additions and deletions, changing content-addressed paths, and competing push timing. A stable-path fixture or a test that retains superseded nodes does not prove a content-addressed replacement retry works.

@@ -26,7 +26,7 @@ from utilities.digest_recovery_download import SourceRun
 from utilities.digest_recovery_inputs import restore, unpack
 
 from ._harness import _copy_config
-from .test_digest_recovery import saved_inputs
+from ._recovery_inputs import saved_inputs
 
 pytestmark = pytest.mark.workflow
 

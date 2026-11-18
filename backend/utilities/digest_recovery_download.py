@@ -6,13 +6,15 @@ import hashlib
 import json
 import re
 import subprocess
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import Literal
 
 from pydantic import ConfigDict, PositiveInt, TypeAdapter
 
 from idhazh.contracts.base import CommitSha, Model, Timestamp
-from utilities.publication_request import IntegrityError
+from utilities.digest_recovery_refusal import RecoveryRefusalError, RefusalReason
+
+type PlatformCall = Callable[[str, str], bytes]
 
 
 class SourceRun(Model):
@@ -59,20 +61,20 @@ def api(repository: str, path: str) -> bytes:
     ).stdout
 
 
-def pages(repository: str, path: str, key: str) -> list[object]:
+def pages(repository: str, path: str, key: str, call_api: PlatformCall = api) -> list[object]:
     """Page only the selected run's finite artifact or job inventory."""
     rows: list[object] = []
     page = 1
     while True:
-        payload = json.loads(api(repository, f"{path}?per_page=100&page={page}"))
+        payload = json.loads(call_api(repository, f"{path}?per_page=100&page={page}"))
         batch = payload[key]
         if not isinstance(batch, list):
-            raise IntegrityError(f"platform response has no {key} list")
+            raise RecoveryRefusalError(RefusalReason.PLATFORM_LIST_MISSING, (key,))
         rows.extend(batch)
         if len(rows) >= payload["total_count"]:
             return rows
         if not batch:
-            raise IntegrityError("platform pagination ended before its declared count")
+            raise RecoveryRefusalError(RefusalReason.PAGINATION_ENDED_EARLY)
         page += 1
 
 
@@ -90,33 +92,32 @@ def select_artifacts(source: SourceRun, values: Sequence[object]) -> dict[str, A
             or not re.fullmatch(r"sha256:[0-9a-f]{64}", artifact.digest)
             or artifact.name in selected
         ):
-            raise IntegrityError(
-                "source artifacts are expired, foreign or ambiguous", (artifact.name,)
+            raise RecoveryRefusalError(
+                RefusalReason.ARTIFACT_EXPIRED_FOREIGN_OR_AMBIGUOUS, (artifact.name,)
             )
         selected[artifact.name] = artifact
     if "plan" not in selected:
-        raise IntegrityError("source run has no retained plan artifact")
+        raise RecoveryRefusalError(RefusalReason.NO_PLAN_ARTIFACT)
     return selected
 
 
-def download(execution: str) -> tuple[SourceRun, dict[str, bytes], frozenset[int]]:
-    """Download and checksum the saved plan and items, not evidence or model captures."""
-    if not re.fullmatch(r"[1-9][0-9]*", execution):
-        raise ValueError("source run must be a positive platform run ID")
-    repository = subprocess.run(
-        ["gh", "repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"],
-        check=True,
-        stdout=subprocess.PIPE,
-        text=True,
-    ).stdout.strip()
-    source = SourceRun.model_validate_json(api(repository, f"actions/runs/{execution}"))
+def fetch_source(
+    execution: str, repository: str, call_api: PlatformCall
+) -> tuple[SourceRun, dict[str, bytes], frozenset[int]]:
+    """Fetch and checksum one run's saved plan and items through the given platform client."""
+    source = SourceRun.model_validate_json(call_api(repository, f"actions/runs/{execution}"))
     if source.id != int(execution):
-        raise IntegrityError("platform returned another source run")
+        raise RecoveryRefusalError(RefusalReason.ANOTHER_SOURCE_RUN)
     jobs = TypeAdapter(list[SourceJob]).validate_python(
-        pages(repository, f"actions/runs/{execution}/attempts/{source.run_attempt}/jobs", "jobs")
+        pages(
+            repository,
+            f"actions/runs/{execution}/attempts/{source.run_attempt}/jobs",
+            "jobs",
+            call_api,
+        )
     )
     if not any(job.name == "plan" and job.conclusion == "success" for job in jobs):
-        raise IntegrityError("source attempt has no successful planning job")
+        raise RecoveryRefusalError(RefusalReason.NO_SUCCESSFUL_PLAN_JOB)
     failed = frozenset(
         int(match[1])
         for job in jobs
@@ -124,14 +125,25 @@ def download(execution: str) -> tuple[SourceRun, dict[str, bytes], frozenset[int
     )
     selected = select_artifacts(
         source,
-        pages(repository, f"actions/runs/{execution}/artifacts", "artifacts"),
+        pages(repository, f"actions/runs/{execution}/artifacts", "artifacts", call_api),
     )
     archives: dict[str, bytes] = {}
     for name, artifact in selected.items():
-        data = api(repository, f"actions/artifacts/{artifact.id}/zip")
+        data = call_api(repository, f"actions/artifacts/{artifact.id}/zip")
         if f"sha256:{hashlib.sha256(data).hexdigest()}" != artifact.digest:
-            raise IntegrityError(
-                "downloaded artifact checksum differs from platform digest", (name,)
-            )
+            raise RecoveryRefusalError(RefusalReason.CHECKSUM_DIFFERS_FROM_DIGEST, (name,))
         archives[name] = data
     return source, archives, failed
+
+
+def download(execution: str) -> tuple[SourceRun, dict[str, bytes], frozenset[int]]:
+    """Download and checksum the saved plan and items, not evidence or model captures."""
+    if not re.fullmatch(r"[1-9][0-9]*", execution):
+        raise RecoveryRefusalError(RefusalReason.RUN_ID_NOT_POSITIVE)
+    repository = subprocess.run(
+        ["gh", "repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"],
+        check=True,
+        stdout=subprocess.PIPE,
+        text=True,
+    ).stdout.strip()
+    return fetch_source(execution, repository, api)
