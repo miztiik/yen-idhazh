@@ -13,9 +13,9 @@ import { modelWork } from '../src/lib/server/model-work';
  * Three things are checked here, all in plain Node against fixtures so nothing
  * depends on the committed archive (`CLAUDE.md` section 13). First, the reader
  * opens only the dates it is asked for - never a listing of the tree - so its
- * cost is the window and not the archive (Guardrail #12). Second, `evalDays` and
- * `modelWork` take the distinct-published counts from the record where a day has
- * one, and fall back to the row counts where it does not. Third, every
+ * cost is the window and not the archive (Guardrail #12). Second, `modelWork`
+ * takes the distinct-published counts from the record where a day has one, and
+ * falls back to the row counts where it does not. Third, every
  * measurement distribution still reads every row, so a re-score still counts
  * twice where a median means it to.
  */
@@ -191,19 +191,10 @@ const SETTLED = new Map<string, DayScoredCounts>([
 	[DATE, { scored: 2 }]
 ]);
 
-test('evalDays without a record counts the ledger rows, as it always did', () => {
-		const [day] = evalDays(ROWS);
-	expect(day.scored).toBe(4);
-});
-
-test('evalDays with a record counts the distinct-published items', () => {
-		const [day] = evalDays(ROWS, SETTLED);
-	// The distinct published count replaces the measurement-row count.
-	expect(day.scored).toBe(2);
-	// Every measurement distribution still reads every row: four hhem readings,
-	// and the median is the same number the rows gave without the record.
+test('evalDays reads every row, so a re-score counts twice in a median', () => {
+	const [day] = evalDays(ROWS);
+	// Four hhem readings for three distinct items: the re-scored one counts twice.
 	expect(day.matched).toBe(4);
-		expect(day.matchMid).toBe(evalDays(ROWS)[0].matchMid);
 });
 
 const SCORES: Record<string, string>[] = ROWS.map((row) => ({ ...row, model_id: 'm' })) as Record<

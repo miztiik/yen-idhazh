@@ -4,9 +4,9 @@
  * Row 18 windowed the DRAWING of the chart, but the server still built a candle
  * for every timed day in history and inlined the lot into every prerendered
  * `console/model` document. `throughputWithin` bounds the build to the widest
- * span the control can reach - the same seed `reasonsWithin` and `evalWithin`
- * take - so a day older than the widest preset is never built, and the ceiling
- * on the shipped array is the preset's days whatever the archive holds.
+ * span the control can reach, so a day older than the widest preset is never
+ * built, and the ceiling on the shipped array is the preset's days whatever the
+ * archive holds.
  *
  * Nothing here reads a committed ledger. A test that walks the archive costs
  * more every published day (Guardrail #12), and the one thing this proves - which
