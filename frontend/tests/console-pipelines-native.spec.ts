@@ -250,8 +250,8 @@ test('stage clocks, signed gaps and independent cost pairs never fill unknown ce
 	expect(nativeStageTimings(rows(queries.stageTimingsQuery)).length).toBeGreaterThan(0);
 	expect(nativeTimeSplit(rows(queries.itemTimeSplitQuery)).days.some((day) => day.overlapping > 0)).toBe(true);
 	const stage = nativeStageTimings([{ date: '2030-06-01', fetch_ms: 0, extract_ms: null, summarize_ms: 10 }])[0];
-	expect(stage.fetch).toEqual({ ms: 0, timed: 1, total: 1 });
-	expect(stage.extract).toEqual({ ms: null, timed: 0, total: 1 });
+	expect(stage.fetch).toEqual({ ms: 0, timed: 1 });
+	expect(stage.extract).toEqual({ ms: null, timed: 0 });
 	const cost = nativeItemCost([
 		{ prefill_ms: 10, input_tokens: 20, cached_tokens: null, decode_ms: 20, output_tokens: 2 },
 		{ prefill_ms: 0, input_tokens: 20, cached_tokens: 0, decode_ms: null, output_tokens: null }

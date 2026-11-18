@@ -1,6 +1,6 @@
 # Where a drawing becomes pixels
 
-**Last Updated**: 2026-11-12
+**Last Updated**: 2026-11-18
 
 The reader's browser renders numeric charts; the pipeline never draws a chart.
 This page holds that ruling, what it cost and what it
@@ -312,7 +312,7 @@ Table A - Declared types without a direct compiler
 The [text-only proposal rationale](what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md#design-rationale)
 and [diagram boundary](visuals.md#diagrams-deferred) remain relevant.
 Abandonment is distinct from the
-[finalized planner-evidence handoff](../summarize/prompt.md#the-second-call-writes-this-summary-and-the-article-is-read-once):
+[planner-evidence handoff](../summarize/prompt.md#one-call-writes-the-summary-and-plans-the-visual-and-the-article-is-read-once):
 adding a compiler cannot recover a request that was suppressed, declined or
 failed to parse before reaching it.
 
@@ -347,8 +347,9 @@ unchanged.
 **Scatter and bubble keep complete relationship points.** Their plans must have `relationship`
 purpose. The validator requires an entity element, an x measure and a y measure
 for each point; bubble also requires one positive size measure. All measures
-must carry the same existing Tier 2 entity label:
-the label pass writes that tracked entity name on the element table on disk.
+must carry the same existing Tier 2 entity label. Nothing writes that label now,
+because the first model call that did is gone, so these two types cannot validate
+until a code rule links a figure to its subject.
 An unknown entity, a missing label, different entity sets, duplicate entities,
 or a mismatched order is refused; array position alone is not evidence of a
 relationship. The compiler repeats this check at its own boundary. Both chart

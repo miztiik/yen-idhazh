@@ -1,13 +1,12 @@
 /** Pipelines draws only the windowed telemetry and refuses a too-narrow rule. */
 import { expect, test } from './support/browser';
 import { windowOfDays } from '../src/lib/charts/viewport';
-import type { TelemetryRow } from '../src/lib/charts/series';
 import { daysInWindow } from '../src/lib/charts/viewport';
 import { nativeFailureMix } from '../src/lib/console/pipelines/failure-mix';
 import { nativeTimeSplit, timeSplitReadout } from '../src/lib/console/pipelines/item-time-split';
 import { dateSeries, numberFormat } from './support/number-format';
 import { frame } from '../src/lib/charts/frame';
-import { telemetryRow } from './support/telemetry-row';
+import { telemetryRow, type TelemetryRow } from './support/telemetry-row';
 import { JUDGED_THROUGH } from './support/console-window/judgement-fixtures';
 /** An item that published, timed from start to finish: 800 ms in all. */
 function timedItem(date: string, item: string): TelemetryRow {

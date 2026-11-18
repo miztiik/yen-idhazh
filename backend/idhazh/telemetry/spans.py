@@ -47,7 +47,7 @@ class SpanKind(StrEnum):
 class SpanName(StrEnum):
     """Every span this pipeline opens.
 
-    Five are the stages a ledger row already splits: `fetch`, `extract`,
+    Six are the stages a ledger row already splits: `fetch`, `extract`, `analyze`,
     `summarize`, `score` and `visual_planner`. `item` is what they hang under.
     The other five are the reason this exists at all - `robots` nests inside
     `fetch`, `tag` nests inside `extract`, and `render_prompt`, `model_call` and
@@ -61,6 +61,7 @@ class SpanName(StrEnum):
     ROBOTS = "robots"
     EXTRACT = "extract"
     TAG = "tag"
+    ANALYZE = "analyze"
     SUMMARIZE = "summarize"
     RENDER_PROMPT = "render_prompt"
     MODEL_CALL = "model_call"
@@ -111,6 +112,7 @@ class AttrKey(StrEnum):
     LENS_COUNT = "lens_count"
     ENTITY_COUNT = "entity_count"
     EVENT_COUNT = "event_count"
+    MENTION_COUNT = "mention_count"
     MODEL_ID = "model_id"
     PROMPT_DIGEST = "prompt_digest"
     PROMPT_CHARS = "prompt_chars"

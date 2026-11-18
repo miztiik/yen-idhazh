@@ -1,6 +1,6 @@
 # Troubleshoot a Pipeline Item
 
-**Last Updated**: 2026-11-16
+**Last Updated**: 2026-11-18
 
 Use CI records to inspect an item that the pipeline already processed; the
 project does not support local model inference or arbitrary-URL runs.
@@ -50,7 +50,7 @@ code to focus review of the run's workflow logs and captured artifact:
 | Summary `shard_out_of_time` | The worker reached its configured time limit before starting this item. |
 | Summary `context_exceeded` | The prompt and reply allowance did not fit the model context limit. |
 | Summary `output_truncated` | The model reply ended before it formed a complete summary. |
-| Summary `labels_truncated` | The labelling reply ended early, so the summary call did not run. |
+| Summary `labels_truncated` | Historical. The first model call, which labelled names and places, is gone, so only an older row carries it. |
 | Summary `bad_shape` | The model reply did not match the required summary shape. |
 | Summary `length_out_of_range` | Historical. A run no longer rejects a reply for its length, so only an older row carries it. |
 | Summary `copied_source` | The reply repeated too much text from the article. |

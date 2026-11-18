@@ -1,6 +1,6 @@
 # What the Hardware route draws
 
-**Last Updated**: 2026-11-17
+**Last Updated**: 2026-11-18
 
 `/console/machine/` asks what machine the work actually got and how much
 resource headroom that work left.
@@ -124,7 +124,7 @@ one model-rule declaration and a plot on the panel's own ground.
 
 ### What may not be pooled
 
-Refusal is still the existing `mergeHost`/`machineCounters` rule: disagreeing
+Refusal is the `hostHalvesConflict`/`machineCounters` rule: disagreeing
 dates, missing or invalid shard identities, unreadable host versions, conflicting
 host cells, too many reported shards, and an index outside the recorded count
 refuse the run rather than publish half of it. The bounded widest host question
@@ -193,10 +193,12 @@ exactly 0 on 7 days while its pooled share stays between 23.1 and 40.3 percent.
 A row counts only when its prompt and cached cells are both present, finite and
 cached is not above prompt; the remainder is 100 minus the cached share, so the
 parts total exactly 100. The recorded `label_cache_pct` and `summary_cache_pct`
-are those same two cells divided and rounded (`stages/two_calls.py`), not an
+are those same two cells divided and rounded (`stages/summarize_one_item.py`), not an
 independent reading, so the panel does not read them. Settings changes draw as
 dashed verticals; 2026-11-11, when the summary call's share fell from 95.4 to
-77.7 percent, is one.
+77.7 percent, is one. A day with no complete reading is a gap, and an item has
+made one call since 2026-11-17, so the label call's chart draws no bar for a day
+after it.
 
 Read/write token volume reads the settled compact item-health rows, one per
 UTC date, run and article. Both sides require finite, nonnegative input and

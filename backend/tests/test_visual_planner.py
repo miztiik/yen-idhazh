@@ -14,14 +14,12 @@ from typing import Any
 
 import pytest
 from pydantic import ValidationError
-from support.models import a_markers
 from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
-from support.prompts import SUMMARIZE_AND_PLAN_REPLIES, a_table, label_payload
+from support.prompts import SUMMARIZE_AND_PLAN_REPLIES, summary_payload
 from support.visual_plans import current_plan
 
 from idhazh import config
 from idhazh.classify.calls import (
-    build_summarize_and_plan_request,
     parse_summarize_and_plan,
     summarize_and_plan_schema,
 )
@@ -252,24 +250,17 @@ class TestTheGateSuppressesThePlanAndNeverTheCall:
     ) -> None:
         """The cached prefix a gated item reuses is the one an ungated item reuses.
 
-        Every difference sits after the system turn, the article and the label call's
-        reply, so both prompts open with the label call's prompt and its reply and only
-        the trailing turn differs.
+        Every difference sits after the system turn, the headline and the article, so
+        both prompts share everything up to and including the article and only the
+        trailing turn differs.
         """
-        first = label_payload(article_ok)
-        reply = read_text(FIXTURES_DIR / "completions" / "label" / "labelled.json")
-        markers = a_markers()
-        whole = build_summarize_and_plan_request(
-            first, reply, a_table(article_ok), markers=markers
-        )
-        suppressed = build_summarize_and_plan_request(
-            first, reply, a_table(article_ok), markers=markers, plan=False
-        )
-        shared = first["prompt"] + reply
+        whole = summary_payload(article_ok)
+        suppressed = summary_payload(article_ok, plan=False)
+        text = article_ok.text or ""
+        shared = whole["prompt"][: whole["prompt"].index(text) + len(text)]
 
-        assert whole["prompt"].startswith(shared)
         assert suppressed["prompt"].startswith(shared)
-        assert whole["prompt"][len(shared) :] != suppressed["prompt"][len(shared) :]
+        assert whole["prompt"] != suppressed["prompt"]
 
     def test_a_suppressed_reply_parses_to_a_summary_and_no_plan(self) -> None:
         """`visual` is `None` because none was asked for, not because one was lost."""

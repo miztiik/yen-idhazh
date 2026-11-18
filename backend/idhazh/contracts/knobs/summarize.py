@@ -2,9 +2,22 @@
 
 from __future__ import annotations
 
-from pydantic import Field
+from collections.abc import Mapping
+from types import MappingProxyType
+from typing import Any, Final
+
+from pydantic import Field, model_validator
 
 from idhazh.contracts.base import Model
+from idhazh.contracts.knobs.removed import refuse_a_removed_knob
+
+#: The `summarize` knob this block used to carry. `asks_for_a_visual_plan` said
+#: whether the run asks the model for a picture, and nothing acted on it but the
+#: stamp the run's prompt inputs carry. Whether a plan is asked for is decided by
+#: `visuals.enabled_kinds`, so the knob is refused by name and points there.
+SUPERSEDED_SUMMARIZE_NAMES: Final[Mapping[str, str]] = MappingProxyType(
+    {"asks_for_a_visual_plan": "visuals.enabled_kinds"}
+)
 
 
 class SummarizeConfig(Model):
@@ -27,14 +40,8 @@ class SummarizeConfig(Model):
             "measurement or rejection threshold."
         ),
     )
-    asks_for_a_visual_plan: bool = Field(
-        default=True,
-        description=(
-            "Whether the run asks the summarize-and-plan call for a picture. True is what "
-            "the production run does and what ships. A case of the pipeline test workflow "
-            "that runs the summary-only path sets it false beside an empty "
-            "`visuals.enabled_kinds`, which is what takes the plan fields off that call's "
-            "grammar. The window gate reserves the model file's response cap whichever "
-            "way this is set, so no sizing reads it; it is stamped with the prompt inputs."
-        ),
-    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _a_removed_knob_is_refused_by_name(cls, data: Any) -> Any:
+        return refuse_a_removed_knob("summarize", data, SUPERSEDED_SUMMARIZE_NAMES)

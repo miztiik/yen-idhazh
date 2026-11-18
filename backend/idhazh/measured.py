@@ -262,30 +262,40 @@ WORST_TOKENS_A_WORD: Final = TokenizerMeasured(
     ),
 )
 
-# Two-call probes used /tokenize on eight 7,692-word corpus builds:
-# longest-first, densest-first, reverse-densest and five seeded shuffles.
+# The three readings below were taken with /tokenize on eight 7,692-word corpus builds:
+# longest-first, densest-first, reverse-densest and five seeded shuffles. They were read
+# on the longest prompt this project has sent, which carried instructions, sentence
+# addresses and a menu column the digest call's prompt does not, so each one is a ceiling
+# on that prompt and not a reading of it.
 
-LABEL_SCAFFOLD_TOKENS: Final = TokenizerMeasured(
+DIGEST_PROMPT_SCAFFOLD_TOKENS: Final = TokenizerMeasured(
     value=2167,
-    measures="what the label call's prompt costs before a word of the article or a menu row lands",
+    measures=(
+        "a ceiling on what the digest call's prompt costs before a word of the article or a "
+        "menu row lands, read on the longer prompt of the first call it replaced"
+    ),
     taken_on=date(2026, 9, 13),
     subject=QWEN35_9B_Q4_K_M,
     method=(
-        "rendered build_label_request with a seven-word article and empty candidate "
+        "rendered that first call's request with a seven-word article and empty candidate "
         "menu, then tokenized the whole prompt: 2,055 system tokens and 112 others."
     ),
     when_it_fires=(
-        "when prompts, turn markers or weights change, render and tokenize the same "
-        "seven-word article again."
+        "when prompts, turn markers or weights change, render calls.build_summary_request for a "
+        "seven-word article and an empty element table, tokenize the whole prompt, and "
+        "replace this ceiling with the count."
     ),
     why_a_number=(
-        "adds fixed label-prompt tokens to the two-call context-window calculation."
+        "adds the fixed prompt tokens to the digest call's context-window calculation."
     ),
 )
 
-LABEL_BODY_TOKENS_A_WORD: Final = TokenizerMeasured(
+DIGEST_PROMPT_BODY_TOKENS_A_WORD: Final = TokenizerMeasured(
     value=2.2285,
-    measures="the article and its sentence addresses, per word of the cut article",
+    measures=(
+        "a ceiling on the article's tokens per word of the cut article, read with the "
+        "sentence addresses the digest call's prompt no longer carries"
+    ),
     taken_on=date(2026, 9, 13),
     subject=QWEN35_9B_Q4_K_M,
     method=(
@@ -293,17 +303,20 @@ LABEL_BODY_TOKENS_A_WORD: Final = TokenizerMeasured(
         "densest of eight cap-length builds."
     ),
     when_it_fires=(
-        "when a higher ratio is observed, numbered_sentences changes or weights "
-        "change, rebuild the cap-length inputs and remeasure the maximum."
+        "when a higher ratio is observed or weights change, rebuild the cap-length inputs, "
+        "tokenize the article as calls.summary_user_turn prints it, and remeasure the maximum."
     ),
     why_a_number=(
-        "converts article words and sentence addresses to a worst-case token count."
+        "converts article words to a worst-case token count."
     ),
 )
 
-LABEL_MENU_TOKENS_A_ROW: Final = TokenizerMeasured(
+DIGEST_PROMPT_MENU_TOKENS_A_ROW: Final = TokenizerMeasured(
     value=34.115,
-    measures="one row of the label call's candidate menu, in tokens",
+    measures=(
+        "a ceiling on one row of the digest call's element menu, in tokens, read on the "
+        "longer rows of the first call's menu"
+    ),
     taken_on=date(2026, 9, 13),
     subject=QWEN35_9B_Q4_K_M,
     method=(
@@ -311,32 +324,11 @@ LABEL_MENU_TOKENS_A_ROW: Final = TokenizerMeasured(
         "row format: [element_id] excerpt = value unit (sentence sNN)."
     ),
     when_it_fires=(
-        "when candidate_menu, element_id length or weights change, tokenize the "
-        "same menus again and remeasure the maximum tokens per row."
+        "when planning_menu, element_id length or weights change, tokenize the menus of the "
+        "same builds again and remeasure the maximum tokens per row."
     ),
     why_a_number=(
-        "multiplies elements.max_per_article to budget a full candidate menu."
-    ),
-)
-
-SUMMARIZE_AND_PLAN_SEAM_TOKENS: Final = TokenizerMeasured(
-    value=58,
-    measures=(
-        "what the summarize-and-plan call adds in front of its own reply, beyond the "
-        "label call's prompt and reply"
-    ),
-    taken_on=date(2026, 9, 13),
-    subject=QWEN35_9B_Q4_K_M,
-    method=(
-        "tokenized both plan states with two reply strings, then subtracted the label "
-        "prompt and reply: 53 extra tokens with planning, 58 without."
-    ),
-    when_it_fires=(
-        "when summarize_and_plan_user_turn, turn markers or weights change, tokenize "
-        "both prompts on the same input and subtract again."
-    ),
-    why_a_number=(
-        "adds the second call's extra prompt tokens to the context-window calculation."
+        "multiplies elements.max_per_article to budget a full element menu."
     ),
 )
 
@@ -345,8 +337,7 @@ EVERY_MEASURED: Final = (
     WARNING_DAYS_REQUIRED,
     PROMPT_OVERHEAD_TOKENS,
     WORST_TOKENS_A_WORD,
-    LABEL_SCAFFOLD_TOKENS,
-    LABEL_BODY_TOKENS_A_WORD,
-    LABEL_MENU_TOKENS_A_ROW,
-    SUMMARIZE_AND_PLAN_SEAM_TOKENS,
+    DIGEST_PROMPT_SCAFFOLD_TOKENS,
+    DIGEST_PROMPT_BODY_TOKENS_A_WORD,
+    DIGEST_PROMPT_MENU_TOKENS_A_ROW,
 )

@@ -11,12 +11,13 @@ local runtime already speaks, so swapping llama.cpp for something else later is
 a URL change rather than a rewrite. One call, one prompt, nothing replayed.
 
 **The rendered-completion shape** hands the server the prompt string itself.
-A sequence of calls needs it: a chat template renders the same assistant turn
-differently as a generation prompt and as history, so the second call's prompt
-stops matching the first one part-way through and the server re-reads
-everything behind the break. Rendering the bytes here makes the second prompt
-literally the first one plus the reply plus the new turn, so the prefix holds by
-construction rather than by a template's goodwill.
+A call decoded in two spans needs it: a chat template renders the same
+assistant turn differently as a generation prompt and as history, so the second
+span's prompt would stop matching the first one part-way through and the server
+would re-read everything behind the break. Rendering the bytes here makes the
+second prompt literally the first one plus what it wrote plus the closing
+marker, so the prefix holds by construction rather than by a template's
+goodwill.
 
 Decoding parameters are assembled in exactly one place. A second place to set
 temperature is a second place for an output to move for a reason nobody
@@ -251,27 +252,6 @@ class TurnMarkers:
         """
         return self.reply_opening_thinking if self.thinks else self.reply_opening
 
-    def opening_of(self, prompt: str) -> str:
-        """The reply opening a rendered prompt already ends with.
-
-        A continuation reads it off the prompt rather than off a flag handed in
-        beside it, so the second call cannot open its reply differently from the
-        first - which is the one way a continuation could still break the prefix
-        it exists to preserve.
-
-        **Longest first.** The match is on a suffix, so a shorter opening that
-        is a suffix of a longer one would answer for both and a thinking
-        continuation would be spliced with the plain opening. Sorting by length
-        makes that unreachable for any pair, rather than safe for the pair the
-        incumbent happens to declare.
-        """
-        for opening in sorted(
-            (self.reply_opening_thinking, self.reply_opening), key=len, reverse=True
-        ):
-            if prompt.endswith(opening):
-                return opening
-        raise ValueError("this prompt does not end on a reply opening, so nothing may follow it")
-
 
 def turn_markers_digest(markers: TurnMarkers) -> str:
     """One digest over the whole envelope, for the stamp and for the bench.
@@ -317,25 +297,6 @@ def turn_markers_digest(markers: TurnMarkers) -> str:
 def render_prompt(*, system: str, user: str, markers: TurnMarkers) -> str:
     """The prompt bytes a rendered completion is sent, from the markers it is made of."""
     return markers.conversation(system=system, user=user) + markers.opening()
-
-
-def continued_prompt(prompt: str, *, reply: str, user: str, markers: TurnMarkers) -> str:
-    """The next prompt in a sequence: this one, what came back, and one new turn.
-
-    The opening is a literal concatenation, so the property a prefix cache needs
-    is not something two call sites have to agree about - it is what the
-    expression says. The seam sits on the turn-closing marker, which tokenises
-    as one entry of the model's own vocabulary, so the byte prefix survives as a
-    token prefix rather than re-splitting at the join.
-
-    **`reply` is the answer, never the thinking.** Under a thinking envelope the
-    slot behind this prompt also holds what span one wrote, and none of it is
-    replayed here: it is model-written text, and a prompt is exactly the channel
-    Guardrail #11 exists to keep model-written text out of. What that costs is
-    the answer's own tokens re-prefilled, which is prefill rather than decode.
-    """
-    opening = markers.opening_of(prompt)
-    return prompt + reply + markers.turn_closing + markers.turn("user", user) + opening
 
 
 @dataclass(frozen=True, slots=True)
@@ -634,7 +595,7 @@ def completion_payload(
 
     An explicit `sampling.max_tokens` overrides the caller's shape-derived
     budget. Without it, `n_predict` carries that derived budget. Only one
-    output-limit key is sent, including on continuations.
+    output-limit key is sent, including on both spans of a thinking call.
 
     **This is the answer span, whether or not one is thought in front of it.**
     Under a thinking envelope `thinking_span` derives span one from this body
@@ -822,8 +783,6 @@ def answer_span(
 
     The prompt is span one's prompt extended by what span one wrote, so the KV
     slot holds everything in front of it and only the closing marker is new.
-    That is the same property `continued_completion_payload` keeps between two
-    calls, one level down.
 
     **This is where a grammar is applied, and that is the point of the pair.**
     Constraining the first token of the whole decode forces an answer where the
@@ -873,51 +832,6 @@ def one_reply(*, thought: Completion, answer: Completion) -> Completion:
         prefill_ms=thought.prefill_ms + answer.prefill_ms,
         decode_ms=thought.decode_ms + answer.decode_ms,
     )
-
-
-def continued_completion_payload(
-    first: Mapping[str, Any],
-    *,
-    reply: str,
-    user: str,
-    output_schema: dict[str, Any],
-    markers: TurnMarkers,
-    max_answer_tokens: int = DEFAULT_MAX_TOKENS,
-) -> dict[str, Any]:
-    """A second request whose prompt IS the first one's, plus what it returned.
-
-    Not "byte for byte by agreement between two call sites" - the same string
-    object, extended. A prefix cache reuses the longest common prefix of the
-    tokenised prompt, so everything the first call read and everything it wrote
-    is answered from the slot and only the new turn is prefilled.
-
-    The prompt grows, the decoder is held to a different shape, and an output
-    budget derived for the new shape replaces the old derived budget.
-    An explicit `max_tokens` stays unchanged. Temperature,
-    `top_p`, `seed`, `stream` and the prompt cache are carried over untouched,
-    because `completion_payload` is the one place that sets them
-    (`docs/architecture/contracts/determinism.md`).
-
-    **The budget is replaced in the key it was written in.** A second spelling
-    would leave both in the body, and llama-server would answer the first call's
-    budget to a reply sized for the second - a cut plan on every item, recovered
-    into a summary with no picture, and no counter saying why.
-
-    `first` is the first call's ANSWER body, never its thinking span. The
-    thinking span carries no grammar and a budget of its own, and building a
-    continuation on it would send the second call unconstrained.
-
-    `reply` is the first call's own answer content, replayed verbatim. It is a
-    string the model wrote and it is not trusted any further here than a fetched
-    page would be - it has already been parsed against a closed schema, and what
-    it can reach downstream is bounded by that schema and not by this turn.
-    """
-    return {
-        **first,
-        "prompt": continued_prompt(str(first["prompt"]), reply=reply, user=user, markers=markers),
-        **({} if "max_tokens" in first else {"n_predict": max_answer_tokens}),
-        "json_schema": output_schema,
-    }
 
 
 def _reported(value: object) -> int | None:
@@ -1255,9 +1169,8 @@ def props(endpoint: str, *, timeout: float) -> dict[str, Any]:
 #: and free of any marker.
 PROBE_SYSTEM: Final = "You are a probe."
 PROBE_USER: Final = "Answer with the one word this shape allows."
-#: The turn a second call adds, so its prompt is the first one plus what came
-#: back plus one more turn - the exact shape a real item's two calls take. The
-#: derivation reuses it as the second user turn of its history render.
+#: The last user turn of the history render. What the template writes after it
+#: is where a reply is meant to start.
 PROBE_FOLLOW_UP: Final = "Answer once more."
 #: What already-written reply the history render carries. It sits between two
 #: user turns so the bytes that close a turn and open the next one can be read

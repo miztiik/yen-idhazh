@@ -28,7 +28,7 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 		'console-pipelines-window', 'console-polarity',
 		'console-pipelines-native', 'console-pipelines-nothings',
 		'console-published', 'console-ranked', 'console-readout-data',
-		'console-run-health', 'console-shard-board', 'console-shell', 'console-site-size',
+		'console-run-health', 'console-shell', 'console-site-size',
 		'console-stage-timing-days', 'console-timings', 'console-voices', 'console-voices-cuts',
 		'console-visual-attempts', 'console-voices-fetch-time',
 		'console-voices-feeds', 'console-voices-retiring', 'console-voices-sources',

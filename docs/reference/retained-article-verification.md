@@ -21,8 +21,8 @@ Table A - Retained mode inputs
 
 Supplying either retained input selects retained mode. A missing companion,
 invalid ID, duplicate, overlarge selection or candidate-model override fails
-before model startup. Selection order is execution order. Each article's label
-call and summary/plan call stay adjacent; a decline never triggers another call.
+before model startup. Selection order is execution order. Each article is read by
+one call, and a decline never triggers another call.
 No expected visual kind or quality assertion enters either request.
 
 Dispatch a reviewed branch or tag, then verify the run's `headSha` against the
@@ -74,15 +74,21 @@ retention window. All replay files stay below the private directory
   the retained Article, not an extraction that did not happen.
 - `outputs/<item-id>/items/<item-id>.summary.json`, `<item-id>.visual.json` and
   `<item-id>.health.json`: fresh native products, including truthful failures.
-- `outputs/<item-id>/captures/`: the actual native label and summary captures,
-  with requests, replies and available call costs.
+- `outputs/<item-id>/captures/`: the actual native summary capture,
+  with its request, reply and available call cost.
 - `outputs/<item-id>/assets/`: compiled numeric chart data at the native
   relative asset path. This directory is not a publication tree.
 - `llama-server.log`: the owned runtime's log.
 - `text-analysis.log`: the text-analysis service's log, events without article text.
 
 The adapter supplies a configured `ItemRecorder` and explicit capture/render
-roots to the real `two_calls_one_item()`. Configured prompt and reply capture
+roots to the real `summarize_one_item()`, after asking the text-analysis service
+for the article's mentions as the work stage does. Where no service answers, the
+replay finds no names or places: the table is the one the patterns alone make, the
+item logs one `text analysis gave no mentions` warning, and `analyze_ms` records
+what the failed request cost. Judge such a replay by its summary and its health
+row, not by whether a chart that needs a name was drawn.
+Configured prompt and reply capture
 must both be enabled. Existing source and output paths reject traversal,
 symlinks and junctions. A pre-existing output directory refuses a replay rather
 than mixing an older result into fresh proof.
@@ -93,11 +99,11 @@ no-visual result. A successful native decline remains visible and does not
 become an error merely because the operator hoped for a visual. Additional
 quality postconditions are observations over these saved outputs; they cannot
 force the producer to draw or weaken native validation.
-Native reachability may instead record `not_reachable` while both calls ran.
+Native reachability may instead record `not_reachable` while the call ran.
 Preserve native `asked_the_model`: it stays true for the shared summary request
 even when visual fields were omitted. Use `run_visual_decision` and the actual
-second request to distinguish visual admission, and captures to establish which
-calls occurred.
+request to distinguish visual admission, and the capture to establish what was
+sent.
 
 Only the read-only plan and replay jobs run in retained mode. Experimental
 cases, their report and the ledger-commit job are skipped. No production ledger,

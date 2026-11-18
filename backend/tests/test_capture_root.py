@@ -10,7 +10,7 @@ from support.paths import CONTRACT_FIXTURES_DIR, read_text
 from idhazh.contracts.article import Article
 from idhazh.contracts.call_cost import CallKind
 from idhazh.llm.server import Completion
-from idhazh.stages import two_calls
+from idhazh.stages import summarize_one_item
 from idhazh.telemetry.record import Flags, ItemRecorder
 
 
@@ -35,7 +35,7 @@ def an_article() -> Article:
 
 
 def keep_one(root: Path, prompt: str) -> None:
-    two_calls._kept_call(
+    summarize_one_item._kept_call(
         a_recorder(),
         "2026-09-18",
         an_article(),
@@ -49,9 +49,9 @@ def keep_one(root: Path, prompt: str) -> None:
 
 def test_two_readings_of_one_article_do_not_overwrite_each_other(tmp_path: Path) -> None:
     """A capture is named for the item and the call, so nothing in the name says
-    which reading it was. On the pair the second prompt replays the first call's
-    reply, so two readings of one article do not even share a prompt - the one
-    that survived an overwrite would be evidence about a reading nobody chose.
+    which reading it was. Two readings of one article differ in what the model was
+    sent, and the one that survived an overwrite would be evidence about a reading
+    nobody chose.
     """
     keep_one(tmp_path / "repeat-1", "first reading")
     keep_one(tmp_path / "repeat-2", "second reading")

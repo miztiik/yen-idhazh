@@ -1,6 +1,6 @@
 # The Recorded Input Manifest
 
-**Last Updated**: 2026-11-15
+**Last Updated**: 2026-11-18
 
 What a run records about its own inputs, where each value is read from, and the one alarm built on that record. This page owns the enumeration and what the record cannot see.
 
@@ -44,7 +44,7 @@ can see *which* input moved and the console's boundary can say so.
 
 The declared inputs are the weights digest, the quantisation, the runtime build, the chat-template / prompt / output-schema digests, the turn-envelope digest, the truncation cap, the sampling settings, the runtime switches, `n_ctx` / `n_batch` / `n_ubatch` / `n_threads`, the runner class, and the extractor and sanitizer versions. `RunRecord.config_digests` sits beside it and says which config bytes the run read.
 
-**The turn envelope is digested twice, and the second one is not redundant.** The prompt digest covers the envelope already, because the two calls render their own bytes through it. It stops short of two facts all the same: which of the two reply openings a call ends on, and the marker the thinking span stops at. An entry that changed only the string that closes its reasoning block would decode differently and move no rendered prompt, so `turn_markers_sha256` carries the envelope whole - every marker, the system placement and its joiner. **An absent key means a run written before 2026-09-14**, when a marker first became able to move at all; it never means a default value.
+**The turn envelope is digested twice, and the second one is not redundant.** The prompt digest covers the envelope already, because the call renders its own bytes through it. It stops short of two facts all the same: which of the two reply openings a call ends on, and the marker the thinking span stops at. An entry that changed only the string that closes its reasoning block would decode differently and move no rendered prompt, so `turn_markers_sha256` carries the envelope whole - every marker, the system placement and its joiner. **An absent key means a run written before 2026-09-14**, when a marker first became able to move at all; it never means a default value.
 
 **One knob is absent on purpose, and it is the one people look for.** There is no reasoning flag in the stamp. Reasoning is declared by `models.<role>.thinking_close`, so it arrives in the envelope digest and in the rendered prompt's choice of reply opening. A flag beside a marker would be two places to disagree.
 

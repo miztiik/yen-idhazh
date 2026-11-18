@@ -121,6 +121,8 @@ The whole read folds one held month into the answer before it reads the next, wh
 
 The month is still the decision boundary: one raw file of this ledger in a month means that month has been summarised. The files are not rewritten in place. A second run sees the raw summary file and leaves the month alone.
 
+The fold adds fetch, extract and summarize time per row, as `ItemHealthSummaryRow` says. `analyze_ms`, which rows carry from 2026-11-17, is left out: it was 0.6 to 0.8 s an item on the first production run, and adding it would change what every folded month's figures mean, so it waits for a version stamp on `ItemHealthSummaryRow`. The first month that holds it folds in 2028, when the 14-month `full-grain` window has passed it.
+
 ## Why the two whole-read ledgers file by day anyway
 
 `state/raw/feed-retirements/` and `state/raw/visual-prunes/` are the declared exceptions to the partition rule. Neither read will ever carry a window, so the layout buys them no read time at all.

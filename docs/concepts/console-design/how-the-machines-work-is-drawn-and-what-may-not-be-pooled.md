@@ -1,6 +1,6 @@
 # How the machine's work is drawn, and what may not be pooled
 
-**Last Updated**: 2026-11-17
+**Last Updated**: 2026-11-18
 
 The Hardware route and the run timeline draw one machine's work. One measurement
 shapes all of it: **a run does not get one machine.** Measured 2026-09-17 over
@@ -274,7 +274,7 @@ is implied by either trace.
 **Hardware has no opening verdict.** The Clock agreement panel compared the
 item ledger's read rate with the model server's own counters against a 5 percent
 allowance. Nothing else on the route read its answer: a run is refused by
-identity and count rules (`mergeHost`, `machineCounters`), never by that gap.
+identity and count rules (`hostHalvesConflict`, `machineCounters`), never by that gap.
 The two readings are still recorded and `machineCounters` keeps no copy of the
 comparison; `backend/utilities/reconcile_prefill.py --run <id>` still compares
 them by hand, a frozen-fixture test guards its arithmetic, and nothing watches

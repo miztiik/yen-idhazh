@@ -1,138 +1,44 @@
-"""The calls one article takes, declared once as data and walked rather than written out.
+"""Does one article's model call fit the context window?
 
-**Two nodes, and the number is decided here rather than a row at a time.** The
-label call returns the element table and every label and score. The
-summarize-and-plan call returns the summary and the visual plan. A third node is
-not a design this file can express by accident: `NODES` is checked against
-`NODE_COUNT` on import, and the check names what has to happen before the number
-moves.
-
-**The reason the list is a list at all is the token budget.** The window has to
-hold the longest single request the sequence ever makes, and on this path that
-is the last one - the summarize-and-plan prompt is the label prompt plus the
-label call's whole reply, so every node's decode budget is paid inside the next
-node's prompt. A sequence assembled a row at a time is a budget nobody ever
-checks whole, and the failure
-reads as an ordinary day: `--no-context-shift` means a decode that runs into the
+**One call reads the article and writes the summary and, when code finds a chart
+reachable, the visual plan.** The window has to hold that request whole: the
+prompt, which is the instructions, the article and the menu of source elements,
+and then the longest reply the model file lets it write. The check runs before
+the call is sent, because `--no-context-shift` means a decode that runs into the
 wall stops on an ordinary HTTP 200, `recovered_completion` salvages the summary,
 and the item publishes with no picture and `window_exhausted` recorded beside it.
-One item reading that way is the seatbelt working; a whole shard reading that way
-is a sequence nobody sized. `sequence_tokens` is that sum, in one place, read by
-the production gate and by the contract test together.
+That is the seatbelt working for one item; a whole shard reading that way is a
+window nobody sized. Refusing an article up front is still the better answer,
+because the whole decode is paid for before that reason can be written.
 
-**Item-major is a correctness rule, not a layout taste.**
-the summarize entry pins `n_parallel` to 1, so the server holds one
-prefix-cache slot. Every label call first and every summarize-and-plan call afterwards would evict
-the prefix before it was reused, on every item, with nothing in any log to say
-so. `walk` runs every node of one item before the next item's first node, and
-the order is this module's tuple rather than the order somebody wrote two
-statements in.
-
-**Nothing here decides what publishes.** A node returns labels and prose; which
-items run is deterministic code elsewhere. That is this module's shape and no
-longer a rule - `CLAUDE.md` section 1a lifted the ban on a model verdict
-reaching a publish decision.
+**The prompt term is an estimate, and it is built to sit above the real prompt.**
+The three readings in `idhazh.measured` were taken on the longest prompt this
+project has sent: it carried instructions that no longer exist, every sentence of
+the article behind an address, and a menu row per element with the sentence it sits
+in. The one call's prompt is those parts without those instructions and without the
+addresses, so the readings bound it from above. The cost is paid by an article that
+would have fitted: it is refused when it needs the margin the estimate adds. Use
+`request_tokens` with the configured tokenizer's complete prompt count to diagnose
+the actual request.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
-from enum import StrEnum
-from typing import Any, Final, NamedTuple
+from collections.abc import Mapping
+from typing import Any, Final
 
-from idhazh.classify import calls
 from idhazh.contracts.article import Article
-from idhazh.contracts.knobs.extract import ElementsConfig
 from idhazh.extract import TOKENS_PER_WORD
 from idhazh.llm.server import response_limit, window
 from idhazh.measured import (
-    LABEL_BODY_TOKENS_A_WORD,
-    LABEL_MENU_TOKENS_A_ROW,
-    LABEL_SCAFFOLD_TOKENS,
-    SUMMARIZE_AND_PLAN_SEAM_TOKENS,
+    DIGEST_PROMPT_BODY_TOKENS_A_WORD,
+    DIGEST_PROMPT_MENU_TOKENS_A_ROW,
+    DIGEST_PROMPT_SCAFFOLD_TOKENS,
 )
 
-_SCAFFOLD_TOKENS: Final = int(LABEL_SCAFFOLD_TOKENS.value)
-_BODY_TOKENS_A_WORD: Final = LABEL_BODY_TOKENS_A_WORD.value
-_MENU_TOKENS_A_ROW: Final = LABEL_MENU_TOKENS_A_ROW.value
-_SEAM_TOKENS: Final = int(SUMMARIZE_AND_PLAN_SEAM_TOKENS.value)
-
-
-class CallName(StrEnum):
-    """What each node of the sequence is for.
-
-    The member names the job rather than the position, so a reader of a ledger
-    row or a span attribute does not have to know the order to know what ran.
-    `contracts.call_cost.CallKind` carries the same two names for the same two
-    calls, because the ledger and the walk have to agree about what a call was.
-    """
-
-    LABEL = "label"
-    SUMMARIZE_AND_PLAN = "summarize_and_plan"
-
-
-class CallNode(NamedTuple):
-    """One call in the sequence, with the decode budget it reserves.
-
-    `output_tokens` is a callable rather than a number because the label call's
-    budget is re-derived on import from its reply shape's own bounds - move a
-    `maxItems` and the budget moves with it, without anybody remembering to - and
-    the summarize-and-plan call's is the model file's response limit, which only
-    that model's `sampling` block can name. Every node takes the block so the
-    nodes stay one shape, whether or not a node reads it.
-    """
-
-    name: CallName
-    output_tokens: Callable[[Mapping[str, Any]], int]
-
-
-def _label_output_tokens(_sampling: Mapping[str, Any]) -> int:
-    """The label budget is derived from its reply shape and reads no model setting."""
-    return calls.label_budget_tokens()
-
-
-def _summary_output_tokens(sampling: Mapping[str, Any]) -> int:
-    """The summarize-and-plan call reserves the model file's whole response limit.
-
-    Its two prose fields carry no length bound, so there is no worst case to
-    derive and no narrower number to defend: the request runs to
-    `sampling.max_tokens`, or to `DEFAULT_MAX_TOKENS` where the file names none,
-    whether or not a plan is asked for, and the window has to hold that.
-    """
-    return response_limit(sampling)
-
-
-#: The sequence, in order. **This tuple is the contract.** Adding to it is a
-#: design change a person signs off, never a quiet edit: a labelling change adds
-#: a field to the label call's reply shape, not a node here. A third call would
-#: be paid twice over - once as its own decode and again inside every prompt
-#: behind it - and `sequence_tokens` is where that shows up.
-NODES: Final[tuple[CallNode, ...]] = (
-    CallNode(CallName.LABEL, _label_output_tokens),
-    CallNode(CallName.SUMMARIZE_AND_PLAN, _summary_output_tokens),
-)
-
-#: Written down as well as computed, the same way the label budget is. A
-#: number that only exists as `len(...)` is a number nobody re-derives, and the
-#: sequence could then grow without anybody seeing what it cost.
-NODE_COUNT: Final = 2
-
-if len(NODES) != NODE_COUNT:
-    raise TypeError(
-        "the call sequence changed length and nothing priced it - it now has "
-        f"{len(NODES)} nodes against a recorded {NODE_COUNT}. Every node's reply is "
-        "paid twice, once as its own decode and once inside the next node's prompt, so "
-        "re-run `sequence_tokens` against --ctx-size on the summarize entry before "
-        "moving this number."
-    )
-
-if tuple(node.name for node in NODES) != (CallName.LABEL, CallName.SUMMARIZE_AND_PLAN):
-    raise TypeError(
-        "the labelling call has to close before the summary opens - everything the "
-        "summarize-and-plan call points at is defined by the label call's reply, and "
-        "its prompt is the label call's prompt "
-        f"plus that reply. Got {tuple(node.name.value for node in NODES)}."
-    )
+_SCAFFOLD_TOKENS: Final = int(DIGEST_PROMPT_SCAFFOLD_TOKENS.value)
+_BODY_TOKENS_A_WORD: Final = DIGEST_PROMPT_BODY_TOKENS_A_WORD.value
+_MENU_TOKENS_A_ROW: Final = DIGEST_PROMPT_MENU_TOKENS_A_ROW.value
 
 
 def response_tokens(request: Mapping[str, object]) -> int:
@@ -153,16 +59,15 @@ def request_tokens(request: Mapping[str, object], *, prompt_tokens: int) -> int:
     return prompt_tokens + response_tokens(request)
 
 
-def first_prompt_tokens(article_tokens: int, *, menu_rows: int) -> int:
-    """What the label call's prompt costs for an article of this size, in tokens.
+def prompt_tokens(article_tokens: int, *, menu_rows: int) -> int:
+    """What the call's prompt costs for an article of this size, in tokens.
 
     Three terms rather than one, and each reads something.
 
     - the scaffold is fixed, and moves when a prompt file is edited;
-    - the per-word rate covers the article and the `[sNN] ` address in front of
-      every sentence, and moves when prose tokenizes harder than any build so
-      far;
-    - the menu is one row per element the extractor cut, so **the one config
+    - the per-word rate covers the article, and moves when prose tokenizes
+      harder than any build so far;
+    - the menu is one row per element the table holds, so **the one config
       knob that is not the cap or the window still moves this sum.**
 
     `article_tokens` is spent back to words at `extract.TOKENS_PER_WORD`,
@@ -178,45 +83,24 @@ def first_prompt_tokens(article_tokens: int, *, menu_rows: int) -> int:
     )
 
 
-def sequence_tokens(
+def call_tokens(
     article_tokens: int,
     *,
     menu_rows: int,
     sampling: Mapping[str, Any],
 ) -> int:
-    """The existing pre-label estimate, using measured rates and each call's reply budget.
+    """The prompt estimate plus the longest reply the model file lets the call write.
 
-    **The peak is the last node's request, not the sum of two independent
-    calls.** The summarize-and-plan call opens with the label prompt and replays the
-    label reply,
-    so what the window holds at the end is the label call's prompt, plus every decode
-    budget behind it, plus one seam per turn boundary. Walking `NODES` is what
-    makes that true of the sequence rather than of the two statements somebody
-    wrote - add a node and this number grows by that node's budget and a seam,
-    here, without anybody editing this line.
-
-    `sampling` is the model file's block, because the summarize-and-plan call
-    reserves the response limit it names.
-
-    This estimate does not certify the complete continuation: the finalized
-    evidence is not known before labelling, and an explicit sampling limit
-    replaces the label call's derived budget on the wire. Use `request_tokens`
-    with the configured tokenizer's complete prompt count to diagnose the actual
-    request, including the guide, replay, finalized menu and effective response
-    limit.
+    The reply has no length bound of its own, since its two prose fields carry
+    none, so the most it can write is the model file's response limit:
+    `sampling.max_tokens`, or `DEFAULT_MAX_TOKENS` where the file names none. The
+    window has to hold that whether or not a plan is asked for.
 
     It is a sizing rather than a guarantee, and the reason is stated where each
-    term is: the label call's decode budget is a ceiling over a reply shape whose
-    rails are character rails, and `LABEL_BODY_TOKENS_A_WORD` is the top of an
-    eight-build spread rather than a bound. The seatbelt behind it is
-    `recovered_completion`; the brake is the budgets themselves.
+    term is: `DIGEST_PROMPT_BODY_TOKENS_A_WORD` is the top of an eight-build spread
+    rather than a bound. The seatbelt behind it is `recovered_completion`.
     """
-    held = first_prompt_tokens(article_tokens, menu_rows=menu_rows)
-    for index, node in enumerate(NODES):
-        held += node.output_tokens(sampling)
-        if index:
-            held += _SEAM_TOKENS
-    return held
+    return prompt_tokens(article_tokens, menu_rows=menu_rows) + response_limit(sampling)
 
 
 def fits_the_window(
@@ -226,11 +110,9 @@ def fits_the_window(
     menu_rows: int,
     sampling: Mapping[str, Any],
 ) -> bool:
-    """Whether the existing early estimate admits this article before labelling.
+    """Whether the early estimate admits this article before the call is sent.
 
-    This is the unchanged early gate for the two-call path. It includes
-    both reply budgets, because the label reply is paid twice and the
-    candidate menu once. It is not a measured complete-request capacity check.
+    It is not a measured complete-request capacity check.
 
     **Refusing here costs the item and admitting it costs the picture.** An
     article that does not fit is not clipped or degraded: it lands as
@@ -244,40 +126,6 @@ def fits_the_window(
     the cap for a live item would refuse articles that fit.
     """
     return (
-        sequence_tokens(article.token_count, menu_rows=menu_rows, sampling=sampling)
+        call_tokens(article.token_count, menu_rows=menu_rows, sampling=sampling)
         <= window(server)
     )
-
-
-def worst_menu_rows(elements: ElementsConfig | None = None) -> int:
-    """The saturated menu, for sizing rather than for a live item.
-
-    `elements.max_per_article` rather than a measured density, because the cap
-    is what a saturated menu costs and the census says a cap-length article
-    reaches it - the working is beside `LABEL_MENU_TOKENS_A_ROW`.
-    """
-    return (elements or ElementsConfig()).max_per_article
-
-
-def walk[Stop](ask: Callable[[CallNode], Stop | None]) -> Stop | None:
-    """One item's calls, in the order `NODES` declares and in no other.
-
-    `ask` runs one node and returns nothing when the item may go on, or the
-    answer that ends it when it may not. The walk stops at the first node that
-    ends the item, because every node after the first reads the reply of the one
-    before: the summarize-and-plan call's prompt replays the label call's reply verbatim, and a
-    reply that did not parse has not been held to a schema, so sending it would put
-    unchecked model text into a prompt on the argument that it is probably fine
-    (Guardrail #11).
-
-    **This drives one item, and that is the whole of the item-major rule.** The
-    caller loops over items around this call; there is no form of this function
-    that runs one node across many items, and that absence is deliberate - the
-    server holds one prefix-cache slot, so call-major would evict the prefix
-    before it was reused on every item and nothing would say so.
-    """
-    for node in NODES:
-        stop = ask(node)
-        if stop is not None:
-            return stop
-    return None

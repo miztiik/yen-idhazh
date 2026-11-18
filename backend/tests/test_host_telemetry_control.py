@@ -107,6 +107,7 @@ def test_real_work_preserves_item_health_under_host_and_memory_controls(
         captured_article_fetch,
         isolate_ledgers,
         plan,
+        with_an_analysis_service,
     )
 
     from idhazh.contracts.item_health import ItemHealthRow
@@ -131,12 +132,15 @@ def test_real_work_preserves_item_health_under_host_and_memory_controls(
             ):
                 observed.append(frame.f_code.co_name)
 
-    with a_server_that_refuses_every_completion() as server:
+    with (
+        with_an_analysis_service(settings) as read,
+        a_server_that_refuses_every_completion() as server,
+    ):
         previous = sys.getprofile()
         sys.setprofile(profile)
         try:
             stage_work(
-                run_plan, settings=settings, scorer=None, fetcher=captured_article_fetch,
+                run_plan, settings=read, scorer=None, fetcher=captured_article_fetch,
                 model_endpoint=server.endpoint,
             )
         finally:

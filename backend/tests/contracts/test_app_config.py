@@ -14,11 +14,9 @@ from support.paths import CONFIG_DIR, REPO_ROOT, read_text
 
 from idhazh import config
 from idhazh.classify import dag
-from idhazh.classify.calls import label_budget_tokens
 from idhazh.contracts import app_config, story_similarity_distribution
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.appearance_config import AppearanceConfig, ChartConfig
-from idhazh.contracts.call_cost import CallKind
 from idhazh.contracts.knobs import placement
 from idhazh.contracts.knobs.console import ConsoleConfig
 from idhazh.contracts.knobs.evaluation import DriftConfig, EvaluationConfig
@@ -33,11 +31,7 @@ from idhazh.contracts.knobs.text_analysis import TextAnalysisConfig
 from idhazh.contracts.knobs.ui import UiConfig, VisualSide
 from idhazh.extract import TOKENS_PER_WORD
 from idhazh.llm.server import DEFAULT_MAX_TOKENS, response_limit, window
-from idhazh.measured import LABEL_BODY_TOKENS_A_WORD as _LABEL_A_WORD
-from idhazh.measured import LABEL_MENU_TOKENS_A_ROW as _MENU_A_ROW
-from idhazh.measured import LABEL_SCAFFOLD_TOKENS as _LABEL_SCAFFOLD
 from idhazh.measured import PROMPT_OVERHEAD_TOKENS as _PROMPT_OVERHEAD
-from idhazh.measured import SUMMARIZE_AND_PLAN_SEAM_TOKENS as _SUMMARIZE_AND_PLAN_SEAM
 from idhazh.measured import WORST_TOKENS_A_WORD as _WORST_TOKENS
 
 from ._fixtures import CONFIG_FILES, CONFIG_NOT_OWNED, committed_models, copy_config
@@ -59,7 +53,6 @@ def test_the_config_file_names_every_knob_it_owns(name: str) -> None:
     reading `config/` that the knob exists. Measured 2026-09-17 before this
     landed: `idhazh.json` named 16 fewer knobs than it owns and
     `appearance.json` 2 fewer, while the other four named all of theirs.
-    `summarize.asks_for_a_visual_plan` was among the missing.
 
     **Owns, not declares.** Three blocks sit on two models and only one file is
     their source; `CONFIG_NOT_OWNED` names the other side. Padding a legacy
@@ -326,17 +319,6 @@ PROMPT_OVERHEAD_TOKENS: Final = int(_PROMPT_OVERHEAD.value)
 WORST_TOKENS_A_WORD: Final = _WORST_TOKENS.value
 
 
-#: The same four things for the two-call path, whose prompt this repository
-#: renders itself. Same module, same reason.
-LABEL_SCAFFOLD_TOKENS: Final = int(_LABEL_SCAFFOLD.value)
-
-LABEL_BODY_TOKENS_A_WORD: Final = _LABEL_A_WORD.value
-
-LABEL_MENU_TOKENS_A_ROW: Final = _MENU_A_ROW.value
-
-SUMMARIZE_AND_PLAN_SEAM_TOKENS: Final = int(_SUMMARIZE_AND_PLAN_SEAM.value)
-
-
 def _worst_sequence_tokens(committed: AppConfig) -> tuple[int, int]:
     """The longest prompt the cap allows, and that prompt plus a full answer.
 
@@ -376,47 +358,34 @@ def test_the_longest_article_the_cap_allows_still_fits_the_window() -> None:
     )
 
 
-def _worst_two_call_sequence_tokens(committed: AppConfig) -> tuple[int, int]:
-    """The label call's prompt at the cap, and the whole sequence behind it.
+def _worst_one_call_sequence_tokens(committed: AppConfig) -> tuple[int, int]:
+    """The digest call's prompt at the cap, and the whole sequence behind it.
 
     A second derivation and not a widening of the one above, because the two
-    paths render different prompts. The single call sends one system turn and
-    the article. The label call sends a system turn that carries both jobs, the article
-    with an address in front of every sentence, and a menu of every quantity and
-    date the extractor already cut - then pays for its own reply twice, once as
-    a decode and once again inside the summarize-and-plan call's prompt.
+    paths render different prompts. The standalone summarizer sends one system
+    turn and the article. The digest call sends its own system turn, the article
+    and a menu of every element the extractor and the text-analysis service
+    already cut, up to `elements.max_per_article` rows, and then writes up to
+    the model file's response limit.
 
     **The arithmetic itself is `classify.dag`'s and this is the gate over it.**
     It used to be written out here, which put the number the production path
     never checked and the number this file asserts in two places - and two
-    derivations of one quantity disagree the first time a term moves. The three
-    terms of the prompt and the per-turn seam are documented where they are
-    computed; what stays here is the cap, the knob and the window, all three
-    read from `config/` (Guardrail #6).
+    derivations of one quantity disagree the first time a term moves. What stays
+    here is the cap, the knob and the window, all three read from `config/`
+    (Guardrail #6).
     """
     rows = committed.elements.max_per_article
     cap = committed.extract.truncation_cap_tokens
     sampling = committed_models().summarizer.sampling
     return (
-        dag.first_prompt_tokens(cap, menu_rows=rows),
-        dag.sequence_tokens(cap, menu_rows=rows, sampling=sampling),
+        dag.prompt_tokens(cap, menu_rows=rows),
+        dag.call_tokens(cap, menu_rows=rows, sampling=sampling),
     )
 
 
-def test_every_call_in_the_sequence_has_a_kind_the_ledger_can_record() -> None:
-    """The walk and the ledger have to agree about what a call was.
-
-    `dag.CallName` and `CallKind` spell the same names for the same calls. The
-    count and the order of the nodes are held by the import-time guards in
-    `classify.dag`.
-    """
-    assert {node.name.value for node in dag.NODES} <= {kind.value for kind in CallKind}, (
-        "a node the ledger has no CallKind for records its cost as nothing"
-    )
-
-
-def test_the_two_calls_fit_the_window_at_the_cap() -> None:
-    """Preserve admission under the existing pre-label estimate.
+def test_the_call_fits_the_window_at_the_cap() -> None:
+    """Preserve admission under the existing pre-call estimate.
 
     This does not certify a complete continuation with finalized evidence or
     an explicit response limit. Those are diagnosed from the actual request.
@@ -424,26 +393,23 @@ def test_the_two_calls_fit_the_window_at_the_cap() -> None:
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
     models = committed_models()
     n_ctx = window(models.summarizer.server)
-    prompt, sequence = _worst_two_call_sequence_tokens(committed)
+    prompt, sequence = _worst_one_call_sequence_tokens(committed)
 
     assert sequence <= n_ctx, (
         f"the longest article extract.truncation_cap_tokens "
         f"({committed.extract.truncation_cap_tokens}) lets through makes a {prompt}-token "
-        f"the label call prompt at elements.max_per_article of "
-        f"{committed.elements.max_per_article}. The label call's {label_budget_tokens()}-token "
-        f"reply, the {SUMMARIZE_AND_PLAN_SEAM_TOKENS}-token seam and the summarize-and-plan call's "
-        f"{response_limit(models.summarizer.sampling)}-token response limit put the pair at "
-        f"{sequence} against a window of {n_ctx}, over by "
-        f"{sequence - n_ctx}. Measure the complete request before proposing a "
-        "configuration or article-admission change."
+        f"prompt at elements.max_per_article of {committed.elements.max_per_article}. The "
+        f"{response_limit(models.summarizer.sampling)}-token response limit puts the call at "
+        f"{sequence} against a window of {n_ctx}, over by {sequence - n_ctx}. Measure the "
+        "complete request before proposing a configuration or article-admission change."
     )
 
 
 def test_the_gate_holds_room_for_the_whole_response_limit_the_model_file_names() -> None:
-    """The summarize-and-plan reply has no length bound, so its reserve is the limit itself."""
+    """The reply has no length bound, so its reserve is the limit itself."""
 
     def held(sampling: dict[str, int]) -> int:
-        return dag.sequence_tokens(1000, menu_rows=10, sampling=sampling)
+        return dag.call_tokens(1000, menu_rows=10, sampling=sampling)
 
     assert held({"max_tokens": 9000}) - held({"max_tokens": 8000}) == 1000
     assert held({}) == held({"max_tokens": DEFAULT_MAX_TOKENS})
@@ -1058,6 +1024,24 @@ def test_a_config_still_spelling_the_fold_cover_under_run_is_refused() -> None:
         match=re.escape("run.settled_fold_after_days is gone and nothing replaces it"),
     ):
         AppConfig.model_validate({"run": {"settled_fold_after_days": 7}})
+
+
+def test_a_config_still_spelling_a_setting_of_the_first_model_call_is_refused() -> None:
+    """The model reads an item once now, and the two settings the first call read are gone.
+
+    Whether a picture is asked for is decided by `visuals.enabled_kinds`, so a
+    leftover `summarize.asks_for_a_visual_plan` is refused and pointed there. No
+    task reads the labelling instructions, so a leftover `prompt_files.generate_labels`
+    is refused with nothing to point at. Either would otherwise be a number somebody
+    believes.
+    """
+    with pytest.raises(ValidationError, match=re.escape("is now visuals.enabled_kinds")):
+        AppConfig.model_validate({"summarize": {"asks_for_a_visual_plan": False}})
+    with pytest.raises(
+        ValidationError,
+        match=re.escape("prompt_files.generate_labels is gone and nothing replaces it"),
+    ):
+        AppConfig.model_validate({"prompt_files": {"generate_labels": "prompts/a.txt"}})
 
 
 def test_a_band_that_cannot_draw_the_hardest_labelled_pair_is_refused() -> None:

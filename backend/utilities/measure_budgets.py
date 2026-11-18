@@ -154,11 +154,10 @@ class BudgetReading:
 class Tokenizer:
     """The running server's own tokenizer, over its own HTTP.
 
-    The same shape `measure_two_calls.Tokenizer` uses and for the same reason:
-    asking the server is the only way to count with the vocabulary that is
-    actually loaded. It differs in one way - a server that will not answer raises
-    here rather than yielding `None`, because every caller below has exactly one
-    thing to do about it and that is to stop.
+    Asking the server is the only way to count with the vocabulary that is
+    actually loaded. A server that will not answer raises here rather than
+    yielding `None`, because every caller below has exactly one thing to do about
+    it and that is to stop.
     """
 
     base: str

@@ -116,8 +116,8 @@ test('the stage choices change only the identity-free rule ranking', async ({ pa
 test('timing-rule inspection keeps both events on a changed day', async ({ page }) => {
 	await drawClient(page, code, 'StageTimings', {
 		days: ['2026-09-01', '2026-09-02'].map((date) => ({
-			date, items: 1, fetch: { ms: 10, timed: 1, total: 1 },
-			extract: { ms: 20, timed: 1, total: 1 }, summarize: { ms: 100, timed: 1, total: 1 }
+			date, items: 1, fetch: { ms: 10, timed: 1 },
+			extract: { ms: 20, timed: 1 }, summarize: { ms: 100, timed: 1 }
 		})),
 		span: { start: '2026-09-01', end: '2026-09-02' }, height: 220, width: 390,
 		tickDensity: 6, readoutMaxShare: 1,

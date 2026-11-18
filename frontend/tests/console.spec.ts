@@ -141,8 +141,8 @@ test("a day's two rates are its whole tokens over its whole seconds, and each ru
     expect(day.read).toEqual({ min: 500, p25: 500, median: 500, p75: 750, max: 1000 });
     expect(day.write).toEqual({ min: 50, p25: 50, median: 50, p75: 75, max: 100 });
     expect(day.runs).toEqual([
-        { runId: '2030-06-15-1', items: 2, read: 750, write: 75 },
-        { runId: '2030-06-15-2', items: 1, read: 500, write: 50 }
+        { runId: '2030-06-15-1', read: 750, write: 75 },
+        { runId: '2030-06-15-2', read: 500, write: 50 }
     ]);
 });
 test('a telemetry read holds exactly the window it is handed, however many months are committed', () => {

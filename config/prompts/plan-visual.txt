@@ -31,9 +31,8 @@ For "visual":
 
 "confidence": your self-rating from 0 to 1, not source uncertainty.
 
-Use only finalized-table IDs. Any number in title, caption or why must be
+Use only IDs from the source-element menu. Any number in title, caption or why must be
 supported by the selected chart references; do not add unplotted numeric facts.
-Check meaning against the original article, not just the summary; earlier
-labels are judgments, not proof. Do not supply plotted values, dates or layout
-settings; code resolves measurements from the selected IDs. Source names may
-retain their written digits.
+Check meaning against the original article, not just the summary. Do not supply
+plotted values, dates or layout settings; code resolves measurements from the
+selected IDs. Source names may retain their written digits.

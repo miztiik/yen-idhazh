@@ -1,6 +1,6 @@
 # How to analyze a pipeline artifact
 
-**Last Updated**: 2026-09-29
+**Last Updated**: 2026-11-18
 
 How to find out what the model was asked about one story, what it answered, what
 that cost, and whether the summary it wrote is any good.
@@ -13,8 +13,8 @@ prompt on one line, so a text editor shows a wall.
 
 `digest.yml` writes one capture per model call per item, for 90 days. The
 analyzer reads the downloaded artifact directory and groups the calls for each
-item. On the pair, the second prompt replays the first call's reply, so its
-capture is not redundant.
+item. An item makes one call, so it has one capture. A run from before
+2026-11-17 also holds the first call's capture, which the report does not show.
 
 ## When to run it
 
@@ -58,13 +58,13 @@ capture is not redundant.
 
 | Section | What it answers |
 | :--- | :--- |
-| 1. The story these calls read | The canonical link, the outlet, the article and summary word counts, how the item ended, which run and shard |
+| 1. The story the call read | The canonical link, the outlet, the article and summary word counts, how the item ended, which run and shard |
 | 2. What to look at | Only what is wrong. Empty means nothing is |
-| 3. What the calls cost | One row a call: the server's own clock, tokens in, tokens the cache answered, tokens really read, tokens out, decode rate, stop reason. Then what the cache saved, then the summary's share of the decode against the picture's |
-| 4 and 5. What each call sent back | Each reply parsed into tables of what it says |
-| 6. The raw text | Every prompt and reply whole, folded into a `<details>` block |
+| 3. What the call cost | The server's own clock, tokens in, tokens the cache answered, tokens really read, tokens out, decode rate, stop reason. Then what the cache saved, then the summary's share of the decode against the picture's |
+| 4. What the model call sent back | The reply parsed into tables of what it says |
+| 5. The raw text | The prompt and reply whole, folded into a `<details>` block |
 
-5. To judge the summary, open the link in section 1 and read section 5 beside
+5. To judge the summary, open the link in section 1 and read section 4 beside
    it. That is the only check that settles it; nothing inside the document can.
 
 ## Options
@@ -83,15 +83,15 @@ capture is not redundant.
 | What you see | What it means |
 | :--- | :--- |
 | `holds no capture files` | The run had `logging.capture_prompts` and `logging.capture_replies` both off, so the upload was a green no-op |
-| `No call in this pair recorded what it cost` | A capture written before 2026-09-15. Pass `--health` |
+| `The call recorded no cost` | A capture written before 2026-09-15. Pass `--health` |
 | `This capture does not say which story it was about` | The same. Pass `--health` |
 | `the item-health ledger under state holds no row for <day>` | The day passed to `--health` is not the day the run published, or `--state` points at a tree without it |
 | `the prompt was not captured` on a call | One flag was off for that run |
-| `This reply cannot be read as JSON` | That is the finding, and section 6 has the bytes. The message names the character it broke at |
+| `This reply cannot be read as JSON` | That is the finding, and section 5 has the bytes. The message names the character it broke at |
 
 ## See also
 
 - [../reference/github-actions.md](../reference/github-actions.md) - workflow roles, committed records and expiring artifacts.
 - [../architecture/sources/item-health.md](../architecture/sources/item-health.md) - the ledger `--health` reads, column by column.
-- [../architecture/summarize/prompt.md](../architecture/summarize/prompt.md) - what the two calls ask for, and why in that order.
+- [../architecture/summarize/prompt.md](../architecture/summarize/prompt.md) - what the call asks for, and why.
 - [../../CLAUDE.md](../../CLAUDE.md) - Guardrail #11 on fetched text. A rendered prompt is never committed because it carries the article body inside it.

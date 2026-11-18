@@ -587,10 +587,10 @@ def _widest(node: dict[str, Any], defs: dict[str, Any]) -> int:
 def widest_json_characters(schema: dict[str, Any]) -> int:
     """The longest JSON text a generated schema can hold, in characters.
 
-    Public because the label call derives its output budget from the bounds of
-    the shape it will be held to, and this is that arithmetic. Written once here
-    rather than copied there: two implementations of one piece disagree the
-    first time a bound moves, and the one that is wrong is the one nobody reads.
+    This is the arithmetic an output budget is derived from: the bounds of the
+    shape the decoder will be held to. Written once rather than copied: two
+    implementations of one piece disagree the first time a bound moves, and the
+    one that is wrong is the one nobody reads.
 
     It counts every declared property, not only the required ones, because a
     grammar-constrained decoder emits them all. Code-owned fields are skipped

@@ -7,9 +7,6 @@
   "chat_template_characters": 7816,
   "system": "You label what one item says. Answer with JSON and nothing else.",
   "user": "Title: A note\n\nThe item, one sentence per line:\n[s0] It rained.",
-  "reply": "{\"labels\": [], \"keyphrases\": [\"rain\"]}",
-  "question": "Now write the summary.",
   "generation_prompt": "<|im_start|>system\nYou label what one item says. Answer with JSON and nothing else.<|im_end|>\n<|im_start|>user\nTitle: A note\n\nThe item, one sentence per line:\n[s0] It rained.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
-  "generation_prompt_thinking": "<|im_start|>system\nYou label what one item says. Answer with JSON and nothing else.<|im_end|>\n<|im_start|>user\nTitle: A note\n\nThe item, one sentence per line:\n[s0] It rained.<|im_end|>\n<|im_start|>assistant\n<think>\n",
-  "continued_prompt": "<|im_start|>system\nYou label what one item says. Answer with JSON and nothing else.<|im_end|>\n<|im_start|>user\nTitle: A note\n\nThe item, one sentence per line:\n[s0] It rained.<|im_end|>\n<|im_start|>assistant\n{\"labels\": [], \"keyphrases\": [\"rain\"]}<|im_end|>\n<|im_start|>user\nNow write the summary.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
+  "generation_prompt_thinking": "<|im_start|>system\nYou label what one item says. Answer with JSON and nothing else.<|im_end|>\n<|im_start|>user\nTitle: A note\n\nThe item, one sentence per line:\n[s0] It rained.<|im_end|>\n<|im_start|>assistant\n<think>\n"
 }

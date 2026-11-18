@@ -78,18 +78,6 @@ _NO_REPLY_DETAIL: Final[dict[FailureCode, str]] = {
     FailureCode.CONTEXT_EXCEEDED: (
         "the prompt did not fit the served context window, so the server refused it"
     ),
-    # The two-call path's two ways of having no reply to parse, and they are two
-    # because the fix is two: the labelling call's own output budget is derived
-    # from its own grammar, and a reply that answered inside that budget and
-    # still could not be read is a different morning.
-    FailureCode.LABELS_TRUNCATED: (
-        "the labelling reply ran out of its output budget, so the call that writes "
-        "the summary was never sent"
-    ),
-    FailureCode.BAD_SHAPE: (
-        "the labelling reply did not hold its shape, so the call that writes the "
-        "summary was never sent"
-    ),
 }
 
 

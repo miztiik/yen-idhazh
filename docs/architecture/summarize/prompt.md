@@ -1,8 +1,8 @@
 # The Summarizer Prompt
 
-**Last Updated**: 2026-11-17
+**Last Updated**: 2026-11-18
 
-What the model is asked to produce, how the two calls share context, and what the pipeline validates. Prompt wording is not a security control: sanitization and validated output shapes enforce the boundary.
+What the model is asked to produce, what it reads beside the article, and what the pipeline validates. Prompt wording is not a security control: sanitization and validated output shapes enforce the boundary.
 
 ## The prompt is a template, not a text
 
@@ -22,31 +22,33 @@ Table A - Production instruction files
 
 | Id | `prompt_files` key | Path relative to the selected config root |
 | --- | --- | --- |
-| A1 | `generate_labels` | `prompts/generate-labels.txt` |
-| A2 | `write_digest_summary` | `prompts/write-digest-summary.txt` |
-| A3 | `plan_visual` | `prompts/plan-visual.txt` |
-| A4 | `continue_summary` | `prompts/continue-summary.txt` |
-| A5 | `summarize_article` | `prompts/generate-summary.txt` |
-| A6 | `compare_articles` | `prompts/compare-articles.txt` |
+| A1 | `write_digest_summary` | `prompts/write-digest-summary.txt` |
+| A2 | `plan_visual` | `prompts/plan-visual.txt` |
+| A3 | `continue_summary` | `prompts/continue-summary.txt` |
+| A4 | `summarize_article` | `prompts/generate-summary.txt` |
+| A5 | `compare_articles` | `prompts/compare-articles.txt` |
 
 Production rendering retains universal-newline reading and performs no
 whitespace trimming. The app config's additive reader uses the declared task paths if an older
-authored input omits `prompt_files`; new authored configuration names them all.
-The standalone summary, corpus and reference-set readers use A5, shared with the
+authored input omits `prompt_files`; new authored configuration names them all. A config that
+still names `generate_labels`, the retired first call's file, is refused by name: no task reads
+such a file, so a path left in `prompt_files` would be one somebody believes.
+The standalone summary, corpus and reference-set readers use A4, shared with the
 [summary generator's default](../../reference/summary-generator-api.md).
 It emits `title` and `summary`, and its instructions are identical for every
 article. Configured templates may still use the validated substitution values.
 Reference sampling spreads articles by source length, as the
 [reference-set procedure](../../how-to/fine-tune-a-model.md#the-reference-set)
 describes.
-The digest retains its separate A2 and A4 instructions;
-the comparison judge and its stamp use A6's full rendered instructions.
+The digest retains its separate A1, A2 and A3 instructions, and its one call reads
+those three.
+The comparison judge and its stamp use A5's full rendered instructions.
 Offline judge capture and saved-evidence validation use that same selected file,
 so their recorded identity cannot describe instructions from another root.
 
 The [summary generator](../../reference/summary-generator-api.md) and
 [comparison workflow](../../reference/summary-evaluation-workflow.md) select
-different tasks in the same directory. Neither replaces the digest's continuation
+different tasks in the same directory. Neither replaces the digest's call
 with fresh independent calls. [Native UniEval](../../reference/unieval-api.md)
 resolves its own question files before scoring; source coverage keeps its pinned
 upstream question construction.
@@ -76,31 +78,38 @@ If extraction read only part of the article, state that limitation on the item. 
 
 Use grammar-constrained decoding derived from the declared reply model. Refuse unknown keys and validate the result after decoding. A well-shaped object still needs content checks.
 
-The label request restricts quantity references to printed candidate ids.
-New mention and proposal citations contain only exact source text in `surface`;
-code computes their locations. Date rows remain source evidence, but receive no first-pass quantity
-judgments. Empty quantity pools permit only an empty label list; no selection
-is mandatory. The label call's output budget uses the widest current reply shape rather than
-the narrower request.
+The request restricts every reference to the ids in the menu the model is shown.
+The model cites an element by its id and writes no position: code minted each id
+from offsets it computed. Date rows remain source evidence. An empty menu permits
+only empty reference lists; no selection is mandatory.
 
-## The second call writes this summary, and the article is read once
+## One call writes the summary and plans the visual, and the article is read once
 
-[classify/calls.py](../../../backend/idhazh/classify/calls.py) makes adjacent calls for each item:
+[classify/calls.py](../../../backend/idhazh/classify/calls.py) builds the one request
+each item makes, and [stages/summarize_one_item.py](../../../backend/idhazh/stages/summarize_one_item.py)
+sends it:
 
-1. Label the extracted article elements with `generate-labels.txt`, sharing the
-   system turn with `write-digest-summary.txt` and `plan-visual.txt`.
-2. Continue that conversation with `continue-summary.txt` to write the summary
-   and plan a visual.
+- **The system turn** is `write-digest-summary.txt` and `plan-visual.txt`, joined,
+  with the type guide. It is the same bytes on every item.
+- **The user turn** is the fenced headline, the fenced article as the page wrote it,
+  the menu of source elements when a chart is reachable, and the closing question from
+  `continue-summary.txt`.
 
-The completion prompts are rendered explicitly. The second extends the first prompt and its validated reply instead of reconstructing a chat-message array. Keep the calls adjacent on the same slot so another item cannot evict the shared prefix.
+The prompt is rendered explicitly rather than by the model's chat template. The shared
+system turn is a prefix the server's cache answers for on every item after the first,
+so only the headline, the article and the menu are read again.
 
-**The continuation receives the same finalized table as reachability and
-validation.** After the first reply, `anchored()` adds source-backed entities,
-places and recovered quantities with code-computed element ids.
-The request builder requires that table rather than reconstructing ids from
-the raw label reply. Its compact, fenced data preserves the source cells and
-existing label judgements after the reusable prefix. Attaching the data does
-not depend on a placeholder in the selected continuation template.
+**The names and places in the menu are not asked of the model.** The
+[text-analysis service](../text-analysis/text-analysis-api.md) labels them in
+`Article.text` before the model runs, and the work stage turns each labelled span into an
+entity or place element with code-computed ids. A service that cannot answer leaves the
+menu with the figures and dates the patterns found, and the item publishes. The
+[element contract](../extraction/elements.md) owns how a label becomes an element.
+
+**The request carries the same table as reachability and validation.** Its compact,
+fenced data holds each element's id, kind, excerpt, parsed value and unit, after the
+reusable prefix. Attaching the data does not depend on a placeholder in the selected
+template.
 
 Every reference field in the derived request grammar chooses from exactly
 those visible ids. With no ids, reference lists can only be empty and the
@@ -122,25 +131,6 @@ An input oracle proves that finalized ids are visible and constrain references.
 Replaying an authored valid plan proves parsing and compilation, not that a
 real model will choose a useful visual.
 
-The current label reply contains `labels`, `proposed` and `named_mentions`.
-Quantity labels contain only `element_id`, `measure` and `entity`. A named group
-contains exact mention citations, its `entity` or `place` kind and a source-given
-name. The single collection preserves the former collections' combined capacity.
-Claims, quotes, keyphrases and lede addresses have no current producer.
-
-Historical replies must pass their original closed shape and bounds before
-adaptation. The older observation fields are validated together before being
-discarded; removed quantity/group judgments are validated too. The continuation
-replays the original raw reply only after validation. Unknown keys and malformed
-old evidence still fail. Capture envelopes and historical raw bytes are unchanged.
-
-An original collection key selects the oldest historical format. Otherwise any
-`sentence_id` in a proposal or mention selects the addressed format for the
-entire reply. Every citation in that format must have a valid address field;
-mixed or null/missing addresses fail without retrying as current input.
-Validated historical addresses remain internal and retain sentence-local
-anchoring. They are never exposed in the current decoder grammar.
-
 The planner no longer repeats `element_ids`. Code collects the references in
 encodings, labels, annotations and the declared whole into the native saved
 plan's existing bounded field. Title, caption and diagnostic numbers must be
@@ -150,44 +140,24 @@ validate their original reference list; the persisted plan shape is unchanged.
 
 ### Every instruction sits in front of the article
 
-Put shared instructions in one stable system turn: element labels, summary rules and visual-plan rules. Keep only item-dependent requests, such as the finalized evidence and the reply fields, in the continuation. Derive requested field names from the reply shape.
+Put shared instructions in one stable system turn: summary rules and visual-plan rules. Keep only item-dependent requests, such as the menu and the reply fields, behind the article. Derive requested field names from the reply shape.
 
-Fenced headline and article text remain untrusted data. Do not let either become a system instruction, shell argument, filename or fetch destination. Scope an instruction to the job it governs: a labeling rule against inventing numbers must not forbid the summary from reporting a source figure.
+Fenced headline and article text remain untrusted data. Do not let either become a system instruction, shell argument, filename or fetch destination. Scope an instruction to the job it governs: a plan rule against inventing numbers must not forbid the summary from reporting a source figure.
 
-### Sentence addresses identify source sentences, not physical line counts
+### The model is shown no sentence address
 
-The label turn prints each original sentence slice as `[sN]` followed by one
-JSON string on one physical line. JSON escapes internal line controls,
-backslashes and quotation marks; decoding and concatenating those strings
-recovers the original source, including sentence-boundary whitespace. The
-presentation does not change `Article.text`, segmentation, offsets or hashes.
-Non-ASCII text stays literal so the existing sanitizer still recognizes forged
-turn markers. The escaped strings remain fenced user data, never instructions.
+The article is printed once, whole and unchanged, because the call is asked for no
+location. No `[sN]` address, character offset or position appears in any model-facing
+text, and the grammar has no field that could carry one. Every id in the menu is an
+offset into `Article.text`, so the request builder refuses a table built over a
+different string than the text printed beside it: a menu that points into a document
+the model is not reading is the failure it prevents.
 
-These addresses remain input presentation, not required model output. A current
-surface must occur exactly once in the entire bounded `Article.text`, including
-overlapping matches. A repeated name needs a short exact qualifying phrase or a
-different unambiguous source occurrence within the existing phrase bound.
-Missing or ambiguous matches are refused, never resolved by choosing the first.
-Historical addressed citations search only their original sentence; an invalid
-address never falls back to searching the article.
-Distinct people remain distinct and geographic markets belong in place mentions. The
-[element contract](../extraction/elements.md#the-two-kinds-only-a-model-can-find)
-owns those meanings and anchoring rules.
-
-The current grammar binds quantity labels to printed quantity ids. It asks for
-no sentence id, character offset or position. Code derives those from validated
-source matches. Empty quantity pools keep empty selections. Legal references
-do not establish useful numeric generation.
-
-`measure_two_calls.article_from_user_turn` recognizes the explicit current
-JSON-string heading and the historical raw-line heading separately. It decodes
-only the former and refuses malformed current strings or addresses, without
-retrying them as historical text. Historical displays keep literal escapes and
-continuation newlines; their stripped sentence separators cannot recover the
-original offsets. Use the retained native Article for that provenance.
-Historical raw label replies and capture fields stay unchanged; their
-compatibility validation does not widen the current three-field decoder.
+Code derives every location from the labelled spans the service returned, and re-slices
+each excerpt from `Article.text` rather than trusting the words the service sent back.
+A mention whose offsets do not cut those words is dropped. The
+[element contract](../extraction/elements.md#the-two-kinds-only-a-labeller-can-find)
+owns those meanings and the anchoring rules.
 
 ### What is in the prompt bytes, and who wrote each part
 
@@ -195,8 +165,6 @@ The active model entry declares its turn opening, closing, reply openings, syste
 
 - Require the role placeholder where a marker opens a role-bearing turn.
 - Reject empty structural markers and incompatible system-role/joiner declarations.
-- Match nested reply openings longest-first.
-- Read a continuation's opening from the prompt being extended, not an independent flag.
 - Confirm the sanitizer strips every declared marker an article could forge.
 - Prove both byte-prefix and token-prefix continuity with the configured tokenizer.
 
@@ -215,42 +183,24 @@ Never recover a partially written summary. A visual plan may cite only validated
 
 ### The output budget
 
-The label call's budget is derived from its schema: every array in the shape
-carries a `maxItems` and every decoded string a `maxLength`, so the widest reply
-is arithmetic. The summarize-and-plan call has nothing to derive. Its two prose
-fields carry no length bound, so it runs under the model file's
-`sampling.max_tokens`, or `DEFAULT_MAX_TOKENS` where the file names none, with a
-plan or without one. An explicit `max_tokens` also replaces the label call's
-derived budget on each request, including continuations; see
-[model-file.md](../../concepts/config/model-file.md#design-rationale).
+The call has nothing to derive a budget from. Its two prose fields carry no length
+bound, so it runs under the model file's `sampling.max_tokens`, or
+`DEFAULT_MAX_TOKENS` where the file names none, with a plan or without one; see
+[model-file.md](../../concepts/config/model-file.md#design-rationale). Do not silently clamp a reply
+budget to available context. Report a window failure at the call site.
 
-The label reply uses a measured output-density estimate. Name the tokenizer and evidence behind that estimate; it is not a mathematical guarantee for every possible string.
-
-The label reply also becomes part of the second prompt. Count it in both positions when checking the context window. Do not silently clamp a reply budget to available context. Report a window failure at the call site.
-
-The label and context allowances derive from the current native shape, not
-retired observations or the narrower per-article reference menu. Effective
-configured response caps, context and timeout settings do not change with this
-retirement.
-
-For capacity diagnostics, tokenize the complete rendered continuation with the
+For capacity diagnostics, tokenize the complete rendered request with the
 configured model's vocabulary, then add the effective response limit from that
-request body. The complete input already contains the first prompt, the actual
-label reply, the shared guide and the finalized evidence menu. Cached tokens
-still occupy context; do not omit them or add the first reply's maximum budget
-again. Check the first call's own prompt and response allowance separately.
+request body. The complete input already contains the system turn, the article and
+the menu of source elements. Cached tokens still occupy context; do not omit them.
 
-The measurement utility reports complete-request capacity using the effective
-cap before applying its optional diagnostic decode cap, so a short timing run
-cannot claim more production space than the configured request has.
-
-The existing pre-label gate remains an estimate over measured word/menu rates,
-the label call's derived budget and the summary call's response limit, not a
-certificate for every finalized request. At the committed window (65,536 tokens),
-cap (26,000 tokens) and menu (256 rows) it sums to 64,403 tokens for the longest
-article the extractor passes, 1,133 under the window (computed 2026-11-17); a
-model file that names a larger `max_tokens` narrows that margin one token for
-one.
+The pre-call gate remains an estimate over measured word and menu-row rates and the
+call's response limit, not a certificate for every request. The rates were measured on
+the longest prompt this project has sent, which carried instructions and addresses the
+one call no longer has, so they bound its prompt from above. At the committed window
+(65,536 tokens), cap (26,000 tokens) and menu (256 rows) it sums to 61,607 tokens for
+the longest article the extractor passes, 3,929 under the window (computed 2026-11-17);
+a model file that names a larger `max_tokens` narrows that margin one token for one.
 Conservative byte ceilings are not observed token counts. A bounded check with
 retained production replies and a constructed source-cap input measures those
 requests only; a repeated long source and its historical reply do not establish
@@ -258,7 +208,8 @@ universal fit or present-day planning quality. Capacity diagnostics do not
 change admission, suppress a visual, reduce a response cap or replace existing
 summary-first recovery.
 
-A cut label reply fails as `labels_truncated`. Do not repair missing arrays as empty: that would make incomplete output indistinguishable from an article with no elements. A retry needs a deliberate input change and a configured attempt policy; repeating an identical deterministic request is not recovery.
+A reply the output budget cuts inside the summary fails as `output_truncated`; one cut
+inside the plan keeps its summary, as [above](#summary-before-visual). A retry needs a deliberate input change and a configured attempt policy; repeating an identical deterministic request is not recovery.
 
 ## The shape is not the whole check
 
@@ -310,7 +261,7 @@ The evaluation record identifies the article with its source headline, not a gen
 
 ## The record covers the ask
 
-`RunRecord.inputs.prompt_sha256` covers templates, substituted policy, turn markers and turn order. It must not change merely because the article or label reply changes. The two-call path supplies its own prompt inputs to the recorded run manifest.
+`RunRecord.inputs.prompt_sha256` covers templates, substituted policy, turn markers and turn order. It must not change merely because the article changes. `classify.calls.prompt_inputs` supplies the digest call's inputs to the recorded run manifest: the system and user turns rendered with the headline and article empty, the summarize block, `visuals.enabled_kinds` and the selected chart types. The kinds are digested beside the bytes because the rendering always asks for a plan, so a run that asks for none would otherwise read as unchanged.
 
 Changing prompt wording or policy changes this identity. The digest makes the change observable; it is not permission to skip work or a quality verdict.
 
@@ -320,25 +271,25 @@ Prompt changes affect new work, not frozen published days. Do not rebuild the ar
 
 ## Design rationale
 
-Reduce labeling to chart evidence, not a general article inventory. Quantity
-meaning and known-subject links support chart planning and relationship checks.
-Repeated salience, attribution, hedge, dimension and time judgments have no
-independent downstream check; chart framing must still preserve material
-qualifications, and temporal charts still cite source DATE elements.
+Read the article once. The first of the two calls the pipeline used to make only labelled what
+code could already find: on 66 captured articles it took 3.67 of 7.04 hours of model time
+(52 percent) and fed a chart planner that published no chart, while the local text-analysis
+service returns the same names and places with exact offsets in seconds. Dropping the call
+saves its decode, because the remaining call reads the article either way. What the model no
+longer writes - what a figure measures and whom it describes - is not replaced: the plan reads
+a figure's excerpt beside the article, and the validator still checks every reference it cites.
+Scatter and bubble charts needed the subject link only that call wrote, so they cannot validate
+until a code rule links a figure to its subject.
 
-State the extraction task directly. A quantity's subject is not merely its
-reporter, but a company reporting its own sales can be both. Skip quantities
-whose meaning is unclear, and use an empty subject only when no named subject
-is stated. Request source phrases rather than sentence identifiers: position
-bookkeeping is code's work. Exact article-wide uniqueness keeps a copied phrase
-checkable without silently choosing among repeated occurrences.
+The service is a new recipient of article text, so it is a loopback process the run starts
+and its reply is data ([trust boundary](../sources/trust-boundary.md)). What reaches the model
+from it is an excerpt re-sliced from `Article.text` and rendered by the same menu code as every
+other row; no word the service returns is ever a prompt, path, URL or shell argument.
 
-The model sees source ids, kinds, excerpts, parsed values, units and sentence
-addresses, plus retained measure/subject judgments. Character offsets, extractor
-bookkeeping and unused historical judgments stay out of this projection.
-Persisted spans, source hashes and re-slicing checks remain intact: they validate
-the evidence rather than merely help debugging. Summary instructions and the
-shared-prefix continuation are unchanged.
+The model sees source ids, kinds, excerpts, parsed values and units. Character offsets,
+extractor bookkeeping and sentence addresses stay out of this projection. Persisted spans,
+source hashes and re-slicing checks remain intact: they validate the evidence rather than
+merely help debugging.
 
 A stable prefix reduces repeated reading without treating prompt wording as a control. Summary-first decoding protects the reader's primary content when visual planning cannot finish. Model-specific transport declarations keep shared editorial instructions testable across models.
 
@@ -346,11 +297,9 @@ Task paths belong to the selected configuration so a candidate never reads
 instructions from the original checkout. One directory holds distinct products
 and call flows, not one shared summary instruction or a scanned prompt registry.
 
-Escaping sentence presentation removes unaddressed continuation lines without
-normalizing the source that evidence indexes. An explicit heading distinguishes
-that presentation from historical raw text without changing the saved reply or
-capture format. These invariants prove transport, not improved model coverage
-or useful generated visuals; those require both fresh production calls.
+The article is printed unchanged and unaddressed, so the bytes the model reads are the bytes
+`Article.text` holds and the ids it cites index them. These invariants prove transport, not
+improved model coverage or useful generated visuals; those require a fresh production call.
 
 ## See also
 
