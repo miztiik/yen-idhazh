@@ -1,6 +1,6 @@
 # Model throughput and why it drifts inside a run
 
-**Last Updated**: 2026-11-17
+**Last Updated**: 2026-11-18
 What the two model rates mean, why the slow half of a run is slow, and what a
 change in either number is allowed to prove.
 
@@ -51,8 +51,7 @@ tokens a second** (2026-08-23, `ubuntu-latest`, EPYC 9V74, llama.cpp build
 b10598, three repeats). The number of tokens these weights spend before closing
 the block is not measured and belongs to the weights rather than a knob. Against
 the 900-token answer worst case of 149.8 seconds, every 100 tokens of thinking
-is **16.6 seconds**. The pipeline makes two calls per item, so an item pays two
-spans.
+is **16.6 seconds**. An item makes one call, so it pays one span.
 
 **The risk the null cap carries, named.** With no cap, a model that never writes
 its closing marker decodes to `n_ctx` - and the answer span's prompt is the
@@ -71,23 +70,16 @@ re-read a prompt the first one filled. If it misses, the estimated cost is
 evaluated tokens beside its cached tokens on every item, and their difference is
 what the answer span really prefilled. One run with thinking declared answers it.
 
-**A second cost is real, priced and not an estimate.** The summarize-and-plan
-call replays the label call's
-answer and never its thinking, because a prompt is the one place a model's
-own words could steer the next decode (Guardrail #11). So the label call's answer
-tokens
-are prefilled again rather than read from the slot. That is prefill rather than
-decode, and prefill runs at about 2.2 times decode on this page's own ratio; the
-article in front of it is still answered from the slot, because the common
-prefix reaches to the end of the label call's prompt either way.
-
 **The shard bound was re-derived rather than carried forward.** The worst of the
 80 shard rows on 2026-09-02 used 135.4 minutes and carried 40 items, so the
 worst measured item is 203.1 s. A worker now draws 20 items
-(`run.safety_ceiling_per_run` 80 over `run.max_parallel` 4), and two thinking
-spans add 85.2 s, so the derived worst item is **288.3 s** and the derived worst
-shard is **96.1 minutes**. `run.shard_timeout_minutes` stays at 200, which holds
-that with 2.1 times over. `run.shard_size` stays at 5: the fan-out is
+(`run.safety_ceiling_per_run` 80 over `run.max_parallel` 4). On 2026-09-14, for
+the two calls an item then made, two thinking spans added 85.2 s, so the derived
+worst item was 288.3 s and the derived worst shard 96.1 minutes. An item now
+makes one call and pays one span, 42.6 s, so the same inputs derive a worst item
+of **245.7 s** and a worst shard of **81.9 minutes**.
+`run.shard_timeout_minutes` stays at 200, which holds that with 2.4 times over.
+`run.shard_size` stays at 5: the fan-out is
 `min(ceil(80 / 5), 4)`, so `max_parallel` binds and the size would have to rise
 above 20 to move anything - and a worker carrying more items is the opposite of
 what a longer item wants.
@@ -145,13 +137,15 @@ cannot say whether a slow day was long articles or long summaries.
 
 ## Each call is charged on its own, and the item is their sum
 
-An item is read by more than one model call, so from 2026-09-12 `Summary`,
-the item-health ledger and the published projection record the five cost numbers
-per call as well as for the item. **The five flat cells are the sum over the
+From 2026-09-12 `Summary`, the item-health ledger and the published projection
+record the five cost numbers per call as well as for the item, and an item made
+two calls until 2026-11-17. It makes one now, recorded in the second slot so the
+`summary_*` series stays continuous, and a row written while it made two stays
+readable. **The five flat cells are the sum over the
 calls the row records**, which is what keeps every reader that pools them -
 `day_metrics`, `console_band`, `backend/utilities/reconcile_prefill.py`
-and the console's own rates - correct with no edit of its own on the day a
-second call starts being recorded. The contract refuses a row where they are
+and the console's own rates - correct with no edit of its own however many calls
+a row records. The contract refuses a row where they are
 not, so the property is enforced rather than described.
 
 Why the split exists is one number. Measured 2026-09-12 on a developer laptop,
@@ -297,151 +291,76 @@ cached_tokens` rather than the whole prompt.
 
 So an article is never charged for the article before it.
 
-**Under the two-call design that sentence still holds, and the shared prefix is
-now worth naming.** Measured 2026-09-12 on the configured weights, item 2 of a
-run reused **1,362 tokens** of the label call's prompt with no work - its system
-turn, which is byte-identical on every item - while the article behind it read
-from cold. The run also destroyed the previous item's copy of the summarize-and-plan call's question,
+**The shared prefix is worth naming.** The system turn is byte-identical on
+every item, so the one-slot cache answers it from the previous item while the
+article behind it reads from cold. Measured 2026-09-12, when an item made two
+calls, item 2 of a run reused **1,362 tokens** of its first prompt with no work -
+that system turn - and the run destroyed the previous item's copy of the rest,
 which is what a one-slot cache is supposed to do
 ([`../../reference/benchmarks/two-call-re-read.md`](../../reference/benchmarks/two-call-re-read.md)).
+What an instruction placed behind the article costs, and why the instructions
+sit in the system turn in front of it, is measured in
+[`../../reference/benchmarks/instructions-in-front.md`](../../reference/benchmarks/instructions-in-front.md).
 
-## What the summarize-and-plan call reads again, and which row owns each part
+## Which stage sends the call
 
-The second call opens with the first call's whole message array, so most of its
-prompt is answered from the slot. What is left is three things, and the figure
-in force for each is from
-[`../../reference/benchmarks/two-call-re-read.md`](../../reference/benchmarks/two-call-re-read.md) -
-`Qwen3.5-9B-Q4_K_M.gguf` through `llama-server` build 10444, 2026-09-12, one run
-and no spread, on the longest article the committed corpus holds.
+`work` sends one call an item: it reads the article and writes the summary and,
+when code finds a chart reachable, the plan. Until 2026-11-17 it sent two,
+adjacently - a call that labelled names and places, then the summary-and-plan
+call - and the adjacency was a correctness rule: the summarize entry pins
+`n_parallel` to 1, so the server holds one cache slot, and every first call
+before every second call would have evicted the prefix before it was reused. The
+first call took 52 percent of model time on 66 captured articles and fed a chart
+planner that published no chart, so it went
+([prompt.md](prompt.md#design-rationale)).
 
-| Cause | Tokens an item | At 9.85 tokens a second | Whose |
-| --- | --- | --- | --- |
-| the article changed | the whole label-call prompt, less the shared system turn | - | irreducible |
-| the chat template broke the prefix | **100** - four, plus the label call's whole 96-token reply behind them | 10.2 s an item, 3.4 min of a 20-item shard | plan 11 row #3c, closed |
-| the trailing turn sits behind the article | **697**, of which 687 is the question's own text, now **47** | **69.7 s an item, 23.2 min of a 20-item shard**, now 4.8 s and 1.6 min | plan 11 row #3e, closed |
+**There is no flag and no second path.** `run.two_calls_per_item` once switched
+between one call and two, for one day. Plan 11 row #6 deleted the knob, the small
+model, the `visuals` job and the single-call branch of `stage_work` in one commit
+on 2026-09-13, and the stage has had one path since. Maintainer ruling,
+2026-09-13: move forward, no rollback.
 
-**687 was the number to act on, and it was seven times the template's.** The summarize-and-plan call's
-question names no article and quotes no sentence, so it is the same bytes on
-every item - but the article in front of it is not, so a prefix cache could not
-reach it and all 687 tokens were read again, every item, for ever. The plan
-carried "about 670" as an estimate until this reading and it is withdrawn.
-
-**Row #3e moved both jobs into the system turn and left three lines behind**: the
-band the article's own length picked, and the fields the grammar will hold the
-reply to. The rendered turn went from 692 tokens to 42, so **650 tokens come off
-every item** - 66.0 seconds an item, 22.0 minutes of a 20-item shard - and the
-system turn grew by 697, paid once a shard because it is the same bytes on every
-item. **Net, a 20-item shard is 20.8 minutes better off.** Measured 2026-09-12
-([`../../reference/benchmarks/instructions-in-front.md`](../../reference/benchmarks/instructions-in-front.md)).
-
-**What the two calls cost over a single call was 797 tokens an item** - the
-template break plus the trailing turn - which is **80.9 seconds an item, about
-27 minutes of a 20-item shard.** Rows #3c and #3e removed 749 of the 797,
-leaving about **48 tokens an item, 4.9 seconds**. **37 tokens of pointer stay
-behind, which is what the row's floor exists to say** - the saving is not the
-whole 797.
-
-**A token count names the runtime, not the processor** (`CLAUDE.md` Guardrail
-#10, as clarified 2026-09-12), so the counts above travel and the seconds beside
-them are this page's own measured rate rather than the laptop the counts came
-from.
-
-## Which stage sends the two calls
-
-Until 2026-09-12 nothing sent them. The two calls, the gate in front of them,
-the downgrade ladder below them and the renderer at the end were all built and none of
-them was reachable from a stage: `work` made one summarizer call an item and the
-separate `visuals` job drew the pictures on the small model.
-
-**`work` sends both, adjacently, per item**, and that adjacency is a correctness
-rule rather than a layout taste: the summarize entry pins `n_parallel`
-to 1, so the server holds one cache slot, and every label call first with every
-summarize-and-plan call afterwards would evict the prefix before it was reused -
-on every item, with nothing in any log to say so.
-
-**There is no flag and no second path.** `run.two_calls_per_item` switched
-between the two for one day. Plan 11 row #6 deleted the knob, the small model,
-the `visuals` job and the single-call branch of `stage_work` in one commit, so
-the pair is what the stage does rather than what it can be asked to do. Maintainer
-ruling, 2026-09-13: move forward, no rollback.
-
-**The pipeline stamp digests a different prompt now.** The stamp
-hashes the chat template read off `/props`, and the two calls render their own
+**The pipeline stamp digests the prompt the call renders.** The stamp
+hashes the chat template read off `/props`, and the call renders its own
 bytes, so that template no longer reaches what the model reads and
 `models.summarizer.turns` does. `classify.calls.prompt_inputs`
 is what the stamp hashes instead: both turns rendered through the same helpers
-the live requests use, with the article and the label call's reply empty, plus every
-number `summarize` can substitute into them. Editing a marker moves the stamp,
+the live request uses, with the headline and the article empty, plus the
+summarize block, `visuals.enabled_kinds` and the selected chart types. Editing a marker moves the stamp,
 which is the state `Observation.DETERMINISM_VIOLATION` exists to make visible -
 and it is the only route the envelope takes into a run record, because
 `run.json` carries the recorded model reference and the markers sit on the
 declared entry.
 
-**Three prices nobody can read off a token count, and each can fail the design
-on its own. The first has now been read.** The prompt cache: if the summarize-and-plan call's
-`cached_tokens` is below the label call's prompt token count, the slot is not answering
-for the article and every figure above is wrong. The item-health ledger carries
-`label_input_tokens` and `summary_cached_tokens` side by side from 2026-09-12,
-so the reading is one comparison over that ledger, and
-[the sequence the window holds](#the-sequence-is-declared-once-and-the-window-was-checked-against-it)
-below says what came back. The second is the summarize-and-plan call's decode: its output budget was 4,735 tokens when this was
-written (it is now the model file's response limit, 8,192) and the one reply ever measured was 327, and a reply at half that
-budget is 144 minutes of the summarize-and-plan call alone on a 20-item shard. The third is the worst
-`work` shard against the 180-minute bar in the host-fingerprint ledger.
+## The window is checked before the call is sent
 
-## The sequence is declared once, and the window was checked against it
+`backend/idhazh/classify/dag.py` answers one question: does this article's call
+fit the window. The window has to hold the prompt - the instructions, the article
+and the menu of source elements - and then the longest reply the model file lets
+the call write. `dag.call_tokens` is that sum: an estimate of the prompt, built
+from three readings in `idhazh.measured` that were taken on a longer prompt than
+the one sent and so sit above it, plus `sampling.max_tokens`. The contract test
+and the production refusal read the same function.
 
-`backend/idhazh/classify/dag.py` holds the two calls as an ordered tuple with
-each one's decode budget beside it, and `work` walks that tuple rather than
-writing the two calls out as two statements. **The reason is the window, not
-tidiness.** Every node's reply is paid twice - once as its own decode, and again
-inside the prompt of every node behind it - so what the window has to hold is
-the label call's prompt plus both budgets plus the seam between the turns. The
-label call's budget is derived from its reply shape; the summarize-and-plan
-call's is the model file's response limit. A sequence
-assembled a statement at a time is a budget nobody ever checks whole, and
-`dag.sequence_tokens` is that sum in one place: the contract test and the
-production refusal read the same function. A third call raises it by that call's
-budget plus a seam plus the prompt it drags forward, and the import-time guard in
-that module is what makes adding one loud.
-
-**An article the sequence cannot hold is refused before the label call is sent.**
+**An article the window cannot hold is refused before the call is sent.**
 `dag.fits_the_window` is the check and `FailureCode.CONTEXT_EXCEEDED` is what the
 item lands as. Admitting it would cost the picture rather than the item:
 `--no-context-shift` means the decode stops at the wall on an ordinary HTTP 200,
 `recovered_completion` salvages the summary, and the item publishes with
-`window_exhausted` recorded where the picture would have been - after both calls
-have been paid for. Refusing it up front is still the better answer, because
-that whole decode is spent before the reason can be written.
-
-**The cache works, measured on the runner.** Over run `2026-09-13-34762570110`,
-shard 2, three consecutive items on a stock `ubuntu-latest`: the summarize-and-plan call reported
-8,680, 5,570 and 2,851 cached tokens against the label call prompts of 6,834, 4,271 and
-2,457 - so the summarize-and-plan call read back the whole of the label call's prompt and its reply every
-time, and prefilled only the seam. The label call reported 1,755 cached tokens on all
-three, which is the shared turn in front of the article surviving from one item
-to the next. That is the one comparison the paragraph above asks for, and it is
-the first price answered.
+`window_exhausted` recorded where the picture would have been - after the whole
+decode has been paid for. Refusing it up front is still the better answer,
+because that whole decode is spent before the reason can be written.
 
 **How many items the window refuses, and it is none.** Over the trailing 30 days
 ending 2026-09-13, 8,938 items carry a recorded prompt: the median is 1,672
-tokens, the 95th percentile 3,378 and the worst 8,741. Behind the prompt the
-sequence spends a fixed 11,284 tokens - 6,491 for the label call's reply, 58 for the seam
-and 4,735 for the summarize-and-plan call's. At the committed `n_ctx` of 65,536 **no item of the 8,938
-would have been refused**. That is the number that decides
-whether a later row proposes a raise, and it says the raise has already been
-made and bought the whole tail. Read once from `ledger.load_item_health` with a
-30-day cover, 2026-09-13; that reader is `ledger.load_days` over the same 30 days
-now.
-
-**The same question with the response limit as the reserve** (computed
-2026-11-17 from the committed window, cap and menu). Behind the prompt the
-sequence now holds a fixed 10,988 tokens - 2,738 for the label call's reply, 58
-for the seam and 8,192 for the summarize-and-plan call's response limit. The
-longest article the extractor passes (26,000 tokens, 256 menu rows) sums to
-64,403 of the 65,536-token window, so no committed article is refused: 1,133
-tokens remain, against a worst prompt of 8,741 tokens in the 2026-09-13
-population above.
+tokens, the 95th percentile 3,378 and the worst 8,741. Read once from
+`ledger.load_item_health` with a 30-day cover, 2026-09-13; that reader is
+`ledger.load_days` over the same 30 days now. Behind the prompt the call holds a
+fixed 8,192 tokens, the model file's response limit (computed 2026-11-17 from the
+committed window, cap and menu). The longest article the extractor passes
+(26,000 tokens, 256 menu rows) sums to 61,607 of the 65,536-token window, so no
+committed article is refused: 3,929 tokens remain, against a worst recorded
+prompt of 8,741 tokens.
 
 ## The write rate still falls through a run, and the cause is the ordering
 

@@ -1,6 +1,6 @@
 # The Summarizer Prompt
 
-**Last Updated**: 2026-11-17
+**Last Updated**: 2026-11-18
 
 What the model is asked to produce, what it reads beside the article, and what the pipeline validates. Prompt wording is not a security control: sanitization and validated output shapes enforce the boundary.
 
@@ -22,26 +22,27 @@ Table A - Production instruction files
 
 | Id | `prompt_files` key | Path relative to the selected config root |
 | --- | --- | --- |
-| A1 | `generate_labels` | `prompts/generate-labels.txt` |
-| A2 | `write_digest_summary` | `prompts/write-digest-summary.txt` |
-| A3 | `plan_visual` | `prompts/plan-visual.txt` |
-| A4 | `continue_summary` | `prompts/continue-summary.txt` |
-| A5 | `summarize_article` | `prompts/generate-summary.txt` |
-| A6 | `compare_articles` | `prompts/compare-articles.txt` |
+| A1 | `write_digest_summary` | `prompts/write-digest-summary.txt` |
+| A2 | `plan_visual` | `prompts/plan-visual.txt` |
+| A3 | `continue_summary` | `prompts/continue-summary.txt` |
+| A4 | `summarize_article` | `prompts/generate-summary.txt` |
+| A5 | `compare_articles` | `prompts/compare-articles.txt` |
 
 Production rendering retains universal-newline reading and performs no
 whitespace trimming. The app config's additive reader uses the declared task paths if an older
-authored input omits `prompt_files`; new authored configuration names them all.
-The standalone summary, corpus and reference-set readers use A5, shared with the
+authored input omits `prompt_files`; new authored configuration names them all. A config that
+still names `generate_labels`, the retired first call's file, is refused by name: no task reads
+such a file, so a path left in `prompt_files` would be one somebody believes.
+The standalone summary, corpus and reference-set readers use A4, shared with the
 [summary generator's default](../../reference/summary-generator-api.md).
 It emits `title` and `summary`, and its instructions are identical for every
 article. Configured templates may still use the validated substitution values.
 Reference sampling spreads articles by source length, as the
 [reference-set procedure](../../how-to/fine-tune-a-model.md#the-reference-set)
 describes.
-The digest retains its separate A2, A3 and A4 instructions, and its one call reads
-those three; no stage reads A1, which only the measurement utility still renders.
-The comparison judge and its stamp use A6's full rendered instructions.
+The digest retains its separate A1, A2 and A3 instructions, and its one call reads
+those three.
+The comparison judge and its stamp use A5's full rendered instructions.
 Offline judge capture and saved-evidence validation use that same selected file,
 so their recorded identity cannot describe instructions from another root.
 
@@ -164,8 +165,6 @@ The active model entry declares its turn opening, closing, reply openings, syste
 
 - Require the role placeholder where a marker opens a role-bearing turn.
 - Reject empty structural markers and incompatible system-role/joiner declarations.
-- Match nested reply openings longest-first.
-- Read a continuation's opening from the prompt being extended, not an independent flag.
 - Confirm the sanitizer strips every declared marker an article could forge.
 - Prove both byte-prefix and token-prefix continuity with the configured tokenizer.
 

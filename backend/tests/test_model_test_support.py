@@ -10,7 +10,7 @@ import pytest
 from contracts._fixtures import copy_config, entry_with
 from support.models import a_markers, a_sampling, a_server, active_model_file
 from support.paths import CONFIG_DIR, FIXTURES_DIR, read_text
-from support.prompts import label_payload
+from support.prompts import summary_payload
 from support.server import RecordedEndpoint, render_template_response
 
 from idhazh import config
@@ -61,7 +61,7 @@ def test_active_helpers_accept_a_new_filename_without_a_recording(
     assert active_model_file(config_dir) == settings.app.models_file
     assert a_server(config_dir) == settings.models.summarizer.server
     assert a_sampling(config_dir) == settings.models.summarizer.sampling
-    payload = label_payload(article_ok, config_dir=config_dir)
+    payload = summary_payload(article_ok, config_dir=config_dir)
     assert payload["model"] == settings.models.summarizer.id
     assert payload["prompt"].endswith(a_markers().reply_opening)
 

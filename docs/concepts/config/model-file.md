@@ -1,6 +1,6 @@
 # The model's own file
 
-**Last Updated**: 2026-11-17
+**Last Updated**: 2026-11-18
 
 What `config/` says about a set of weights: which model runs, what runtime
 settings are declared for those exact bytes, how a turn is written for it, and
@@ -69,7 +69,7 @@ route defaults to 8,192 output tokens when the value is absent; an explicit
 value, including the active model's 8,192-token limit, wins. Rendered completions
 use the caller's shape-derived `n_predict` budget when no `max_tokens` is
 declared, or 8,192 tokens when the caller supplies no budget. An explicit
-`max_tokens` replaces that limit, survives continuations,
+`max_tokens` replaces that limit
 and also bounds a separate reasoning span. A request sends only one of these
 limit keys. Output schemas and grammars remain enforced, and a reply stopped by
 its limit is still reported as truncated rather than published as complete.
@@ -101,7 +101,7 @@ refused by name.** Plan 11 row #6 deleted `models.visual_planner`,
 `run.two_calls_per_item`, `run.visual_planner_budget_minutes` and
 `finetune.student` in one commit, and the two older names that used to migrate
 into two of them - `models.route` and `run.route_budget_minutes` - went with
-them. The small model they configured is gone: the work stage makes two calls
+them. The small model they configured is gone: the work stage makes one call
 per item on the summarizer weights, so the same model that writes the summary
 decides the picture.
 
@@ -300,7 +300,7 @@ the entry, where `declared_for` pins them to its `sha256`.
 | Marker | What it is | Where it comes from |
 | --- | --- | --- |
 | `turn_opening` | opens a turn, with the role substituted into it | the template |
-| `turn_closing` | closes a turn, and is where the summarize-and-plan call's prompt splices onto the label call's | the template |
+| `turn_closing` | closes a turn | the template |
 | `reply_opening` | where the model starts writing, reasoning off | the template |
 | `reply_opening_thinking` | the same, reasoning on | the template |
 | `system_role` | whether this model gives the system block a turn of its own or folds it into the first user turn | the template |

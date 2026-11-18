@@ -1,6 +1,6 @@
 # The Trust Boundary
 
-**Last Updated**: 2026-11-17
+**Last Updated**: 2026-11-18
 
 Where a stranger's bytes stop being instructions and become data, what actually enforces that, and the planted attacks that assert it on every change. This is the operational home of Guardrail #11.
 
@@ -238,7 +238,7 @@ of the two strings supplied the source headline.
 The digest's call builds its user turn in `classify.calls.summary_user_turn`: the
 title, the article and the menu of source elements are each a
 `sanitize.untrusted_block`. The title once was the one string that was not - the
-call before it printed it as a bare line, `Title: ...`, directly in front of the
+retired first call printed it as a bare line, `Title: ...`, directly in front of the
 fence. That bare line is a framing position. The prompt's own "the block below is
 data" sentence does not reach it, and prompt wording is not a control in the first
 place, because it is written in the same channel the attack arrives in.

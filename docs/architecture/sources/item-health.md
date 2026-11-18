@@ -1,6 +1,6 @@
 # Item Health
 
-**Last Updated**: 2026-11-17
+**Last Updated**: 2026-11-18
 
 What every planned item did on every run, where that record lives, and which
 failures count against a source. This is item-grain evidence. Feed health is
@@ -148,10 +148,10 @@ prose below turns on, not the complete list defined by the contract:
 | `elements_found` | int | `span_integrity` is true, from 2026-09-08 | Tier 1 elements the candidate pass kept |
 | `element_class` | enum | `span_integrity` is true, from 2026-09-08 | `chartable`, `narrative` or `unclassified` |
 | `model_calls` | int | a split was recorded, from 2026-09-12 | how many calls the five cells above add up over |
-| `label_kind` | enum | a split was recorded, from 2026-09-12 | `summarize`, `visual_plan`, `label` or `summarize_and_plan` |
-| `label_*` | int | a split was recorded, from 2026-09-12 | the first call's own five, same names and same order |
-| `summary_kind` | enum | a second call ran, from 2026-09-12 | which call ran second |
-| `summary_*` | int | a second call ran, from 2026-09-12 | the second call's own five |
+| `label_kind` | enum | a row written while an item made two calls, 2026-09-12 to 2026-11-17 | `summarize`, `visual_plan`, `label` or `summarize_and_plan` |
+| `label_*` | int | the same rows; never written since | the first call's own five, same names and same order |
+| `summary_kind` | enum | a model call returned, from 2026-09-12 | which call this slot records: the second of two, then the one call |
+| `summary_*` | int | a model call returned, from 2026-09-12 | that call's own five |
 | `truncation_cap_tokens` | int | the body was cut, from 2026-09-14 | which cap did the cutting |
 
 Optional fields are nullable, and an older row can lack a field added later.
@@ -174,10 +174,10 @@ The contract refuses a row that records one call and leaves the totals at that
 call's numbers, which is what lets every reader that pools these cells stay
 pooled and stay correct. **Either slot may stand alone**: an item that makes one
 model call records it in the summary slot and leaves the label slot empty, and a
-row that fills both is as valid as it was. Read the cache per call rather than off the total: a
-second call replays the first call's prompt and is answered for it, so
-`cached_tokens` over the item is non-zero on every item that took two calls and
-says nothing about either
+row that fills both is as valid as it was. On a row written while an item took two
+calls, read the cache per call rather than off the total: the second call replayed
+the first call's prompt and was answered for it, so `cached_tokens` over the item
+is non-zero on every such item and says nothing about either
 ([the split](../summarize/throughput.md#each-call-is-charged-on-its-own-and-the-item-is-their-sum)).
 **The picture costs nothing extra here**: the summarize-and-plan call writes the summary and the plan
 in one reply, so what a picture cost is already inside the cells above and there
@@ -523,6 +523,8 @@ stage that did the work.
 reject an acceptable body for an absent source headline; the summarizer
 generates the title. `length_out_of_range` is the same: no run produces it,
 because no reply is judged by its length, and an older row still reads.
+`labels_truncated` is the same: the first model call that could cut its reply is
+gone, so no run produces it, and an older row still reads.
 
 **A new code is named in five places, and the fifth only fails at runtime.**
 `FailureCode` itself, `FAILURE_CODE_STAGES`, `SOURCE_NEUTRAL_FAILURE_CODES`,

@@ -375,10 +375,9 @@ def _ask_the_model(
 ) -> tuple[Completion | None, FailureCode]:
     """One request, its reply, and the code that says why there is none.
 
-    Shared by the single call and by both halves of the two-call pair, because
-    what a caller does with a reply differs and how a reply is asked for does
-    not. The generation span is opened here so a run that makes two calls an
-    item draws two spans rather than one covering both.
+    Shared by the standalone summarizer and the digest's call, because what a
+    caller does with a reply differs and how a reply is asked for does not. The
+    generation span is opened here, so each request draws a span of its own.
 
     `markers` decide whether that request is one decode or two. An envelope that
     declares a closing marker gets a thinking span in front of the answer, and

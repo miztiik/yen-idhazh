@@ -13,11 +13,10 @@ from utilities.pipeline_test_case import TEST_CASES_ROOT
 
 
 def write_test_case(test_case: object, *, source: Path, root: Path) -> Path:
-    """Two files move, and one intention moves both.
+    """Two files move: the app config and the active model's file.
 
-    `visuals.enabled_kinds` empty is what makes no picture reachable;
-    `summarize.asks_for_a_visual_plan` false is what the run's prompt inputs are
-    stamped with. Apart they disagree about what the run asked for.
+    A test case that asks for no picture writes `visuals.enabled_kinds` empty, which is
+    what makes no picture reachable and what the run's prompt inputs are stamped with.
 
     The test case also names its own child under the shared trial root, so three
     test cases write separate trees without changing their writer identities.
@@ -31,9 +30,6 @@ def write_test_case(test_case: object, *, source: Path, root: Path) -> Path:
     app = json.loads(app_path.read_text(encoding="utf-8"))
     # Through `.get`, because the committed config carries only what differs from
     # a default - so a block this test case moves may not be in the file at all.
-    summarize = dict(app.get("summarize") or {})
-    summarize["asks_for_a_visual_plan"] = test_case.asks_for_a_visual_plan  # type: ignore[attr-defined]
-    app["summarize"] = summarize
     if not test_case.asks_for_a_visual_plan:  # type: ignore[attr-defined]
         visuals = dict(app.get("visuals") or {})
         visuals["enabled_kinds"] = []

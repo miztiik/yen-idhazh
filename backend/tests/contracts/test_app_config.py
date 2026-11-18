@@ -53,7 +53,6 @@ def test_the_config_file_names_every_knob_it_owns(name: str) -> None:
     reading `config/` that the knob exists. Measured 2026-09-17 before this
     landed: `idhazh.json` named 16 fewer knobs than it owns and
     `appearance.json` 2 fewer, while the other four named all of theirs.
-    `summarize.asks_for_a_visual_plan` was among the missing.
 
     **Owns, not declares.** Three blocks sit on two models and only one file is
     their source; `CONFIG_NOT_OWNED` names the other side. Padding a legacy
@@ -1025,6 +1024,24 @@ def test_a_config_still_spelling_the_fold_cover_under_run_is_refused() -> None:
         match=re.escape("run.settled_fold_after_days is gone and nothing replaces it"),
     ):
         AppConfig.model_validate({"run": {"settled_fold_after_days": 7}})
+
+
+def test_a_config_still_spelling_a_setting_of_the_first_model_call_is_refused() -> None:
+    """The model reads an item once now, and the two settings the first call read are gone.
+
+    Whether a picture is asked for is decided by `visuals.enabled_kinds`, so a
+    leftover `summarize.asks_for_a_visual_plan` is refused and pointed there. No
+    task reads the labelling instructions, so a leftover `prompt_files.generate_labels`
+    is refused with nothing to point at. Either would otherwise be a number somebody
+    believes.
+    """
+    with pytest.raises(ValidationError, match=re.escape("is now visuals.enabled_kinds")):
+        AppConfig.model_validate({"summarize": {"asks_for_a_visual_plan": False}})
+    with pytest.raises(
+        ValidationError,
+        match=re.escape("prompt_files.generate_labels is gone and nothing replaces it"),
+    ):
+        AppConfig.model_validate({"prompt_files": {"generate_labels": "prompts/a.txt"}})
 
 
 def test_a_band_that_cannot_draw_the_hardest_labelled_pair_is_refused() -> None:

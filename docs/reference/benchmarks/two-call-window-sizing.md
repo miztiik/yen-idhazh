@@ -141,6 +141,12 @@ Three throwaway scripts, gitignored under `.tmp_*` and not committed, built on
 [`../../../backend/idhazh/measured.py`](../../../backend/idhazh/measured.py),
 each carrying its own method and what to do when it moves.
 
+**Since this page was written** `measure_two_calls.py` was deleted with the first
+call. `SUMMARIZE_AND_PLAN_SEAM_TOKENS` went with it, and the other three became
+`DIGEST_PROMPT_SCAFFOLD_TOKENS`, `DIGEST_PROMPT_BODY_TOKENS_A_WORD` and
+`DIGEST_PROMPT_MENU_TOKENS_A_ROW`, which the one call's window check still reads as
+ceilings.
+
 **One defect found in `measure_two_calls.py` and not fixed here.** Its printed
 ceiling subtracts the retired `max_output_tokens` as the label call's
 decode budget, which stopped being the label call's budget when row #3g derived it from

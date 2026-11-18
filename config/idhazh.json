@@ -345,7 +345,6 @@
   "prompt_files": {
     "compare_articles": "prompts/compare-articles.txt",
     "continue_summary": "prompts/continue-summary.txt",
-    "generate_labels": "prompts/generate-labels.txt",
     "plan_visual": "prompts/plan-visual.txt",
     "summarize_article": "prompts/generate-summary.txt",
     "write_digest_summary": "prompts/write-digest-summary.txt"
@@ -377,7 +376,6 @@
     "holdout_reach_days": 730
   },
   "summarize": {
-    "asks_for_a_visual_plan": true,
     "max_verbatim_words": 20
   },
   "text_analysis": {
@@ -409,7 +407,7 @@
     "tagline": "Daily news summaries, with links to their sources.",
     "theme_default": "dark"
   },
-  "version": "2026-11-17",
+  "version": "2026-11-18",
   "visuals": {
     "asset_base_url": "",
     "downgrade_enabled": false,

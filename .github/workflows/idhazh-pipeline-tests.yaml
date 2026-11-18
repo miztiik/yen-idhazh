@@ -2,9 +2,10 @@
 #
 # Name a models file and every enabled test case runs on those weights, through
 # the production code - the real fetcher, the real extractor, the real prompts,
-# the real two calls, the real model server - over a few drawn articles. Name
-# nothing and it runs the configured model. It is a check that a model walks the
-# path: this checks stage execution, not server performance or summary quality.
+# the real text-analysis service, the real model call, the real model server -
+# over a few drawn articles. Name nothing and it runs the configured model. It
+# is a check that a model walks the path: this checks stage execution, not
+# server performance or summary quality.
 #
 # Random mode has four jobs. `plan` draws once and lists the runners the enabled
 # test cases need. `test-case` is one job per runner, each with its own model
@@ -35,8 +36,8 @@
 # workflow that checks execution rather than summary quality.
 #
 # Optional retained inputs bypass the draw and every experimental case. Only
-# selected native Articles cross into a fresh, artifact-only production call
-# pair; the report and ledger-commit jobs do not run in that mode.
+# selected native Articles cross into a fresh, artifact-only production call;
+# the report and ledger-commit jobs do not run in that mode.
 name: Pipeline tests
 
 # Dispatch only. Random mode may select a candidate model; retained mode names
@@ -274,11 +275,10 @@ jobs:
       # written, switched on or not, so a test case that is off is still proven
       # to load and turning it on cannot be the first time anybody read it.
       #
-      # Two files move, and the test case declares one intention that moves both.
-      # `visuals.enabled_kinds` empty is what makes no picture reachable, so the
-      # gate takes the plan fields off the summarize-and-plan call's grammar;
-      # `summarize.asks_for_a_visual_plan` false is what the run's prompt inputs
-      # are stamped with. Apart they disagree about what the run asked for.
+      # Two files move: the app config and the active model's file. A test case that
+      # asks for no picture writes `visuals.enabled_kinds` empty, which is what makes
+      # no picture reachable, so the gate takes the plan fields off the model call's
+      # grammar, and what the run's prompt inputs are stamped with.
       - name: Write each test case's config
         run: |
           set -euo pipefail
