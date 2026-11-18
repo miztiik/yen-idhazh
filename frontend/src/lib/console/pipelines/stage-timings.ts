@@ -12,7 +12,7 @@ export function nativeStageTimings(rows: readonly Row[]): StageTimingDay[] {
 				const value = finiteCell(row[cell]);
 				return value === null ? [] : [value];
 			});
-			return { ms: nearestRank(values, 0.5), timed: values.length, total: own.length };
+			return { ms: nearestRank(values, 0.5), timed: values.length };
 		};
 		return { date, items: own.length, fetch: stage('fetch_ms'), extract: stage('extract_ms'), summarize: stage('summarize_ms') };
 	});

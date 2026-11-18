@@ -28,8 +28,8 @@ import {
 } from '../../charts/series';
 // Type-only, so it is erased and the browser suite still loads this module in
 // plain Node with no alias to resolve. `DayScoredCounts` lives in the console
-// layer both reducers reach, so the server one borrows it rather than the
-// console importing a server type back the other way.
+// layer, so this module borrows it rather than the console importing a server
+// type back the other way.
 import type { DayScoredCounts } from '../eval-instruments';
 import { itemRates } from '../rates';
 
@@ -872,7 +872,6 @@ export function throughputWithin(
 				runs: [...perRun.entries()]
 					.map(([runId, bucket]) => ({
 						runId,
-						items: Math.max(bucket.read.length, bucket.write.length),
 						read: rateSpread(bucket.read, rank)?.median ?? 0,
 						write: rateSpread(bucket.write, rank)?.median ?? 0
 					}))
