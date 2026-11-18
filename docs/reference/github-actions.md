@@ -282,11 +282,14 @@ shared action, before its model server and with the same optional behaviour, and
 stops it after the test case; the retained-input job does likewise. So a pipeline
 test walks the path production walks. The service log is saved beside the model
 server's log, in the case's `runner-<runner>/` folder and in the retained
-verification folder.
+verification folder. The service answers two requests at a time and refuses a
+third with `429 BUSY`, and the work stage does not retry. A test case whose
+`n_parallel` puts more than two shards on a runner therefore publishes the items
+that lose the race without names; the committed cases hold one or two.
 
 Optional `retained_source_run` and `retained_item_ids` inputs instead select
 bounded native Articles from one completed Content refresh attempt. This mode
-uses the committed production model and both real calls, with fresh private
+uses the committed production model and one real call an article, with fresh private
 assets and captures. It runs no experimental case, report, ledger commit or
 publication. The [retained-input reference](retained-article-verification.md)
 defines validation, native outputs and the distinction between source and replay
@@ -294,8 +297,8 @@ provenance. Both inputs empty preserve the random mode.
 
 A successful summary proves execution, not visual generation. The random draw
 need not contain a warranted numeric chart. To establish a
-generation repair, inspect both actual calls for named warranted positive
-examples and a legitimate no-visual example, retaining their source inputs,
+generation repair, inspect the actual call of each named warranted positive
+example and of a legitimate no-visual example, retaining their source inputs,
 code revision, committed model, runner conditions, decisions and named assets.
 Old or authored replies and forced request types are not current generation
 evidence. The [visual publication contract](../architecture/publishing/visuals.md)
