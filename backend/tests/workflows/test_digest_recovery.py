@@ -184,6 +184,7 @@ def test_real_partial_assembly_and_delivery_keep_source_and_writer_separate(
     result = digest_recover.publish_outputs(
         repo,
         restored,
+        digest_recover.CheckedDay(saved.date),
         source=source_run,
         identity=identity,
     )
@@ -217,6 +218,7 @@ def test_real_partial_assembly_and_delivery_keep_source_and_writer_separate(
     repeated = digest_recover.publish_outputs(
         repo,
         restored,
+        digest_recover.CheckedDay(saved.date),
         source=source_run,
         identity=identity,
     )

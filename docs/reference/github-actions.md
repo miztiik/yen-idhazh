@@ -133,8 +133,10 @@ search vectors. A retained source fragment is reused only when it matches the
 saved completed items; conflicting source bytes refuse recovery.
 Corpus harvest retains its normal optional-failure policy.
 Day contracts, site build, Pages size and published-column checks precede the
-commit. Fresh-main regeneration, immutable collisions, published-input import,
-the final site rebuild and bundle gate use the normal publication path.
+commit; the publisher takes the checked day as an argument, so recovery cannot
+publish a day that has not been checked. Fresh-main regeneration, immutable
+collisions, published-input import, the final site rebuild and bundle gate use
+the normal publication path.
 Recovery does not start Pages publication; committed changes reach the site on
 the publication schedule or through a manual dispatch.
 
