@@ -160,23 +160,6 @@ DROPPED_CELLS: Final[frozenset[str]] = frozenset(
 #: it away passes here and fails the browser check instead.
 COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
     {
-        "frontend/src/lib/charts/series.ts": (
-            "vertical",
-            "summary_words",
-            "model_calls",
-            "label_kind",
-            "label_prefill_ms",
-            "label_decode_ms",
-            "label_output_tokens",
-            "summary_kind",
-            "summary_prefill_ms",
-            "summary_decode_ms",
-            "summary_output_tokens",
-            "model_wait_ms",
-            "visual_plan_tokens_written",
-            "label_decode_tokens_per_s",
-            "summary_decode_tokens_per_s",
-        ),
         "frontend/src/lib/console/queries/shared.ts": (
             "date",
             "stage",
@@ -262,13 +245,19 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
             "watchlist_bonus",
             "carriage_step",
         ),
-        "frontend/src/lib/console/machine/counters.ts": ("llama_rss_peak_bytes",),
         "frontend/src/lib/data/token-deviation-query.ts": (
             "n_threads", "n_batch", "model_quantisation", "temperature",
             "label_budget_tokens", "summary_budget_tokens", "run_visual_decision",
         ),
         "frontend/src/lib/console/model/work.ts": ("version",),
         "frontend/src/lib/server/payload.ts": ("detail",),
+        "backend/utilities/pipeline_artifact_analyzer.py": (
+            "summary_words",
+            "summary_decode_ms",
+            "summary_output_tokens",
+            "visual_plan_tokens_written",
+        ),
+        "backend/utilities/server_memory_mark.py": ("llama_rss_peak_bytes",),
         "backend/utilities/slot_probe.py": (
             "slot_id",
             "kv_tokens_at_start",
@@ -339,6 +328,26 @@ UNREAD_CELLS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
         ),
         "which visual decision this item-health row identifies for human review": (
             "visual_id",
+        ),
+        "which desk the article was filed under on the day the item ran": (
+            "vertical",
+        ),
+        "how many model calls an item made, and how long it waited on the server": (
+            "model_calls",
+            "model_wait_ms",
+        ),
+        # `backend/utilities/pipeline_artifact_analyzer.py` reads the first six of
+        # these by a name it builds from the call slot, which a search for the
+        # column's own name does not find.
+        "what each of the two calls was, and how long and how fast it read and wrote": (
+            "label_kind",
+            "summary_kind",
+            "label_prefill_ms",
+            "label_decode_ms",
+            "label_output_tokens",
+            "summary_prefill_ms",
+            "label_decode_tokens_per_s",
+            "summary_decode_tokens_per_s",
         ),
     }
 )
