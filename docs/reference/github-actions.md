@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-11-17
+**Last Updated**: 2026-11-18
 
 Which workflows run, when they run, and what they may publish.
 The [workflow declarations](../../.github/workflows/) are authoritative.
@@ -105,10 +105,14 @@ is committed. Set it to false only when the recovered day should be published.
 The utility validates the saved plan's native ledger envelope and rows, the
 platform artifact checksums, source run/attempt/code identity and each worker
 payload. It refuses missing successful-worker artifacts, expired or corrupt
-inputs, mixed attempts, unplanned files and foreign local bytes. Failed workers
-may have missing outputs; completed sibling outputs remain, and the normal
-census records unfinished items honestly. A source run whose artifacts expired
-cannot be completed this way.
+inputs, mixed attempts, unplanned files and foreign local bytes. Each refusal
+the utility itself decides carries a machine-readable reason, the
+`RefusalReason` enum in
+[`digest_recovery_refusal.py`](../../backend/utilities/digest_recovery_refusal.py),
+whose value is the sentence the operator reads. Failed workers may have missing
+outputs; completed sibling outputs remain, and the normal census records
+unfinished items honestly. A source run whose artifacts expired cannot be
+completed this way.
 
 From a clean checkout with the publication runtime and site dependencies
 installed, the same entry is:
