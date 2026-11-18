@@ -2,7 +2,7 @@
 import type { Row } from '../../data/ledger';
 import { normalizeHostRow } from '../../data/host-fingerprint';
 import type { MachineProcessors } from './article-cost';
-import { machineCounters, type MachineLimits } from './counters';
+import { machineCounters } from './counters';
 import { finiteCell, nearestRank, qualifyingWork, referenceWork, typicalSeconds } from '../rates';
 import type { RankedInput } from '../../charts/d3/rankedList';
 import * as queries from '../queries/machine';
@@ -39,8 +39,8 @@ export function shardCounts(rows: readonly Row[]): Map<string, number> {
 	return result;
 }
 
-export function countersFrom(hosts: readonly Row[], items: readonly Row[], counts: readonly Row[], limits: MachineLimits) {
-	return machineCounters(textRows(hosts), textRows(items), shardCounts(counts), limits);
+export function countersFrom(hosts: readonly Row[], items: readonly Row[], counts: readonly Row[]) {
+	return machineCounters(textRows(hosts), textRows(items), shardCounts(counts));
 }
 
 /** The cost join needs measured logical counts, not a fingerprint or private metadata. */

@@ -95,23 +95,6 @@ export interface RunConfig {
 	 * day is not evidence the next one will be quiet, and a runway has to be the
 	 * worst case to be worth printing (Guardrail #10). */
 	safety_ceiling_per_run: number;
-	/** When the platform stops a work shard. The ceiling the machine page reads
-	 * `job_seconds` against - 4,208 seconds means nothing until 200 minutes sits
-	 * beside it. */
-	shard_timeout_minutes: number;
-}
-
-/** What the console needs to say how much room a prompt had left.
- *
- * One flag of the summarizer entry's `server` block, not the whole of it:
- * the machine page reads the longest sequence any item recorded against the
- * window, and a counter
- * without its ceiling is not a measurement. It is the summarizer's window
- * because the summarizer is what those shards ran; the visual planner carries
- * its own block and nothing here draws it.
- */
-export interface InferenceConfig {
-	n_ctx: number;
 }
 
 /** What the console needs to say how much room the site has left. */
@@ -578,8 +561,7 @@ const DEFAULTS: UiConfig = {
 
 const RUN_DEFAULTS: RunConfig = {
 	success_floor_pct: 70,
-	safety_ceiling_per_run: 80,
-	shard_timeout_minutes: 200
+	safety_ceiling_per_run: 80
 };
 const VISUALS_DEFAULTS: VisualsConfig = {
 	min_chart_points: 3,
@@ -609,12 +591,6 @@ const SAME_STORY_FLOOR = 0.94;
 // it on the cosine, which is how the floor above was measured and now the only
 // legal value.
 const SAME_STORY_WEIGHTS = { cosine_weight: 1.0 };
-// The value a checkout with no config file runs on. `config/models/` pins
-// `--ctx-size` at 65536 and every real page reads that; this only fires for a
-// checkout with no model file at all, and such a checkout summarizes nothing.
-// Naming the committed window here would have the console state a window the
-// unconfigured pipeline does not use.
-const INFERENCE_DEFAULTS: InferenceConfig = { n_ctx: 8192 };
 const RETENTION_DEFAULTS: RetentionConfig = { site_budget_mb: 800 };
 // The same three values `ObservabilityConfig` declares in the contract, so a
 // checkout with no config file prices a run at the documented starting rate
@@ -805,20 +781,8 @@ interface RawConfig {
 			adaptive_dedup_threshold?: Partial<SimilarityConfig>;
 		};
 	};
-	/** Which file under `config/models/` holds the active model. The whole
-	 * model left `idhazh.json` on 2026-09-14; this names where it went. */
-	models_file?: string;
 	/** The one `similarity` knob the site reads: how far back the hand marks count. */
 	similarity?: { holdout_reach_days?: number };
-}
-
-/** The active model's own file. Only the one flag a console panel reads.
- *
- * The key is llama-server's own spelling, because that is what the file
- * carries: an entry's `server` block is the flags the binary is started with,
- * emitted verbatim. */
-interface RawModels {
-	summarizer?: { server?: Record<string, unknown> };
 }
 
 /** Keys the `digest` block carries that no page reads.
@@ -932,24 +896,6 @@ const raw = once<RawConfig>('config', 'idhazh.json');
  * fallback below exists for.
  */
 const appearance = once<RawAppearance>('config', 'appearance.json');
-
-/** The active model's file, found by following the pointer and never by name.
- *
- * Read the same way `once` reads a fixed path, but the path is a value rather
- * than a literal: a build that spelled the filename would keep reading the old
- * model on the day somebody swapped the pointer, and would show a context
- * window the run never used.
- */
-let heldModels: RawModels | undefined;
-function models(): RawModels {
-	if (heldModels === undefined) {
-		const pointer = raw().models_file;
-		const read =
-			pointer === undefined ? null : readJson<RawModels>('config', ...pointer.split('/'));
-		heldModels = frozen(read ?? ({} as RawModels));
-	}
-	return heldModels;
-}
 
 /** Three layers, most specific last: defaults, the legacy block, the new file.
  *
@@ -1145,11 +1091,6 @@ export function engineExtensionRepository(): string {
 export function ledgerArchiveBaseUrl(): string {
 	const value = raw().ledger?.archive_base_url;
 	return typeof value === 'string' ? value : '';
-}
-
-export function inferenceConfig(): InferenceConfig {
-	const declared = models().summarizer?.server?.['--ctx-size'];
-	return typeof declared === 'number' ? { n_ctx: declared } : { ...INFERENCE_DEFAULTS };
 }
 
 export function retentionConfig(): RetentionConfig {
