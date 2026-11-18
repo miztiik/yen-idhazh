@@ -286,6 +286,12 @@ When selection is active, the replacement must also be selected. The bar
 compiler cannot preserve an extra grouping or other channel, so those
 requests are refused rather than silently dropping facts.
 
+The ladder takes its edge table as a parameter and defaults to this one, so a test can drive the
+chains, shared targets, cycles and unbuilt or unselected neighbours that the shipped one-step edges
+cannot form. A table handed in skips the import-time checks (no cycle, a role rule on every
+target) and can only change which forms are tried: every candidate still re-enters the validator,
+and the rungs bound the walk.
+
 Five refusals are worth naming, because each is a judgement rather than a derivation:
 
 - **`dot` to `bar`** would replace position on a common scale with length from
