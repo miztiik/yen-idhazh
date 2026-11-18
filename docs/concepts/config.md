@@ -126,6 +126,14 @@ commit. `extra="forbid"` still refuses a stale key by name. When a fixture
 preserves an older guarantee, keep the fields that provide that evidence;
 unrelated settings can follow the current config reader.
 
+## Judge config files carry a revision date
+
+A config file that a judge reads on its nightly run carries `version`: the UTC date (`YYYY-MM-DD`, never an integer) of the last edit that changed one of its values. Whoever changes a value bumps `version` in the same commit. Nothing checks that the bump happened, so the diff of every value change should show it. The first such file is `config/judges/content-similarity-judge.json`; no other config file carries a revision date yet, and the offline evaluation settings file beside it has none because no night reads it.
+
+`config_versions()` in `backend/idhazh/content_similarity_judge/settings.py` returns the date of each judge-owned file a night read as one line of ASCII JSON keyed by the file's path under `config/`: `{"judges/content-similarity-judge.json":"YYYY-MM-DD"}`. A new judge-owned file adds a key to that text and never a column to the records that carry it. The loader refuses a `version` that is missing, is not a real calendar date, or is later than today's date in UTC, which is how a local date that is already tomorrow in UTC reads, so write the UTC date.
+
+It is a revision date and not a schema version, so it needs no changelog and no read-side migration (the [authored-input rule](#removing-a-config-field-updates-its-authored-inputs)); a file's shape still changes together with its model. The reasons for a date and for one text are under [Design rationale](#design-rationale).
+
 ## Build-time config versus shipped config
 
 Most knobs are read only by the producer and never reach a reader: source lists, model references, batch sizes, timeouts, retry budgets. Shipping those into the published bundle would be dead bytes and a muddled surface.
@@ -154,6 +162,8 @@ Keeping tunables in schema-validated files rather than in code exists so that tu
 Excluding the runner's ceilings is the less obvious half. They look exactly like knobs and are not: a configurable job timeout invites someone to raise it rather than fix the batch size, which is precisely the reasoning Guardrail #2 exists to prevent. Authority: Carmack.
 
 **This page became an index on 2026-09-23, and six pages came off it.** It answered at least six questions at about 33,300 tokens, which made it the heaviest page the routing table could send an agent to. One section titled for a frame width had grown to hold the model references, the extraction signals, the summary ladder and the source filters, so a reader could not act on the frame width without reading past four unrelated answers - the split test failing in the open ([../reference/documentation-structure.md](../reference/documentation-structure.md)). The stem keeps the rules every config file obeys and the routing table; each child keeps one question. The cost is real and is the usual one: a knob whose page nobody can guess now costs a table lookup, where before it cost a long scroll. Authority: Fowler.
+
+**A revision date in the file, and one JSON text of dates.** A night's records have to say which tuning produced them. The `version` in `config/idhazh.json` cannot, because it moves only when that file's shape changes and a changed value leaves it as it was. A column for each judge-owned file would change the records' contract every time a file is added, so the dates travel as one text keyed by path, and a reader parses that text to see one. The cost of the rule is that the bump is a human step nothing enforces.
 
 ## Rejected alternatives
 

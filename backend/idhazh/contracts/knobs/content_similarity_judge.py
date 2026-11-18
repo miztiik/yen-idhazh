@@ -2,11 +2,11 @@
 
 from pydantic import Field
 
-from idhazh.contracts.base import Model
+from idhazh.contracts.base import DateStamp, Model
 
 
 class ContentSimilarityJudgeConfig(Model):
-    """The draw budget, verdict flush cadence and decoder temperature."""
+    """The draw budget, verdict flush cadence, decoder temperature and revision date."""
 
     pair_budget: int = Field(
         ge=1,
@@ -29,6 +29,15 @@ class ContentSimilarityJudgeConfig(Model):
         description=(
             "Decoder temperature for both orders. Zero measures order disagreement "
             "without adding sampling noise; the summarizer's temperature stays separate."
+        ),
+    )
+    version: DateStamp = Field(
+        description=(
+            "UTC date (YYYY-MM-DD) of the last edit to this file that changed a value, "
+            "bumped in the same commit as that edit. A night records the date of each "
+            "config file it read, so its results say which tuning produced them. It is a "
+            "revision date and never a schema version, so it needs no migration. The "
+            "loader refuses a date that does not exist or has not arrived yet."
         ),
     )
 
