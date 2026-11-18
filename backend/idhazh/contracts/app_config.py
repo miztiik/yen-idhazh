@@ -128,9 +128,14 @@ class AppConfig(Contract):
     )
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-11-18",
+            change="Refuse two retired knobs by name.",
+            why="Neither does anything now, so a config that spells one is refused, not read.",
+        ),
+        ChangelogEntry(
             version="2026-11-17",
-            change="Add the text-analysis block and label map; refuse two retired knobs by name.",
-            why="Absent blocks use the declared defaults; a retired knob is refused, not read.",
+            change="Add the text-analysis service block and the label map for its mentions.",
+            why="Absent blocks use the declared defaults, so an older config reads unchanged.",
         ),
         ChangelogEntry(
             version="2026-11-16",
@@ -141,11 +146,6 @@ class AppConfig(Contract):
             version="2026-11-15",
             change="Retire diagnostic knobs and name the retained corpus compression ceiling.",
             why="Historical config drops retired limits and preserves the corpus ratio cutoff.",
-        ),
-        ChangelogEntry(
-            version="2026-11-12",
-            change="Clarify the existing machine appearance controls.",
-            why="Configuration fields, bounds, defaults and historical reads are unchanged.",
         ),
         ChangelogEntry(
             version="2026-09-28",
