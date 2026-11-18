@@ -100,8 +100,14 @@ def stage_pick_item_pairs(
 
     **The read is bounded by the window and never by the archive** (Guardrail
     #12). One day payload and the `ceil(window / 24)` earlier days
-    `_earlier_days` already declares - one at the 36-hour default. Nothing here
+    `_earlier_days` already declares - two at the 36-hour default. Nothing here
     walks a collection a run appends to.
+
+    **Only pairs that hold one of the day's own stories are drawn.** The
+    grouping pass never weighs two earlier-day stories against each other, so
+    such a pair cannot change what publishes, and it already had its turn the
+    night the later of the two was new. `assemble.cross_source_pairs` does not
+    yield it, which leaves the budget to pairs that have not had theirs.
 
     **The pairs at or above the line the day was built with are never cut.**
     Those are the merges a reader is already living with, so they are the whole
