@@ -1,8 +1,8 @@
 """Why does recovery refuse one retained input?
 
 Each reason names one cause and carries the sentence an operator reads, so a caller or a test
-matches the cause and never the wording. A message that used to name its subject now carries
-that subject in `paths`.
+matches the cause and never the wording. The subject of a refusal - a file, an artifact, an
+inventory key - travels in `paths` and is appended to the message.
 """
 
 from __future__ import annotations
@@ -62,8 +62,13 @@ class RefusalReason(StrEnum):
 
 
 class RecoveryRefusalError(IntegrityError):
-    """A recovery input was refused for `reason`; `paths` names the offending files or keys."""
+    """A recovery input was refused for `reason`; `paths` names the offending files or keys.
+
+    The message is the reason's sentence followed by the subject, each name escaped by `ascii`, so
+    a name read from an artifact cannot put a second line or a control character in a log.
+    """
 
     def __init__(self, reason: RefusalReason, paths: tuple[str, ...] = ()) -> None:
-        super().__init__(reason.value, paths)
+        subject = f": {', '.join(ascii(path) for path in paths)}" if paths else ""
+        super().__init__(f"{reason.value}{subject}", paths)
         self.reason = reason

@@ -254,9 +254,18 @@ def test_select_artifacts_keeps_the_plan_and_items_and_skips_other_artifacts() -
     )
     selected = select_artifacts(
         SOURCE_RUN,
-        [platform_artifact("plan", id=4), platform_artifact("items-0", id=5), captures],
+        [
+            platform_artifact("plan", id=4),
+            platform_artifact("items-0", id=5),
+            platform_artifact("items-10", id=6),
+            captures,
+        ],
     )
-    assert {name: artifact.id for name, artifact in selected.items()} == {"plan": 4, "items-0": 5}
+    assert {name: artifact.id for name, artifact in selected.items()} == {
+        "plan": 4,
+        "items-0": 5,
+        "items-10": 6,
+    }
 
 
 @pytest.mark.parametrize(("values", "reason"), ARTIFACT_REFUSALS)
@@ -1100,3 +1109,30 @@ def test_download_refuses_a_run_id_that_is_not_positive_before_asking_the_platfo
     with pytest.raises(RecoveryRefusalError) as caught:
         download(execution)
     assert caught.value.reason is RefusalReason.RUN_ID_NOT_POSITIVE
+
+
+def test_download_lets_a_positive_run_id_through_to_the_platform_client(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Past the id check the first thing it does is start `gh`, which is not on this path.
+    monkeypatch.setenv("PATH", str(tmp_path))
+    with pytest.raises(FileNotFoundError):
+        download("1")
+
+
+# --- the refusal itself -----------------------------------------------------------------------
+
+
+def test_a_refusal_names_its_subject_and_keeps_a_name_from_an_artifact_on_one_line() -> None:
+    reason = RefusalReason.UNSAFE_OR_DUPLICATE_FILE
+    hostile = "bad\nname\x1b[0m"
+
+    named = RecoveryRefusalError(reason, (hostile,))
+    bare = RecoveryRefusalError(RefusalReason.NOT_A_ZIP_ARCHIVE)
+
+    assert named.reason is reason
+    assert named.paths == (hostile,)
+    assert str(named).startswith(reason.value)
+    assert ascii(hostile) in str(named)
+    assert str(named).isprintable()
+    assert str(bare) == RefusalReason.NOT_A_ZIP_ARCHIVE.value
