@@ -130,7 +130,7 @@ class PipelineTestCase(Model):
             "window it is given between its slots, so two slots on the committed "
             "window is a 32,768-token slot rather than the 65,536 the production "
             "gate admits articles against - and the worst article the truncation cap "
-            "admits needs 64,403. Leaving it alone would make the test case a test of a "
+            "admits needs 61,607. Leaving it alone would make the test case a test of a "
             "smaller window wearing a concurrency test case's name."
         ),
     )

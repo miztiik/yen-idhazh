@@ -1,6 +1,6 @@
 # Visual planning and rendering
 
-**Last Updated**: 2026-11-17
+**Last Updated**: 2026-11-18
 
 How an item gets a numeric chart or - most of the time - nothing at
 all: which pass decides, which gate refuses, and what every refusal is called.
@@ -31,7 +31,7 @@ Six pages, one question each. Arrive at the one holding your question and stop.
 There is no separate visual stage and no second model:
 
 ```
-idhazh work --date <D> # two calls an item: labels, then the summary and the plan
+idhazh work --date <D> # one call an item: the summary and the plan
 idhazh assemble --date <D> # the day payload picks up whatever was drawn
 ```
 
@@ -79,9 +79,9 @@ the small model, this stage and its job together. Until then the flag off leaves
 exactly where it was.
 
 **Numeric charts cross the actual worker and assembly boundary in tests.**
-`test_assemble_publishes_a_chart_from_its_decision_alone` runs both production
-calls against local boundary replies. Real extraction and anchoring finalize
-the evidence; the actual second request must show and admit the ids the
+`test_assemble_publishes_a_chart_from_its_decision_alone` runs
+the production call against a local boundary reply. Real extraction and anchoring finalize
+the evidence; the actual request must show and admit the ids the
 compiler uses. Only named serialized article, summary, decision and item-health
 outputs, plus their input fingerprint, cross into a fresh publisher tree.
 Neither the worker's public directory nor its captures cross.
@@ -106,12 +106,13 @@ It needs an article a bar can legally be drawn from, which is rarer than it soun
 customers - so `units_convertible` refuses every bar expressible from it, correctly.
 `tests/fixtures/pages/wind.html` exists for this: four countries, four figures, one unit, matching
 the shape `tests/fixtures/visual-validator/` already keeps as the plan that passes. Its recorded
-pair is `label/wind-labelled.json` and `summarize-and-plan/wind-summary-and-plan.json`, and the element
-ids in the second are the ones this pipeline mints from the first - so an extractor change that
+reply is `summarize-and-plan/wind-summary-and-plan.json`, and the element ids in it are the ones
+this pipeline mints from the page and from the four countries a loopback stand-in for the
+text-analysis service labels - so an extractor change that
 moves a span turns the test red rather than quietly turning the picture off.
 
 **Generation and normal publication require separate observations.** Retain
-both actual calls for named warranted numeric chart examples and a
+the actual call for named warranted numeric chart examples and a
 legitimate no-visual example, using the committed model and production path.
 Record the code revision, model identity, source inputs and runner conditions
 beside the captured requests, replies, decisions and resulting named assets.
@@ -131,8 +132,8 @@ gate.
 
 This is the whole safety design, and it is structural rather than instructed.
 
-1. Code cuts quantity and date spans, then anchors the label reply's additional
-   source elements against the same article text.
+1. Code cuts quantity and date spans, then anchors the mentions the text-analysis
+   service returned against the same article text.
 2. The model receives the finalized menu and chooses elements **by their ids**,
    with those choices enforced by the article-specific request grammar.
 3. The spec is built here in Python from the chosen ids. Any derived value
@@ -184,9 +185,9 @@ against `items_routed + items_prefiltered`, or state which one you meant. Both k
 names the run manifest froze on 2026-09-05; the Python behind them is `items_decided` and
 `items_prefiltered` ([../contracts/schemas.md](../contracts/schemas.md)).
 
-## The two-call gate suppresses the plan and never skips the call
+## The gate suppresses the plan and never skips the call
 
-The single-call gate above skips a request. The two-call flow cannot, because **the summarize-and-plan call is the call
+The prefilter above skips a request. The gate here cannot, because **the summarize-and-plan call is the call
 that writes the summary** - so what the gate takes away is the plan's decode, not the request. The
 grammar is what takes it: `summarize_and_plan_model(plan=False)` is the summary draft alone, with no `visual`
 property, so the decoder has nowhere to write a plan. A smaller budget on its own would not do it -
@@ -225,7 +226,7 @@ expensive.
 | The decoder shape | `{summary, visual}` | the summary draft alone |
 | The output budget | the model file's response limit | the same |
 | The trailing user turn | finalized evidence and continuation | continuation only |
-| The system turn, the article, the label call's reply | unchanged | unchanged |
+| The system turn and the article | unchanged | unchanged |
 
 The budget is the response limit the model file names (`sampling.max_tokens`, 8,192 in every committed
 model file), gated or not. It used to be derived from the reply shape's own word bounds, 3,397 tokens
@@ -246,7 +247,7 @@ the summarize-and-plan call shipped on 2026-09-12 behind a flag, and the flag we
 (176 by direct count and 175
 by subtracting the summary from the whole - the one-token gap is a merge across the object
 boundary.) How often the gate fires is the other half of the bill and is a run measurement still
-owed on the two-call flow; the single-call gate's own rate was 46.9 percent of items, measured
+owed; the prefilter's own rate was 46.9 percent of items, measured
 on 2026-08-25.
 
 **The trailing ask loses its visual field too, and that is the same rule read a second time.** A turn that
@@ -259,7 +260,7 @@ shared system prefix, so the two requests cannot drift before the article.
 A test asserts that cached prefix is identical with and without a visual.
 
 **Suppressing the plan moves nothing in front of the article.** All three differences sit after the
-system turn, the article and the label call's reply, so the cached prefix a gated item reuses is the prefix
+system turn and the article, so the cached prefix a gated item reuses is the prefix
 an ungated one reuses, and the floor row #3 measured is the same floor for both.
 
 ## Every `none` says which gate refused it
@@ -275,10 +276,10 @@ because a console counts members and cannot count prose.
 | `model_declined` | The model was asked and answered `none`. The ordinary answer, and the one the design wants to stay common. |
 | `validation_failed` | A plan was drafted, the validator refused it, and the ladder reached no depth that validates. |
 | `output_budget_cut` | The reply ran out of output budget after the summary closed, so the plan was never written. The item publishes; the picture is what was lost. |
-| `window_exhausted` | The article and earlier reply filled the context window, so the plan was cut before it was written. |
+| `window_exhausted` | The prompt filled the context window, so the plan was cut before it was written. |
 
 **One member per gate, never one per call site.** The reachability gate refuses in two places - the
-single-call prefilter above and the two-call suppression - and both record `not_reachable`, because
+prefilter above and the plan suppression - and both record `not_reachable`, because
 what an operator acts on is the gate rather than the line of code. And **which** check refused is
 `ValidatorCheck`'s to say: one fact with two homes is a fact that can disagree with itself.
 
@@ -377,15 +378,17 @@ flowchart TD
     direction TB
     ART["<b>ARTICLE</b><br/>sanitized text; every span indexes these bytes"]
     CP["<b>CANDIDATE PASS</b> - code<br/>finds every quantity the number pattern matches<br/>mints element_id, span_start, span_end"]
-    C1["<b>LABEL CALL</b> - model<br/>labels what each number MEANS<br/>no schema field accepts a value, a unit or an offset"]
+    TA["<b>TEXT ANALYSIS</b> - local service, not the language model<br/>labels organisations, people and places<br/>its reply is data: a label and two offsets"]
     ANC["<b>ANCHORING</b> - code<br/>one rule per shape<br/>what will not anchor is dropped"]
-    TE[("<b>TRUSTED ELEMENTS</b><br/>TIER 1 byte-exact, cut from the article<br/>TIER 2 model-assigned, span-anchored")]
-    C2["<b>SUMMARIZE-AND-PLAN CALL</b> - model<br/>writes the summary AND names the visual type<br/>selects elements BY ID into encoding roles"]
+    TE[("<b>TRUSTED ELEMENTS</b><br/>TIER 1 byte-exact, cut from the article<br/>TIER 2 retired, readable and never written")]
+    C2["<b>SUMMARIZE-AND-PLAN CALL</b> - model<br/>writes the summary AND names the visual type<br/>selects elements BY ID into encoding roles<br/>no schema field accepts a value, a unit or an offset"]
     VP["<b>VISUAL PLAN</b><br/>type + role -&gt; element_ids<br/>no geometry, no literal value, no authored text"]
     VV{"<b>VALIDATOR</b> - deterministic, no model<br/>is this type drawable from these elements?"}
     DL["<b>DOWNGRADE LADDER</b><br/>depth 1, depth 2, then refuse"]
     VC["<b>CHART COMPILER</b> - code<br/>plan + elements =&gt; VisualData<br/>every number traced to an element or a derived value"]
-    ART --> CP --> C1 --> ANC --> TE --> C2 --> VP --> VV
+    ART --> CP --> TE
+    ART --> TA --> ANC --> TE
+    TE --> C2 --> VP --> VV
     VV -->|"chart plan"| VC
     VV -->|"not drawable"| DL
     DL -->|"re-enters the SAME validator"| VV
@@ -434,8 +437,8 @@ flowchart TD
   classDef plain fill:#f8f9fa,stroke:#adb5bd,stroke-width:1px,color:#0b1020;
 
   class ART,PG,ROUTE,FJ plain;
-  class CP,ANC,VP,DL,VC,D3,K1 code;
-  class C1,C2,K2 model;
+  class CP,TA,ANC,VP,DL,VC,D3,K1 code;
+  class C2,K2 model;
   class VV,SC,K3 gate;
   class TE,DJ,VJ,K4 ledger;
   class DEG,K5 none;
@@ -446,7 +449,8 @@ flowchart TD
 | Node | What it holds |
 |---|---|
 | `CP` | Code reads first and the model never sees a raw article without a candidate table beside it. It emits `element_id`, `kind`, `surface`, `span_start`, `span_end`, `value`, `unit`, `sentence_index`, `extractor` |
-| `C1` | The model's whole numeric vocabulary is `0..len(candidates)-1`. **It cannot write a number because no field of the schema accepts one**, which is a property of the grammar rather than a check somebody remembered to add |
+| `TA` | A local process the run starts, asked once per article before the model reads it. The pipeline reads a label and two offsets of each mention and nothing else; the words it returns are compared with the characters those offsets cut from `Article.text`, and a mention whose words differ is dropped. No word it returns reaches a prompt, path, URL or command |
+| `C2` | The model's whole numeric vocabulary is the ids the menu shows. **It cannot write a number because no field of the schema accepts one**, which is a property of the grammar rather than a check somebody remembered to add |
 | `VP` | `decision`, `purpose`, `type`, `encodings`, `declared_whole_element_id`, `element_ids`, `labels`, `annotations`, `why`, `title`, `caption`, `confidence`, `plan_version`. Four prohibitions: no geometry, no literal value, no authored text, no `alt_text` |
 | `VV` | Ten checks: elements exist; semantically compatible; units convertible; roles valid for the type; enough data; no duplicate in a role; no invented values; numerals matched; plan version current; stacked parts equal a separate declared whole |
 | `VC` | The chart compiler: the one place chart numbers come into being, each arithmetic result resolved over Tier 1 elements through the closed four-function allow-list - `count`, `sum`, `share_of_declared_whole`, `convert` |

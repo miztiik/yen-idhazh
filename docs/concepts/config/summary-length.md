@@ -1,6 +1,6 @@
 # What gets summarized
 
-**Last Updated**: 2026-11-17
+**Last Updated**: 2026-11-18
 
 The knobs that decide how much of an article is read, whether it is summarized
 at all, and which length ratio a training candidate must clear. Nothing here
@@ -79,11 +79,10 @@ distribution, per run, with no target to measure it against
 
 The one number the summary prompt states is `summarize.max_verbatim_words`, the
 longest quotation it allows. It is an instruction to the model, not a measurement
-of copied text and not a rejection threshold. `summarize.asks_for_a_visual_plan`
-is stamped with the prompt inputs and sizes nothing: a pipeline-test case that
-runs the summary-only path sets it false beside an empty
-`visuals.enabled_kinds`, and that empty list is what takes the plan fields off the
-second call's grammar.
+of copied text and not a rejection threshold. Whether the call asks for a plan at
+all is `visuals.enabled_kinds`: a pipeline-test case that runs the summary-only
+path sets that list empty, and an empty list is what takes the plan fields off the
+call's grammar.
 
 ## Design rationale
 
@@ -97,6 +96,13 @@ was missing. A band nobody asks the model for indicates nothing, so the per-size
 bands, the overshoot policy and the title word range were deleted rather than
 kept as hints. Rejected: keeping the bands as a line on the console, which would
 be a number with no producer behind it.
+
+**One setting answers whether the call plans a picture.** `summarize.asks_for_a_visual_plan`
+was a second spelling of `visuals.enabled_kinds`: only the prompt stamp read it, and an
+empty kinds list already takes the plan off the grammar by itself. It is gone, and a config
+that still spells it is refused by name with a pointer to `visuals.enabled_kinds`, so nobody
+keeps a switch that does nothing. The stamp counts the kinds instead
+([prompt.md](../../architecture/summarize/prompt.md#the-record-covers-the-ask)).
 
 ## See also
 
