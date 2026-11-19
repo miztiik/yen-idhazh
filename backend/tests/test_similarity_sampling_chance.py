@@ -21,7 +21,7 @@ from support.ledger import SEED_COMMIT
 
 from idhazh import atomic_write, ledger
 from idhazh.content_similarity_judge import tenant
-from idhazh.content_similarity_judge.ledger_reads import load_pair_verdicts
+from idhazh.content_similarity_judge.ledger_reads import load_pair_verdicts, load_threshold_history
 from idhazh.content_similarity_judge.tenant import JUDGE_ID
 from idhazh.contracts.base import derive_text_digest, derive_url_key
 from idhazh.contracts.council_invocation import (
@@ -385,3 +385,5 @@ def test_the_tenant_files_a_night_that_lost_a_runner_whatever_the_reports_say(
 
     assert settled.outcome is ShardOutcome.COMPLETED
     assert len(load_pair_verdicts(state, [DATE])) == 3
+    (filed_row,) = load_threshold_history(state, [DATE])
+    assert (filed_row.date, filed_row.run_id, filed_row.runners_reported) == (DATE, RUN, 1)

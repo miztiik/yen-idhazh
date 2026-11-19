@@ -57,6 +57,7 @@ JUDGE_STAGE_MODULES: Final = (
     "idhazh.stages.file_pair_verdicts",
     "idhazh.stages.judge_item_pairs",
     "idhazh.stages.pick_item_pairs",
+    "idhazh.stages.review_thresholds",
 )
 
 #: Every persisted shape a judge owns, spelled one by one for the same reason.

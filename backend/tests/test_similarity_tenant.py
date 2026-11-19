@@ -16,17 +16,29 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from support.ledger import SEED_COMMIT
-from support.paths import CONFIG_DIR
+from support.judged_pairs import a_night_of_pairs
+from support.ledger import SEED_COMMIT, seed_compact_index, seed_compact_period, seed_raw_rows
+from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh import config, ledger
+from idhazh.content_similarity_judge import settings as judge_settings
 from idhazh.content_similarity_judge import tenant
+from idhazh.content_similarity_judge.ledger_reads import (
+    load_pair_verdicts,
+    load_pair_verdicts_filed_on,
+    load_threshold_history,
+    review_days,
+)
 from idhazh.contracts.base import ServerJob, derive_text_digest, derive_url_key
 from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
 from idhazh.contracts.council_invocation import ScheduleRequest
-from idhazh.contracts.file_envelope import WriterIdentity
+from idhazh.contracts.file_envelope import Period, WriterIdentity
+from idhazh.contracts.ledger_index import CompactEntry, EntryState
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.story_similarity_pair_verdict import PairBucket, StorySimilarityPairVerdict
+from idhazh.contracts.story_similarity_threshold_history_row import (
+    StorySimilarityThresholdHistoryRow,
+)
 from idhazh.council import registry
 from idhazh.council.tenancy import Tenant
 from idhazh.ledger import staging
@@ -126,10 +138,10 @@ def test_this_judge_splits_its_work_the_way_its_draw_is_dealt() -> None:
 def test_this_judge_stages_each_ledger_it_writes_where_the_registry_files_it() -> None:
     """One staged path a ledger, read off the registry, so a ledger that moves moves its path.
 
-    The judged pairs go through the ledger door, so they are staged under
-    `state/raw/`. A ledger no night writes any more is staged by nothing, and the
-    folders the judge once filed CSV into are staged by nothing either - not by
-    name, and not by a parent folder holding them.
+    The judged pairs and the row each night files for the two thresholds go through the
+    ledger door, so both are staged under `state/raw/`. A ledger no night writes any more is
+    staged by nothing, and the folders the judge once filed CSV into are staged by nothing
+    either - not by name, and not by a parent folder holding them.
     """
     staged = tenant.TENANT.committed_paths
     old_csv_folders = (
@@ -141,7 +153,10 @@ def test_this_judge_stages_each_ledger_it_writes_where_the_registry_files_it() -
     )
 
     assert staged == tuple(staging.staged_path(which) for which in tenant.WRITTEN_LEDGERS)
-    assert staged == ("state/raw/content-similarity-judge/pair-verdicts",)
+    assert staged == (
+        "state/raw/content-similarity-judge/pair-verdicts",
+        "state/raw/content-similarity-judge/threshold-history",
+    )
     assert not [
         path
         for path in staged
@@ -153,9 +168,161 @@ def test_this_judge_stages_each_ledger_it_writes_where_the_registry_files_it() -
     ), "this judge stages a ledger outside its own family"
 
 
-def test_the_collecting_job_needs_no_committed_input_of_this_judge() -> None:
-    """It reads tonight's files, which arrive as artifacts, and files rows without reading any."""
-    assert tenant.TENANT.publication_inputs(date=A_NIGHT) == ()
+#: A night whose review window crosses a month and a year, so the declaration has to name
+#: days of two years and three months.
+NIGHT: Final = "2027-01-03"
+PAIRS: Final = LedgerName.CONTENT_SIMILARITY_JUDGE_PAIR_VERDICTS
+HISTORY: Final = LedgerName.CONTENT_SIMILARITY_JUDGE_THRESHOLD_HISTORY
+PAIR_PRODUCER: Final = "stages.file_pair_verdicts"
+HISTORY_PRODUCER: Final = "stages.review_thresholds"
+NIGHT_FIXTURE: Final = (
+    CONTRACT_FIXTURES_DIR
+    / "story-similarity-threshold-history-row"
+    / "a-night-that-held-both-thresholds.json"
+)
+
+
+def test_the_collecting_job_is_told_the_days_the_review_reads_and_no_others() -> None:
+    """Seven nights of pairs ending on the night, and the 28 days of history before it.
+
+    The edges are what is pinned. The night six days back is read and the one seven back is
+    not. The history reaches the 28th day before the night, and neither the 29th nor the
+    night itself, whose own row is what the run is about to file.
+    """
+    declared = set(tenant.TENANT.publication_inputs(date=NIGHT))
+    pairs = "state/raw/content-similarity-judge/pair-verdicts"
+    history = "state/raw/content-similarity-judge/threshold-history"
+
+    assert {f"{pairs}/2026/12/28", f"{pairs}/2027/01/03"} <= declared
+    assert f"{pairs}/2026/12/27" not in declared
+    assert {f"{history}/2026/12/06", f"{history}/2027/01/02"} <= declared
+    assert f"{history}/2026/12/05" not in declared
+    assert f"{history}/2027/01/03" not in declared
+
+
+def a_history_row(day: str) -> StorySimilarityThresholdHistoryRow:
+    """The committed sample night, filed on `day`."""
+    sample = StorySimilarityThresholdHistoryRow.from_json(read_text(NIGHT_FIXTURE))
+    return sample.model_copy(update={"date": day, "run_id": f"{day}-9"})
+
+
+def a_state_with_every_kind_of_source(root: Path) -> dict[str, Path]:
+    """Pair verdicts and threshold history written by the real writers, one file of each kind.
+
+    The pairs are December packed as a month, 1 January packed as a day, 2 January recorded
+    as quiet with a repair's raw file filed after the record, and the night itself raw. The
+    history is a raw file at each end of its window, a packed day between them, and the raw
+    files just outside the window on both sides.
+    """
+    state, made = root / "state", {}
+
+    def pairs_of(day: str) -> list[StorySimilarityPairVerdict]:
+        return a_night_of_pairs([(0.71, "YES"), (0.72, "NO")], date=day, first_index=int(day[-2:]))
+
+    def kept(days: tuple[str, ...]) -> list[tuple[str, str, StorySimilarityPairVerdict]]:
+        return [(day, f"{day}-9", row) for day in days for row in pairs_of(day)]
+
+    made["december"] = seed_compact_period(
+        state, PAIRS, StorySimilarityPairVerdict, Period.MONTHLY, "2026-12",
+        kept(("2026-12-20", "2026-12-28", "2026-12-30")), producer=PAIR_PRODUCER,
+    )
+    made["first of january"] = seed_compact_period(
+        state, PAIRS, StorySimilarityPairVerdict, Period.DAILY, "2027-01-01",
+        kept(("2027-01-01",)), producer=PAIR_PRODUCER,
+    )
+    made["pair daily index"] = seed_compact_index(
+        state, PAIRS, Period.DAILY,
+        [
+            CompactEntry(covers="2027-01-01", rows=2, bytes=1),
+            CompactEntry(covers="2027-01-02", rows=0, bytes=0, state=EntryState.EMPTY),
+        ],
+    )
+    made["pair monthly index"] = seed_compact_index(
+        state, PAIRS, Period.MONTHLY, [CompactEntry(covers="2026-12", rows=6, bytes=1)]
+    )
+    made["pair yearly index"] = seed_compact_index(state, PAIRS, Period.YEARLY, [])
+    for name, day in (("repair", "2027-01-02"), ("night", NIGHT)):
+        (made[name],) = seed_raw_rows(
+            state, PAIRS, pairs_of(day), covers=day, run_id=f"{day}-9", producer=PAIR_PRODUCER
+        )
+
+    made["history packed day"] = seed_compact_period(
+        state, HISTORY, StorySimilarityThresholdHistoryRow, Period.DAILY, "2026-12-20",
+        [("2026-12-20", "2026-12-20-9", a_history_row("2026-12-20"))], producer=HISTORY_PRODUCER,
+    )
+    made["history daily index"] = seed_compact_index(
+        state, HISTORY, Period.DAILY, [CompactEntry(covers="2026-12-20", rows=1, bytes=1)]
+    )
+    made["history monthly index"] = seed_compact_index(state, HISTORY, Period.MONTHLY, [])
+    made["history yearly index"] = seed_compact_index(state, HISTORY, Period.YEARLY, [])
+    for name, day in (
+        ("history first day", "2026-12-06"),
+        ("history yesterday", "2027-01-02"),
+        ("history day 29", "2026-12-05"),
+        ("history tonight", NIGHT),
+    ):
+        (made[name],) = seed_raw_rows(
+            state, HISTORY, [a_history_row(day)], covers=day, run_id=f"{day}-9",
+            producer=HISTORY_PRODUCER,
+        )
+    return made
+
+
+def what_the_review_reads(state: Path) -> tuple[list[StorySimilarityPairVerdict], list[StorySimilarityThresholdHistoryRow]]:
+    """The rows the review of NIGHT is handed: earlier nights through the door, tonight's raw."""
+    days = review_days(NIGHT, config=judge_settings.load())
+    return (
+        [
+            *load_pair_verdicts(state, days.pair_verdicts),
+            *load_pair_verdicts_filed_on(state, NIGHT),
+        ],
+        load_threshold_history(state, days.threshold_history),
+    )
+
+
+def test_a_checkout_holding_only_the_declared_files_reads_what_the_whole_tree_reads(
+    tmp_path: Path,
+) -> None:
+    """The declaration is enough, and every kind of file in it is one a read depends on.
+
+    A copy holding only the files the declaration covers reads the very rows the whole tree
+    does. Leaving out any one file a read goes through - the month, the packed day, the raw
+    day, either index, the history's packed day or its raw edge - changes what is read, so the
+    declaration names nothing the reads could do without. The yearly indexes are named too
+    and no read here needs them, since no year is packed.
+    """
+    root = tmp_path / "whole"
+    made = a_state_with_every_kind_of_source(root)
+    declared = tenant.TENANT.publication_inputs(date=NIGHT)
+    whole = what_the_review_reads(root / "state")
+
+    def copy_without(name: str | None) -> Path:
+        sparse = tmp_path / f"sparse-without-{name}"
+        for kind, path in made.items():
+            relative = path.relative_to(root).as_posix()
+            if kind == name or not any(
+                relative == one or relative.startswith(f"{one}/") for one in declared
+            ):
+                continue
+            (sparse / relative).parent.mkdir(parents=True, exist_ok=True)
+            (sparse / relative).write_bytes(path.read_bytes())
+        return sparse / "state"
+
+    assert {row.date for row in whole[0]} == {"2026-12-28", "2026-12-30", "2027-01-01", NIGHT}
+    assert {row.date for row in whole[1]} == {"2026-12-06", "2026-12-20", "2027-01-02"}
+    assert what_the_review_reads(copy_without(None)) == whole
+    for needed in (
+        "december",
+        "first of january",
+        "night",
+        "pair daily index",
+        "pair monthly index",
+        "history packed day",
+        "history daily index",
+        "history first day",
+        "history yesterday",
+    ):
+        assert what_the_review_reads(copy_without(needed)) != whole, needed
 
 
 def a_filed_night(state: Path, date: str) -> None:

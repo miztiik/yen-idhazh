@@ -18,7 +18,8 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import config, ledger
-from idhazh.content_similarity_judge.ledger_reads import load_pair_verdicts
+from idhazh.content_similarity_judge import settings as judge_settings
+from idhazh.content_similarity_judge.ledger_reads import load_pair_verdicts, review_days
 from idhazh.contracts.base import DateStamp, RunId
 from idhazh.contracts.council_invocation import (
     JudgeSchedule,
@@ -33,6 +34,7 @@ from idhazh.contracts.story_similarity_pair import ContentSimilarityJudgeId
 from idhazh.council import metrics_sink, session
 from idhazh.council.tenancy import ShardResult
 from idhazh.ledger import staging
+from idhazh.ledger.window_inputs import inputs_of_days
 from idhazh.similarity.budget import refuse_a_night_this_tenant_cannot_finish
 
 #: This judge's own slug, narrowed to the one member it can be. The closed set
@@ -41,8 +43,12 @@ from idhazh.similarity.budget import refuse_a_night_this_tenant_cannot_finish
 #: second thing to keep in step with the ledger's directory name.
 JUDGE_ID: Final[ContentSimilarityJudgeId] = "content-similarity-judge"
 
-#: Every ledger this judge's own work writes: the judged pairs.
-WRITTEN_LEDGERS: Final = (LedgerName.CONTENT_SIMILARITY_JUDGE_PAIR_VERDICTS,)
+#: Every ledger this judge's own work writes: the judged pairs, and the two thresholds
+#: each night's pairs put them at.
+WRITTEN_LEDGERS: Final = (
+    LedgerName.CONTENT_SIMILARITY_JUDGE_PAIR_VERDICTS,
+    LedgerName.CONTENT_SIMILARITY_JUDGE_THRESHOLD_HISTORY,
+)
 
 #: Where each of those ledgers sits, as the collecting job stages it. Read off
 #: the registry rather than spelled, so a ledger that moves onto the ledger door
@@ -87,13 +93,33 @@ class ContentSimilarityJudge:
         return COMMITTED_PATHS
 
     def publication_inputs(self, *, date: str) -> tuple[str, ...]:
-        """No committed input: the collecting job reads only tonight's own files.
+        """The ledger files the night's review reads, named from the days it reads.
 
-        It reads the verdict files and the readings the units shipped, which arrive
-        as artifacts, and it files rows without reading any earlier night's. So the
-        collecting job's sparse checkout needs nothing of this judge's from the tree.
+        The collecting job reads from a sparse checkout, and the review reads the last
+        nights of `pair-verdicts` and the history of `threshold-history`. `review_days` names
+        those days for the stage and for this declaration alike, and
+        `idhazh.ledger.window_inputs` turns them into the raw folders, compact files and
+        indexes that reading them could open. The loaders do not fail on a file that is not
+        there; they read a shorter window, which is why the review also checks the history it
+        read against the thresholds the draw followed.
+
+        One config read and date arithmetic, because a declaration that raises costs the
+        night its rows: it runs before the night is settled.
         """
-        return ()
+        days = review_days(date, config=judge_settings.load())
+        return tuple(
+            sorted(
+                {
+                    *inputs_of_days(
+                        LedgerName.CONTENT_SIMILARITY_JUDGE_PAIR_VERDICTS, days.pair_verdicts
+                    ),
+                    *inputs_of_days(
+                        LedgerName.CONTENT_SIMILARITY_JUDGE_THRESHOLD_HISTORY,
+                        days.threshold_history,
+                    ),
+                }
+            )
+        )
 
     def nights_outstanding(
         self, *, window: tuple[DateStamp, ...], state_dir: Path | None = None
@@ -223,17 +249,19 @@ class ContentSimilarityJudge:
         prepared: PreparationReceipt,
         reports: tuple[ShardReport, ...],
     ) -> ShardResult:
-        """File what the units judged, each pair with the chance its slice gave it.
+        """File what the units judged, then where the night's pairs put both thresholds.
 
         A night files whatever its units returned, so the reports say nothing the
         files do not: a unit that died left no file, or a file of the pairs it had
         finished, and either way the rows that exist are the rows that are filed.
+        The thresholds are reviewed from the ledger afterwards, so the night's own
+        pairs are read back the way the earlier nights' are.
 
-        The stage writes under the state root the council handed over, and files
-        its rows through the ledger door under the council's writer identity,
-        naming itself as the producer.
+        The stages write under the state root the council handed over, and file
+        their rows through the ledger door under the council's writer identity,
+        each naming itself as the producer.
         """
-        from idhazh.stages import file_pair_verdicts
+        from idhazh.stages import file_pair_verdicts, review_thresholds
 
         filed = file_pair_verdicts.stage_file_pair_verdicts(
             date,
@@ -245,8 +273,23 @@ class ContentSimilarityJudge:
             expected_shards=prepared.shards,
             state_dir=state_dir,
         )
+        reviewed = review_thresholds.stage_review_thresholds(
+            date,
+            run_id=run_id,
+            judge_id=JUDGE_ID,
+            shipped_root=_shipping_dir(date),
+            draw_path=_draw_path(date),
+            identity=identity,
+            expected_shards=prepared.shards,
+            state_dir=state_dir,
+            config_dir=config.DEFAULT_CONFIG_DIR,
+        )
         return ShardResult(
-            outcome=ShardOutcome.COMPLETED if filed.rows_filed else ShardOutcome.NOTHING_TO_DO
+            outcome=(
+                ShardOutcome.COMPLETED
+                if filed.rows_filed or reviewed.filed
+                else ShardOutcome.NOTHING_TO_DO
+            )
         )
 
 
