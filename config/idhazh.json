@@ -296,6 +296,7 @@
     "payload_ceilings_bytes": {
       "config/ledgers.json": 3600,
       "console/band.json": 2000,
+      "state/compact/content-similarity-judge/holdout-pairs/index/": 2200,
       "state/compact/content-similarity-judge/pair-verdicts/index/": 2200,
       "state/compact/content-similarity-judge/threshold-history/index/": 2200,
       "state/compact/council-run-records/index/": 2088,

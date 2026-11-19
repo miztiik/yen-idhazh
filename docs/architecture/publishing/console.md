@@ -159,8 +159,10 @@ and `threshold-history` are Data explorer ledgers, and the note links to that
 route using the address in the shared route table. It also says they do not
 change what the site merges.
 
-Both panels keep their build-time reads. The digest days and the hand marks are
-not published ledgers. `content-similarity-holdout.ts` stays under
+Both panels keep their build-time reads. The digest days are not published
+ledgers. The hand marks are one, because the Data explorer offers `holdout-pairs`,
+but this page still reads their packed files at build time and does not fetch
+them in the browser. `content-similarity-holdout.ts` stays under
 `frontend/src/lib/server/`; the browser must not import it. Reads keep their
 existing window and holdout-reach bounds. The browser changes the window over
 those inlined results, without a fetch; only `merged-stories` follows it, because

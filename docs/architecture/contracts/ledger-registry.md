@@ -439,6 +439,14 @@ council verb imports that module, and a judge deleted from the tree has to leave
 council verb running: the council's import test holds the two new contracts to the
 judge-only list.
 
+**The hand marks consent too, so the explorer offers the whole family.** `holdout-pairs` files
+through the same door and packs under the same retention chain as the other two, so consent is
+one flag and one index cap of the same size. The rows are already committed to a public
+repository, so consent exposes nothing the repository does not already show; it lets an
+operator query the marks beside the verdicts and thresholds without opening Parquet by hand.
+The Judgement page keeps reading the marks at build time: a ledger's consent decides what the
+explorer offers, and moves no panel onto a browser fetch.
+
 ## See also
 
 - [state-ledgers.md](state-ledgers.md) - what each ledger answers, and why it files at the grain it does.
