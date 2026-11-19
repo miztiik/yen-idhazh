@@ -551,9 +551,15 @@ keep their full checkout, with unchanged model, dependency and cache steps.
 Before settlement, the shared `publication_inputs.materialize` reads each
 active judge's `publication_inputs(date=...)` from the checkout's fixed commit.
 It lists only those named paths, periods and indexes and explicitly fetches
-their blobs. No declaration means refusal on a sparse checkout. An absent path
-in that commit remains absent; a listed blob that cannot be fetched fails
-collection, rather than being treated as missing data. Imported bytes are not
+their blobs. A tenant with no `publication_inputs` member is refused on a sparse
+checkout. An absent path in that commit remains absent; a listed blob that cannot
+be fetched fails collection, rather than being treated as missing data. A path
+the declaration omits is not noticed here: the ledger loaders read the days they
+find and never fail on a file that is not there, so a read with a missing input
+returns a shorter window and not an error. A tenant whose result depends on the
+window checks that itself. The similarity judge compares the thresholds its draw
+followed with the history it read, and files nothing when they differ. Imported
+bytes are not
 completed writes. Earlier outputs are not replaced when a later date names them.
 The publisher still builds its private candidate on fresh main and never reruns
 a judge.
@@ -572,8 +578,8 @@ council run, `job` `save_council_results`, `shard` 0, the run's attempt, and the
 `--commit` the job checked out. It files the council's own record with it and
 passes it to each tenant's `Tenant.settle`. A tenant names its own producer and
 changes nothing else, so every raw file the night commits says which run, job
-and commit wrote it. The similarity judge's `file_pair_verdicts` files the
-night's pair verdicts this way.
+and commit wrote it. The similarity judge's `file_pair_verdicts` and
+`review_thresholds` file the night's pair verdicts and its threshold row this way.
 
 There is no regeneration command on that call. The council is the only writer of
 a tenant's own ledger and `concurrency` runs one council at a time, so a lost

@@ -54,6 +54,7 @@ JUDGE_STAGE_MODULES = (
     "idhazh.stages.pick_item_pairs",
     "idhazh.stages.judge_item_pairs",
     "idhazh.stages.file_pair_verdicts",
+    "idhazh.stages.review_thresholds",
 )
 
 

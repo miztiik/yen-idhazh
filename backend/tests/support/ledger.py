@@ -3,17 +3,18 @@
 from __future__ import annotations
 
 import itertools
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Final
 
 from idhazh import ledger
-from idhazh.contracts.base import ServerJob
+from idhazh.contracts.base import Contract, ServerJob
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow
-from idhazh.contracts.file_envelope import WriterIdentity
+from idhazh.contracts.file_envelope import Period, RowIdentity, WriterIdentity
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow
+from idhazh.contracts.ledger_index import CompactEntry, CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.evals import writer as eval_writer
 from idhazh.stages import plan as plan_stage
@@ -22,6 +23,16 @@ from idhazh.telemetry import silicon
 SEED_COMMIT: Final = "0" * 40
 _SEED_CALLS: Final = itertools.count(1)
 _HOST_PRODUCER: Final = silicon.PRODUCER
+
+#: The writer a compact file names: a compaction, not the rows' own writers.
+COMPACTION: Final = WriterIdentity(
+    run_id="2026-09-28-1",
+    attempt=1,
+    job=ServerJob.RUN_TASKS,
+    shard=0,
+    producer="gardener.tasks.compaction",
+    git_sha=SEED_COMMIT,
+)
 
 
 def seed_publication_inventory(public_root: Path) -> None:
@@ -159,3 +170,85 @@ def seed_scores(
         rows,
         identity=writer_identity(run_id, attempt=attempt, job=job, shard=shard),
     )
+
+
+def seed_raw_rows(
+    state_dir: Path,
+    which: LedgerName,
+    rows: Sequence[Contract],
+    *,
+    covers: str,
+    run_id: str,
+    producer: str,
+    job: ServerJob = ServerJob.SAVE_COUNCIL_RESULTS,
+) -> list[Path]:
+    """One raw file of these rows, through the door, under the identity of the run that filed them."""
+    return list(
+        ledger.persist(
+            state_dir,
+            list(rows),
+            ledger=which,
+            covers=covers,
+            identity=writer_identity(run_id, job=job, producer=producer),
+        )
+    )
+
+
+def seed_compact_period[C: Contract](
+    state_dir: Path,
+    which: LedgerName,
+    model: type[C],
+    period: Period,
+    covers: str,
+    rows: Sequence[tuple[str, str, C]],
+    *,
+    producer: str,
+    job: ServerJob = ServerJob.SAVE_COUNCIL_RESULTS,
+) -> Path:
+    """One compact period file, written through the door the way the compaction writes it.
+
+    Each row comes with the day it covers and the run that filed it, which is the identity its
+    raw file gave it and a compact file keeps.
+    """
+    stored = [
+        ledger.StoredRow(
+            identity=RowIdentity(
+                ledger=which,
+                covers=day,
+                run_id=run_id,
+                attempt=1,
+                job=job,
+                shard=0,
+                unit_id=str(
+                    ledger.unit_id(
+                        ledger=which, covers=day, run_id=run_id, job=job, shard=0, producer=producer
+                    )
+                ),
+            ),
+            row=row,
+        )
+        for day, run_id, row in rows
+    ]
+    return ledger.persist_period(
+        state_dir,
+        stored,
+        model=model,
+        ledger=which,
+        period=period,
+        covers=covers,
+        identity=COMPACTION,
+        built_from=len(stored),
+    )
+
+
+def seed_compact_index(
+    state_dir: Path, which: LedgerName, period: Period, entries: Sequence[CompactEntry]
+) -> Path:
+    """One period's index naming these entries, written whole."""
+    index = CompactIndex(
+        version=CompactIndex.schema_version(), ledger=which, period=period, entries=list(entries)
+    )
+    path = ledger.compact_index_path(state_dir, which, period)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(index.to_json().encode("ascii"))
+    return path

@@ -9,8 +9,6 @@ ledger (CLAUDE.md section 13).
 
 from __future__ import annotations
 
-import csv
-import io
 import logging
 from collections.abc import Iterator
 from hashlib import sha256
@@ -18,14 +16,14 @@ from pathlib import Path
 from typing import Final
 
 import pytest
+from support.judged_pairs import a_reading, a_saver, a_verdict_file
 from support.ledger import SEED_COMMIT
 
 from idhazh import atomic_write, ledger
 from idhazh.content_similarity_judge import tenant
-from idhazh.content_similarity_judge.ledger_reads import load_pair_verdicts
+from idhazh.content_similarity_judge.ledger_reads import load_pair_verdicts, load_threshold_history
 from idhazh.content_similarity_judge.tenant import JUDGE_ID
-from idhazh.contracts.base import ServerJob, derive_text_digest, derive_url_key
-from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
+from idhazh.contracts.base import derive_text_digest, derive_url_key
 from idhazh.contracts.council_invocation import (
     ArtifactFile,
     PreparationReceipt,
@@ -33,7 +31,6 @@ from idhazh.contracts.council_invocation import (
     Selection,
 )
 from idhazh.contracts.council_run_record import ShardOutcome
-from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.knobs.council import JudgeLifecycleStatus
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.story_similarity_pair import JUDGE_POLICY_VERSION
@@ -158,54 +155,6 @@ def test_rows_of_one_slice_that_disagree_about_what_it_held_are_refused() -> Non
         with_sampling_chance(rows)
 
 
-def a_verdict_file(rows: list[StorySimilarityPairVerdict]) -> str:
-    """What a unit leaves behind, written through the contract's own columns."""
-    out = io.StringIO()
-    writer = csv.DictWriter(
-        out, fieldnames=StorySimilarityPairVerdict.csv_columns(), lineterminator="\n"
-    )
-    writer.writeheader()
-    for row in rows:
-        writer.writerow(row.csv_row())
-    return out.getvalue()
-
-
-def a_metrics_row(
-    *, shard: int, dealt: int = 2, date: str = DATE, run_id: str = RUN
-) -> ContentSimilarityJudgeMetrics:
-    """One unit's instrument reading, with a funnel that closes."""
-    return ContentSimilarityJudgeMetrics.model_validate(
-        {
-            "date": date,
-            "run_id": run_id,
-            "work_part_index": shard,
-            "pairs_dealt": dealt,
-            "pairs_read": dealt,
-            "pairs_agreed": dealt,
-            "pairs_unreadable": 0,
-            "pairs_refused": 0,
-            "pairs_abandoned": 0,
-            "disagreement_rate": 0.0,
-            "unclear_rate": 0.0,
-            "first_token_margin_median": 0.5,
-            "decode_seconds_total": 3.5 + shard,
-            "decode_seconds_max": 2.0,
-        }
-    )
-
-
-def a_saver(run_id: str = RUN) -> WriterIdentity:
-    """The writer the council hands a tenant: the job that saves the night's results."""
-    return WriterIdentity(
-        run_id=run_id,
-        attempt=1,
-        job=ServerJob.SAVE_COUNCIL_RESULTS,
-        shard=0,
-        producer="council.session",
-        git_sha=SEED_COMMIT,
-    )
-
-
 def a_night(
     root: Path, per_unit: list[list[StorySimilarityPairVerdict]]
 ) -> tuple[Path, Path]:
@@ -213,7 +162,7 @@ def a_night(
     shipped, verdicts = root / "shipped", root / "verdicts"
     for unit, rows in enumerate(per_unit):
         metrics_sink.ship_judge_metrics(
-            a_metrics_row(shard=unit, dealt=len(rows)),
+            a_reading(shard=unit, dealt=len(rows), date=DATE, run_id=RUN),
             judge_id=JUDGE_ID,
             name=str(unit),
             out_dir=shipped,
@@ -240,7 +189,7 @@ def file_the_night(
         judge_id=JUDGE_ID,
         shipped_root=shipped,
         verdicts_dir=verdicts,
-        identity=a_saver(),
+        identity=a_saver(RUN),
         expected_shards=expected,
         state_dir=state,
     )
@@ -339,7 +288,7 @@ def test_a_night_whose_units_shipped_nothing_files_nothing(tmp_path: Path) -> No
         judge_id=JUDGE_ID,
         shipped_root=tmp_path / "nothing-was-uploaded",
         verdicts_dir=tmp_path / "nothing-was-judged",
-        identity=a_saver(),
+        identity=a_saver(RUN),
         expected_shards=0,
         state_dir=state,
     )
@@ -348,17 +297,18 @@ def test_a_night_whose_units_shipped_nothing_files_nothing(tmp_path: Path) -> No
     assert not ledger.raw_root(state, LedgerName.CONTENT_SIMILARITY_JUDGE_PAIR_VERDICTS).exists()
 
 
-def test_the_units_totals_are_logged_and_not_filed(
+def test_the_log_line_counts_the_units_that_reported_and_files_no_totals_of_its_own(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """The readings the units shipped land in the log line, and in no ledger."""
+    """The readings the units shipped are counted, not summed: the totals ride the night's row."""
     with caplog.at_level(logging.INFO, logger="idhazh"):
         file_the_night(tmp_path, tmp_path / "state", a_hand_worked_night())
 
     said = next(
         record.getMessage() for record in caplog.records if "file-pair-verdicts" in record.getMessage()
     )
-    assert "shards=2/2 filed=6 runners_reported=2 dealt=6 read=6 agreed=6" in said
+    assert "shards=2/2 filed=6 runners_reported=2" in said
+    assert "dealt=" not in said
     assert not ledger.raw_root(tmp_path / "state", LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS).exists()
 
 
@@ -418,7 +368,7 @@ def test_the_tenant_files_a_night_that_lost_a_runner_whatever_the_reports_say(
         tenant._verdict_path(DATE, shard=0), a_verdict_file(a_hand_worked_night()[0])
     )
     metrics_sink.ship_judge_metrics(
-        a_metrics_row(shard=0),
+        a_reading(shard=0, dealt=2, date=DATE, run_id=RUN),
         judge_id=JUDGE_ID,
         name="0",
         out_dir=tenant._shipping_dir(DATE),
@@ -428,10 +378,12 @@ def test_the_tenant_files_a_night_that_lost_a_runner_whatever_the_reports_say(
         date=DATE,
         run_id=RUN,
         state_dir=state,
-        identity=a_saver(),
+        identity=a_saver(RUN),
         prepared=prepared,
         reports=(),
     )
 
     assert settled.outcome is ShardOutcome.COMPLETED
     assert len(load_pair_verdicts(state, [DATE])) == 3
+    (filed_row,) = load_threshold_history(state, [DATE])
+    assert (filed_row.date, filed_row.run_id, filed_row.runners_reported) == (DATE, RUN, 1)

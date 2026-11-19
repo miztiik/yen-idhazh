@@ -424,6 +424,7 @@ def test_the_newest_row_before_the_night_inside_the_lookback_sets_the_thresholds
     assert followed == ThresholdsInForce(lower=0.66, upper=0.96, set_on="2026-08-19"), (
         "the last row of the newest day wins, and the night's own row and a later one never do"
     )
+    assert followed.row is history[2], "the row that set them is handed back, not looked up again"
 
 
 def test_with_no_row_inside_the_lookback_the_configured_starts_set_the_thresholds() -> None:
@@ -432,9 +433,10 @@ def test_with_no_row_inside_the_lookback_the_configured_starts_set_the_threshold
     assert thresholds_in_force(
         old, night=DATE, within_days=14, lower_start=0.70, upper_start=0.93
     ) == ThresholdsInForce(lower=0.70, upper=0.93, set_on=None)
-    assert thresholds_in_force(
+    starts = thresholds_in_force(
         [], night=DATE, within_days=14, lower_start=0.70, upper_start=0.93
-    ).set_on is None
+    )
+    assert (starts.set_on, starts.row) == (None, None)
 
 
 def test_the_days_to_read_are_the_days_the_rule_keeps() -> None:

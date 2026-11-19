@@ -6,9 +6,16 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 import pytest
+from support.judged_pairs import a_reading
 
+from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
 from idhazh.contracts.story_similarity_pair import SameStoryVerdict
-from idhazh.similarity.statistics import PairStatistics, reading_statistics
+from idhazh.similarity.statistics import (
+    PairStatistics,
+    combined_statistics,
+    reading_statistics,
+    shipped_statistics,
+)
 
 
 @dataclass(frozen=True)
@@ -84,3 +91,42 @@ def test_swapping_failure_order_and_recombining_shards_keeps_counts_and_rates() 
 def test_legacy_readings_with_no_grammar_flag_remain_readable_under_their_own_method() -> None:
     legacy = Reading(SameStoryVerdict.UNCLEAR, SameStoryVerdict.UNCLEAR, grammar_applied=None)
     assert reading_statistics([legacy]) == PairStatistics(1, 1, 1, 1)
+
+
+def a_shipped(
+    *, read: int, agreed: int, unclear_rate: float | None, refused: int = 0
+) -> ContentSimilarityJudgeMetrics:
+    """One runner's shipped reading with these counts, the rest of its funnel left as it was."""
+    return a_reading(
+        shard=0, dealt=read + refused, date="2026-11-18", run_id="2026-11-18-9"
+    ).model_copy(
+        update={
+            "pairs_read": read,
+            "pairs_agreed": agreed,
+            "pairs_refused": refused,
+            "unclear_rate": unclear_rate,
+        }
+    )
+
+
+def test_a_shipped_reading_gives_back_the_counts_its_rates_were_made_from() -> None:
+    """Nine valid pairs and two refused, six agreed and a third of those UNCLEAR: 2 of 6."""
+    stats = shipped_statistics(a_shipped(read=9, agreed=6, unclear_rate=1 / 3, refused=2))
+
+    assert stats == PairStatistics(attempted=11, valid=9, agreed=6, unclear=2)
+    assert shipped_statistics(a_shipped(read=4, agreed=0, unclear_rate=None)).unclear == 0
+
+
+def test_runners_are_counted_as_one_lot_so_a_big_runner_outweighs_a_small_one() -> None:
+    """Ten pairs of which 2 were UNCLEAR and two pairs of which 1 was: 3 of 12, not 35 percent.
+
+    Averaging the two runners' own rates, 0.2 and 0.5, would give 0.35 and weigh the runner
+    that read two pairs as much as the runner that read ten.
+    """
+    big = shipped_statistics(a_shipped(read=10, agreed=10, unclear_rate=0.2))
+    small = shipped_statistics(a_shipped(read=2, agreed=2, unclear_rate=0.5))
+
+    combined = combined_statistics([big, small])
+
+    assert combined == PairStatistics(attempted=12, valid=12, agreed=12, unclear=3)
+    assert combined.unclear_rate == pytest.approx(0.25)

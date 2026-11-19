@@ -111,10 +111,11 @@ def stage_file_pair_verdicts(
     written, and nothing is dropped, because a dropped file reads as a lost unit and
     the scheduler would name the night again.
 
-    **The instrument rows the units shipped are logged, not filed.** Their totals
-    are what a night is judged by - how many pairs it was dealt, how many agreed, how
-    many were lost - and the log line is where a person reads them until a ledger row
-    carries them.
+    **The instrument rows the units shipped are checked and counted here, not summed.**
+    Each must be this night's own, and how many arrived is `runners_reported`. Their
+    totals - how many pairs the night was dealt, how many agreed, how many were lost -
+    are filed on the night's threshold-history row by `review_thresholds`, which reads
+    the same shipped files, so the totals have one home.
 
     **`shipped_root`, `verdicts_dir` and `judge_id` are handed in rather than
     resolved here.** The two directories the units uploaded into belong to the
@@ -160,19 +161,12 @@ def stage_file_pair_verdicts(
         runners_reported=len(readings),
     )
     LOG.info(
-        "file-pair-verdicts date=%s run=%s shards=%s/%s filed=%s runners_reported=%s "
-        "dealt=%s read=%s agreed=%s unreadable=%s refused=%s abandoned=%s",
+        "file-pair-verdicts date=%s run=%s shards=%s/%s filed=%s runners_reported=%s",
         report.date,
         report.run_id,
         report.shards_present,
         report.shards_expected,
         report.rows_filed,
         report.runners_reported,
-        sum(one.pairs_dealt for one in readings),
-        sum(one.pairs_read for one in readings),
-        sum(one.pairs_agreed for one in readings),
-        sum(one.pairs_unreadable for one in readings),
-        sum(one.pairs_refused for one in readings),
-        sum(one.pairs_abandoned for one in readings),
     )
     return report

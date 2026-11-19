@@ -97,7 +97,7 @@ Table G - Status Reckoner
 | G2 | 2 | Version the judge's config files | - | A | DONE | urban-memory | - | - |
 | G3 | 3 | Declare the two new ledgers | - | A | DONE | musical-happiness | - | - |
 | G4 | 4 | Draw by weighted slice and file pair verdicts | 1, 2, 3 | B | DONE | crispy-spoon | - | - |
-| G5 | 5 | Find and move both thresholds | 4 | C | PENDING | - | - | - |
+| G5 | 5 | Find and move both thresholds | 4 | C | DONE | glowing-goggles | - | - |
 | G6 | 6 | Judge canary pairs once per run | 5 | D | PENDING | - | - | - |
 | G7 | 7 | Judgement page without the retired data | 4 | E | DONE | fuzzy-waffle | - | - |
 | G8 | 8 | Retire the old record, fit, knobs and ledgers | 5, 6, 7 | F | PENDING | - | - | - |
@@ -332,11 +332,16 @@ Table O - Row 4 rejected alternatives
   - `config/judges/content-similarity-judge.json`
   - `backend/idhazh/contracts/knobs/content_similarity_judge.py`
   - `backend/idhazh/content_similarity_judge/tenant.py`
-  - `backend/idhazh/ledger/rows.py`
+  - `backend/idhazh/content_similarity_judge/ledger_reads.py`
+  - `backend/idhazh/ledger/window_inputs.py`
+  - `backend/idhazh/ledger/staging.py`
+  - `backend/utilities/publication_inputs.py`
   - `backend/idhazh/similarity/threshold_evidence.py`
   - `backend/idhazh/similarity/threshold_curve.py`
   - `backend/idhazh/similarity/threshold_move.py`
+  - `backend/idhazh/similarity/night_totals.py`
   - `backend/idhazh/similarity/statistics.py`
+  - `backend/idhazh/similarity/thresholds_in_force.py`
   - `backend/idhazh/stages/review_thresholds.py`
   - `backend/idhazh/stages/file_pair_verdicts.py`
   - `backend/tests/test_similarity_threshold_evidence.py`
@@ -344,18 +349,31 @@ Table O - Row 4 rejected alternatives
   - `backend/tests/test_similarity_threshold_move.py`
   - `backend/tests/test_similarity_statistics.py`
   - `backend/tests/test_review_thresholds.py`
+  - `backend/tests/test_review_thresholds_stage.py`
   - `backend/tests/test_similarity_tenant.py`
+  - `backend/tests/test_similarity_sampling_chance.py`
+  - `backend/tests/test_similarity_selection.py`
+  - `backend/tests/ledger/test_window_inputs.py`
+  - `backend/tests/support/judged_pairs.py`
+  - `backend/tests/support/threshold_nights.py`
+  - `backend/tests/support/ledger.py`
   - `backend/tests/council/test_session.py`
   - `backend/tests/council/test_council_runs_without_a_judge.py`
   - `backend/tests/contracts/test_content_similarity_judge_config.py`
   - `docs/architecture/publishing/how-the-content-similarity-judge-follows-its-thresholds.md`
+  - `docs/architecture/publishing/llm-council.md`
+  - `docs/architecture/publishing/autotune-content-similarity.md`
+  - `docs/architecture/contracts/ledger-registry.md`
+  - `docs/architecture/contracts/persistence.md`
+  - `docs/architecture/contracts/schemas.md`
   - `docs/concepts/growing-reads.md`
   - `docs/concepts/glossary.md`
+  - `docs/concepts/partitions.md`
 - **Acceptance gates:**
-  - Local: the new tests through the test selector. Curve test: the Newton fit equals a brute-force grid maximiser of the same penalised likelihood on a hand-built table, to 1e-4. Move tests: every `move_limited_by` and `held_because` value is reachable; a 0.05 shift in synthetic evidence first moves a threshold on night 3 or 4 of the shift and has caught up within 8 nights; widening is faster than narrowing for both thresholds; a gap over `far_gap` takes `far_gap_step` both ways; a changed meaning stamp restarts the window; a re-run's duplicate rows count once; the pull centre is the start value until `pull_minimum_nights` values exist; the tenant's `publication_inputs` names exactly the day folders, compact files and indexes the loaders read for `window_nights` and `pull_window_nights` nights. Ruff, mypy, doc check.
+  - Local: the new tests through the test selector. Curve test: the Newton fit equals a brute-force grid maximiser of the same penalised likelihood on a hand-built table, to 1e-4, and finds the maximum on 300 windows where a looser stopping rule does not. Move tests: every `move_limited_by` and `held_because` value is reachable; a 0.05 shift in synthetic evidence is first acted on from the second night to the fifth of the shift and never the first, in both directions at both thresholds; no night moves a threshold by more than its step, and out uses the larger step; the threshold follows the shift without turning back and comes within 0.02 of the shifted point in at most 9 nights moving out and 12 moving in, out sooner than in (ceilings measured on a fixture of 40 pairs a night beside each threshold); a gap over `far_gap` takes `far_gap_step` both ways; a limit only shortens a move; a changed meaning stamp restarts the window; a re-run's duplicate rows count once; the pull centre is the start value until `pull_minimum_nights` values exist; a night settled out of order equals the same night settled in order. Stage tests on a real ledger: no row for a night that dealt nothing; a row for a night that lost every runner; tonight's rows read raw on a day recorded as quiet; a reading or a draw file that is not the night's stops the review; a draw that followed thresholds the history does not show stops it. Tenant tests: a copy holding only the files `publication_inputs` declares reads the same rows as the whole tree, leaving out any one file a read goes through changes what is read, and the edges are pinned (7 nights of pairs, 28 days of history, never the night's own history). Config: each cross-setting rule has a refusal test. Ruff, mypy, doc check.
   - CI: the required checks are authoritative.
-  - Named observation: on the first 7 real nights read `threshold-history` and say per threshold whether `usable_pairs_used` reached `minimum_usable_pairs` and where the curve's estimate sits against the start.
-- **Oracle:** for every night of a 14-night in-memory run, recomputing the estimate from the stored curve columns, and the move and `threshold_after` from the stored estimate, thresholds and counts, reproduces every stored value, so a night can be recomputed by hand from its row and `pair-verdicts`. It cannot settle that the curve shape holds on the real judge below 0.88; the first 7 real nights show that.
+  - Named observation: on the first 7 real nights read `threshold-history` and say per threshold whether `usable_pairs_used` reached `minimum_usable_pairs` and where the curve's estimate sits against the start. Over the first 14 real nights count, per threshold, the nights held as `fit_failed` with `usable_pairs_used` of at least 240; three in a row on one threshold means the window cannot place it, and Y8 is priced then. Count the nights that have pair rows and no history row, and read from `pair-verdicts` by run the share of pair rows a later run filed again for the same night (B7's trigger is 10 percent; it is measured only).
+- **Oracle:** for every night of a 14-night run through the real stage against a real ledger, a second working from the ledger and the row's own columns reproduces every stored threshold value: the evidence counts and window from `pair-verdicts`, the curve as the maximum of the pulled likelihood (both slope conditions hold), the estimate from the stored curve, the gap, the nights in a row, the word, and the move and `threshold_after` from the stored gap, thresholds and limits. So a night's threshold columns can be recomputed by hand from its row and `pair-verdicts`; the runner totals come from artifacts that expire. It cannot settle that the curve shape holds on the real judge below 0.88, or how far a judge's YES answers on clearly different pairs bias the lower estimate (about 0.014 at a 3 percent floor, an estimate); the first 7 real nights show both.
 - **Decisions:**
 
 Table P - Row 5 decisions
@@ -363,14 +381,18 @@ Table P - Row 5 decisions
 | Id | Decision | Authority |
 | --- | --- | --- |
 | P1 | Formulae are Table F with the Table D defaults, which are simulated values (D13) | Andre |
-| P2 | Widening is fast and narrowing slow for both thresholds, because a threshold sitting too far inside the uncertain range leaves wrong answers in a bucket the draw barely checks. Lower: falls up to `widening_step`, rises up to `narrowing_step`. Upper: rises up to `widening_step`, falls up to `narrowing_step`. A gap over `far_gap` takes `far_gap_step` both ways, so a bad start is found in about 6 nights, not 15. This is the opposite of the site's rule for `floor_min` (falling fast), which governs what publishes and stays out of scope (B1) | Andre |
+| P2 | Widening is fast and narrowing slow for both thresholds, because a threshold sitting too far inside the uncertain range leaves wrong answers in a bucket the draw barely checks. Lower: falls up to `widening_step`, rises up to `narrowing_step`. Upper: rises up to `widening_step`, falls up to `narrowing_step`. A gap over `far_gap` takes `far_gap_step` both ways, so a bad start is found in moves and not in steps of the narrowing size: a gap of 0.12 takes 6 moves out and 13 in. A night is at least a move, plus the night that confirms the gap, plus the waits for the window to refill, because each move out pushes about a third of the older pairs out of the window. This is the opposite of the site's rule for `floor_min` (falling fast), which governs what publishes and stays out of scope (B1) | Andre |
 | P3 | Weights are used only for the weighted totals (F6). In the curve they hurt: in simulation the share of lower-threshold estimates off by more than 0.02 went from 4% to 42% with weights, and to 8% with weights capped at three times the median; chance depends only on score, so the curve needs none | Andre |
 | P4 | The curve is fitted in pure Python by Newton steps with step halving on the penalised log-likelihood (two parameters, about 1,100 points at most, at most 50 iterations). A fit that does not converge, or returns steepness not above zero, holds the threshold with `held_because` `fit_failed`. No dependency is added: scikit-learn and scipy sit in the dev extra, and scikit-learn's penalty is centred on zero rather than on the pull centre | Fowler |
 | P5 | The evidence keeps only rows with tonight's meaning stamp (judge model, prompt digest, grammar digest, scorer model, cosine weight, judge policy version), so a change restarts the window by itself and `nights_used` shows it. A re-run's duplicate rows count once (newest filed row per `pair_key`). A night settled out of order is filed under its own date and later nights are not recomputed | Andre, Fowler |
 | P6 | `held_because` precedence: `not_enough_evidence`, then `fit_failed`, then `within_ignore_range`, then `waiting_for_second_night`. A held threshold keeps `threshold_after` equal to `threshold_before`, and its estimate is still stored | Fowler |
-| P7 | "Nights in a row" counts consecutive nights with a gap beyond the ignore range and the same sign, read from the previous row's stored `gap`; a move does not reset the count | Andre |
-| P8 | The night's row carries the runner totals folded from the shipped runner readings (sums, and the slowest runner's seconds; `pairs_read` becomes `pairs_valid`) and `canary_answers`, empty until row 6 | Fowler |
-| P9 | The collecting job reads from a sparse checkout, so the tenant's `publication_inputs` declares the day folders, compact files and indexes of `pair-verdicts` for `window_nights` nights and of `threshold-history` for `pull_window_nights` nights, using the same window arithmetic as the loaders; an input the loaders read and the declaration omits fails the collecting job | Fowler |
+| P7 | "Nights in a row" counts consecutive nights with a gap beyond the ignore range and the same sign, read from the previous row's stored `gap`; a move does not reset the count. Only a row dated the day before the night counts, so a night with no row breaks the run | Andre, Fowler |
+| P8 | The night's row carries the runner totals folded from the shipped runner readings (sums, and the slowest runner's seconds; `pairs_read` becomes `pairs_valid`) and `canary_answers`, empty until row 6. A night that dealt pairs files a row even when none came back judged, and a night that dealt none files none | Fowler |
+| P9 | The collecting job reads from a sparse checkout, so the tenant's `publication_inputs` declares the day folders, compact files and indexes of `pair-verdicts` for `window_nights` nights and of `threshold-history` for the larger of the lookback and `pull_window_nights` days, built by one function (`review_days`) from the days the loaders are handed. The loaders do not fail on a file that is absent: they read a shorter window. So the review works out the thresholds its history gives and files nothing when they differ from the thresholds every row of the night's draw names | Fowler |
+| P10 | Tonight's pair rows are read as raw files and the earlier nights through the door. The door serves a day the gardener recorded as empty from that record and never opens raw rows filed after it, and every repaired night is such a day. The scheduler reads each window day's raw files for the same reason | Fowler |
+| P11 | A limit only shortens a move. A threshold already outside a limit, because a setting changed under it, does not move that way and is not pushed back to the limit | Andre |
+| P12 | Each cross-setting rule is a validator of the config: share levels in order, the pull minimum within its window, a far gap above the ignore range with a far step no smaller than a near one, each limit leaving the draw a thin slice of the end beyond it, the smallest gap holding both thin runs, and the starts inside the limits and the smallest gap apart | Andre |
+| P13 | If the review fails, the night keeps its pair rows and has no threshold row, and the scheduler does not name it again | Fowler |
 
 - **Rejected alternatives:**
 
@@ -709,6 +731,7 @@ Table Y - Open questions
 | Y5 | Lower share level 0.05 or 0.10? | 0.05; move to 0.10 if the fully dissimilar bucket shows the judge says YES on more than 1 in 20 clearly different pairs in the first week | 5 |
 | Y6 | Delete `council/metrics_sink.collect_judge_metrics`, which no judge calls after row 4? | Keep it as the council's generic capability (N5) | 4 |
 | Y7 | Is the two-nights-in-a-row confirmation worth its column? | Keep `nights_running_required` at 2; in simulation it cuts false moves only from 17 to 14 per 100 steady nights, so set it to 1 if the first 14 real nights show no false moves | 5 |
+| Y8 | What should a night do when a threshold's window holds one answer for many nights, so no curve exists? | Hold as `fit_failed` and add no rule. Price a rule (a bounded widening step, or a reset of the last 14 days of `threshold-history` by named prune) only when three nights in a row show `fit_failed` with at least 240 usable pairs on one threshold. In simulation, a lower start 0.15 below the true point first moved on a median night 9, 0.20 below on night 15 and 0.30 below on night 41 | - |
 
 ## See also
 

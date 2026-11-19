@@ -7,20 +7,61 @@ deleted from the tree has to leave every council verb running
 
 Each read takes the days its caller names. Nothing here walks a ledger, so what a read costs
 is the number of days asked for and never how long the ledger has been filling
-(CLAUDE.md Guardrail #12).
+(CLAUDE.md Guardrail #12). The night's review names its days once, in `review_days`, and the
+collecting job's sparse checkout is told the same days from the same function, so the days a
+stage opens and the days that are fetched for it cannot drift apart.
+
+**Two doors, for two questions.** `load_pair_verdicts` asks which rows the ledger holds for
+the days, and a day a compact index already names is served from that record. A night the
+judge repairs is such a day: the gardener recorded it as quiet before the judge came back to it,
+and the rows filed since sit in raw files the index does not look at. `load_pair_verdicts_filed_on`
+reads the raw files of one day and nothing else, so the run that has just filed a night's rows
+can read them back.
 """
 
 from __future__ import annotations
 
 from collections.abc import Collection
+from dataclasses import dataclass
 from pathlib import Path
 
 from idhazh import ledger
+from idhazh.contracts.knobs.content_similarity_judge import ContentSimilarityJudgeConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.story_similarity_pair_verdict import StorySimilarityPairVerdict
 from idhazh.contracts.story_similarity_threshold_history_row import (
     StorySimilarityThresholdHistoryRow,
 )
+from idhazh.similarity.threshold_evidence import evidence_days
+from idhazh.similarity.thresholds_in_force import lookback_days
+
+
+@dataclass(frozen=True, slots=True)
+class ReviewDays:
+    """The UTC days of each ledger a night's review reads, oldest first."""
+
+    pair_verdicts: tuple[str, ...]
+    threshold_history: tuple[str, ...]
+
+
+def review_days(night: str, *, config: ContentSimilarityJudgeConfig) -> ReviewDays:
+    """The days a night's review reads: the nights of evidence and the history behind the pull.
+
+    **Guardrail #12 declaration.** The fixed-size input is three named settings: the
+    `window_nights` days of pair verdicts that end on the night, and for threshold history the
+    larger of `draw.thresholds_lookback_days`, which is how far back the draw looks for the
+    thresholds in force, and `thresholds.pull_window_nights`, the nights of steepness the pull
+    is the median of. History is the days before the night, never the night itself.
+    """
+    return ReviewDays(
+        pair_verdicts=evidence_days(night, window_nights=config.thresholds.window_nights),
+        threshold_history=lookback_days(
+            night,
+            within_days=max(
+                config.draw.thresholds_lookback_days, config.thresholds.pull_window_nights
+            ),
+        ),
+    )
 
 
 def load_pair_verdicts(
@@ -46,6 +87,30 @@ def load_pair_verdicts(
         LedgerName.CONTENT_SIMILARITY_JUDGE_PAIR_VERDICTS,
         days,
         model=StorySimilarityPairVerdict,
+    )
+
+
+def load_pair_verdicts_filed_on(
+    state_dir: Path, day: str
+) -> list[StorySimilarityPairVerdict]:
+    """The pair verdicts filed as raw files for this one UTC day, whatever the indexes say of it.
+
+    **Guardrail #12 declaration.** The fixed-size input is the one day named: the door lists
+    that day's raw folder and no other, whatever the ledger holds.
+
+    The run that has just filed a night's rows reads them back here. `load_pair_verdicts`
+    would serve a day the gardener already recorded as quiet from that record and never open
+    the raw files filed after it, which is what a night the judge repairs is. The rows come
+    oldest file first, so the last row of a pair is the newest, and rows of every run of the
+    night are here: the caller picks its own run's.
+    """
+    which = LedgerName.CONTENT_SIMILARITY_JUDGE_PAIR_VERDICTS
+    return ledger.load_current_rows(
+        state_dir,
+        which,
+        model=StorySimilarityPairVerdict,
+        key=ledger.door_key(which),
+        days=[day],
     )
 
 

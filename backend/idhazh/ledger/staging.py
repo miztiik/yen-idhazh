@@ -233,9 +233,10 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
     ),
     LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS: LedgerStaging(
         writer=(
-            "nothing writes it now: the collecting job logs what the units shipped and "
-            "files no row of it. idhazh.council.metrics_sink.collect_judge_metrics stays "
-            "as the council's own capability for a judge that files its readings"
+            "nothing writes it now: the night's threshold-history row carries what the "
+            "units shipped, summed by idhazh.stages.review_thresholds. "
+            "idhazh.council.metrics_sink.collect_judge_metrics stays as the council's own "
+            "capability for a judge that files its readings"
         ),
         symbol=None,
         job_labels=frozenset(),
@@ -262,10 +263,12 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
     ),
     LedgerName.CONTENT_SIMILARITY_JUDGE_THRESHOLD_HISTORY: LedgerStaging(
         writer=(
-            "nothing fills it yet: the council's collecting job will file one row a "
-            "night through the ledger door, after that night's pair verdicts are filed"
+            "idhazh.stages.review_thresholds.stage_review_thresholds, through the ledger "
+            "door, called from the council's tenant module in the job that saves the "
+            "night's results, after that night's pair verdicts are filed - resolved from "
+            "config at call time rather than dispatched from a `digest.yml` job"
         ),
-        symbol=None,
+        symbol="idhazh.stages.review_thresholds.stage_review_thresholds",
         job_labels=frozenset(),
     ),
     LedgerName.TRACES: LedgerStaging(

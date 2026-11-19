@@ -104,9 +104,19 @@ def test_a_missing_owned_knob_is_refused_at_the_judge_reader(tmp_path: Path, key
         ("thresholds", {"lower_start": -1.0}, "fully dissimilar end"),
         ("thresholds", {"upper_start": 0.9900000005}, "fully similar end"),
         ("thresholds", {"lower_start": -0.9900000005}, "fully dissimilar end"),
+        ("thresholds", {"lower_share_level": 0.95}, "lower_share_level 0.95 is not below"),
+        ("thresholds", {"pull_minimum_nights": 29}, "pull_minimum_nights 29 is above"),
+        ("thresholds", {"far_gap": 0.01}, "far_gap 0.01 is not above"),
+        ("thresholds", {"far_gap_step": 0.01}, "far_gap_step 0.01 is under"),
+        ("thresholds", {"lowest_lower_threshold": -1.0}, "lowest_lower_threshold -1.0 leaves"),
+        ("thresholds", {"highest_upper_threshold": 1.0}, "highest_upper_threshold 1.0 leaves"),
+        ("thresholds", {"smallest_gap": 0.1}, "smallest_gap 0.1 is under"),
+        ("thresholds", {"lowest_lower_threshold": 0.75}, "is below lowest_lower_threshold"),
+        ("thresholds", {"highest_upper_threshold": 0.9}, "is above highest_upper_threshold"),
+        ("thresholds", {"smallest_gap": 0.25}, "closer than smallest_gap"),
     ],
 )
-def test_a_draw_the_slices_cannot_be_cut_from_is_refused_at_the_judge_reader(
+def test_settings_the_night_could_not_run_on_are_refused_at_the_judge_reader(
     tmp_path: Path, block: str, changes: dict[str, object], refused: str
 ) -> None:
     declaration(tmp_path, **{block: committed(block) | changes})
