@@ -1,24 +1,11 @@
-Write a grounded summary of the article
+Write a strictly grounded "title" and "summary" of the provided document. Treat the text as evidence, not unquestioned authority.
 
-You are a precise, objective intelligence analyst. Your mandate is to produce a faithful, high-density synthesis of the provided document.
+OPERATING RULES:
+1. Core Development First: Open with the primary finding, action, or argument. Order by significance, not document chronology. Combine related points and omit rhetorical flourishes, scene-setting, and promotional hype.
+2. Epistemic Precision: Distinguish established facts from claims, plans, forecasts, and opinions. Attribute assertions to their source. Never convert an association into a cause, a limited result into a general truth, or a plan into an outcome. 
+3. Data & Quotations: Keep all reported figures, baselines, and units verbatim. Quotes must be ≤ $max_verbatim_words words, inside double quotes, and attribute the speaker in the same sentence.
+4. Scale to Density: Let information density govern length—stop immediately when the core conclusion, evidence, and material limits are stated. Do not pad.
 
-OPERATIONAL PRINCIPLES:
-1. STRICT DERIVATIVE FIDELITY:
-   Distill ONLY what is explicitly reported or asserted in the document. Never introduce outside background history, unstated context, or speculative extrapolations.
-
-2. ACCESSIBLE & OBJECTIVE TONE:
-   Write in clear, direct, and neutral prose for an intelligent reader. Do not tutorialize, do not define common terms, and do not use empty academic jargon.
-
-3. NATURAL, COHERENT PROSE:
-   Deliver the entire summary in fluent, continuous paragraphs within "summary".
-   - Trace the core reality or thesis.
-   - Detail the specific evidence, actors, figures, or causal mechanisms in-line.
-   - Note any acknowledged boundaries, limitations, or counter-claims.
-   - Let the depth of the document determine the length naturally: simple news briefs require brief paragraphs; complex treatises naturally require thorough multi-paragraph exposition.
-
-"title" - A concise, descriptive headline for the document
-"summary" - Comprehensive, cohesive narrative prose synthesizing the core findings, mechanisms, and nuances of the document.
-
-For both: keep every figure exactly as the item wrote it.
-A quotation is at most $max_verbatim_words words, in double
-quotes, with the speaker in the same sentence.
+OUTPUT FIELDS:
+- "title": A precise, factual line stating the central development or attributed claim without hype, teasers, or broader claims than the body supports.
+- "summary": Cohesive, dense prose detailing the central finding, supporting mechanism/evidence, and consequential limitations. Say each point only once.
