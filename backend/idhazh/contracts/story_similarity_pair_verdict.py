@@ -555,10 +555,10 @@ class StorySimilarityPairVerdict(Contract):
 
         The four stamp columns move together: a row that names a model but no grammar says
         the verdict came from somewhere the row cannot describe. A pair no judge has read
-        carries nothing a judge says. A judged pair says whether both calls held the
-        grammar, which they did exactly when both readings are valid, and `readings_agree`
-        is checked here rather than trusted, because it is the flag the weighted totals read
-        and a writer that set it early would count a disagreement.
+        carries no verdict, no agreement and no grammar flag. A judged pair says whether both
+        calls held the grammar, which they did exactly when both readings are valid, and
+        `readings_agree` is checked here rather than trusted, because it is the flag the
+        weighted totals read and a writer that set it early would count a disagreement.
 
         Two agreed UNCLEAR readings ARE agreed. The judge was asked and answered the same
         way twice; that the answer is "I cannot tell" is a count the night keeps rather than
