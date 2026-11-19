@@ -34,7 +34,11 @@ def reading(raw: bytes) -> judge.Reading:
     )
     right = left.model_copy(update={"item_id": "world-02", "source_url": "https://right.example/a"})
     return judge.read_once(
-        left, right, client=ProtocolReplies(raw), settings=settings, markers=a_markers()
+        left.summary,
+        right.summary,
+        client=ProtocolReplies(raw),
+        settings=settings,
+        markers=a_markers(),
     )
 
 

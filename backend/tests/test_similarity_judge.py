@@ -500,8 +500,8 @@ def test_two_disagreeing_readings_are_unusable() -> None:
     day = _a_day()
     with ProtocolReplies(_reply("one-event"), _reply("two-events")) as server:
         result = judge.judge_pair(
-            day.items[0],
-            day.items[1],
+            day.items[0].summary,
+            day.items[1].summary,
             client=_client(server),
             settings=_settings(),
             markers=a_markers(),
@@ -517,8 +517,8 @@ def test_two_agreeing_unclear_readings_are_usable() -> None:
     day = _a_day()
     with ProtocolReplies(_reply("too-vague-to-say")) as server:
         result = judge.judge_pair(
-            day.items[0],
-            day.items[1],
+            day.items[0].summary,
+            day.items[1].summary,
             client=_client(server),
             settings=_settings(),
             markers=a_markers(),
@@ -540,8 +540,8 @@ def test_two_readings_the_grammar_did_not_hold_are_not_an_agreement() -> None:
     day = _a_day()
     with ProtocolReplies(_reply("the-grammar-was-not-applied")) as server:
         result = judge.judge_pair(
-            day.items[0],
-            day.items[1],
+            day.items[0].summary,
+            day.items[1].summary,
             client=_client(server),
             settings=_settings(),
             markers=a_markers(),
@@ -560,7 +560,11 @@ def test_a_pair_is_read_twice_with_the_two_summaries_swapped() -> None:
     settings = _settings()
     with ProtocolReplies(_reply("two-events")) as server:
         judge.judge_pair(
-            left, right, client=_client(server), settings=settings, markers=a_markers()
+            left.summary,
+            right.summary,
+            client=_client(server),
+            settings=settings,
+            markers=a_markers(),
         )
         decodes = server.decodes
 
@@ -617,11 +621,11 @@ def test_a_reply_the_grammar_could_not_have_written_is_written_down(
     with ProtocolReplies(_reply("the-grammar-was-not-applied")) as server:
         with caplog.at_level(logging.WARNING, logger="idhazh"):
             read = judge.read_once(
-                day.items[0],
-            day.items[1],
-            client=_client(server),
-            settings=_settings(),
-            markers=a_markers(),
+                day.items[0].summary,
+                day.items[1].summary,
+                client=_client(server),
+                settings=_settings(),
+                markers=a_markers(),
             )
 
     assert read.verdict is None
@@ -645,11 +649,11 @@ def test_a_first_token_outside_the_grammar_is_written_down(
     with ProtocolReplies(_reply("the-word-was-patched-in-afterwards")) as server:
         with caplog.at_level(logging.WARNING, logger="idhazh"):
             read = judge.read_once(
-                day.items[0],
-            day.items[1],
-            client=_client(server),
-            settings=_settings(),
-            markers=a_markers(),
+                day.items[0].summary,
+                day.items[1].summary,
+                client=_client(server),
+                settings=_settings(),
+                markers=a_markers(),
             )
 
     assert read.verdict is None
@@ -742,8 +746,8 @@ def test_a_thinking_entry_reads_its_verdict_off_the_answer_span() -> None:
     thought = _rendered_reply("thinking-span-one")
     with ProtocolReplies(thought, _rendered_reply("thinking-span-two")) as server:
         reading = judge.read_once(
-            day.items[0],
-            day.items[1],
+            day.items[0].summary,
+            day.items[1].summary,
             client=_client(server),
             settings=settings,
             markers=_thinking_markers(),
@@ -774,16 +778,16 @@ def test_a_pairs_calls_are_counted_rather_than_derived_from_its_pairs() -> None:
     spans = (_rendered_reply("thinking-span-one"), _rendered_reply("thinking-span-two"))
     with ProtocolReplies(cold_reply) as cold_server:
         cold = judge.judge_pair(
-            day.items[0],
-            day.items[1],
+            day.items[0].summary,
+            day.items[1].summary,
             client=_client(cold_server),
             settings=_settings(),
             markers=a_markers(),
         )
     with ProtocolReplies(*spans) as thinking_server:
         thinking = judge.judge_pair(
-            day.items[0],
-            day.items[1],
+            day.items[0].summary,
+            day.items[1].summary,
             client=_client(thinking_server),
             settings=_settings_judging_behind_a_thinking_span(),
             markers=_thinking_markers(),
@@ -813,8 +817,8 @@ def test_a_pair_whose_first_reading_was_refused_still_makes_its_second_call() ->
     day = _a_day()
     with ProtocolReplies(_reply("the-word-was-patched-in-afterwards"), _reply("one-event")) as server:
         result = judge.judge_pair(
-            day.items[0],
-            day.items[1],
+            day.items[0].summary,
+            day.items[1].summary,
             client=_client(server),
             settings=_settings(),
             markers=a_markers(),
@@ -835,8 +839,8 @@ def test_a_settings_with_no_judge_role_decodes_one_span_and_says_so() -> None:
     settings = _settings()
     with ProtocolReplies(_reply("two-events")) as server:
         reading = judge.read_once(
-            day.items[0],
-            day.items[1],
+            day.items[0].summary,
+            day.items[1].summary,
             client=_client(server),
             settings=settings,
             markers=a_markers(),
@@ -886,7 +890,11 @@ def test_actual_emitted_prefixes_accept_the_literal_despite_a_higher_illegal_alt
         content, pieces=pieces, alternatives=(("Sure", -0.01), ("NO", -2.0))
     ))
     reading = judge.read_once(
-        day.items[0], day.items[1], client=client, settings=_settings(), markers=a_markers()
+        day.items[0].summary,
+        day.items[1].summary,
+        client=client,
+        settings=_settings(),
+        markers=a_markers(),
     )
 
     assert reading.verdict == SameStoryVerdict(content.lstrip(" "))
@@ -921,8 +929,11 @@ def test_refusals_keep_the_closed_reason_and_actual_cost(
     payload = json.loads(raw) | {"tokens_evaluated": 7, "tokens_predicted": 3}
     day = _a_day()
     reading = judge.read_once(
-        day.items[0], day.items[1],
-        client=ProtocolReplies(json.dumps(payload).encode()), settings=_settings(), markers=a_markers(),
+        day.items[0].summary,
+        day.items[1].summary,
+        client=ProtocolReplies(json.dumps(payload).encode()),
+        settings=_settings(),
+        markers=a_markers(),
     )
 
     assert (reading.verdict, reading.grammar_applied, reading.refusal_reason) == (None, False, reason)

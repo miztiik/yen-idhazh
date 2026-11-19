@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from functools import partial
 
 from idhazh import config
-from idhazh.contracts.digest_day import DigestItem
 from idhazh.llm.server import (
     TurnMarkers,
     completion_url,
@@ -44,8 +43,12 @@ class ModelReader:
         return cls(client, markers)
 
     def read_pair(
-        self, left: DigestItem, right: DigestItem, *, settings: config.Settings
+        self, left_summary: str, right_summary: str, *, settings: config.Settings
     ) -> judge.Judged:
         return judge.judge_pair(
-            left, right, client=self.client, markers=self.markers, settings=settings
+            left_summary,
+            right_summary,
+            client=self.client,
+            markers=self.markers,
+            settings=settings,
         )

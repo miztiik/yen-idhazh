@@ -160,7 +160,7 @@ def stage_judge_item_pairs(
         if left is None or right is None:
             unreadable += 1
             continue
-        verdicts = reader.read_pair(left, right, settings=settings)
+        verdicts = reader.read_pair(left.summary, right.summary, settings=settings)
         readings.append(verdicts)
         judged.append(_with_the_verdict(row, verdicts, stamp=stamp))
         if len(judged) % flush_every == 0:

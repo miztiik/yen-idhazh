@@ -32,7 +32,6 @@ from typing import Any, Final
 
 from idhazh import config
 from idhazh.contracts.base import fit_field
-from idhazh.contracts.digest_day import DigestItem
 from idhazh.contracts.knobs.models import ModelEntry
 from idhazh.contracts.story_similarity_pair import (
     ReadingRefusalReason,
@@ -305,14 +304,19 @@ def decode_body(
 
 
 def read_once(
-    left: DigestItem,
-    right: DigestItem,
+    left_summary: str,
+    right_summary: str,
     *,
     client: Client,
     settings: config.Settings,
     markers: TurnMarkers,
 ) -> Reading:
     """One constrained decode, and the two checks that say it was constrained.
+
+    **It takes the two summaries and nothing else.** A summary is all the judge ever
+    reads of a story, so a pair that has no published item behind it - one of the
+    known-answer pairs, whose text lives in config - goes through this same function
+    and builds the same request, rather than through a second path that could drift.
 
     The model is `judge.entry_of` - the summariser's entry, or a judge role
     declared beside it on the same weights.
@@ -337,7 +341,7 @@ def read_once(
         system=prompt.system_turn(
             prompt_files=settings.app.prompt_files, config_dir=settings.config_dir
         ),
-        user=prompt.user_turn(left, right),
+        user=prompt.render_user_turn(left_summary, right_summary),
         markers=markers,
     )
     started = time.perf_counter()
@@ -417,8 +421,8 @@ def _metered(client: Client, meter: _Meter) -> Client:
 
 
 def judge_pair(
-    left: DigestItem,
-    right: DigestItem,
+    left_summary: str,
+    right_summary: str,
     *,
     client: Client,
     settings: config.Settings,
@@ -442,8 +446,12 @@ def judge_pair(
     """
     meter = _Meter()
     metered = _metered(client, meter)
-    forward = read_once(left, right, client=metered, settings=settings, markers=markers)
-    swapped = read_once(right, left, client=metered, settings=settings, markers=markers)
+    forward = read_once(
+        left_summary, right_summary, client=metered, settings=settings, markers=markers
+    )
+    swapped = read_once(
+        right_summary, left_summary, client=metered, settings=settings, markers=markers
+    )
     return Judged(
         verdict=forward.verdict,
         verdict_swapped=swapped.verdict,

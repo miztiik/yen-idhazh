@@ -312,7 +312,7 @@ def test_exact_production_request_bytes_and_both_orders(settings: config.Setting
     run, captured = memory_run(frozen, settings)
     production = ProtocolReplies(native_reply("YES"))
     case = frozen.cases[0]
-    production.reader.read_pair(case.left, case.right, settings=settings)
+    production.reader.read_pair(case.left.summary, case.right.summary, settings=settings)
     expected = [json.dumps(body).encode() for body in production.decodes]
     actual = [body.encode() for reading in (run.cases[0].forward, run.cases[0].reverse)
               if reading is not None for body in reading.request_json]

@@ -234,7 +234,9 @@ def test_real_consumers_and_stamps_follow_two_selected_roots(tmp_path: Path) -> 
         replies = ProtocolReplies(native_reply("YES"))
         left, right = item("First report.", 1), item("Second report.", 2)
         for a, b in ((left, right), (right, left)):
-            judge.read_once(a, b, client=replies, settings=settings, markers=a_markers())
+            judge.read_once(
+                a.summary, b.summary, client=replies, settings=settings, markers=a_markers()
+            )
         assert all(label in str(body["prompt"]) for body in replies.decodes)
         stamp = stamps.judge_inputs(settings)
         assert stamp.prompt_digest == derive_text_digest(prompt.prompt_text(**options))
