@@ -579,7 +579,30 @@ def test_a_pair_is_read_twice_with_the_two_summaries_swapped() -> None:
     )
 
 
-@pytest.mark.parametrize("sampling", [{}, {"operator_option": 17}])
+def test_a_pair_keeps_each_orders_own_margin_and_the_file_order_prompt_count() -> None:
+    """The swapped call's confidence and the first call's prompt are not folded into other figures.
+
+    The two replies differ in what the decoder was sure of and in how long the prompt was, so a
+    field that read the wrong call, or the sum of both, fails here.
+    """
+    day = _a_day()
+    sure = native_reply("NO", prompt_tokens=11, alternatives=(("NO", -0.01), ("YES", -4.7)))
+    unsure = native_reply("NO", prompt_tokens=13, alternatives=(("NO", -1.0), ("YES", -1.0)))
+    with ProtocolReplies(sure, unsure) as server:
+        result = judge.judge_pair(
+            day.items[0].summary,
+            day.items[1].summary,
+            client=_client(server),
+            settings=_settings(),
+            markers=a_markers(),
+        )
+
+    sure_margin = judge.margin_of(parse_completion(sure.decode("utf-8")).first_token_choices)
+    assert sure_margin is not None and sure_margin > 0.9
+    assert result.first_token_margin == sure_margin
+    assert result.first_token_margin_swapped == 0.0
+    assert result.prompt_tokens_file_order == 11
+    assert result.prompt_tokens == 24, "the pair's own total stays both calls"
 def test_judging_changes_only_its_own_sampling_setting(
     tmp_path: Path, sampling: dict[str, Any]
 ) -> None:

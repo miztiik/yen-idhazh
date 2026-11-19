@@ -122,6 +122,9 @@ class Judged:
     verdict_swapped: SameStoryVerdict | None
     usable: bool
     first_token_margin: float | None
+    #: The swapped call's own margin, beside the file-order one above. A pair keeps both
+    #: readings' confidence, and a reading outside the grammar keeps whatever window it had.
+    first_token_margin_swapped: float | None
     #: Wall clock for every call this pair made, which is two cold and four under
     #: a thinking envelope.
     decode_seconds: float
@@ -129,7 +132,12 @@ class Judged:
     #: thinking envelope is two calls, and the figure a venue sizing a timeout
     #: needs is the longest one thing it waited on.
     decode_seconds_max: float
+    #: Both calls' prompts added up, which is what the pair cost the server.
     prompt_tokens: int
+    #: The file-order call's prompt alone. For one pair it is the same on every runner and every
+    #: night until the prompt, the chat template or the tokenizer moves, which the sum cannot
+    #: show once the swapped call's prompt changes with it.
+    prompt_tokens_file_order: int
     completion_tokens: int
     #: How many calls this pair actually made, counted at the seam. Never twice
     #: the pairs: that arithmetic reports a thinking judge at half what it spent.
@@ -457,9 +465,11 @@ def judge_pair(
         verdict_swapped=swapped.verdict,
         usable=forward.verdict is not None and forward.verdict == swapped.verdict,
         first_token_margin=forward.first_token_margin,
+        first_token_margin_swapped=swapped.first_token_margin,
         decode_seconds=forward.decode_seconds + swapped.decode_seconds,
         decode_seconds_max=meter.longest,
         prompt_tokens=forward.prompt_tokens + swapped.prompt_tokens,
+        prompt_tokens_file_order=forward.prompt_tokens,
         completion_tokens=forward.completion_tokens + swapped.completion_tokens,
         calls=meter.calls,
         grammar_applied=forward.grammar_applied and swapped.grammar_applied,
