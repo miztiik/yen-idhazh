@@ -45,15 +45,10 @@ test.describe('route-owned console configuration', () => {
 		]);
 		expect(routes.pipelines.judged).toContain('slowest-articles');
 		expect(routes['data-explorer'].judged).toEqual(['data-explorer-rows', 'data-explorer-shape']);
-		const judgementPanels = [
-			'merged-stories', 'merge-line', 'judge-agreement',
-			'record-gates', 'verdict-split', 'holdout-margin'
-		];
+		const judgementPanels = ['merged-stories', 'holdout-margin'];
 		expect(routes.judgement.panel_groups).toEqual([
-			{ id: 'what-was-grouped', title: 'What was grouped', panels: judgementPanels.slice(0, 2) },
-			{ id: 'what-the-judge-found', title: 'What the judge found', panels: judgementPanels.slice(2) }
+			{ id: 'judgement', title: '', panels: judgementPanels }
 		]);
-		expect(routes.judgement.panel_groups.flatMap((group) => group.panels)).toEqual(judgementPanels);
 		expect(routes.judgement.judged).toEqual(judgementPanels);
 		const modelPanels = [
 			'model-cards', 'model-throughput', 'item-cost', 'call-ending',
@@ -97,6 +92,19 @@ test.describe('route-owned console configuration', () => {
 		const files = routeFiles();
 		files.machine.knobs.read_write_default_metric = 2;
 		expect(() => routeConsolesFrom(files)).toThrow('knobs.read_write_default_metric must be 0 (Run total) or 1 (Median per article)');
+	});
+
+	test('refuses a hand-marks axis with no width, below or above the line', () => {
+		const refused: Record<string, number>[] = [
+			{ holdout_axis_below_line: 0, holdout_axis_above_line: 0.01 },
+			{ holdout_axis_below_line: 0.02, holdout_axis_above_line: -0.01 },
+			{ holdout_axis_below_line: 0.02 }
+		];
+		for (const knobs of refused) {
+			const files = routeFiles();
+			files.judgement.knobs = knobs;
+			expect(() => routeConsolesFrom(files)).toThrow(/judgement\.json knobs\.holdout_axis_below_line and knobs\.holdout_axis_above_line must both be set above zero/);
+		}
 	});
 
 	test('refuses a missing route file', () => {

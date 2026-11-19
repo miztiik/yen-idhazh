@@ -1,7 +1,7 @@
-/** Judgement reports its window on four judge surfaces. */
+/** Judgement reports its window on the one surface that follows it. */
 import type { RouteExpect } from './index';
 
 export const EXPECT: RouteExpect | null = {
-	windowed: ['judge-agreement', 'merge-line', 'merged-stories', 'record-gates'],
+	windowed: ['merged-stories'],
 	dailyTable: false
 };

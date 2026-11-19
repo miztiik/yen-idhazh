@@ -7,7 +7,7 @@ import { nativeTimeSplit, timeSplitReadout } from '../src/lib/console/pipelines/
 import { dateSeries, numberFormat } from './support/number-format';
 import { frame } from '../src/lib/charts/frame';
 import { telemetryRow, type TelemetryRow } from './support/telemetry-row';
-import { JUDGED_THROUGH } from './support/console-window/judgement-fixtures';
+import { DRAWN_THROUGH } from './support/console-window/readout';
 /** An item that published, timed from start to finish: 800 ms in all. */
 function timedItem(date: string, item: string): TelemetryRow {
     return telemetryRow({
@@ -40,7 +40,7 @@ test.describe("Pipelines' failure mix and time split draw the window's days, on 
     test("a day with no row draws no column, and its strip says so, while a day that ran clean is a real zero", () => {
         // Three days ending on the pinned day: an item failed at fetch on the first,
         // nothing ran on the second, and the third timed one item and failed none.
-        const window = windowOfDays(JUDGED_THROUGH, 3, 'right');
+        const window = windowOfDays(DRAWN_THROUGH, 3, 'right');
         const rows = [failedItem('2030-06-13', 'a', 'fetch'), timedItem('2030-06-15', 'b')];
         const calendar = daysInWindow(window);
         const mix = nativeFailureMix(rows.map((row) => ({ ...row })), calendar);

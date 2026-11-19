@@ -2,7 +2,7 @@
 	/** How many stories each day folded into another, and how big the biggest
 	 * fold was.
 	 *
-	 * **This is the one figure on Judgement that involves no model.** It was true
+	 * **This is a count of what shipped, and it involves no model.** It was true
 	 * before the judge existed and it stays true if the judge is replaced: the
 	 * grouping pass wrote `same_story_as` into the day we published, and this
 	 * counts it. A reader who stops here has seen a fact about what shipped
@@ -187,13 +187,14 @@
 	id="merged-stories"
 	title="Stories the day merged"
 	note="One column is one day: the stories that day folded behind another because we read them as the same story. The dot is the biggest group that day, counting the one we kept."
+	wide
 >
 	<div
 		data-windowed="merged-stories"
 		data-panel-question="How many published stories were merged?"
 		data-model-rule="no"
 		data-model-rule-name="merged-stories"
-		data-model-rule-none="the judge's record, not how summaries are written"
+		data-model-rule-none="the published merges, not how summaries are written"
 		data-window-days={windowDays}
 		data-merge-state={inputDays === null ? 'missing' : panelState}
 		data-merge-days={drawn.length}

@@ -26,8 +26,6 @@ import { tooFewSentence as writeTooFewSentence } from '../../src/lib/console/wai
 import {
 	mergeNote as writeMergeNote,
 	mergeRate as writeMergeRate,
-	rateWithDenominator as writeRateWithDenominator,
-	describeUnclear as writeDescribeUnclear,
 	type MergeTotals
 } from '../../src/lib/console/merge-line';
 import { faithfulness as reduceFaithfulness } from '../../src/lib/console/model/faithfulness';
@@ -115,24 +113,6 @@ export function mergeNote(totals: MergeTotals, days: number): string {
 
 export function mergeRate(totals: MergeTotals, days: number): string | null {
 	return writeMergeRate(totals, days, numberFormat);
-}
-
-export function rateWithDenominator(
-	numerator: number | null,
-	denominator: number | null,
-	floor: number,
-	mark?: number
-): string | null {
-	return writeRateWithDenominator(numerator, denominator, floor, numberFormat, mark);
-}
-
-export function describeUnclear(
-	unclear: number | null,
-	agreed: number | null,
-	floor: number,
-	mark?: number
-): string {
-	return writeDescribeUnclear(unclear, agreed, floor, numberFormat, mark);
 }
 
 export function faithfulness(

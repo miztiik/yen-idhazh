@@ -1,31 +1,20 @@
 {
   "panel_groups": [
     {
-      "id": "what-was-grouped",
-      "title": "What was grouped",
+      "id": "judgement",
+      "title": "",
       "panels": [
         "merged-stories",
-        "merge-line"
-      ]
-    },
-    {
-      "id": "what-the-judge-found",
-      "title": "What the judge found",
-      "panels": [
-        "judge-agreement",
-        "record-gates",
-        "verdict-split",
         "holdout-margin"
       ]
     }
   ],
   "judged": [
     "merged-stories",
-    "merge-line",
-    "judge-agreement",
-    "record-gates",
-    "verdict-split",
     "holdout-margin"
   ],
-  "knobs": {}
+  "knobs": {
+    "holdout_axis_below_line": 0.02,
+    "holdout_axis_above_line": 0.01
+  }
 }

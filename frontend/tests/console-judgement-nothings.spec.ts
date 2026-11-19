@@ -1,4 +1,4 @@
-/** Do the six build-time panels distinguish empty evidence from absent evidence? */
+/** Do the two build-time Judgement panels distinguish empty evidence from absent evidence? */
 import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -10,10 +10,6 @@ import { judgeNothings, type Nothing, type PanelReading } from './support/panel-
 const FRONTEND = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const PANELS = [
 	['merged-stories', 'MergedStoriesPanel'],
-	['merge-line', 'MergeLinePlot'],
-	['judge-agreement', 'JudgeAgreement'],
-	['record-gates', 'RecordGates'],
-	['verdict-split', 'VerdictSplit'],
 	['holdout-margin', 'HoldoutMargin']
 ] as const;
 
@@ -29,11 +25,11 @@ for (const [id, name] of PANELS) {
 		const compiled = serverCompiler(testInfo.outputPath('components'));
 		const lib = (file: string) => pathToFileURL(join(FRONTEND, 'src', 'lib', file)).href;
 		const rewrite: Rewrite[] = [
-			'charts/frame', 'charts/readout', 'charts/viewport', 'charts/indexed-runs',
-			'charts/series', 'charts/targetbar', 'console/merge-line',
-			'console/span-words', 'console/verdict-split', 'console/holdout', 'format'
+			'charts/frame', 'charts/readout', 'charts/viewport',
+			'charts/series', 'console/merge-line',
+			'console/span-words', 'console/holdout', 'format'
 		].map((file) => [`$lib/${file}`, lib(`${file}.ts`)] as const);
-		for (const child of ['Panel', 'ChartReadout', 'TargetBar']) {
+		for (const child of ['Panel', 'ChartReadout']) {
 			const module = await compiled(`src/lib/components/${child}.svelte`, child, [
 				...rewrite, ['../charts/readout', lib('charts/readout.ts')]
 			]);
@@ -43,33 +39,21 @@ for (const [id, name] of PANELS) {
 		const component = (await import(pathToFileURL(module).href)).default;
 		const appearance = JSON.parse(readFileSync(join(FRONTEND, '..', 'config', 'appearance.json'), 'utf8'));
 		const similarity = JSON.parse(readFileSync(join(FRONTEND, '..', 'config', 'idhazh.json'), 'utf8')).assemble.same_story;
-		const tuning = similarity.adaptive_dedup_threshold;
+		const axis = JSON.parse(readFileSync(join(FRONTEND, '..', 'config', 'console', 'judgement.json'), 'utf8')).knobs;
 		const common = {
 			viewport: { start: '2030-06-01', end: '2030-06-30' },
 			height: appearance.console.chart_height, width: appearance.console.chart_width,
 			tickDensity: appearance.chart.tick_density, readoutMaxShare: appearance.chart.readout_max_share
 		};
+		const marks = {
+			line: similarity.floor_min, axisBelow: axis.holdout_axis_below_line, axisAbove: axis.holdout_axis_above_line,
+			skipped: [], marked: 0, weights: { cosineWeight: similarity.cosine_weight ?? 1 }
+		};
 		const inputs: Record<string, { empty: Record<string, unknown>; absent: Record<string, unknown> }> = {
 			'merged-stories': { empty: { days: [] }, absent: { days: null } },
-			'merge-line': {
-				empty: { days: [], knobs: tuning, builtWith: similarity.floor_min, markedApart: null },
-				absent: { days: null, knobs: tuning, builtWith: similarity.floor_min, markedApart: null }
-			},
-			'judge-agreement': {
-				empty: { days: [], limits: { disagreementMax: tuning.disagreement_max, unclearMax: tuning.unclear_max }, attemptsFloor: appearance.console.min_attempts_for_rate },
-				absent: { days: null, limits: { disagreementMax: tuning.disagreement_max, unclearMax: tuning.unclear_max }, attemptsFloor: appearance.console.min_attempts_for_rate }
-			},
-			'record-gates': {
-				empty: { days: [], dates: [], gates: { minimumNegatives: tuning.minimum_negatives, minimumDays: tuning.minimum_days, minimumAboveLine: tuning.minimum_above_line } },
-				absent: { days: null, dates: [], gates: { minimumNegatives: tuning.minimum_negatives, minimumDays: tuning.minimum_days, minimumAboveLine: tuning.minimum_above_line } }
-			},
-			'verdict-split': {
-				empty: { record: { bandLow: tuning.band_low, bandHigh: tuning.band_high, binWidth: tuning.bin_width ?? 0.001, daysCounted: 0, slots: [] }, applied: similarity.floor_min, discardShare: tuning.discard_share, axisMultiple: appearance.console.precision_axis_multiple, figures: { inBand: 0, judged: 0, usable: 0 } },
-				absent: { record: null, applied: similarity.floor_min, discardShare: tuning.discard_share, axisMultiple: appearance.console.precision_axis_multiple, figures: { inBand: null, judged: null, usable: null } }
-			},
 			'holdout-margin': {
-				empty: { marks: [], agreedScores: [], skipped: [], marked: 0, applied: similarity.floor_min, maxDownStep: tuning.max_down_bins * (tuning.bin_width ?? 0.001), fitted: false, weights: { cosineWeight: tuning.cosine_weight ?? 1, fittedOn: null }, scored: null },
-				absent: { marks: null, agreedScores: null, skipped: [], marked: 0, applied: similarity.floor_min, maxDownStep: tuning.max_down_bins * (tuning.bin_width ?? 0.001), fitted: false, weights: { cosineWeight: tuning.cosine_weight ?? 1, fittedOn: null }, scored: null }
+				empty: { ...marks, marks: [], agreedScores: [] },
+				absent: { ...marks, marks: null, agreedScores: null }
 			}
 		};
 		const html = (input: Record<string, unknown>) => render(component, { props: { ...common, ...input } }).body;
@@ -87,12 +71,6 @@ for (const [id, name] of PANELS) {
 			expect(markup.match(/data-comparison=/g)).toHaveLength(1);
 			expect(markup).toMatch(/data-comparison="[^"]+ against [^"]+"/);
 			expect(markup).toMatch(/data-readout-(?:none|records|columns)=/);
-		}
-		if (id === 'verdict-split') {
-			expect(empty.match(/data-verdict-cell=/g)).toHaveLength(4);
-			expect(empty.match(/data-verdict-figure=/g)).toHaveLength(3);
-			expect(empty).toContain('Eligible to merge');
-			expect(absent).not.toContain('data-verdict-cell=');
 		}
 		// Gate 8 reads words and placeholder treatment only; SSR has no rendered ground.
 		const reading = (markup: string): PanelReading => ({

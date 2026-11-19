@@ -3,30 +3,28 @@ import {
 	committedFloor,
 	committedWeights,
 	consoleConfig,
-	holdoutReachDays,
-	similarityConfig
+	holdoutReachDays
 } from '$lib/server/config';
-import { daysInWindow, windowOfDays } from '$lib/charts/viewport';
-import { findBuiltLine } from '$lib/console/applied-line';
-import { mergeCountsOf, type JudgeDay, type LineDay, type MergeDay } from '$lib/console/merge-line';
+import { mergeCountsOf, type MergeDay } from '$lib/console/merge-line';
 import type { ScoreWeights } from '$lib/console/holdout';
 import { loadDay, publishedDates } from '$lib/server/payload';
-import { readRecordedLine } from '$lib/server/recorded-line';
-import { fittedLines, scoreRecord } from '$lib/server/content-similarity-judge';
-import { holdoutReading, markReach, mergeLineHoldoutScore } from '$lib/server/content-similarity-holdout';
+import { holdoutReading, markReach } from '$lib/server/content-similarity-holdout';
 import { windowDay } from '$lib/server/window-day';
 
 export const prerender = true;
 
-export type { JudgeDay, LineDay, MergeDay };
+export type { MergeDay };
 
 /** What Judgement reads, and what it costs.
  *
- * One day file a published day inside the widest span the window control
- * offers, and nothing else. The route fetches nothing at read time: every span
- * the control can draw is already in the document, so changing the window costs
- * no request. The newest published day's run record is one more file, read for
- * the line that day was built with.
+ * Two reads, both at build time, and nothing is fetched by a browser. Every span
+ * the window control can draw is already in the document, so changing the
+ * window costs no request.
+ *
+ * The first is one day file for each published day inside the widest span the
+ * window control offers. The day payload is the biggest file the build reads and
+ * none of it belongs in this document, so it is reduced to its four merge counts
+ * here rather than handed to the browser.
  *
  * **The cover is worked out before the first file is opened** (Guardrail #12).
  * `widestDays` is the largest preset, so a day older than the widest span is
@@ -34,131 +32,42 @@ export type { JudgeDay, LineDay, MergeDay };
  * archive has accumulated. Raising a preset raises the cost, visibly, in the
  * config file that raised it.
  *
- * Four numbers survive per day. The day payload is the biggest file the build
- * reads and none of it belongs in this document, so it is reduced to its counts
- * here rather than handed to the browser.
+ * The second is the packed hand marks inside their own reach, which ends on the
+ * same day as every window here, plus one published day per distinct date they
+ * name. The bound is the reach and not the archive, and the days it opens sit
+ * outside the window preset - so it has an entry of its own in
+ * `docs/concepts/growing-reads.md`.
  */
 export async function load() {
 	const console = consoleConfig();
 	const widestDays = Math.max(...console.window_presets);
 	// Every window on this route ends on the site's newest published day.
 	const day = windowDay();
-	// The widest span the window control offers, as a window: the fitted lines and
-	// the holdout score are read inside it, and the squares strip draws every day
-	// of it.
-	const readSpan = windowOfDays(day, widestDays, console.today_anchor);
 	const merges: MergeDay[] = publishedDates(undefined, widestDays)
 		.sort()
 		.map((date) => {
 			const day = loadDay(date);
 			return { date, ...mergeCountsOf(day?.items ?? []) };
 		});
-	// One read, three panels. The fitted row carries the line, both judge rates
-	// and all three gate counts, so asking the ledger twice would be two reads
-	// that could disagree about which run of a date they took. It also holds the
-	// days the rule a build follows looks back over while `applied_lookback_days`
-	// is under the widest preset, because no row is dated after the newest
-	// published day. The rows come from the packed record, read inside the widest
-	// span, so a fitted day reaches the page once the gardener has packed it.
-	const fitted = await fittedLines(readSpan);
-	const rows = fitted.rows;
-	const similarity = similarityConfig();
-	// The record is cumulative and the counts are per day, so the newest row is
-	// what both the split and the figures strip are about.
-	const newest = rows.length === 0 ? null : rows[rows.length - 1];
-	// The ruler the holdout marks are scored under. The newest fitted row wins,
-	// because the margin has to be read under the weights the line was set with;
-	// the committed config answers on a day no fit has ever run, and on a row
-	// written before the two columns existed.
+	// The ruler the hand marks are scored under: the weight in the committed
+	// config, the same one `assemble` scores a pair with.
 	const committed = committedWeights();
-	const weights: ScoreWeights = {
-		cosineWeight: newest?.cosineWeight ?? committed.cosine_weight,
-		fittedOn: newest?.cosineWeight == null ? null : newest.date
-	};
-	// The packed hand marks inside their own reach, which ends on the same day as
-	// every window here, plus one published day per distinct date they name. The
-	// bound is the reach and not the archive, and the days it opens sit outside
-	// the window preset - so it has an entry of its own in
-	// `docs/concepts/growing-reads.md`.
+	const weights: ScoreWeights = { cosineWeight: committed.cosine_weight };
 	const reach = markReach(day, holdoutReachDays());
 	const holdout = await holdoutReading(weights, reach);
-	// How the line stood against the marks, off the committed row rather than
-	// counted again here. Null where nobody has run the verb that writes it, where
-	// its day is not packed yet, or where the newest row is older than the widest
-	// preset reaches - and the panel says the line has not been scored rather
-	// than showing four zeros.
-	const scored = await mergeLineHoldoutScore(readSpan);
 	return {
 		// Oldest first, the order every chart on this console draws a day axis in.
 		merges,
-		readSpan,
-		fittedRead: fitted.read,
-		judgeRates: fitted.rates,
-		rejectedJudgeRows: fitted.rejected,
-		// Eight numbers and two words a day at the widest preset, so the window
-		// control filters an array that is already here and no preset costs a fetch.
-		lines: rows.map(
-			(row): LineDay => ({
-				date: row.date,
-				previous: row.previous,
-				proposed: row.proposed,
-				applied: row.applied,
-				clampKind: row.clampKind,
-				heldReason: row.heldReason,
-				maxDownStep: row.maxDownStep,
-				maxUpStep: row.maxUpStep
-			})
-		),
-		// The judge's own health and the record's fill, off the same rows.
-		judge: rows.map(
-			(row): JudgeDay => ({
-				date: row.date,
-				disagreementRate: row.disagreementRate,
-				unclearRate: row.unclearRate,
-				pairsJudged: row.pairsJudged,
-				pairsUsable: row.pairsUsable,
-				negativesOnRecord: row.negativesOnRecord,
-				aboveLineOnRecord: row.aboveLineOnRecord,
-				daysOnRecord: row.daysOnRecord,
-				heldReason: row.heldReason,
-				judgePolicyVersion: row.judgePolicyVersion
-			})
-		),
-		// Every date the widest preset spans, so the squares strip draws the days
-		// nothing recorded. A strip built from the rows would draw a shorter,
-		// tidier picture of a record that had stopped filling. Date arithmetic rather
-		// than a directory walk, so the cost is the span the config names and never
-		// what the archive holds (Guardrail #12).
-		span: daysInWindow(readSpan),
-		// The band and the daily step the chart draws against, read off config so
-		// the axis is the range a line MAY take rather than the range it has taken.
-		similarity,
-		// 120 slots, a fixed size whatever the archive grows to, so this read costs
-		// the same on the thousandth day as on the third. The page draws no 120-slot
-		// chart, so only the four counts, the two ranges and the 24 rebinned rows
-		// reach the document.
-		record: scoreRecord(),
-		// The day's three counts, off the newest fitted row. A dash where the ledger
-		// holds no answer, never a zero.
-		figures: {
-			inBand: newest?.pairsInBand ?? null,
-			judged: newest?.pairsJudged ?? null,
-			usable: newest?.pairsUsable ?? null
-		},
-		// The line the newest published day was built with, which the merge line's
-		// rule, the verdict split and the holdout margin all draw. The day's last
-		// build wrote it into the run record; where the record holds none, the rule
-		// a build follows works it out from the fitted rows, the switch, the
-		// lookback and the committed floor.
-		builtWith: findBuiltLine(day, readRecordedLine(day), rows, similarity, committedFloor()),
-		// Only the pairs marked as two different stories reach the document whole.
-		// They are the load-bearing ones - the line has to stay above every one of
-		// them - and inlining the rest would put two addresses and two headlines a
-		// row in a prerendered page for marks that set no floor.
 		holdout: {
 			read: holdout.read,
 			reach,
-			scoredRead: scored.read,
+			// The merge line: the floor in the committed config, which nothing fits or
+			// moves. Every mark below is compared with it.
+			line: committedFloor(),
+			// Only the pairs marked as two different stories reach the document whole.
+			// They are the load-bearing ones - the line has to stay above every one of
+			// them - and inlining the rest would put two addresses and two headlines a
+			// row in a prerendered page for marks that set no floor.
 			marks: holdout.marks.filter((mark) => !mark.sameStory),
 			skipped: holdout.skipped,
 			marked: holdout.marked,
@@ -176,11 +85,7 @@ export async function load() {
 			agreedScores: holdout.marks
 				.filter((mark) => mark.sameStory)
 				.map((mark) => Number(mark.score.toFixed(6))),
-			weights,
-			// The committed reading, or null. Ten numbers, so the panel can print what
-			// the line did to every mark on the day somebody scored it -
-			// which is the part a rebuild of this page cannot reconstruct.
-			scored: scored.score
+			weights
 		},
 		// How many date labels the day axis may carry - `chart.tick_density`.
 		chart: chartConfig(),
