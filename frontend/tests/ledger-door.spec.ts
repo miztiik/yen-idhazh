@@ -239,7 +239,7 @@ test('a fresh compact session reads changed same-size rows and removes views abs
 	const raw = JSON.parse(readFileSync(path.resolve('..', 'config', 'ledgers.json'), 'utf8'));
 	raw.families[0].ledgers.push({
 		name: 'runtime-old', prefix: ['feed-ingest-plan', 'runtime-old'], grain: 'raw-and-compact',
-		publish_to_data_explorer: true, stem: null, suffix: null
+		publish_to_data_explorer: true, suffix: null
 	});
 	const oldCatalog = parseLedgerCatalog(raw);
 	await buildLedger(root, { ledger: 'runtime-old', catalog: oldCatalog, pinned: '2030-06-15', days: [{ ago: 0, rows: 1 }] });

@@ -58,8 +58,8 @@ class Grain(StrEnum):
 
     Removal condition: `docs/concepts/telemetry-intent.md` requires every tree
     under `state/` to reach one pattern. A member is deleted by the migration
-    that empties it, and the enum with the last of them. Five shapes are recorded
-    because all five are really in use right now, not because five is a design.
+    that empties it, and the enum with the last of them. Three shapes are recorded
+    because all three are really in use right now, not because three is a design.
     No committed ledger files CSV under any of them: every one that did has
     moved through the door.
 
@@ -69,28 +69,17 @@ class Grain(StrEnum):
     is the path inside each root rather than a folder of its own.
     """
 
-    FLAT = "flat"
     DAY_FILE = "day"
     DAY_TREE = "tree"
-    STAMPED = "stamp"
     RAW_AND_COMPACT = "raw-and-compact"
 
 
-#: Which of `stem` and `suffix` each grain needs. A flat file is the only one
-#: that names itself; a day directory is the only one with no extension, and a
-#: raw-and-compact ledger names every file from its own grammar.
-_NEEDS_A_STEM: dict[Grain, bool] = {
-    Grain.FLAT: True,
-    Grain.DAY_FILE: False,
-    Grain.DAY_TREE: False,
-    Grain.STAMPED: False,
-    Grain.RAW_AND_COMPACT: False,
-}
+#: Whether each grain's files carry an extension. A day file is the only one that
+#: does: a day directory has none, and a raw-and-compact ledger names every file
+#: from its own grammar.
 _NEEDS_A_SUFFIX: dict[Grain, bool] = {
-    Grain.FLAT: True,
     Grain.DAY_FILE: True,
     Grain.DAY_TREE: False,
-    Grain.STAMPED: True,
     Grain.RAW_AND_COMPACT: False,
 }
 
@@ -107,7 +96,6 @@ class LedgerEntry(Model):
     grain: Grain
     prefix: tuple[str, ...]
     publish_to_data_explorer: StrictBool
-    stem: str | None = None
     suffix: str | None = None
 
     @model_validator(mode="after")
@@ -115,8 +103,8 @@ class LedgerEntry(Model):
         """Refuse an entry no path could be built from, while an operator is reading.
 
         Every clause here is a path the builders would otherwise emit wrong: a
-        flat file with no name, a day file with no extension, a directory
-        carrying one, or a segment that walks out of `state/`.
+        day file with no extension, a directory carrying one, or a segment that
+        walks out of `state/`.
         """
         for segment in self.prefix:
             if not re.fullmatch(LEDGER_SEGMENT_PATTERN, segment):
@@ -132,12 +120,6 @@ class LedgerEntry(Model):
             raise ValueError(
                 f"{self.name} files by {self.grain.value} and has no prefix, so its files "
                 "would sit loose at the top of state/. Give it a directory"
-            )
-        if _NEEDS_A_STEM[self.grain] != (self.stem is not None):
-            raise ValueError(
-                f"{self.name} files by {self.grain.value} and "
-                f"{'needs a stem' if _NEEDS_A_STEM[self.grain] else 'is named by its period'}, "
-                f"so stem must be {'set' if _NEEDS_A_STEM[self.grain] else 'null'}"
             )
         if _NEEDS_A_SUFFIX[self.grain] != (self.suffix is not None):
             raise ValueError(

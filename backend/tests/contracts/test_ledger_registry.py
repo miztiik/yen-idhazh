@@ -34,7 +34,6 @@ REPO_ROOT: Final = Path(__file__).resolve().parents[3]
 REGISTRY: Final = REPO_ROOT / "config" / paths.REGISTRY_FILENAME
 
 A_DAY: Final = "2026-09-18"
-A_STAMP: Final = "20260918T120000Z"
 STATE: Final = Path("state")
 
 #: What each builder answered before the registry existed: the POSIX form, the
@@ -140,11 +139,9 @@ CLAIMED_AT_THE_BASE: Final[frozenset[str]] = frozenset(
 )
 
 #: The period each grain is asked for, so one table drives every builder check.
-COVERS: Final[dict[Grain, str | None]] = {
-    Grain.FLAT: None,
+COVERS: Final[dict[Grain, str]] = {
     Grain.DAY_FILE: A_DAY,
     Grain.DAY_TREE: A_DAY,
-    Grain.STAMPED: A_STAMP,
 }
 
 #: The ledgers that file under `state/raw/` and `state/compact/` through the door.
@@ -421,8 +418,6 @@ def test_a_day_tree_root_is_where_it_was(member: LedgerName) -> None:
 def test_the_two_forms_of_one_folder_agree() -> None:
     """`tree_relpath` is `tree_root` in POSIX form, the way `relpath` is `path`'s."""
     for member in REGISTRY_ADDRESSED:
-        if paths.entry(member).grain is Grain.FLAT:
-            continue
         assert paths.tree_relpath(member) == paths.tree_root(STATE, member).as_posix()
 
 
@@ -516,36 +511,30 @@ def test_the_three_owners_build_the_paths_they_built_before() -> None:
 
 
 @pytest.mark.parametrize(
-    ("grain", "stem", "suffix"),
+    ("grain", "suffix"),
     [
-        (Grain.FLAT, "score-distribution", ".json"),
-        (Grain.DAY_FILE, None, ".json"),
-        (Grain.DAY_TREE, None, None),
-        (Grain.STAMPED, None, ".json"),
-        (Grain.RAW_AND_COMPACT, None, None),
+        (Grain.DAY_FILE, ".json"),
+        (Grain.DAY_TREE, None),
+        (Grain.RAW_AND_COMPACT, None),
     ],
 )
-def test_a_grain_accepts_its_path_fields_and_refuses_the_other_shapes(
-    grain: Grain, stem: str | None, suffix: str | None
+def test_a_grain_accepts_its_suffix_and_refuses_the_other_shape(
+    grain: Grain, suffix: str | None
 ) -> None:
-    """Construct each valid shape and make its stem and suffix rules refuse edits."""
+    """Construct each valid shape and make its suffix rule refuse an edit."""
     payload = {
         "name": LedgerName.ITEM_HEALTH,
         "grain": grain,
         "prefix": ("item-health",),
         "publish_to_data_explorer": False,
-        "stem": stem,
         "suffix": suffix,
     }
     entry = LedgerEntry.model_validate(payload)
-    assert entry.stem == stem
     assert entry.suffix == suffix
 
-    wrong_stem = "unexpected" if stem is None else None
     wrong_suffix = ".json" if suffix is None else None
-    for field, value in (("stem", wrong_stem), ("suffix", wrong_suffix)):
-        with pytest.raises(ValidationError, match=rf"{field} must be"):
-            LedgerEntry.model_validate(payload | {field: value})
+    with pytest.raises(ValidationError, match=r"suffix must be"):
+        LedgerEntry.model_validate(payload | {"suffix": wrong_suffix})
 
 
 def test_a_ledger_under_the_two_roots_has_no_registry_address() -> None:

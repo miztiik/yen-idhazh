@@ -273,6 +273,4 @@ def staged_path(ledger: LedgerName) -> str:
     held = paths.entry(ledger)
     if held.grain is Grain.RAW_AND_COMPACT:
         return paths.raw_root(Path(paths.STATE_DIRNAME), ledger).as_posix()
-    if held.grain is Grain.FLAT:
-        return paths.relpath(ledger)
     return paths.tree_relpath(ledger)

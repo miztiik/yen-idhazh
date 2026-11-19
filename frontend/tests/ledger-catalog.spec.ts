@@ -127,7 +127,7 @@ test('required family metadata, real dates, vocabularies and grain fields are va
 	}
 	for (const fields of [
 		{ name: 'BAD' }, { grain: 'unknown' }, { grain: undefined }, { prefix: undefined },
-		{ stem: 'unexpected' }, { suffix: '.json' }, { extra: true }
+		{ suffix: '.json' }, { extra: true }
 	]) {
 		const payload = registry();
 		Object.assign(payload.families[0].ledgers[0], fields);

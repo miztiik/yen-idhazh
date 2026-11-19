@@ -65,7 +65,6 @@ def _registry_payload(prefixes: Mapping[str, str]) -> dict[str, object]:
                 continue
             held["grain"] = Grain.RAW_AND_COMPACT.value
             held["prefix"] = prefix.split("/")
-            held["stem"] = None
             held["suffix"] = None
     return payload
 

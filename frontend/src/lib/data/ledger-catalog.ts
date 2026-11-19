@@ -1,10 +1,10 @@
 /** Validate a grouped registry and derive its immutable, environment-independent lookup. */
-export const LEDGER_GRAINS = ['flat', 'day', 'tree', 'stamp', 'raw-and-compact'] as const;
+export const LEDGER_GRAINS = ['day', 'tree', 'raw-and-compact'] as const;
 export const LEDGER_LIFECYCLE_STATUSES = ['active', 'paused', 'retired'] as const;
 export const LEDGER_SEGMENT_PATTERN = '^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$';
 export const LEDGER_CONFIG_FIELDS = ['families'] as const;
 export const LEDGER_FAMILY_FIELDS = ['name', 'lifecycle_status', 'description', 'onboarded', 'ledgers'] as const;
-export const LEDGER_ENTRY_FIELDS = ['name', 'grain', 'prefix', 'publish_to_data_explorer', 'stem', 'suffix'] as const;
+export const LEDGER_ENTRY_FIELDS = ['name', 'grain', 'prefix', 'publish_to_data_explorer', 'suffix'] as const;
 
 export type LedgerCatalogEntry = Readonly<{
 	name: string;
@@ -75,12 +75,10 @@ function entryOf(value: unknown, family: string, where: string): LedgerCatalogEn
 	const parts = list(held.prefix, `${where}.prefix`).map((part) => segment(part, `${where}.prefix`));
 	if (typeof held.publish_to_data_explorer !== 'boolean') throw new Error(`${where}.publish_to_data_explorer must be a boolean`);
 	if (held.publish_to_data_explorer && grain !== 'raw-and-compact') throw new Error(`${name} enables publish_to_data_explorer but is not raw-and-compact`);
-	for (const key of ['stem', 'suffix'] as const) {
-		const value = held[key];
-		if (value !== undefined && value !== null && typeof value !== 'string') throw new Error(`${where}.${key} is not a string or null`);
-		const needed = key === 'stem' ? grain === 'flat' : ['flat', 'day', 'stamp'].includes(grain);
-		if (needed !== (value !== undefined && value !== null)) throw new Error(`${name}.${key} must be ${needed ? 'set' : 'null'}`);
-	}
+	const suffix = held.suffix;
+	if (suffix !== undefined && suffix !== null && typeof suffix !== 'string') throw new Error(`${where}.suffix is not a string or null`);
+	const needsSuffix = grain === 'day';
+	if (needsSuffix !== (suffix !== undefined && suffix !== null)) throw new Error(`${name}.suffix must be ${needsSuffix ? 'set' : 'null'}`);
 	if (parts[0] !== family) throw new Error(`${name} prefix does not start with family ${family}`);
 	if (grain === 'raw-and-compact' && (parts.at(-1) !== name || (name === family && parts.length !== 1))) {
 		throw new Error(`${name} raw-and-compact prefix must end with its name and preserve its family`);
