@@ -11,7 +11,7 @@ Nothing here reads a ledger or a config file. The caller names the days to read 
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date as date_type
 from datetime import timedelta
 
@@ -28,6 +28,10 @@ class ThresholdsInForce:
     upper: float
     #: The UTC day of the row that set them, empty when the configured starts did.
     set_on: str | None
+    #: The row that set them, so whoever needs more than the two thresholds from it reads the
+    #: row the draw read and not a second answer to "which row is newest". Left out of equality:
+    #: two nights that follow the same thresholds follow the same thresholds.
+    row: StorySimilarityThresholdHistoryRow | None = field(default=None, compare=False)
 
 
 def lookback_days(night: str, *, within_days: int) -> tuple[str, ...]:
@@ -68,4 +72,5 @@ def thresholds_in_force(
         lower=newest.lower_threshold_after,
         upper=newest.upper_threshold_after,
         set_on=newest.date,
+        row=newest,
     )
