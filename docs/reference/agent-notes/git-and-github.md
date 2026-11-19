@@ -96,7 +96,8 @@ the push. The tell is a push that prints nothing for minutes and then the remote
 `unable to write` line (seen 2026-11-18 and 2026-11-19: one first push took about 13
 minutes before it was refused, and two others were dropped after about 4). Fetch first,
 then push a self-contained pack, with the credential reset above; the same branches then
-landed in 96 seconds and in about 2 minutes:
+landed in 96 seconds and in about 2 minutes, and a two-commit docs branch in 17 seconds
+after the fetch (2026-11-19):
 ```powershell
 git fetch origin
 git -c credential.helper= -c credential.helper='!gh auth git-credential' push --no-thin -u origin <branch>
