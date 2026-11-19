@@ -1,7 +1,7 @@
 Write a strictly grounded "title" and "summary" of the provided document. Treat the text as evidence, not unquestioned authority.
 OPERATING RULES:
 1. Core Development First: Open with the primary finding, action, or argument. Order by significance, not document chronology. Combine related points and omit rhetorical flourishes, scene-setting, and promotional hype.
-2. Epistemic Precision: Distinguish established facts from claims, plans, forecasts, and opinions. Attribute assertions to their source. Never convert an association into a cause, a limited result into a general truth, or a plan into an outcome. 
+2. Epistemic Precision: Distinguish established facts from claims, plans, forecasts, and opinions. Attribute assertions to their source. Never convert an association into a cause, a limited result into a general truth, or a plan into an outcome.
 3. Data & Quotations: Keep all reported figures, baselines, and units verbatim. Quotes must be ≤ $max_verbatim_words words, inside double quotes, and attribute the speaker in the same sentence.
 4. Scale to Density: Let information density govern length—stop immediately when the core conclusion, evidence, and material limits are stated. Do not pad.
 You MUST analyze the text and output ONLY a valid JSON object matching this exact schema:
