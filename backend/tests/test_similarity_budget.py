@@ -21,7 +21,10 @@ pytestmark = pytest.mark.contract
 def _with(pair_budget: int) -> ContentSimilarityJudgeConfig:
     """A config that draws `pair_budget` pairs, against whatever clocks are named."""
     return ContentSimilarityJudgeConfig(
-        pair_budget=pair_budget, flush_every_pairs=1, judge_temperature=0.0
+        pair_budget=pair_budget,
+        flush_every_pairs=1,
+        judge_temperature=0.0,
+        version="2026-11-18",
     )
 
 

@@ -1,7 +1,8 @@
-"""Does the judge read its own required execution settings without changing its model?"""
+"""Does the judge read its own required settings and revision date without changing its model?"""
 
 import dataclasses
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -64,7 +65,9 @@ def test_a_written_judge_file_changes_the_sampler_and_the_stamp_together(tmp_pat
     assert sampling["top_p"] == judge.entry_of(settings).sampling["top_p"]
 
 
-@pytest.mark.parametrize("key", ["pair_budget", "flush_every_pairs", "judge_temperature"])
+@pytest.mark.parametrize(
+    "key", ["pair_budget", "flush_every_pairs", "judge_temperature", "version"]
+)
 def test_a_missing_owned_knob_is_refused_at_the_judge_reader(tmp_path: Path, key: str) -> None:
     path = declaration(tmp_path)
     raw = json.loads(path.read_text(encoding="utf-8"))
@@ -72,6 +75,41 @@ def test_a_missing_owned_knob_is_refused_at_the_judge_reader(tmp_path: Path, key
     path.write_text(json.dumps(raw), encoding="utf-8", newline="\n")
     with pytest.raises(ValueError, match=key):
         judge_settings.load(tmp_path)
+
+
+@pytest.mark.parametrize(
+    "version",
+    [
+        20261118,
+        "2026-11-18T00:00",
+        "2026-02-30",
+        "\u0662\u0660\u0662\u0666-\u0661\u0661-\u0661\u0668",
+        "9999-12-31",
+    ],
+    ids=["an integer", "a time", "a day that does not exist", "non-ascii digits", "a day to come"],
+)
+def test_a_version_that_is_not_a_past_date_is_refused_at_the_judge_reader(
+    tmp_path: Path, version: object
+) -> None:
+    declaration(tmp_path, version=version)
+    with pytest.raises(ValueError, match="version"):
+        judge_settings.load(tmp_path)
+
+
+def test_a_version_of_today_is_read(tmp_path: Path) -> None:
+    today = datetime.now(UTC).date().isoformat()
+    declaration(tmp_path, version=today)
+    assert judge_settings.load(tmp_path).version == today
+
+
+def test_the_versions_a_night_read_are_one_line_of_ascii_json_keyed_by_file(
+    tmp_path: Path,
+) -> None:
+    declaration(tmp_path, version="2026-11-17")
+    assert (
+        judge_settings.config_versions(tmp_path)
+        == '{"judges/content-similarity-judge.json":"2026-11-17"}'
+    )
 
 
 def test_offline_settings_use_their_own_named_file_and_defaults(tmp_path: Path) -> None:

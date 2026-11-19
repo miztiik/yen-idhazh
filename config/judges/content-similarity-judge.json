@@ -3,5 +3,6 @@
   "runs_model": true,
   "pair_budget": 200,
   "flush_every_pairs": 1,
-  "judge_temperature": 0.0
+  "judge_temperature": 0.0,
+  "version": "2026-11-18"
 }
