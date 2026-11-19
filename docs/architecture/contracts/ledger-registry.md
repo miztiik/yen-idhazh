@@ -347,6 +347,7 @@ The diagram draws the edits and the one write. The table below names the module 
 | `raw_files.py` | which raw files hold a ledger's current rows - the highest attempt at each work unit, oldest first - and what those rows are |
 | `ledger_files.py` | which files - yearly, monthly, daily or raw - hold one ledger's current rows, and what they are |
 | `day_removal.py` | which door files hold a range of days, and each one rebuilt without them |
+| `window_inputs.py` | which paths reading named days opens, so a sparse checkout can fetch only them. Imported by its own name, because a name added to the door joins what every council verb loads |
 | `stored_output.py` | whether named raw and compact files agree with their stored identities and compact indexes |
 | `published_columns.py` | whether the ledger files the site publishes carry the columns their row contracts declare |
 | `arrow_schema.py` | which column type each field of a contract becomes |
