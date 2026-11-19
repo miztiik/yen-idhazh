@@ -47,7 +47,7 @@ def committed(block: str) -> dict[str, object]:
     return dict(raw[block])
 
 
-def test_the_judge_owns_its_draw_and_thresholds_and_shared_stages_keep_the_rest() -> None:
+def test_the_judge_reads_its_draw_and_thresholds_from_its_own_file() -> None:
     settings = config.load(CONFIG_DIR)
     execution = judge_settings.load(CONFIG_DIR)
     raw = json.loads(
@@ -56,11 +56,6 @@ def test_the_judge_owns_its_draw_and_thresholds_and_shared_stages_keep_the_rest(
     assert execution.model_dump() == {
         name: raw[name] for name in type(execution).model_fields
     }
-    shared = settings.app.assemble.same_story.judging_knobs().model_dump()
-    assert not set(type(execution).model_fields) & set(shared)
-    assert {"enabled", "band_low", "bin_width", "discard_share", "applied_lookback_days"} <= set(
-        shared
-    )
     digest = next(
         digest
         for digest in settings.digests

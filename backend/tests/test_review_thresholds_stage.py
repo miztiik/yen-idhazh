@@ -38,8 +38,10 @@ from idhazh.content_similarity_judge.tenant import JUDGE_ID
 from idhazh.contracts.file_envelope import Period
 from idhazh.contracts.ledger_index import CompactEntry, EntryState
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.story_similarity_pair import SameStoryVerdict
-from idhazh.contracts.story_similarity_pair_verdict import StorySimilarityPairVerdict
+from idhazh.contracts.story_similarity_pair_verdict import (
+    SameStoryVerdict,
+    StorySimilarityPairVerdict,
+)
 from idhazh.contracts.story_similarity_threshold_history_row import (
     StorySimilarityThresholdHistoryRow,
     ThresholdHoldReason,

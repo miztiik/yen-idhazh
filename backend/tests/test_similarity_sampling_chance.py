@@ -33,8 +33,11 @@ from idhazh.contracts.council_invocation import (
 from idhazh.contracts.council_run_record import ShardOutcome
 from idhazh.contracts.knobs.council import JudgeLifecycleStatus
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.story_similarity_pair import JUDGE_POLICY_VERSION
-from idhazh.contracts.story_similarity_pair_verdict import PairBucket, StorySimilarityPairVerdict
+from idhazh.contracts.story_similarity_pair_verdict import (
+    JUDGE_POLICY_VERSION,
+    PairBucket,
+    StorySimilarityPairVerdict,
+)
 from idhazh.council import metrics_sink, session
 from idhazh.similarity.sampling_chance import with_sampling_chance
 from idhazh.stages import file_pair_verdicts
@@ -309,7 +312,6 @@ def test_the_log_line_counts_the_units_that_reported_and_files_no_totals_of_its_
     )
     assert "shards=2/2 filed=6 runners_reported=2" in said
     assert "dealt=" not in said
-    assert not ledger.raw_root(tmp_path / "state", LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS).exists()
 
 
 @pytest.fixture

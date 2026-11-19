@@ -141,54 +141,38 @@ The migration and its compatibility checks are owned by
 
 Saved similarity model identities use `Slug`, the same lowercase letters,
 digits and single separating hyphens accepted for configured model IDs.
-`StorySimilarityPair`, `StorySimilarityDistribution`,
-`FittedSimilarityThreshold`, `ContentSimilarityJudgeMetrics` and
-`MergeLineHoldoutScore` advance to `2026-10-24T19:49`. Readers validate the recorded
-spelling, never membership in today's selected model file. Existing JSON,
-CSV and Parquet strings, versions and provenance remain unchanged on read;
-no archive rewrite, second write format or migration is needed.
-Fixed judge software identities and verdict vocabularies remain closed.
-The maintainer-directed reversal of the former closed model lists is recorded in
-[similarity's design rationale](../publishing/autotune-content-similarity.md#design-rationale).
+Readers validate the recorded spelling, never membership in today's selected
+model file, so a row stays readable after the selected model changes. Fixed
+judge software identities and verdict vocabularies remain closed.
 
-The four judge-evidence contracts advance to `2026-11-05` with an appended
-nullable `judge_policy_version`. Historical JSON, CSV and Parquet rows retain
-their stored version, rates and unknown policy. Unjudged pair draws also leave
-the policy null. New-policy pairs require exact agreement/usability and valid
-two-order evidence; new metrics and fits validate their valid-reading
-denominators. Fitted rows append nullable `pairs_refused`, unknown for history,
-and permit null disagreement/unclear rates when their denominator is empty.
+A pair verdict carries four stamp columns that move together: `judge_model`,
+`prompt_digest`, `grammar_digest` and `judge_policy_version`, the UTC date of the
+judge interpretation the row follows. A pair no judge has read carries none of them, no
+verdict and no agreement. A judged pair says its calls held the grammar exactly when both
+readings are valid, and its agreement is checked against its two readings rather than
+trusted. A runner report that names the current policy must have rates that follow from its
+counts, and a rate is empty when its denominator is.
 
-`StorySimilarityPairVerdict` and `StorySimilarityThresholdHistoryRow` start at `2026-11-18`
-with no earlier row, so neither carries a retired-heading shim or a read-side migration. The
-pair verdict is the pair row with `judge_id` and `judged_by_run_id` dropped,
-`composite_score` renamed `similarity_score`, `usable` renamed `readings_agree`, both scores
-allowed from -1 to 1 because the draw now meets pairs below 0, and the draw's bucket and
-slice, the pair counts and sampling chance, the thresholds in force and `config_versions`
-added. A cosine or score within a billionth past 1 or -1 is folded back to the bound, because
-two identical vectors can divide to one bit past 1.0; a value further out is refused. Neither
-contract accepts NaN or infinity. A mapping cannot be a parquet column, so `config_versions`
-(both rows) and `canary_answers` (the threshold row) are each one JSON text, written compact
-with sorted keys, no spaces and ASCII only; the contract refuses any other spelling of the
-same object, so equal content is equal text. `canary_answers` is a positional list of six
-cells per canary id, so a seventh cell would need a new version that reads six or seven.
-Native and frontend readers accept those values before new writers emit them.
-No historical row or aggregate archive is rewritten.
-`ContentSimilarityJudgeMetrics` then advances to `2026-11-19` with an appended nullable
-`canary_answers`, the same JSON text the threshold row keeps, holding the answers on the
-known-answer pairs that one runner judged. It refuses an answer whose runner is not the row's
-own work part, and a reading shipped or a row stored without the column reads as no
-known-answer pair judged, so nothing is rewritten.
-The distribution and fitted contracts also append nullable
-`calibration_policy_version`, a date-valued protocol identity distinct from
-judge interpretation. New records identify the adjustable, non-headline
-population; historical JSON, CSV and Parquet values remain null. The field
-participates in aggregate identity and the one-time archive/reset transition,
-without changing the meaning of daily judge-health rates. Existing named
-historical fixtures remain the compatibility inputs; missing fields are not
-relabelled as current and old slot totals are not reconstructed.
-The [judge page](../publishing/autotune-content-similarity.md) owns the meaning
-of these counts and the archive-before-reset rule.
+`StorySimilarityPairVerdict`, `StorySimilarityThresholdHistoryRow` and
+`StorySimilarityRunnerReport` have no earlier row, so none carries a retired-heading shim
+or a read-side migration. Both scores of a pair run from -1 to 1 because the draw meets
+pairs below 0. A cosine or score within a billionth past 1 or -1 is folded back to the
+bound, because two identical vectors can divide to one bit past 1.0; a value further out
+is refused. No contract accepts NaN or infinity. A mapping cannot be a parquet column, so
+`config_versions` (the pair verdict and the threshold-history row) and `canary_answers` (the
+threshold-history row and the runner report) are each one JSON text, written compact with
+sorted keys, no spaces and ASCII only; the contract refuses any other spelling of the same
+object, so equal content is equal text. `canary_answers` is a positional list of six cells
+per canary id, so a seventh cell would need a new version that reads six or seven. Native and
+frontend readers accept those values before new writers emit them.
+
+`StorySimilarityRunnerReport` lives for one run: each runner ships one in its upload and
+the collecting job reads them to build the night's threshold-history row, so it is in no
+ledger. Its `canary_answers` holds the answers on the known-answer pairs that runner judged,
+and it refuses an answer whose runner is not the report's own work part. A report shipped
+without the column reads as no known-answer pair judged. The
+[judge page](../publishing/how-the-content-similarity-judge-follows-its-thresholds.md) owns
+the meaning of these columns.
 
 The ledger layer reads a field annotation as a recursive tree: scalar (`string`, `int64`, `float64`, `bool`), list (`list[T]` and `tuple[T, ...]`), or struct (nested Pydantic model). A closed set of unions and wrapped aliases is reduced before the conversion, and unsupported shapes fail with the full nested field path. `backend/idhazh/ledger/arrow_schema.py` is the single entry point; `backend/idhazh/ledger/parquet.py` renders that tree to Arrow; `backend/idhazh/ledger/json_lines.py` stays format-generic and never adds contract-specific branches.
 
@@ -410,13 +394,9 @@ The shapes, and where each one lives once written:
 | `ItemHealthRow` | `item-health-row` | one row of `state/raw/item-health/<YYYY>/<MM>/<DD>/`, in the raw file its writer files through the ledger door, packed later under `state/compact/item-health/` |
 | `ItemHealthSummaryRow` | `item-health-summary-row` | one row of `state/raw/item-health-summary/<YYYY>/<MM>/<DD>/`, filed through the ledger door and packed later under `state/compact/item-health-summary/` |
 | `DayMetrics` | `day-metrics` | `state/day-metrics/<YYYY>/<MM>/<DD>.json`, one whole document per published day, rewritten when that day is corrected |
-| `StorySimilarityPair` | `story-similarity-pair` | one row of `state/raw/content-similarity-judge/scored-pairs/<YYYY>/<MM>/<DD>/`, in the raw file the council's save job filed through the ledger door under the judged date, packed later under `state/compact/content-similarity-judge/scored-pairs/` - one borderline pair, what it scored, what a judge said in both orders, the instrument that said it, and the part that judged it, `work_part_index`. No night files it now |
-| `StorySimilarityDistribution` | `story-similarity-distribution` | the whole of `state/content-similarity-judge/score-distribution.json`, rewritten - a fixed row of slots and three counts each, so the fit read one file of a size that never changes (Guardrail #12). No night writes it now |
-| `FittedSimilarityThreshold` | `fitted-similarity-threshold` | one row of `state/raw/content-similarity-judge/fitted-thresholds/<YYYY>/<MM>/<DD>/`, in the raw file the council's save job filed through the ledger door under the day it fitted, packed later under `state/compact/content-similarity-judge/fitted-thresholds/` - what the merge line was, what the evidence proposed, and what the run applied. No night files it now |
 | `SimilarityHoldoutPair` | `similarity-holdout-pair` | one row under `state/raw/content-similarity-judge/holdout-pairs/<YYYY>/<MM>/<DD>/`, filed by a person's harvest through the ledger door under the day it was marked and packed under `state/compact/content-similarity-judge/holdout-pairs/` - two addresses, two headlines, and whether they are one story |
 | `CouncilRunRecord` | `council-run-record` | one row of `state/raw/council-run-records/<YYYY>/<MM>/<DD>/`, later packed under `state/compact/council-run-records/` - which council step ran for one tenant, how it ended, how long it took, and what it cost. A missing part row against `work_part_count` shows a part that did not report |
-| `ContentSimilarityJudgeMetrics` | `content-similarity-judge-metrics` | one row of `state/raw/content-similarity-judge/metrics/<YYYY>/<MM>/<DD>/`, in the raw file the council's save job filed through the ledger door under the judged date, packed later under `state/compact/content-similarity-judge/metrics/` - what one part of that judge's night, `work_part_index`, dealt, read, agreed and lost, plus its two rates and its clocks, and, from `2026-11-19`, the answers it got on the known-answer pairs it judged (`canary_answers`), which are in none of the counts or clocks. A judging unit still ships one as its scratch reading and the collecting job logs it; no night files it now |
-| `MergeLineHoldoutScore` | `content-similarity-judge-merge-line-holdout-score` | one row under `state/raw/content-similarity-judge/merge-line-holdout-scores/<YYYY>/<MM>/<DD>/`, packed under `state/compact/content-similarity-judge/merge-line-holdout-scores/` - the line in force, the four cells it scored against the hand-marked holdout, and what the line was made of. No model runs in it, so it carries no call stamp |
+| `StorySimilarityRunnerReport` | `story-similarity-runner-report` | one CSV file a judging runner ships in its upload to the collecting job - what that part of the night, `work_part_index`, dealt, validly read, agreed and lost, its two rates and its clocks, and the answers it got on the known-answer pairs it judged (`canary_answers`), which are in none of the counts or clocks. The collecting job reads the runners' reports to build the night's threshold-history row, and nothing files one |
 | `StorySimilarityPairVerdict` | `story-similarity-pair-verdict` | one row of `state/raw/content-similarity-judge/pair-verdicts/<YYYY>/<MM>/<DD>/`, in the raw file the ledger door files under the judged date, packed later under `state/compact/content-similarity-judge/pair-verdicts/` - one pair put to the judge, what it scored, the draw slice that held it, the sampling chance that follows, the two thresholds in force, and what the judge said in both orders; its part is `work_part_index`. The same shape holds the night's draw before a judging unit reads it. `stages.file_pair_verdicts` files it |
 | `StorySimilarityThresholdHistoryRow` | `story-similarity-threshold-history-row` | one row of `state/raw/content-similarity-judge/threshold-history/<YYYY>/<MM>/<DD>/`, in the raw file the ledger door files under the judged date, packed later under `state/compact/content-similarity-judge/threshold-history/` - one run's reading of both thresholds: for each, the evidence read, the fitted curve, the estimate, the gap, the move and the reason it held, and then the night's counts, rates and clocks. It describes a whole run and names no part. `stages.review_thresholds` files it |
 | `RunManifest` | `run-manifest` | `.../<DD>/run.json`, append-only per date |
@@ -499,12 +479,9 @@ mirrors the digest tree its rows are derived from.
 | `state/raw/feed-retirements/` | a file per writer, by day | is this address gone for good? | no - a retirement is permanent for one endpoint |
 | `state/day-metrics/` | day files | what did one published day do, in totals? | it is addressed by day: the site opens the dates a page names and walks nothing |
 | `state/raw/visual-prunes/` | a file per writer, by day | is the picture backlog shrinking? | no, and the layout saves this read nothing - see below |
-| `state/raw/content-similarity-judge/scored-pairs/` and `state/compact/content-similarity-judge/scored-pairs/` | a raw file per write by day, packed into day, month and year files | what did the judge say about this day's borderline pairs? | no - the collecting job's fit reads the one date it judged through `ledger.load_days` and never opens that day again |
-| `state/raw/content-similarity-judge/fitted-thresholds/` and `state/compact/content-similarity-judge/fitted-thresholds/` | a raw file per write by day, packed into day, month and year files | what was the merge line, and what moved it? | yes - the step-change guard takes a median over the newest `step_change_window_rows` written rows, and `assemble` looks back `applied_lookback_days` for a line; both read through `ledger.load_days`, which opens only the days it names |
-| `state/raw/content-similarity-judge/holdout-pairs/` and `state/compact/content-similarity-judge/holdout-pairs/` | a raw file per harvest by the day the marks were made, packed into day, month and year files | which pairs did a person judge, and how? | yes, `similarity.holdout_reach_days`: both readers open that many days back and no more, and a pair marked again is read once with its newest mark. The loader refuses a compaction that keeps fewer days than the reach |
+| `state/raw/content-similarity-judge/holdout-pairs/` and `state/compact/content-similarity-judge/holdout-pairs/` | a raw file per harvest by the day the marks were made, packed into day, month and year files | which pairs did a person judge, and how? | yes, `similarity.holdout_reach_days`: the console's holdout panel opens that many days back and no more, and a pair marked again is read once with its newest mark. The loader refuses a compaction that keeps fewer days than the reach |
 | `state/raw/content-similarity-judge/pair-verdicts/` and `state/compact/content-similarity-judge/pair-verdicts/` | a raw file per write by day, packed into day, month and year files | what did the judge say about each pair the draw took, and how likely was the draw to take it? | yes - a reader names the days it wants, and `load_pair_verdicts` opens only those through `ledger.load_days` |
 | `state/raw/content-similarity-judge/threshold-history/` and `state/compact/content-similarity-judge/threshold-history/` | a raw file per write by day, packed into day, month and year files | where did the two thresholds stand each night, and why did they move or hold? | yes - a reader names the nights it wants, and `load_threshold_history` opens only those through `ledger.load_days` |
-| `state/content-similarity-judge/score-distribution.json` | one document | what has the judge said, slot by slot, across the whole band? | no - **it is not a ledger at all.** It is rewritten whole, and its size is the band and the slot width rather than the history. That is the point: the fit reads it instead of sorting every pair ever judged (Guardrail #12) |
 
 A window turns a partition into a skipped file open. `day_partition.days_in_window`
 names both ends of a day cover, so a plan run opens the days it names and no
@@ -585,23 +562,13 @@ Every row ledger files through the ledger door, where each file records the shap
 
 ### Narrowing a row ledger declares the field it dropped
 
-A door file keeps the shape it was written under, and nothing re-files it. So a field deleted from a row contract is still a column in every file written before the change, and `extra="forbid"` would refuse every one of those rows. **A narrowing therefore declares the field it dropped**, in a frozen set on the row itself named `DROPPED_CELLS`, and the row's before-validator drops those keys from every payload it reads. `ItemHealthRow` has held one since 2026-09-17; `StorySimilarityPair` gained one on 2026-09-21 when `decode_digest` left, and `FittedSimilarityThreshold` on 2026-09-24 when `key_point_weight` left. A field renamed rather than dropped is read under its new name through `RENAMED_CELLS` in the same before-validator, and only when the new name is absent.
+A door file keeps the shape it was written under, and nothing re-files it. So a field deleted from a row contract is still a column in every file written before the change, and `extra="forbid"` would refuse every one of those rows. **A narrowing therefore declares the field it dropped**, in a frozen set on the row itself named `DROPPED_CELLS`, and the row's before-validator drops those keys from every payload it reads. `ItemHealthRow` and `EvalRow` each declare one. A field renamed rather than dropped is read under its new name through a map beside it (`RENAMED_CELLS` on `EvalRow`) in the same before-validator, and only when the new name is absent.
 
 A row keeps the `version` it was written with. The base contract accepts an older stamp on purpose, so a later read-side migration has something to branch on; restamping every row would erase the only marker of which rows predate the change.
-
-**A record whose own name is a stamp over its values lands under a new name when one of those values goes.** `StorySimilarityDistribution.record_stamp` is the archive filename, so removing a stamped value moves it exactly as changing one would: the next record counted archives under the old name and a fresh one starts. Nothing ever re-derives an archive's name, so every file already written stays readable under the name it has, and the reset happens once.
 
 ### Widening a row ledger writes an empty cell, never a value invented today
 
 A new field is nullable, and every row written before it reads that field as absent. Zero, or a value recomputed today, would claim the older run measured something it never looked at - and for a digest that is worse than silence, because the whole point of a digest is that somebody can check it. A door file written before the field existed has no such column, so a widening rewrites no committed file, and a row from an older file reads the new field as absent.
-
-### Why `JudgeConfigStamp` is a mixin, and an empty `judge_id` is read by name
-
-`StorySimilarityPair` gained six columns on 2026-09-21 - `judge_id`, `judge_temperature`, `grammar_applied`, `first_token_probabilities`, `thinking_spans` and `judged_by_run_id` - and the six are declared in the row's own body rather than inherited from `judge_call.JudgeConfigStamp`. Pydantic collects a base class's fields first, so inheriting would have put them at the HEAD of the CSV header and re-read every committed row one cell out of place. A mixin that cannot be inherited by the row it was written for is the price of a ledger with rows already in it, and it is the reason `JudgeConfigStamp` is a mixin rather than a base class. A seventh column, `decode_digest`, landed and left the same day, which is why the row declares `DROPPED_CELLS`.
-
-`judge_id` is the one appended cell the widening fills rather than leaves empty: its default is not `None`, and the rows it fills were written by the judge that owns the ledger. That makes it the one column the reader has to name. `StorySimilarityPair.from_csv_row` drops the key when the cell is empty so pydantic supplies the default, and it does that BY NAME - a predicate over "any field whose default is not `None`" would also drop `version`, because a required field has no default at all, and the before-validator would then refill it with this build's own stamp. That is silent coercion on the one cell that says which rows predate the widening.
-
-Authority: Fowler (persisted contracts), 2026-09-21.
 
 `backend/idhazh/contracts/` **must not import any other subpackage** of `backend/idhazh/`. Contracts are the bottom of the dependency graph; everything else depends on them (`CLAUDE.md` section 4). A contract that imports a stage is a contract that cannot be loaded by a test of that stage.
 

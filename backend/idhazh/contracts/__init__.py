@@ -30,7 +30,6 @@ from idhazh.contracts.content_similarity_judge_evaluation import (
     EvaluationRun,
     EvaluationSet,
 )
-from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
 from idhazh.contracts.corpus import CorpusMeta, CorpusRow
 from idhazh.contracts.council_invocation import PreparationReceipt, Selection, ShardFiles
 from idhazh.contracts.council_run_record import CouncilRunRecord
@@ -57,7 +56,6 @@ from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.file_envelope import FileEnvelope
 from idhazh.contracts.fingerprint import PipelineInputs
-from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.icon_manifest import IconManifest
 from idhazh.contracts.item_health import ItemHealthRow
@@ -66,7 +64,6 @@ from idhazh.contracts.label_row import LabelRow
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, RawDayIndex
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.machine_panels import MachinePanels
-from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
 from idhazh.contracts.pipeline_tests import PipelineTestsConfig
 from idhazh.contracts.publication_inventory import PublicationInventory
 from idhazh.contracts.publication_receipt import PublicationReceipt
@@ -100,9 +97,8 @@ from idhazh.contracts.story_encoder_candidate import (
     CandidateVectorUnit,
     PinnedEncoderCandidate,
 )
-from idhazh.contracts.story_similarity_distribution import StorySimilarityDistribution
-from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.story_similarity_pair_verdict import StorySimilarityPairVerdict
+from idhazh.contracts.story_similarity_runner_report import StorySimilarityRunnerReport
 from idhazh.contracts.story_similarity_threshold_history_row import (
     StorySimilarityThresholdHistoryRow,
 )
@@ -143,7 +139,6 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     CollectionPruneRow,
     CompactIndex,
     ConsoleBand,
-    ContentSimilarityJudgeMetrics,
     CorpusMeta,
     CorpusRow,
     CouncilRunRecord,
@@ -165,14 +160,12 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     FeedHealthRow,
     FeedRetirementRow,
     FileEnvelope,
-    FittedSimilarityThreshold,
     IconManifest,
     HostFingerprintRow,
     ItemHealthRow,
     ItemHealthSummaryRow,
     LabelRow,
     MachinePanels,
-    MergeLineHoldoutScore,
     PipelineTestsConfig,
     PinnedEncoderCandidate,
     PublicationInventory,
@@ -195,9 +188,8 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     SimilarityHoldoutPair,
     SourceHealthView,
     Sources,
-    StorySimilarityDistribution,
-    StorySimilarityPair,
     StorySimilarityPairVerdict,
+    StorySimilarityRunnerReport,
     StorySimilarityThresholdHistoryRow,
     Summary,
     Taxonomy,

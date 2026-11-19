@@ -122,9 +122,9 @@ the daily run's work job writes, so it restores what is already there - and the
 throughput reading this feature is sized against was taken on those same
 weights.
 
-Nothing it writes reaches a reader until
-`assemble.same_story.adaptive_dedup_threshold.enabled` is turned on
-([../architecture/publishing/layout.md](../architecture/publishing/layout.md)).
+Nothing it writes changes what publishes. The site's merge line is a configured value
+a person sets, and the judge's thresholds steer only which pairs it reads next
+([how the judge follows its thresholds](../architecture/publishing/how-the-content-similarity-judge-follows-its-thresholds.md)).
 
 ## What one run leaves for the next
 

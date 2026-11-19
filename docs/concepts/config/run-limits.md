@@ -1,6 +1,6 @@
 # Guards, alarms and limits
 
-**Last Updated**: 2026-11-18
+**Last Updated**: 2026-11-19
 
 Some numbers in `config/` are not there to be tuned. They are there to stop a
 bug running for six hours, to say out loud that something has changed, or to
@@ -31,13 +31,13 @@ five, and it does not assume this bound already fits it
 
 ## Why the council's runner numbers are a block of their own
 
-Until 2026-09-21 the judging shard's bound was `run.judge_shard_timeout_minutes` and its fan-out width was `assemble.same_story.adaptive_dedup_threshold.shards`. One sat in the digest pipeline's block and the other inside one judge's block, and both are the venue's: they price a runner, a checkout, an install and a weights cache restore, none of which a judge can see.
+The judging shard's bound and its fan-out width are the venue's: they price a runner, a checkout, an install and a weights cache restore, none of which a judge can see. So they sit in the council's own block, and neither in the digest pipeline's block nor inside one judge's.
 
-The width is the one that bit. `.github/workflows/llm-council.yml` sized its own matrix by reading that judge's config path, so a repository with no judge configured lost its planning job before it planned anything - and the bound went with it, leaving a shard to run to GitHub's 6 h job ceiling with nothing written. A council that cannot be configured without a judge present is a council that depends on one.
+The width is the one that would bite if it lived with a judge. A workflow that sized its own matrix by reading a judge's config path would lose its planning job before it planned anything in a repository with no judge configured, and the bound would go with it, leaving a shard to run to GitHub's 6 h job ceiling with nothing written. A council that cannot be configured without a judge present is a council that depends on one.
 
 **The judge's whole block is optional for the same reason, and that is what makes the rule checkable.** A block built by a default factory cannot say "no judge is configured": absent and present-at-defaults read the same afterwards, so the condition could be asserted and never tested. With the block optional the absence survives validation, and the check that a day of judging fits its bound runs per tenant - only while that tenant's block is there.
 
-What stayed put: `run.shard_timeout_minutes` and `run.shard_wrap_up_minutes` are the work shard's, a different stage with a different preamble, and `flush_every_pairs` is denominated in pairs, a unit only the content-similarity judge has. Ruled by Carmack on the three that moved and by Fowler on the block that became optional, 2026-09-21.
+What stayed with the work shard: `run.shard_timeout_minutes` and `run.shard_wrap_up_minutes` are the work shard's, a different stage with a different preamble, and `flush_every_pairs` is denominated in pairs, a unit only the content-similarity judge has.
 
 **The council's settings and `judge_names` share `config/llm_council.json`.** Registration is a config edit, not a code change, and an empty list stays legal. [The council owns that rule](../../architecture/publishing/llm-council.md#the-tenant-list-and-the-judge-in-it).
 

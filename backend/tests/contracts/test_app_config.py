@@ -14,17 +14,15 @@ from support.paths import CONFIG_DIR, REPO_ROOT, read_text
 
 from idhazh import config
 from idhazh.classify import dag
-from idhazh.contracts import app_config, story_similarity_distribution
+from idhazh.contracts import app_config
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.appearance_config import AppearanceConfig, ChartConfig
-from idhazh.contracts.knobs import placement
 from idhazh.contracts.knobs.console import ConsoleConfig
 from idhazh.contracts.knobs.evaluation import DriftConfig, EvaluationConfig
 from idhazh.contracts.knobs.extract import ElementsConfig
 from idhazh.contracts.knobs.ledger import LedgerConfig
 from idhazh.contracts.knobs.model_server import ModelServerConfig, is_loopback, resolve_base_url
 from idhazh.contracts.knobs.observability import LoggingConfig, ObservabilityConfig
-from idhazh.contracts.knobs.placement import SameStoryConfig, SimilarityThresholdConfig
 from idhazh.contracts.knobs.retention import PAGES_HARD_CAP_MB, RetentionConfig
 from idhazh.contracts.knobs.similarity import SimilarityConfig
 from idhazh.contracts.knobs.text_analysis import TextAnalysisConfig
@@ -777,12 +775,11 @@ def test_the_leading_block_is_a_knob_the_frontend_agrees_with() -> None:
 
 
 def test_the_holdout_reach_is_a_knob_the_frontend_agrees_with() -> None:
-    """The two readers of the hand marks open one reach, so a page and a reading count alike.
+    """The Judgement route's own copy of the reach is the contract's default.
 
-    The scoring verb reads `similarity.holdout_reach_days` off the contract and
-    the Judgement route reads it off the file, falling back to its own copy on a
-    clone with no `config/`. A drift between the two copies would let the panel
-    draw marks the reading never counted.
+    The route reads `similarity.holdout_reach_days` off the file, falling back to
+    its own copy on a clone with no `config/`. A drift between the two copies
+    would let a bare clone draw a different set of marks than a configured one.
     """
     reader = read_text(REPO_ROOT / "frontend" / "src" / "lib" / "server" / "config.ts")
     mirrored = re.search(r"const HOLDOUT_REACH_DAYS = (\d+);", reader)
@@ -927,87 +924,6 @@ def test_a_negative_heartbeat_is_refused_and_the_error_names_the_field() -> None
     assert LoggingConfig(waiting_heartbeat_seconds=0).waiting_heartbeat_seconds == 0
 
 
-def test_a_band_that_does_not_divide_into_whole_slots_is_refused() -> None:
-    """A part-slot at one end holds counts drawn from a smaller catchment than its neighbours.
-
-    The fit would read that as a dip in the judge's verdicts rather than as an
-    artefact of the arithmetic. Refused at the config rather than left to the
-    record, because the record's own validator fires hours later in CI with
-    nothing saying which of three knobs to move.
-    """
-    with pytest.raises(ValidationError, match="does not divide into whole slots"):
-        SimilarityThresholdConfig(bin_width=0.0007)
-
-
-def test_a_band_that_opens_above_todays_floor_is_refused() -> None:
-    """A band above the floor can only ever judge pairs the pass already merges.
-
-    The record then fills with confirmations and the line can never come down,
-    while every number in the file still looks legal. This is the one knob
-    combination that makes a downward move impossible without failing anything.
-    """
-    with pytest.raises(ValidationError, match="could only ever rise"):
-        SameStoryConfig(
-            floor_min=0.94,
-            adaptive_dedup_threshold=SimilarityThresholdConfig(band_low=0.95),
-        )
-
-
-def test_a_daily_step_that_outruns_the_band_is_refused() -> None:
-    """A step wider than the band can put the line where the record holds no slot.
-
-    This replaced the margin check on 2026-09-19. That one refused a step at or
-    above the gap between the line and the nearest pair marked as two stories;
-    the 200 labels marked that day put the nearest such pair at 0.9407, above
-    the 0.94 line, so there is no gap left for a step to eat.
-
-    The caps are slot counts, so the comparison is a count against the band's own
-    slot count rather than one decimal against another.
-    """
-    band = SimilarityThresholdConfig()
-    slots = round((band.band_high - band.band_low) / band.bin_width)
-    with pytest.raises(ValidationError, match="outside the record"):
-        SimilarityThresholdConfig(max_down_bins=slots)
-    with pytest.raises(ValidationError, match="outside the record"):
-        SimilarityThresholdConfig(max_up_bins=slots)
-    with pytest.raises(ValidationError, match="outside the record"):
-        SimilarityThresholdConfig(dead_zone_bins=slots)
-
-
-def test_a_config_that_makes_the_line_rise_faster_than_it_falls_is_refused() -> None:
-    """The line falls fast and rises slow, and the config is where that is held.
-
-    Lowering the line publishes less, which is the house rule, so both mechanisms
-    - the damping weight and the daily cap - are larger going down than going up.
-    The shape reads backwards to anyone who has not been told the rule, and the
-    obvious tidy-up is to point it the other way, so the refusal is here rather
-    than a comment somebody deletes.
-    """
-    with pytest.raises(ValidationError, match="meant to be quick"):
-        SimilarityThresholdConfig(fall_weight=0.15, rise_weight=0.5)
-    with pytest.raises(ValidationError, match="meant to be quick"):
-        SimilarityThresholdConfig(max_down_bins=3, max_up_bins=10)
-
-
-def test_a_config_still_spelling_a_retired_threshold_knob_is_refused() -> None:
-    """Two knobs changed unit as well as name, and one changed maintainer.
-
-    `max_down_step` was a score and `max_down_bins` is a count of slots, so an
-    operator who moves 0.005 across untouched has written a step two hundred
-    times too small. "extra inputs are not permitted" would not have told them.
-
-    `shards` left this block for `council` on 2026-09-21, so its replacement is
-    printed as a whole path - a person sent to a block-relative name would be
-    sent to a key inside the block the knob just left.
-    """
-    with pytest.raises(ValidationError, match="max_down_bins"):
-        SimilarityThresholdConfig.model_validate({"max_down_step": 0.005})
-    with pytest.raises(ValidationError, match="fall_weight"):
-        SimilarityThresholdConfig.model_validate({"smoothing_weight": 0.15})
-    with pytest.raises(ValidationError, match=re.escape("council.shards")):
-        SimilarityThresholdConfig.model_validate({"shards": 4})
-
-
 def test_a_config_still_spelling_the_judging_bound_under_run_is_refused() -> None:
     """The bound left `run` for `council`, and a stale file is answered by name.
 
@@ -1051,22 +967,6 @@ def test_a_config_still_spelling_a_setting_of_the_first_model_call_is_refused() 
         AppConfig.model_validate({"prompt_files": {"generate_labels": "prompts/a.txt"}})
 
 
-def test_a_band_that_cannot_draw_the_hardest_labelled_pair_is_refused() -> None:
-    """The pair a wrong line publishes first has to be inside the band the fit judges.
-
-    A band opening above the highest two-story mark draws only pairs nobody has
-    marked apart, so the record fills with easy agreements and the line is never
-    tested against the case that would prove it wrong. This bites where the
-    floor_min check does not: a floor raised above that mark lets a band clear
-    the first ceiling and miss the second.
-    """
-    with pytest.raises(ValidationError, match="the line most has to get right"):
-        SameStoryConfig(
-            floor_min=0.98,
-            adaptive_dedup_threshold=SimilarityThresholdConfig(band_low=0.95),
-        )
-
-
 def test_no_judges_own_measurement_reaches_the_shared_config_contract() -> None:
     """A measured figure one judge produced may not sit where every reader loads it.
 
@@ -1091,33 +991,3 @@ def test_no_judges_own_measurement_reaches_the_shared_config_contract() -> None:
         "config now carries one judge's measurement - and moving that measurement "
         "would re-size budgets nobody measured"
     )
-
-
-def test_the_two_contract_modules_share_one_grid_tolerance() -> None:
-    """Two literals for one rule drift the first time somebody loosens one.
-
-    The config and the record have to agree exactly, or a band the knob block
-    accepts is a band the record refuses - hours later, in CI, on the first day counted.
-    """
-    assert placement.GRID_TOLERANCE is story_similarity_distribution.GRID_TOLERANCE
-
-
-def test_a_config_with_no_judge_in_it_validates_and_stays_that_way() -> None:
-    """The zero-judge condition, expressed as a config test.
-
-    A block built by a default factory cannot express "no judge is configured":
-    absent and present-at-defaults read the same afterwards, so the condition
-    would be asserted and never tested. The block is optional and defaults to
-    absent, so the absence survives validation and this test can fail.
-
-    The council's own runner numbers are in their own block, so a file with no
-    judge in it still says how long a judging shard may run and how many of them
-    there are. The roster is taken out with the block, because a file with no
-    judge in it registers none either - and a slug naming a judge that is not
-    there is refused by name on the night it runs.
-    """
-    committed = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
-    del committed["assemble"]["same_story"]["adaptive_dedup_threshold"]
-    without_a_judge = AppConfig.model_validate(committed)
-
-    assert without_a_judge.assemble.same_story.adaptive_dedup_threshold is None

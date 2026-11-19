@@ -42,7 +42,7 @@ from typing import Any
 from idhazh import config
 from idhazh.content_similarity_judge.model_reader import ModelReader
 from idhazh.contracts.knobs.content_similarity_canaries import CanaryPair
-from idhazh.contracts.story_similarity_pair import SameStoryVerdict
+from idhazh.contracts.story_similarity_pair_verdict import SameStoryVerdict
 from idhazh.contracts.story_similarity_threshold_history_row import canary_answers_text
 from idhazh.similarity import judge
 from idhazh.stages.common import LOG

@@ -52,7 +52,7 @@ question, and the four answers do not mix.
 | `packages/feed-probe/` | The standalone TypeScript feed access and article readability probe, its CLI, machine-readable reports and package-local tests | a person | no |
 | `.github/agents/` | The seven persona advisors (`CLAUDE.md` section 14) | a person | no |
 | `.claude/skills/` | Claude Code skill wrappers that point at `docs/`, so one procedure is not written twice | a person | no |
-| `state/` | The append-only ledgers one run leaves for the next. Ledger-door data files under `state/raw/<prefix>/` and `state/compact/<prefix>/`; a family ledger's prefix includes its family folder. Similarity-judge ledgers live under `content-similarity-judge/` ([persistence](../architecture/contracts/persistence.md)). A ledger with multiple writers gives each writer its own day file. `state/content-similarity-judge/` holds the judge's score record and archive; `state/raw/council-run-records/` holds council step records later packed under `state/compact/council-run-records/` | a run, in CI | the Data explorer may read compact data from the configured repository; ordinary panels use compact files staged for ledgers with registry consent ([panel delivery](../architecture/publishing/how-the-query-door-answers-a-panel.md#what-the-site-holds-for-the-door)) |
+| `state/` | The append-only ledgers one run leaves for the next. Ledger-door data files under `state/raw/<prefix>/` and `state/compact/<prefix>/`; a family ledger's prefix includes its family folder. Similarity-judge ledgers live under `content-similarity-judge/` ([persistence](../architecture/contracts/persistence.md)). A ledger with multiple writers gives each writer its own day file. `state/raw/council-run-records/` holds council step records later packed under `state/compact/council-run-records/` | a run, in CI | the Data explorer may read compact data from the configured repository; ordinary panels use compact files staged for ledgers with registry consent ([panel delivery](../architecture/publishing/how-the-query-door-answers-a-panel.md#what-the-site-holds-for-the-door)) |
 | `state/raw/<ledger>/set-aside/` | Each file a compaction could not read, moved under its old path below `state/` - a raw file, or a day or month file that could not be read when its period closed - and counted in its period's `set_aside`. No gardener step names the folder, so nothing reads a file there again or deletes it; a person reads it when the console shows a non-zero count ([../architecture/publishing/ledger-compaction.md](../architecture/publishing/ledger-compaction.md#a-file-that-cannot-be-read)) | the gardener's compaction, in CI | **never**: the site copies only `state/compact/` |
 | `state/raw/traces/pipeline-tests/<id>/` | Pipeline tests write trial spans here as JSONL. These are not ledger-door parquet files. This tier-first sibling of production's `state/traces/` keeps trial retention separate from production retention ([../architecture/contracts/persistence.md](../architecture/contracts/persistence.md#design-rationale)) | a dispatch, in CI | **never** |
 | `state/raw/pipeline-tests/<id>/<ledger>/`, `state/compact/pipeline-tests/<id>/<ledger>/` | A pipeline test case's own ledgers, including item-health and host-fingerprint, file through the same tier-first `raw`/`compact` builders production ledgers use, with the test case and case name ahead of the ledger's own folder (`backend/idhazh/ledger/paths.py::overlay_registry`). Compaction declarations in `config/gardener/compact-trial-*.json` own these folders | a dispatch, in CI | **never** |
@@ -88,7 +88,7 @@ These exist on a developer machine and in CI. None is ever committed.
 | `backend/var/summary-generator-tests/` | Caller-owned summary API response, private event and Markdown report; never published or committed |
 | `backend/var/summary-eval-tests/` | Comparison caller's same-run receipts, phase evidence, escaped report and native logs; never published or committed |
 | `backend/var/evidence/` | Inside `backend/var/`, and named here because a person has to find it. One file per scored item, holding the article text and the summary a human labeller must read. Article bodies are not ours to republish, so this one is uncommittable on principle rather than on size |
-| `backend/var/council/` | Inside `backend/var/`, and named here for the same reason. **Everything one judging night carries between its jobs, and the only thing it carries**: the workflow uploads this directory and nothing else, so a file a tenant writes outside it is thrown away with the runner. One date a directory, and inside it a slot each for what was picked, what was judged, what the units measured and how each unit ended. A file is named `<date>-<tenant>-<unit>`, so eight units cannot land on one path and a file merged out of eight artifacts still says who wrote it. Nothing here is ever committed - a drawn row carries no verdict yet and the units rewrite it, while a row reaches the `content-similarity-judge/scored-pairs` ledger once, through the ledger door, already judged, and is never edited afterwards |
+| `backend/var/council/` | Inside `backend/var/`, and named here for the same reason. **Everything one judging night carries between its jobs, and the only thing it carries**: the workflow uploads this directory and nothing else, so a file a tenant writes outside it is thrown away with the runner. One date a directory, and inside it a slot each for what was picked, what was judged, what the units measured and how each unit ended. A file is named `<date>-<tenant>-<unit>`, so eight units cannot land on one path and a file merged out of eight artifacts still says who wrote it. Nothing here is ever committed - a drawn row carries no verdict yet and the units rewrite it, while a row reaches the `content-similarity-judge/pair-verdicts` ledger once, through the ledger door, already judged, and is never edited afterwards |
 | `frontend/build/` | The built bundle. Pages rebuilds it from source on every deploy |
 | `frontend/static/digest/` | Staged from `frontend/public/digest/` at build time. A copy is not a source |
 | `frontend/static/state/` | Copied at build time from compact indexes and their named files for ledgers enabled in `config/ledgers.json`. A copy is not a source |
@@ -120,7 +120,7 @@ file is that no machine wrote it. See
 
 The similarity holdout marks were the second, until a program took the writing
 over: a labeller still reads two articles and marks them one story or two, and
-that mark is the fixed floor the fitted merge line has to stay above, but
+that mark is the fixed floor the merge line has to stay above, but
 `backend/utilities/sample_sheet.py --harvest` now saves each labelling through
 the ledger door, under `state/raw/content-similarity-judge/holdout-pairs/`, and
 the gardener packs it under `state/compact/content-similarity-judge/holdout-pairs/`.
@@ -245,15 +245,12 @@ is now true of every stage-owned name rather than these nine alone, so the
 suite-walking guard that policed the difference is gone with the difference.
 
 **A stage module is named for the work it does, never for the loop that runs
-it.** Four of them were `judge_draw`, `judge_shard`, `judge_fold` and
-`judge_fit`: one family prefix naming the single loop that happened to call
-them. The prefix said which loop a stage was in and nothing about what the stage
-answers, so the directory listing told a reader nothing, and a second judge
-writing the same four steps could only repeat the prefix and lie or break the
-pattern. Renamed on 2026-09-21 to `pick_item_pairs`, `judge_item_pairs`,
-`count_verdicts` and `set_merge_line`; the last two were deleted on 2026-11-19
-when the cumulative-record fit stopped, and `file_pair_verdicts` files the
-night's rows now. The test is the directory listing: read a
+it.** A prefix naming the single loop that happens to call a stage says which
+loop it is in and nothing about what the stage answers, so the directory listing
+tells a reader nothing, and a second judge writing the same steps could only
+repeat the prefix and lie or break the pattern. The judge's stages are
+`pick_item_pairs`, `judge_item_pairs`, `judge_canary_pairs`, `file_pair_verdicts`
+and `review_thresholds`. The test is the directory listing: read a
 filename and you know what the code inside answers, whoever calls it.
 
 ## Rejected alternatives

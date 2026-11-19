@@ -152,24 +152,3 @@ def test_the_refusal_names_every_knob_a_person_could_move() -> None:
         assert knob in said, f"the refusal has to name {knob}"
     assert "6 h job ceiling" in said, "raising the timeout is bounded and the message says so"
     assert str(budget.SECONDS_A_JUDGED_PAIR) in said, "the cost is what the arithmetic turns on"
-
-
-def test_a_config_with_no_adaptive_block_is_checked_like_any_other() -> None:
-    """The draw budget is this judge's own setting, so no other block decides whether it is checked.
-
-    A config without the adaptive-threshold block used to be exempt, which let a night
-    this judge could not finish through whenever that block was absent.
-    """
-    without = AppConfig.model_validate({"models_file": "models/test.json"})
-    council = CouncilConfig()
-
-    assert without.assemble.same_story.adaptive_dedup_threshold is None
-    budget.refuse_a_night_this_tenant_cannot_finish(
-        without, council=council, judge_knobs=_with(_the_widest_draw_that_fits(council))
-    )
-    with pytest.raises(ValueError, match=r"draw\.pair_budget"):
-        budget.refuse_a_night_this_tenant_cannot_finish(
-            without,
-            council=council,
-            judge_knobs=_with(_the_widest_draw_that_fits(council) + 1),
-        )

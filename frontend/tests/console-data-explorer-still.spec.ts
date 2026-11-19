@@ -146,7 +146,7 @@ test('a reader loads real ledgers, queries them, and draws the answer', async ({
 	// Only the generated repository changes. The preview server keeps the same compiled site.
 	registry.families[0].ledgers.push({
 		name: 'runtime-report', prefix: ['feed-ingest-plan', 'runtime-report'], grain: 'raw-and-compact',
-		publish_to_data_explorer: true, stem: null, suffix: null
+		publish_to_data_explorer: true, suffix: null
 	});
 
 	writeFileSync(registryPath, JSON.stringify(registry));

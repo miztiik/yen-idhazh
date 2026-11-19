@@ -6,8 +6,9 @@ Which pairs of stories does the nightly judge read, what does it keep about each
 where do its two thresholds sit and move? This page owns the nightly draw, the rows it
 leaves in `pair-verdicts`, the review that finds where each threshold belongs and the row
 it leaves in `threshold-history`, the known-answer pairs the judge is checked against, and
-the words they use. What a threshold decides about
-publication is in [autotune-content-similarity.md](autotune-content-similarity.md); the
+the words they use. What makes two items one story on the published day, and the fixed
+line that decides it, is in [autotune-content-similarity.md](autotune-content-similarity.md);
+nothing this judge writes moves that line. The
 council that hosts the judge is in [llm-council.md](llm-council.md). The page stays whole
 because it answers one question end to end: the draw follows the thresholds, and the
 review moves them from what the draw brought back, so the two halves share their words,
@@ -92,7 +93,8 @@ by the judging stage and is described under [the known-answer pairs](#the-known-
 - **Judge** ([judge_item_pairs.py](../../../backend/idhazh/stages/judge_item_pairs.py))
   runs on each shard. It judges the known-answer pairs its shard was dealt, reads the rows
   its shard owns, writes the verdict file as it goes, and ships a reading of its own
-  instrument with the known-answer answers beside it. A shard that stops on its clock
+  instrument ([`StorySimilarityRunnerReport`](../../../backend/idhazh/contracts/story_similarity_runner_report.py))
+  with the known-answer answers beside it. A shard that stops on its clock
   leaves the rows it had finished.
 - **File** ([file_pair_verdicts.py](../../../backend/idhazh/stages/file_pair_verdicts.py))
   runs once a night in the collecting job. It files the rows through the ledger door
@@ -260,6 +262,101 @@ by the collecting job.
 
 The runners' readings of their own instruments are not a ledger of their own: the
 review sums them onto the night's `threshold-history` row.
+
+## How the judge reads a pair
+
+The judge answers one closed question about two summaries, in one of three words, under a
+grammar: do these two report on the exact same event, YES, NO or UNCLEAR. It is never asked
+whether a summary is good. A quality verdict has no place to go on a row filed by the pair's
+score, and mixing the two would put one model's opinion about writing inside the answers that
+place a threshold. How a published summary is judged is a different loop with a different
+ledger ([evaluation.md](../../concepts/evaluation.md)).
+
+**The judge is handed the two summaries and nothing else.** Not the score, which would hand
+it the number its answers are used to place a threshold against. Not the source names, which
+invite a verdict about publishers rather than about events. Not the publication times, which
+answer the question by proxy. `user_turn` in
+[prompt.py](../../../backend/idhazh/similarity/prompt.py) is the only thing that builds the
+ask. Each summary goes in fenced as untrusted data, like every other piece of text that came
+off the open web ([trust-boundary.md](../sources/trust-boundary.md)), and the ask is repeated
+after both, so the last words the model reads before it answers are ours.
+
+**Every pair is read twice, and a pair the two readings disagree about is not usable.** The
+second read puts the summaries the other way round. A model that answers one way on a pair and
+the other way on the same pair reversed has told us about itself and not about the pair. It
+is never read a third time, because a third reading with no rule for breaking the tie would be
+a coin toss wearing a number. The row is still filed with both verdicts, so a disagreement is
+a fact somebody can count: the night's `disagreement_rate` does.
+
+**A reading is valid only with the literal answer and the decoder's own emission.** The
+literal is exactly YES, NO or UNCLEAR, optionally preceded by one space. The selected token
+ids, text and bytes come from each native probability position and not from the ranked
+`top_logprobs` alternatives, and selected prefixes are consumed until they identify the
+literal verdict. Missing, malformed, empty, ambiguous or contradictory emission evidence
+refuses that reading, with one closed reason on the reading and in its log line:
+`invalid_literal`, `missing_emission`, `invalid_emission`, `ambiguous_emission` or
+`mismatched_emission`. There is no ranking fallback, no retokenisation and no retry. Both
+orders still run and keep their costs, even when the first is refused.
+
+**A refused reading is evidence, not an absent pair.** The runner records each order's verdict
+independently, leaves a refused order null, sets `grammar_applied` and `readings_agree` false
+for the pair, and reads the next pair. One valid order survives beside a refusal in the other,
+and two refusals never become agreement. The shared
+[model reader](../../../backend/idhazh/content_similarity_judge/model_reader.py) keeps
+production endpoint resolution, template checks and tokenizer checks, and replay supplies
+concrete responses at that same boundary.
+
+**`first_token_margin` is the gap between the two likeliest verdicts, over the mass the
+grammar admits.** The judge asks the decoder what else it could have written where the verdict
+opens, and the window is the 25 non-empty prefixes the grammar admits. A token is the opening
+of a legal reply and not a legal reply, so `NO` and ` NO` are one verdict said twice, and
+subtracting the top two entries would report a near-zero gap on a reply the model was certain
+about. So each token is summed into the verdict its text opens; a token that opens none or
+several (a lone space, an empty token) is dropped; and the rest is divided by the legal mass,
+because the window is the model's own distribution and not the grammar's (18 of 25 returned
+tokens were illegal in the measurement). The margin is empty where fewer than two verdicts got
+any mass: 1.0 would read as full agreement with the grammar and 0.0 as the one thing the
+column exists to catch. The window is stored as `first_token_probabilities`, each log
+probability as the server reported it, so the margin can be recomputed from any row. The
+measurement is in
+[what-the-margin-rule-changes.md](../../reference/benchmarks/what-the-margin-rule-changes.md).
+
+**What an answer means has its own identity, apart from the prompt.** `JUDGE_POLICY_VERSION`
+in [the pair contract](../../../backend/idhazh/contracts/story_similarity_pair_verdict.py) is
+a protocol date for how a reading becomes evidence, and not a setting. Judged pair rows and
+the night's row carry it as `judge_policy_version`; a draw row nothing has judged carries
+null. It is one of the six values of the meaning stamp, so a change to it leaves older pairs
+out of the evidence and the window restarts by itself. No prompt edit is used to reset the
+evidence.
+
+**The judge may take a model entry of its own, and no committed file gives it one.** The one
+thing this judge could want from a second entry is a reasoning span in front of its verdict,
+and the committed entry that offers one also moves the summariser's answer budget, cache types
+and batch size, which would change the words a reader gets with no instrument watching. So
+`models.judge` is optional and null everywhere. A second entry that names weights nobody
+serves is refused when the config loads: no server is started for it, so it would decode on
+the summariser's weights while every verdict was recorded under a model that never saw the
+pair. What it may move is the decode. It is filled the day a replay says a reasoned verdict is
+a better verdict, and that replay is priced and unrun.
+
+**Three risks in how the judge reads its first answer token were checked against the code on
+2026-10-12, and one is still open.**
+
+- **A prompt that ends in a space - open.** A rendered prompt that ends in a space starts the
+  answer from a position the model rarely sees, so the first-token probabilities move and the
+  reply still parses. The prompt ends on the reply opening read off the model's own template
+  (`render_prompt` in [server.py](../../../backend/idhazh/llm/server.py)), and nothing
+  refuses an opening that ends in a space. The grammar's optional leading space and the prefix
+  bucketing decide which verdict a token counts for; they do not undo the shift. The smallest
+  fix is to refuse such an opening when the markers are derived, before any pair is judged.
+- **Token ids built from a string - closed.** The margin credits each returned token to a
+  verdict by its text, and no token id is built, so a vocabulary that splits a word
+  differently changes nothing the margin reads.
+- **Thinking left on - closed by the design.** The judge sends its own prompt bytes, and the
+  reply opening is read off the template rendered with the thinking keyword off, so a template
+  cannot turn reasoning on behind it. Reasoning runs only through the declared two-span path,
+  and the verdict is read off the answer. Closing that path for every judge call was proposed
+  and not taken, because it would remove the second model entry above.
 
 ## The known-answer pairs
 
@@ -605,6 +702,15 @@ id stand, and a foreign row would skew its slice's chance unseen.
 by the hash can leave a small slice entirely on one runner, and a file by the hash puts
 the small slices at its end.
 
+**The shards are CI jobs, not processes on one runner.** The runner is 2 physical cores
+behind 4 logical CPUs, and one `llama-server` on the configured weights plus the shard's
+Python held at most 10.04 to 11.62 GiB at once, 64 to 74 percent of the runner's 15.61 GiB
+(measured 2026-11-16 over the eight digest work shards of run 2026-11-16-43901478491;
+[model-file.md](../../concepts/config/model-file.md) has how the server uses memory). The
+shards also commit nothing: one job downloads every shard's verdicts and makes one push, so
+there is no merge driver to trust, no union stacking to census afterwards, and no shard that
+can die having pushed half its rows.
+
 **The runners' readings are summed onto the night's row.** The totals are the night's,
 not the runner's, so the review folds them into one row a night, and a reading stays a
 scratch file shipped between jobs and never a ledger of its own.
@@ -628,8 +734,8 @@ to show.
 
 **Out is fast and in is slow.** A threshold sitting too far inside the doubtful range
 leaves wrong answers in a bucket the draw barely checks, while one sitting too far out
-only spends some pairs on near-certain ones. This is the opposite of the site's rule for
-the publishing floor, which decides what publishes and is not touched here. The speed is
+only spends some pairs on near-certain ones. The merge line that decides what publishes is
+a fixed value a person sets and is not touched here. The speed is
 per move and not per night: each move out pushes about a third of the older pairs out of
 the 0.06 window, so the usable pairs fall under 240 and the next move waits for the window
 to refill. A gap of 0.12 takes 6 moves out and 13 in (3 at the far step, then 10 at the
@@ -718,12 +824,25 @@ below 0.88, because no pair there has been judged yet. And a judge that answers 
 about 3 percent of clearly different pairs, which raises the lower estimate by about 0.014
 and which no test here can see. The lower share level is a setting for that reason.
 
-**No second record runs beside the draw.** The cumulative record and the fit it fed
-assume the old draw, so beside this one they would be wrong from the first night.
+**No cumulative record runs beside the draw.** A running total of every pair ever judged
+would assume one sampling chance for the whole history, and the draw's chances change every
+night, so a total kept beside it would be wrong from the first night. The rows of
+`pair-verdicts` carry each pair's own chance, which is why a night's totals can be rebuilt
+from them.
+
+**The merge line is a fixed number.** Nothing here moves `assemble.same_story.floor_min`: the
+thresholds steer which pairs the judge reads and decide nothing about what publishes, so a
+night of the judge being wrong, down or absent changes no published day. The run's record
+names the line it grouped at.
+
+**Nothing from an earlier design is migrated or read.** The ledgers, the score record and the
+archive that came before the weighted draw are deleted with their folders, and no reader of
+`pair-verdicts` or `threshold-history` carries a shim for their columns. A checkout of an older
+commit reads the state it wrote, because git keeps the two together.
 
 ## See also
 
-- [autotune-content-similarity.md](autotune-content-similarity.md) - what a similarity threshold decides, and the loop it replaced.
+- [autotune-content-similarity.md](autotune-content-similarity.md) - what makes two items one story, and the fixed line that decides it.
 - [llm-council.md](llm-council.md) - the venue that hosts the judge and what it asks of a tenant.
 - [../contracts/ledger-registry.md](../contracts/ledger-registry.md) - how `pair-verdicts` and `threshold-history` are registered.
 - [../../concepts/growing-reads.md](../../concepts/growing-reads.md) - why each read here names its days.

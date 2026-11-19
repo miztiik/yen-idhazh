@@ -30,7 +30,6 @@ from idhazh.content_similarity_judge.ledger_reads import (
     review_days,
 )
 from idhazh.contracts.base import ServerJob, derive_text_digest, derive_url_key
-from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
 from idhazh.contracts.council_invocation import ScheduleRequest
 from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.ledger_index import CompactEntry, EntryState
@@ -111,17 +110,15 @@ def test_the_tenant_answers_every_member_the_venue_calls(member: str) -> None:
 
 
 def test_the_slug_is_the_word_this_judges_stores_are_addressed_by() -> None:
-    """Three spellings of one word, and a drift between any two loses a row.
+    """Two spellings of one word, and a drift between them loses a row.
 
-    The slug names the directory each unit uploads into, the column every
-    instrument row carries, and the prefix under `state/` the whole judge files
-    beneath. A collecting job looking in one place for what a unit wrote to
-    another finds nothing and says nothing.
+    The slug names the directory each unit uploads into and the prefix under
+    `state/` the whole judge files beneath. A collecting job looking in one place
+    for what a unit wrote to another finds nothing and says nothing.
     """
-    on_the_row = ContentSimilarityJudgeMetrics.model_fields["judge_id"].default
+    family = ledger.entry(LedgerName.CONTENT_SIMILARITY_JUDGE_PAIR_VERDICTS).prefix[0]
 
-    assert tenant.JUDGE_ID == ledger.entry(LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS).prefix[0]
-    assert tenant.JUDGE_ID == on_the_row
+    assert tenant.JUDGE_ID == family
     assert tenant.TENANT.judge_id == tenant.JUDGE_ID
 
 
@@ -139,30 +136,17 @@ def test_this_judge_stages_each_ledger_it_writes_where_the_registry_files_it() -
     """One staged path a ledger, read off the registry, so a ledger that moves moves its path.
 
     The judged pairs and the row each night files for the two thresholds go through the
-    ledger door, so both are staged under `state/raw/`. A ledger no night writes any more is
-    staged by nothing, and the folders the judge once filed CSV into are staged by nothing
-    either - not by name, and not by a parent folder holding them.
+    ledger door, so both are staged under `state/raw/`, and nothing else is: not a
+    parent folder that would stage the hand marks a person files, and not a folder this
+    judge once wrote.
     """
     staged = tenant.TENANT.committed_paths
-    old_csv_folders = (
-        "state/content-similarity-judge/scored-pairs",
-        "state/content-similarity-judge/metrics",
-        "state/raw/content-similarity-judge/scored-pairs",
-        "state/raw/content-similarity-judge/metrics",
-        "state/content-similarity-judge/score-distribution.json",
-    )
 
     assert staged == tuple(staging.staged_path(which) for which in tenant.WRITTEN_LEDGERS)
     assert staged == (
         "state/raw/content-similarity-judge/pair-verdicts",
         "state/raw/content-similarity-judge/threshold-history",
     )
-    assert not [
-        path
-        for path in staged
-        for old in old_csv_folders
-        if old == path or old.startswith(f"{path}/")
-    ], "a staged path still covers a folder the judge no longer writes"
     assert all(
         ledger.entry(which).prefix[0] == tenant.JUDGE_ID for which in tenant.WRITTEN_LEDGERS
     ), "this judge stages a ledger outside its own family"

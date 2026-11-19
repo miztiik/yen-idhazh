@@ -29,8 +29,10 @@ from datetime import date as date_type
 from datetime import timedelta
 from typing import Literal
 
-from idhazh.contracts.story_similarity_pair import SameStoryVerdict
-from idhazh.contracts.story_similarity_pair_verdict import StorySimilarityPairVerdict
+from idhazh.contracts.story_similarity_pair_verdict import (
+    SameStoryVerdict,
+    StorySimilarityPairVerdict,
+)
 
 #: Which of the two thresholds. The row's columns come in pairs, `lower_*` and `upper_*`.
 Side = Literal["lower", "upper"]

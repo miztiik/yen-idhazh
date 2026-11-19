@@ -1,6 +1,6 @@
 # Prune a collection
 
-**Last Updated**: 2026-10-11
+**Last Updated**: 2026-11-19
 
 How do I delete the old members of a collection, safely, without taking the
 whole backlog in one go?
@@ -98,7 +98,7 @@ Both ends are named and both are inclusive, so `--since X --until X` is one day.
 range you typed is taken whole unless you ask for a smaller bite:
 
 ```
-idhazh telemetry prune --target content-similarity-judge-fitted-thresholds \
+idhazh telemetry prune --target content-similarity-judge-threshold-history \
   --since 2025-01-01 --until 2025-12-31 --no-dry-run --max-deletes 30 \
   --run-id 2026-10-08-1 --commit <full sha of the checkout>
 ```

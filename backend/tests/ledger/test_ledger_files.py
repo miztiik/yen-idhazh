@@ -516,7 +516,6 @@ def test_every_ledger_the_registry_files_under_the_two_roots_has_a_key_and_a_rea
     for member in planner:
         with pytest.raises(ValueError, match="history is read by the TypeScript planner"):
             ledger.load_ledger_rows(Path(), member, model=VisualPruneRow)
-    # The judge's score distribution is one document rewritten whole, so it stays
-    # off the door and the door has no row for it.
+    # The day record is filed off the door, so the door has no row for it.
     with pytest.raises(ValueError, match="has no key and no row contract"):
-        ledger.door_key(LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION)
+        ledger.door_key(LedgerName.DAY_METRICS)

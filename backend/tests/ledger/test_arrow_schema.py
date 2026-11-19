@@ -24,8 +24,6 @@ from idhazh.contracts.base import (
     Model,
     RunId,
     Sha256,
-    derive_text_digest,
-    derive_url_key,
 )
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.eval_row import EvalRow
@@ -35,7 +33,7 @@ from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.seen import PublishedRow, SeenRow
-from idhazh.contracts.story_similarity_pair import StorySimilarityPair
+from idhazh.contracts.story_similarity_pair_verdict import StorySimilarityPairVerdict
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.ledger.arrow_schema import (
     Column,
@@ -258,26 +256,14 @@ def test_a_uuid_uses_its_json_string_and_round_trips(tmp_path: Path) -> None:
     assert _round_trip(row, tmp_path) == row
 
 
-def test_a_story_similarity_pair_round_trips_through_a_parquet_file(tmp_path: Path) -> None:
-    """The three scorer and judge choices on a scored pair reach the file and come back."""
-    low, high = sorted(
-        (derive_url_key("https://example.com/one"), derive_url_key("https://example.org/two"))
+def test_a_pair_verdict_round_trips_through_a_parquet_file(tmp_path: Path) -> None:
+    """The slice, the chance, the thresholds in force and the judge's columns reach the file and come back."""
+    path = (
+        CONTRACT_FIXTURES_DIR
+        / "story-similarity-pair-verdict"
+        / "a-judged-pair-with-its-slice-and-chance.json"
     )
-    row = StorySimilarityPair.model_validate(
-        {
-            "date": "2026-09-18",
-            "run_id": "2026-09-18-1",
-            "shard": 0,
-            "pair_key": derive_text_digest(low + high),
-            "left_url_key": low,
-            "right_url_key": high,
-            "composite_score": 0.9,
-            "cosine": 0.9,
-            "headline": False,
-            "scorer_model": "all-minilm-l6-v2-quantized",
-            "cosine_weight": 1.0,
-        }
-    )
+    row = StorySimilarityPairVerdict.from_json(read_text(path))
 
     assert _round_trip(row, tmp_path) == row
 

@@ -38,8 +38,8 @@ class LedgerStaging:
     `test_every_store_is_filled_by_a_writer_this_test_can_follow`, which
     resolves it with `importlib` - a renamed or deleted writer fails that test
     rather than going unchecked. `symbol` is `None` only where there is no
-    single resolvable attribute to point at: a person's own run, a ledger
-    nothing writes now, or a capability still ahead of its writer (Guardrail
+    single resolvable attribute to point at: a person's own run, a writer in
+    another language, or a capability still ahead of its writer (Guardrail
     #3). The two fields can
     disagree in only one direction - `symbol` is `None` only when `writer`
     says there is nothing to follow - so a filled-in `symbol` always has a
@@ -191,23 +191,6 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
         symbol="idhazh.stages.plan.stage_plan",
         job_labels=frozenset({"plan"}),
     ),
-    LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS: LedgerStaging(
-        writer=(
-            "nothing writes it now: the council's collecting job files each judged pair "
-            "into content-similarity-judge/pair-verdicts instead, and this ledger stays "
-            "registered while its readers do"
-        ),
-        symbol=None,
-        job_labels=frozenset(),
-    ),
-    LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS: LedgerStaging(
-        writer=(
-            "nothing writes it now: no night fits a line from the cumulative record any "
-            "more, and this ledger stays registered while its readers do"
-        ),
-        symbol=None,
-        job_labels=frozenset(),
-    ),
     LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS: LedgerStaging(
         writer=(
             "a person, running `backend/utilities/sample_sheet.py --harvest` to file the "
@@ -216,39 +199,6 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
             "stages it"
         ),
         symbol="utilities.sample_sheet.harvest",
-        job_labels=frozenset(),
-    ),
-    LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION: LedgerStaging(
-        writer=(
-            "nothing writes it now: no night counts verdicts into a cumulative record "
-            "any more, and this record stays registered while its readers do"
-        ),
-        symbol=None,
-        job_labels=frozenset(),
-    ),
-    LedgerName.CONTENT_SIMILARITY_JUDGE_ARCHIVE: LedgerStaging(
-        writer="nothing writes it now: the record it archived is no longer counted",
-        symbol=None,
-        job_labels=frozenset(),
-    ),
-    LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS: LedgerStaging(
-        writer=(
-            "nothing writes it now: the night's threshold-history row carries what the "
-            "units shipped, summed by idhazh.stages.review_thresholds. "
-            "idhazh.council.metrics_sink.collect_judge_metrics stays as the council's own "
-            "capability for a judge that files its readings"
-        ),
-        symbol=None,
-        job_labels=frozenset(),
-    ),
-    LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES: LedgerStaging(
-        writer=(
-            "a person, running `python -m idhazh score-merge-line-holdout`. The marked "
-            "file changes when somebody labels more pairs rather than when a day "
-            "publishes, so nothing in the daily pipeline calls it and no job stages it. "
-            "The stage writes through the ledger door"
-        ),
-        symbol="idhazh.stages.score_merge_line_holdout.stage_score_merge_line_holdout",
         job_labels=frozenset(),
     ),
     LedgerName.CONTENT_SIMILARITY_JUDGE_PAIR_VERDICTS: LedgerStaging(
@@ -323,6 +273,4 @@ def staged_path(ledger: LedgerName) -> str:
     held = paths.entry(ledger)
     if held.grain is Grain.RAW_AND_COMPACT:
         return paths.raw_root(Path(paths.STATE_DIRNAME), ledger).as_posix()
-    if held.grain is Grain.FLAT:
-        return paths.relpath(ledger)
     return paths.tree_relpath(ledger)

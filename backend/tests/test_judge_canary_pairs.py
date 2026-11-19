@@ -33,9 +33,9 @@ from idhazh import config
 from idhazh.content_similarity_judge import settings as judge_settings
 from idhazh.content_similarity_judge.model_reader import ModelReader
 from idhazh.content_similarity_judge.tenant import JUDGE_ID
-from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
 from idhazh.contracts.knobs.content_similarity_canaries import CanaryPair
 from idhazh.contracts.knobs.models import ModelsConfig
+from idhazh.contracts.story_similarity_runner_report import StorySimilarityRunnerReport
 from idhazh.contracts.story_similarity_threshold_history_row import (
     CanaryAnswersText,
     StorySimilarityThresholdHistoryRow,
@@ -304,10 +304,10 @@ def an_answer(runner: int, word: str = "YES") -> list[Any]:
     return [word, word, 0.9810234, 0.993, 812, runner]
 
 
-def a_runner(shard: int, answers: dict[str, list[Any]]) -> ContentSimilarityJudgeMetrics:
+def a_runner(shard: int, answers: dict[str, list[Any]]) -> StorySimilarityRunnerReport:
     """One runner's reading of its own instrument, having judged the pairs named in `answers`."""
     reading = a_reading(shard=shard, dealt=2, date=DATE, run_id=f"{DATE}-9")
-    return ContentSimilarityJudgeMetrics.model_validate(
+    return StorySimilarityRunnerReport.model_validate(
         reading.model_dump(mode="json") | {"canary_answers": canary_answers_text(answers)}
     )
 
@@ -393,7 +393,7 @@ def test_four_runners_ship_their_share_and_the_night_names_all_six_exactly_once(
         report, _ = judge_them(a_reply("YES"), date=date, shard=runner, shards=4)
         reading = a_reading(shard=runner, dealt=2, date=date, run_id=f"{date}-9")
         metrics_sink.ship_judge_metrics(
-            ContentSimilarityJudgeMetrics.model_validate(
+            StorySimilarityRunnerReport.model_validate(
                 reading.model_dump(mode="json") | {"canary_answers": report.answers}
             ),
             judge_id=JUDGE_ID,
@@ -402,7 +402,7 @@ def test_four_runners_ship_their_share_and_the_night_names_all_six_exactly_once(
         )
 
     shipped = metrics_sink.shipped_rows(
-        tmp_path, judge_id=JUDGE_ID, contract=ContentSimilarityJudgeMetrics
+        tmp_path, judge_id=JUDGE_ID, contract=StorySimilarityRunnerReport
     )
     text = merged_canary_answers(shipped)
 

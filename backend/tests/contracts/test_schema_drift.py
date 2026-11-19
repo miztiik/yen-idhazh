@@ -115,19 +115,6 @@ def test_fixture_round_trips_without_losing_values(path: Path) -> None:
                 expected["visual_id"] = None
         elif "visual_id" in contract.model_fields and "visual_id" not in original:
             expected = {**original, "visual_id": None}
-        if contract.__schema_stem__ in {
-            "story-similarity-pair", "story-similarity-distribution",
-            "content-similarity-judge-metrics", "fitted-similarity-threshold",
-        }:
-            expected = {"judge_policy_version": None, **expected}
-        if contract.__schema_stem__ == "content-similarity-judge-metrics":
-            expected = {"canary_answers": None, **expected}
-        if contract.__schema_stem__ == "fitted-similarity-threshold":
-            expected = {"pairs_refused": None, **expected}
-        if contract.__schema_stem__ in {
-            "story-similarity-distribution", "fitted-similarity-threshold",
-        }:
-            expected = {"calibration_policy_version": None, **expected}
         if contract.__schema_stem__ == "day-metrics":
             expected.pop("label_similarity", None)
             for key in ("bands", "reasons", "determinism_violations"):

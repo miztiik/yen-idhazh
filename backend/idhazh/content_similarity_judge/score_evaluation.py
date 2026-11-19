@@ -39,7 +39,7 @@ from idhazh.contracts.content_similarity_judge_evaluation import (
 )
 from idhazh.contracts.knobs.content_similarity_judge import ContentSimilarityEvaluationConfig
 from idhazh.contracts.knobs.models import ModelRef
-from idhazh.contracts.story_similarity_pair import JUDGE_POLICY_VERSION, SameStoryVerdict
+from idhazh.contracts.story_similarity_pair_verdict import JUDGE_POLICY_VERSION, SameStoryVerdict
 from idhazh.llm.server import one_reply, parse_completion
 from idhazh.similarity import judge, prompt
 

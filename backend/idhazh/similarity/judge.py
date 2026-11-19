@@ -33,10 +33,10 @@ from typing import Any, Final
 from idhazh import config
 from idhazh.contracts.base import fit_field
 from idhazh.contracts.knobs.models import ModelEntry
-from idhazh.contracts.story_similarity_pair import (
+from idhazh.contracts.story_similarity_pair_verdict import (
     ReadingRefusalReason,
     SameStoryVerdict,
-    StorySimilarityPair,
+    StorySimilarityPairVerdict,
 )
 from idhazh.llm.server import (
     Completion,
@@ -243,7 +243,7 @@ def first_token_window(choices: Sequence[TokenChoice]) -> str:
     window = [[choice.token, round(choice.logprob, 6)] for choice in choices]
     return fit_field(
         json.dumps(window, ensure_ascii=True, separators=(",", ":")),
-        model=StorySimilarityPair,
+        model=StorySimilarityPairVerdict,
         field="first_token_probabilities",
         absent="[]",
     )

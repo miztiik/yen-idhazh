@@ -30,7 +30,7 @@ weighed.
 | | |
 | --- | --- |
 | Instrument, live measurement | `idhazh.llm.server.grammar_completion_payload` off the committed entry, posted to a server started by `idhazh.llm.server.server_argv` - the judge's own body, not a body written for this page |
-| Instrument, census count | Every committed row read back through `StorySimilarityPair.from_csv_row` |
+| Instrument, census count | Every row the judge's earlier pair ledger held, read back through that ledger's own contract. The ledger and its rows are deleted, so this count cannot be repeated |
 | Weights | `Qwen3.5-9B-Q4_K_M.gguf`, sha256 `03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8` - the file `models.summarizer` declares |
 | Build | `b10444-5f754ea0e`, read off `/props` on the running process |
 | Prompt | The judge's own system turn and the first two items of `tests/fixtures/contracts/digest-day`, rendered through the entry's turn markers |
@@ -63,7 +63,7 @@ value, which is the assertion the test makes rather than a number it quotes.
 
 ## What the column said before today
 
-Every committed row, read on 2026-09-21 before the rule changed. 82 rows across
+Every row the earlier pair ledger held, read on 2026-09-21 before the rule changed. 82 rows across
 two day files, and all 82 carry a margin.
 
 | Rows | Lowest | Quarter | Middle | Three-quarter | Highest | Mean | Spread |
@@ -77,12 +77,14 @@ vocabulary offered one, and on the reply measured here it did exactly that.
 
 ## What this cannot settle
 
-**How far the two readings differ across the 82 rows.** The committed rows carry
+**How far the two readings differ across the 82 rows.** The rows carry
 `first_token_probabilities` empty - the column was added on 2026-09-21 and the
 judge that fills it landed after those rows were judged - so there is no window
 on those rows to re-read, and one reply is not a distribution. **The instrument
 that could answer it is a re-judge of the same 82 pairs, priced at 82 x 94.53 s
-= 2.15 h on the judging runner.** Nothing on this page should be read as a claim
+= 2.15 h on the judging runner.** The rows are deleted with their ledger, so that
+re-judge can no longer be run, and the question stays open until the live judge's own
+readings answer it. Nothing on this page should be read as a claim
 about the population.
 
 **Whether a reasoned verdict is a better verdict.** Not measured, and not
@@ -102,5 +104,5 @@ replies under the new rule, and no such population exists yet.
 ## See also
 
 - [`which-probabilities-the-server-returns.md`](which-probabilities-the-server-returns.md) - whether the numbers are the model's own or the grammar's, which is what makes renormalising real work.
-- [`../../architecture/publishing/autotune-content-similarity.md`](../../architecture/publishing/autotune-content-similarity.md) - the judge this column belongs to, and what the reset costs.
+- [`../../architecture/publishing/how-the-content-similarity-judge-follows-its-thresholds.md`](../../architecture/publishing/how-the-content-similarity-judge-follows-its-thresholds.md) - the judge this column belongs to.
 - [`../../architecture/summarize/model-boundary.md`](../../architecture/summarize/model-boundary.md) - why the layer hands back the raw window and computes no margin.

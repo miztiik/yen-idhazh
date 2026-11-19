@@ -66,41 +66,20 @@ JUDGE_STAGE_MODULES: Final = (
 #: checks below cannot see it - so `test_every_judge_contract_named_here_exists`
 #: holds the tuple against the tree.
 JUDGE_CONTRACT_MODULES: Final = (
-    "idhazh.contracts.content_similarity_judge_metrics",
     "idhazh.contracts.knobs.content_similarity_canaries",
     "idhazh.contracts.knobs.content_similarity_judge",
-    "idhazh.contracts.fitted_similarity_threshold",
-    "idhazh.contracts.judge_call",
-    "idhazh.contracts.merge_line_holdout_score",
     "idhazh.contracts.similarity_holdout_pair",
-    "idhazh.contracts.story_similarity_distribution",
-    "idhazh.contracts.story_similarity_pair",
     "idhazh.contracts.story_similarity_pair_verdict",
+    "idhazh.contracts.story_similarity_runner_report",
     "idhazh.contracts.story_similarity_threshold_history_row",
 )
 
-#: The three judge contracts a council verb still reaches, and the routes they
-#: arrive on. Measured by a fresh walk on 2026-09-21, and the maintainer's ruling the
-#: same day is that these three may cross and nothing else may.
-#:
-#: **Why they are here rather than cut.** Both carriers are modules the two sides
-#: genuinely share. `idhazh.ledger` is the one registry of CSV rows and the
-#: tenancy protocol reads its row types off it; `idhazh.contracts.knobs.placement`
-#: is the knob block `app_config` composes, and `registry` loads `app_config` to
-#: ask a tenant whether it can finish the night. Cutting either means moving a
-#: shape every stage and the digest pipeline read, which is a row of its own -
-#: priced, and not taken with this one.
-#:
-#: **No judge CODE is on this list and none may join it.** These are declarations
-#: a judge deleted from the tree would take with it, which is what makes the
-#: exception survivable: the council imports the shape, never the judge.
-JUDGE_CONTRACTS_STILL_CROSSING: Final = frozenset(
-    {
-        "idhazh.contracts.fitted_similarity_threshold",
-        "idhazh.contracts.story_similarity_distribution",
-        "idhazh.contracts.story_similarity_pair",
-    }
-)
+#: The judge contracts a council verb may reach at import time, and the route each
+#: arrives on. None may: every shape a judge owns lives in that judge's own module,
+#: so a judge deleted from the tree takes its shapes with it and the council still
+#: imports. A shape both sides read belongs in a module neither owns. An exception
+#: is a name added here with its reason, and no judge CODE may ever join it.
+JUDGE_CONTRACTS_STILL_CROSSING: Final[frozenset[str]] = frozenset()
 
 
 @pytest.fixture(scope="module")
@@ -202,20 +181,19 @@ def test_a_named_transitive_dependency_keeps_its_import_route(
 def test_the_judge_contracts_that_still_cross_cannot_grow(reached: set[str]) -> None:
     """The exception is self-limiting, or it is an invitation.
 
-    Three judge contracts arrive through two modules both sides share, and the
-    maintainer ruled on 2026-09-21 that those three may cross while the routes are
-    priced. A list with no upper edge is one the next person extends, so what is
-    held here is the exact set: a fourth fails, and so does a third that was cut
-    without the list being cut with it.
+    The listed set, empty today, is exactly the judge contracts a council verb may
+    reach. A list with no upper edge is one the next person extends, so the set is
+    held exact: a contract that starts to cross fails, and so does one that is
+    listed after it stopped crossing.
     """
     crossing = reached & set(JUDGE_CONTRACT_MODULES)
 
     assert crossing == set(JUDGE_CONTRACTS_STILL_CROSSING), (
-        "the judge contracts a council verb reaches are no longer the three the "
-        "maintainer agreed to. Added: "
+        "the judge contracts a council verb reaches are not the listed set. Added: "
         f"{sorted(crossing - JUDGE_CONTRACTS_STILL_CROSSING)}; gone: "
-        f"{sorted(JUDGE_CONTRACTS_STILL_CROSSING - crossing)}. A new one needs a "
-        "ruling, and one that left needs this list shortened in the same commit."
+        f"{sorted(JUDGE_CONTRACTS_STILL_CROSSING - crossing)}. A contract that "
+        "crosses needs a named reason in the list, and one that stopped crossing "
+        "needs the list shortened in the same commit."
     )
 
 

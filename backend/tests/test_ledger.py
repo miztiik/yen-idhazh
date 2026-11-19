@@ -26,7 +26,6 @@ from idhazh.contracts.base import ServerJob, derive_url_key
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.file_envelope import Compression, Format, RowIdentity, Tier, WriterIdentity
-from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import (
     FailureCode,
@@ -37,7 +36,6 @@ from idhazh.contracts.item_health import (
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.seen import PublishedRow, SeenRow
-from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.ledger import filenames, ledger_files
 from idhazh.ledger.persist import _rendered
@@ -115,29 +113,6 @@ def fingerprint_row(*, on: str = DATE, shard: int = 0, cpu: str = "one") -> Host
             "run_id": f"{on}-1",
             "shard": shard,
             "cpu_model": cpu,
-        }
-    )
-
-
-def pair_row(*, on: str = DATE, judged_by_run_id: str | None = None) -> StorySimilarityPair:
-    """One judged pair, read from the committed contract fixture and re-dated.
-
-    Read inside the helper rather than at module scope, so a fixture that stops
-    parsing fails the test that asked for a row instead of the whole file
-    (CLAUDE.md section 13).
-    """
-    raw = json.loads(
-        read_text(
-            CONTRACT_FIXTURES_DIR / "story-similarity-pair" / "judged-the-same-in-both-orders.json"
-        )
-    )
-    return StorySimilarityPair.model_validate(
-        raw
-        | {
-            "version": StorySimilarityPair.schema_version(),
-            "date": on,
-            "run_id": f"{on}-1",
-            "judged_by_run_id": judged_by_run_id,
         }
     )
 
@@ -657,101 +632,6 @@ def test_the_hand_marks_file_inside_the_judges_folder_under_both_door_roots() ->
     )
 
 
-def judge_identity(*, run_id: str, attempt: int = 1) -> WriterIdentity:
-    """Who files a night's judged pairs: the council's save, with the counting stage producing."""
-    return WriterIdentity(
-        run_id=run_id,
-        attempt=attempt,
-        job=ServerJob.SAVE_COUNCIL_RESULTS,
-        shard=0,
-        producer="stages.count_verdicts",
-        git_sha="a" * 40,
-    )
-
-
-def test_the_judged_pairs_are_filed_under_the_day_they_were_drawn_from(tmp_path: Path) -> None:
-    """One nested folder more than a ledger that is its own family, and the path says so.
-
-    Everything this judge files hangs off `content-similarity-judge/`, in each of
-    the door's two roots, so a helper that quietly dropped the nest would file a
-    ledger nothing else can find. A pair is filed under the day it was drawn
-    from, never under the day the council judged it.
-    """
-    drawn_on = "2026-09-18"
-    which = LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS
-
-    (filed,) = ledger.persist(
-        tmp_path,
-        [pair_row(on=drawn_on)],
-        ledger=which,
-        covers="2026-09-19",
-        identity=judge_identity(run_id="2026-09-19-7"),
-    )
-
-    assert filed.parent.relative_to(tmp_path).as_posix() == (
-        "raw/content-similarity-judge/scored-pairs/2026/09/18"
-    )
-    assert ledger.compact_folder(tmp_path, which).relative_to(tmp_path).as_posix() == (
-        "compact/content-similarity-judge/scored-pairs"
-    )
-
-
-def fitted_row(*, on: str) -> FittedSimilarityThreshold:
-    """One fitted line, read from the committed contract fixture and re-dated."""
-    return FittedSimilarityThreshold.from_json(
-        read_text(
-            CONTRACT_FIXTURES_DIR
-            / "fitted-similarity-threshold"
-            / "the-clamp-held-a-fall-back-to-the-step.json"
-        )
-    ).model_copy(update={"date": on, "run_id": f"{on}-1"})
-
-
-def test_the_fitted_line_is_filed_under_the_day_it_was_fitted_for(tmp_path: Path) -> None:
-    """Its sibling's nest, because the guard reads a window of days across both.
-
-    The step-change guard takes a median over the newest fourteen written rows,
-    which the reader answers by asking the door for a window of days backwards.
-    Everything this judge files hangs off `content-similarity-judge/`, in each
-    of the door's two roots, so a helper that quietly dropped the nest would file
-    a ledger nothing else can find.
-    """
-    fitted_on = "2026-09-18"
-    covers = "2026-09-17"
-    which = LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS
-    identity = judge_identity(run_id=f"{fitted_on}-1").model_copy(
-        update={"producer": "stages.set_merge_line"}
-    )
-    fitted = fitted_row(on=fitted_on)
-
-    (filed,) = ledger.persist(
-        tmp_path, [fitted], ledger=which, covers=covers, identity=identity
-    )
-
-    assert filed.parent.relative_to(tmp_path).as_posix() == (
-        "raw/content-similarity-judge/fitted-thresholds/2026/09/18"
-    )
-    assert ledger.read_envelope(filed).identity == identity
-    assert ledger.load_fitted_thresholds(
-        tmp_path, today=fitted_on, within_days=1
-    ) == [fitted]
-    assert ledger.compact_folder(tmp_path, which).relative_to(tmp_path).as_posix() == (
-        "compact/content-similarity-judge/fitted-thresholds"
-    )
-
-
-def test_the_score_record_is_one_file_that_never_grows_with_the_archive() -> None:
-    """Not a ledger: it is rewritten, and its size is the band rather than the history.
-
-    That is the whole reason the fit reads it instead of the day tree
-    (Guardrail #12), so the path carries no date and there is nothing here for a
-    partition to place.
-    """
-    assert ledger.path(
-        Path("state"), LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION
-    ) == Path("state/content-similarity-judge/score-distribution.json")
-
-
 # --- The cleanup record, one file per pass ----------------------------------
 
 
@@ -910,38 +790,6 @@ def test_load_visual_prunes_skips_a_file_it_cannot_read_and_names_it(
 
 
 # --- What settles two rows of one key ---------------------------------------
-
-
-def test_a_re_judged_pair_keeps_its_row_and_a_repeated_attempt_does_not(
-    tmp_path: Path,
-) -> None:
-    """`judged_by_run_id` is in the key because `run_id` cannot tell these two apart.
-
-    `run_id` on this row names the run that drew the pair, so two judging runs
-    over one draw write the identical string. Under a key without the judging
-    stamp the settlement would keep one row and drop the fresh verdict, while
-    the record counted it - two descriptions of one day with nothing able to
-    tell them apart. A second attempt at ONE judging run is still one row: the
-    door keeps the higher attempt of one writer's work and drops the first.
-    """
-    first = pair_row()
-    again = pair_row(judged_by_run_id=f"{DATE}-7")
-    which = LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS
-
-    ledger.persist(
-        tmp_path, [first], ledger=which, covers=DATE, identity=judge_identity(run_id=f"{DATE}-1")
-    )
-    for attempt in (1, 2):
-        ledger.persist(
-            tmp_path,
-            [again],
-            ledger=which,
-            covers=DATE,
-            identity=judge_identity(run_id=f"{DATE}-7", attempt=attempt),
-        )
-
-    kept = ledger.load_story_similarity_pairs(tmp_path, DATE)
-    assert sorted(row.judged_by_run_id or "" for row in kept) == ["", f"{DATE}-7"]
 
 
 def test_a_repeated_fingerprint_is_settled_when_a_reader_asks(tmp_path: Path) -> None:

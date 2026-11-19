@@ -6,8 +6,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Protocol
 
-from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
-from idhazh.contracts.story_similarity_pair import SameStoryVerdict
+from idhazh.contracts.story_similarity_pair_verdict import SameStoryVerdict
+from idhazh.contracts.story_similarity_runner_report import StorySimilarityRunnerReport
 
 
 class PairReadings(Protocol):
@@ -78,7 +78,7 @@ def combined_statistics(parts: Iterable[PairStatistics]) -> PairStatistics:
     return PairStatistics(attempted, valid, agreed, unclear)
 
 
-def shipped_statistics(reading: ContentSimilarityJudgeMetrics) -> PairStatistics:
+def shipped_statistics(reading: StorySimilarityRunnerReport) -> PairStatistics:
     """What one runner's shipped reading counted, with its UNCLEAR count recovered.
 
     The reading holds `unclear_rate` and not the count behind it. The runner made the rate
@@ -88,8 +88,8 @@ def shipped_statistics(reading: ContentSimilarityJudgeMetrics) -> PairStatistics
     """
     unclear = round((reading.unclear_rate or 0.0) * reading.pairs_agreed)
     return PairStatistics(
-        attempted=reading.pairs_read + reading.pairs_refused,
-        valid=reading.pairs_read,
+        attempted=reading.pairs_valid + reading.pairs_refused,
+        valid=reading.pairs_valid,
         agreed=reading.pairs_agreed,
         unclear=unclear,
     )

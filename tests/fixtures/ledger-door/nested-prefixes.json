@@ -1,4 +1,4 @@
 {
-  "scored-pairs": "content-similarity-judge/scored-pairs",
-  "metrics": "content-similarity-judge/deep/metrics"
+  "pair-verdicts": "content-similarity-judge/pair-verdicts",
+  "threshold-history": "content-similarity-judge/deep/threshold-history"
 }

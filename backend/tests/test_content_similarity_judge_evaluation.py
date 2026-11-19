@@ -61,7 +61,7 @@ from idhazh.contracts.eval_row import ConfidenceBand
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.knobs.content_similarity_judge import ContentSimilarityEvaluationConfig
 from idhazh.contracts.knobs.models import ModelsConfig
-from idhazh.contracts.story_similarity_pair import ReadingRefusalReason, SameStoryVerdict
+from idhazh.contracts.story_similarity_pair_verdict import ReadingRefusalReason, SameStoryVerdict
 from idhazh.llm.server import Completion
 from idhazh.similarity import prompt
 from utilities.evaluate_content_similarity_judge import main

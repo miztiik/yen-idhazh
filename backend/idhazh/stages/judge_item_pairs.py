@@ -31,12 +31,14 @@ from idhazh import assemble, atomic_write, config
 from idhazh.content_similarity_judge import settings as judge_settings
 from idhazh.content_similarity_judge.model_reader import ModelReader
 from idhazh.contracts.base import derive_url_key
-from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
 from idhazh.contracts.council_run_record import ShardOutcome
 from idhazh.contracts.digest_day import DigestItem
 from idhazh.contracts.knobs.content_similarity_canaries import CanaryPair
-from idhazh.contracts.story_similarity_pair import SameStoryVerdict
-from idhazh.contracts.story_similarity_pair_verdict import StorySimilarityPairVerdict
+from idhazh.contracts.story_similarity_pair_verdict import (
+    SameStoryVerdict,
+    StorySimilarityPairVerdict,
+)
+from idhazh.contracts.story_similarity_runner_report import StorySimilarityRunnerReport
 from idhazh.similarity import judge, stamps
 from idhazh.similarity.statistics import reading_statistics
 from idhazh.stages import judge_canary_pairs
@@ -79,7 +81,7 @@ class ShardReport:
     #: How this judge's own instrument behaved over the unit, ready to ship. The
     #: tenant carries it to the venue's shipping capability and reads no cell of
     #: it by name.
-    metrics: ContentSimilarityJudgeMetrics
+    metrics: StorySimilarityRunnerReport
 
     #: What the calls cost, for the venue's own row. `model_calls` is counted at
     #: the seam rather than doubled from the pairs, because a pair read behind a
@@ -272,8 +274,8 @@ def _instrument_reading(
     unreadable: int,
     stamp: stamps.JudgeStamp,
     canary_answers: str | None,
-) -> ContentSimilarityJudgeMetrics:
-    """How this shard's own instrument behaved, as the row its ledger holds.
+) -> StorySimilarityRunnerReport:
+    """How this runner's own instrument behaved, as the reading it ships.
 
     **`pairs_abandoned` is the remainder and never a counter.** A shard that
     stopped on its deadline never reached those pairs, so no line on the way past
@@ -287,10 +289,6 @@ def _instrument_reading(
     **`canary_answers` is the one cell that is not about the drawn pairs.** It is what the
     judge said on the known-answer pairs this shard owns, already in the compact text the night's
     row keeps, and it is in none of the counts, rates or clocks here.
-
-    `judge_id` is left to the contract's own default, which is the same one
-    member this judge's tenant module narrows its slug to. Naming it here would
-    make this module import the tenant that imports it.
     """
     counts = reading_statistics(readings)
     margins = [one.first_token_margin for one in readings if one.first_token_margin is not None]
@@ -305,7 +303,7 @@ def _instrument_reading(
         "run_id": run_id,
         "work_part_index": shard,
         "pairs_dealt": dealt,
-        "pairs_read": counts.valid,
+        "pairs_valid": counts.valid,
         "pairs_agreed": counts.agreed,
         "pairs_unreadable": unreadable,
         "pairs_refused": counts.refused,
@@ -319,7 +317,7 @@ def _instrument_reading(
         ),
         "canary_answers": canary_answers,
     }
-    return ContentSimilarityJudgeMetrics.model_validate(payload)
+    return StorySimilarityRunnerReport.model_validate(payload)
 
 
 def _rows_this_shard_owns(

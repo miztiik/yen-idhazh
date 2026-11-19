@@ -8,8 +8,8 @@ from dataclasses import dataclass
 import pytest
 from support.judged_pairs import a_reading
 
-from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
-from idhazh.contracts.story_similarity_pair import SameStoryVerdict
+from idhazh.contracts.story_similarity_pair_verdict import SameStoryVerdict
+from idhazh.contracts.story_similarity_runner_report import StorySimilarityRunnerReport
 from idhazh.similarity.statistics import (
     PairStatistics,
     combined_statistics,
@@ -95,13 +95,13 @@ def test_legacy_readings_with_no_grammar_flag_remain_readable_under_their_own_me
 
 def a_shipped(
     *, read: int, agreed: int, unclear_rate: float | None, refused: int = 0
-) -> ContentSimilarityJudgeMetrics:
+) -> StorySimilarityRunnerReport:
     """One runner's shipped reading with these counts, the rest of its funnel left as it was."""
     return a_reading(
         shard=0, dealt=read + refused, date="2026-11-18", run_id="2026-11-18-9"
     ).model_copy(
         update={
-            "pairs_read": read,
+            "pairs_valid": read,
             "pairs_agreed": agreed,
             "pairs_refused": refused,
             "unclear_rate": unclear_rate,

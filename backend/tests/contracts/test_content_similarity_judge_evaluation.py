@@ -18,7 +18,7 @@ from idhazh.contracts.content_similarity_judge_evaluation import (
     EvaluationSet,
 )
 from idhazh.contracts.knobs.content_similarity_judge import ContentSimilarityEvaluationConfig
-from idhazh.contracts.story_similarity_pair import SameStoryVerdict
+from idhazh.contracts.story_similarity_pair_verdict import SameStoryVerdict
 
 pytestmark = pytest.mark.contract
 DOCUMENTS = (EvaluationSet, EvaluationLabels, EvaluationRun, EvaluationReport)

@@ -1,6 +1,6 @@
 """Two articles a judge read, and whether it called them one story.
 
-The fixed floor every fitted line has to stay above. One row a pair, and the
+The fixed floor the merge line has to stay above. One row a pair, and the
 false rows are the load-bearing ones: a line that drops below a pair marked as
 two different stories would publish a merge nobody chose.
 
@@ -41,7 +41,7 @@ def _mark(cell: str) -> bool:
 
     Comparing against one spelling reads every other spelling as false, and false
     is the load-bearing mark here: a file read that way becomes all two-story
-    pairs, and the floor fitted from it refuses every merge without erroring.
+    pairs, and the floor the merge line has to stay above is read off it without erroring.
     """
     try:
         return _MARKS[cell.strip().lower()]

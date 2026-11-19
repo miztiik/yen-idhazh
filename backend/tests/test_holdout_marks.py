@@ -1,11 +1,9 @@
-"""Do the marks a harvest saves read back once a pair, each with the mark it was given last?
+"""Do the marks a harvest saves reach the ledger the panel reads, under the person who ran it?
 
 The harvest in `backend/utilities/sample_sheet.py` files one labelling's marks
-through the ledger door under the day they were made, and
-`idhazh.similarity.holdout.marked_pairs` reads them over the reach
-`similarity.holdout_reach_days` sets. A pair a person marks again is read once,
-with its newest mark, so a corrected mark replaces the one it corrects rather
-than counting beside it.
+through the ledger door under the day they were made. The door keeps the newest
+mark of a pair, so a corrected mark replaces the one it corrects rather than
+counting beside it.
 
 Every case writes its own state root under `tmp_path`, and nothing reads the
 committed marks or the published archive (CLAUDE.md section 13).
@@ -15,17 +13,15 @@ from __future__ import annotations
 
 import csv
 import json
-from datetime import date, timedelta
 from pathlib import Path
 from typing import Final
 
 import pytest
-from support.paths import CONFIG_DIR
 
-from idhazh import config, ledger
+from idhazh import ledger
 from idhazh.contracts.base import ServerJob, derive_url_key
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.similarity import holdout
+from idhazh.contracts.similarity_holdout_pair import SimilarityHoldoutPair
 from utilities import sample_sheet
 from utilities.sample_sheet import Article, Pair, band_of, harvest
 
@@ -33,15 +29,13 @@ pytestmark = pytest.mark.contract
 
 HOLDOUT: Final = LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS
 
-#: The day a person first labels the sheet, and a later day they correct a mark.
+#: The day a person labels the sheet.
 FIRST_DAY: Final = "2026-09-19"
-SECOND_DAY: Final = "2026-10-08"
 
 A_LABELLER: Final = "a-labeller"
 
 #: The run and the commit a person's harvest names. Any run id and full SHA will do.
 A_RUN: Final = "2026-09-19-1"
-A_LATER_RUN: Final = "2026-10-08-1"
 A_COMMIT: Final = "0735031c2a9e4b8f1d6c3a5e7b9d0f2a4c6e8b1d"
 
 LINE: Final = 0.94
@@ -95,36 +89,6 @@ def harvested(
     )
 
 
-def committed_reach() -> int:
-    """The committed `similarity.holdout_reach_days`, read inside a test."""
-    return config.load(CONFIG_DIR).app.similarity.holdout_reach_days
-
-
-def test_the_oracle_a_pair_marked_again_reads_once_with_its_second_mark(tmp_path: Path) -> None:
-    """Two harvests on two days, the second correcting one pair, read back as one row a pair.
-
-    Before the marks moved onto the door a harvest rewrote one file whole, so the
-    second harvest here would have left only the pair it named. Read through the
-    door, the first pair carries the second day's mark and the second pair keeps
-    the first day's.
-    """
-    sheet, state = tmp_path / "sheet", tmp_path / "state"
-    corrected, kept = a_pair("corrected"), a_pair("kept")
-    pairs = [corrected, kept]
-    first = a_batch(sheet, "labels-batch-01.json", {"corrected": True, "kept": True})
-    second = a_batch(sheet, "labels-batch-02.json", {"corrected": False})
-
-    assert harvested(sheet, state, pairs, first, on=FIRST_DAY, run_id=A_RUN) == 2
-    assert harvested(sheet, state, pairs, second, on=SECOND_DAY, run_id=A_LATER_RUN) == 1
-
-    marks = holdout.marked_pairs(state, today=SECOND_DAY, reach_days=committed_reach())
-
-    assert sorted((mark.left_url, mark.same_story, mark.marked_on) for mark in marks) == [
-        (corrected.left.url, False, SECOND_DAY),
-        (kept.left.url, True, FIRST_DAY),
-    ]
-
-
 def test_a_harvest_files_one_raw_file_under_the_person_who_ran_it(tmp_path: Path) -> None:
     """The marks are one door file under the day they were made, written by `operator`.
 
@@ -156,23 +120,6 @@ def test_a_harvest_that_found_no_label_files_nothing(tmp_path: Path) -> None:
 
     assert harvested(sheet, state, [a_pair("a-pair")], batch, on=FIRST_DAY, run_id=A_RUN) == 0
     assert not ledger.raw_root(state, HOLDOUT).exists()
-
-
-def test_a_mark_filed_before_the_reach_is_not_read(tmp_path: Path) -> None:
-    """The read opens the reach and nothing older, so its cost never grows with the ledger.
-
-    Both ends are named: a mark filed exactly `reach` days back still counts,
-    and one a day older does not, until somebody marks the pair again.
-    """
-    sheet, state = tmp_path / "sheet", tmp_path / "state"
-    batch = a_batch(sheet, "labels-batch-01.json", {"a-pair": True})
-    harvested(sheet, state, [a_pair("a-pair")], batch, on=FIRST_DAY, run_id=A_RUN)
-    reach = 30
-    edge = (date.fromisoformat(FIRST_DAY) + timedelta(days=reach)).isoformat()
-    past = (date.fromisoformat(FIRST_DAY) + timedelta(days=reach + 1)).isoformat()
-
-    assert len(holdout.marked_pairs(state, today=edge, reach_days=reach)) == 1
-    assert holdout.marked_pairs(state, today=past, reach_days=reach) == []
 
 
 @pytest.mark.parametrize(
@@ -258,7 +205,7 @@ def test_the_typed_harvest_saves_the_marks_through_the_door(tmp_path: Path) -> N
     typed = a_typed_harvest(tmp_path, state, "--run-id", A_RUN, "--commit", A_COMMIT)
     assert sample_sheet.main(typed) == 0
 
-    (mark,) = holdout.marked_pairs(state, today=FIRST_DAY, reach_days=committed_reach())
+    (mark,) = ledger.load_days(state, HOLDOUT, [FIRST_DAY], model=SimilarityHoldoutPair)
     assert (mark.left_url, mark.same_story, mark.marked_on) == (
         "https://left.test/bridge",
         False,
