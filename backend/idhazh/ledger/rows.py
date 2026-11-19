@@ -8,11 +8,10 @@ Every writer here that records new rows asks `lifecycle.accepts_new_rows` first,
 and writes nothing into a paused or retired family; `append_seen` and
 `append_published` ask through `persist`, which asks for every pipeline write.
 
-Nine readers here read a ledger that lives under `state/raw/` and
+Seven readers here read a ledger that lives under `state/raw/` and
 `state/compact/` - `load_seen`, `load_published`,
-`load_health`, `load_retirements`, `load_visual_prunes`, the two item-health
-readers `load_settled_failures` and `load_source_counts`, and the judge's
-`load_story_similarity_pairs` and `load_fitted_thresholds` - and all nine read it
+`load_health`, `load_retirements`, `load_visual_prunes`, and the two item-health
+readers `load_settled_failures` and `load_source_counts` - and all seven read it
 through `ledger/ledger_files.py`, which reads the yearly files, then the monthly
 files, then the daily files, then the raw days no compact index names, each date
 from exactly one of them. Two of their writers are here, `append_seen` and
@@ -31,13 +30,11 @@ from idhazh import day_partition
 from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.file_envelope import WriterIdentity
-from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.recorded_instant import instant_bounds
 from idhazh.contracts.seen import PublishedRow, SeenRow
-from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.ledger import ledger_files
 from idhazh.ledger.persist import persist
@@ -235,60 +232,6 @@ def load_retirements(state_dir: Path) -> list[FeedRetirementRow]:
     """
     return ledger_files.load_ledger_rows(
         state_dir, LedgerName.FEED_RETIREMENTS, model=FeedRetirementRow
-    )
-
-
-def load_story_similarity_pairs(state_dir: Path, date: str) -> list[StorySimilarityPair]:
-    """One named day's judged pairs, read through the ledger door, and never a second day.
-
-    **Guardrail #12 declaration, and it is the whole point of this ledger's
-    shape.** The fold counts one date into the record and the record is then the
-    only thing the fit reads, so this asks the door for the day the date names
-    and stops: the three compact indexes, the one file that serves the day, and
-    that day's raw files. It costs the same on the thousandth day as on the third
-    whatever the ledger holds beside it.
-
-    A file this build cannot read is skipped with a warning naming it, the way
-    the door reads every ledger, so a short day is said in the log rather than
-    silently counted as a quiet one.
-    """
-    return ledger_files.load_days(
-        state_dir,
-        LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS,
-        [date],
-        model=StorySimilarityPair,
-    )
-
-
-def load_fitted_thresholds(
-    state_dir: Path, *, today: str, within_days: int
-) -> list[FittedSimilarityThreshold]:
-    """Every fitted row in the window, read through the ledger door, oldest day first.
-
-    **Guardrail #12 declaration.** `day_partition.days_in_window` names both
-    ends, so a cover of `n` days asks the door for exactly `n + 1` days: the
-    three compact indexes, the one file that serves each day, and the raw files
-    of the days no index names. The ledger is never walked, so the read costs the
-    same on the thousandth day as on the third.
-
-    **The window is in days and the guard's median is in rows, and the caller is
-    what reconciles them.** One missed run leaves thirteen rows inside a
-    fourteen-day cover, the median returns nothing, and a guard that silently
-    never fires is worse than one that fires too readily. The fit therefore asks
-    for `max(settled_window_days, step_change_window_rows * 2)` days and takes the
-    newest rows it finds - a bound set by two knobs rather than by the archive.
-
-    A day the fit never ran has no row, which is not a fault. Two runs of one
-    date both keep their row, the later run's last, because the door keeps the
-    order its writers filed in. A file this build cannot read is skipped with a
-    warning naming it, the way the door reads every ledger, so a short window is
-    said in the log rather than silently read as a quiet one.
-    """
-    return ledger_files.load_days(
-        state_dir,
-        LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS,
-        day_partition.days_in_window(today, within_days),
-        model=FittedSimilarityThreshold,
     )
 
 

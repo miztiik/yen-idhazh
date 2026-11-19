@@ -90,19 +90,6 @@ VISUAL_PRUNE_KEY: Final = ("date", "run_id")
 COUNTERFACTUAL_SCORE_KEY: Final = ("date", "run_id", "vertical", "url_key")
 
 
-#: What makes two fitted-line rows the same record. One run fits one line for one
-#: date, so a second row under those two cells is a second attempt at one
-#: execution rather than a second answer. Both attempts read the same score
-#: record and walk the same counts, so the first row wins and there is nothing
-#: for a preference rule to choose between.
-#:
-#: The shape these two cells name is
-#: `idhazh.contracts.fitted_similarity_threshold`, and the door table below
-#: imports it only when its ledger is asked about, for the reason the holdout
-#: score's key gives.
-STORY_SIMILARITY_THRESHOLD_KEY: Final = ("date", "run_id")
-
-
 #: What makes two hand marks the same record: one pair of addresses, in the
 #: order the mark names them. The day is not in the key, because a pair a person
 #: marks again is the same pair with a newer mark, and a key that held the day
@@ -112,35 +99,6 @@ STORY_SIMILARITY_THRESHOLD_KEY: Final = ("date", "run_id")
 #: and the door table below imports it only when its ledger is asked about, for
 #: the reason beside `_JUDGE_DOOR_SHAPES`.
 HOLDOUT_PAIR_KEY: Final = ("left_url", "right_url")
-
-
-#: What makes two judged-pair rows the same record. `run_id` is in the key
-#: because two runs of one day judge the same pair against different articles,
-#: and both readings are facts worth keeping. Drop it and the settlement would
-#: keep whichever landed first, which is the opposite of what a re-run means -
-#: the fold picks the newest run itself, over the whole day, rather than letting
-#: a line-by-line rewrite decide.
-#:
-#: `work_part_index` follows `run_id`, because a judge row about one part of the
-#: split is keyed on its part: two parts of one run never settle into one record.
-#:
-#: `judged_by_run_id` is in it because `run_id` names the DIGEST run that
-#: published the day, so two judging runs over one date write the identical
-#: string there. Without this cell the settlement would keep the row already in
-#: the checked-out file and discard every fresh verdict, while the record
-#: counted the fresh ones - two descriptions of one day with nothing able to
-#: tell them apart.
-#:
-#: The shape these cells name is `idhazh.contracts.story_similarity_pair`, and
-#: the door table below imports it only when its ledger is asked about, for the
-#: reason the holdout score's key gives.
-STORY_SIMILARITY_PAIR_KEY: Final = (
-    "date",
-    "run_id",
-    "work_part_index",
-    "pair_key",
-    "judged_by_run_id",
-)
 
 
 #: What makes two pair-verdict rows the same record: one pair, put to the judge by
@@ -358,13 +316,6 @@ def _similarity_holdout_pair() -> type[Contract]:
     return SimilarityHoldoutPair
 
 
-def _story_similarity_pair() -> type[Contract]:
-    """The judged pair's row contract, imported when its ledger is first asked about."""
-    from idhazh.contracts.story_similarity_pair import StorySimilarityPair
-
-    return StorySimilarityPair
-
-
 def _story_similarity_pair_verdict() -> type[Contract]:
     """The pair verdict's row contract, imported when its ledger is first asked about."""
     from idhazh.contracts.story_similarity_pair_verdict import StorySimilarityPairVerdict
@@ -390,13 +341,6 @@ def _content_similarity_judge_metrics() -> type[Contract]:
     return ContentSimilarityJudgeMetrics
 
 
-def _fitted_similarity_threshold() -> type[Contract]:
-    """The fitted line's row contract, imported when its ledger is first asked about."""
-    from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
-
-    return FittedSimilarityThreshold
-
-
 #: The door ledgers a judge writes, each with its key and the function that
 #: imports the contract one of its rows is read by. The rest of the door table
 #: imports its contracts as this module loads. A judge's waits for the first
@@ -411,17 +355,9 @@ _JUDGE_DOOR_SHAPES: Final[
         HOLDOUT_PAIR_KEY,
         _similarity_holdout_pair,
     ),
-    LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS: (
-        STORY_SIMILARITY_PAIR_KEY,
-        _story_similarity_pair,
-    ),
     LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS: (
         CONTENT_SIMILARITY_JUDGE_METRICS_KEY,
         _content_similarity_judge_metrics,
-    ),
-    LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS: (
-        STORY_SIMILARITY_THRESHOLD_KEY,
-        _fitted_similarity_threshold,
     ),
     LedgerName.CONTENT_SIMILARITY_JUDGE_PAIR_VERDICTS: (
         STORY_SIMILARITY_PAIR_VERDICT_KEY,

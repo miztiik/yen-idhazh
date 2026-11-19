@@ -44,8 +44,6 @@ from idhazh.ledger.keys import (
     ITEM_HEALTH_KEY,
     ITEM_HEALTH_RULE,
     OBSERVATION_KEY,
-    STORY_SIMILARITY_PAIR_KEY,
-    STORY_SIMILARITY_THRESHOLD_KEY,
     VISUAL_PRUNE_KEY,
     Preference,
     door_contract,
@@ -122,7 +120,6 @@ from idhazh.ledger.rows import (
     FeedHealthHistory,
     append_published,
     append_seen,
-    load_fitted_thresholds,
     load_health,
     load_health_history,
     load_published,
@@ -130,7 +127,6 @@ from idhazh.ledger.rows import (
     load_seen,
     load_settled_failures,
     load_source_counts,
-    load_story_similarity_pairs,
     load_visual_prunes,
 )
 
@@ -226,8 +222,6 @@ __all__ = [  # noqa: RUF022
     "ITEM_HEALTH_KEY",
     "ITEM_HEALTH_RULE",
     "OBSERVATION_KEY",
-    "STORY_SIMILARITY_PAIR_KEY",
-    "STORY_SIMILARITY_THRESHOLD_KEY",
     "VISUAL_PRUNE_KEY",
     "Preference",
     "door_contract",
@@ -252,7 +246,6 @@ __all__ = [  # noqa: RUF022
     "FeedHealthHistory",
     "append_published",
     "append_seen",
-    "load_fitted_thresholds",
     "load_health",
     "load_health_history",
     "load_published",
@@ -260,6 +253,5 @@ __all__ = [  # noqa: RUF022
     "load_seen",
     "load_settled_failures",
     "load_source_counts",
-    "load_story_similarity_pairs",
     "load_visual_prunes",
 ]

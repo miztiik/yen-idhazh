@@ -235,54 +235,14 @@
     {
       "name": "content-similarity-judge",
       "lifecycle_status": "active",
-      "description": "Model verdicts on whether two items tell the same story, and the similarity threshold fitted from them.",
+      "description": "Model verdicts on whether two items tell the same story, the two thresholds that follow from them, and the hand marks beside them.",
       "onboarded": "2026-09-21",
       "ledgers": [
-        {
-          "name": "scored-pairs",
-          "publish_to_data_explorer": false,
-          "grain": "raw-and-compact",
-          "prefix": ["content-similarity-judge", "scored-pairs"],
-          "stem": null,
-          "suffix": null
-        },
-        {
-          "name": "fitted-thresholds",
-          "publish_to_data_explorer": false,
-          "grain": "raw-and-compact",
-          "prefix": ["content-similarity-judge", "fitted-thresholds"],
-          "stem": null,
-          "suffix": null
-        },
         {
           "name": "holdout-pairs",
           "publish_to_data_explorer": false,
           "grain": "raw-and-compact",
           "prefix": ["content-similarity-judge", "holdout-pairs"],
-          "stem": null,
-          "suffix": null
-        },
-        {
-          "name": "score-distribution",
-          "publish_to_data_explorer": false,
-          "grain": "flat",
-          "prefix": ["content-similarity-judge"],
-          "stem": "score-distribution",
-          "suffix": ".json"
-        },
-        {
-          "name": "archive",
-          "publish_to_data_explorer": false,
-          "grain": "stamp",
-          "prefix": ["content-similarity-judge", "archive"],
-          "stem": null,
-          "suffix": ".json"
-        },
-        {
-          "name": "metrics",
-          "publish_to_data_explorer": false,
-          "grain": "raw-and-compact",
-          "prefix": ["content-similarity-judge", "metrics"],
           "stem": null,
           "suffix": null
         }

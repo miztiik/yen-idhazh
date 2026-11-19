@@ -191,23 +191,6 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
         symbol="idhazh.stages.plan.stage_plan",
         job_labels=frozenset({"plan"}),
     ),
-    LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS: LedgerStaging(
-        writer=(
-            "nothing writes it now: the council's collecting job files each judged pair "
-            "into content-similarity-judge/pair-verdicts instead, and this ledger stays "
-            "registered while its readers do"
-        ),
-        symbol=None,
-        job_labels=frozenset(),
-    ),
-    LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS: LedgerStaging(
-        writer=(
-            "nothing writes it now: no night fits a line from the cumulative record any "
-            "more, and this ledger stays registered while its readers do"
-        ),
-        symbol=None,
-        job_labels=frozenset(),
-    ),
     LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS: LedgerStaging(
         writer=(
             "a person, running `backend/utilities/sample_sheet.py --harvest` to file the "
@@ -216,19 +199,6 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
             "stages it"
         ),
         symbol="utilities.sample_sheet.harvest",
-        job_labels=frozenset(),
-    ),
-    LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION: LedgerStaging(
-        writer=(
-            "nothing writes it now: no night counts verdicts into a cumulative record "
-            "any more, and this record stays registered while its readers do"
-        ),
-        symbol=None,
-        job_labels=frozenset(),
-    ),
-    LedgerName.CONTENT_SIMILARITY_JUDGE_ARCHIVE: LedgerStaging(
-        writer="nothing writes it now: the record it archived is no longer counted",
-        symbol=None,
         job_labels=frozenset(),
     ),
     LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS: LedgerStaging(

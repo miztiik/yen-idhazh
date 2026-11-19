@@ -79,7 +79,7 @@ for (const value of invalidConsent) {
 test('consent cannot enable a grain the compact reader cannot query', () => {
 	const payload = registry();
 	const entry = payload.families.flatMap((family: { ledgers: { name: string }[] }) => family.ledgers)
-		.find((entry: { name: string }) => entry.name === 'score-distribution');
+		.find((entry: { name: string }) => entry.name === 'day-metrics');
 	entry.publish_to_data_explorer = true;
 	expect(() => parseLedgerCatalog(payload)).toThrow(/not raw-and-compact/);
 });

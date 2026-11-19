@@ -34,18 +34,16 @@ from idhazh.contracts.council_invocation import (
 from idhazh.contracts.council_run_record import ShardOutcome
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.story_similarity_pair import ContentSimilarityJudgeId
 from idhazh.council import metrics_sink, session
 from idhazh.council.tenancy import ShardResult
 from idhazh.ledger import staging
 from idhazh.ledger.window_inputs import inputs_of_days
 from idhazh.similarity.budget import refuse_a_night_this_tenant_cannot_finish
 
-#: This judge's own slug, narrowed to the one member it can be. The closed set
-#: is declared once beside the column that holds it, and named here because this
-#: is the module the council reads it off - a second spelling of the string is a
-#: second thing to keep in step with the ledger's directory name.
-JUDGE_ID: Final[ContentSimilarityJudgeId] = "content-similarity-judge"
+#: This judge's own slug, named here because this is the module the council reads
+#: it off: a second spelling of the string is a second thing to keep in step with
+#: the registration in `config/llm_council.json`.
+JUDGE_ID: Final = "content-similarity-judge"
 
 #: Every ledger this judge's own work writes: the judged pairs, and the two thresholds
 #: each night's pairs put them at.
@@ -79,7 +77,7 @@ class ContentSimilarityJudge:
     """
 
     @property
-    def judge_id(self) -> ContentSimilarityJudgeId:
+    def judge_id(self) -> str:
         return JUDGE_ID
 
     @property

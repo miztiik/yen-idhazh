@@ -57,7 +57,6 @@ from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.file_envelope import FileEnvelope
 from idhazh.contracts.fingerprint import PipelineInputs
-from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.icon_manifest import IconManifest
 from idhazh.contracts.item_health import ItemHealthRow
@@ -99,8 +98,6 @@ from idhazh.contracts.story_encoder_candidate import (
     CandidateVectorUnit,
     PinnedEncoderCandidate,
 )
-from idhazh.contracts.story_similarity_distribution import StorySimilarityDistribution
-from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.story_similarity_pair_verdict import StorySimilarityPairVerdict
 from idhazh.contracts.story_similarity_threshold_history_row import (
     StorySimilarityThresholdHistoryRow,
@@ -164,7 +161,6 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     FeedHealthRow,
     FeedRetirementRow,
     FileEnvelope,
-    FittedSimilarityThreshold,
     IconManifest,
     HostFingerprintRow,
     ItemHealthRow,
@@ -193,8 +189,6 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     SimilarityHoldoutPair,
     SourceHealthView,
     Sources,
-    StorySimilarityDistribution,
-    StorySimilarityPair,
     StorySimilarityPairVerdict,
     StorySimilarityThresholdHistoryRow,
     Summary,

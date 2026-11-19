@@ -109,10 +109,8 @@ MOVED_LEDGER_TASKS: Final = (
     "compact-feed-ingest-plan-rejected-articles",
     "compact-feed-ingest-plan-feed-health-state",
     "compact-feed-ingest-plan-plan-runs",
-    "compact-content-similarity-judge-scored-pairs",
     "compact-content-similarity-judge-metrics",
     "compact-content-similarity-judge-holdout-pairs",
-    "compact-content-similarity-judge-fitted-thresholds",
     "compact-content-similarity-judge-pair-verdicts",
     "compact-content-similarity-judge-threshold-history",
 )

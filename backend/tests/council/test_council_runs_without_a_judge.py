@@ -69,37 +69,18 @@ JUDGE_CONTRACT_MODULES: Final = (
     "idhazh.contracts.content_similarity_judge_metrics",
     "idhazh.contracts.knobs.content_similarity_canaries",
     "idhazh.contracts.knobs.content_similarity_judge",
-    "idhazh.contracts.fitted_similarity_threshold",
     "idhazh.contracts.judge_call",
     "idhazh.contracts.similarity_holdout_pair",
-    "idhazh.contracts.story_similarity_distribution",
-    "idhazh.contracts.story_similarity_pair",
     "idhazh.contracts.story_similarity_pair_verdict",
     "idhazh.contracts.story_similarity_threshold_history_row",
 )
 
-#: The three judge contracts a council verb still reaches, and the routes they
-#: arrive on. Measured by a fresh walk on 2026-09-21, and the maintainer's ruling the
-#: same day is that these three may cross and nothing else may.
-#:
-#: **Why they are here rather than cut.** Both carriers are modules the two sides
-#: genuinely share. `idhazh.ledger` is the one registry of CSV rows and the
-#: tenancy protocol reads its row types off it; `idhazh.contracts.knobs.placement`
-#: is the knob block `app_config` composes, and `registry` loads `app_config` to
-#: ask a tenant whether it can finish the night. Cutting either means moving a
-#: shape every stage and the digest pipeline read, which is a row of its own -
-#: priced, and not taken with this one.
-#:
-#: **No judge CODE is on this list and none may join it.** These are declarations
-#: a judge deleted from the tree would take with it, which is what makes the
-#: exception survivable: the council imports the shape, never the judge.
-JUDGE_CONTRACTS_STILL_CROSSING: Final = frozenset(
-    {
-        "idhazh.contracts.fitted_similarity_threshold",
-        "idhazh.contracts.story_similarity_distribution",
-        "idhazh.contracts.story_similarity_pair",
-    }
-)
+#: The judge contracts a council verb may reach at import time, and the route each
+#: arrives on. None may: every shape a judge owns lives in that judge's own module,
+#: so a judge deleted from the tree takes its shapes with it and the council still
+#: imports. A shape both sides read belongs in a module neither owns. An exception
+#: is a name added here with its reason, and no judge CODE may ever join it.
+JUDGE_CONTRACTS_STILL_CROSSING: Final[frozenset[str]] = frozenset()
 
 
 @pytest.fixture(scope="module")

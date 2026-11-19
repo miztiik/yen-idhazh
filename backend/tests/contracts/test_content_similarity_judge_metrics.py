@@ -153,25 +153,6 @@ def test_the_shared_stamp_keeps_the_software_identity_closed_and_weights_open() 
         ContentSimilarityJudgeMetrics.model_validate(payload | {"judge_model": "../weights"})
 
 
-def test_a_row_written_before_the_part_was_renamed_reads_its_part_under_the_new_name() -> None:
-    """`shard` became `work_part_index`, and a row an earlier run wrote still reads.
-
-    Both sides: a CSV row under the old heading, and a JSON payload carrying the
-    old key. The part number moves across unchanged.
-    """
-    row = a_shard("a-shard-that-read-its-pairs")
-    cells = row.csv_row()
-    old_cells = {name: cell for name, cell in cells.items() if name != "work_part_index"}
-    old_cells["shard"] = cells["work_part_index"]
-    payload = row.model_dump(mode="json")
-    old_payload = {name: value for name, value in payload.items() if name != "work_part_index"}
-    old_payload["shard"] = row.work_part_index
-
-    assert ContentSimilarityJudgeMetrics.from_csv_row(old_cells) == row
-    assert ContentSimilarityJudgeMetrics.model_validate(old_payload) == row
-    assert "shard" not in ContentSimilarityJudgeMetrics.model_fields
-
-
 def a_shard_with_known_answers(runner: int = 2) -> ContentSimilarityJudgeMetrics:
     """The recorded shard, having also judged one known-answer pair on `runner`."""
     payload: dict[str, Any] = a_shard("a-shard-that-read-its-pairs").model_dump(mode="json")

@@ -44,7 +44,7 @@ from __future__ import annotations
 
 import json
 from math import isclose
-from typing import Any, ClassVar, Self
+from typing import Any, ClassVar, Literal, Self
 
 from pydantic import Field, model_validator
 
@@ -53,17 +53,17 @@ from idhazh.contracts.base import (
     Contract,
     DateStamp,
     RunId,
-    renamed_keys,
-    without_retired_keys,
 )
 from idhazh.contracts.judge_call import JudgeConfigStamp
-from idhazh.contracts.story_similarity_pair import (
-    DROPPED_CELLS,
-    RENAMED_CELLS,
-    ContentSimilarityJudgeId,
-)
 from idhazh.contracts.story_similarity_pair_verdict import JUDGE_POLICY_VERSION, JudgeModelId
 from idhazh.contracts.story_similarity_threshold_history_row import CanaryAnswersText
+
+#: The slug this judge files its readings under. A closed set is honest here in
+#: the way it could not be on the shared call stamp: that stamp is inherited by
+#: judges nobody has written yet, and every row that carries this one is written
+#: by this judge and no other. Its software identity is fixed even when the
+#: weights it runs change.
+ContentSimilarityJudgeId = Literal["content-similarity-judge"]
 
 
 class ContentSimilarityJudgeMetrics(JudgeConfigStamp, Contract):
@@ -215,19 +215,6 @@ class ContentSimilarityJudgeMetrics(JudgeConfigStamp, Contract):
         ),
     )
 
-    @model_validator(mode="before")
-    @classmethod
-    def _without_the_columns_this_row_stopped_naming(cls, data: Any) -> Any:
-        """The read-side migration `CLAUDE.md` section 11 owes a removed or renamed column.
-
-        A shard writes one of these the moment it finishes and a later step reads
-        it back, so a key the row stopped naming is one `extra="forbid"` refuses
-        on a payload nothing is wrong with. The set and the map are the pair
-        row's, so the two shapes that lost and renamed the same columns cannot
-        name different ones.
-        """
-        return renamed_keys(without_retired_keys(data, *DROPPED_CELLS), RENAMED_CELLS)
-
     @model_validator(mode="after")
     def _the_funnel_closes(self) -> Self:
         """Every pair dealt was read, refused, unreachable or never got to.
@@ -299,12 +286,9 @@ class ContentSimilarityJudgeMetrics(JudgeConfigStamp, Contract):
         """The inverse. An empty cell is an absent reading, never a zero.
 
         A column the file does not carry at all reads as an empty cell too, so a
-        row written before a column existed still opens and a widening stays
-        additive. A heading the row renamed is read under its new name.
+        widening stays additive.
         """
-        payload: dict[str, Any] = dict.fromkeys(cls.model_fields, "") | renamed_keys(
-            dict(row), RENAMED_CELLS
-        )
+        payload: dict[str, Any] = dict.fromkeys(cls.model_fields, "") | dict(row)
         for name in cls._absent_when_blank():
             if payload[name] == "":
                 payload[name] = None

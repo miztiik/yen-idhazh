@@ -43,7 +43,6 @@ from idhazh.fingerprint import (
     prose_changed_alone,
 )
 from idhazh.render import write_charts_from_decisions
-from idhazh.similarity import applied
 from idhazh.stages import common
 from idhazh.stages.common import (
     INPUTS_PAYLOAD,
@@ -273,15 +272,7 @@ def stage_assemble(
         )
 
     generated_at = assemble.utc_now()
-    # The one place the merge line is chosen. `collapse_same_story` reads the floor
-    # off the block it is handed, so the fitted line arrives the same way the
-    # committed one always has - and with the flag off this returns the committed
-    # block itself, byte for byte.
-    same_story = applied.effective_same_story(
-        settings.app.assemble.same_story,
-        state_dir=common.STATE_ROOT,
-        date=plan.date,
-    )
+    same_story = settings.app.assemble.same_story
 
     # This run's own block, under a name no other run of the day can reach, so
     # there is nothing here for a rebase to merge. It is written before the day
