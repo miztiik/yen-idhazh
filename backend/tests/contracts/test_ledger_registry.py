@@ -366,6 +366,17 @@ def test_a_ledger_outside_its_familys_folder_stops_the_build_naming_it() -> None
     ) in str(refusal.value)
 
 
+def test_a_ledger_with_no_folder_is_refused() -> None:
+    """Every family is a folder under `state/`, so no ledger sits loose at its top."""
+    judge = a_family("content-similarity-judge")
+    loose = [{**judge["ledgers"][0], "prefix": []}, *judge["ledgers"][1:]]
+
+    with pytest.raises(ValidationError, match="has no prefix, so its files would sit loose"):
+        LedgersConfig.model_validate(
+            a_registry([{**judge, "ledgers": loose}, *without("content-similarity-judge")])
+        )
+
+
 def test_a_member_named_for_the_wrong_place_stops_the_build_naming_it() -> None:
     """The name rule, proved able to fire by filing one ledger inside another family.
 

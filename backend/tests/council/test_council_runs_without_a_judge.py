@@ -181,20 +181,19 @@ def test_a_named_transitive_dependency_keeps_its_import_route(
 def test_the_judge_contracts_that_still_cross_cannot_grow(reached: set[str]) -> None:
     """The exception is self-limiting, or it is an invitation.
 
-    Three judge contracts arrive through two modules both sides share, and the
-    maintainer ruled on 2026-09-21 that those three may cross while the routes are
-    priced. A list with no upper edge is one the next person extends, so what is
-    held here is the exact set: a fourth fails, and so does a third that was cut
-    without the list being cut with it.
+    The listed set, empty today, is exactly the judge contracts a council verb may
+    reach. A list with no upper edge is one the next person extends, so the set is
+    held exact: a contract that starts to cross fails, and so does one that is
+    listed after it stopped crossing.
     """
     crossing = reached & set(JUDGE_CONTRACT_MODULES)
 
     assert crossing == set(JUDGE_CONTRACTS_STILL_CROSSING), (
-        "the judge contracts a council verb reaches are no longer the three the "
-        "maintainer agreed to. Added: "
+        "the judge contracts a council verb reaches are not the listed set. Added: "
         f"{sorted(crossing - JUDGE_CONTRACTS_STILL_CROSSING)}; gone: "
-        f"{sorted(JUDGE_CONTRACTS_STILL_CROSSING - crossing)}. A new one needs a "
-        "ruling, and one that left needs this list shortened in the same commit."
+        f"{sorted(JUDGE_CONTRACTS_STILL_CROSSING - crossing)}. A contract that "
+        "crosses needs a named reason in the list, and one that stopped crossing "
+        "needs the list shortened in the same commit."
     )
 
 
