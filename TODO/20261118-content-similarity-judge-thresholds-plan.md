@@ -93,7 +93,7 @@ Table G - Status Reckoner
 
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| G1 | 1 | Judge only new pairs | - | A | PENDING | - | - | - |
+| G1 | 1 | Judge only new pairs | - | A | DONE | animated-eureka | - | - |
 | G2 | 2 | Version the judge's config files | - | A | DONE | urban-memory | - | - |
 | G3 | 3 | Declare the two new ledgers | - | A | DONE | musical-happiness | - | - |
 | G4 | 4 | Draw by weighted slice and file pair verdicts | 1, 2, 3 | B | PENDING | - | - | - |
@@ -127,7 +127,7 @@ Table H - Row 1 decisions
 
 | Id | Decision | Authority |
 | --- | --- | --- |
-| H1 | A pair of two earlier-day stories is never drawn. The merge pass only joins the night's own stories, so such a pair cannot change what publishes. Replaying the repo's draw functions over 2026-11-03 to 2026-11-16 found 0 of 733 drawn pairs with a story from the night's own day already judged, against 772 of 1,046 drawn pairs of two earlier-day stories | Fowler |
+| H1 | A pair of two earlier-day stories is never drawn. The merge pass only joins the night's own stories, so such a pair cannot change what publishes. Counting each pair once a night from the committed pair rows of 2026-11-03 to 2026-11-16, 0 of 767 drawn pairs with a story from the night's own day had been filed on an earlier night of that span, against 813 of 1,117 drawn pairs of two earlier-day stories | Fowler |
 | H2 | The window reaches `ceil(window_hours / 24)` earlier days, two at 36 hours. The docstrings in the three stage files and in `collapse_same_story`, the window test's name and the `growing-reads.md` line say one; they are corrected, and the `cross_source_pairs` docstring (it promises exactly the pairs the merge pass weighs) becomes true | Fowler |
 | H3 | A story published after the council's checkout would go undrawn. The replay matched the committed draw size on 14 of 14 nights, so no action; a mismatch in the named observation reopens it | Fowler |
 
@@ -137,8 +137,8 @@ Table I - Row 1 rejected alternatives
 
 | Id | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
-| I1 | A memory of judged pairs, read from the last nights' ledger rows | It would catch republished addresses and same-date re-runs, neither seen in 14 nights, and it leaves earlier-day pairs in the pool | A bounded two-night read plus stamp matching; price it by counting repeats over 10 nights after this row | Fowler |
-| I2 | Leave as is | Over half of 2,323 judgments since 2026-11-03 were repeats | Nothing to build; price the delay by the nightly share of repeats | Plan intent |
+| I1 | A memory of judged pairs, read from the last nights' ledger rows | It would catch republished addresses, which put no repeated pair into the draw in 14 nights (0 of 767), and same-date re-runs, which B7 keeps out of scope; and it leaves earlier-day pairs in the pool | A bounded two-night read plus stamp matching; price it by counting repeats over 10 nights after this row | Fowler |
+| I2 | Leave as is | Of 2,472 judgments filed for 2026-11-03 to 2026-11-16, 1,401 (57 percent) were repeats: 813 of a pair judged on an earlier night and 588 of a pair filed again for the same night | Nothing to build; price the delay by the nightly share of repeats | Plan intent |
 
 ### Row #2 - Version the judge's config files
 

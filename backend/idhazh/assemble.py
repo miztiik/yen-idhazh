@@ -854,6 +854,13 @@ def cross_source_pairs(
     a day boundary the window cannot reach across - is not yielded, so a caller
     sees exactly the pairs the grouping pass would have weighed.
 
+    **A pair of two stories that both belong to earlier days is not yielded
+    either.** The grouping pass places `items` against the window and never
+    weighs two earlier stories against each other, so such a pair cannot change
+    what publishes. It already had its turn the night the later of the two was
+    new, so a caller that drew it again would mostly repeat a judgment. Every
+    pair yielded holds at least one story of `items`.
+
     Across mastheads for the reason the grouping pass is: one newsroom's second
     piece is a different problem with a different control, and it is where the
     encoder is least trustworthy, because two releases from one desk share their
@@ -873,6 +880,8 @@ def cross_source_pairs(
     if day is None:
         return
     for left, right in combinations(sorted(day.vectors), 2):
+        if left in day.earlier and right in day.earlier:
+            continue
         if outlet_of(day.by_id[left]) == outlet_of(day.by_id[right]):
             continue
         terms = _pair_terms(left, right, day)
@@ -952,7 +961,7 @@ def collapse_same_story(
     A story that breaks at 23:00 and is picked up at 07:00 is one story, and a
     day boundary is an accident of the calendar. `earlier` carries only the
     published days `window_hours` can still reach - the caller works out which,
-    and at 36 hours that is one - so the cost is set by the window rather than
+    and at 36 hours that is two - so the cost is set by the window rather than
     by how much archive exists (Guardrail #12). At `window_hours` of 0 nothing
     earlier is read at all and the pass is exactly the same-day one it was.
 

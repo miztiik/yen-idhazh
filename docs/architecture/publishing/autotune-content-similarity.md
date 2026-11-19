@@ -1,6 +1,6 @@
 # Autotuning the similarity line that groups one story
 
-**Last Updated**: 2026-11-17
+**Last Updated**: 2026-11-18
 
 A day runs the same story from more than one of our feeds. This page owns the
 line that decides when two items are one story, how that line fits itself once a
@@ -188,7 +188,7 @@ flowchart TD
     usefloor["Group at the committed floor"]
   end
   subgraph council["llm-council.yml - the draw and judge jobs"]
-    draw["Score every cross-source pair again.<br/>Keep the ones inside the band.<br/>Take every pair above the line first,<br/>then fill the budget in hash order"]
+    draw["Score every cross-source pair that holds a story<br/>of the day itself, again. Keep the ones<br/>inside the band. Take every pair above<br/>the line first, then fill the budget<br/>in hash order"]
     shards["One job a shard, one model server each.<br/>Read every pair twice, the two summaries<br/>the other way round the second time"]
   end
   subgraph collectjob["llm-council.yml - the collect job"]
@@ -595,8 +595,8 @@ A story that breaks at 23:00 and is picked up at 07:00 is one story, and a day b
 
 | What the window does | What it does not do |
 | --- | --- |
-| Lets a story on this day pair with one on an earlier published day, on the hours between the two stories' own times. | Group two earlier days with each other. A published day is finished; the pass reads it and never re-decides it. |
-| Bound the read. `stages.assemble._earlier_days` opens `ceil(hours / 24)` days by date arithmetic - one at 36 - so the cost is the same on the thousandth day as the third (Guardrail #12). | Bind a pair inside one published day. Those are scored exactly as they were, which is what makes `0` an exact revert rather than an approximate one. |
+| Lets a story on this day pair with one on an earlier published day, on the hours between the two stories' own times. | Group two earlier days with each other. A published day is finished; the pass reads it and never re-decides it. The nightly draw leaves such a pair out too ([design rationale](#design-rationale)). |
+| Bound the read. `stages.assemble._earlier_days` opens `ceil(hours / 24)` days by date arithmetic - two at 36 - so the cost is the same on the thousandth day as the third (Guardrail #12). | Bind a pair inside one published day. Those are scored exactly as they were, which is what makes `0` an exact revert rather than an approximate one. |
 | Record the match on the NEWER story, as `also_ran_earlier`. | Fold anything. Today's story keeps its card, its place in the order and its anchor. |
 
 **A cross-day match is a name in the stack and never a fold.** `same_story_as` still means this day's own anchor, because folding today's page onto a card it does not hold would leave the reader with nothing to open. What today's story gains is `also_ran_earlier` - up to `EARLIER_OUTLETS_MAX` mastheads, each with the day it ran and the address on that day - and the card prints them as more names in the same `Also covered by` stack, each saying which day and linking to that day's page.
@@ -827,6 +827,22 @@ belong to this judge, so they are recorded here.
   Reasoning runs only through the declared two-span path, and the verdict is
   read off the answer. A proposal of 2026-10-12 to close that path for every
   judge call was not taken: it would reverse the paragraph above.
+
+**The nightly draw meets only pairs that hold one of the day's own stories.**
+The grouping pass places the day's stories against the window and never weighs
+two earlier-day stories against each other, so a pair of two of them cannot
+change what publishes, and it already had its turn the night the later of the
+two was new. Drawing it again mostly repeats a judgment. Over the 14 nights
+2026-11-03 to 2026-11-16, counting each pair once a night from the committed
+pair rows, 813 of the 1,117 drawn pairs of two earlier-day stories (73 percent)
+had already been filed on an earlier night of that span, against 0 of the 767
+drawn pairs that held one of the day's own stories. The guard sits in
+`assemble.cross_source_pairs` beside the other refusals, so the grouping pass
+is untouched and a window of 0 is still the same-day pass. What it gives up: a
+story added to the day after the council has read it is never drawn against the
+stories it shared the day with. A memory of judged pairs read back from the
+ledger was refused instead, because it would leave in the pool the earlier-day
+pairs that were never judged.
 
 ## Rejected alternatives
 

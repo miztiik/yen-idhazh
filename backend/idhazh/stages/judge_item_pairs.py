@@ -324,7 +324,7 @@ def _items_by_url_key(
 
     **Guardrail #12 declaration.** Today's published day plus the days the
     same-story window still reaches, which is `ceil(window_hours / 24)` of them -
-    one at the 36-hour default. It is the same work on the thousandth day as on
+    two at the 36-hour default. It is the same work on the thousandth day as on
     the third, and it is exactly the read the draw was taken over: a pair the
     draw could name is a pair these days hold.
 

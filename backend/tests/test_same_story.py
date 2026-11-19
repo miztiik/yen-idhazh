@@ -415,6 +415,35 @@ def test_the_count_stays_a_count_of_this_days_sources() -> None:
     assert [one.also_covered_by for one in stamped] == [1, 1]
 
 
+def test_two_stories_from_earlier_days_are_never_drawn_as_a_pair() -> None:
+    """The draw meets the pairs the grouping pass can weigh, and never these.
+
+    The pass places today's stories against the window and never weighs two
+    earlier stories against each other, so a pair of two of them cannot change
+    what publishes - and it already had its turn the night the later of the two
+    was new. The three stories are inside the window of one another and carry
+    one vector, so only this rule can keep the pair of the two earlier ones out.
+    """
+    tonight = item("world-03", source="paper", when="2026-08-31T04:00:00Z")
+    yesterday = item("world-02", source="wire", when="2026-08-30T22:00:00Z")
+    before = item("world-01", source="herald", when="2026-08-29T23:00:00Z")
+    earlier = [
+        EarlierDay(
+            date="2026-08-30", items=[yesterday], embeddings=block({"world-02": unit(0)})
+        ),
+        EarlierDay(date="2026-08-29", items=[before], embeddings=block({"world-01": unit(0)})),
+    ]
+
+    pairs = cross_source_pairs(
+        [tonight], block({"world-03": unit(0)}), window_hours=36.0, earlier=earlier
+    )
+
+    assert [(pair.left, pair.right) for pair in pairs] == [
+        ("world-01", "world-03"),
+        ("world-02", "world-03"),
+    ]
+
+
 # --- the arithmetic --------------------------------------------------------
 
 
