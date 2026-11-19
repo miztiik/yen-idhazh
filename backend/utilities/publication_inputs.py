@@ -6,52 +6,25 @@ from collections.abc import Sequence
 from datetime import date, timedelta
 from pathlib import Path
 
-from idhazh.contracts.file_envelope import Period
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.ledger import paths
+from idhazh.ledger.window_inputs import CompactLayoutChangedError, inputs_of_days
 from utilities.publication_git import Repository
 from utilities.publication_request import PLAIN_MODE, IntegrityError, relative, safe_file
 
 
 def ledger_window(which: LedgerName, *, through: str, days: int) -> tuple[str, ...]:
-    """Raw days, exact compact periods and three named indexes, never a ledger walk."""
-    state = Path("state")
-    raw = paths.raw_root(state, which)
-    asked: set[str] = {
-        paths.compact_index_path(state, which, period).as_posix() for period in Period
-    }
-    coverage: dict[Period, set[str]] = {period: set() for period in Period}
+    """Raw days, exact compact periods and three named indexes, never a ledger walk.
+
+    The `days` days that end on `through`, named by `idhazh.ledger.window_inputs`. A layout
+    that no longer matches is an integrity failure here, as it always was for the digest tool.
+    """
     end = date.fromisoformat(through)
-    for offset in range(days):
-        stamp = (end - timedelta(days=offset)).isoformat()
-        asked.add((raw / stamp.replace("-", "/")).as_posix())
-        for period, covers in (
-            (Period.DAILY, stamp),
-            (Period.MONTHLY, stamp[:7]),
-            (Period.YEARLY, stamp[:4]),
-        ):
-            coverage[period].add(covers)
-    for period, periods in coverage.items():
-        if not periods:
-            continue
-        sample_date = min(periods)
-        sample = paths.compact_path(state, which, period, sample_date)
-        sample_parts = (
-            sample_date.split("-")
-            if period is not Period.YEARLY
-            else [
-                sample_date,
-                sample_date,
-            ]
+    try:
+        return inputs_of_days(
+            which, ((end - timedelta(days=offset)).isoformat() for offset in range(days))
         )
-        if sample.with_suffix("").parts[-len(sample_parts) :] != tuple(sample_parts):
-            raise IntegrityError("compact period layout changed; update the bounded input policy")
-        root = sample.parents[len(sample_parts) - 1]
-        for covers in periods:
-            parts = covers.split("-") if period is not Period.YEARLY else [covers, covers]
-            held = root.joinpath(*parts)
-            asked.update(held.with_suffix(suffix).as_posix() for suffix in (".parquet", ".json"))
-    return tuple(sorted(asked))
+    except CompactLayoutChangedError as error:
+        raise IntegrityError(str(error)) from error
 
 
 def named_entries(
