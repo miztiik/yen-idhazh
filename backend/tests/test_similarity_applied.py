@@ -14,7 +14,6 @@ import pytest
 from support.ledger import SEED_COMMIT
 from support.paths import CONTRACT_FIXTURES_DIR, read_text
 from test_same_story import block, item, unit
-from test_similarity_fit import a_written_row
 
 from idhazh import assemble, config, ledger
 from idhazh.contracts.base import ServerJob
@@ -36,6 +35,53 @@ DATE: Final = "2026-09-18"
 #: The feature switched on. Everything else is the committed default, so a test
 #: that names a knob is naming the one thing it is about.
 ON: Final = SimilarityThresholdConfig(enabled=True)
+
+#: The committed knobs a written row names, because a row records the settings
+#: it was fitted under.
+KNOBS: Final = SimilarityThresholdConfig()
+
+
+def a_written_row(
+    *,
+    date: str,
+    proposed: float | None = None,
+    daily_shift: float | None = None,
+    previous: float = 0.94,
+    applied: float | None = None,
+) -> FittedSimilarityThreshold:
+    """One row as the ledger holds it. `proposed` absent is a held day."""
+    settled_at = previous if proposed is None else proposed
+    return FittedSimilarityThreshold(
+        version=FittedSimilarityThreshold.schema_version(),
+        date=date,
+        run_id=f"{date}-1",
+        record_stamp="c" * 64,
+        previous=previous,
+        proposed=proposed,
+        after_damping=proposed,
+        applied=settled_at if applied is None else applied,
+        clamp_kind=ClampKind.NONE,
+        clamp_movement=0.0,
+        held_reason=HeldReason.NONE if proposed is not None else HeldReason.SHEET_TOO_SMALL,
+        daily_shift=daily_shift,
+        discard_share=KNOBS.discard_share,
+        fall_weight=KNOBS.fall_weight,
+        rise_weight=KNOBS.rise_weight,
+        max_down_step=KNOBS.max_down_step,
+        max_up_step=KNOBS.max_up_step,
+        step_change_multiple=KNOBS.step_change_multiple,
+        pairs_in_band=0,
+        pairs_judged=0,
+        pairs_usable=0,
+        disagreement_rate=0.0,
+        unclear_rate=0.0,
+        negatives_on_record=0,
+        above_line_on_record=0,
+        days_on_record=0,
+        merge_count=0,
+        scorer_model="all-minilm-l6-v2-quantized",
+        cosine_weight=1.0,
+    )
 
 
 def a_fitted_row(
