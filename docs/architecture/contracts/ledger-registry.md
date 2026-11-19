@@ -233,7 +233,14 @@ declaration controls whether it runs; the family controls whether rows are
 written. They need not have the same status. Pausing a judge leaves other writers
 into an active family unchanged. See [judge status](../publishing/llm-council.md#each-registered-judge-declares-whether-it-runs).
 
-**What pausing a family costs, beyond its own rows.** CI builds its canary day through the same writers, so pausing a family thins that fixture too. A paused `digest-fragments` stops the first run of a new day from publishing it at all: the day is assembled from the fragments on disk, and a day with none is refused. A paused `visual-prunes` stops the cleanup record while the cleanup itself still runs, because the record goes through the ledger door from the assemble job, which is not one of the maintenance jobs; nothing reads those rows yet, and the cleanup deletes nothing today.
+**What pausing a family costs, beyond its own rows.** The on-demand browser
+suite builds its canary day through the same writers, so pausing a family
+thins that fixture too. A paused `digest-fragments` stops the first run of a
+new day from publishing it at all: the day is assembled from the fragments on
+disk, and a day with none is refused. A paused `visual-prunes` stops the cleanup
+record while the cleanup itself still runs, because the record goes through
+the ledger door from the assemble job, which is not one of the maintenance
+jobs; nothing reads those rows yet, and the cleanup deletes nothing today.
 
 ## Onboarding and offboarding
 

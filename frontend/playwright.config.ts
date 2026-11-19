@@ -78,21 +78,11 @@ export function previewPort(worktree: string, env: Record<string, string | undef
 const PORT = previewPort(dirname(fileURLToPath(import.meta.url)), process.env);
 
 const GROUPS = groupedSpecs(fileURLToPath(new URL('./tests/', import.meta.url)));
-// CI defers only the default console selection. An explicit --project mapping
-// (including test:changed's groups) remains authoritative.
-const EXPLICIT_PROJECTS = process.argv.some((arg) => arg === '--project' || arg.startsWith('--project='));
-const SKIP_CONSOLE = process.env.SKIP_CONSOLE_SUITE === 'true' && !EXPLICIT_PROJECTS;
 
 /** How many spec files run at once.
  *
- * One by default, four in CI, and the two machines disagree about which is
- * right. On a runner - 4 vCPU with nothing else on it (Guardrail #2) - four workers
- * took the browser step from 344 s to 207 s, 40 percent faster, measured
- * 2026-09-05 on runs 33989034726 and 33991122503. On an i7-1265U with six other
- * checkouts building, the same change measured 233.7 s against 135.5 s, 72
- * percent SLOWER, because two performance cores shared with other work have no
- * spare core to give. So CI asks for four and a developer keeps the quiet
- * default.
+ * The CI smoke is a single case. For the full suite, raise the default of one
+ * only on an idle machine; extra workers compete with sibling worktrees.
  */
 function workerCount(asked: string | undefined): number {
 	if (asked === undefined || asked.trim() === '') return 1;
@@ -125,7 +115,7 @@ export default defineConfig({
 		serviceWorkers: 'block',
 		trace: 'retain-on-failure'
 	},
-	projects: FRONTEND_GROUPS.filter((name) => name !== 'logic' && (name !== 'console' || !SKIP_CONSOLE)).map((name) => ({
+	projects: FRONTEND_GROUPS.filter((name) => name !== 'logic').map((name) => ({
 		name,
 		testMatch: GROUPS[name].map((filename) => `**/${filename}`),
 		// The reader and query-worker specs install the worker that obeys the
