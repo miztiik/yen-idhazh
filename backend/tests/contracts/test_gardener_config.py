@@ -114,6 +114,8 @@ MOVED_LEDGER_TASKS: Final = (
     "compact-content-similarity-judge-metrics",
     "compact-content-similarity-judge-holdout-pairs",
     "compact-content-similarity-judge-fitted-thresholds",
+    "compact-content-similarity-judge-pair-verdicts",
+    "compact-content-similarity-judge-threshold-history",
 )
 
 

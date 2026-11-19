@@ -157,6 +157,31 @@ STORY_SIMILARITY_PAIR_KEY: Final = (
 )
 
 
+#: What makes two pair-verdict rows the same record: one pair, put to the judge by
+#: one part of one council run. `run_id` is in the key because two runs of one
+#: night judge the same pair twice and both readings are facts worth keeping, and
+#: `work_part_index` follows it because a row about one part of the split is keyed
+#: on its part, so two parts of one run never settle into one record.
+#:
+#: The shape these cells name is `idhazh.contracts.story_similarity_pair_verdict`,
+#: and the door table below imports it only when its ledger is asked about, for
+#: the reason the holdout score's key gives.
+STORY_SIMILARITY_PAIR_VERDICT_KEY: Final = ("date", "run_id", "work_part_index", "pair_key")
+
+
+#: What makes two threshold-history rows the same record. One run reads both
+#: thresholds for one date once, so a second row under those two cells is a second
+#: attempt at one execution rather than a second answer. Both attempts read the
+#: same pair verdicts and reach the same numbers, so the first row wins and there
+#: is nothing for a preference rule to choose between.
+#:
+#: The shape these cells name is
+#: `idhazh.contracts.story_similarity_threshold_history_row`, and the door table
+#: below imports it only when its ledger is asked about, for the reason the
+#: holdout score's key gives.
+STORY_SIMILARITY_THRESHOLD_HISTORY_KEY: Final = ("date", "run_id")
+
+
 #: What makes two metrics rows the same record: one part of one council run's
 #: night, for one judged date. The door table below imports the row contract,
 #: `idhazh.contracts.content_similarity_judge_metrics`, only when its ledger is
@@ -361,6 +386,22 @@ def _story_similarity_pair() -> type[Contract]:
     return StorySimilarityPair
 
 
+def _story_similarity_pair_verdict() -> type[Contract]:
+    """The pair verdict's row contract, imported when its ledger is first asked about."""
+    from idhazh.contracts.story_similarity_pair_verdict import StorySimilarityPairVerdict
+
+    return StorySimilarityPairVerdict
+
+
+def _story_similarity_threshold_history_row() -> type[Contract]:
+    """The night's threshold row contract, imported when its ledger is first asked about."""
+    from idhazh.contracts.story_similarity_threshold_history_row import (
+        StorySimilarityThresholdHistoryRow,
+    )
+
+    return StorySimilarityThresholdHistoryRow
+
+
 def _content_similarity_judge_metrics() -> type[Contract]:
     """The judge's per-part reading, imported when its ledger is first asked about."""
     from idhazh.contracts.content_similarity_judge_metrics import (
@@ -406,6 +447,14 @@ _JUDGE_DOOR_SHAPES: Final[
     LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS: (
         STORY_SIMILARITY_THRESHOLD_KEY,
         _fitted_similarity_threshold,
+    ),
+    LedgerName.CONTENT_SIMILARITY_JUDGE_PAIR_VERDICTS: (
+        STORY_SIMILARITY_PAIR_VERDICT_KEY,
+        _story_similarity_pair_verdict,
+    ),
+    LedgerName.CONTENT_SIMILARITY_JUDGE_THRESHOLD_HISTORY: (
+        STORY_SIMILARITY_THRESHOLD_HISTORY_KEY,
+        _story_similarity_threshold_history_row,
     ),
 }
 

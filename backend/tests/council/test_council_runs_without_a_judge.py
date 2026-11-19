@@ -73,6 +73,8 @@ JUDGE_CONTRACT_MODULES: Final = (
     "idhazh.contracts.similarity_holdout_pair",
     "idhazh.contracts.story_similarity_distribution",
     "idhazh.contracts.story_similarity_pair",
+    "idhazh.contracts.story_similarity_pair_verdict",
+    "idhazh.contracts.story_similarity_threshold_history_row",
 )
 
 #: The three judge contracts a council verb still reaches, and the routes they

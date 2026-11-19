@@ -1,6 +1,6 @@
 # The gardener's knobs and declarations
 
-**Last Updated**: 2026-11-05
+**Last Updated**: 2026-11-18
 
 What the gardener may delete and rewrite, and how each of its tasks is declared.
 Two inputs, both under `config/`: the gardener's own knobs in
@@ -79,7 +79,7 @@ Why each tree gets the age it has is
 
 ## The compaction declarations that ship
 
-All twenty-three production ledger declarations pack live. They keep day files until 45 whole days
+All twenty-six production ledger declarations pack live. They keep day files until 45 whole days
 after their month ends, then month files until 93 whole days after their year
 ends. Indexed year files expire 36 calendar months after that UTC year ends.
 For example, 2026 expires on 2030-01-01 at 00:00 UTC. Each declaration has
@@ -92,12 +92,14 @@ Each declaration owns `state/raw/<folder>` and `state/compact/<folder>`, where
 folder and then that name for a ledger filed inside its family's folder, such as
 `content-similarity-judge/merge-line-holdout-scores` for the holdout score,
 `content-similarity-judge/scored-pairs` for the judge's scored pairs,
-`content-similarity-judge/fitted-thresholds` for the fitted merge line and
+`content-similarity-judge/fitted-thresholds` for the fitted merge line,
+`content-similarity-judge/pair-verdicts` for the judge's pair verdicts,
+`content-similarity-judge/threshold-history` for the history of its two thresholds and
 `content-similarity-judge/holdout-pairs` for the hand marks. Each is called
 `compact-<folder>` with `/` written `-`.
 The raw-day packing wait remains one whole day for every ledger.
 
-Table A. All twenty-three production declarations use the same packing and expiry settings.
+Table A. All twenty-six production declarations use the same packing and expiry settings.
 
 | ID | Declaration | Daily to monthly / monthly to yearly / yearly expiry |
 | --- | --- | --- |
@@ -124,9 +126,12 @@ Table A. All twenty-three production declarations use the same packing and expir
 | A21 | `compact-feed-ingest-plan-feed-health-state` | 45 days / 93 days / 36 calendar months |
 | A22 | `compact-feed-ingest-plan-plan-runs` | 45 days / 93 days / 36 calendar months |
 | A23 | `compact-feed-ingest-plan-selected-articles` | 45 days / 93 days / 36 calendar months |
+| A24 | `compact-feed-ingest-plan-rejected-articles` | 45 days / 93 days / 36 calendar months |
+| A25 | `compact-content-similarity-judge-pair-verdicts` | 45 days / 93 days / 36 calendar months |
+| A26 | `compact-content-similarity-judge-threshold-history` | 45 days / 93 days / 36 calendar months |
 
 The two `compact-trial-*` declarations use the separate trial policy under
-their named trial roots. Only shards that run one of the four planner declarations
+their named trial roots. Only shards that run one of the five planner declarations
 install Bun 1.3.13 and the existing common-contracts and ledger-writer packages.
 That adds two locked package installs to those shards and lets TypeScript own
 planner row validation and compaction without a Python schema or codec copy.

@@ -1,13 +1,13 @@
 # Partitions
 
-**Last Updated**: 2026-10-10
+**Last Updated**: 2026-11-18
 A **partition** is one file holding one period of a collection that grows. The
 directory is the collection and the name says the period - `<YYYY-MM>` for a month,
 `<YYYY>/<MM>/<DD>` for a day. A reader opens the periods its window names and skips
 the rest. A writer appends to the period its own date names and leaves the rest
 alone.
 
-**A month is the usual unit here and it is not the only one.** Twelve collections
+**A month is the usual unit here and it is not the only one.** Fourteen collections
 partition by **day** instead, and the first two below are the same series - the
 state ledger is derived from the published tree:
 
@@ -25,6 +25,8 @@ state ledger is derived from the published tree:
 | `state/raw/content-similarity-judge/metrics/<YYYY>/<MM>/<DD>/` | `council.metrics_sink.collect_judge_metrics`, through `ledger.persist` in `council-settle` |
 | `state/raw/content-similarity-judge/merge-line-holdout-scores/<YYYY>/<MM>/<DD>/` | `stages.score_merge_line_holdout`, through `ledger.persist` from a person's own machine |
 | `state/raw/content-similarity-judge/holdout-pairs/<YYYY>/<MM>/<DD>/` | `backend/utilities/sample_sheet.py --harvest`, through `ledger.persist` from a person's own machine |
+| `state/raw/content-similarity-judge/pair-verdicts/<YYYY>/<MM>/<DD>/` | nothing yet; the council's collecting job will file it through `ledger.persist` in `council-settle` |
+| `state/raw/content-similarity-judge/threshold-history/<YYYY>/<MM>/<DD>/` | nothing yet; the council's collecting job will file it through `ledger.persist` in `council-settle` |
 
 Every rule on this page reads the same with "day" in place of "month": a writer
 appends to the day its own date names, a reader opens the days its window names,
@@ -211,6 +213,8 @@ Authority: maintainer, 2026-09-06.
 | Content-similarity judge metrics | `state/raw/content-similarity-judge/metrics/<YYYY>/<MM>/<DD>/`, packed under `state/compact/content-similarity-judge/metrics/` | `council.metrics_sink.collect_judge_metrics`, through `ledger.persist` in `council-settle` | Partitioned by **judged day**: it files by the digest date the part judged rather than the day the run started - the same grain as the council record beside it, so a reader holding one night's units of work against one night's readings opens one day in each. Nested under a folder named for the judge rather than the venue it ran in: what a reading is ABOUT decides where it is filed, never what executed it, so this ledger stays put on the day the council stops hosting this judge. Each row names its part as `work_part_index`. Its committed CSV days stay at `state/content-similarity-judge/metrics/<YYYY>/<MM>/<DD>.csv` until the migrator moves them. |
 | Merge-line holdout scores | `state/raw/content-similarity-judge/merge-line-holdout-scores/<YYYY>/<MM>/<DD>/`, packed under `state/compact/content-similarity-judge/merge-line-holdout-scores/` | `stages.score_merge_line_holdout`, run by a person through `ledger.persist` | Partitioned by **day**, filing by the day the line was scored - not by either of the two dates the labelled pair names, which the holdout row carries itself. One row a day, for the reason the fitted line files by day: a read that carries a window over the newest rows, and one prune pass to take a day's reading back off the record. It sits under the judge's prefix and holds no judge's reading at all: the shipped scoring calls no model, so the row carries no call stamp. Closed once the run's date leaves the day. **No workflow job writes it and no workflow job stages it**: a person runs `idhazh score-merge-line-holdout` and commits the raw file, the way the marks beside it are committed. |
 | Holdout marks | `state/raw/content-similarity-judge/holdout-pairs/<YYYY>/<MM>/<DD>/`, packed under `state/compact/content-similarity-judge/holdout-pairs/` | `backend/utilities/sample_sheet.py --harvest`, run by a person through `ledger.persist` | Partitioned by **day**, filing each harvest by the day its marks were made, `--labelled-on` - not by either of the two dates the marked pair names, which the row carries itself. A pair marked again lands on a later day, so a reader keeps one row a pair, its newest mark. Its read carries a window, `similarity.holdout_reach_days`. It was one flat file, `state/content-similarity-judge/holdout-pairs.csv`, which every harvest rewrote whole. **No workflow job writes it**: a person runs the harvest and commits the raw file. |
+| Pair verdicts | `state/raw/content-similarity-judge/pair-verdicts/<YYYY>/<MM>/<DD>/`, packed under `state/compact/content-similarity-judge/pair-verdicts/` | nothing yet; the council's collecting job will file it through `ledger.persist` in `council-settle` | Partitioned by **judged day**, for the reason the judge's other ledgers are: it files by the digest date the pair came from rather than the day the run started, nested under the judge's folder inside each door root. Each row names its part as `work_part_index`, and the key keeps two runs of one night apart. Its read carries a window: a reader names the nights it wants, and `load_pair_verdicts` opens only those. Closed once the run's date leaves the day. |
+| Threshold history | `state/raw/content-similarity-judge/threshold-history/<YYYY>/<MM>/<DD>/`, packed under `state/compact/content-similarity-judge/threshold-history/` | nothing yet; the council's collecting job will file it through `ledger.persist` in `council-settle` | Partitioned by **judged day**, nested under the judge's folder. One row a run describes both thresholds for the night it judged, and names no part. A second run of one night keeps its own row beside the first, and the door keeps the order the rows were filed in, so the last row of a date is the newest. Its read carries a window: a reader names the nights it wants, and `load_threshold_history` opens only those. Closed once the run's date leaves the day. |
 | Traces | `state/traces/<YYYY>/<MM>/<DD>/` | `telemetry.traces` | Partitioned by **day** the whole time, and a **day directory** since 2026-09-22 - the day used to be a prefix on the filename. A trace carries no date cell, so the run id is what says which day it belongs under. It is JSON lines rather than CSV, which is the whole of what it does differently, and the gardener's `traces` task deletes whole files past its window rather than folding them: a trace is a lookup, and a fold of it would invent a total nobody reads. |
 
 The collection with nothing committed is not aspirational. Its writer ships and is

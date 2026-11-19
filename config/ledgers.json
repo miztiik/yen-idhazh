@@ -285,6 +285,22 @@
           "prefix": ["content-similarity-judge", "merge-line-holdout-scores"],
           "stem": null,
           "suffix": null
+        },
+        {
+          "name": "pair-verdicts",
+          "publish_to_data_explorer": true,
+          "grain": "raw-and-compact",
+          "prefix": ["content-similarity-judge", "pair-verdicts"],
+          "stem": null,
+          "suffix": null
+        },
+        {
+          "name": "threshold-history",
+          "publish_to_data_explorer": true,
+          "grain": "raw-and-compact",
+          "prefix": ["content-similarity-judge", "threshold-history"],
+          "stem": null,
+          "suffix": null
         }
       ]
     },

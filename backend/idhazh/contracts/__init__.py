@@ -102,6 +102,10 @@ from idhazh.contracts.story_encoder_candidate import (
 )
 from idhazh.contracts.story_similarity_distribution import StorySimilarityDistribution
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
+from idhazh.contracts.story_similarity_pair_verdict import StorySimilarityPairVerdict
+from idhazh.contracts.story_similarity_threshold_history_row import (
+    StorySimilarityThresholdHistoryRow,
+)
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.taxonomy import (
     EventDef,
@@ -193,6 +197,8 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     Sources,
     StorySimilarityDistribution,
     StorySimilarityPair,
+    StorySimilarityPairVerdict,
+    StorySimilarityThresholdHistoryRow,
     Summary,
     Taxonomy,
     VisualAggregateRow,

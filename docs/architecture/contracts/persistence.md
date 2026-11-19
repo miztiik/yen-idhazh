@@ -1,6 +1,6 @@
 # The Ledger Door: Parquet and JSON Lines Under state/raw and state/compact
 
-**Last Updated**: 2026-10-27
+**Last Updated**: 2026-11-18
 
 How a contract payload reaches disk under `state/raw/` and `state/compact/`, how it comes back, and how the parquet engine is swapped. The door is `backend/idhazh/ledger/persist.py`; everything a producer needs is two calls, `ledger.persist` and `ledger.load`. The registry and the lifecycle statuses are [ledger-registry.md](ledger-registry.md), what each ledger answers is [state-ledgers.md](state-ledgers.md), and the shape of a contract is [schemas.md](schemas.md).
 
@@ -317,6 +317,8 @@ Every ledger whose rows a later run settles files through the door. The table sa
 | similarity judge's metrics | `council.metrics_sink.collect_judge_metrics`, called by `stages.count_verdicts` in the same job and under the same identity | nothing yet | the judged day its `date` names |
 | similarity judge's fitted merge line | `stages.set_merge_line`, through `ledger.persist` in the same job and under the same identity | `stages.set_merge_line` and a build's `similarity.applied.applied_line`, through `ledger.load_fitted_thresholds`; the Judgement page through `fittedLines` in `frontend/src/lib/server/content-similarity-judge.ts`, which reads packed days only | the day its `date` names |
 | holdout marks | `backend/utilities/sample_sheet.py --harvest`, a person's command, through `ledger.persist` with job `operator` | `similarity.holdout.marked_pairs`, and the Judgement page through `markedPairs` in `frontend/src/lib/server/content-similarity-holdout.ts`, both over `similarity.holdout_reach_days` | the day the marks were made, because the row has no `date` field |
+| similarity judge's pair verdicts | nothing yet; the council's collecting job will file each judged pair, through `ledger.persist` under the council's writer identity | `content_similarity_judge.ledger_reads.load_pair_verdicts`, over the days its caller names | the judged day its `date` names |
+| similarity judge's threshold history | nothing yet; the council's collecting job will file one row a night, through `ledger.persist` under the same identity | `content_similarity_judge.ledger_reads.load_threshold_history`, over the days its caller names | the judged day its `date` names |
 
 Each writer names the commit its run checked out, which is why `idhazh plan`, `record`, `fingerprint` and `job-clock` take `--commit` as `idhazh assemble` always did, and a gardener run takes `--git-sha`. No job has to ask for the parquet engine to reach these ledgers, because pyarrow is part of the base install ([What it costs to install](#what-it-costs-to-install)).
 

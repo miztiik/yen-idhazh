@@ -281,6 +281,45 @@ def test_a_ledger_with_no_entry_stops_the_build_naming_it() -> None:
     assert "no entry for item-health" in str(refusal.value)
 
 
+#: The two ledgers that hold the judge's pair verdicts and the history of its two thresholds.
+PAIR_AND_THRESHOLD_LEDGERS: Final = (
+    LedgerName.CONTENT_SIMILARITY_JUDGE_PAIR_VERDICTS,
+    LedgerName.CONTENT_SIMILARITY_JUDGE_THRESHOLD_HISTORY,
+)
+
+
+@pytest.mark.parametrize("member", PAIR_AND_THRESHOLD_LEDGERS, ids=lambda m: m.value)
+def test_a_judge_ledger_files_inside_its_family_and_offers_itself_to_the_explorer(
+    member: LedgerName,
+) -> None:
+    held = paths.entry(member)
+
+    assert (held.grain, held.prefix, held.publish_to_data_explorer) == (
+        Grain.RAW_AND_COMPACT,
+        ("content-similarity-judge", member.value),
+        True,
+    )
+    registry = LedgersConfig.from_json(REGISTRY.read_text(encoding="utf-8"))
+    assert member in registry.data_explorer_ledgers
+
+
+@pytest.mark.parametrize("member", PAIR_AND_THRESHOLD_LEDGERS, ids=lambda m: m.value)
+def test_a_registry_copy_missing_one_of_these_entries_is_refused_naming_it(
+    member: LedgerName,
+) -> None:
+    """The oracle for a ledger's registration: drop its one entry and the build will not load."""
+    judge = a_family("content-similarity-judge")
+    remaining = [held for held in judge["ledgers"] if held["name"] != member.value]
+    assert len(remaining) == len(judge["ledgers"]) - 1, "the family never listed this ledger"
+
+    with pytest.raises(ValidationError) as refusal:
+        LedgersConfig.model_validate(
+            a_registry([{**judge, "ledgers": remaining}, *without("content-similarity-judge")])
+        )
+
+    assert f"no entry for {member.value}" in str(refusal.value)
+
+
 def test_a_ledger_named_twice_stops_the_build_naming_it() -> None:
     """Two entries for one ledger are two answers, and nothing chooses between them."""
     seen = a_family(LedgerName.SEEN.value)
@@ -309,7 +348,7 @@ def test_an_entry_for_no_ledger_is_refused_by_the_name_it_carries() -> None:
 def test_a_family_named_twice_stops_the_build_naming_it() -> None:
     """Two lists for one folder would give that folder two statuses.
 
-    The judge's seven ledgers split across two families of one name, so every
+    The judge's nine ledgers split across two families of one name, so every
     ledger is still listed exactly once and only the family repeats.
     """
     judge = a_family("content-similarity-judge")
