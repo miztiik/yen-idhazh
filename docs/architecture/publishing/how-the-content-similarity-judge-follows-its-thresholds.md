@@ -698,7 +698,7 @@ rows, and a setting changes by an edit that bumps its file's `version`
 | First council run | Older nights with no `pair-verdicts` row are named one a night, newest first, until the 7-night window has slid past the rest | A night that has rows and is named again is a fault in the scheduler's read ([which nights](#which-nights-the-judge-is-behind-on)) |
 | First gardener run | Three compaction tasks for this judge: `pair-verdicts`, `threshold-history` and `holdout-pairs` | A ledger missing from the list is never packed: its compaction declaration or its name in the gardener's task list is missing ([adding a ledger](../contracts/ledger-registry.md#onboarding-and-offboarding)) |
 | First 7 real nights | Per threshold, whether `usable_pairs_used` reached `minimum_usable_pairs` (240), and where `estimate` sits against the configured start (0.70 and 0.93) | Short of 240: raise `draw.pair_budget` (the guard has [room](#the-known-answer-pairs)) or reweight `draw.bucket_weights`. Far from its start: nothing to edit, because the threshold walks to the estimate and a start is read only while no row is in the last 14 days. A `thresholds` setting the rows contradict is re-derived from them |
-| First week | The share of usable `fully_dissimilar` pairs answered YES: at most 28 pairs, 4 a night | More than 1 in 20 (2 of 28 is 7 percent, 1 of 28 is 3.6): move `lower_share_level` from 0.05 to 0.10 ([why](#design-rationale)) |
+| First week | The share of usable `fully_dissimilar` pairs answered YES: at most 28 pairs, 4 a night | More than 1 in 20 (2 of 28 is 7 percent, 1 of 28 is 3.6 percent): move `lower_share_level` from 0.05 to 0.10 ([why](#design-rationale)) |
 | First 14 real nights | Per threshold, the nights held as `fit_failed` with `usable_pairs_used` of at least 240 | Three in a row on one threshold: the window cannot place it, so price a rule ([why none is added](#design-rationale)) |
 | First 14 real nights | Nights that have pair rows and no history row | Each is a failed review: it is not named again, and the next night follows the newest earlier row. The collecting job's log has the error |
 | First 14 real nights | By `run_id`, the share of a night's pair rows that a later run filed again for the same night. It was 24 percent over the old design's 14 nights | Above 10 percent: build a re-run that judges only what it lacks ([why not yet](#design-rationale)) |
@@ -712,7 +712,7 @@ Each is left out on purpose. None is a gap to fill unasked.
 | --- | --- | --- |
 | Using a threshold to decide what publishes | The site groups stories at its fixed `floor_min` (0.94) while the judge tracks the evidence, so the two can disagree | A request naming which threshold the site follows and which mistake costs more, merging two stories or publishing a duplicate; then a plan |
 | A Judgement-page panel for threshold history or known-answer answers | Both are read in the Data explorer and not drawn ([why](console.md#judgement-draws-the-published-merges-and-the-hand-marks)) | A request naming the question the panel answers; then a design consult |
-| Remembering judged pairs from earlier nights | A pair drawn again is judged again. None was in the old design's 14 nights: 0 of 767 pairs that held a story of the night's own day | Repeats counted by `pair_key` over the first 10 nights of `pair-verdicts`. A bounded read of two nights plus a match on the meaning stamp prices it ([the reason](autotune-content-similarity.md#design-rationale)) |
+| Remembering judged pairs from earlier nights | A pair drawn again is judged again. In the old design's 14 nights, none of the 767 pairs that held a story of the night's own day had been judged on an earlier night | Repeats counted by `pair_key` over the first 10 nights of `pair-verdicts`. A bounded read of two nights plus a match on the meaning stamp prices it ([the reason](autotune-content-similarity.md#design-rationale)) |
 | Re-measuring the seconds a pair is budgeted at (`SECONDS_A_JUDGED_PAIR`, 110.98 s) | The guard stays conservative: at 150 pairs it expects 4,439 s of a runner's 10,500 s (42 percent), from a figure measured on 2026-09-18 on another model file | 14 nights of `decode_seconds_total` in `threshold-history` ([the reading](../../reference/benchmarks/what-a-judge-pair-costs.md#how-to-take-this-reading-again)) |
 | Dating the other config files | A night's rows name the judge's own two files and no other tuning | A plan that gives every config file a `version` and a bump rule ([the rule so far](../../concepts/config.md#judge-config-files-carry-a-revision-date)) |
 
@@ -746,8 +746,9 @@ id stand, and a foreign row would skew its slice's chance unseen.
 
 **A re-run judges the whole night again, and a re-run that judges only what it lacks is not
 built.** A second run of a night draws the same pairs and puts all of them to the judge
-again: 150 pairs and the six known-answer pairs, which [the guard](#the-known-answer-pairs)
-prices at 4,439 s of a runner's 10,500 s. The thresholds are not harmed, because the
+again: 150 pairs and the six known-answer pairs, shared over four runners.
+[The guard](#the-known-answer-pairs) prices the busiest runner's share, 40 pairs (38 drawn
+and 2 known-answer), at 4,439 s of its 10,500 s. The thresholds are not harmed, because the
 evidence counts each pair once, by its newest row; what a re-run costs is model time.
 Resuming would save the share of a night's rows that a later run files again. That share was
 24 percent over the old design's 14 nights, at a budget of 200 pairs, and the budget is now

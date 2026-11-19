@@ -42,8 +42,8 @@ Side = Literal["lower", "upper"]
 class MeaningStamp:
     """Everything that decides what a pair's verdict and score mean.
 
-    The same six values the plan names: two pairs with one stamp were scored and judged
-    the same way, so their answers can be counted together.
+    Two pairs with one stamp were scored and judged the same way, so their answers can be
+    counted together.
     """
 
     judge_model: str | None
