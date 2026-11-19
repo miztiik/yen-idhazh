@@ -603,6 +603,9 @@ def test_a_pair_keeps_each_orders_own_margin_and_the_file_order_prompt_count() -
     assert result.first_token_margin_swapped == 0.0
     assert result.prompt_tokens_file_order == 11
     assert result.prompt_tokens == 24, "the pair's own total stays both calls"
+
+
+@pytest.mark.parametrize("sampling", [{}, {"operator_option": 17}])
 def test_judging_changes_only_its_own_sampling_setting(
     tmp_path: Path, sampling: dict[str, Any]
 ) -> None:
@@ -1029,6 +1032,7 @@ def test_an_article_instruction_stays_fenced_when_the_judge_receives_the_pair(
             draw_path=_a_draw(run_dir),
             verdict_path=_a_verdict_file(run_dir, shard=0),
             deadline=_a_deadline_no_shard_will_reach(),
+            canary_pairs=(),
             reader=server.reader,
         )
         decodes = server.decodes
@@ -1092,6 +1096,7 @@ def test_a_verdict_file_round_trips_through_the_contract(
             draw_path=_a_draw(run_dir),
             verdict_path=_a_verdict_file(run_dir, shard=0),
             deadline=_a_deadline_no_shard_will_reach(),
+            canary_pairs=(),
             reader=server.reader,
         )
 
@@ -1162,6 +1167,7 @@ def test_a_pair_the_grammar_did_not_hold_is_written_down_and_the_shard_reads_on(
             draw_path=_a_draw(run_dir),
             verdict_path=_a_verdict_file(run_dir, shard=0),
             deadline=_a_deadline_no_shard_will_reach(),
+            canary_pairs=(),
             reader=server.reader,
         )
 
@@ -1209,6 +1215,7 @@ def test_a_shard_that_owned_nothing_still_leaves_a_file(
             draw_path=_a_draw(run_dir),
             verdict_path=_a_verdict_file(run_dir, shard=0),
             deadline=_a_deadline_no_shard_will_reach(),
+            canary_pairs=(),
             reader=server.reader,
         )
         assert server.decodes == [], "a shard that owns nothing calls no model"
@@ -1249,6 +1256,7 @@ def test_a_shard_handed_a_deadline_that_has_passed_judges_nothing_and_says_so(
             draw_path=_a_draw(run_dir),
             verdict_path=_a_verdict_file(run_dir, shard=0),
             deadline=time.monotonic() - 1.0,
+            canary_pairs=(),
             reader=server.reader,
         )
         assert server.decodes == [], "the shard read a pair after its own deadline"
@@ -1306,6 +1314,7 @@ def test_a_shard_that_dies_mid_draw_keeps_every_pair_it_had_already_judged(
                     draw_path=_a_draw(run_dir),
                     verdict_path=_a_verdict_file(run_dir, shard=0),
                     deadline=_a_deadline_no_shard_will_reach(),
+                    canary_pairs=(),
                     reader=server.reader,
                 )
         return _a_verdict_file(run_dir, shard=0)
@@ -1356,6 +1365,7 @@ def test_the_shard_stops_on_the_instant_the_councils_own_clocks_describe(
             draw_path=_a_draw(judge_root / day.date),
             verdict_path=_a_verdict_file(judge_root / day.date, shard=0),
             deadline=compute_shard_deadline(settings.council, started=time.monotonic()),
+            canary_pairs=(),
             reader=server.reader,
         )
         assert server.decodes == [], "the shard judged its pair, so no deadline reached it"
@@ -1402,6 +1412,7 @@ def test_the_funnel_the_shard_reports_adds_up_to_what_it_was_dealt(
             draw_path=_a_draw(run_dir),
             verdict_path=_a_verdict_file(run_dir, shard=0),
             deadline=_a_deadline_no_shard_will_reach(),
+            canary_pairs=(),
             reader=server.reader,
         )
 
@@ -1458,6 +1469,7 @@ def test_a_shard_that_read_nothing_measures_nothing_rather_than_zero(
             draw_path=_a_draw(run_dir),
             verdict_path=_a_verdict_file(run_dir, shard=0),
             deadline=_a_deadline_no_shard_will_reach(),
+            canary_pairs=(),
             reader=server.reader,
         )
 
@@ -1499,6 +1511,7 @@ def test_a_judged_row_keeps_what_the_draw_wrote_and_leaves_the_chance_to_the_col
             draw_path=_a_draw(run_dir),
             verdict_path=_a_verdict_file(run_dir, shard=0),
             deadline=_a_deadline_no_shard_will_reach(),
+            canary_pairs=(),
             reader=server.reader,
         )
 
@@ -1513,3 +1526,151 @@ def test_a_judged_row_keeps_what_the_draw_wrote_and_leaves_the_chance_to_the_col
     assert (written.slice_pairs_usable, written.sampling_chance) == (None, None)
     assert written.judge_policy_version == report.metrics.judge_policy_version == JUDGE_POLICY_VERSION
     assert written.run_id == report.metrics.run_id == _a_council_run(day.date)
+
+
+def test_a_known_answer_pair_is_judged_first_and_puts_the_model_the_same_request_as_a_drawn_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The row's oracle: the judge cannot tell a known-answer pair from one of the night's own.
+
+    A committed known-answer pair's two summaries become two items of a published day, and the
+    draw takes them as a pair. The shard judges the known-answer pair first and the drawn pair
+    second, so the first two requests are the known pair's and the next two the drawn pair's, and
+    they have to be the same whole request body. The replies tell the order: the first two are
+    wrong answers for the known pair, and they land on its row, not on the drawn pair's.
+
+    What it cannot settle is whether the labels are right, or whether the judge is right on pairs
+    unlike these six.
+    """
+    from idhazh.content_similarity_judge import settings as judge_settings
+
+    known = judge_settings.load_canaries(CONFIG_DIR).pairs[0]
+    day = _a_day()
+    first, second = sorted(day.items[:2], key=lambda item: derive_url_key(item.source_url))
+    day = day.model_copy(
+        update={
+            "items": [
+                first.model_copy(update={"summary": known.left.summary}),
+                second.model_copy(update={"summary": known.right.summary}),
+                day.items[2],
+            ]
+        }
+    )
+    root = _a_day_on_disk(tmp_path, day)
+    monkeypatch.setattr(common, "PUBLIC_ROOT", root)
+    run_dir = tmp_path / "judge" / day.date
+    drawn = _drawn(day.items[0], day.items[1], shard=0, date=day.date)
+    atomic_write.write_atomic(_a_draw(run_dir), judge_item_pairs._as_csv([drawn]))
+
+    with ProtocolReplies(
+        _reply("two-events"), _reply("two-events"), _reply("one-event"), _reply("one-event")
+    ) as server:
+        report = judge_item_pairs.stage_judge_item_pairs(
+            day.date,
+            run_id=_a_council_run(day.date),
+            shard=0,
+            shards=1,
+            settings=_settings(),
+            digest_root=root,
+            draw_path=_a_draw(run_dir),
+            verdict_path=_a_verdict_file(run_dir, shard=0),
+            deadline=_a_deadline_no_shard_will_reach(),
+            canary_pairs=[known],
+            reader=server.reader,
+        )
+        decodes = server.decodes
+
+    assert len(decodes) == 4
+    assert decodes[:2] == decodes[2:], "the known-answer pair's request is the drawn pair's"
+    assert [json.dumps(body, sort_keys=True).encode() for body in decodes[:2]] == [
+        json.dumps(body, sort_keys=True).encode() for body in decodes[2:]
+    ]
+    assert report.metrics.canary_answers is not None
+    assert json.loads(report.metrics.canary_answers)["same-1"][:2] == ["NO", "NO"], (
+        "the first two replies were the known-answer pair's, so it was judged first"
+    )
+    assert [row.verdict for row in _rows(report.path)] == [SameStoryVerdict.YES]
+
+
+def test_a_known_answer_pair_adds_to_no_drawn_count_file_or_clock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The venue's cost cells hold the known-answer calls; the funnel, the file and the clock do not."""
+    from idhazh.content_similarity_judge import settings as judge_settings
+
+    known = judge_settings.load_canaries(CONFIG_DIR).pairs[:2]
+    day = _a_day()
+    root = _a_day_on_disk(tmp_path, day)
+    monkeypatch.setattr(common, "PUBLIC_ROOT", root)
+    run_dir = tmp_path / "judge" / day.date
+    drawn = _drawn(day.items[0], day.items[1], shard=0, date=day.date)
+    atomic_write.write_atomic(_a_draw(run_dir), judge_item_pairs._as_csv([drawn]))
+
+    with ProtocolReplies(_reply("one-event")) as server:
+        report = judge_item_pairs.stage_judge_item_pairs(
+            day.date,
+            run_id=_a_council_run(day.date),
+            shard=0,
+            shards=1,
+            settings=_settings(),
+            digest_root=root,
+            draw_path=_a_draw(run_dir),
+            verdict_path=_a_verdict_file(run_dir, shard=0),
+            deadline=_a_deadline_no_shard_will_reach(),
+            canary_pairs=known,
+            reader=server.reader,
+        )
+
+    row = report.metrics
+    written = read_text(report.path)
+    assert (report.owned, report.judged, report.usable) == (1, 1, 1)
+    assert (row.pairs_dealt, row.pairs_read, row.pairs_agreed, row.pairs_refused) == (1, 1, 1, 0)
+    assert (row.pairs_unreadable, row.pairs_abandoned) == (0, 0)
+    assert [r.pair_key for r in _rows(report.path)] == [drawn.pair_key]
+    assert all(pair.id not in written for pair in known), "a known-answer pair is no verdict row"
+    assert row.canary_answers is not None and sorted(json.loads(row.canary_answers)) == [
+        "same-1",
+        "same-2",
+    ]
+    assert report.model_calls == 6, "two known-answer pairs and one drawn pair, two calls each"
+    assert (report.tokens_in, report.tokens_out) == (42, 12)
+    assert row.decode_seconds_total is not None
+    assert report.model_seconds > row.decode_seconds_total, (
+        "the venue's model seconds hold the known-answer calls and the instrument's clock does not"
+    )
+
+
+def test_a_shard_with_no_drawn_pair_still_judges_and_ships_its_known_answer_pairs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The outcome describes the night's own work, so it stays `nothing_to_do` while answers ship."""
+    from idhazh.content_similarity_judge import settings as judge_settings
+
+    known = judge_settings.load_canaries(CONFIG_DIR).pairs[:1]
+    day = _a_day()
+    root = _a_day_on_disk(tmp_path, day)
+    monkeypatch.setattr(common, "PUBLIC_ROOT", root)
+    run_dir = tmp_path / "judge" / day.date
+    atomic_write.write_atomic(_a_draw(run_dir), judge_item_pairs._as_csv([]))
+
+    with ProtocolReplies(_reply("one-event")) as server:
+        report = judge_item_pairs.stage_judge_item_pairs(
+            day.date,
+            run_id=_a_council_run(day.date),
+            shard=0,
+            shards=1,
+            settings=_settings(),
+            digest_root=root,
+            draw_path=_a_draw(run_dir),
+            verdict_path=_a_verdict_file(run_dir, shard=0),
+            deadline=_a_deadline_no_shard_will_reach(),
+            canary_pairs=known,
+            reader=server.reader,
+        )
+
+    assert report.outcome is ShardOutcome.NOTHING_TO_DO
+    assert report.metrics.pairs_dealt == 0
+    assert report.metrics.canary_answers is not None
+    assert list(json.loads(report.metrics.canary_answers)) == ["same-1"]
+    assert report.model_calls == 2
+    assert read_text(report.path) == ",".join(StorySimilarityPairVerdict.csv_columns()) + "\n"

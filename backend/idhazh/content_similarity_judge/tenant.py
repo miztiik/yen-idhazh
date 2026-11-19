@@ -210,6 +210,9 @@ class ContentSimilarityJudge:
     ) -> ShardResult:
         """Judge the pairs this unit owns, then ship what the instrument read.
 
+        The known-answer pairs come from config and are handed to the stage, which judges the
+        ones this unit was dealt before its own pairs and puts their answers on the reading.
+
         The row goes out through the venue's own capability, which writes it
         under the columns its contract names - so a cell this judge declares and
         this unit did not fill fails on this runner rather than arriving in a
@@ -218,16 +221,18 @@ class ContentSimilarityJudge:
         from idhazh.stages import common, judge_item_pairs
         from idhazh.stages.common import LOG
 
+        settings = config.load()
         report = judge_item_pairs.stage_judge_item_pairs(
             date,
             run_id=run_id,
             shard=shard,
             shards=shards,
-            settings=config.load(),
+            settings=settings,
             digest_root=common.PUBLIC_ROOT,
             draw_path=_draw_path(date),
             verdict_path=_verdict_path(date, shard=shard),
             deadline=deadline,
+            canary_pairs=judge_settings.load_canaries(settings.config_dir).pairs,
         )
         shipped = metrics_sink.ship_judge_metrics(
             report.metrics, judge_id=JUDGE_ID, name=str(shard), out_dir=_shipping_dir(date)
