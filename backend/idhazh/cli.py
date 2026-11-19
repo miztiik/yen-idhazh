@@ -80,7 +80,6 @@ from idhazh.stages import (
     common,
     harvest,
     record,
-    score_merge_line_holdout,
     site_weight,
     work,
 )
@@ -199,7 +198,6 @@ STAGES: Final[tuple[str, ...]] = (
     "site-weight",
     "published-columns",
     "check-publication",
-    "score-merge-line-holdout",
     "council-prepare",
     "council-settle",
     "council-shard",
@@ -355,15 +353,6 @@ def _main(argv: Sequence[str] | None = None) -> int:
             "a machine. A workflow that mints its own name hands it to every verb "
             "that writes a row, so a night's rows cannot arrive under two addresses. "
             "A digest run computes its own from --execution instead."
-        ),
-    )
-    parser.add_argument(
-        "--labeller",
-        default=None,
-        help=(
-            "Who marked the holdout, for score-merge-line-holdout. The same name "
-            "sample_sheet.py was given when it harvested the marks, because the row "
-            "records what a reading is worth and a mark is worth what its labeller is."
         ),
     )
     parser.add_argument(
@@ -640,42 +629,6 @@ def _dispatch(
         except PublicationCheckError as error:
             logging.getLogger(__name__).error("check-publication is mis-wired: %s", error)
             return 2
-
-    if args.stage == "score-merge-line-holdout":
-        # Above the fetcher for the reason check-publication is: it reads the
-        # marks and the published days they name, and starting a
-        # fetcher to do it would read every host's robots.txt for nothing.
-        #
-        # A person types this verb. Nothing schedules it, because the marks
-        # change when somebody labels more pairs and not when a day publishes.
-        if args.labeller is None:
-            parser.error(
-                "score-merge-line-holdout needs --labeller: the row records who marked "
-                "the holdout, and a reading nobody can attribute is a reading nobody "
-                "can argue with later"
-            )
-        if args.run_id is None:
-            parser.error(
-                "score-merge-line-holdout needs --run-id: the row says which run took "
-                "the reading, and a digest run's id would claim a machine and a clock "
-                "that scored nothing"
-            )
-        if args.commit == _STAND_IN_COMMIT:
-            parser.error(
-                "score-merge-line-holdout needs --commit: the file it writes names the "
-                "commit of the code that took the reading, and the stand-in of zeros "
-                "names none. Pass what git rev-parse HEAD prints"
-            )
-        scored = score_merge_line_holdout.stage_score_merge_line_holdout(
-            args.date or _today(),
-            run_id=args.run_id,
-            labeller=args.labeller,
-            commit_sha=args.commit,
-            settings=settings,
-            state_dir=None if args.state_root is None else args.state_root,
-            digest_root=args.digest_root,
-        )
-        return 0 if scored is not None else 1
 
     if args.stage == "council-prepare":
         # Above the fetcher because picking the work is the council resolving its

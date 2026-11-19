@@ -57,8 +57,6 @@ FIXTURE_FILES: Final = (
     "content-similarity-judge-evaluation-labels/example.json",
     "content-similarity-judge-evaluation-run/example.json",
     "content-similarity-judge-evaluation-report/example.json",
-    "content-similarity-judge-merge-line-holdout-score/a-holdout-retention-has-eaten-into.json",
-    "content-similarity-judge-merge-line-holdout-score/a-line-scored-against-the-holdout.json",
     "content-similarity-judge-metrics/a-shard-that-read-its-pairs.json",
     "content-similarity-judge-metrics/a-shard-that-was-dealt-nothing.json",
     "corpus-meta/window.json",

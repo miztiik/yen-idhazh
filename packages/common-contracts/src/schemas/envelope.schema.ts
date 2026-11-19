@@ -12,7 +12,7 @@ export const LedgerNameSchema = z.enum([
   "seen", "feed-health", "item-health", "host-fingerprint", "summary-quality-evals",
   "item-health-summary", "published", "feed-retirements", "visual-prunes", "visual-design-attempts",
   "counterfactual-scores", "scored-pairs", "fitted-thresholds", "holdout-pairs", "score-distribution",
-  "archive", "metrics", "merge-line-holdout-scores", "pair-verdicts", "threshold-history",
+  "archive", "metrics", "pair-verdicts", "threshold-history",
   "traces", "day-metrics", "digest-fragments",
   "gardener", "run-plan", "run-shards", "council-run-records",
   "discovered-articles", "selected-articles", "rejected-articles", "feed-health-state", "plan-runs",

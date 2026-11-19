@@ -16,10 +16,6 @@ FIXTURE_NAMES = {
         "ceiling-reached.json",
         "exhausted-dry-run.json",
     ),
-    "content-similarity-judge-merge-line-holdout-score": (
-        "a-holdout-retention-has-eaten-into.json",
-        "a-line-scored-against-the-holdout.json",
-    ),
     "content-similarity-judge-metrics": (
         "a-shard-that-read-its-pairs.json",
         "a-shard-that-was-dealt-nothing.json",

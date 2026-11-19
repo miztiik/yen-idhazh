@@ -9,8 +9,7 @@ It calls no model, opens no socket and decides nothing. Nothing in the pipeline
 reads what it writes. The labels a reader produces from it are harvested back
 into the holdout marks, `holdout-pairs`, a ledger saved through the ledger door
 under `state/raw/content-similarity-judge/holdout-pairs/`. The console's holdout
-panel draws the marks, and `idhazh score-merge-line-holdout` scores the merge
-line against them.
+panel draws the marks.
 
 **It samples across the line, not across the four judged cells.** The sheet the
 plan first described sorted pairs by where the judge and the line disagreed,

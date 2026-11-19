@@ -52,7 +52,6 @@ COMMITTED_FILES: Final = (
 COMMITTED_DECLARATIONS: Final = (
     "compact-content-similarity-judge-fitted-thresholds.json",
     "compact-content-similarity-judge-holdout-pairs.json",
-    "compact-content-similarity-judge-merge-line-holdout-scores.json",
     "compact-council-run-records.json",
     "compact-counterfactual-scores.json",
     "compact-feed-health.json",

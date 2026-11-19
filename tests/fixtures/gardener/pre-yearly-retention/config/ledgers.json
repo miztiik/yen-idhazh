@@ -285,14 +285,6 @@
           "prefix": ["content-similarity-judge", "metrics"],
           "stem": null,
           "suffix": null
-        },
-        {
-          "name": "merge-line-holdout-scores",
-          "publish_to_data_explorer": false,
-          "grain": "raw-and-compact",
-          "prefix": ["content-similarity-judge", "merge-line-holdout-scores"],
-          "stem": null,
-          "suffix": null
         }
       ]
     },

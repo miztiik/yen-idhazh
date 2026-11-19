@@ -21,7 +21,6 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from support.ledger import SEED_COMMIT
 from support.paths import CONFIG_DIR, read_text
 
 from idhazh import config, ledger
@@ -32,12 +31,11 @@ from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.file_envelope import Period, RowIdentity, WriterIdentity
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import LedgerLifecycleStatus, LedgersConfig
-from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.council import metrics_sink
 from idhazh.ledger import lifecycle, paths
-from idhazh.stages import common, score_merge_line_holdout, work
+from idhazh.stages import common, work
 from idhazh.telemetry import FileSink, source_health
 from idhazh.telemetry.publish import day_metrics
 from idhazh.telemetry.spans import AttrKey, SpanName, Tracer
@@ -231,16 +229,6 @@ ROUTES: Final[dict[str, tuple[LedgerName, int, Callable[[Path], bool]]]] = {
             s,
             lambda: source_health.file_retirements(
                 s, [_first(FeedRetirementRow)], _identity(ServerJob.PLAN)
-            ),
-        ),
-    ),
-    "score_merge_line_holdout": (
-        LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES,
-        1,
-        lambda s: _wrote(
-            s,
-            lambda: score_merge_line_holdout._append(
-                s, A_DAY, _first(MergeLineHoldoutScore), commit_sha=SEED_COMMIT
             ),
         ),
     ),
