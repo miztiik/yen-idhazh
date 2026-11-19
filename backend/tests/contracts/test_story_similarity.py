@@ -461,6 +461,8 @@ def test_historical_native_and_parquet_readings_retain_unknown_policy(
         added.add("calibration_policy_version")
     if contract is FittedSimilarityThreshold:
         added.add("pairs_refused")
+    if contract is ContentSimilarityJudgeMetrics:
+        added.add("canary_answers")
     historical = original.model_dump(mode="json", exclude=added)
     columns = [
         replace(column, nullable=False)

@@ -32,6 +32,7 @@ from idhazh.contracts.judge_call import JudgeConfigStamp
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain
 from idhazh.contracts.story_similarity_pair import JUDGE_POLICY_VERSION
+from idhazh.contracts.story_similarity_threshold_history_row import canary_answers_text
 
 pytestmark = pytest.mark.contract
 
@@ -169,6 +170,40 @@ def test_a_row_written_before_the_part_was_renamed_reads_its_part_under_the_new_
     assert ContentSimilarityJudgeMetrics.from_csv_row(old_cells) == row
     assert ContentSimilarityJudgeMetrics.model_validate(old_payload) == row
     assert "shard" not in ContentSimilarityJudgeMetrics.model_fields
+
+
+def a_shard_with_known_answers(runner: int = 2) -> ContentSimilarityJudgeMetrics:
+    """The recorded shard, having also judged one known-answer pair on `runner`."""
+    payload: dict[str, Any] = a_shard("a-shard-that-read-its-pairs").model_dump(mode="json")
+    answers = canary_answers_text({"same-1": ["YES", "YES", 0.9810234, 0.993, 812, runner]})
+    return ContentSimilarityJudgeMetrics.model_validate(payload | {"canary_answers": answers})
+
+
+def test_a_shards_known_answers_round_trip_through_the_file_it_ships() -> None:
+    """The cell is JSON in a CSV file, so quotes and commas have to survive the trip."""
+    row = a_shard_with_known_answers()
+
+    document = ledger.render_file(ContentSimilarityJudgeMetrics.csv_columns(), [row.csv_row()])
+    read_back = list(csv.DictReader(io.StringIO(document)))
+
+    assert ContentSimilarityJudgeMetrics.from_csv_row(read_back[0]) == row
+    assert read_back[0]["canary_answers"] == '{"same-1":["YES","YES",0.9810234,0.993,812,2]}'
+    assert len(document.splitlines()) == 2, "a cell put a line break in the row"
+
+
+def test_a_shard_cannot_claim_a_known_answer_another_runner_gave() -> None:
+    """The row is the only place the answer and the runner that gave it sit together."""
+    with pytest.raises(ValidationError, match="same-1 on runner 3, and this row is runner 2"):
+        a_shard_with_known_answers(runner=3)
+
+
+def test_a_row_written_before_known_answers_existed_reads_them_as_none() -> None:
+    """A column added later is additive: a file without it opens, and means no pair was judged."""
+    row = a_shard("a-shard-that-read-its-pairs")
+    old_cells = {name: cell for name, cell in row.csv_row().items() if name != "canary_answers"}
+
+    assert row.canary_answers is None
+    assert ContentSimilarityJudgeMetrics.from_csv_row(old_cells) == row
 
 
 def test_the_door_files_the_ledger_under_the_judges_own_folder() -> None:

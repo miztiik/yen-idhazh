@@ -120,6 +120,8 @@ def test_fixture_round_trips_without_losing_values(path: Path) -> None:
             "content-similarity-judge-metrics", "fitted-similarity-threshold",
         }:
             expected = {"judge_policy_version": None, **expected}
+        if contract.__schema_stem__ == "content-similarity-judge-metrics":
+            expected = {"canary_answers": None, **expected}
         if contract.__schema_stem__ == "fitted-similarity-threshold":
             expected = {"pairs_refused": None, **expected}
         if contract.__schema_stem__ in {
