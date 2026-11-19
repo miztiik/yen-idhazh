@@ -138,7 +138,7 @@ Table I - Row 1 rejected alternatives
 | Id | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
 | I1 | A memory of judged pairs, read from the last nights' ledger rows | It would catch republished addresses, which put no repeated pair into the draw in 14 nights (0 of 767), and same-date re-runs, which B7 keeps out of scope; and it leaves earlier-day pairs in the pool | A bounded two-night read plus stamp matching; price it by counting repeats over 10 nights after this row | Fowler |
-| I2 | Leave as is | Of 2,472 judgments filed for 2026-11-03 to 2026-11-16, 1,401 (57 percent) were repeats: 813 of a pair judged on an earlier night and 588 of a night judged again | Nothing to build; price the delay by the nightly share of repeats | Plan intent |
+| I2 | Leave as is | Of 2,472 judgments filed for 2026-11-03 to 2026-11-16, 1,401 (57 percent) were repeats: 813 of a pair judged on an earlier night and 588 of a pair filed again for the same night | Nothing to build; price the delay by the nightly share of repeats | Plan intent |
 
 ### Row #2 - Version the judge's config files
 
