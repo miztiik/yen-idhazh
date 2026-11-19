@@ -69,7 +69,6 @@ JUDGE_CONTRACT_MODULES: Final = (
     "idhazh.contracts.content_similarity_judge_metrics",
     "idhazh.contracts.knobs.content_similarity_canaries",
     "idhazh.contracts.knobs.content_similarity_judge",
-    "idhazh.contracts.judge_call",
     "idhazh.contracts.similarity_holdout_pair",
     "idhazh.contracts.story_similarity_pair_verdict",
     "idhazh.contracts.story_similarity_threshold_history_row",

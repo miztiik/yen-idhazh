@@ -28,7 +28,6 @@ from idhazh import ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
 from idhazh.contracts.file_envelope import WriterIdentity
-from idhazh.contracts.judge_call import JudgeConfigStamp
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain
 from idhazh.contracts.story_similarity_pair_verdict import JUDGE_POLICY_VERSION
@@ -130,14 +129,8 @@ def test_current_measurements_validate_the_valid_reading_denominator() -> None:
         ContentSimilarityJudgeMetrics.model_validate(payload | {"unclear_rate": None})
 
 
-def test_the_shared_stamp_keeps_the_software_identity_closed_and_weights_open() -> None:
+def test_the_model_column_records_weights_that_are_no_longer_configured_and_refuses_a_path() -> None:
     """The instrument is fixed; its recorded weights need not still be configured."""
-    columns = ContentSimilarityJudgeMetrics.csv_columns()
-    assert set(JudgeConfigStamp.model_fields) <= set(columns), (
-        "the shard row stopped carrying the shared stamp, so two judges are free to "
-        "spell the same reading two ways"
-    )
-
     payload: dict[str, Any] = a_shard("a-shard-that-read-its-pairs").model_dump(mode="json")
     assert ContentSimilarityJudgeMetrics.model_validate(
         {name: value for name, value in payload.items() if name != "judge_id"}

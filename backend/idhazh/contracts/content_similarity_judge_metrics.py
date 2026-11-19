@@ -10,8 +10,9 @@ whether the pipeline worked; this one says whether the instrument did, and the
 two never meet in a column. A reading may be compared across two judges only
 when it is a count or a clock.
 
-**It inherits the config stamp and not a per-call one.** A shard has no single
-call, so a per-call grammar flag, a per-call probability window and a per-call
+**It stamps the settings and not one call.** The model, the sampler temperature, the
+reasoning span count and the two digests say what the instrument was set to. A shard has
+no single call, so a per-call grammar flag, a per-call probability window and a per-call
 clock have nothing to point at here. The three shard-level equivalents are
 `pairs_refused`, `first_token_margin_median` and the two decode totals.
 
@@ -53,20 +54,18 @@ from idhazh.contracts.base import (
     Contract,
     DateStamp,
     RunId,
+    Sha256,
 )
-from idhazh.contracts.judge_call import JudgeConfigStamp
 from idhazh.contracts.story_similarity_pair_verdict import JUDGE_POLICY_VERSION, JudgeModelId
 from idhazh.contracts.story_similarity_threshold_history_row import CanaryAnswersText
 
-#: The slug this judge files its readings under. A closed set is honest here in
-#: the way it could not be on the shared call stamp: that stamp is inherited by
-#: judges nobody has written yet, and every row that carries this one is written
-#: by this judge and no other. Its software identity is fixed even when the
-#: weights it runs change.
+#: The slug this judge files its readings under. Every row that carries it is
+#: written by this judge and no other. Its software identity is fixed even when
+#: the weights it runs change.
 ContentSimilarityJudgeId = Literal["content-similarity-judge"]
 
 
-class ContentSimilarityJudgeMetrics(JudgeConfigStamp, Contract):
+class ContentSimilarityJudgeMetrics(Contract):
     """One shard of one night: what this judge was dealt, what it read, what it cost."""
 
     __schema_stem__: ClassVar[str] = "content-similarity-judge-metrics"
@@ -102,8 +101,7 @@ class ContentSimilarityJudgeMetrics(JudgeConfigStamp, Contract):
         default="content-similarity-judge",
         description=(
             "Which instrument wrote this reading. One member, because this ledger holds "
-            "the readings of one judge and no other - so the column is narrowed here, "
-            "where a closed set can be closed honestly."
+            "the readings of one judge and no other."
         ),
     )
     judge_model: JudgeModelId | None = Field(
@@ -112,6 +110,31 @@ class ContentSimilarityJudgeMetrics(JudgeConfigStamp, Contract):
             "Which weights judged, as the recorded model slug, independent of the "
             "models currently configured. Empty where no model ran."
         ),
+    )
+    judge_temperature: float | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "The sampler temperature, as the number it was set to. An operator "
+            "reading a row needs the value, not a digest of it."
+        ),
+    )
+    thinking_spans: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "How many reasoning spans each call decoded before its answer - 0 for a "
+            "cold answer, 1 under a thinking envelope. A column of its own because no "
+            "other cell here moves with it: an envelope moves only the prompt, which "
+            "nothing stamps. Without this cell a reading taken after reasoning and one "
+            "taken cold are one population to every reader."
+        ),
+    )
+    prompt_digest: Sha256 | None = Field(
+        default=None, description="sha256 of the rendered system turn."
+    )
+    grammar_digest: Sha256 | None = Field(
+        default=None, description="sha256 of the grammar handed to the decoder."
     )
 
     date: DateStamp = Field(description="The digest date judged.")
