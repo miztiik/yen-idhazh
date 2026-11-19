@@ -95,7 +95,7 @@ Table G - Status Reckoner
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | G1 | 1 | Judge only new pairs | - | A | PENDING | - | - | - |
 | G2 | 2 | Version the judge's config files | - | A | PENDING | - | - | - |
-| G3 | 3 | Declare the two new ledgers | - | A | PENDING | - | - | - |
+| G3 | 3 | Declare the two new ledgers | - | A | DONE | musical-happiness | - | - |
 | G4 | 4 | Draw by weighted slice and file pair verdicts | 1, 2, 3 | B | PENDING | - | - | - |
 | G5 | 5 | Find and move both thresholds | 4 | C | PENDING | - | - | - |
 | G6 | 6 | Judge canary pairs once per run | 5 | D | PENDING | - | - | - |
@@ -187,6 +187,7 @@ Table K - Row 2 rejected alternatives
   - `config/gardener/compact-content-similarity-judge-pair-verdicts.json`
   - `config/gardener/compact-content-similarity-judge-threshold-history.json`
   - `config/gardener/config/idhazh_gardener.json`
+  - `config/idhazh.json`
   - `packages/common-contracts/src/schemas/envelope.schema.ts`
   - `tests/fixtures/contracts/story-similarity-pair-verdict/a-judged-pair-with-its-slice-and-chance.json`
   - `tests/fixtures/contracts/story-similarity-threshold-history-row/a-night-that-held-both-thresholds.json`
@@ -206,6 +207,7 @@ Table K - Row 2 rejected alternatives
   - `docs/architecture/contracts/persistence.md`
   - `docs/concepts/partitions.md`
   - `docs/concepts/config/idhazh-gardener.md`
+  - `docs/concepts/glossary.md`
   - `docs/reference/repository-layout.md`
 - **Acceptance gates:**
   - Local: the new contract tests (round trip through `ledger.persist` and the loaders in a temporary state directory; refusals: slice edges inverted, a chance outside 0 to 1, a non-zero `move` with `held_because` other than none, a held threshold whose `threshold_after` differs from `threshold_before`, a non-JSON `canary_answers` or `config_versions`); the registry, gardener, schema-drift (every contract has a fixture), no-CSV and council-import tests; the frontend catalog spec and the vocabulary tests through the test selector; ruff, mypy and the TypeScript typecheck; doc check.

@@ -61,6 +61,8 @@ class LedgerName(StrEnum):
     CONTENT_SIMILARITY_JUDGE_ARCHIVE = "archive"
     CONTENT_SIMILARITY_JUDGE_METRICS = "metrics"
     CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES = "merge-line-holdout-scores"
+    CONTENT_SIMILARITY_JUDGE_PAIR_VERDICTS = "pair-verdicts"
+    CONTENT_SIMILARITY_JUDGE_THRESHOLD_HISTORY = "threshold-history"
     TRACES = "traces"
     DAY_METRICS = "day-metrics"
     DIGEST_FRAGMENTS = "digest-fragments"

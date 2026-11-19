@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-11-15
+**Last Updated**: 2026-11-18
 
 The persisted-shape subsystem: where the models live, how a schema is obtained from one, the small hand copy the frontend carries, and the tests that stop the two drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 10.
 
@@ -158,6 +158,20 @@ the policy null. New-policy pairs require exact agreement/usability and valid
 two-order evidence; new metrics and fits validate their valid-reading
 denominators. Fitted rows append nullable `pairs_refused`, unknown for history,
 and permit null disagreement/unclear rates when their denominator is empty.
+
+`StorySimilarityPairVerdict` and `StorySimilarityThresholdHistoryRow` start at `2026-11-18`
+with no earlier row, so neither carries a retired-heading shim or a read-side migration. The
+pair verdict is the pair row with `judge_id` and `judged_by_run_id` dropped,
+`composite_score` renamed `similarity_score`, `usable` renamed `readings_agree`, both scores
+allowed from -1 to 1 because the draw now meets pairs below 0, and the draw's bucket and
+slice, the pair counts and sampling chance, the thresholds in force and `config_versions`
+added. A cosine or score within a billionth past 1 or -1 is folded back to the bound, because
+two identical vectors can divide to one bit past 1.0; a value further out is refused. Neither
+contract accepts NaN or infinity. A mapping cannot be a parquet column, so `config_versions`
+(both rows) and `canary_answers` (the threshold row) are each one JSON text, written compact
+with sorted keys, no spaces and ASCII only; the contract refuses any other spelling of the
+same object, so equal content is equal text. `canary_answers` is a positional list of six
+cells per canary id, so a seventh cell would need a new version that reads six or seven.
 Native and frontend readers accept those values before new writers emit them.
 No historical row or aggregate archive is rewritten.
 The distribution and fitted contracts also append nullable
@@ -399,6 +413,8 @@ The shapes, and where each one lives once written:
 | `CouncilRunRecord` | `council-run-record` | one row of `state/raw/council-run-records/<YYYY>/<MM>/<DD>/`, later packed under `state/compact/council-run-records/` - which council step ran for one tenant, how it ended, how long it took, and what it cost. A missing part row against `work_part_count` shows a part that did not report |
 | `ContentSimilarityJudgeMetrics` | `content-similarity-judge-metrics` | one row of `state/raw/content-similarity-judge/metrics/<YYYY>/<MM>/<DD>/`, in the raw file the council's save job files through the ledger door under the judged date, packed later under `state/compact/content-similarity-judge/metrics/` - what one part of that judge's night, `work_part_index`, dealt, read, agreed and lost, plus its two rates and its clocks |
 | `MergeLineHoldoutScore` | `content-similarity-judge-merge-line-holdout-score` | one row under `state/raw/content-similarity-judge/merge-line-holdout-scores/<YYYY>/<MM>/<DD>/`, packed under `state/compact/content-similarity-judge/merge-line-holdout-scores/` - the line in force, the four cells it scored against the hand-marked holdout, and what the line was made of. No model runs in it, so it carries no call stamp |
+| `StorySimilarityPairVerdict` | `story-similarity-pair-verdict` | one row of `state/raw/content-similarity-judge/pair-verdicts/<YYYY>/<MM>/<DD>/`, in the raw file the ledger door files under the judged date, packed later under `state/compact/content-similarity-judge/pair-verdicts/` - one pair put to the judge, what it scored, the draw slice that held it, the sampling chance that follows, the two thresholds in force, and what the judge said in both orders; its part is `work_part_index`. The same shape holds the night's draw before a judging unit reads it. Nothing writes it yet |
+| `StorySimilarityThresholdHistoryRow` | `story-similarity-threshold-history-row` | one row of `state/raw/content-similarity-judge/threshold-history/<YYYY>/<MM>/<DD>/`, in the raw file the ledger door files under the judged date, packed later under `state/compact/content-similarity-judge/threshold-history/` - one run's reading of both thresholds: for each, the evidence read, the fitted curve, the estimate, the gap, the move and the reason it held, and then the night's counts, rates and clocks. It describes a whole run and names no part. Nothing writes it yet |
 | `RunManifest` | `run-manifest` | `.../<DD>/run.json`, append-only per date |
 | `DigestDay` | `digest-day` | `.../<DD>/digest.json` and each `run-<N>.json` |
 | `SearchIndex` | `search-index` | `frontend/public/assist/index/<YYYY-MM>.json`, with its vectors in a sibling `.bin` |
@@ -482,6 +498,8 @@ mirrors the digest tree its rows are derived from.
 | `state/raw/content-similarity-judge/scored-pairs/` and `state/compact/content-similarity-judge/scored-pairs/` | a raw file per write by day, packed into day, month and year files | what did the judge say about this day's borderline pairs? | no - the collecting job's fit reads the one date it judged through `ledger.load_days` and never opens that day again |
 | `state/raw/content-similarity-judge/fitted-thresholds/` and `state/compact/content-similarity-judge/fitted-thresholds/` | a raw file per write by day, packed into day, month and year files | what was the merge line, and what moved it? | yes - the step-change guard takes a median over the newest `step_change_window_rows` written rows, and `assemble` looks back `applied_lookback_days` for a line; both read through `ledger.load_days`, which opens only the days it names |
 | `state/raw/content-similarity-judge/holdout-pairs/` and `state/compact/content-similarity-judge/holdout-pairs/` | a raw file per harvest by the day the marks were made, packed into day, month and year files | which pairs did a person judge, and how? | yes, `similarity.holdout_reach_days`: both readers open that many days back and no more, and a pair marked again is read once with its newest mark. The loader refuses a compaction that keeps fewer days than the reach |
+| `state/raw/content-similarity-judge/pair-verdicts/` and `state/compact/content-similarity-judge/pair-verdicts/` | a raw file per write by day, packed into day, month and year files | what did the judge say about each pair the draw took, and how likely was the draw to take it? | yes - a reader names the days it wants, and `load_pair_verdicts` opens only those through `ledger.load_days` |
+| `state/raw/content-similarity-judge/threshold-history/` and `state/compact/content-similarity-judge/threshold-history/` | a raw file per write by day, packed into day, month and year files | where did the two thresholds stand each night, and why did they move or hold? | yes - a reader names the nights it wants, and `load_threshold_history` opens only those through `ledger.load_days` |
 | `state/content-similarity-judge/score-distribution.json` | one document | what has the judge said, slot by slot, across the whole band? | no - **it is not a ledger at all.** It is rewritten whole, and its size is the band and the slot width rather than the history. That is the point: the fit reads it instead of sorting every pair ever judged (Guardrail #12) |
 
 A window turns a partition into a skipped file open. `day_partition.days_in_window`

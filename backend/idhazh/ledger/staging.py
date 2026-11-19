@@ -253,6 +253,22 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
         symbol="idhazh.stages.score_merge_line_holdout.stage_score_merge_line_holdout",
         job_labels=frozenset(),
     ),
+    LedgerName.CONTENT_SIMILARITY_JUDGE_PAIR_VERDICTS: LedgerStaging(
+        writer=(
+            "nothing fills it yet: the council's collecting job will file each judged "
+            "pair through the ledger door, and the ledger is declared ahead of that writer"
+        ),
+        symbol=None,
+        job_labels=frozenset(),
+    ),
+    LedgerName.CONTENT_SIMILARITY_JUDGE_THRESHOLD_HISTORY: LedgerStaging(
+        writer=(
+            "nothing fills it yet: the council's collecting job will file one row a "
+            "night through the ledger door, after that night's pair verdicts are filed"
+        ),
+        symbol=None,
+        job_labels=frozenset(),
+    ),
     LedgerName.TRACES: LedgerStaging(
         writer=(
             "idhazh.stages.work.trace_sink opens a file sink on its own path helper "
