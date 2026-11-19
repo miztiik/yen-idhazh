@@ -98,7 +98,7 @@ Table G - Status Reckoner
 | G3 | 3 | Declare the two new ledgers | - | A | DONE | musical-happiness | - | - |
 | G4 | 4 | Draw by weighted slice and file pair verdicts | 1, 2, 3 | B | DONE | crispy-spoon | - | - |
 | G5 | 5 | Find and move both thresholds | 4 | C | DONE | glowing-goggles | - | - |
-| G6 | 6 | Judge canary pairs once per run | 5 | D | PENDING | - | - | - |
+| G6 | 6 | Judge canary pairs once per run | 5 | D | DONE | verbose-succotash | - | - |
 | G7 | 7 | Judgement page without the retired data | 4 | E | DONE | fuzzy-waffle | - | - |
 | G8 | 8 | Retire the old record, fit, knobs and ledgers | 5, 6, 7 | F | PENDING | - | - | - |
 
@@ -412,24 +412,38 @@ Table Q - Row 5 rejected alternatives
   - `config/judges/content-similarity-canaries.json`
   - `backend/idhazh/contracts/knobs/content_similarity_canaries.py`
   - `backend/idhazh/contracts/content_similarity_judge_metrics.py`
+  - `backend/idhazh/contracts/story_similarity_threshold_history_row.py`
   - `backend/idhazh/content_similarity_judge/settings.py`
+  - `backend/idhazh/content_similarity_judge/model_reader.py`
+  - `backend/idhazh/content_similarity_judge/run_evaluation.py`
+  - `backend/idhazh/content_similarity_judge/tenant.py`
   - `backend/idhazh/similarity/judge.py`
+  - `backend/idhazh/similarity/prompt.py`
   - `backend/idhazh/similarity/budget.py`
+  - `backend/idhazh/similarity/night_totals.py`
   - `backend/idhazh/stages/judge_canary_pairs.py`
   - `backend/idhazh/stages/judge_item_pairs.py`
-  - `backend/idhazh/stages/review_thresholds.py`
+  - `backend/utilities/measure_judge_call.py`
   - `backend/tests/contracts/test_content_similarity_canary_config.py`
+  - `backend/tests/contracts/test_content_similarity_judge_config.py`
+  - `backend/tests/contracts/test_content_similarity_judge_metrics.py`
+  - `backend/tests/contracts/test_schema_drift.py`
+  - `backend/tests/contracts/test_story_similarity.py`
   - `backend/tests/test_judge_canary_pairs.py`
   - `backend/tests/test_similarity_judge.py`
-  - `backend/tests/test_similarity_tenant.py`
   - `backend/tests/test_similarity_budget.py`
-  - `backend/tests/contracts/test_content_similarity_judge_metrics.py`
-  - `backend/tests/council/_imports.py`
+  - `backend/tests/test_similarity_selection.py`
+  - `backend/tests/test_prompt_files.py`
+  - `backend/tests/test_completion_evidence.py`
+  - `backend/tests/test_content_similarity_judge_evaluation.py`
   - `backend/tests/council/test_session.py`
   - `backend/tests/council/test_council_runs_without_a_judge.py`
   - `docs/architecture/publishing/how-the-content-similarity-judge-follows-its-thresholds.md`
+  - `docs/architecture/publishing/llm-council.md`
+  - `docs/architecture/contracts/schemas.md`
   - `docs/concepts/config.md`
   - `docs/concepts/glossary.md`
+  - Corrected against the tree at execution. The list named `stages/review_thresholds.py`, `test_similarity_tenant.py` and `council/_imports.py`, and none needed an edit: the night row's `canary_answers` was already set in `night_totals.runner_columns`, where the gathering now lives, and the guard's tenant test reads the committed files. The list left out what the other decisions reach: S8 retypes `read_once`, `judge_pair` and `ModelReader.read_pair`, so `prompt.py`, `model_reader.py`, `run_evaluation.py`, `measure_judge_call.py` and the four tests that call them change; the tenant passes the pairs; `config_versions()` naming a second file reaches `test_content_similarity_judge_config.py` and `test_similarity_selection.py`; the new reading column reaches `test_schema_drift.py` and `test_story_similarity.py`; `canary_answers_text` sits beside the checker it satisfies; and the docs the retype and the column touch are `llm-council.md` and `schemas.md`.
 - **Acceptance gates:**
   - Local: the config contract refuses a set missing a kind, with duplicate ids, an expected answer that does not match its kind, an empty or non-ASCII summary, over 12 pairs, a synthetic pair without its id prefix, or a missing `version`; the committed file is ASCII. Stage tests with a recorded-response client: a wrong answer is logged and stored as given; disagreeing orders are stored as given; the request bytes equal a live pair's for the same two summaries; the runner for pair i is `(i + date ordinal) mod runners`; no canary id reaches the draw, the verdict files, `pair-verdicts` or the curve evidence; `canary_answers` round-trips as Table E6 says; the budget guard counts the canary pairs. Ruff, mypy, doc check.
   - CI: the required checks are authoritative.
@@ -448,6 +462,8 @@ Table R - Starting canary pairs
 | R5 | `unclear-1` | unclear | 2026-11-07, `ai-gp9n67v36c3r4t64` | 2026-10-24, `ai-q5vhq5s6p62e7sb2` | UNCLEAR | Two one-line cartoon captions; neither says what happened |
 | R6 | `unclear-2` | unclear | 2026-11-07, `ai-act5etj22gy5jvdn` | 2026-11-07, `world-t4n61hawy70wkg6h` | UNCLEAR | A one-line cartoon caption on an election's aftermath beside a specific report from it; the caption names no event |
 
+Re-verified at execution on 2026-11-19 against the published day files: all twelve item ids exist on the named dates and each summary says what its Why says, so no pair was replaced. R3's left summary has one accented letter and is copied with it folded to ASCII, which its `basis` says.
+
 - **Decisions:**
 
 Table S - Row 6 decisions
@@ -462,6 +478,10 @@ Table S - Row 6 decisions
 | S6 | The judge had never answered UNCLEAR on a real pair when checked on 2026-11-17, so the two unclear pairs may answer NO every night. That is a finding about the judge, not a fault in the check | Andre |
 | S7 | Summary text lives in the config file (ASCII JSON) so a retired published day cannot orphan a pair. At most 12 pairs, every kind present, changed only by a reviewed edit that bumps `version`; no automatic refresh, because that would put fetched text into the reference set unreviewed. A runner judges its canary pairs before its live pairs, which finds a wrong model, a runtime change that breaks the constrained answer, and a prompt or grammar edit; it cannot find decay late in a run | Fowler |
 | S8 | A canary pair goes through the same request builder as live text and is never presented as an instruction; `judge_pair` takes two summaries instead of two digest items | Fowler |
+| S9 | The retype of S8 replaces and does not add: `read_once`, `judge_pair` and `ModelReader.read_pair` take summaries, `prompt.render_user_turn` is the one public layout of the user turn and `prompt.user_turn` stays the item adapter. A drawn pair's two request bodies are byte-identical before and after (sha256 c853bd34b357, recorded from the old and the new tree). An additive string core beside item-taking doors was the other answer | Fowler (Andre preferred the additive core) |
+| S10 | The judging stage takes the pairs as a required argument, `canary_pairs`, and the tenant loads them from config; the stage judges them first through its own reader and returns the answers and costs in memory. Required because the failure it guards against is silent: no check, and no word about it | Fowler |
+| S11 | A wrong answer is anything but the expected word in both orders. The cells are the judge's own words (null where refused), margins unrounded, and the file-order call's prompt count with zero (a server that reported none) stored as null. The calls are in the unit's cost cells for the venue and in no funnel count, rate or clock of the reading; a runner with no drawn pair keeps outcome `nothing_to_do` | Andre |
+| S12 | A call that raises stores nothing for its pair: logged as an error naming the id, and the runner goes on to its next pair and then its own. A canary id two readings both answer is warned about and the lower runner's answer kept, never raised on, because a raise costs the night its threshold row | Andre (the call), Fowler (the duplicate) |
 
 - **Rejected alternatives:**
 

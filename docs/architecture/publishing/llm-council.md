@@ -393,7 +393,8 @@ nothing.
 
 The content-similarity judge is what declares one today, in
 [../../../backend/idhazh/similarity/budget.py](../../../backend/idhazh/similarity/budget.py):
-its draw of pairs, at its own measured per-pair cost, against the window below.
+its draw of pairs plus the known-answer pairs its busiest runner judges first, at its own
+measured per-pair cost, against the window below.
 The number is that judge's reading, so the check is that judge's too.
 Composed application configuration must not load a judge's runtime budget
 check for callers that do not run it.
