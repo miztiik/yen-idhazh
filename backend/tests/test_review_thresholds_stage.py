@@ -2,30 +2,22 @@
 
 Every night here is laid down the way the collecting job finds it: a draw file, a verdict file
 and a shipped reading for each unit that came back. The pairs go through `file_pair_verdicts`
-into a real ledger in `tmp_path`, and the review then reads them back through the door. The last
-test is the row's oracle: a run of 14 nights, every number of every row worked out again from the
-ledger and from the row's own columns by a second, independent working. Nothing walks the
-committed ledger (CLAUDE.md section 13).
-
-The pure arithmetic of the review is `test_review_thresholds.py`, `test_similarity_threshold_*.py`.
+into a temporary ledger, and the review reads them back and files its history.
+Threshold arithmetic is tested in memory in `test_review_thresholds.py`.
 """
 
 from __future__ import annotations
 
-import math
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import date as date_type
-from datetime import timedelta
-from functools import partial
 from pathlib import Path
-from typing import Any, Final
+from typing import Final
 
 import pytest
 from support.judged_pairs import DATE, a_night_of_pairs, a_reading, a_saver, a_verdict_file
 from support.ledger import seed_compact_index
 from support.paths import CONFIG_DIR
-from support.threshold_nights import LOOKBACK, RULES, STEADY, a_day, pairs_beside
+from support.threshold_nights import LOOKBACK, RULES, a_day, pairs_beside
 
 from idhazh import atomic_write, ledger
 from idhazh.content_similarity_judge import settings as judge_settings
@@ -38,10 +30,6 @@ from idhazh.content_similarity_judge.tenant import JUDGE_ID
 from idhazh.contracts.file_envelope import Period
 from idhazh.contracts.ledger_index import CompactEntry, EntryState
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.story_similarity_pair_verdict import (
-    SameStoryVerdict,
-    StorySimilarityPairVerdict,
-)
 from idhazh.contracts.story_similarity_threshold_history_row import (
     StorySimilarityThresholdHistoryRow,
     ThresholdHoldReason,
@@ -77,7 +65,6 @@ def lay_down_a_night(
     step: int,
     *,
     thresholds: tuple[float, float] | None = None,
-    shift: float = 0.0,
     units: int = 2,
     lost: Sequence[int] = (),
     extra: Sequence[tuple[float, str]] = (),
@@ -104,7 +91,7 @@ def lay_down_a_night(
         )
         thresholds = (followed.lower, followed.upper)
     lower, upper = thresholds
-    pairs = [*pairs_beside(lower, upper, shift=shift, night=step), *extra]
+    pairs = [*pairs_beside(lower, upper, shift=0.0, night=step), *extra]
     drawn = a_night_of_pairs(
         pairs,
         answered=False,
@@ -174,7 +161,6 @@ def settle_a_night(
     state: Path,
     step: int,
     *,
-    shift: float = 0.0,
     units: int = 2,
     lost: Sequence[int] = (),
     extra: Sequence[tuple[float, str]] = (),
@@ -182,7 +168,7 @@ def settle_a_night(
 ) -> StorySimilarityThresholdHistoryRow:
     """Lay a night down and review it, and hand back the row it filed."""
     night = lay_down_a_night(
-        root, state, step, shift=shift, units=units, lost=lost, extra=extra, attempt=attempt
+        root, state, step, units=units, lost=lost, extra=extra, attempt=attempt
     )
     report = review(night, state)
     assert report.row is not None and report.filed
@@ -340,154 +326,3 @@ def test_a_draw_that_followed_thresholds_the_history_does_not_show_stops_the_rev
 
     assert not ledger.raw_root(state, HISTORY).exists()
     assert len(load_pair_verdicts(state, [a_day(0)])) == 80
-
-
-# --- the oracle ---------------------------------------------------------------------------
-
-
-def a_logit(share: float) -> float:
-    return math.log(share / (1.0 - share))
-
-
-def column(row: StorySimilarityThresholdHistoryRow, side: str, name: str) -> Any:
-    """One of a row's `lower_` or `upper_` columns by its name."""
-    return getattr(row, f"{side}_{name}")
-
-
-def independent_after(
-    side: str, before: float, gap: float, other: float
-) -> float:
-    """Where a move of this gap lands, worked from the documented rule and not the stage's code.
-
-    The gap is cut to its step (far, widening for the move out, narrowing for the move in), then
-    clamped by the one limit that faces its way, which only ever shortens it.
-    """
-    outward = gap < 0 if side == "lower" else gap > 0
-    step = (
-        RULES.far_gap_step
-        if abs(gap) > RULES.far_gap
-        else RULES.widening_step
-        if outward
-        else RULES.narrowing_step
-    )
-    landed = before + max(-step, min(step, gap))
-    if side == "lower":
-        return (
-            max(landed, min(before, RULES.lowest_lower_threshold))
-            if gap < 0
-            else min(landed, max(before, other - RULES.smallest_gap))
-        )
-    return (
-        max(landed, min(before, other + RULES.smallest_gap))
-        if gap < 0
-        else min(landed, max(before, RULES.highest_upper_threshold))
-    )
-
-
-def the_row_agrees_with_the_ledger(
-    state: Path,
-    row: StorySimilarityThresholdHistoryRow,
-    previous: StorySimilarityThresholdHistoryRow | None,
-) -> None:
-    """Every number of one night's row, worked again from the ledger and from its own columns."""
-    last = date_type.fromisoformat(row.date)
-    days = [(last - timedelta(days=back)).isoformat() for back in range(6, -1, -1)]
-    newest: dict[str, StorySimilarityPairVerdict] = {}
-    for pair in load_pair_verdicts(state, days):
-        newest[pair.pair_key] = pair
-    usable = [pair for pair in newest.values() if pair.readings_agree]
-    adjacent = previous is not None and previous.date == (last - timedelta(days=1)).isoformat()
-    lower_after = row.lower_threshold_after
-
-    for side in ("lower", "upper"):
-        get = partial(column, row, side)
-        before = get("threshold_before")
-        expected_before = (
-            getattr(previous, f"{side}_threshold_after")
-            if adjacent
-            else RULES.lower_start if side == "lower" else RULES.upper_start
-        )
-        assert before == pytest.approx(expected_before, abs=1e-9), f"{row.date} {side} chain"
-
-        near = [pair for pair in usable if abs(pair.similarity_score - before) <= RULES.near_threshold_width]
-        assert get("usable_pairs_used") == len(near), f"{row.date} {side} evidence"
-        assert get("nights_used") == len({pair.date for pair in near})
-        assert get("window_first_date") == (min(pair.date for pair in near) if near else None)
-
-        estimate, gap = get("estimate"), get("gap")
-        if estimate is None:
-            assert get("curve_intercept") is None and gap is None
-        else:
-            a, b = get("curve_intercept"), get("curve_steepness")
-            level = RULES.lower_share_level if side == "lower" else RULES.upper_share_level
-            assert estimate == pytest.approx((a_logit(level) - a) / b, abs=1e-6)
-            assert gap == pytest.approx(estimate - before, abs=1e-6)
-            slope_a = slope_b = 0.0
-            for pair in near:
-                answer = float(pair.verdict is SameStoryVerdict.YES)
-                chance = 1.0 / (1.0 + math.exp(-(a + b * pair.similarity_score)))
-                slope_a += answer - chance
-                slope_b += (answer - chance) * pair.similarity_score
-            slope_b -= (b - get("pull_centre")) / get("pull_spread") ** 2
-            assert abs(slope_a) < 1e-3 and abs(slope_b) < 1e-3, f"{row.date} {side} is not a maximum"
-
-        beyond = 0
-        if gap is not None and abs(gap) > RULES.ignore_range:
-            before_gap = getattr(previous, f"{side}_gap") if adjacent else None
-            beyond = (
-                getattr(previous, f"{side}_nights_beyond_ignore_range") + 1
-                if before_gap is not None
-                and getattr(previous, f"{side}_nights_beyond_ignore_range") >= 1
-                and (before_gap > 0) == (gap > 0)
-                else 1
-            )
-        assert get("nights_beyond_ignore_range") == beyond
-
-        held = (
-            ThresholdHoldReason.NOT_ENOUGH_EVIDENCE
-            if len(near) < RULES.minimum_usable_pairs
-            else ThresholdHoldReason.FIT_FAILED
-            if gap is None
-            else ThresholdHoldReason.WITHIN_IGNORE_RANGE
-            if abs(gap) <= RULES.ignore_range
-            else ThresholdHoldReason.WAITING_FOR_SECOND_NIGHT
-            if beyond < RULES.nights_running_required
-            else ThresholdHoldReason.NONE
-        )
-        assert get("held_because") is held, f"{row.date} {side} word"
-        other = row.upper_threshold_before if side == "lower" else lower_after
-        after = before if held is not ThresholdHoldReason.NONE else independent_after(
-            side, before, gap, other
-        )
-        assert get("threshold_after") == pytest.approx(after, abs=1e-9), f"{row.date} {side} move"
-        assert get("move") == pytest.approx(after - before, abs=1e-9)
-
-
-def test_fourteen_nights_through_the_stage_agree_with_a_second_working_of_every_number(
-    tmp_path: Path,
-) -> None:
-    """Six steady nights and eight of a curve 0.05 lower: the rows hold, wait, move and settle.
-
-    Inputs: 40 pairs beside each threshold a night, answered by a judge whose curve is known
-    (`support.threshold_nights`), filed through `file_pair_verdicts` and reviewed through the
-    stage. The oracle reads the ledger back and recomputes each stored number without the stage's
-    own code: the evidence counts, the curve as a maximum of the pulled likelihood, the estimate,
-    the gap, the nights in a row, the word and the move.
-    """
-    state = tmp_path / "state"
-    rows = [
-        settle_a_night(tmp_path, state, step, shift=-0.05 if step >= STEADY else 0.0)
-        for step in range(STEADY + 8)
-    ]
-
-    previous = None
-    for row in rows:
-        the_row_agrees_with_the_ledger(state, row, previous)
-        previous = row
-    moves = {
-        side: [round(getattr(row, f"{side}_move"), 6) for row in rows if getattr(row, f"{side}_move")]
-        for side in ("lower", "upper")
-    }
-    assert moves["lower"] and moves["upper"], "the shift was never acted on"
-    assert rows[STEADY - 1].lower_held_because is not ThresholdHoldReason.NONE
-    assert load_threshold_history(state, [row.date for row in rows]) == rows

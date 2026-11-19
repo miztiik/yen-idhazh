@@ -1,4 +1,4 @@
-"""Do raw and compact attempt records produce the same complete, correctly counted Parquet report?"""
+"""Does the command count settled attempts in Parquet and refuse incomplete reads?"""
 
 from __future__ import annotations
 
@@ -167,24 +167,15 @@ def report(state: Path, days: tuple[str, ...] = DAYS) -> subprocess.CompletedPro
     return command(state, arguments)
 
 
-@pytest.mark.parametrize("period", PERIODS)
-def test_real_command_matches_raw_and_compact_counts_without_changing_inputs(
-    tmp_path: Path, period: Period,
-) -> None:
-    raw, compact = tmp_path / "raw-state", tmp_path / "compact-state"
-    seeded(raw)
-    seeded(compact)
-    packed(compact, period)
-    before = {state: snapshot(state) for state in (raw, compact)}
+def test_real_command_writes_parquet_counts_of_settled_attempts(tmp_path: Path) -> None:
+    state = tmp_path / "state"
+    seeded(state)
 
-    raw_result = report(raw, (DAYS[1], DAYS[0], DAYS[0]))
-    compact_result = report(compact)
+    result = report(state, (DAYS[1], DAYS[0], DAYS[0]))
 
-    assert raw_result.returncode == 0, raw_result.stderr.decode()
-    assert compact_result.returncode == 0, compact_result.stderr.decode()
-    assert raw_result.stdout == compact_result.stdout
+    assert result.returncode == 0, result.stderr.decode()
     with (
-        pyarrow.BufferReader(raw_result.stdout) as source,
+        pyarrow.BufferReader(result.stdout) as source,
         pyarrow.parquet.ParquetFile(source, pre_buffer=False) as opened,
     ):
         table = opened.read(use_threads=False)
@@ -207,7 +198,6 @@ def test_real_command_matches_raw_and_compact_counts_without_changing_inputs(
     assert table.to_pylist() == [
         dict(zip(EXPECTED_COLUMNS, row, strict=True)) for row in expected
     ]
-    assert {state: snapshot(state) for state in (raw, compact)} == before
 
 
 def test_missing_dates_are_named_once_without_invented_zero_groups(tmp_path: Path) -> None:

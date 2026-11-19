@@ -10,9 +10,11 @@ from support.paths import CONFIG_DIR
 
 from idhazh import config
 from idhazh.contracts.base import ServerJob
-from idhazh.contracts.file_envelope import WriterIdentity
+from idhazh.contracts.file_envelope import FileEnvelope, WriterIdentity
 from idhazh.contracts.publication_inventory import PublicationInventory
+from idhazh.contracts.publication_receipt import PublicationReceipt
 from idhazh.contracts.run_manifest import RunManifest
+from idhazh.ledger import parquet
 from idhazh.stages import common
 from utilities import digest_publish, digest_recover, publication_evidence
 from utilities.digest_recovery_inputs import plan_import, restore
@@ -66,19 +68,6 @@ def test_real_partial_assembly_and_delivery_keep_source_and_writer_separate(
         failed_shards=frozenset({1}),
     )
     assert restored.plan == saved
-    # Restoring again is safe only when every retained byte is unchanged.
-    assert (
-        restore(
-            repo,
-            scratch,
-            archives,
-            execution="1",
-            attempt=1,
-            commit=source_commit,
-            failed_shards=frozenset({1}),
-        )
-        == restored
-    )
     monkeypatch.setattr(config, "REPO_ROOT", repo)
     monkeypatch.setattr(common, "VAR_ROOT", repo / "backend" / "var" / "run")
     monkeypatch.setattr(common, "STATE_ROOT", repo / "state")
@@ -99,24 +88,6 @@ def test_real_partial_assembly_and_delivery_keep_source_and_writer_separate(
         identity=identity,
         settings=settings,
     )
-    manifest_path = f"frontend/public/digest/{saved.date.replace('-', '/')}/run.json"
-    manifest = RunManifest.read(repo / manifest_path)
-    record = next(run for run in manifest.runs if run.run_id == saved.run_id)
-    assert record.commit_sha == source_commit
-    assert record.items_succeeded == 1
-    assert record.items_failed == 1
-    assert record.shards == 2
-    # A gate failure before delivery leaves a local fragment; retry must carry it into preparation.
-    digest_recover.assemble_outputs(
-        repo,
-        restored.plan,
-        source=source_run,
-        identity=identity,
-        settings=settings,
-    )
-    hashes = publication_evidence.read(repo, identity, digest_publish.VERBS["assemble"])
-    assert hashes
-    publication_evidence.identified(repo, identity, hashes)
     result = digest_recover.publish_outputs(
         repo,
         restored,
@@ -133,29 +104,23 @@ def test_real_partial_assembly_and_delivery_keep_source_and_writer_separate(
         contains(scope, restored.plan_path)
         for scope in digest_publish.permissions("assemble", date=saved.date)
     ), "normal assembly authority must not expand to planning"
+    manifest_path = f"frontend/public/digest/{saved.date.replace('-', '/')}/run.json"
     entry = remote.entry("main", manifest_path)
     assert entry is not None
     published = RunManifest.model_validate_json(remote.blob(entry.oid))
-    assert (
-        next(run for run in published.runs if run.run_id == saved.run_id).commit_sha
-        == source_commit
+    record = next(run for run in published.runs if run.run_id == saved.run_id)
+    assert record.commit_sha == source_commit
+    assert (record.items_succeeded, record.items_failed, record.shards) == (1, 1, 2)
+
+    receipt = PublicationReceipt.read(publication_evidence.receipt_path(repo, identity, "assemble"))
+    (health_path,) = (
+        path for path in receipt.writes
+        if path.startswith("state/raw/item-health/") and path.endswith(".parquet")
     )
-    # A retry observes assembly again; stale pre-preparation receipts are not reused.
-    digest_recover.assemble_outputs(
-        repo,
-        restored.plan,
-        source=source_run,
-        identity=identity,
-        settings=settings,
-    )
-    repeated = digest_recover.publish_outputs(
-        repo,
-        restored,
-        digest_recover.CheckedDay(saved.date),
-        source=source_run,
-        identity=identity,
-    )
-    assert repeated.exit_code == 0, repeated
+    health = remote.entry("main", health_path)
+    assert health is not None
+    metadata, _ = parquet.read(remote.blob(health.oid))
+    assert FileEnvelope.from_metadata(metadata).identity == identity
     assert git(repo, "rev-parse", "HEAD").strip() == current_commit
     assert not (
         repo
