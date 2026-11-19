@@ -128,10 +128,10 @@ door takes.
 
 ## What it costs
 
-`digest.yml` names the one day the run wrote and parses one day. `ci.yml` and
-`backfill.yml` sweep the whole committed tree, and that sweep grows one day a
-day: no prune deletes a `digest.json`, and a contract change can invalidate any
-frozen day, so a bounded input would answer the question for only some of them.
+`digest.yml` and `backfill.yml` name the days they change. Routine CI does not
+sweep the archive. A check without `--day` still reads every committed day, so
+its cost grows as the archive grows. Use named compatibility checks when
+changing a contract: an unchecked historical day has no new verdict.
 
 Measured 2026-09-08 on a developer machine: 18 committed days, 19.87 MB, 0.45 s
 - about 44 MB/s. At the 727-day horizon the 1 GB Pages cap sets, that is roughly

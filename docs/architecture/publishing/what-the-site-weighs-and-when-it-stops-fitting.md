@@ -60,7 +60,11 @@ on the smallest page, inside the spread between two plain builds of one tree.
 
 Two failures with nothing in common used to be welded into one step before the commit that publishes, and only one of them is worth a day.
 
-**An invalid payload is caught before the commit, and the build is not what catches it.** A reading document carries a seed and the browser fetches the rest, so no build opens the stories past the seed. `idhazh check-publication` opens all of them, against the committed shape the build reads and the served shape a browser fetches, and it runs immediately before `npm run build` in both publishing jobs. That day is broken, it must not publish, and both checks run before the commit. The guarantee's name is the part worth stating: **a broken day can no longer be merged**, and the publishing step is what keeps the pipeline's own pushes inside it - `ci.yml` never starts from a push the pipeline made ([frontend.md](frontend.md)).
+**Publication validates changed days before committing them.** A reading
+document carries a seed and the browser fetches the rest, so the build does
+not validate every story. `idhazh check-publication` opens all stories for
+the days named by the publishing jobs, before their build and commit. Routine
+CI does not sweep historical days ([frontend.md](frontend.md)).
 
 **A weight failure is a number we wrote down ourselves.** `page_weight.ceilings_bytes` in `config/idhazh.json` says how heavy each named page's prerendered HTML may get. Past it the page still reads correctly - what grew is the document, not the meaning. So the gate runs after the commit, in `digest.yml` and in `backfill.yml` alike, and it names only `/404`, which moves when a person edits source and never when a run publishes ([../../how-to/run-the-gates.md](../../how-to/run-the-gates.md)).
 
@@ -68,7 +72,9 @@ Two failures with nothing in common used to be welded into one step before the c
 
 **It stays fatal, and that costs something.** The day publishes, then the `assemble` job goes red. A page-weight number crossed on a Tuesday leaves `main` red until somebody looks at it. That is the price of the trade and it is not hidden. The property the four deleted ceilings stood in for is asserted by `frontend/scripts/bundle-gate.mjs` with no size number in it: non-home documents may carry no `introduced_by_run:` day-item marker, and dated documents may not be generated ([../../how-to/run-the-gates.md](../../how-to/run-the-gates.md#the-console-has-no-page-number)). A warning was rejected for the same reason a green light on a broken alarm was: nobody reads it.
 
-**"At the next CI run" is not "at the next push", and the difference is a delay.** `ci.yml` triggers on every push to `main`, but the pipeline's own pushes never start it: GitHub does not begin a workflow from a push made with the job's `GITHUB_TOKEN`. So the red job the pipeline produces is the `assemble` job inside the digest run, and `main`'s own CI stays green until the next merge somebody pushes. **Read a red `site` job as a page that has been over its ceiling since some earlier publish**, not as something the merge in front of you did.
+**The publication jobs enforce their own limits.** A push made with their
+`GITHUB_TOKEN` does not start CI. A failing release budget is reported in the
+publishing job, not deferred to the next CI run.
 
 **The gate reads a build made after the last commit step.** A lost push is retried by rebuilding the day against origin's new tip, so a build made before the commit can describe a tree the retry has already replaced - and the gate would then weigh one tree's pages against another tree's records. The rebuild is `npm run build` alone, 17 s against a run of 164 to 184 min. `npm ci` is deliberately not repeated with it: the lockfile moves rarely and `frontend/src` moves several times a day, so a reinstall would delete `node_modules` every run to cover the rarer case, and `npm ci` has its own partial-extract failure mode.
 

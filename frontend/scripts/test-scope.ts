@@ -18,89 +18,42 @@ const ALL: TestGroup[] = ['backend', ...FRONTEND_GROUPS];
 const READER: TestGroup[] = ['logic', 'reader', 'publishing'];
 const CONSOLE: TestGroup[] = ['logic', 'console', 'publishing'];
 
-/** The operator console's own files.
- *
- * The browser group covers representative query-worker and recovery journeys;
- * deterministic console rules run with logic. The console is an operator page,
- * not a reader surface, so a pull request buys its browser journeys only for
- * console-owned changes. Shared changes reach them on the merge push to `main`,
- * which runs every group. The shared panel frame is an exception: every console
- * route renders it, so its edits buy the console on the pull request.
- */
-const CONSOLE_OWNED =
-	/^(frontend\/(tests\/(?:console[-.]|support\/(?:(?:console-expect|console-window|panel-drivers)\/|(?:pipelines-ledgers|pipelines-span|retained-telemetry)\.ts$))|src\/(routes|lib)\/console\/|src\/lib\/components\/(?:Console[A-Z]|Panel\.svelte$)|src\/lib\/server\/console-shell\.ts$)|config\/console\/)/;
-
 /** A document a test reads is that test's input, not documentation.
  *
- * `chart-vocabulary.spec.ts` reads the chart-type list from this page, so an edit
- * buys the logic group and no browser. The key is the constant the spec reads
- * its page from, so the selector and test cannot name different pages.
+ * The keys are also used by the specs, so the selector and tests cannot name
+ * different pages.
  */
 const DOC_TEST_INPUTS: Record<string, TestGroup[]> = {
 	[CONSOLE_MODEL_LABELS_PAGE]: ['logic'],
 	[CHART_VOCABULARY_PAGE]: ['logic']
 };
 
-function consoleIsTheSubject(paths: readonly string[]): boolean {
-	return paths.some((path) => {
-		const clean = path.replaceAll('\\', '/');
-		return CONSOLE_OWNED.test(clean);
-	});
-}
-
 export type CiAnswer = {
-	browser: boolean;
 	code: boolean;
-	modelAbsent: boolean;
-	console: boolean;
-	validateAll: boolean;
+	bun: boolean;
+	logic: boolean;
+	tooling: boolean;
 };
 
-/** Anything under here IS the archive, so a change to it has to be re-read. */
-const ARCHIVE_TOUCHED = /^frontend\/public\/(digest|telemetry|assist)\//;
+// Native packages share configuration, contracts, and recorded inputs.
+const BUN_TEST_INPUTS = [
+	/^(?:packages|config|tests\/fixtures|backend\/idhazh\/contracts)\//,
+	/^services\/(?:feed-ingest-plan|host-fingerprints|host-probes|serve-pipeline-apis|summary-generator)\//,
+	/^tools\/summary-generator-caller\//,
+	/^\.github\/(?:actions\/publication-runtime\/|scripts\/|workflows\/(?:ci|ai-pipeline-tests|feed-ingest-plan-test|yen-ai-pipeline)\.yml$)/,
+	/^(?:full-ci-run|unresolved-change-base)$/
+];
 
-/** The check decisions the `scope` job writes to `$GITHUB_OUTPUT`.
- *
- * A pure function of the changed paths, so the truth table is checked here at
- * microseconds a case rather than through a temporary git repository and a
- * shell. `backend/tests/workflows/` still drives the real script end to
- * end, on a handful of cases, because the plumbing can break on its own.
- */
-export function ciAnswer(paths: readonly string[], isPr: boolean): CiAnswer {
-	const selection = selectPaths(paths);
-	// A harness change still proves itself on everything: `tooling` covers the
-	// selector, the Playwright config and the workflow that reads them.
-	const deferred = isPr && !selection.tooling && !consoleIsTheSubject(paths);
-	// Whether anything but documentation changed. Skipping on this is safe
-	// because the documentation branch in `selectPaths` is a closed list of
-	// prefixes: a path nobody classified falls to full coverage instead.
-	const code = selection.groups.length > 0 || selection.contracts || selection.tooling;
+export function ciAnswer(paths: readonly string[]): CiAnswer {
+	const { groups, contracts, tooling, reasons } = selectPaths(paths);
 	return {
-		browser: selection.groups.some((group) => group !== 'backend' && group !== 'logic'),
-		code,
-		modelAbsent: code && (!isPr || selection.tooling || selection.contracts || selection.reasons.some(({ path, groups }) => {
-			const clean = path.replaceAll('\\', '/');
-			if (/^(docs\/|TODO\/|(?:README|AGENTS|CLAUDE)\.md$|frontend\/tests\/)/.test(clean)) return false;
-			if (/^frontend\/src\/(routes\/console\/|lib\/(console|charts|data)\/|styles\/)/.test(clean)) return false;
-			// A backend-only selection cannot change model asset staging. Unknown
-			// inputs still select frontend groups and therefore buy the second build.
-			return groups.some((group) => group !== 'backend');
-		})),
-		console: selection.groups.includes('console') && !deferred,
-		// A published day is frozen, so the only thing that can invalidate one is a
-		// change to the shape it is read through - or an edit to the day itself.
-		// Everything else leaves an answer that was settled when the day was
-		// written, and re-deriving it costs about 0.27 s a day (`CLAUDE.md` Guardrail
-		// #12). Outside a pull request a code change always re-reads: that is the
-		// merge to `main`. Documentation carries no shape, so it never does.
-		validateAll:
-			code &&
-			(!isPr ||
-				selection.contracts ||
-				selection.tooling ||
-				paths.some((path) => ARCHIVE_TOUCHED.test(path.replaceAll('\\', '/'))))
+		code: groups.length > 0 || contracts || tooling,
+		bun: reasons.some(({ path }) => BUN_TEST_INPUTS.some((input) => input.test(path))),
+		logic: groups.includes('logic'),
+		tooling
 	};
 }
+
 // A value is a pytest target, so a package directory stands for every module
 // in it - which is what a split left behind where one module used to be.
 const MODULE_TESTS: Record<string, string[]> = {
@@ -213,9 +166,6 @@ export function selectPaths(paths: readonly string[]): Selection {
 			backendFiles.add(UTILITY_TESTS[path]);
 			reason = 'utility nothing else runs; its own tests';
 		} else if (/^backend\/idhazh\/(?!contracts\/).+\.py$/.test(path)) {
-			// The browser reaches backend code only through the canary build, so a
-			// pull request answers with the whole backend suite, and the merge push
-			// to `main`, which runs every group, settles the browser.
 			selected = ['backend'];
 			fullBackend = true;
 			reason = 'backend module; full backend suite';
@@ -269,30 +219,18 @@ export function selectionForChange(root: string, base = 'origin/main', head = 'H
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
 	const base = process.env.BASE ?? '';
 	const head = process.env.HEAD ?? '';
-	const isPr = process.env.EVENT === 'pull_request' && base !== '' && head !== '';
-	// Without a range - a dispatch, or a first push - the sentinel buys
-	// everything, which is what an unknown change is worth.
 	let paths: string[] = ['full-ci-run'];
 	if (base !== '' && head !== '') {
 		try {
-			const changed = changedPaths(process.cwd(), base, head, false);
-			// A pull request is answered from its own paths. A push is answered from
-			// the sentinel, because the group each path selects is a wager that
-			// nobody forgot a path and the merge is where that wager is settled. The
-			// one thing a push does read the paths for is whether any code changed
-			// at all: that branch is a closed list of prefixes rather than a wager.
-			paths = isPr || !ciAnswer(changed, false).code ? changed : ['full-ci-run'];
+			paths = changedPaths(process.cwd(), base, head, false);
 		} catch {
 			paths = ['unresolved-change-base'];
 		}
 	}
 	if (process.argv.includes('--ci')) {
-		const answer = ciAnswer(paths, isPr);
-		console.log(`browser=${answer.browser}`);
-		console.log(`code=${answer.code}`);
-		console.log(`model_absent=${answer.modelAbsent}`);
-		console.log(`console=${answer.console}`);
-		console.log(`validate_all=${answer.validateAll}`);
+		for (const [suite, selected] of Object.entries(ciAnswer(paths))) {
+			console.log(`${suite}=${selected}`);
+		}
 	} else {
 		console.log(JSON.stringify(selectPaths(paths), null, 2));
 	}
