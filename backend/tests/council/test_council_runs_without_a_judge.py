@@ -54,10 +54,9 @@ JUDGE_CODE_PACKAGES: Final = ("idhazh.content_similarity_judge", "idhazh.similar
 #: stage is named for the work it does rather than for whose loop it is in, so a
 #: shared prefix would go blind to three of these four.
 JUDGE_STAGE_MODULES: Final = (
-    "idhazh.stages.count_verdicts",
+    "idhazh.stages.file_pair_verdicts",
     "idhazh.stages.judge_item_pairs",
     "idhazh.stages.pick_item_pairs",
-    "idhazh.stages.set_merge_line",
 )
 
 #: Every persisted shape a judge owns, spelled one by one for the same reason.

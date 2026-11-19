@@ -27,7 +27,15 @@ def declaration(root: Path, **changes: object) -> Path:
     return path
 
 
-def test_the_judge_owns_the_three_execution_knobs_and_shared_stages_keep_the_rest() -> None:
+def committed(block: str) -> dict[str, object]:
+    """One nested block of the committed judge file, for a test to change one key of."""
+    raw = json.loads(
+        (CONFIG_DIR / "judges" / "content-similarity-judge.json").read_text(encoding="utf-8")
+    )
+    return dict(raw[block])
+
+
+def test_the_judge_owns_its_draw_and_thresholds_and_shared_stages_keep_the_rest() -> None:
     settings = config.load(CONFIG_DIR)
     execution = judge_settings.load(CONFIG_DIR)
     raw = json.loads(
@@ -50,14 +58,19 @@ def test_the_judge_owns_the_three_execution_knobs_and_shared_stages_keep_the_res
 
 
 def test_a_written_judge_file_changes_the_sampler_and_the_stamp_together(tmp_path: Path) -> None:
-    declaration(tmp_path, pair_budget=7, flush_every_pairs=2, judge_temperature=0.4)
+    declaration(
+        tmp_path,
+        draw=committed("draw") | {"pair_budget": 7},
+        flush_every_pairs=2,
+        judge_temperature=0.4,
+    )
     settings = dataclasses.replace(config.load(CONFIG_DIR), config_dir=tmp_path)
     prompt_file = settings.app.prompt_files.compare_articles
     prompt_path = tmp_path / prompt_file
     prompt_path.parent.mkdir(parents=True)
     prompt_path.write_bytes((CONFIG_DIR / prompt_file).read_bytes())
     execution = judge_settings.load(tmp_path)
-    assert execution.pair_budget == 7 and execution.flush_every_pairs == 2
+    assert execution.draw.pair_budget == 7 and execution.flush_every_pairs == 2
     sampling = judge.decode_settings(settings)
     assert sampling["temperature"] == 0.4
     assert stamps.judge_inputs(settings).judge_temperature == 0.4
@@ -66,7 +79,7 @@ def test_a_written_judge_file_changes_the_sampler_and_the_stamp_together(tmp_pat
 
 
 @pytest.mark.parametrize(
-    "key", ["pair_budget", "flush_every_pairs", "judge_temperature", "version"]
+    "key", ["draw", "thresholds", "flush_every_pairs", "judge_temperature", "version"]
 )
 def test_a_missing_owned_knob_is_refused_at_the_judge_reader(tmp_path: Path, key: str) -> None:
     path = declaration(tmp_path)
@@ -74,6 +87,28 @@ def test_a_missing_owned_knob_is_refused_at_the_judge_reader(tmp_path: Path, key
     del raw[key]
     path.write_text(json.dumps(raw), encoding="utf-8", newline="\n")
     with pytest.raises(ValueError, match=key):
+        judge_settings.load(tmp_path)
+
+
+@pytest.mark.parametrize(
+    ("block", "changes", "refused"),
+    [
+        ("draw", {"slice_width": 0.03}, "does not divide 1"),
+        ("draw", {"coarse_slice_width": 0.035}, "whole number of"),
+        ("draw", {"fully_similar": {"weight": 6, "minimum": 7, "maximum": 6}}, "above the maximum"),
+        ("draw", {"pair_budget": 0}, "pair_budget"),
+        ("draw", {"unknown_knob": 1}, "unknown_knob"),
+        ("thresholds", {"upper_start": 0.8}, "need 0.1200"),
+        ("thresholds", {"lower_start": 0.95}, "apart"),
+        ("thresholds", {"upper_start": 1.0}, "fully similar end"),
+        ("thresholds", {"lower_start": -1.0}, "fully dissimilar end"),
+    ],
+)
+def test_a_draw_the_slices_cannot_be_cut_from_is_refused_at_the_judge_reader(
+    tmp_path: Path, block: str, changes: dict[str, object], refused: str
+) -> None:
+    declaration(tmp_path, **{block: committed(block) | changes})
+    with pytest.raises(ValueError, match=refused):
         judge_settings.load(tmp_path)
 
 

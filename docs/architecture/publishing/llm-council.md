@@ -1,6 +1,6 @@
 # The LLM-COUNCIL, and why judging has its own clock
 
-**Last Updated**: 2026-11-16
+**Last Updated**: 2026-11-19
 
 The room a model verdict is taken in. `LLM-COUNCIL` is a workflow of its own -
 [../../../.github/workflows/llm-council.yml](../../../.github/workflows/llm-council.yml) -
@@ -16,18 +16,21 @@ the room, and that page is the one case being heard in it today.
 
 ## It is a separate workflow because of the budget, not the schedule
 
-At the cap the same-story block permits - 200 pairs, judged in both orders -
-that is 400 model calls. A pair costs a measured 110.98 seconds at its worst,
-so the cap is **6 hours 10 minutes of model time run serially**, and a GitHub
-job is killed at 6 hours with nothing written (`CLAUDE.md` Guardrail #2). At the
-average pair, 94.53 seconds, it is 5 hours 15 minutes - which clears the ceiling
-by 45 minutes, and a bound has to survive a bad night rather than an average one
+At the cap the same-story draw permits - 150 pairs, judged in both orders -
+that is 300 model calls. A pair costs a measured 110.98 seconds at its worst,
+so the cap is **4 hours 37 minutes of model time run serially**, against the
+175 minutes one unit has to work in (below) and the 6 hours at which a GitHub
+job is killed with nothing written (`CLAUDE.md` Guardrail #2). At the average
+pair, 94.53 seconds, it is 3 hours 56 minutes. One unit cannot hold either, so
+the draw is split over the council's four units, 38 pairs and 70 minutes at the
+worst pair cost each, and a bound has to survive a bad night rather than an
+average one
 ([what a judge pair costs](../../reference/benchmarks/what-a-judge-pair-costs.md)).
 
-**Today's median day is 33 pairs, and it would fit inside `digest.yml`
-comfortably.** That is the argument for the split rather than against it: sizing
-the shape off the median means the first busy day crosses the ceiling and writes
-nothing at all.
+**The draw takes its whole budget every night, so there is no quiet night to
+size the shape from.** The weighted draw takes the pairs its budget allows
+whatever the day held, and a shape that only fits on a median day is a shape
+that finds out on a busy one.
 
 ### Design rationale: planning and collection keep separate total deadlines
 
@@ -568,9 +571,8 @@ council run, `job` `save_council_results`, `shard` 0, the run's attempt, and the
 `--commit` the job checked out. It files the council's own record with it and
 passes it to each tenant's `Tenant.settle`. A tenant names its own producer and
 changes nothing else, so every raw file the night commits says which run, job
-and commit wrote it. The similarity judge's `count_verdicts` files its scored
-pairs and its metrics this way, and its `set_merge_line` files the night's
-fitted merge line.
+and commit wrote it. The similarity judge's `file_pair_verdicts` files the
+night's pair verdicts this way.
 
 There is no regeneration command on that call. The council is the only writer of
 a tenant's own ledger and `concurrency` runs one council at a time, so a lost
@@ -872,8 +874,7 @@ case where more than one job commits into one ledger file - the digest pipeline
 has four to eight committing units on one day. The council has one
 committing writer, and its day file is already settled on every write by a key
 carrying the run id, which is the property a segment exists to provide. The
-council's record, the scored pairs, the judge's metrics and the fitted merge
-line now all file through the ledger door, where each write is a raw file named
+council's record and the judge's pair verdicts now both file through the ledger door, where each write is a raw file named
 for its writer, so no council write appends to a day file.
 
 **The second reason went with the staging ledger on 2026-09-22.** A compaction
@@ -948,7 +949,7 @@ with it.
 
 | Case | Decides | Status |
 | --- | --- | --- |
-| Same-story pairs | where the merge line should have been | ships today, [autotune-content-similarity.md](autotune-content-similarity.md) |
+| Same-story pairs | which stories are one story, read by score slice | ships today, [autotune-content-similarity.md](autotune-content-similarity.md) |
 | Summary fluency | a 1-5 readability score, summary only, sampled | design of record, [autotune-summary-quality.md](autotune-summary-quality.md) |
 
 Every page named in the See also below describes a knob a person sets by hand
@@ -956,7 +957,7 @@ today. Where one of them gains a fitted line, this is the room it is fitted in.
 
 ## See also
 
-- [autotune-content-similarity.md](autotune-content-similarity.md) - the one case heard here today: the merge line, its fold, and how it moves.
+- [autotune-content-similarity.md](autotune-content-similarity.md) - the one case heard here today: the merge line, its fold, and how the nightly judge reads pairs near it.
 - [autotune-search-quality.md](autotune-search-quality.md) - research: what search returns, and a judge that would tune the similarity floor. Not built.
 - [autotune-summary-quality.md](autotune-summary-quality.md) - the next-day fluency judge, and the loop it feeds.
 - [autotune-story-prominence.md](autotune-story-prominence.md) - what decides a story's position, hand-set today.

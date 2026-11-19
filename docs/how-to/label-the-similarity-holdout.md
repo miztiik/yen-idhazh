@@ -1,6 +1,6 @@
 # Label the Similarity Holdout
 
-**Last Updated**: 2026-10-11
+**Last Updated**: 2026-11-19
 
 Read pairs of articles the merge line has to decide between, and record whether
 each pair is one news event or two. The marks are saved through the ledger door
@@ -51,7 +51,7 @@ python -m idhazh council-prepare --date 2026-09-18 --run-id 2026-09-19-1
 ```
 
 Any tree of CSVs carrying `date`, `pair_key`, `left_url_key`, `right_url_key`
-and `composite_score` will do - the tool reads every `*.csv` in a `selection`
+and `similarity_score` will do - the tool reads every `*.csv` in a `selection`
 slot under `--draw-root`, so pointing it at `backend/var/council` covers every
 day drawn so far. It reads the selection slot and nothing else because a night
 leaves its verdicts and its instrument rows in the same tree, and those carry no
@@ -94,11 +94,13 @@ INFO:idhazh:sample_sheet resolved 1197 pairs, refused {'no-article': 0,
 'no-score': 0, 'already-drawn': 1607}, wrote 200 to test-results/...
 ```
 
-`already-drawn` is normal and large - 1,607 of the 2,804 rows over 29 days were
-one pair arriving twice. A pair whose two articles sit on different published
-days is drawn on both of those days, so the same `pair_key` shows up once a day
-and the second copy is dropped. `no-article` means the published day no longer
-carries one of the two addresses.
+`already-drawn` is large on draws made before the draw took only new pairs: 1,607
+of the 2,804 rows over 29 days were one pair arriving twice, because a pair whose
+two articles sit on different published days was drawn on both of those days, so
+the same `pair_key` showed up once a day and the second copy was dropped. A draw
+made now holds each `pair_key` once, so the count stays near zero unless a night
+was drawn again; the second copy is dropped either way. `no-article` means the
+published day no longer carries one of the two addresses.
 
 `pairs.md` is the one to read. `pairs.json` carries the same pairs as data.
 

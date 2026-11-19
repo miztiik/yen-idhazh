@@ -1,8 +1,33 @@
 {
   "lifecycle_status": "active",
   "runs_model": true,
-  "pair_budget": 200,
+  "draw": {
+    "pair_budget": 150,
+    "slice_width": 0.01,
+    "thin_slices_each_end": 6,
+    "coarse_slice_width": 0.04,
+    "bucket_weights": {
+      "lower_thin": 40,
+      "upper_thin": 30,
+      "middle_coarse": 20
+    },
+    "fully_similar": {
+      "weight": 6,
+      "minimum": 2,
+      "maximum": 6
+    },
+    "fully_dissimilar": {
+      "weight": 4,
+      "minimum": 1,
+      "maximum": 4
+    },
+    "thresholds_lookback_days": 14
+  },
+  "thresholds": {
+    "lower_start": 0.7,
+    "upper_start": 0.93
+  },
   "flush_every_pairs": 1,
   "judge_temperature": 0.0,
-  "version": "2026-11-18"
+  "version": "2026-11-19"
 }

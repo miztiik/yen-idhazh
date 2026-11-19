@@ -31,8 +31,8 @@ from idhazh.contracts.story_similarity_pair import (
     JUDGE_POLICY_VERSION,
     ReadingRefusalReason,
     SameStoryVerdict,
-    StorySimilarityPair,
 )
+from idhazh.contracts.story_similarity_pair_verdict import PairBucket, StorySimilarityPairVerdict
 from idhazh.council.deadline import compute_shard_deadline
 from idhazh.llm.server import (
     TokenChoice,
@@ -41,7 +41,8 @@ from idhazh.llm.server import (
     render_prompt,
 )
 from idhazh.sanitize import FENCE_CLOSE, FENCE_OPEN
-from idhazh.similarity import counting, judge, prompt, stamps
+from idhazh.similarity import judge, prompt, stamps
+from idhazh.similarity.statistics import reading_statistics
 from idhazh.stages import common, judge_item_pairs
 
 #: What a page writes when it wants to be merged with something it is not. It
@@ -176,12 +177,7 @@ def _a_deadline_no_shard_will_reach() -> float:
 
 
 def _a_council_run(date: str) -> str:
-    """The name a council night files its rows under.
-
-    Never the draw's own `<date>-1`. The column a shard fills with this exists
-    because the run that read a pair and the run that published the day are two
-    different runs, and one string standing for both could not tell them apart.
-    """
+    """The name a council night files its rows under, and the one its draw rows carry."""
     return f"{date}-9"
 
 
@@ -235,7 +231,7 @@ def _client(server: ProtocolReplies) -> judge.Client:
 
 def _drawn(
     left: DigestItem, right: DigestItem, *, shard: int, date: str, cosine: float = 0.93
-) -> StorySimilarityPair:
+) -> StorySimilarityPairVerdict:
     """One row of the draw, in the shape the scoring stage leaves it."""
     return _a_drawn_row(
         sorted((derive_url_key(left.source_url), derive_url_key(right.source_url))),
@@ -245,7 +241,7 @@ def _drawn(
     )
 
 
-def _drawn_beyond_the_window(*, shard: int, date: str) -> StorySimilarityPair:
+def _drawn_beyond_the_window(*, shard: int, date: str) -> StorySimilarityPairVerdict:
     """A drawn row naming two addresses no day this shard can open published.
 
     The real shape of an unreadable pair rather than a corrupt one: the draw was
@@ -264,28 +260,40 @@ def _drawn_beyond_the_window(*, shard: int, date: str) -> StorySimilarityPair:
 
 def _a_drawn_row(
     keys: list[str], *, shard: int, date: str, cosine: float = 0.93
-) -> StorySimilarityPair:
-    """Two address keys as the contract holds a drawn pair, with nothing judged yet."""
-    return StorySimilarityPair.model_validate(
+) -> StorySimilarityPairVerdict:
+    """Two address keys as the contract holds a drawn pair, with nothing judged yet.
+
+    The only pair its slice held, taken whole, so the slice columns are the draw's
+    own: the lightly sampled end above the upper threshold of 0.93.
+    """
+    return StorySimilarityPairVerdict.model_validate(
         {
             "date": date,
-            "run_id": f"{date}-1",
+            "run_id": _a_council_run(date),
             "work_part_index": shard,
             "pair_key": derive_text_digest(keys[0] + keys[1]),
             "left_url_key": keys[0],
             "right_url_key": keys[1],
-            "composite_score": cosine,
+            "similarity_score": cosine,
             "cosine": cosine,
             "headline": False,
             "scorer_model": "all-minilm-l6-v2-quantized",
             "cosine_weight": 1.0,
+            "bucket": PairBucket.FULLY_SIMILAR,
+            "slice_low": 0.93,
+            "slice_high": 1.0,
+            "slice_pairs_available": 1,
+            "slice_pairs_judged": 1,
+            "lower_threshold_in_force": 0.7,
+            "upper_threshold_in_force": 0.93,
+            "config_versions": '{"judges/content-similarity-judge.json":"2026-11-19"}',
         }
     )
 
 
-def _rows(path: Path) -> list[StorySimilarityPair]:
+def _rows(path: Path) -> list[StorySimilarityPairVerdict]:
     with path.open("r", encoding="utf-8", newline="") as handle:
-        return [StorySimilarityPair.from_csv_row(cells) for cells in csv.DictReader(handle)]
+        return [StorySimilarityPairVerdict.from_csv_row(cells) for cells in csv.DictReader(handle)]
 
 
 def _fenced(rendered: str) -> list[str]:
@@ -993,7 +1001,7 @@ def test_an_article_instruction_stays_fenced_when_the_judge_receives_the_pair(
 
     written = _rows(report.path)
     assert [row.verdict for row in written] == [SameStoryVerdict.NO]
-    assert written[0].usable is True
+    assert written[0].readings_agree is True
 
     assert PLANTED not in prompt.system_turn(), "it never reaches the instructions"
     assert decodes, "the shard posted nothing, so this proves nothing"
@@ -1061,18 +1069,17 @@ def test_a_verdict_file_round_trips_through_the_contract(
     assert report.outcome is ShardOutcome.COMPLETED
     assert len(rows) == 1
     row = rows[0]
-    assert row.version == StorySimilarityPair.schema_version() != drawn.version
+    assert row.version == StorySimilarityPairVerdict.schema_version() != drawn.version
     assert row.pair_key == drawn.pair_key
     assert row.verdict is SameStoryVerdict.YES
     assert row.verdict_swapped is SameStoryVerdict.YES
-    assert row.usable is True
+    assert row.readings_agree is True
     assert row.judge_model == settings.models.summarizer.id
     assert report.metrics.judge_model == row.judge_model == "unseen-judge-v2"
     assert row.prompt_digest == prompt.prompt_digest()
     assert row.grammar_digest == prompt.grammar_digest()
     assert row.first_token_margin is not None
     assert row.decode_seconds is not None
-    assert row.judge_id == "content-similarity-judge"
     assert row.judge_temperature == stamp.judge_temperature
     assert row.grammar_applied is True
     assert row.thinking_spans == 0, "the committed entry declares no reasoning span"
@@ -1082,7 +1089,7 @@ def test_a_verdict_file_round_trips_through_the_contract(
     assert [entry[0] for entry in window] == [choice.token for choice in recorded]
     assert window[0][1] == pytest.approx(recorded[0].logprob, abs=5e-7)
     assert window[0][1] <= 0.0, "stored as the log probability the margin is computed at"
-    assert StorySimilarityPair.from_csv_row(row.csv_row()) == row
+    assert StorySimilarityPairVerdict.from_csv_row(row.csv_row()) == row
 
 
 def test_a_pair_the_grammar_did_not_hold_is_written_down_and_the_shard_reads_on(
@@ -1126,28 +1133,18 @@ def test_a_pair_the_grammar_did_not_hold_is_written_down_and_the_shard_reads_on(
 
     rows = _rows(report.path)
     refused, held = rows[0], rows[1]
-    counted = counting.day_counts(
-        rows,
-        record=counting.empty_record(
-            settings.app.assemble.same_story.judging_knobs(),
-            scorer=stamps.scorer_inputs(settings),
-            judge=stamps.judge_inputs(settings),
-        ),
-    )
 
     assert report.outcome is ShardOutcome.COMPLETED
     assert (report.owned, report.judged, report.usable) == (2, 2, 1)
     assert refused.grammar_applied is False
     assert refused.verdict is None
     assert refused.verdict_swapped is None
-    assert refused.usable is False
+    assert refused.readings_agree is False
     assert refused.decode_seconds is not None, "the pair still paid for both of its calls"
     assert refused.first_token_probabilities is not None, "the window that gave it away"
     assert held.grammar_applied is True, "the shard read the pair after the refused one"
-    assert held.usable is True
-    assert sum(slot.same + slot.different + slot.unclear for slot in counted.values()) == 1, (
-        "the day's count took the refused pair as a verdict"
-    )
+    assert held.readings_agree is True
+    assert reading_statistics(rows).valid == 1, "the night's count took the refused pair as a verdict"
 
 
 def test_a_shard_that_owned_nothing_still_leaves_a_file(
@@ -1184,7 +1181,7 @@ def test_a_shard_that_owned_nothing_still_leaves_a_file(
 
     assert report.path.exists()
     assert report.outcome is ShardOutcome.NOTHING_TO_DO
-    assert read_text(report.path) == ",".join(StorySimilarityPair.csv_columns()) + "\n"
+    assert read_text(report.path) == ",".join(StorySimilarityPairVerdict.csv_columns()) + "\n"
 
 
 def test_a_shard_handed_a_deadline_that_has_passed_judges_nothing_and_says_so(
@@ -1229,7 +1226,7 @@ def test_a_shard_handed_a_deadline_that_has_passed_judges_nothing_and_says_so(
         "still close on the shard the deadline exists to let report"
     )
     assert report.metrics.decode_seconds_total is None, "it made no call to time"
-    assert read_text(report.path) == ",".join(StorySimilarityPair.csv_columns()) + "\n"
+    assert read_text(report.path) == ",".join(StorySimilarityPairVerdict.csv_columns()) + "\n"
 
 
 def test_a_shard_that_dies_mid_draw_keeps_every_pair_it_had_already_judged(
@@ -1330,7 +1327,7 @@ def test_the_shard_stops_on_the_instant_the_councils_own_clocks_describe(
         assert server.decodes == [], "the shard judged its pair, so no deadline reached it"
 
     written = _a_verdict_file(judge_root / day.date, shard=0)
-    assert read_text(written) == ",".join(StorySimilarityPair.csv_columns()) + "\n"
+    assert read_text(written) == ",".join(StorySimilarityPairVerdict.csv_columns()) + "\n"
 
 
 def test_the_funnel_the_shard_reports_adds_up_to_what_it_was_dealt(
@@ -1440,14 +1437,15 @@ def test_a_shard_that_read_nothing_measures_nothing_rather_than_zero(
     assert (report.model_calls, report.tokens_in, report.tokens_out) == (0, 0, 0)
 
 
-def test_a_judged_row_names_the_night_that_read_it_and_not_the_day_it_published(
+def test_a_judged_row_keeps_what_the_draw_wrote_and_leaves_the_chance_to_the_collecting_job(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Two runs, two columns. The draw's run published the day; the council read it.
+    """The shard fills the judging columns and touches nothing the draw decided.
 
-    `judged_by_run_id` is in the settlement key, so while every row carried the
-    same empty cell a re-judge of a pair was dropped as a repeat of the row it
-    was meant to replace.
+    The slice, how many pairs it held and gave, the thresholds followed, the run and the
+    config revisions are the draw's, and a shard that rewrote one would file a pair
+    under a chance it never had. How many pairs of the slice came back usable, and the
+    chance that follows, are what no single shard can know, so they stay empty.
     """
     day = _a_day()
     root = _a_day_on_disk(tmp_path, day)
@@ -1471,11 +1469,13 @@ def test_a_judged_row_names_the_night_that_read_it_and_not_the_day_it_published(
         )
 
     written = _rows(report.path)[0]
+    drawn_columns = {
+        name: value
+        for name, value in drawn.model_dump(mode="json").items()
+        if value is not None and name != "readings_agree"
+    }
 
-    assert written.judged_by_run_id == _a_council_run(day.date)
+    assert {name: written.model_dump(mode="json")[name] for name in drawn_columns} == drawn_columns
+    assert (written.slice_pairs_usable, written.sampling_chance) == (None, None)
     assert written.judge_policy_version == report.metrics.judge_policy_version == JUDGE_POLICY_VERSION
-    assert written.run_id == drawn.run_id
-    assert written.judged_by_run_id != written.run_id, (
-        "the draw's own run and the council's night are two different runs, and a "
-        "shard writing one into both columns says nothing at all"
-    )
+    assert written.run_id == report.metrics.run_id == _a_council_run(day.date)

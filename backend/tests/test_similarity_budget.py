@@ -7,6 +7,7 @@ import math
 import pytest
 from support.paths import CONFIG_DIR, read_text
 
+from idhazh.content_similarity_judge import settings as judge_settings
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.knobs.content_similarity_judge import ContentSimilarityJudgeConfig
 from idhazh.contracts.knobs.council import CouncilConfig
@@ -19,12 +20,10 @@ pytestmark = pytest.mark.contract
 
 
 def _with(pair_budget: int) -> ContentSimilarityJudgeConfig:
-    """A config that draws `pair_budget` pairs, against whatever clocks are named."""
-    return ContentSimilarityJudgeConfig(
-        pair_budget=pair_budget,
-        flush_every_pairs=1,
-        judge_temperature=0.0,
-        version="2026-11-18",
+    """The committed judge settings, drawing `pair_budget` pairs, against whatever clocks are named."""
+    committed = judge_settings.load(CONFIG_DIR)
+    return committed.model_copy(
+        update={"draw": committed.draw.model_copy(update={"pair_budget": pair_budget})}
     )
 
 
@@ -121,9 +120,22 @@ def test_the_refusal_names_every_knob_a_person_could_move() -> None:
     assert str(budget.SECONDS_A_JUDGED_PAIR) in said, "the cost is what the arithmetic turns on"
 
 
-def test_a_config_with_no_judge_block_has_nothing_to_check() -> None:
-    """This judge is optional, so its absence is a night the council runs without it."""
+def test_a_config_with_no_adaptive_block_is_checked_like_any_other() -> None:
+    """The draw budget is this judge's own setting, so no other block decides whether it is checked.
+
+    A config without the adaptive-threshold block used to be exempt, which let a night
+    this judge could not finish through whenever that block was absent.
+    """
     without = AppConfig.model_validate({"models_file": "models/test.json"})
+    council = CouncilConfig()
 
     assert without.assemble.same_story.adaptive_dedup_threshold is None
-    budget.refuse_a_night_this_tenant_cannot_finish(without, council=CouncilConfig())
+    budget.refuse_a_night_this_tenant_cannot_finish(
+        without, council=council, judge_knobs=_with(_the_widest_draw_that_fits(council))
+    )
+    with pytest.raises(ValueError, match=r"draw\.pair_budget"):
+        budget.refuse_a_night_this_tenant_cannot_finish(
+            without,
+            council=council,
+            judge_knobs=_with(_the_widest_draw_that_fits(council) + 1),
+        )
