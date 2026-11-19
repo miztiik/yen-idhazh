@@ -14,11 +14,7 @@ service is one more thing that can be wrong about one article.
 
 **One element per distinct name, at its first occurrence.** A chart cites a name by
 the element's id and draws the cited words, so a second occurrence of the same words adds
-a menu row the model must read and no chart it could not already draw. Reading costs
-about 101 ms a prompt token at the configured model's median of 9.85 tokens a second
-(`ubuntu-latest`, 2026-09-09, `docs/architecture/summarize/throughput.md`) and a row is
-about 34 tokens, so each row is worth about 3.5 seconds an item for as long as the menu is
-shown (an estimate from those two readings). `found` still counts every labelled mention,
+an element no chart could not already draw. `found` still counts every labelled mention,
 taken before the repeats go, so a reader can see how many were folded.
 """
 

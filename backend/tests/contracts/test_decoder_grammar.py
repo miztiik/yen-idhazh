@@ -1,10 +1,10 @@
 """Does every schema we hand a constrained decoder bound its own decode length?
 
-Not "is there a `maxLength`". `visual.unbounded_leaves` already asks that, and it
-answered yes throughout 2026-09-14 while the decoder ran unbounded: llama.cpp's
-schema-to-grammar converter honours a `pattern` or a length bound, never both, so
-a `maxLength` beside `^[a-z]+-...$` is dropped and never reaches the grammar. The
-question that could disagree with that one is whether the pattern bounds itself.
+Not "is there a `maxLength`". That question answered yes throughout 2026-09-14 while
+the decoder ran unbounded: llama.cpp's schema-to-grammar converter honours a `pattern`
+or a length bound, never both, so a `maxLength` beside `^[a-z]+-...$` is dropped and
+never reaches the grammar. The question that could disagree with it is whether the
+pattern bounds itself.
 """
 
 from __future__ import annotations

@@ -639,8 +639,8 @@ def recovered_completion(completion: Completion) -> Completion | None:
 
     Nothing comes back in the two cases where there is nothing to recast: a cut
     that landed inside the summary itself, which is where there is genuinely
-    nothing to publish, and a reply the reachability gate narrowed to the summary
-    draft alone (`plan=False`), which is already the single-call shape and whose
+    nothing to publish, and a reply for an item that was offered no table
+    (`plan=False`), which is already the single-call shape and whose
     `summary` is a string rather than an object.
     """
     body = summary_object(completion.content)

@@ -1,10 +1,10 @@
 """What a visual plan is, and the four things it may not carry.
 
-A **visual plan** is a model's answer to "should this story carry a picture,
-and if so what shape and out of which facts". It is the payload the planner's
-second call decodes into, and the only thing a compiler is allowed to draw
-from. Everything a reader will see is reached through it, so what it may not
-hold is as much of the contract as what it holds.
+A **visual plan** says whether a story carries a picture and, if so, what shape
+and out of which facts. Code builds it from the row of a table of figures the
+model chose (`idhazh.classify.calls`), and it is the only thing a compiler is
+allowed to draw from. Everything a reader will see is reached through it, so
+what it may not hold is as much of the contract as what it holds.
 
 **Four prohibitions, and the shape carries three and a half of them.**
 
@@ -17,86 +17,50 @@ hold is as much of the contract as what it holds.
 2. **No literal values.** No field anywhere accepts a free number. A bar height
    is reached by citing an `ElementId`, and the element carries the characters
    the article itself wrote. So the worst a prompt injection can do is pick the
-   wrong bars; it cannot draw the wrong number.
+   wrong table or row; it cannot draw the wrong number.
 3. **No authored text where a reader reads a fact.** `labels` and `annotations`
    are element references, not strings - code cuts every character a reader
-   sees, and the model points and names. The three prose channels that remain -
-   `title`, `caption` and `why` - are length-bounded here, and whether a numeral
-   inside one is matched by a cited element is the validator's check, not the
-   shape's. That half is the only part of the four this module hands on.
+   sees. The three prose channels that remain - `title`, `caption` and `why` -
+   are length-bounded here, the model's answer is refused if one holds a digit,
+   and whether a numeral inside one is matched by a cited element is the
+   validator's check, not the shape's. That half is the only part of the four
+   this module hands on.
 4. **No `alt_text`.** The compiler writes it, from the elements it already
    holds, so it is satisfied by construction. Written by the model it would be
    the last unguarded prose channel in the system. The field is not declared,
    it is named in `FORBIDDEN_FIELDS`, and this module refuses to import if one
    is ever added back.
 
-**The decoder is the control, not the prompt.** Field order is decode order, so
-the order below is load-bearing: `decision` and `purpose` are committed before
-`type`, and `confidence` decodes **after** `type` rather than before it. Second
-in the list, a confidence would condition every field after it - the model would
-be reading its own hedge back as evidence. It is recorded and it gates nothing.
-Since 2026-11-18 the plan is built by code from the row a model chose, which asks
-for no confidence, so it is null there.
-
-Code stamps `version` and `plan_version` and collects `element_ids` from the
-selected references. None is requested from the current decoder. The native
-saved plan retains all three fields, so historical plans remain readable.
+`confidence` is optional and null: the plan is built by code from the row a
+model chose, which asks for none. It is recorded and it gates nothing. Code
+stamps `version` and `plan_version` and collects `element_ids` from the
+selected references, and the saved plan retains all three fields, so
+historical plans remain readable.
 
 ## Every role is a key, and an unused one is empty
 
 `encodings` is one flat object with a field per role, and the schema requires
-every one of them. A `bar` therefore emits `"bins": []` and `"size": []`
+every one of them. A `bar` therefore carries `"bins": []` and `"size": []`
 alongside the two channels it fills.
 
 **Presence is the guarantee; what may be empty is the validator's.** Left
-optional, a role is a role the model can simply not mention, and a plan that
+optional, a role is a role a payload can simply not mention, and a plan that
 names `bar` and omits `quantity` reads as a complete answer - "a confident chart
 with no bars in it", which happened twice on the first live run. Required, that
-plan is a decode failure at the key rather than a chart with nothing in it.
-Which roles a given type may leave empty needs the type's own rule set, and a
-schema cannot say "at most four roles for a `bar`", so that ruling belongs to
-the validator and this shape only guarantees it has something to rule on.
-
-The one-per-role object is why the roles are fields rather than a map. A JSON
-Schema can require the keys of an object it declares; it cannot require the keys
-of a map. An eighteen-branch union, one per type, was the other way to reach the
-same place, and it was refused: the decoder would have to pick a branch before
-it has picked a type.
+plan fails to load rather than becoming a chart with nothing in it. Which roles
+a given type may leave empty needs the type's own rule set, and a schema cannot
+say "at most four roles for a `bar`", so that ruling belongs to the validator
+and this shape only guarantees it has something to rule on.
 
 **There is no `label` role, and the top-level `labels` field is why.** `labels`
 is the elements whose own characters name the marks and the axes - one naming
 channel for the whole picture, capped at eight marks and two axes. A `label`
-role would ask the same question a second time inside `encodings`, and a model
+role would ask the same question a second time inside `encodings`, and a payload
 that answers it twice can answer it two ways, with no fact to settle which. So
 naming stays one field, and `encodings` stays the answer to a different question:
 which elements are *drawn*, and by which channel. `event_label` is not the
 exception it looks like - a timeline's `time` channel places a dot and nothing
 else, so the event text is the mark rather than a name for one.
-
-**What required-but-empty costs, measured rather than assumed.** An empty role
-is `"<name>":[]` and a comma, so the nine role names cost 114 characters on a
-plan that fills none and the seven a `bar` leaves empty cost 87. That is **28
-tokens** on the declining plan and **23** on the four-bar one, about 3.1 tokens
-an empty role. At the 6.01 tok/s the configured summarizer decodes at
-(`ubuntu-latest`, 2026-08-23) that is 4.7 s and 3.8 s a plan. The plan is
-decoded by the summarize-and-plan call, behind the summary, so this sits inside
-`run.shard_timeout_minutes` (200) along with everything else an item costs.
-
-The reading is `idhazh.measured.EMPTY_ROLE_TOKENS` and it names weights this
-repository retired. It is cited rather than imported: this package is the bottom
-of the dependency graph and imports no other subpackage (`CLAUDE.md` section 4).
-It does not set `WORST_CASE_REPLY_CHARACTERS`, which is the arithmetic below over
-this module's own bounds - it is what says that arithmetic is worth paying for.
-
-## The worst-case decoded reply, in characters
-
-Every decoded array and string is bounded. Excluding code-owned fields, the
-current plan's structural ceiling is **3,004 JSON characters**, recomputed from
-the schema at import. `WORST_CASE_REPLY_CHARACTERS` must agree with that result.
-This is a shape bound, not a measured runtime or output size.
-
-The native saved `element_ids` list remains bounded for historical readers and
-validation. Removing its repeated generation changes no persisted field.
 """
 
 from __future__ import annotations
@@ -128,26 +92,10 @@ FORBIDDEN_FIELDS: Final = frozenset({"alt_text"})
 #: machine-checked rather than promised above. Bounded to 0..1 and drawn nowhere.
 NUMERIC_FIELDS: Final = frozenset({"confidence"})
 
-#: Code stamps the versions and collects the references already selected by the
-#: model. The saved field remains readable, but no current decoder repeats it.
-CODE_STAMPED_FIELDS: Final = frozenset({"version", "plan_version", "element_ids"})
-
-#: A float's repr never runs past 17 significant digits, so `0.` and a sign in
-#: front of them is 20 characters and is an upper bound with room in it.
-_NUMBER_MAX_CHARACTERS: Final = 20
-
-#: The longest reply the decoder can produce, derived from the bounds below and
-#: checked against the generated schema at import. Written down as well as
-#: computed because it is what the planner's output budget is derived from, and
-#: a number nobody can read off the module is a number nobody re-derives.
-WORST_CASE_REPLY_CHARACTERS: Final = 3004
-
 #: `<kind>-<span_start>-<span_end>` at its longest, and `ELEMENT_ID_PATTERN`
-#: already admits no more than that - the pattern bounds every one of its own
-#: quantifiers, because a `maxLength` beside an unbounded quantifier is the one
-#: the schema-to-grammar converter drops. So `max_length` here is the belt and
-#: the pattern is the braces; the number is element.py's because the identity
-#: rule and the decoder bound are now the same bound.
+#: already admits no more than that, so `max_length` here is the belt and the
+#: pattern is the braces; the number is element.py's because the identity rule
+#: and this bound are one bound.
 _PlanElementId = Annotated[
     ElementId, StringConstraints(pattern=ELEMENT_ID_PATTERN, max_length=ELEMENT_ID_MAX_LENGTH)
 ]
@@ -161,8 +109,8 @@ _PlanVersion = Annotated[SchemaVersion, StringConstraints(max_length=_VERSION_MA
 #: the most any declarable type can reach for.
 MAX_ELEMENT_IDS: Final = 32
 #: One role is one channel and a channel carries one entry per mark, so this is
-#: `visuals.max_chart_points`. A cap rise past 8 is a contract change on purpose:
-#: the worst-case reply length has to move when the number of marks does.
+#: `visuals.max_chart_points`. A cap rise past 8 is a contract change on purpose,
+#: and the table builder's ceiling reads it.
 MAX_IDS_PER_ROLE: Final = 8
 _RoleIds = Annotated[list[_PlanElementId], Field(max_length=MAX_IDS_PER_ROLE)]
 #: Eight marks and two axes.
@@ -229,10 +177,9 @@ class EncodingRole(StrEnum):
     the validator's rule; this names the roles that exist.
 
     What each channel is for is the description on the field of the same name
-    in `PlanEncodings`, which is the copy that reaches the generated schema and
-    so the only copy a decoder is shown. The member order is the decode order of
-    that object, and the two may not drift: this module refuses to import unless
-    the names and the order match.
+    in `PlanEncodings`, which is the copy that reaches the generated schema. The
+    member order is the field order of that object, and the two may not drift:
+    this module refuses to import unless the names and the order match.
 
     There is no `label` role. What names a mark is the top-level `labels` field,
     and one fact with two homes is a fact that can disagree with itself.
@@ -253,13 +200,12 @@ class PlanEncodings(Model):
     """Which elements fill which channel: every role a key, an unused one empty.
 
     References only - a channel names the elements that fill it and never the
-    values they hold. Every field is required, so a decoder cannot answer for a
-    `bar` by quietly not mentioning `quantity`; an inapplicable channel is an
-    empty array, and whether empty is legal for a given type is the validator's
-    rule rather than this shape's.
+    values they hold. Every field is required, so a plan cannot name a `bar` by
+    quietly not mentioning `quantity`; an inapplicable channel is an empty
+    array, and whether empty is legal for a given type is the validator's rule
+    rather than this shape's.
 
-    Field order is decode order here as it is on the plan itself, and it is the
-    order `EncodingRole` declares.
+    Field order is the order `EncodingRole` declares.
     """
 
     category: _RoleIds = Field(description="The discrete axis: what each mark is.")
@@ -486,9 +432,9 @@ class VisualPlan(Contract):
 def _leaves(schema: dict[str, Any], defs: dict[str, Any], path: str) -> list[tuple[str, Any]]:
     """Every subschema of the generated document, flattened, with `$ref` followed.
 
-    The generated JSON Schema is what a grammar-constrained decoder is held to,
-    so the two guards below are asked of that document rather than of the Python
-    annotations - the schema is the surface a model's output actually meets.
+    The guard below is asked of the generated JSON Schema rather than of the
+    Python annotations - the schema is the surface every other reader of a
+    plan meets.
     """
     found: list[tuple[str, Any]] = [(path, schema)]
     ref = schema.get("$ref")
@@ -507,7 +453,7 @@ def _leaves(schema: dict[str, Any], defs: dict[str, Any], path: str) -> list[tup
 
 
 def numeric_leaves() -> set[str]:
-    """Every place in the generated schema where a decoder may write a number.
+    """Every place in the generated schema where a payload may carry a number.
 
     Geometry is a number and a drawn value is a number, so prohibitions 1 and 2
     are one question asked of the schema: which fields admit one?
@@ -521,104 +467,6 @@ def numeric_leaves() -> set[str]:
     }
 
 
-def unbounded_leaves() -> set[str]:
-    """Every place a decoder may write an unbounded string, array or map.
-
-    A bound with nothing to total is half a decision, so this is what makes the
-    worst-case arithmetic in the module docstring true rather than intended. A
-    closed vocabulary needs no length: an enum is bounded by its longest member.
-    """
-    schema = VisualPlan.json_schema()
-    defs = schema.get("$defs", {})
-    loose: set[str] = set()
-    for path, node in _leaves(schema, defs, ""):
-        kind = node.get("type")
-        if kind == "string" and "maxLength" not in node and "enum" not in node:
-            loose.add(path.split(".")[0])
-        elif kind == "array" and "maxItems" not in node:
-            loose.add(path.split(".")[0])
-        # A closed object writes `additionalProperties: false` and needs no count;
-        # a map writes a value schema there, and how many keys it may hold is the
-        # only thing bounding it.
-        elif kind == "object" and isinstance(node.get("additionalProperties"), dict):
-            if "maxProperties" not in node:
-                loose.add(path.split(".")[0])
-    return loose
-
-
-def _resolve(node: dict[str, Any], defs: dict[str, Any]) -> dict[str, Any]:
-    ref = node.get("$ref")
-    if isinstance(ref, str) and ref.startswith("#/$defs/"):
-        return _resolve(defs[ref.removeprefix("#/$defs/")], defs)
-    return node
-
-
-def _widest(node: dict[str, Any], defs: dict[str, Any]) -> int:
-    """The longest JSON text this subschema can hold, in characters."""
-    ref = node.get("$ref")
-    if isinstance(ref, str) and ref.startswith("#/$defs/"):
-        return _widest(defs[ref.removeprefix("#/$defs/")], defs)
-    for key in ("anyOf", "oneOf"):
-        if key in node:
-            return max(_widest(branch, defs) for branch in node[key])
-    kind = node.get("type")
-    if kind == "null":
-        return len("null")
-    if kind == "boolean":
-        # `false` is the longer of the two literals a decoder may write here.
-        return len("false")
-    if kind in {"number", "integer"}:
-        return _NUMBER_MAX_CHARACTERS
-    if kind == "string":
-        if "enum" in node:
-            return max(len(member) for member in node["enum"]) + 2
-        return int(node["maxLength"]) + 2
-    if kind == "array":
-        items = int(node["maxItems"])
-        return items * _widest(node["items"], defs) + max(items - 1, 0) + 2
-    properties = node.get("properties")
-    if properties is not None:
-        # Under grammar-constrained decoding every declared key is emitted, so the
-        # worst case counts them all rather than only the required ones.
-        pairs = [
-            len(name) + 3 + _widest(child, defs)
-            for name, child in properties.items()
-            if name not in CODE_STAMPED_FIELDS
-        ]
-        return sum(pairs) + max(len(pairs) - 1, 0) + 2
-    keys = sorted((len(m) for m in _resolve(node["propertyNames"], defs)["enum"]), reverse=True)
-    kept = keys[: int(node["maxProperties"])]
-    value = _widest(node["additionalProperties"], defs)
-    return sum(length + 3 + value for length in kept) + max(len(kept) - 1, 0) + 2
-
-
-def widest_json_characters(schema: dict[str, Any]) -> int:
-    """The longest JSON text a generated schema can hold, in characters.
-
-    This is the arithmetic an output budget is derived from: the bounds of the
-    shape the decoder will be held to. Written once rather than copied: two
-    implementations of one piece disagree the first time a bound moves, and the
-    one that is wrong is the one nobody reads.
-
-    It counts every declared property, not only the required ones, because a
-    grammar-constrained decoder emits them all. Code-owned fields are skipped
-    because the current decoder never writes them.
-    """
-    return _widest(schema, schema.get("$defs", {}))
-
-
-def worst_case_reply_characters() -> int:
-    """The longest plan the decoder can produce, in characters of JSON.
-
-    Row 14's bounds exist so this is arithmetic rather than a hope, and a number
-    written once in a docstring goes stale the first time a bound moves - so it
-    is computed from the generated schema and checked at import instead. A token
-    spans at least one character, so this is also a ceiling on tokens, which is
-    what the planner's output budget is derived from.
-    """
-    return widest_json_characters(VisualPlan.json_schema())
-
-
 _declared = set(VisualPlan.model_fields)
 if not _declared.isdisjoint(FORBIDDEN_FIELDS):
     raise TypeError(
@@ -627,8 +475,9 @@ if not _declared.isdisjoint(FORBIDDEN_FIELDS):
         "can check (12.8 X6)"
     )
 #: The role vocabulary and the object that carries it are two spellings of one
-#: list, and the validator reads the first while the decoder is held to the
-#: second. Order as well as names, because field order is decode order.
+#: list, and the validator reads the first while a saved plan is held to the
+#: second. Order as well as names, so the two never disagree about which channel
+#: is which.
 if tuple(PlanEncodings.model_fields) != tuple(role.value for role in EncodingRole):
     raise TypeError(
         "every role is a channel and every channel is a role, in one order - "
@@ -639,17 +488,4 @@ if numeric_leaves() != NUMERIC_FIELDS:
     raise TypeError(
         "a visual plan carries no geometry and no literal value, so the only number in it "
         f"is {sorted(NUMERIC_FIELDS)} - found {sorted(numeric_leaves())}"
-    )
-#: `version` is stamped by code on read and is never decoded, so the decoder
-#: cannot spend a token on it and it is outside the arithmetic above.
-if unbounded_leaves() - {"version"}:
-    raise TypeError(
-        "every decoded array and string is bounded, or the worst-case reply length is a "
-        f"hope - unbounded: {sorted(unbounded_leaves() - {'version'})}"
-    )
-if worst_case_reply_characters() != WORST_CASE_REPLY_CHARACTERS:
-    raise TypeError(
-        "a bound moved and the worst-case reply length did not follow it - the schema now "
-        f"admits {worst_case_reply_characters()} characters against a recorded "
-        f"{WORST_CASE_REPLY_CHARACTERS}; re-derive the table in the module docstring"
     )

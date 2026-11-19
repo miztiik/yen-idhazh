@@ -34,7 +34,7 @@ Table C - Status Reckoner
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | 1 | Build name-and-figure tables from an article | - | A | DONE | cuddly-dollop | own pull request | - |
 | C2 | 2 | Let the model choose among the tables | 1 | B | DONE | cuddly-dollop | own pull request | - |
-| C3 | 3 | Delete what only the id menu served | 2 | C | PENDING | - | - | - |
+| C3 | 3 | Delete what only the id menu served | 2 | C | DONE | cuddly-dollop | own pull request | - |
 
 ## 2. Row #1 - Build name-and-figure tables from an article
 
@@ -80,11 +80,11 @@ Table E - Row #2 decisions
 ## 4. Row #3 - Delete what only the id menu served
 
 - **Scope:** Remove what row #2 left unused: the old gate, the worst-case-reply arithmetic and its measured records, the per-row menu rate, a reply fixture nothing reads, and every doc section that still presents the id menu or the old gate as current design; keep the validator, the ladder, the compiler and `VisualPlan`. If OBS-1 later calls for a revert of row #2, this row is reverted first.
-- **Files touched:** (from a search for the names being deleted; re-run at dispatch)
-  - Code: `backend/idhazh/visual_planner.py`, `backend/idhazh/contracts/visual.py`, `backend/idhazh/measured.py`, `backend/utilities/measure_budgets.py`
-  - Fixtures: `tests/fixtures/completions/summarize-and-plan/canary-page-title.json` (a reply in the old shape, read by nothing)
-  - Tests: `backend/tests/test_chart_vocabulary.py`, `backend/tests/test_visual_planner.py`, `backend/tests/test_measure_budgets.py`, `backend/tests/contracts/test_visual_plan.py`
-  - Docs: `docs/architecture/publishing/visuals.md`; `docs/reference/benchmarks/two-call-re-read.md`, `docs/reference/benchmarks/instructions-in-front.md` and `docs/reference/benchmarks/two-call-window-sizing.md` (pointers only); `TODO/20261110-restore-visual-publication-plan.md` (its pending row names files already deleted, and the menu)
+- **Files touched:** (from a search for the names being deleted, re-run at dispatch)
+  - Code: `backend/idhazh/visual_planner.py`, `backend/idhazh/contracts/visual.py`, `backend/idhazh/measured.py`, `backend/utilities/measure_budgets.py`; a comment or description only: `backend/idhazh/classify/calls.py`, `backend/idhazh/anchor_mentions.py`, `backend/idhazh/contracts/knobs/visuals.py`
+  - Fixtures: `tests/fixtures/completions/summarize-and-plan/canary-page-title.json` (a reply in the old shape, read by nothing), deleted
+  - Tests: `backend/tests/test_chart_vocabulary.py`, `backend/tests/test_visual_planner.py`, `backend/tests/test_measure_budgets.py`, `backend/tests/contracts/test_visual_plan.py`; a docstring only: `backend/tests/contracts/test_decoder_grammar.py`
+  - Docs: `docs/reference/benchmarks/two-call-re-read.md`, `docs/reference/benchmarks/instructions-in-front.md`, `docs/reference/benchmarks/two-call-window-sizing.md` and `docs/reference/benchmarks/what-the-suite-costs.md` (pointers only); `docs/architecture/publishing/what-drawing-costs-and-what-has-been-retired-for-it.md` (one sentence); `TODO/20261110-restore-visual-publication-plan.md` (its roll-up lines for the first call and the first fresh chart); `docs/reference/agent-notes/git-and-github.md` (one entry). `docs/architecture/publishing/visuals.md` needed nothing after row #2
 - **Acceptance gates:** Local: the shared selector over the changed tests; `-m contract`; ruff and mypy over `backend/`. CI: the complete suite.
 - **Oracle:** A search of `backend/`, `config/`, `docs/`, `frontend/src`, `tests/`, `tools/` and `.github/` for each deleted name finds only history (changelogs, dated benchmark pages), and the validator, ladder and compiler test modules pass with no change to their assertions. It cannot settle that no reader outside the repository uses a deleted name; `docs/architecture/contracts/ledger-registry.md` lists the readers of persisted data.
 - **Decisions:**

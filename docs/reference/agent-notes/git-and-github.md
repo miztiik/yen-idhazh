@@ -1,6 +1,6 @@
 # Agent Notes - Git and GitHub
 
-**Last Updated**: 2026-11-11
+**Last Updated**: 2026-11-18
 
 Checks for agents using Git and GitHub. Follow the
 [PR workflow](../../how-to/ship-a-pr.md) and [git rules](../../../CLAUDE.md#7-git-hygiene).
@@ -26,6 +26,11 @@ Checks for agents using Git and GitHub. Follow the
 - If `main` advances only run output, publish the fixed validated candidate rather than waiting for another data-only merge or missing-blob fetch. Check the actual diff first; reconcile relevant code or contract changes and preserve local work and any in-flight Git operation.
 - Resolve conflicts from both changes' intent. Do not take `--ours` or `--theirs` for every file without checking what it discards.
 - A documentation branch based on a feature branch can retain its old code after that feature is squash-merged. Merge current main, keep its tested code and verify that the final diff changes only the intended documents.
+- **A branch stacked on a squash-merged parent reports add/add conflicts on the parent's files.** Main holds the parent as one new commit, so every file the parent added reads as added on both sides, though the content is the same. The tell is an empty diff between the parent's last commit and main for exactly those files; any file that differs is a real conflict to resolve by hand. Then keep the branch's side for the identical ones:
+  ```powershell
+  git diff <parent-commit> origin/main -- <files>
+  git checkout --ours -- <files>
+  ```
 
 ## Git timestamps and REST replies
 

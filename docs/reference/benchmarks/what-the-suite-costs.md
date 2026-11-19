@@ -63,6 +63,8 @@ Of the phases, 4,805 s is `call`, 498 s is `setup` and 9 s is `teardown`. The
 | 90.4 | 1.7% | `workflows/test_commit_script.py::test_the_day_publishes_when_origin_moved_under_it` |
 | 86.2 | 1.6% | `test_ledger.py::test_load_published_costs_the_answer_and_not_the_file` |
 
+The first row's test was deleted on 2026-11-18 with the gate it tested.
+
 ## The ten dearest modules
 
 | Seconds | Share | Module |

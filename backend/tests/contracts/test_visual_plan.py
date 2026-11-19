@@ -1,4 +1,4 @@
-"""What may a model's visual plan not contain, and how long can its reply get?"""
+"""What may a visual plan not contain?"""
 
 from __future__ import annotations
 
@@ -10,19 +10,15 @@ from pydantic import ValidationError
 from support.paths import CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh.contracts.visual import (
-    CODE_STAMPED_FIELDS,
     FORBIDDEN_FIELDS,
     MAX_LABELS,
     NUMERIC_FIELDS,
-    WORST_CASE_REPLY_CHARACTERS,
     EncodingRole,
     PlanDecision,
     PlanEncodings,
     VisualPlan,
     VisualType,
     numeric_leaves,
-    unbounded_leaves,
-    worst_case_reply_characters,
 )
 
 pytestmark = pytest.mark.contract
@@ -161,28 +157,6 @@ def test_naming_a_mark_has_one_home_and_it_is_not_a_role() -> None:
     assert MAX_LABELS == 10, "eight marks and two axes, which is what naming a mark is for"
 
 
-def test_required_but_empty_roles_cost_what_the_module_says_they_cost() -> None:
-    """Every role being a key is paid for on every reply, so the price is checked.
-
-    Characters are the half a test can hold, and they are exact. The token
-    figure beside them in the module docstring came from `llama-tokenize` against
-    the Qwen3 vocabulary, which needs weights this repository does not commit
-    (Guardrail #2), so it is recorded there with its hardware and date instead.
-    """
-    cost = {}
-    for stem in ("bar-chart", "declined"):
-        body = {
-            name: value
-            for name, value in _plan_payload(stem).items()
-            if name not in CODE_STAMPED_FIELDS
-        }
-        lean = body | {"encodings": {r: ids for r, ids in body["encodings"].items() if ids}}
-        dumped = (json.dumps(b, separators=(",", ":"), sort_keys=True) for b in (body, lean))
-        whole, without = (len(text) for text in dumped)
-        cost[stem] = whole - without
-    assert cost == {"bar-chart": 87, "declined": 114}
-
-
 def test_a_plan_carrying_alt_text_does_not_load() -> None:
     """Prohibition 4. The compiler assembles alt text out of the element values
     it already holds; the model writing it would be one prose channel restating
@@ -195,14 +169,7 @@ def test_a_plan_carrying_alt_text_does_not_load() -> None:
     )
 
 
-def test_every_decoded_array_and_string_in_the_plan_is_bounded() -> None:
-    """A bound with no total is half a decision, so this is what makes the
-    worst-case arithmetic in the module docstring true rather than intended.
-
-    `version` is the one exception and it is not decoded: the base contract
-    stamps it on read, so no reply spends a character on it.
-    """
-    assert unbounded_leaves() == {"version"}
+def test_a_plan_listing_more_elements_than_the_cap_does_not_load() -> None:
     with pytest.raises(ValidationError, match="element_ids"):
         VisualPlan.model_validate(
             _plan_payload() | {"element_ids": [f"quantity-{n}-{n + 4}" for n in range(99)]}
@@ -273,24 +240,3 @@ def test_a_plan_may_not_draw_an_element_it_never_declared(field: str) -> None:
     error = caught.value.errors(include_input=False)[0]
     assert error["type"] == "visual_plan_reference_declared"
     assert error["ctx"] == {"field": field}
-
-
-def test_the_worst_case_reply_length_is_arithmetic_and_the_fixtures_are_a_fraction_of_it() -> None:
-    """Row 14's bounds buy one number, and this is the number.
-
-    The ceiling is recomputed from the generated schema, so a bound that moves
-    without the docstring's table moving with it fails at import. The two
-    committed plans are measured beside it, because a ceiling nothing is
-    compared against says nothing about what a reply actually costs.
-    """
-    assert worst_case_reply_characters() == WORST_CASE_REPLY_CHARACTERS == 3004
-    measured = {}
-    for stem in ("bar-chart", "declined"):
-        decoded = {
-            name: value
-            for name, value in _plan_payload(stem).items()
-            if name not in CODE_STAMPED_FIELDS
-        }
-        measured[stem] = len(json.dumps(decoded, separators=(",", ":"), sort_keys=True))
-    assert measured == {"bar-chart": 695, "declined": 384}
-    assert max(measured.values()) < WORST_CASE_REPLY_CHARACTERS // 4

@@ -72,7 +72,7 @@ class VisualsConfig(Model):
     )
     type_selection_enabled: bool = Field(  # Remove after maintainer-approved permanent activation.
         default=False,
-        description="Apply enabled_types to the request grammar, reachability and parsed plans.",
+        description="Apply enabled_types to the request grammar and parsed plans.",
     )
     enabled_types: list[VisualType] = Field(
         default_factory=lambda: list(NUMERIC_TYPES),
