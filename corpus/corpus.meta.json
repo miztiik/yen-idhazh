@@ -4,18 +4,18 @@
   "last_date": "2026-11-19",
   "last_run": "2026-10-30",
   "models": {
-    "ornith-1-5-9b-q5-k-m": 280,
+    "ornith-1-5-9b-q5-k-m": 310,
     "qwen3-5-9b-q4-k-m": 695,
-    "qwen3-8b-q4-k-m": 1015
+    "qwen3-8b-q4-k-m": 995
   },
   "prompt_digest": "e57674b95b811a2672c3310d6e512edb1b990a8fd8328863ad934117bb1704db",
-  "rows": 1990,
+  "rows": 2000,
   "version": "2026-09-28T21:00",
   "verticals": {
-    "ai": 496,
-    "business-economy": 173,
-    "energy": 279,
-    "india": 584,
-    "world": 458
+    "ai": 493,
+    "business-economy": 175,
+    "energy": 282,
+    "india": 589,
+    "world": 461
   }
 }
