@@ -1148,13 +1148,14 @@ def holdout(state: Path, day: DigestDay) -> int:
     Judgement page reads packed days only, so `pack_fixture_ledgers` packs them.
 
     **It does not reach the panel's worst state, and it cannot.** That state is a
-    line that has fallen below a pair somebody read as two different stories.
+    line that sits at or below a pair somebody read as two different stories.
     This function picks its pairs out of `day`, which `collapse_same_story` has
     already grouped at the floor, so every surviving pair scores below the floor
     by construction - the opposite of what a violation needs. Measured on the
     committed canary: the top surviving pair scores 0.555091 against a floor of
-    0.94, a margin of +0.3849, and the panel draws `no-fit`. Reaching `violation`
-    needs a score written independently of the collapsed day.
+    0.94, a margin of +0.3849, and the panel draws `clear`, with every pair off
+    its scale. Reaching `violation` needs a score written independently of the
+    collapsed day.
 
     Fixture, not measurement. Nobody read these articles and the marks are false;
     what is true about them is the shape, which is what the panel draws.

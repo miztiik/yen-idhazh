@@ -23,6 +23,7 @@ pytestmark = pytest.mark.contract
         ("plot_min_fill_share", 0.85),
         ("panel_groups", []),
         ("judged_panel_ids", []),
+        ("precision_axis_multiple", 10.0),
     ],
 )
 def test_a_console_knob_with_no_surviving_reader_is_refused(removed: str, value: object) -> None:

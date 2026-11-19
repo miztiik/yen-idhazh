@@ -1,6 +1,6 @@
 # What the page is drawn from
 
-**Last Updated**: 2026-11-16
+**Last Updated**: 2026-11-19
 
 Every knob a reader's page or an operator's console is drawn from: the file that
 owns them, the rule that decides which file owns a key when two name it, the
@@ -146,10 +146,10 @@ missing or extra top-level keys, repeated ids and judged ids the route does not
 draw. These are repository-authored config files, not persisted telemetry, so
 their parser owns the validation; no second Pydantic model restates it.
 `console.panel_groups` and `console.judged_panel_ids` are removed from the shared
-appearance block. Named groups on Pipelines, Summaries, Hardware, Voices and
-Judgement supply the existing rail links and matching `PanelGroup` anchors.
-Grouping does not change panel ids, their order or judged membership. The Data
-explorer retains one untitled workbench group.
+appearance block. Named groups on Pipelines, Summaries, Hardware and Voices
+supply the existing rail links and matching `PanelGroup` anchors.
+Grouping does not change panel ids, their order or judged membership. Judgement
+and the Data explorer each keep one untitled group.
 
 `frontend/src/lib/server/config.ts` reads the named route files through
 `routeConsolesFrom` and exposes `routeConsoles()`. Vite supplies one build-time
@@ -242,14 +242,15 @@ delete shards the console can still ask for, and a deleted shard draws as a gap
 that reads like a day the pipeline did nothing
 ([retention-ages.md](retention-ages.md#why-14-and-not-13)).
 
-The preset control is the console's only shared span control. `pan_days` and
-`zoom_factor` have no surviving reader and are removed. `band_outlier_rows`
+The preset control is the console's only shared span control. `pan_days`,
+`zoom_factor` and `precision_axis_multiple` have no surviving reader and are
+removed. `band_outlier_rows`
 belonged only to the retired viewport. `plot_min_fill_share` belonged only to
-the removed per-panel picture gate. All four are absent from the contract,
+the removed per-panel picture gate. All five are absent from the contract,
 committed appearance file and full-knob fixtures. Unknown keys fail validation;
 an old local copy must delete them rather than expect a value to take effect.
 
-`min_attempts_for_rate` remains live for paired judge shares, Model comparisons
+`min_attempts_for_rate` remains live for Model comparisons
 and source shares, Hardware percentiles and Pipelines cost distributions. It is
 not a floor on the native failure mix's failed-row/recorded-row share.
 

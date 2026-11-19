@@ -1,4 +1,4 @@
-/** Judgement draws six named panels in one untitled group. */
+/** Judgement draws two named panels in one untitled group. */
 import type { RouteExpect } from './index';
 export const EXPECT: RouteExpect = {
 	layout: null,
