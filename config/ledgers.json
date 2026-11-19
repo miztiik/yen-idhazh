@@ -216,7 +216,7 @@
       "ledgers": [
         {
           "name": "holdout-pairs",
-          "publish_to_data_explorer": false,
+          "publish_to_data_explorer": true,
           "grain": "raw-and-compact",
           "prefix": ["content-similarity-judge", "holdout-pairs"],
           "suffix": null

@@ -228,8 +228,10 @@ Widen `--draw-root` rather than editing the batch.
 
 **Nothing schedules it.** A person labels when they choose rather than when a day
 publishes, so no workflow runs the harvest and no job stages what it writes.
-Commit the raw file yourself. The console reads the marks once the gardener has
-packed their day, within about two days of the day they are filed under.
+Commit the raw file yourself. The console and the Data explorer read the marks
+once the gardener has packed their day, within about two days of the day they
+are filed under. The explorer offers them as the `holdout-pairs` ledger, beside
+`pair-verdicts` and `threshold-history`.
 
 ## The mark spelling
 

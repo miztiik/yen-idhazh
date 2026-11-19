@@ -572,6 +572,8 @@ def test_the_holdout_reach_is_held_against_the_marks_compaction(
 
     A mark the compaction deleted inside the reach would be a mark the page looks
     for and finds gone. One month reaches back 73 days, far under the committed 730.
+    The marks are an explorer ledger, so a forever window also packs years, as the
+    committed declaration does.
     """
     folder = "content-similarity-judge/holdout-pairs"
     compaction = a_compaction(
@@ -579,6 +581,8 @@ def test_the_holdout_reach_is_held_against_the_marks_compaction(
         owns=[f"state/raw/{folder}", f"state/compact/{folder}"],
         monthly_window=monthly,
     )
+    if monthly["unit"] == "forever":
+        compaction["monthly_keep_days"] = 93
     config_dir = a_garden(tmp_path, compact_content_similarity_judge_holdout_pairs=compaction)
     reach = config.load(CONFIG_DIR).app.similarity.holdout_reach_days
     if loads:

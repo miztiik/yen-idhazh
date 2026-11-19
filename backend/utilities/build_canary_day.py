@@ -146,12 +146,10 @@ FIXTURE_ROW_LEDGERS: Final[dict[LedgerName, tuple[type[FixtureRow], tuple[str, .
 }
 
 #: The ledgers the console reads from packed files, so the fixture packs them.
-#: Feed health and the hand marks are read at build time and never published, so
-#: they are added by name.
+#: Feed health is read at build time and never published, so it is added by name.
 PACKED_LEDGERS: Final = (
     *config.load().ledgers.data_explorer_ledgers,
     LedgerName.FEED_HEALTH,
-    LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS,
 )
 
 #: The UTC day the fixture's packing pass runs on: two days after the attack
