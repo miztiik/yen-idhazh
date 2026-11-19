@@ -1,28 +1,31 @@
-"""How did this judge's own instrument behave over one unit of work?
+"""What did one judging runner read, refuse and time over its part of a night's draw?
 
-One row per shard per council run. It says what the selection dealt the shard,
-how much of that got a reading, what the readings looked like, and what they
-cost - the judge's own funnel, its own rates and its own clocks.
+One reading per runner per council run. It says what the selection dealt the runner,
+how much of that got two valid readings, what the readings looked like, and what they
+cost - the funnel, the rates and the clocks of one part of one night.
 
-**Every column here is this judge's own.** A second judge declares its own
-contract and shares none of them. The council's record beside this one says
-whether the pipeline worked; this one says whether the instrument did, and the
-two never meet in a column. A reading may be compared across two judges only
-when it is a count or a clock.
+**It lives for one run and is in no ledger.** Each runner ships its reading in its upload,
+and the collecting job reads them back to make the night's threshold row, which is the only
+thing kept. The council's record says whether the pipeline worked; this one says whether the
+instrument did, and the two never meet in a column.
+
+**Every column here is this judge's own.** A second judge declares its own contract and
+shares none of them. A reading may be compared across two judges only when it is a count or
+a clock.
 
 **It stamps the settings and not one call.** The model, the sampler temperature, the
-reasoning span count and the two digests say what the instrument was set to. A shard has
+reasoning span count and the two digests say what the instrument was set to. A runner has
 no single call, so a per-call grammar flag, a per-call probability window and a per-call
-clock have nothing to point at here. The three shard-level equivalents are
+clock have nothing to point at here. The three runner-level equivalents are
 `pairs_refused`, `first_token_margin_median` and the two decode totals.
 
 **The funnel closes, and a validator is what holds it closed.** The four terms
-added together are what the shard was dealt, and the abandoned term is one of
-them - without it the identity goes red on exactly the shard that stopped on its
-own deadline, which is the shard this row exists to let report at all.
+added together are what the runner was dealt, and the abandoned term is one of
+them - without it the identity goes red on exactly the runner that stopped on its
+own deadline, which is the runner this reading exists to let report at all.
 
-**A rate over no rows is empty rather than zero.** An empty shard measured
-nothing, and a zero there reads as a shard that measured everything and found
+**A rate over no pairs is empty rather than zero.** An empty runner measured
+nothing, and a zero there reads as a runner that measured everything and found
 nothing wrong. Those are opposite facts.
 
 **The known-answer pairs ride along in one column.** Each runner judges the few it was
@@ -30,22 +33,16 @@ dealt before its own pairs, and `canary_answers` holds what the judge said, in t
 the night's threshold row keeps. They are in no count above and no clock: the funnel and
 the rates describe the night's own pairs only.
 
-**This row is a record and never an alarm.** The line-setting gates already fire
-on the day-grain rates, and a second threshold here would be an answer nobody
-could reconcile with the first.
-
-The ledger door files it under
-`state/raw/content-similarity-judge/metrics/<YYYY>/<MM>/<DD>/`, and the gardener
-packs it under `state/compact/content-similarity-judge/metrics/`. The folder is
-spelled in `idhazh.ledger`, which is where a path belongs and which this module
-may not import (CLAUDE.md section 4).
+**This reading is a record and never an alarm.** The threshold review reads the night's
+summed counts, and a second threshold here would be an answer nobody could reconcile with
+the first.
 """
 
 from __future__ import annotations
 
 import json
 from math import isclose
-from typing import Any, ClassVar, Literal, Self
+from typing import Any, ClassVar, Self
 
 from pydantic import Field, model_validator
 
@@ -59,51 +56,19 @@ from idhazh.contracts.base import (
 from idhazh.contracts.story_similarity_pair_verdict import JUDGE_POLICY_VERSION, JudgeModelId
 from idhazh.contracts.story_similarity_threshold_history_row import CanaryAnswersText
 
-#: The slug this judge files its readings under. Every row that carries it is
-#: written by this judge and no other. Its software identity is fixed even when
-#: the weights it runs change.
-ContentSimilarityJudgeId = Literal["content-similarity-judge"]
 
+class StorySimilarityRunnerReport(Contract):
+    """One runner of one night: what it was dealt, what it read, what it cost."""
 
-class ContentSimilarityJudgeMetrics(Contract):
-    """One shard of one night: what this judge was dealt, what it read, what it cost."""
-
-    __schema_stem__: ClassVar[str] = "content-similarity-judge-metrics"
+    __schema_stem__: ClassVar[str] = "story-similarity-runner-report"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-11-19",
-            change="canary_answers joins the reading: the known-answer pairs this runner judged.",
-            why="The collecting job folds each runner's answers onto the night's threshold row.",
-        ),
-        ChangelogEntry(
-            version="2026-11-05",
-            change="Judge policy identifies valid-reading counts and unavailable rates.",
-            why="Refusals must not become disagreements or zero measurements.",
-        ),
-        ChangelogEntry(
-            version="2026-10-24T19:49",
-            change="Judge model identities accept any valid slug.",
-            why="Recorded identities must remain readable after the selected models change.",
-        ),
-        ChangelogEntry(
-            version="2026-10-24",
-            change="The Qwen 3.8 Distill Q5 model joins judge_model.",
-            why="A shipped model file can be recorded in a future judge verdict.",
-        ),
-        ChangelogEntry(
-            version="2026-09-21",
-            change="Earlier changes are in this file's git history.",
-            why="A changelog says what moved lately; git is the archive.",
+            change="Initial shape: one runner's counts, rates, clocks and known-answer pairs.",
+            why="The collecting job sums the runners' readings into the night's threshold row.",
         ),
     )
 
-    judge_id: ContentSimilarityJudgeId = Field(
-        default="content-similarity-judge",
-        description=(
-            "Which instrument wrote this reading. One member, because this ledger holds "
-            "the readings of one judge and no other."
-        ),
-    )
     judge_model: JudgeModelId | None = Field(
         default=None,
         description=(
@@ -138,21 +103,21 @@ class ContentSimilarityJudgeMetrics(Contract):
     )
 
     date: DateStamp = Field(description="The digest date judged.")
-    run_id: RunId = Field(description="The council run this shard belonged to.")
+    run_id: RunId = Field(description="The council run this runner belonged to.")
     work_part_index: int = Field(
-        ge=0, description="Which part of the judging split this row is about."
+        ge=0, description="Which part of the judging split this reading is about."
     )
     pairs_dealt: int = Field(
-        ge=0, description="How many pairs the selection gave this shard."
+        ge=0, description="How many pairs the selection gave this runner."
     )
-    pairs_read: int = Field(
+    pairs_valid: int = Field(
         ge=0, description="How many completed pairs got two valid readings."
     )
     pairs_agreed: int = Field(
         ge=0,
         description=(
-            "How many read pairs answered the same way in both orders. A subset of the "
-            "pairs read, never of the pairs dealt."
+            "How many valid pairs answered the same way in both orders. A subset of the "
+            "valid pairs, never of the pairs dealt."
         ),
     )
     pairs_unreadable: int = Field(
@@ -173,9 +138,9 @@ class ContentSimilarityJudgeMetrics(Contract):
     pairs_abandoned: int = Field(
         ge=0,
         description=(
-            "How many pairs this shard owned and never reached, because it stopped on "
+            "How many pairs this runner owned and never reached, because it stopped on "
             "its own deadline. A column of its own so the funnel still closes on the "
-            "shard the deadline exists to let report."
+            "runner the deadline exists to let report."
         ),
     )
     disagreement_rate: float | None = Field(
@@ -183,8 +148,8 @@ class ContentSimilarityJudgeMetrics(Contract):
         ge=0,
         le=1,
         description=(
-            "What share of the pairs read answered differently in the two orders. Empty "
-            "when no pair had two valid readings, because a rate over no rows is not zero."
+            "What share of the valid pairs answered differently in the two orders. Empty "
+            "when no pair had two valid readings, because a rate over no pairs is not zero."
         ),
     )
     unclear_rate: float | None = Field(
@@ -192,8 +157,8 @@ class ContentSimilarityJudgeMetrics(Contract):
         ge=0,
         le=1,
         description=(
-            "What share of the pairs agreed answered UNCLEAR. Empty on a shard that "
-            "agreed nothing, for the reason above, and per shard for the reason above."
+            "What share of the pairs agreed answered UNCLEAR. Empty on a runner that "
+            "agreed nothing, for the reason above."
         ),
     )
     first_token_margin_median: float | None = Field(
@@ -211,20 +176,23 @@ class ContentSimilarityJudgeMetrics(Contract):
         default=None,
         ge=0,
         description=(
-            "How long the shard's calls took, added up. Empty where no call was made."
+            "How long the runner's calls took, added up. Empty where no call was made."
         ),
     )
     decode_seconds_max: float | None = Field(
         default=None,
         ge=0,
         description=(
-            "The longest single call. A shard with an ordinary total and a bad worst "
+            "The longest single call. A runner with an ordinary total and a bad worst "
             "call is the one that runs out of clock next, and the total alone hides it."
         ),
     )
     judge_policy_version: DateStamp | None = Field(
         default=None,
-        description="UTC date identifying judge interpretation; null on historical measurements.",
+        description=(
+            "UTC date identifying the judge interpretation the rates follow. Empty when the "
+            "runner stamped none, and the rates are then not checked against the counts."
+        ),
     )
     canary_answers: CanaryAnswersText | None = Field(
         default=None,
@@ -232,39 +200,39 @@ class ContentSimilarityJudgeMetrics(Contract):
             "What the judge answered on the known-answer pairs this runner was dealt, as one "
             "compact JSON object keyed by canary id, in the shape the night's threshold row "
             "keeps: the answer in file order, the answer swapped, the two first-token margins, "
-            "the file-order call's prompt tokens and the runner index, which is this row's own "
-            "work part. Empty when this runner was dealt none or judged none. The pairs are in "
-            "no count or clock on this row."
+            "the file-order call's prompt tokens and the runner index, which is this reading's "
+            "own work part. Empty when this runner was dealt none or judged none. The pairs "
+            "are in no count or clock on this reading."
         ),
     )
 
     @model_validator(mode="after")
     def _the_funnel_closes(self) -> Self:
-        """Every pair dealt was read, refused, unreachable or never got to.
+        """Every pair dealt was valid, refused, unreachable or never got to.
 
-        The four terms are one funnel written in four columns, and a row where
-        they do not add up to what the shard was dealt is a row whose arithmetic
+        The four terms are one funnel written in four columns, and a reading where
+        they do not add up to what the runner was dealt is a reading whose arithmetic
         nobody can reproduce - every rate read off it would then be a share of a
         denominator that means nothing.
         """
         accounted = (
-            self.pairs_read + self.pairs_refused + self.pairs_unreadable + self.pairs_abandoned
+            self.pairs_valid + self.pairs_refused + self.pairs_unreadable + self.pairs_abandoned
         )
         if accounted != self.pairs_dealt:
             raise ValueError(
-                f"pairs_dealt is {self.pairs_dealt} and the shard accounts for {accounted} "
-                "(read, refused, unreadable, abandoned). Every pair dealt has exactly one "
+                f"pairs_dealt is {self.pairs_dealt} and the runner accounts for {accounted} "
+                "(valid, refused, unreadable, abandoned). Every pair dealt has exactly one "
                 "of those four endings."
             )
-        if self.pairs_agreed > self.pairs_read:
+        if self.pairs_agreed > self.pairs_valid:
             raise ValueError(
-                f"pairs_agreed is {self.pairs_agreed} over {self.pairs_read} read. A pair "
+                f"pairs_agreed is {self.pairs_agreed} over {self.pairs_valid} valid. A pair "
                 "agrees only if both of its readings arrived."
             )
         if self.judge_policy_version == JUDGE_POLICY_VERSION:
             expected = (
-                (self.pairs_read - self.pairs_agreed) / self.pairs_read
-                if self.pairs_read else None
+                (self.pairs_valid - self.pairs_agreed) / self.pairs_valid
+                if self.pairs_valid else None
             )
             if (
                 (self.disagreement_rate is None) != (expected is None)
@@ -278,18 +246,18 @@ class ContentSimilarityJudgeMetrics(Contract):
 
     @model_validator(mode="after")
     def _the_known_answers_are_this_runners_own(self) -> Self:
-        """Every known-answer pair on this row was judged by this runner, and says so.
+        """Every known-answer pair on this reading was judged by this runner, and says so.
 
-        The night's row keeps each answer's runner index, and this row is the only place
+        The night's row keeps each answer's runner index, and this reading is the only place
         the answer and the runner that gave it sit together. An index that is not this
-        row's own work part would put an answer on a runner that never judged it.
+        reading's own work part would put an answer on a runner that never judged it.
         """
         if self.canary_answers is None:
             return self
         for canary_id, answer in json.loads(self.canary_answers).items():
             if answer[5] != self.work_part_index:
                 raise ValueError(
-                    f"canary_answers puts {canary_id} on runner {answer[5]}, and this row is "
+                    f"canary_answers puts {canary_id} on runner {answer[5]}, and this reading is "
                     f"runner {self.work_part_index}'s"
                 )
         return self
@@ -300,7 +268,7 @@ class ContentSimilarityJudgeMetrics(Contract):
         return tuple(cls.model_fields)
 
     def csv_row(self) -> dict[str, str]:
-        """Every cell a string. A reading this shard could not take is an empty cell."""
+        """Every cell a string. A reading this runner could not take is an empty cell."""
         payload = self.model_dump(mode="json")
         return {name: "" if payload[name] is None else str(payload[name]) for name in payload}
 
@@ -308,8 +276,7 @@ class ContentSimilarityJudgeMetrics(Contract):
     def from_csv_row(cls, row: dict[str, str]) -> Self:
         """The inverse. An empty cell is an absent reading, never a zero.
 
-        A column the file does not carry at all reads as an empty cell too, so a
-        widening stays additive.
+        A column the file does not carry at all reads as an empty cell too.
         """
         payload: dict[str, Any] = dict.fromkeys(cls.model_fields, "") | dict(row)
         for name in cls._absent_when_blank():

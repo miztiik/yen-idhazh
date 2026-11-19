@@ -239,14 +239,6 @@
           "suffix": null
         },
         {
-          "name": "metrics",
-          "publish_to_data_explorer": false,
-          "grain": "raw-and-compact",
-          "prefix": ["content-similarity-judge", "metrics"],
-          "stem": null,
-          "suffix": null
-        },
-        {
           "name": "pair-verdicts",
           "publish_to_data_explorer": true,
           "grain": "raw-and-compact",

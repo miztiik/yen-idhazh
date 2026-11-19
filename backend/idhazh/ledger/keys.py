@@ -126,13 +126,6 @@ STORY_SIMILARITY_PAIR_VERDICT_KEY: Final = ("date", "run_id", "work_part_index",
 STORY_SIMILARITY_THRESHOLD_HISTORY_KEY: Final = ("date", "run_id")
 
 
-#: What makes two metrics rows the same record: one part of one council run's
-#: night, for one judged date. The door table below imports the row contract,
-#: `idhazh.contracts.content_similarity_judge_metrics`, only when its ledger is
-#: asked about, for the reason the holdout score's key gives.
-CONTENT_SIMILARITY_JUDGE_METRICS_KEY: Final = ("date", "run_id", "work_part_index")
-
-
 #: What makes two retirement rows the same record. The address and nothing else:
 #: a retirement is permanent for one endpoint key, so a second row for it says
 #: nothing the first did not. `feed_id` is deliberately absent - renaming a feed
@@ -332,15 +325,6 @@ def _story_similarity_threshold_history_row() -> type[Contract]:
     return StorySimilarityThresholdHistoryRow
 
 
-def _content_similarity_judge_metrics() -> type[Contract]:
-    """The judge's per-part reading, imported when its ledger is first asked about."""
-    from idhazh.contracts.content_similarity_judge_metrics import (
-        ContentSimilarityJudgeMetrics,
-    )
-
-    return ContentSimilarityJudgeMetrics
-
-
 #: The door ledgers a judge writes, each with its key and the function that
 #: imports the contract one of its rows is read by. The rest of the door table
 #: imports its contracts as this module loads. A judge's waits for the first
@@ -354,10 +338,6 @@ _JUDGE_DOOR_SHAPES: Final[
     LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS: (
         HOLDOUT_PAIR_KEY,
         _similarity_holdout_pair,
-    ),
-    LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS: (
-        CONTENT_SIMILARITY_JUDGE_METRICS_KEY,
-        _content_similarity_judge_metrics,
     ),
     LedgerName.CONTENT_SIMILARITY_JUDGE_PAIR_VERDICTS: (
         STORY_SIMILARITY_PAIR_VERDICT_KEY,

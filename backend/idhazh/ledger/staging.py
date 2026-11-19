@@ -38,8 +38,8 @@ class LedgerStaging:
     `test_every_store_is_filled_by_a_writer_this_test_can_follow`, which
     resolves it with `importlib` - a renamed or deleted writer fails that test
     rather than going unchecked. `symbol` is `None` only where there is no
-    single resolvable attribute to point at: a person's own run, a ledger
-    nothing writes now, or a capability still ahead of its writer (Guardrail
+    single resolvable attribute to point at: a person's own run, a writer in
+    another language, or a capability still ahead of its writer (Guardrail
     #3). The two fields can
     disagree in only one direction - `symbol` is `None` only when `writer`
     says there is nothing to follow - so a filled-in `symbol` always has a
@@ -199,16 +199,6 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
             "stages it"
         ),
         symbol="utilities.sample_sheet.harvest",
-        job_labels=frozenset(),
-    ),
-    LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS: LedgerStaging(
-        writer=(
-            "nothing writes it now: the night's threshold-history row carries what the "
-            "units shipped, summed by idhazh.stages.review_thresholds. "
-            "idhazh.council.metrics_sink.collect_judge_metrics stays as the council's own "
-            "capability for a judge that files its readings"
-        ),
-        symbol=None,
         job_labels=frozenset(),
     ),
     LedgerName.CONTENT_SIMILARITY_JUDGE_PAIR_VERDICTS: LedgerStaging(

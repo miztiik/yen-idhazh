@@ -16,10 +16,6 @@ FIXTURE_NAMES = {
         "ceiling-reached.json",
         "exhausted-dry-run.json",
     ),
-    "content-similarity-judge-metrics": (
-        "a-shard-that-read-its-pairs.json",
-        "a-shard-that-was-dealt-nothing.json",
-    ),
     "council-run-record": (
         "a-part-that-ran-the-model.json",
         "a-selection-that-ran-no-model.json",

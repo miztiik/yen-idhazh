@@ -5,7 +5,6 @@
   "shards": 5,
   "task_names": [
     "compact-content-similarity-judge-holdout-pairs",
-    "compact-content-similarity-judge-metrics",
     "compact-content-similarity-judge-pair-verdicts",
     "compact-content-similarity-judge-threshold-history",
     "compact-council-run-records",

@@ -33,8 +33,8 @@ class LedgerName(StrEnum):
     **The Python name is spelled from the value and the family, and nothing
     else.** A ledger that is its own family is its value in upper snake case:
     `feed-health` is `FEED_HEALTH`. A ledger inside a family puts the family
-    first: `metrics` under `content-similarity-judge` is
-    `CONTENT_SIMILARITY_JUDGE_METRICS`. The registry refuses a member that
+    first: `pair-verdicts` under `content-similarity-judge` is
+    `CONTENT_SIMILARITY_JUDGE_PAIR_VERDICTS`. The registry refuses a member that
     breaks the rule when it loads, because a Python name that says something the
     value does not is a second name a reader has to learn.
 
@@ -55,7 +55,6 @@ class LedgerName(StrEnum):
     VISUAL_DESIGN_ATTEMPTS = "visual-design-attempts"
     COUNTERFACTUAL_SCORES = "counterfactual-scores"
     CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS = "holdout-pairs"
-    CONTENT_SIMILARITY_JUDGE_METRICS = "metrics"
     CONTENT_SIMILARITY_JUDGE_PAIR_VERDICTS = "pair-verdicts"
     CONTENT_SIMILARITY_JUDGE_THRESHOLD_HISTORY = "threshold-history"
     TRACES = "traces"

@@ -19,12 +19,12 @@ import math
 from collections.abc import Callable, Sequence
 from typing import Any, Final
 
-from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
 from idhazh.contracts.story_similarity_pair_verdict import (
     PairBucket,
     SameStoryVerdict,
     StorySimilarityPairVerdict,
 )
+from idhazh.contracts.story_similarity_runner_report import StorySimilarityRunnerReport
 from idhazh.contracts.story_similarity_threshold_history_row import canary_answers_text
 from idhazh.similarity.statistics import combined_statistics, shipped_statistics
 
@@ -100,7 +100,7 @@ def end_columns(
     }
 
 
-def merged_canary_answers(readings: Sequence[ContentSimilarityJudgeMetrics]) -> str | None:
+def merged_canary_answers(readings: Sequence[StorySimilarityRunnerReport]) -> str | None:
     """The known-answer pairs' answers of every runner that reported, as the night's one text.
 
     Each pair is dealt to one runner, so the runners' answers name different pairs and the
@@ -135,7 +135,7 @@ def merged_canary_answers(readings: Sequence[ContentSimilarityJudgeMetrics]) -> 
 
 
 def runner_columns(
-    readings: Sequence[ContentSimilarityJudgeMetrics], *, expected_shards: int
+    readings: Sequence[StorySimilarityRunnerReport], *, expected_shards: int
 ) -> dict[str, Any]:
     """What the runners that reported were dealt and how each pair ended, added up.
 

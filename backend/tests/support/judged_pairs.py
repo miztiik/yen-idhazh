@@ -16,12 +16,12 @@ from typing import Any, Final
 
 from idhazh.content_similarity_judge import settings as judge_settings
 from idhazh.contracts.base import ServerJob, derive_text_digest, derive_url_key
-from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.story_similarity_pair_verdict import (
     JUDGE_POLICY_VERSION,
     StorySimilarityPairVerdict,
 )
+from idhazh.contracts.story_similarity_runner_report import StorySimilarityRunnerReport
 from idhazh.similarity.sampling_chance import with_sampling_chance
 from idhazh.similarity.slices import slice_grid
 from support.ledger import SEED_COMMIT
@@ -155,15 +155,15 @@ def a_verdict_file(rows: Sequence[StorySimilarityPairVerdict]) -> str:
     return out.getvalue()
 
 
-def a_reading(*, shard: int, dealt: int, date: str, run_id: str) -> ContentSimilarityJudgeMetrics:
-    """One unit's reading of its own instrument, with a funnel that closes."""
-    return ContentSimilarityJudgeMetrics.model_validate(
+def a_reading(*, shard: int, dealt: int, date: str, run_id: str) -> StorySimilarityRunnerReport:
+    """One runner's reading of its own instrument, with a funnel that closes."""
+    return StorySimilarityRunnerReport.model_validate(
         {
             "date": date,
             "run_id": run_id,
             "work_part_index": shard,
             "pairs_dealt": dealt,
-            "pairs_read": dealt,
+            "pairs_valid": dealt,
             "pairs_agreed": dealt,
             "pairs_unreadable": 0,
             "pairs_refused": 0,

@@ -25,7 +25,6 @@ from support.paths import CONFIG_DIR, read_text
 
 from idhazh import config, ledger
 from idhazh.contracts.base import Contract, ServerJob
-from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
 from idhazh.contracts.day_metrics import DayMetrics
 from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.file_envelope import Period, RowIdentity, WriterIdentity
@@ -33,7 +32,6 @@ from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import LedgerLifecycleStatus, LedgersConfig
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.visual_prune import VisualPruneRow
-from idhazh.council import metrics_sink
 from idhazh.ledger import lifecycle, paths
 from idhazh.stages import common, work
 from idhazh.telemetry import FileSink, source_health
@@ -135,28 +133,6 @@ def test_raw_trial_exception_requires_exact_root_run_and_attempt(
     assert not write(trial, identity), "the production gate returns when the trial exits"
 
 
-def _collect_metrics(state: Path) -> bool:
-    shipped = state.parent / "shipped"
-    metrics_sink.ship_judge_metrics(
-        _first(ContentSimilarityJudgeMetrics),
-        judge_id="content-similarity-judge",
-        name="0",
-        out_dir=shipped,
-    )
-    return _wrote(
-        state,
-        lambda: metrics_sink.collect_judge_metrics(
-            shipped,
-            judge_id="content-similarity-judge",
-            contract=ContentSimilarityJudgeMetrics,
-            which=LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS,
-            state_dir=state,
-            covers=A_DAY,
-            identity=_identity(ServerJob.SAVE_COUNCIL_RESULTS),
-        ),
-    )
-
-
 def _trace(state: Path) -> bool:
     settings = config.load(CONFIG_DIR)
     settings = replace(
@@ -198,8 +174,9 @@ def _trace(state: Path) -> bool:
 
 
 #: Every route that records new rows and asks the check, with the ledger it
-#: writes and how many rows it tries. The judge's record and archive and the
-#: digest fragment are driven through their stages in their own modules' tests.
+#: writes and how many rows it tries. The judge's pair verdicts and threshold
+#: history and the digest fragment are driven through their stages in their own
+#: modules' tests.
 ROUTES: Final[dict[str, tuple[LedgerName, int, Callable[[Path], bool]]]] = {
     "persist": (LedgerName.VISUAL_PRUNES, 1, _persist),
     "append_seen": (
@@ -232,7 +209,6 @@ ROUTES: Final[dict[str, tuple[LedgerName, int, Callable[[Path], bool]]]] = {
             ),
         ),
     ),
-    "collect_judge_metrics": (LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS, 1, _collect_metrics),
     "day_metrics": (
         LedgerName.DAY_METRICS,
         1,

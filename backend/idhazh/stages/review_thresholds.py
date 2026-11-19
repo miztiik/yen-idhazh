@@ -35,7 +35,6 @@ from idhazh.content_similarity_judge.ledger_reads import (
     load_threshold_history,
     review_days,
 )
-from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.knobs.content_similarity_judge import ThresholdsConfig
 from idhazh.contracts.ledger_name import LedgerName
@@ -43,6 +42,7 @@ from idhazh.contracts.story_similarity_pair_verdict import (
     RECOMPUTED_TOLERANCE,
     StorySimilarityPairVerdict,
 )
+from idhazh.contracts.story_similarity_runner_report import StorySimilarityRunnerReport
 from idhazh.contracts.story_similarity_threshold_history_row import (
     StorySimilarityThresholdHistoryRow,
 )
@@ -100,12 +100,12 @@ def _draw_rows(draw_path: Path) -> list[StorySimilarityPairVerdict]:
 
 def _readings_of_this_night(
     shipped_root: Path, *, judge_id: str, date: str, run_id: str
-) -> list[ContentSimilarityJudgeMetrics]:
+) -> list[StorySimilarityRunnerReport]:
     """The runners' readings of their own instrument, each one this night's and this run's."""
     if not shipped_root.exists():
         return []
     readings = metrics_sink.shipped_rows(
-        shipped_root, judge_id=judge_id, contract=ContentSimilarityJudgeMetrics
+        shipped_root, judge_id=judge_id, contract=StorySimilarityRunnerReport
     )
     strays = sorted({(one.date, one.run_id) for one in readings} - {(date, run_id)})
     if strays:
@@ -284,7 +284,7 @@ def build_threshold_row(
     window: Sequence[StorySimilarityPairVerdict],
     history: Sequence[StorySimilarityThresholdHistoryRow],
     draw_rows: Sequence[StorySimilarityPairVerdict],
-    readings: Sequence[ContentSimilarityJudgeMetrics],
+    readings: Sequence[StorySimilarityRunnerReport],
     expected_shards: int,
     rules: ThresholdsConfig,
     lookback_days_of_the_draw: int,

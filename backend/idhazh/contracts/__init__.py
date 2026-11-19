@@ -30,7 +30,6 @@ from idhazh.contracts.content_similarity_judge_evaluation import (
     EvaluationRun,
     EvaluationSet,
 )
-from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
 from idhazh.contracts.corpus import CorpusMeta, CorpusRow
 from idhazh.contracts.council_invocation import PreparationReceipt, Selection, ShardFiles
 from idhazh.contracts.council_run_record import CouncilRunRecord
@@ -99,6 +98,7 @@ from idhazh.contracts.story_encoder_candidate import (
     PinnedEncoderCandidate,
 )
 from idhazh.contracts.story_similarity_pair_verdict import StorySimilarityPairVerdict
+from idhazh.contracts.story_similarity_runner_report import StorySimilarityRunnerReport
 from idhazh.contracts.story_similarity_threshold_history_row import (
     StorySimilarityThresholdHistoryRow,
 )
@@ -139,7 +139,6 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     CollectionPruneRow,
     CompactIndex,
     ConsoleBand,
-    ContentSimilarityJudgeMetrics,
     CorpusMeta,
     CorpusRow,
     CouncilRunRecord,
@@ -190,6 +189,7 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     SourceHealthView,
     Sources,
     StorySimilarityPairVerdict,
+    StorySimilarityRunnerReport,
     StorySimilarityThresholdHistoryRow,
     Summary,
     Taxonomy,

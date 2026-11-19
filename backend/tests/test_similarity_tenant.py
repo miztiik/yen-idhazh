@@ -30,7 +30,6 @@ from idhazh.content_similarity_judge.ledger_reads import (
     review_days,
 )
 from idhazh.contracts.base import ServerJob, derive_text_digest, derive_url_key
-from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
 from idhazh.contracts.council_invocation import ScheduleRequest
 from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.ledger_index import CompactEntry, EntryState
@@ -111,17 +110,15 @@ def test_the_tenant_answers_every_member_the_venue_calls(member: str) -> None:
 
 
 def test_the_slug_is_the_word_this_judges_stores_are_addressed_by() -> None:
-    """Three spellings of one word, and a drift between any two loses a row.
+    """Two spellings of one word, and a drift between them loses a row.
 
-    The slug names the directory each unit uploads into, the column every
-    instrument row carries, and the prefix under `state/` the whole judge files
-    beneath. A collecting job looking in one place for what a unit wrote to
-    another finds nothing and says nothing.
+    The slug names the directory each unit uploads into and the prefix under
+    `state/` the whole judge files beneath. A collecting job looking in one place
+    for what a unit wrote to another finds nothing and says nothing.
     """
-    on_the_row = ContentSimilarityJudgeMetrics.model_fields["judge_id"].default
+    family = ledger.entry(LedgerName.CONTENT_SIMILARITY_JUDGE_PAIR_VERDICTS).prefix[0]
 
-    assert tenant.JUDGE_ID == ledger.entry(LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS).prefix[0]
-    assert tenant.JUDGE_ID == on_the_row
+    assert tenant.JUDGE_ID == family
     assert tenant.TENANT.judge_id == tenant.JUDGE_ID
 
 

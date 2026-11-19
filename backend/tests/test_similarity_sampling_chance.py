@@ -312,7 +312,6 @@ def test_the_log_line_counts_the_units_that_reported_and_files_no_totals_of_its_
     )
     assert "shards=2/2 filed=6 runners_reported=2" in said
     assert "dealt=" not in said
-    assert not ledger.raw_root(tmp_path / "state", LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS).exists()
 
 
 @pytest.fixture

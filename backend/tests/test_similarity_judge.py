@@ -1421,7 +1421,7 @@ def test_the_funnel_the_shard_reports_adds_up_to_what_it_was_dealt(
     stamp = stamps.judge_inputs(settings)
 
     assert (report.owned, report.judged, report.unreadable, report.refused) == (3, 2, 1, 1)
-    assert (row.pairs_dealt, row.pairs_read, row.pairs_refused) == (3, 1, 1)
+    assert (row.pairs_dealt, row.pairs_valid, row.pairs_refused) == (3, 1, 1)
     assert (row.pairs_unreadable, row.pairs_abandoned) == (1, 0)
     assert row.pairs_agreed == 1, "the pair that read answered the same way twice"
     assert row.disagreement_rate == 0.0
@@ -1625,7 +1625,7 @@ def test_a_known_answer_pair_adds_to_no_drawn_count_file_or_clock(
     row = report.metrics
     written = read_text(report.path)
     assert (report.owned, report.judged, report.usable) == (1, 1, 1)
-    assert (row.pairs_dealt, row.pairs_read, row.pairs_agreed, row.pairs_refused) == (1, 1, 1, 0)
+    assert (row.pairs_dealt, row.pairs_valid, row.pairs_agreed, row.pairs_refused) == (1, 1, 1, 0)
     assert (row.pairs_unreadable, row.pairs_abandoned) == (0, 0)
     assert [r.pair_key for r in _rows(report.path)] == [drawn.pair_key]
     assert all(pair.id not in written for pair in known), "a known-answer pair is no verdict row"

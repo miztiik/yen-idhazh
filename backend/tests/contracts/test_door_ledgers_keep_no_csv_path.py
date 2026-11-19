@@ -53,7 +53,6 @@ ENVELOPE_NAMED_FIELDS: Final[Mapping[LedgerName, frozenset[str]]] = {
     LedgerName.RUN_PLAN: frozenset({"run_id"}),
     LedgerName.RUN_SHARDS: frozenset({"run_id"}),
     LedgerName.COUNCIL_RUN_RECORDS: frozenset({"run_id"}),
-    LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS: frozenset({"run_id"}),
     LedgerName.CONTENT_SIMILARITY_JUDGE_PAIR_VERDICTS: frozenset({"run_id"}),
     LedgerName.CONTENT_SIMILARITY_JUDGE_THRESHOLD_HISTORY: frozenset({"run_id"}),
 }

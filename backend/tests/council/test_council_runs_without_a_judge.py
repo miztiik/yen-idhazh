@@ -66,11 +66,11 @@ JUDGE_STAGE_MODULES: Final = (
 #: checks below cannot see it - so `test_every_judge_contract_named_here_exists`
 #: holds the tuple against the tree.
 JUDGE_CONTRACT_MODULES: Final = (
-    "idhazh.contracts.content_similarity_judge_metrics",
     "idhazh.contracts.knobs.content_similarity_canaries",
     "idhazh.contracts.knobs.content_similarity_judge",
     "idhazh.contracts.similarity_holdout_pair",
     "idhazh.contracts.story_similarity_pair_verdict",
+    "idhazh.contracts.story_similarity_runner_report",
     "idhazh.contracts.story_similarity_threshold_history_row",
 )
 

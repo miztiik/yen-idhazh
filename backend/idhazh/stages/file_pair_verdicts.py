@@ -22,10 +22,10 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import ledger
-from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.story_similarity_pair_verdict import StorySimilarityPairVerdict
+from idhazh.contracts.story_similarity_runner_report import StorySimilarityRunnerReport
 from idhazh.council import metrics_sink
 from idhazh.similarity.sampling_chance import with_sampling_chance
 from idhazh.stages.common import LOG
@@ -61,7 +61,7 @@ def _verdict_rows(path: Path) -> list[StorySimilarityPairVerdict]:
 
 def _refuse_what_is_not_this_nights_own(
     rows: Sequence[StorySimilarityPairVerdict],
-    readings: Sequence[ContentSimilarityJudgeMetrics],
+    readings: Sequence[StorySimilarityRunnerReport],
     *,
     date: str,
     run_id: str,
@@ -138,7 +138,7 @@ def stage_file_pair_verdicts(
     rows = [row for path in present for row in _verdict_rows(path)]
     readings = (
         metrics_sink.shipped_rows(
-            shipped_root, judge_id=judge_id, contract=ContentSimilarityJudgeMetrics
+            shipped_root, judge_id=judge_id, contract=StorySimilarityRunnerReport
         )
         if shipped_root.exists()
         else []
