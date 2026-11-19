@@ -19,7 +19,11 @@ from typing import Final
 
 from idhazh import config, ledger
 from idhazh.content_similarity_judge import settings as judge_settings
-from idhazh.content_similarity_judge.ledger_reads import load_pair_verdicts, review_days
+from idhazh.content_similarity_judge.ledger_reads import (
+    load_pair_verdicts,
+    load_pair_verdicts_filed_on,
+    review_days,
+)
 from idhazh.contracts.base import DateStamp, RunId
 from idhazh.contracts.council_invocation import (
     JudgeSchedule,
@@ -137,6 +141,12 @@ class ContentSimilarityJudge:
         before it filed anything, and a night that drew nothing, which stays named
         until it leaves the window.
 
+        **A night the gardener recorded as quiet and the judge has repaired since is
+        filed too.** The ledger door serves such a day from the record and never opens
+        the raw files filed after it, so each window day's raw files are read as well.
+        Without that, a repaired night would be named every night until the next
+        compaction packed it.
+
         **An empty ledger names every night of the window.** A judge that has filed
         nothing is behind on all of them, and the council's repair budget lets only a few
         through a night, so the window fills over a few nights rather than at once.
@@ -147,6 +157,7 @@ class ContentSimilarityJudge:
         """
         state = state_dir if state_dir is not None else config.REPO_ROOT / ledger.STATE_DIRNAME
         filed = {row.date for row in load_pair_verdicts(state, window)}
+        filed |= {night for night in window if load_pair_verdicts_filed_on(state, night)}
         return tuple(night for night in window if night not in filed)
 
     def schedule(self, *, request: ScheduleRequest) -> JudgeSchedule:

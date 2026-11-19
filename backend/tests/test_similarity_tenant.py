@@ -386,6 +386,27 @@ def test_this_judge_names_the_nights_with_no_filed_pair_and_no_other(tmp_path: P
     assert set(answered) <= set(window)
 
 
+def test_a_night_recorded_as_quiet_and_repaired_since_is_not_named_again(tmp_path: Path) -> None:
+    """The gardener found the night quiet and recorded it as empty; the judge then repaired it.
+
+    The ledger door serves a day recorded as empty from that record and never opens the raw
+    files filed after it, so the scheduler also opens each window day's raw files. Without
+    that, the repaired night would be named again until the gardener packed it.
+    """
+    state, night = tmp_path / "state", "2026-09-18"
+    seed_compact_index(
+        state, PAIRS, Period.DAILY, [CompactEntry(covers=night, rows=0, bytes=0, state=EntryState.EMPTY)]
+    )
+    seed_compact_index(state, PAIRS, Period.MONTHLY, [])
+    seed_compact_index(state, PAIRS, Period.YEARLY, [])
+    assert tenant.TENANT.nights_outstanding(window=(night,), state_dir=state) == (night,)
+
+    a_filed_night(state, night)
+
+    assert load_pair_verdicts(state, [night]) == [], "the door still serves the day as empty"
+    assert tenant.TENANT.nights_outstanding(window=(night,), state_dir=state) == ()
+
+
 @pytest.mark.parametrize(
     ("max_dates", "max_older_dates", "expected"),
     [
