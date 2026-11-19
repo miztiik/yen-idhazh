@@ -26,17 +26,6 @@ SUPERSEDED_ASSEMBLE_NAMES: Final[Mapping[str, str]] = MappingProxyType(
 #: is wrong with. A billionth is far below any weight worth setting.
 _WEIGHTS_TOLERANCE: Final = 1e-9
 
-#: How much of the marked set has to be scorable before the four cells are worth
-#: reading, as a share of the marked rows. Retention deletes published days the
-#: holdout still names, so a run can find no vectors for most of the pairs and
-#: still produce four cells that add up - and four small cells look like a good
-#: line rather than a vanished comparison.
-#:
-#: **A constant rather than a knob, on purpose.** It says what makes the reading
-#: mean anything, and a number that can be tuned down is a number somebody tunes
-#: down on the morning the reading goes red.
-HOLDOUT_RESOLVED_SHARE_MIN: Final = 0.5
-
 #: Wall clock for one judge call at 764 read tokens, in seconds. Derived from the
 #: repository's own reading of 9.85 tokens a second - median over 4,117 timed
 #: rows, slowest 8.25, fastest 44.71, taken 2026-09-09 on a stock ubuntu-latest

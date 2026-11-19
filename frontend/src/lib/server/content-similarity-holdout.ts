@@ -69,8 +69,8 @@ export const HOLDOUT_PAIR_COLUMNS = [
 
 /** The UTC days the hand marks are read over: `reachDays` days before `day`, and `day`.
  *
- * Both ends are named, as `day_partition.days_in_window` names them for the
- * backend's reader, so the page and the backend count the same marks.
+ * Both ends are named, as `day_partition.days_in_window` names them, so the page
+ * and the marks' retention count the same days.
  */
 export function markReach(day: string, reachDays: number): TimeWindow {
 	return windowOfDays(day, reachDays + 1, 'right');
@@ -88,9 +88,8 @@ export interface MarkedReading {
  * The door packs a day by settling its rows under the ledger's key, the two
  * addresses, and its preference: the newer mark wins. A pair marked again on a
  * later day sits in two days, so the same rule is applied once more here, across
- * the days, with the rows asked for oldest filed day first - the order the
- * backend's `similarity/holdout.marked_pairs` reads them in, so the two readers
- * keep the same mark. A day reaches this page once the gardener has packed it.
+ * the days, with the rows asked for oldest filed day first, so the pair keeps the
+ * mark it was given last. A day reaches this page once the gardener has packed it.
  *
  * No packed file is an ordinary state - nobody has harvested a mark yet, or the
  * gardener has not packed the first one - and it reads as no mark.

@@ -284,9 +284,8 @@ class RunRecord(Model):
         description=(
             "The merge line this run grouped the day at. Without it a reader of a "
             "committed run.json cannot tell a day grouped at 0.94 from a day grouped at "
-            "0.937, and the grouping is the thing the fitted line moves. Empty on a run "
-            "that published before the line could move, which is every run before "
-            "2026-09-18."
+            "0.937 once the committed config has changed. Empty on a run that published "
+            "before this was recorded, which is every run before 2026-09-18."
         ),
     )
     note: str | None = None

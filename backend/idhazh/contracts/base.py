@@ -128,7 +128,7 @@ class ServerJob(StrEnum):
 
     **`operator` is here for a file's writer and not for a column.** A command
     a person runs on their own machine, outside any workflow, files a door
-    ledger - the merge line's holdout score - and the door names every file's
+    ledger - the similarity holdout's hand marks - and the door names every file's
     writer from this set. No row of the three ledgers that carry a `job` column
     can hold it, so none of them is version-stamped for it; the file envelope,
     whose writer identity can, is.
