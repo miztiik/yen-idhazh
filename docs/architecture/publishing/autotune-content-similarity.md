@@ -371,7 +371,7 @@ owns that separate measurement.
 | Ledger | The one question it answers |
 | --- | --- |
 | `content-similarity-judge/pair-verdicts`, under `state/raw/` and `state/compact/` | What did the judge say about this pair, in both orders, which slice of the night's scores held it, and what chance did a pair of that slice have of being read? |
-| `content-similarity-judge/threshold-history`, under `state/raw/` and `state/compact/` | On this night, where did each threshold sit and what did the evidence propose for it? Declared; no night files it yet |
+| `content-similarity-judge/threshold-history`, under `state/raw/` and `state/compact/` | On this night, where did each threshold sit, what did the evidence propose for it, and did the night move it? One row a night, filed by `stages.review_thresholds` |
 | `content-similarity-judge/holdout-pairs`, under `state/raw/` and `state/compact/` | Which pairs did a person mark, and which way? |
 | `content-similarity-judge/scored-pairs`, under `state/raw/` and `state/compact/` | What did the judge say about this pair, in both orders, and under which models? No night writes it now |
 | `state/content-similarity-judge/score-distribution.json` | Across everything judged until the fit stopped, how many YES, NO and UNCLEAR readings sit in each slice of the band? No night writes it now |

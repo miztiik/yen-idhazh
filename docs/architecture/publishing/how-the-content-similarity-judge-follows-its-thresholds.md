@@ -3,16 +3,26 @@
 **Last Updated**: 2026-11-19
 
 Which pairs of stories does the nightly judge read, what does it keep about each, and
-where do its two thresholds sit? This page owns the nightly draw, the rows it leaves in
-`pair-verdicts`, and the words they use. What a threshold decides about publication is
-in [autotune-content-similarity.md](autotune-content-similarity.md); the council that
-hosts the judge is in [llm-council.md](llm-council.md).
+where do its two thresholds sit and move? This page owns the nightly draw, the rows it
+leaves in `pair-verdicts`, the review that finds where each threshold belongs and the row
+it leaves in `threshold-history`, and the words they use. What a threshold decides about
+publication is in [autotune-content-similarity.md](autotune-content-similarity.md); the
+council that hosts the judge is in [llm-council.md](llm-council.md). The page stays whole
+because it answers one question end to end: the draw follows the thresholds, and the
+review moves them from what the draw brought back, so the two halves share their words,
+their slices and their rows.
 
 The judge reads a small, deliberate sample of the night's pairs, never all of them.
 Where it looks hardest is where its answer decides something: around the two scores
 that mark the edges of the doubtful range. Everywhere else it looks lightly, as a
 check. Because the sample is uneven on purpose, every pair carries the chance it had of
 being read, so a night's totals can be rebuilt from the rows alone.
+
+The same rows then say where the thresholds belong. Each night the judge reads its own
+answers from the last seven nights that scored near each threshold, fits a curve through
+them, and moves the threshold toward the score where the curve says the same-story share
+reaches the threshold's level: out quickly, in slowly, a step at a time, with every
+number behind the move written down.
 
 ## Words this page uses
 
@@ -31,6 +41,16 @@ being read, so a night's totals can be rebuilt from the rows alone.
 | Sampling chance | Usable pairs over available pairs, for one slice on one night: the chance a pair of that slice was both taken and usable |
 | Weight | One over the sampling chance. A usable pair stands for that many pairs of its slice |
 | Thresholds in force | The two thresholds a night's draw followed |
+| Share level | The same-story share that defines a threshold: 0.05 for the lower one and 0.90 for the upper one. A threshold is the score where the fitted curve reaches it |
+| Evidence | The usable pairs that scored within 0.06 of a threshold in the last seven nights, read the way tonight's were |
+| Curve | The rise of the same-story share with the score, fitted to the evidence as a logistic curve with an intercept and a steepness |
+| Pull | A soft tug that keeps the curve's steepness near its recent median, so thin evidence can shift the curve and cannot tilt it |
+| Estimate | The score where the curve reaches the threshold's share level |
+| Gap | The estimate less where the threshold stood. A negative gap says the evidence puts the threshold lower |
+| Ignore range | A gap this small or smaller is not acted on |
+| Widening, narrowing | Moving a threshold out (the lower one down, the upper one up), which makes the ambiguous range larger, or in |
+| Hold | A night that leaves a threshold where it stood. The row says why in one word |
+| Meaning stamp | The six values that decide what a pair's answer means: judge model, prompt, grammar, scorer, cosine weight and judge policy |
 
 ## The nightly flow
 
@@ -46,14 +66,18 @@ flowchart TD
   FILE --> LEDGER[("pair-verdicts<br/>One row a pair, with its sampling chance")]
   JUDGE --> READING["Each runner's reading of its own instrument"]
   READING --> FILE
+  LEDGER --> REVIEW["review-thresholds, once a night, after the filing<br/>Read the last 7 nights, fit each curve, move or hold"]
+  DRAW --> REVIEW
+  READING --> REVIEW
+  REVIEW -->|"tomorrow's thresholds"| HIST
 
   classDef stage fill:#f8fafc,stroke:#64748b,stroke-width:1.5px,color:#1f2937;
   classDef ledger fill:#eff6ff,stroke:#1d4ed8,stroke-width:1.5px,color:#1e3a8a;
-  class PICK,JUDGE,FILE,DRAW,VERDICTS,READING stage;
+  class PICK,JUDGE,FILE,REVIEW,DRAW,VERDICTS,READING stage;
   class DAY,HIST,LEDGER ledger;
 ```
 
-Three stages, each a module that takes a file in and leaves a file out, run from
+Four stages, each a module that takes a file in and leaves a file out, run from
 [the tenant](../../../backend/idhazh/content_similarity_judge/tenant.py).
 
 - **Pick** ([pick_item_pairs.py](../../../backend/idhazh/stages/pick_item_pairs.py))
@@ -64,8 +88,17 @@ Three stages, each a module that takes a file in and leaves a file out, run from
   leaves the rows it had finished.
 - **File** ([file_pair_verdicts.py](../../../backend/idhazh/stages/file_pair_verdicts.py))
   runs once a night in the collecting job. It files the rows through the ledger door
-  and logs what the runners reported. A night with a lost runner files the rows the
-  others returned.
+  and counts the readings the runners shipped. A night with a lost runner files the
+  rows the others returned.
+- **Review** ([review_thresholds.py](../../../backend/idhazh/stages/review_thresholds.py))
+  runs in the collecting job right after the filing. It calls no model. It reads the
+  last seven nights of `pair-verdicts`, the draw file and the runners' readings, decides
+  what each threshold does, and files one row in `threshold-history`.
+
+If the review fails, the night keeps its pair rows and has no threshold row. The
+scheduler reads `pair-verdicts` only, so it does not name the night again; the runners'
+readings that would have gone onto the row are artifacts that expire, and only the
+threshold columns can be worked out again from the ledger.
 
 The draw file and the verdict file are one shape. The draw leaves every judge column,
 the usable count and the sampling chance empty; a shard fills the judge columns; the
@@ -98,6 +131,10 @@ never followed, so a re-run starts from where the first run started.
 [`thresholds_in_force.py`](../../../backend/idhazh/similarity/thresholds_in_force.py)
 holds the rule, and names the days to read, so a reader of the ledger and the draw that
 follows it cannot disagree. Each pair row carries both thresholds in force, unrounded.
+The review files the row the next night follows, one a night, and it also uses the rule:
+it works out the thresholds the night should have followed and refuses to file when a
+night's rows name others, which is what a checkout that was not handed the history looks
+like ([why](#design-rationale)).
 
 ## The slices
 
@@ -213,15 +250,197 @@ declared in
 row still counts there. `slice_pairs_usable` and `sampling_chance` are filled together,
 by the collecting job.
 
-The runners' readings of their own instruments are not filed. The collecting job logs
-their totals: pairs dealt, read, agreed, unreadable, refused and abandoned.
+The runners' readings of their own instruments are not a ledger of their own: the
+review sums them onto the night's `threshold-history` row.
+
+## Finding where each threshold belongs
+
+After a night's pairs are filed, the review asks of each threshold where the judge's
+answers say the same-story share reaches the threshold's level, and whether to move
+toward that score. The arithmetic is four small pure modules, which read no file, no
+config file and no clock, and one stage that joins them:
+
+| Question | Module |
+| --- | --- |
+| Which pairs are evidence? | [`threshold_evidence.py`](../../../backend/idhazh/similarity/threshold_evidence.py) |
+| Where does the curve through them reach a level? | [`threshold_curve.py`](../../../backend/idhazh/similarity/threshold_curve.py) |
+| What does the gap let the night do? | [`threshold_move.py`](../../../backend/idhazh/similarity/threshold_move.py) |
+| What do the night's lightly sampled ends and runners add up to? | [`night_totals.py`](../../../backend/idhazh/similarity/night_totals.py) |
+| Which rows does a night read, and what does it file? | [`review_thresholds.py`](../../../backend/idhazh/stages/review_thresholds.py) |
+
+`build_threshold_row` in the stage is the whole of the joining and takes rows already
+read, so a night can be worked again from its row and `pair-verdicts` alone.
+
+### The evidence
+
+The evidence for a threshold is the usable pairs from the last `window_nights` nights
+(seven, ending on the night) that scored within `near_threshold_width` (0.06) of where
+the threshold stood that night, on either side and edges included. Three rules decide
+which rows count:
+
+- **Each pair counts once, by its newest row.** A re-run judges the same pairs again and
+  both runs keep their rows. The row filed last counts, whatever it says, and it is
+  chosen before anyone asks whether it is usable: a newer reading that disagreed with
+  itself is the pair's reading now, and the older agreeing one is not kept beside it.
+- **Only pairs read the way tonight's were count.** A different judge model, prompt,
+  grammar, scorer, cosine weight or judge policy changes what an answer means, so
+  such pairs are left out and the window restarts by itself the next night. A night
+  nothing was judged on has no meaning stamp and so no evidence.
+- **Only usable pairs count.** An answer is "the same story" for a YES, and not for a NO
+  or an UNCLEAR.
+
+A window with fewer than seven nights holds the nights there are, and `nights_used` on the
+row says how many. The review of a night reads only the days up to that night, so the
+council can settle an older night after a newer one and the older night is worked out as
+if the newer one did not exist.
+
+### The curve
+
+The share of pairs called the same story is fitted as a logistic curve, with `s` a score:
+
+```text
+P(same story | s) = 1 / (1 + exp(-(a + b * s)))
+```
+
+The intercept `a` and the steepness `b` are the pair that maximises
+
+```text
+sum over the evidence of ln P(answer | score)  -  (b - b0)^2 / (2 * sigma^2)
+```
+
+The first term is how well the curve explains the answers. The second is the pull: it
+keeps `b` near `b0`, the median steepness this threshold's fit stored on the previous 28
+nights (the configured 24.6 until seven nights of it exist), as loosely as `sigma` of 8.0
+allows. Nothing pulls the intercept, so the curve can shift while its slope stays steady,
+and a shift is what the evidence has to be able to show.
+
+**The fit is unweighted.** How many pairs the draw took at a score depends on the score
+alone, so weights change how much evidence there is at a score and not what share it
+shows. They would also hand the few pairs from the lightly sampled ends the loudest voice
+in a fit about the scores beside a threshold. Weights are used only for the totals of the
+two lightly sampled ends below.
+
+The fit is Newton's method with the step halved until the surface does not fall: two
+parameters, a concave surface, at most 50 steps, in pure Python with no added dependency.
+A window whose answers are all alike has no maximum, because the curve keeps sliding
+away, and a steepness that is not above zero says nothing about where a share is crossed.
+Both are reported as no curve, and the threshold is held as `fit_failed` with its curve,
+estimate and gap left empty.
+
+### The estimate and the gap
+
+```text
+estimate = (ln(p / (1 - p)) - a) / b        p is the threshold's share level
+gap      = estimate - threshold_before
+```
+
+At the default share levels `ln(p / (1 - p))` is -2.944 for the lower threshold and 2.197
+for the upper one.
+
+### The move
+
+A night holds a threshold for the first of these reasons that applies, in this order, and
+`held_because` names it:
+
+| Order | `held_because` | The threshold is held when |
+| ---: | --- | --- |
+| 1 | `not_enough_evidence` | Fewer than `minimum_usable_pairs` (240) usable pairs were near it |
+| 2 | `fit_failed` | No curve was fitted |
+| 3 | `within_ignore_range` | The gap is no more than `ignore_range` (0.01) |
+| 4 | `waiting_for_second_night` | The gap has stood beyond the ignore range, on the same side, for fewer than `nights_running_required` (2) nights in a row |
+
+"In a row" counts consecutive nights, read from the previous night's stored gap. A
+night with no row breaks the run, whether the judge lost the night or nothing ran, so a
+hole in the history delays a move by a night and never brings one forward. A move does
+not reset the count: after a move the gap is measured from the new threshold, and a gap
+still beyond the range on the same side is still a night in a row.
+
+Otherwise the threshold moves by the gap, cut to a step: `widening_step` (0.02) when
+moving out, `narrowing_step` (0.005) when moving in, and `far_gap_step` (0.02) either
+way when the gap is over `far_gap` (0.06). A gap smaller than its step is taken whole.
+
+Three limits come after the step: the lower threshold stops at `lowest_lower_threshold`
+(0.50), the upper at `highest_upper_threshold` (0.99), and neither comes closer to the
+other than `smallest_gap` (0.12), which is what keeps tomorrow's draw drawable. The lower
+threshold is limited by where the upper one stands now and the upper one by where the
+lower one ends up, so the lower threshold has first claim on the room between them.
+**A limit only ever shortens a move.** A threshold that already stands outside a limit,
+because a setting changed under it, is not pushed back: it does not move that way, and
+the move is cut to nothing. `move_limited_by` names the last limit that changed the move.
+
+A held threshold keeps its score to the last digit, and its estimate is still stored.
+
+### A worked night
+
+A synthetic night from the tests, which is not a real one: six nights of a judge whose
+curve reaches 5 percent at 0.70 and 90 percent at 0.93, then two nights of a judge whose
+curve sits 0.05 lower, with 40 pairs a night beside each threshold. This is the second
+night of the change.
+
+| | Lower threshold | Upper threshold |
+| --- | ---: | ---: |
+| `threshold_before` | 0.7000 | 0.9300 |
+| Evidence: usable pairs from 7 nights | 280 (enough: 240) | 280 (enough: 240) |
+| Curve intercept `a`, steepness `b` | -19.4104, 24.2073 | -21.4800, 25.6885 |
+| Pull centre `b0` | 25.7618 | 26.1293 |
+| Estimate | (-2.9444 + 19.4104) / 24.2073 = 0.6802 | (2.1972 + 21.4800) / 25.6885 = 0.9217 |
+| Gap | 0.6802 - 0.7000 = -0.0198 | 0.9217 - 0.9300 = -0.0083 |
+| Against the ignore range of 0.01 | beyond; the night before was -0.0118, also beyond on the same side, so 2 nights in a row | within |
+| `held_because` | none | `within_ignore_range` |
+| Move | -0.0198: out, so the step is 0.02, and the gap is smaller, so it is taken whole | 0 |
+| `threshold_after` | 0.6802 | 0.9300 |
+
+The lower threshold moves only now, on the second night it saw the gap, and by what the
+evidence shows rather than by a full step. The upper threshold's gap is smaller than the
+ignore range, so it stays exactly where it was and its estimate is still stored.
+
+## What `threshold-history` stores
+
+One row for each run, filed under the judged date and declared in
+[story_similarity_threshold_history_row.py](../../../backend/idhazh/contracts/story_similarity_threshold_history_row.py).
+A night that dealt pairs files a row even when none came back judged: the evidence is
+empty, both thresholds are held for want of it, and the row says how many runners
+reported. A night that dealt no pair, with no draw rows and no judged rows, files none, so
+a missing row is how a reader tells a night nothing ran from one that ran and lost
+everything.
+
+| Part | Columns |
+| --- | --- |
+| Identity and meaning | `date`, `run_id`, `scorer_model`, `cosine_weight`, `judge_model`, `judge_policy_version`, `config_versions` |
+| Each threshold, once for `lower_` and once for `upper_` | `threshold_before`, `share_level`, `nights_used`, `usable_pairs_used`, `window_first_date`, `curve_intercept`, `curve_steepness`, `pull_centre`, `pull_spread`, `estimate`, `gap`, `nights_beyond_ignore_range`, `move`, `move_limited_by`, `held_because`, `threshold_after` |
+| The lightly sampled ends | `above_upper_pairs_available`, `above_upper_pairs_usable`, `above_upper_same_story_estimated`, `below_lower_pairs_available`, `below_lower_pairs_usable`, `below_lower_different_story_estimated` |
+| The runners | `runners_expected`, `runners_reported`, `pairs_dealt`, `pairs_valid`, `pairs_agreed`, `pairs_unreadable`, `pairs_refused`, `pairs_abandoned`, `disagreement_rate`, `unclear_rate`, `decode_seconds_total`, `decode_seconds_slowest_runner`, `canary_answers` |
+
+- **The curve columns, `estimate` and `gap` are empty together** when no curve was
+  fitted, and `window_first_date` is empty when no usable pair was near.
+- **`move_limited_by` is one of** none, widening_step, narrowing_step, far_gap_step,
+  lowest_allowed, highest_allowed and smallest_gap. **`held_because` is one of** none,
+  not_enough_evidence, fit_failed, within_ignore_range and waiting_for_second_night. `none`
+  means the threshold moved, or that nothing cut the move.
+- **The lightly sampled ends** take their pool, the pairs the draw found there, from the
+  draw file, because an end whose rows were all lost leaves none in `pair-verdicts`. The
+  estimated totals weight each usable pair by one over its sampling chance:
+  `above_upper_same_story_estimated` adds the weights of the YES pairs above the upper
+  threshold, and `below_lower_different_story_estimated` the weights of the pairs below
+  the lower one that were not YES. Each is empty when no pair there was usable. With a
+  handful of pairs a night they are an alarm and never move a threshold.
+- **The runner columns are sums over the runners that reported.** A runner that never
+  reported is in no sum, so the four endings still add up to `pairs_dealt` on a night that
+  lost one, and `runners_reported` against `runners_expected` says it was lost. The two
+  rates come from the summed counts and never from averaging the runners' own rates.
+  `canary_answers` is empty, which means no canary ran, and is never an empty object.
+- **Every figure that follows from another is recomputed when the row is read:** `move` is
+  `threshold_after - threshold_before` and `gap` is `estimate - threshold_before`, each
+  within one millionth, so a writer rounds none of them below six decimal places.
 
 ## Which nights the judge is behind on
 
 The judge names a night when `pair-verdicts` holds no row for it. The council hands it a
 window of tonight and a few earlier nights, so the read is the same few days on the
 thousandth night as on the third. Any one row settles a night: a night that lost a
-runner is not named again, because a repeat judges the whole night over. A night that
+runner is not named again, because a repeat judges the whole night over. A night the
+gardener recorded as quiet and the judge has repaired since counts as filed too, because
+the read opens each window day's raw files as well as the compact index. A night that
 drew nothing files no row, so it stays named until it leaves the window. A judge that
 has filed nothing is behind on every night of its window, and the council's repair
 budget lets one older night through a night.
@@ -233,9 +452,11 @@ The numbers live in
 declared and checked by
 [the knobs contract](../../../backend/idhazh/contracts/knobs/content_similarity_judge.py),
 and changed only by an edit that bumps the file's `version` to the UTC date of the
-edit. The defaults are labelled estimates: a replay of the eight nights from 2026-11-09
-to 2026-11-16 showed each one spends its whole budget of 150, and only real nights show
-how much evidence each threshold needs.
+edit. The `draw` defaults are labelled estimates: a replay of the eight nights from
+2026-11-09 to 2026-11-16 showed each one spends its whole budget of 150, and only real
+nights show how much evidence each threshold needs. The `thresholds` defaults beyond the
+starts come from a simulation over the replayed pools of those nights, when nothing
+below 0.88 had been judged, so they are provisional until the first seven real nights.
 
 | Key | Default | What it sets |
 | --- | ---: | --- |
@@ -247,6 +468,25 @@ how much evidence each threshold needs.
 | `draw.fully_similar`, `draw.fully_dissimilar` | weight 6, 4; minimum 2, 1; maximum 6, 4 | The two lightly sampled ends |
 | `draw.thresholds_lookback_days` | 14 | How old the newest threshold-history row may be |
 | `thresholds.lower_start`, `thresholds.upper_start` | 0.70, 0.93 | The thresholds when no recent row sets them |
+| `thresholds.lower_share_level`, `thresholds.upper_share_level` | 0.05, 0.90 | The same-story share that defines each threshold |
+| `thresholds.window_nights` | 7 | Nights of `pair-verdicts` the evidence reads, ending on the night |
+| `thresholds.near_threshold_width` | 0.06 | How far either side of a threshold a pair may score and still be evidence for it |
+| `thresholds.minimum_usable_pairs` | 240 | The fewest usable pairs near a threshold a night may act on |
+| `thresholds.ignore_range` | 0.01 | A gap this small or smaller is not acted on |
+| `thresholds.nights_running_required` | 2 | Nights in a row a gap must stand before a threshold moves |
+| `thresholds.widening_step`, `thresholds.narrowing_step` | 0.02, 0.005 | The most a threshold moves in a night, out and in |
+| `thresholds.far_gap`, `thresholds.far_gap_step` | 0.06, 0.02 | A gap over the first takes the second, in either direction |
+| `thresholds.lowest_lower_threshold`, `thresholds.highest_upper_threshold` | 0.50, 0.99 | The furthest each threshold may go |
+| `thresholds.smallest_gap` | 0.12 | The least distance between the thresholds: two runs of six thin slices of 0.01 |
+| `thresholds.pull_start_steepness`, `thresholds.pull_spread` | 24.6, 8.0 | Where the curve's steepness is pulled until history exists, and how loosely |
+| `thresholds.pull_window_nights`, `thresholds.pull_minimum_nights` | 28, 7 | The nights of steepness the pull centre is the median of, and the fewest it needs |
+
+The file is refused when its settings contradict each other, because a draw cut from them
+would fail every night. The lower share level must be below the upper; the pull needs no
+more nights than its window holds; the far gap must be above the ignore range and its step
+no smaller than either near step; each limit must leave the draw room for a thin slice of
+the lightly sampled end beyond it; the smallest gap must hold both thin runs; and the starts
+must sit inside the limits and at least the smallest gap apart.
 
 ## Design rationale
 
@@ -276,8 +516,92 @@ id stand, and a foreign row would skew its slice's chance unseen.
 by the hash can leave a small slice entirely on one runner, and a file by the hash puts
 the small slices at its end.
 
-**The runner's reading is logged and not filed.** The totals are the night's, not the
-runner's, and the next stage that reads them folds them into one row a night.
+**The runners' readings are summed onto the night's row.** The totals are the night's,
+not the runner's, so the review folds them into one row a night, and a reading stays a
+scratch file shipped between jobs and never a ledger of its own.
+
+**One curve for each threshold, pooled over seven nights.** One night's pairs near a
+threshold are too few to place it. In a simulation over the replayed nights, a single
+night's estimate was off by more than 0.02 on about a third of nights (32 percent at the
+lower threshold and 28 at the upper), and the seven-night pool on 6 and 2 percent. These
+are estimates from replayed pools and not measurements of the real judge.
+
+**Weights stay out of the curve.** A pair's chance depends on its score alone, so the
+curve needs none. In a simulation over the same replayed pools, the share of
+lower-threshold estimates off by more than 0.02 rose from 4 percent to 42 percent with
+weights, and to 8 percent with weights capped at three times the median.
+
+**The curve is pulled on its steepness and free in its intercept.** A fit to a few hundred
+pairs can trade steepness against position along a long, narrow ridge, so a night of thin
+evidence could move a threshold by tilting the curve. Holding the steepness near its
+recent median leaves the curve free to shift, which is the only move the evidence is there
+to show.
+
+**Out is fast and in is slow.** A threshold sitting too far inside the doubtful range
+leaves wrong answers in a bucket the draw barely checks, while one sitting too far out
+only spends some pairs on near-certain ones. This is the opposite of the site's rule for
+the publishing floor, which decides what publishes and is not touched here. The speed is
+per move and not per night: each move out pushes about a third of the older pairs out of
+the 0.06 window, so the usable pairs fall under 240 and the next move waits for the window
+to refill. A gap of 0.12 takes 6 moves out and 13 in (3 at the far step, then 10 at the
+narrowing step), and a gap of 0.075 takes 4 and 10. A night is at least a move, plus the
+night that confirms the gap, plus the waits. On the tests' synthetic nights, a threshold
+came within 0.02 of a point 0.05 away in 6 to 7 nights moving out and 9 to 10 moving in,
+and not four times as fast as the steps of 0.02 and 0.005 suggest.
+
+**A limit only shortens a move.** A setting can change under a standing threshold, such as
+a lowest score raised above where the lower threshold already stands. A limit that jumped
+the threshold to it would be a move nobody asked for, so the threshold stays where it is,
+cannot go further that way, and can still come in by a step.
+
+**The previous night counts only when it is the day before.** "Nights in a row" means
+consecutive nights, and counting across a hole would confirm a gap on evidence a week
+apart. The rule assumes the council runs every UTC day. A hole costs one more night of
+waiting and never brings a move forward.
+
+**A night that dealt pairs files a row, and a night that dealt none files none.** When every
+runner is lost the evidence is empty, but the row still says so, and the sizes of the
+lightly sampled ends come from the draw file. A missing row is then the one way to tell a
+night nothing ran from a night that ran and lost everything.
+
+**Tonight's pairs are read as raw files.** The collecting job has just filed them, and the
+ledger door serves a day the gardener already recorded as quiet from that record, without
+opening the raw files filed after it. A night the judge repairs is such a day. The nights
+before it are read through the door, and the scheduler opens each window day's raw files
+too, so a repaired night is not named again.
+
+**The review checks the history it read against the thresholds the draw followed.** The
+collecting job reads from a sparse checkout, and the loaders read the days they find: a
+day the checkout was not told about is a shorter window and no error. A silently short
+history would put both thresholds back at the configured starts and file the night as if
+that were where they stood. Every row of a draw names the thresholds it followed, so the
+review refuses to file when the rule, applied to the history it read, gives others. The
+declaration the sparse checkout is handed is built from the same days the loaders read,
+by one function, and a test reads the review's input from a copy that holds only the
+declared files.
+
+**A held night still files its row.** The newest row inside the lookback sets the
+thresholds, so a night that holds files one, and the thresholds never fall back to the
+configured starts while nights keep running. Two things follow. Editing `lower_start` or
+`upper_start` changes nothing for a judge with a row in the last 14 days. And a change to
+`thin_slices_each_end` or `smallest_gap` that leaves the draw less room than the
+thresholds already in the history take makes the draw refuse every night until the history
+is cleared, which an operator does by pruning the newest 14 days of `threshold-history`
+with [the named prune](../../how-to/prune-a-collection.md#prune-a-range-of-days-out-of-a-ledger).
+
+**A window whose answers are all alike holds as `fit_failed`, and nothing else is invented
+for it.** When the lower threshold starts too far below the true point, every pair beside
+it is answered NO and the curve has no maximum, so the threshold cannot move. In a
+simulation of that start, the first move came on a median night 9 when the start was 0.15
+below the true point, night 15 at 0.20 (5 of 60 runs had not moved by night 80) and night
+41 at 0.30 (43 of 60 had not). A rule that widened after a few held nights walked the
+lower threshold to 0.26 instead of 0.69 in 100 of 100 simulated runs on thin evidence, so
+none is added.
+
+**What none of this settles.** Whether the real judge's answers follow a logistic curve
+below 0.88, because no pair there has been judged yet. And a judge that answers YES on
+about 3 percent of clearly different pairs, which raises the lower estimate by about 0.014
+and which no test here can see. The lower share level is a setting for that reason.
 
 **No second record runs beside the draw.** The cumulative record and the fit it fed
 assume the old draw, so beside this one they would be wrong from the first night.
