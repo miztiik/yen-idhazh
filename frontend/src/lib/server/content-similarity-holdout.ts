@@ -8,31 +8,23 @@
  * were scored on, so the score is recomputed here, once, and the page ships the
  * answer. Nothing is scored in a browser.
  *
- * **The four cells come off a committed row and are never counted here.**
- * `python -m idhazh score-merge-line-holdout` writes how the line stood against
- * the marks, so a reading survives the page that drew it and two of them can be
- * held against each other weeks apart. What this file still derives is the
- * per-pair score, which the panel draws as dots and no row carries.
- *
  * **What it reads, and what bounds it.** The packed marks inside the reach
  * `similarity.holdout_reach_days` sets, plus one day payload for each distinct
- * date those marks name, plus the committed readings a window of days reaches.
- * The bound is the reach and the marks inside it rather than the archive: a
- * published day nothing marks is never opened, and another year of archive adds
- * no read at all. The days it does open are outside the window preset the rest
- * of this route works to, which is why the read has an entry of its own in
- * `docs/concepts/growing-reads.md`.
+ * date those marks name. The bound is the reach and the marks inside it rather
+ * than the archive: a published day nothing marks is never opened, and another
+ * year of archive adds no read at all. The days it does open are outside the
+ * window preset the rest of this route works to, which is why the read has an
+ * entry of its own in `docs/concepts/growing-reads.md`.
  *
  * Nothing here is published. It sits under `$lib/server/` so SvelteKit refuses
- * to bundle it for a browser, the same place and for the same reason as
- * `content-similarity-judge.ts`.
+ * to bundle it for a browser.
  */
 
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-// Relative, not `$lib`, for the reason in `content-similarity-judge.ts`: the browser
-// suite loads this module in plain Node, where no Vite alias resolves.
+// Relative, not `$lib`, because the browser suite loads this module in plain
+// Node, where no Vite alias resolves.
 import { windowOfDays, type TimeWindow } from '../charts/viewport';
 import {
 	cosineInt8,
@@ -43,7 +35,7 @@ import {
 } from '../console/holdout';
 import { FILED_DAY_COLUMN } from '../data/slice-query';
 import { sliceFromDisk } from './ledger-disk';
-import { datedFirst, windowRows } from './ledger-rows';
+import { windowRows } from './ledger-rows';
 import { DIGEST_ROOT, STATE_ROOT } from './payload';
 import type { RecordRead } from '../console/recording';
 
@@ -57,46 +49,6 @@ export interface HoldoutReading {
 	/** How many distinct published days were opened to answer it. */
 	daysOpened: number;
 }
-
-/** One committed reading of the line against the marks - the four cells and their line.
- *
- * `state/compact/content-similarity-judge/merge-line-holdout-scores/` holds
- * one row a scoring run, written by `python -m idhazh score-merge-line-holdout`
- * through the ledger door and packed by the gardener.
- * The page reads it rather than counting the same cells again: two answers to
- * one question is what the committed row exists to stop.
- */
-export interface MergeLineHoldoutScore {
-	date: string;
-	runId: string;
-	appliedLine: number;
-	labeller: string;
-	mergedAndOneStory: number;
-	mergedAndTwoStories: number;
-	apartAndOneStory: number;
-	apartAndTwoStories: number;
-	pairsUnresolved: number;
-	labelledTwoStoryPairs: number;
-}
-
-/** The columns of `MergeLineHoldoutScore` the panel reads, in the contract's own order.
- *
- * The door answers only the columns it is asked for. A backend contract test
- * fails when the contract renames or drops one of these, or when this order is
- * not the contract's.
- */
-export const HOLDOUT_SCORE_COLUMNS = [
-	'date',
-	'run_id',
-	'applied_line',
-	'labeller',
-	'merged_and_one_story',
-	'merged_and_two_stories',
-	'apart_and_one_story',
-	'apart_and_two_stories',
-	'pairs_unresolved',
-	'labelled_two_story_pairs'
-] as const;
 
 /** The columns of `SimilarityHoldoutPair` the panel reads, in the contract's own order.
  *
@@ -118,7 +70,7 @@ export const HOLDOUT_PAIR_COLUMNS = [
 /** The UTC days the hand marks are read over: `reachDays` days before `day`, and `day`.
  *
  * Both ends are named, as `day_partition.days_in_window` names them for the
- * backend's reader, so the page and the scoring verb count the same marks.
+ * backend's reader, so the page and the backend count the same marks.
  */
 export function markReach(day: string, reachDays: number): TimeWindow {
 	return windowOfDays(day, reachDays + 1, 'right');
@@ -281,62 +233,4 @@ export async function holdoutReading(
 		});
 	}
 	return { marks, skipped, marked: rows.length, daysOpened: dates.size, read };
-}
-
-/** The newest committed reading of the line against the marks in `window`, or null for none.
- *
- * **Null is an ordinary state and the panel says so rather than erroring.** A
- * person types the verb that writes these rows; nothing in the daily pipeline
- * calls it, so a tree where nobody has run it yet has no row at all - and a
- * window that starts after the newest row has none either. A row reaches the
- * page once the gardener has packed its day.
- *
- * Bounded by the same window every other read on this route takes: the packed
- * days inside it and no more (Guardrail #12).
- */
-export interface HoldoutScoreReading {
-	score: MergeLineHoldoutScore | null;
-	read: RecordRead;
-}
-
-export async function mergeLineHoldoutScore(
-	window: TimeWindow,
-	root: string = STATE_ROOT
-): Promise<HoldoutScoreReading> {
-	const table = await windowRows(root, 'merge-line-holdout-scores', window, HOLDOUT_SCORE_COLUMNS, (start, end) =>
-		sliceFromDisk(root, 'merge-line-holdout-scores', {
-			columns: [...datedFirst(HOLDOUT_SCORE_COLUMNS)],
-			from: start,
-			to: end
-		})
-	);
-	let newest: MergeLineHoldoutScore | null = null;
-	for (const row of table.rows) {
-		const date = (row.date ?? '').trim();
-		const runId = (row.run_id ?? '').trim();
-		const line = Number(row.applied_line);
-		const required = [
-			'applied_line', 'merged_and_one_story', 'merged_and_two_stories',
-			'apart_and_one_story', 'apart_and_two_stories', 'pairs_unresolved', 'labelled_two_story_pairs'
-		] as const;
-		if (date === '' || runId === '' || required.some((key) =>
-			(row[key] ?? '').trim() === '' || !Number.isFinite(Number(row[key]))
-		)) continue;
-		// Date first, then run: two runs of one date both scored the line, and the
-		// later one read the later tree.
-		if (newest !== null && `${newest.date}${newest.runId}` >= `${date}${runId}`) continue;
-		newest = {
-			date,
-			runId,
-			appliedLine: line,
-			labeller: (row.labeller ?? '').trim(),
-			mergedAndOneStory: Number(row.merged_and_one_story),
-			mergedAndTwoStories: Number(row.merged_and_two_stories),
-			apartAndOneStory: Number(row.apart_and_one_story),
-			apartAndTwoStories: Number(row.apart_and_two_stories),
-			pairsUnresolved: Number(row.pairs_unresolved),
-			labelledTwoStoryPairs: Number(row.labelled_two_story_pairs)
-		};
-	}
-	return { score: newest, read: table.read };
 }

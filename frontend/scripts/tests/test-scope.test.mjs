@@ -124,7 +124,7 @@ test('Judgement evidence stays in the real integration tier', () => {
 });
 
 test('a window helper edit selects all its console consumers under either path convention', () => {
-	for (const name of ['controls', 'readout', 'judgement-fixtures', 'server-panels']) {
+	for (const name of ['controls', 'readout', 'server-panels']) {
 		for (const separator of ['/', '\\']) {
 			const path = ['frontend', 'tests', 'support', 'console-window', `${name}.ts`].join(separator);
 			const selection = selectPaths([path]);

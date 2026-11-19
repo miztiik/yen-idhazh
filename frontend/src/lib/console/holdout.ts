@@ -1,19 +1,19 @@
 /** The pairs a person marked apart, and how much room the merge line has left.
  *
- * The holdout marks are the floor every fitted line has to stay above. Nothing in
+ * The holdout marks are the floor the merge line has to stay above. Nothing in
  * the pipeline has ever scored those marks - they are a person's reading, not a
  * judged pair - so the score is derived here and this is the first derivation
  * rather than a second opinion about one the run already wrote.
  *
- * **The margin is the panel.** It is the applied line minus the highest score
- * among the pairs marked as two stories. Positive means the line sits clear of
- * every mark; negative means the line would merge a pair somebody read as two
+ * **The margin is the panel.** It is the line minus the highest score among the
+ * pairs marked as two stories. Positive means the line sits clear of every
+ * mark; negative means the line would merge a pair somebody read as two
  * different events, and that is the one thing this file exists to say out loud.
+ * The line is the floor in the committed config: nothing fits or moves it.
  *
  * **A margin with no scale under it says nothing.** So this file also owns the
- * axis the margin is drawn on, the zone one day's legal fall opens below the
- * line, and how many marks that fall reaches. A distance is only a number until
- * something says how fast it can be spent.
+ * axis the margin is drawn on: the line, and a window of two configured
+ * distances either side of it.
  *
  * Pure and browser safe: no config read, no disk, no `$lib` alias. The `logic`
  * group drives every function here with written-down values, so the arithmetic
@@ -22,13 +22,10 @@
 import { formatNumber, type NumberFormatConfig } from '../number-format';
 
 
-/** What the score was computed under. The weight comes from the newest fitted
- * row where one exists, and from `config/idhazh.json` where none does. */
+/** What the score was computed under: the cosine's weight, read from the
+ * committed config. */
 export interface ScoreWeights {
 	cosineWeight: number;
-	/** The date of the fitted row this weight came off, or null for the
-	 * committed config. A weight with no date beside it is a number that rots. */
-	fittedOn: string | null;
 }
 
 /** One hand-marked pair, scored. */
@@ -55,10 +52,12 @@ export interface HoldoutSkip {
 export interface HoldoutMargin {
 	/** The highest-scoring pair marked as two stories, or null where none is. */
 	closest: HoldoutMark | null;
-	/** Applied minus that score. Negative means the line would merge it. */
+	/** The line minus that score. Negative means the line would merge it. */
 	margin: number | null;
 	/** How many marked-apart pairs score at or above the line. */
 	violations: number;
+	/** How many pairs are marked as two stories: what the margin is the closest of. */
+	pairs: number;
 }
 
 /** Cosine between two stored int8 vectors, without decoding either of them.
@@ -107,15 +106,16 @@ export function pairScore(cosine: number, weights: ScoreWeights): number {
  * comparison the other way and the one pair sitting on the boundary is filed
  * as safe.
  */
-export function holdoutMargin(applied: number, marks: readonly HoldoutMark[]): HoldoutMargin {
+export function holdoutMargin(line: number, marks: readonly HoldoutMark[]): HoldoutMargin {
 	const apart = marks.filter((mark) => !mark.sameStory);
-	if (apart.length === 0) return { closest: null, margin: null, violations: 0 };
+	if (apart.length === 0) return { closest: null, margin: null, violations: 0, pairs: 0 };
 	let closest = apart[0]!;
 	for (const mark of apart) if (mark.score > closest.score) closest = mark;
 	return {
 		closest,
-		margin: applied - closest.score,
-		violations: apart.filter((mark) => mark.score >= applied).length
+		margin: line - closest.score,
+		violations: apart.filter((mark) => mark.score >= line).length,
+		pairs: apart.length
 	};
 }
 
@@ -129,109 +129,46 @@ export function markedApart(marks: readonly HoldoutMark[]): HoldoutMark[] {
 	return marks.filter((mark) => !mark.sameStory).sort((left, right) => right.score - left.score);
 }
 
-/** How far below the line the score axis reaches, in days of legal fall.
- *
- * Two, because the sentence under the figure counts two: a mark inside one
- * day's fall is inside tomorrow's reach, and one inside two days is inside the
- * day after. An axis stopping at one day would print a count of marks it had
- * not drawn.
- */
-export const DAYS_BELOW = 2;
-
-/** And above the line, one day's fall.
- *
- * A mark above the line is the state this panel exists for, so it needs room to
- * be read in. One day's fall is the unit everything else here is measured in,
- * so the room above the line is that unit rather than a number picked to look
- * right.
- */
-export const DAYS_ABOVE = 1;
-
-/** The score axis: the line, two days' legal fall below it and one above.
+/** The score axis: the line, a configured distance below it and another above.
  *
  * **Not the band.** On the 0.88 to 1.00 band the margin this panel exists to
  * draw is 0.0007 of a 0.12 span, so 95 percent of the box carries no ink and
- * the dot lands on top of the rule it is measured against. The band is already
- * the axis of `MergeLinePlot` further up the route, where it is the right
- * answer - that chart draws where the line has been, and this one draws how
- * much room it has left.
+ * the dot lands on top of the rule it is measured against. This chart draws
+ * how much room the line has, which is a question about a distance.
  *
- * Both ends are the line and a config knob, so the axis is the same width every
+ * Both ends are the line and a route knob, so the axis is the same width every
  * day and two days of this panel compare. A mark outside it is off the scale
  * and said to be, rather than widening the axis and shrinking the one part that
- * has to stay readable.
+ * has to stay readable. The window reaches further below the line than above
+ * it: a mark below the line is the clear state and wants context, a mark above
+ * it is the state this panel exists for and needs room only to be read in.
  */
-export function holdoutDomain(applied: number, maxDownStep: number): [number, number] {
-	return [applied - DAYS_BELOW * maxDownStep, applied + DAYS_ABOVE * maxDownStep];
+export function holdoutDomain(line: number, below: number, above: number): [number, number] {
+	return [line - below, line + above];
 }
 
-/** The zone a mark inside is a pair tomorrow could fold: one day's fall, down.
- *
- * **Down only.** The clamp caps both directions, but only a fall folds a pair
- * the line refuses today - a rise folds fewer. A corridor drawn either side of
- * the line would tint scores tomorrow cannot reach.
- */
-export function reachZone(applied: number, maxDownStep: number): [number, number] {
-	return [applied - maxDownStep, applied];
-}
+export type HoldoutState = 'no-marks' | 'clear' | 'violation';
 
-/** How many marked-apart pairs sit on the wrong side of the line: as it stands,
- * after one day of legal fall, and after two. */
-export interface HoldoutReach {
-	today: number;
-	tomorrow: number;
-	dayAfter: number;
-}
-
-export function holdoutReach(
-	applied: number,
-	maxDownStep: number,
-	marks: readonly HoldoutMark[]
-): HoldoutReach {
-	const apart = markedApart(marks);
-	const wrongSide = (line: number): number =>
-		apart.filter((mark) => mark.score >= line).length;
-	return {
-		today: wrongSide(applied),
-		tomorrow: wrongSide(applied - maxDownStep),
-		dayAfter: wrongSide(applied - DAYS_BELOW * maxDownStep)
-	};
-}
-
-export type HoldoutState = 'no-marks' | 'no-fit' | 'clear' | 'violation';
-
-/** Which of the four states the panel is in.
+/** Which of the three states the panel is in.
  *
  * `no-marks` means nobody has marked a pair, so there is nothing to hold the
- * line against. `no-fit` means marks exist and the rule is the line the newest
- * day was built with rather than one a fit chose.
- *
- * **A violation outranks the provenance note.** A marked-apart pair above the
- * line would be merged whether or not a fit has ever run, so a panel that said
- * "no day has fitted a line yet" and stopped there would hide the one state it
- * exists for. Where both are true the violation is the sentence and
- * `weightsNote` still says no day has fitted a line.
+ * line against. `violation` means a pair marked as two stories scores at or
+ * above the line, so the line would merge it. `clear` is every other day.
  */
-export function holdoutState(margin: HoldoutMargin, fitted: boolean): HoldoutState {
+export function holdoutState(margin: HoldoutMargin): HoldoutState {
 	if (margin.closest === null) return 'no-marks';
-	if (margin.violations > 0) return 'violation';
-	return fitted ? 'clear' : 'no-fit';
+	return margin.violations > 0 ? 'violation' : 'clear';
 }
 
 /** The hue the panel takes: what it means, never how important it looks.
  *
- * `bad` where a mark is already on the wrong side. `warn` where none is yet and
- * one day's legal fall would put one there. A panel that looks the same
- * reporting a fault as reporting a clear day is the one thing this one may not
- * be, and the rule is the line the panel draws rather than the panel itself -
- * that rule stays neutral, because a setting is not a fault.
+ * `bad` where a mark is on the wrong side of the line. A panel that looks the
+ * same reporting a fault as reporting a clear day is the one thing this one may
+ * not be, and the rule is the line the panel draws rather than the panel itself
+ * - that rule stays neutral, because a setting is not a fault.
  */
-export function holdoutTone(
-	state: HoldoutState,
-	reach: HoldoutReach
-): 'neutral' | 'warn' | 'bad' {
-	if (state === 'violation') return 'bad';
-	return reach.tomorrow > reach.today ? 'warn' : 'neutral';
+export function holdoutTone(state: HoldoutState): 'neutral' | 'bad' {
+	return state === 'violation' ? 'bad' : 'neutral';
 }
 
 /** A margin as a distance, never as a signed number.
@@ -244,37 +181,40 @@ export function marginDistance(margin: number, numberFormat: NumberFormatConfig)
 	return formatNumber(Math.abs(margin), numberFormat, { si: false });
 }
 
-/** The sentence under the panel, one per state. */
+/** The sentence under the panel, one per state.
+ *
+ * It counts the pairs a person marked as two stories because the margin is the
+ * closest of them: a distance with no population beside it says how little room
+ * there is and not how many marks that room is measured against.
+ */
 export function holdoutNote(
 	margin: HoldoutMargin,
 	state: HoldoutState,
-	marked: number,
-	applied: number,
+	line: number,
 	numberFormat: NumberFormatConfig
 ): string {
+	const distance = marginDistance(margin.margin ?? 0, numberFormat);
+	const among = margin.pairs === 1 ? 'the one pair' : `the closest of the ${margin.pairs} pairs`;
 	switch (state) {
 		case 'no-marks':
 			return 'No scored pair marked as two stories was returned, so there is no measured margin.';
-		case 'no-fit':
-			return (
-				`${marked} ${marked === 1 ? 'pair is' : 'pairs are'} marked by hand. No fitted line was ` +
-				'returned in the loaded window, so the rule below is the line the newest day was built with.'
-			);
 		case 'violation': {
 			const count = margin.violations;
 			return (
-				`The line is ${marginDistance(margin.margin ?? 0, numberFormat)} BELOW a pair a person marked ` +
-				`as two stories, so it would merge them. ${count} hand-marked ` +
-				`${count === 1 ? 'pair is' : 'pairs are'} on the wrong side of it.`
+				`The line is ${distance} BELOW ${among} a person marked as two stories, so it would ` +
+				'merge them.' +
+				(margin.pairs === 1
+					? ''
+					: ` ${count} of the ${margin.pairs} ${count === 1 ? 'is' : 'are'} on the wrong side of it.`)
 			);
 		}
 		default:
 			return (
-				`The line sits ${marginDistance(margin.margin ?? 0, numberFormat)} above the closest pair a ` +
-				'person marked as two stories. No hand-marked pair is on the wrong side of it.' +
+				`The line sits ${distance} above ${among} a person marked as two stories` +
+				(margin.pairs === 1 ? '.' : `, so none of the ${margin.pairs} is on the wrong side of it.`) +
 				// The line is in the sentence because the margin alone says how much
 				// room there is and not where the room starts.
-				` The line is at ${formatNumber(applied, numberFormat, { si: false })}.`
+				` The line is at ${formatNumber(line, numberFormat, { si: false })}.`
 			);
 	}
 }
@@ -286,77 +226,7 @@ export function holdoutNote(
  * it is a number that rots quietly.
  */
 export function weightsNote(weights: ScoreWeights): string {
-	const under = `Scored at ${weights.cosineWeight} on the cosine`;
-	return weights.fittedOn === null
-		? `${under}, the weight in the committed config.`
-		: `${under}, the weight on the newest fitted day, ${weights.fittedOn}.`;
-}
-
-/** The four cells of a committed reading, and the line they were counted at. */
-export interface ScoredHoldout {
-	date: string;
-	appliedLine: number;
-	labeller: string;
-	mergedAndOneStory: number;
-	mergedAndTwoStories: number;
-	apartAndOneStory: number;
-	apartAndTwoStories: number;
-	pairsUnresolved: number;
-	labelledTwoStoryPairs: number;
-}
-
-/** What the last scoring run found, in one sentence, or that none has run.
- *
- * **The counts are read off a committed row and never counted here.** The panel
- * above derives a per-pair score because no row carries one; these four numbers
- * do have a row, and deriving them a second time would be two answers to one
- * question.
- *
- * Null is an ordinary state. A person types the verb that writes the row, so a
- * tree where nobody has run it says so rather than printing four zeros - which
- * would read as a line that merged nothing.
- */
-export function scoredNote(scored: ScoredHoldout | null, numberFormat: NumberFormatConfig): string {
-	if (scored === null) {
-		return (
-			'No committed holdout score was returned in the loaded window. ' +
-			'Run idhazh score-merge-line-holdout to write that reading down.'
-		);
-	}
-	const wrong = scored.mergedAndTwoStories;
-	const missed = scored.apartAndOneStory;
-	const unresolved =
-		scored.pairsUnresolved === 0
-			? ''
-			: ` ${scored.pairsUnresolved} could not be scored: the day they name is no longer published.`;
-	return (
-		`Scored on ${scored.date} at a line of ${formatNumber(scored.appliedLine, numberFormat, { si: false })}, against marks by ` +
-		`${scored.labeller}. It joined ${wrong} of the ${scored.labelledTwoStoryPairs} pairs marked ` +
-		`as two stories, and left ${missed} pairs marked as one story apart.${unresolved}`
-	);
-}
-
-/** What one more day of legal fall would do, in one sentence.
- *
- * The figure on its own says how much room there is. It does not say how fast
- * that room can go, and it can go in one night - which is the whole reason the
- * margin is worth printing rather than the margin itself.
- */
-export function reachNote(
-	reach: HoldoutReach,
-	maxDownStep: number,
-	apart: number,
-	numberFormat: NumberFormatConfig
-): string {
-	const fall = `One day's legal fall is up to ${formatNumber(maxDownStep, numberFormat, { si: false })}`;
-	const more = reach.tomorrow - reach.today;
-	if (more === 0 && reach.dayAfter === reach.today) {
-		return `${fall}, and no further mark is inside the next two days' reach.`;
-	}
-	return (
-		`${fall}, so ${more} more ${more === 1 ? 'mark is' : 'marks are'} inside tomorrow's ` +
-		`reach and ${reach.dayAfter} of ${apart} would be on the wrong side the day after.`
-	);
+	return `Scored at ${weights.cosineWeight} on the cosine, the weight in the committed config.`;
 }
 
 /** The lowest, middle and highest of a set of scores. */
@@ -368,9 +238,8 @@ export interface MarkRange {
 
 /** The range a population of scores covers, or null where it holds nothing.
  *
- * The lower median on an even count, which is the convention `populationRange`
- * takes on the verdict record - two strips on one route may not report a middle
- * two different ways.
+ * The lower median on an even count, so the middle is always a score somebody
+ * marked rather than the mean of two.
  */
 export function scoreRange(scores: readonly number[]): MarkRange | null {
 	if (scores.length === 0) return null;
@@ -389,21 +258,21 @@ export function scoreRange(scores: readonly number[]): MarkRange | null {
  * and it is the reason the one-story marks are worth drawing at all: without
  * them the panel reports one of the two costs the line has.
  */
-export function belowLine(scores: readonly number[], applied: number): number {
-	return scores.filter((score) => score < applied).length;
+export function belowLine(scores: readonly number[], line: number): number {
+	return scores.filter((score) => score < line).length;
 }
 
 /** The pairs read as one story, in one sentence. */
 export function agreedNote(
 	scores: readonly number[],
-	applied: number,
+	line: number,
 	numberFormat: NumberFormatConfig
 ): string {
 	const at = scoreRange(scores);
 	if (at === null) {
 		return 'No scored pair marked as one story was returned, so there is no second population to draw.';
 	}
-	const below = belowLine(scores, applied);
+	const below = belowLine(scores, line);
 	return (
 		`${scores.length} ${scores.length === 1 ? 'pair was' : 'pairs were'} read as one story, ` +
 		`running ${formatNumber(at.min, numberFormat, { si: false })} to ${formatNumber(at.max, numberFormat, { si: false })}. ${below} of them ` +

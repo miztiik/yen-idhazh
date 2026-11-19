@@ -51,11 +51,11 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'WindowControl.svelte', 'WindowControlSource.svelte', 'WindowStatus.svelte'
 	],
 	'src/lib/console': [
-		'applied-line.ts', 'band.ts', 'chrome.ts', 'completeness.ts', 'console-style.ts', 'daily-figures.ts',
+		'band.ts', 'chrome.ts', 'completeness.ts', 'console-style.ts', 'daily-figures.ts',
 		'duration-cohort.ts', 'eval-instruments.ts', 'failure-rules.ts',
-		'holdout.ts', 'judgement-evidence.ts', 'merge-line.ts', 'model-cards.ts',
+		'holdout.ts', 'judgement-evidence.ts', 'merged-stories.ts', 'model-cards.ts',
 		'query-state.ts', 'rates.ts', 'recording.ts', 'RecordNotes.svelte', 'route-console.ts', 'run-square.ts', 'series-tokens.ts',
-		'settings-moved.ts', 'span-words.ts', 'TimeCost.svelte', 'verdict-split.ts', 'waiting.ts', 'window-preference.ts', 'window-slot.ts'
+		'settings-moved.ts', 'span-words.ts', 'TimeCost.svelte', 'waiting.ts', 'window-preference.ts', 'window-slot.ts'
 	],
 	'src/lib/console/queries': ['machine.ts', 'model.ts', 'pipelines.ts', 'shared.ts', 'voices.ts', 'window.ts'],
 	'src/lib/console/pipelines': [
@@ -102,8 +102,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	'src/lib/payload': ['desks.ts', 'drawing.ts', 'lenses.ts', 'project.ts', 'types.ts'],
 	'src/lib/server': [
 		'chart-days.ts', 'config.ts', 'ledger-disk.ts', 'ledger-rows.ts', 'model-work.ts', 'payload.ts',
-		'publication.ts', 'recorded-line.ts',
-		'content-similarity-holdout.ts', 'content-similarity-judge.ts', 'source-retiring.ts', 'window-day.ts'
+		'publication.ts', 'content-similarity-holdout.ts', 'source-retiring.ts', 'window-day.ts'
 	],
 	'src/lib/visual': ['bar.ts', 'width.ts'],
 	'src/routes': ['+error.svelte', '+layout.svelte', '+layout.ts', '+page.server.ts', '+page.svelte'],
@@ -114,8 +113,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	],
 	'src/routes/console/data-explorer': ['+page.svelte', '+page.ts'],
 	'src/routes/console/judgement': [
-		'+page.server.ts', '+page.svelte', 'HoldoutMargin.svelte', 'JudgeAgreement.svelte',
-		'MergedStoriesPanel.svelte', 'MergeLinePlot.svelte', 'RecordGates.svelte', 'VerdictSplit.svelte'
+		'+page.server.ts', '+page.svelte', 'HoldoutMargin.svelte', 'MergedStoriesPanel.svelte'
 	],
 	'src/routes/console/machine': ['+page.server.ts', '+page.svelte'],
 	'src/routes/console/model': ['+page.server.ts', '+page.svelte'],
@@ -145,7 +143,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	],
 	'tests/fixtures/panels': ['WitnessPanel.svelte', 'DurationStack.svelte', 'LegacyReserved.svelte', 'RetainedTelemetry.svelte'],
 	'tests/support/console-window': [
-		'controls.ts', 'readout.ts', 'judgement-fixtures.ts', 'server-panels.ts', 'client-render.ts'
+		'controls.ts', 'readout.ts', 'server-panels.ts', 'client-render.ts'
 	],
 	'tests/support/panel-drivers': ['pipelines.ts']
 };

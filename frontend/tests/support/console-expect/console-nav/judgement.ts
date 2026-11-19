@@ -1,4 +1,4 @@
-/** What words must the six Judgement panels keep? */
+/** What words must the two Judgement panels keep? */
 import type { RouteExpect } from './index';
 export const EXPECT: RouteExpect = {
 	id: 'judgement',

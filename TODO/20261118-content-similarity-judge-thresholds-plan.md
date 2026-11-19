@@ -1,6 +1,6 @@
 # Content-similarity judge: new pairs only, follow both thresholds, canary pairs
 
-**Last Updated**: 2026-11-18
+**Last Updated**: 2026-11-19
 **Level**: 5 - rows 3, 4 and 5 declare, write or retire persisted shapes and row 8 deletes committed data. Row 1 is Level 3, row 2 Level 2, rows 6 and 7 Level 3, row 8 Level 4.
 
 ## 0. Operating contract
@@ -99,7 +99,7 @@ Table G - Status Reckoner
 | G4 | 4 | Draw by weighted slice and file pair verdicts | 1, 2, 3 | B | DONE | crispy-spoon | - | - |
 | G5 | 5 | Find and move both thresholds | 4 | C | DONE | glowing-goggles | - | - |
 | G6 | 6 | Judge canary pairs once per run | 5 | D | PENDING | - | - | - |
-| G7 | 7 | Judgement page without the retired data | 4 | E | PENDING | - | - | - |
+| G7 | 7 | Judgement page without the retired data | 4 | E | DONE | fuzzy-waffle | - | - |
 | G8 | 8 | Retire the old record, fit, knobs and ledgers | 5, 6, 7 | F | PENDING | - | - | - |
 
 ## 2. The draw
@@ -491,37 +491,62 @@ Table T - Row 6 rejected alternatives
   - `frontend/src/lib/server/config.ts`
   - `frontend/src/lib/server/recorded-line.ts`
   - `frontend/src/lib/console/applied-line.ts`
+  - `frontend/src/lib/console/band.ts`
   - `frontend/src/lib/console/holdout.ts`
   - `frontend/src/lib/console/judgement-evidence.ts`
-  - `frontend/src/lib/console/merge-line.ts`
+  - `frontend/src/lib/console/merge-line.ts` (renamed `merged-stories.ts`)
+  - `frontend/src/lib/console/route-console.ts`
   - `frontend/src/lib/console/verdict-split.ts`
   - `frontend/tests/applied-line.spec.ts`
   - `frontend/tests/appearance-config.spec.ts`
+  - `frontend/tests/console-drawn-cells.spec.ts`
   - `frontend/tests/console-judgement-nothings.spec.ts`
+  - `frontend/tests/console-pipelines-window.spec.ts`
   - `frontend/tests/holdout-domain.spec.ts`
   - `frontend/tests/holdout.spec.ts`
   - `frontend/tests/judgement-evidence.spec.ts`
   - `frontend/tests/ledger-rows.spec.ts`
-  - `frontend/tests/merge-line.spec.ts`
+  - `frontend/tests/merge-line.spec.ts` (replaced by `merged-stories.spec.ts`)
+  - `frontend/tests/recorded-line.spec.ts`
   - `frontend/tests/similarity-ledgers.spec.ts`
   - `frontend/tests/span-sentences.spec.ts`
   - `frontend/tests/verdict-split.spec.ts`
   - `frontend/tests/support/console-sources.ts`
   - `frontend/tests/support/number-format.ts`
+  - `frontend/tests/support/console-expect/console-frame/judgement.ts`
+  - `frontend/tests/support/console-expect/console-nav/judgement.ts`
   - `frontend/tests/support/console-expect/console-window/judgement.ts`
   - `frontend/tests/support/console-window/judgement-fixtures.ts`
   - `frontend/scripts/canary-inventory.mjs`
   - `frontend/scripts/test-groups.ts`
   - `frontend/scripts/tests/canary-inventory.test.mjs`
   - `frontend/scripts/tests/test-scope.test.mjs`
+  - `config/console/judgement.json`
+  - `config/appearance.json`
   - `backend/utilities/build_canary_day.py`
-  - `backend/tests/test_console_payloads_producer.py`
+  - `backend/idhazh/telemetry/publish/console_band.py`
+  - `backend/idhazh/contracts/knobs/console.py`
   - `backend/tests/contracts/test_frontend_recorded_line.py`
   - `backend/tests/contracts/test_frontend_console_lists.py`
+  - `backend/tests/contracts/test_retired_knobs.py`
+  - `tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json`
+  - `tests/fixtures/contracts/appearance-config/knobs-set-away-from-the-defaults.json`
+  - `tests/fixtures/gardener/pre-yearly-retention/config/appearance.json`
   - `docs/architecture/publishing/console.md`
-  - `docs/architecture/publishing/console-site-size.md`
-  - `docs/architecture/publishing/frontend.md`
+  - `docs/architecture/publishing/which-console-surfaces-follow-the-window-and-which-say-why-not.md`
+  - `docs/architecture/publishing/autotune-content-similarity.md`
+  - `docs/architecture/publishing/publication-inventory.md`
+  - `docs/architecture/contracts/ledger-registry.md`
+  - `docs/architecture/contracts/persistence.md`
+  - `docs/architecture/contracts/schemas.md`
+  - `docs/concepts/console-design.md`
   - `docs/concepts/console-design/the-rules-every-console-chart-obeys.md`
+  - `docs/concepts/config/appearance.md`
+  - `docs/concepts/growing-reads.md`
+  - `docs/concepts/partitions.md`
+  - `docs/how-to/label-the-similarity-holdout.md`
+  - `docs/how-to/run-the-gates.md`
+- **Files-touched correction:** the list above comes from a search of the tree at execution; the authoring-time list was corrected as follows. Added, because the change reaches them or they named a retired item the first search missed: `config/console/judgement.json` (the panel groups and the axis knobs), `config/appearance.json` and the three appearance fixtures (the `precision_axis_multiple` knob only the deleted panels read), `backend/idhazh/contracts/knobs/console.py`, `backend/tests/contracts/test_retired_knobs.py`, `backend/idhazh/telemetry/publish/console_band.py` and `frontend/src/lib/console/band.ts` (the route tagline named the retired line), `frontend/src/lib/console/route-console.ts` (the axis knobs), `frontend/tests/recorded-line.spec.ts`, `frontend/tests/console-drawn-cells.spec.ts` (the new link is a reviewed address), `frontend/tests/console-pipelines-window.spec.ts`, `frontend/tests/support/console-expect/console-frame/judgement.ts`, `frontend/tests/support/console-expect/console-nav/judgement.ts`, and twelve docs pages. Dropped, because they name no retired item: `backend/tests/test_console_payloads_producer.py`, `docs/architecture/publishing/console-site-size.md`, `docs/architecture/publishing/frontend.md`. Changed in kind: `judgement-fixtures.ts` is deleted, not edited, and `merge-line.ts` with its spec became `merged-stories.ts` and `merged-stories.spec.ts`, because only the merge counts are left in them.
 - **Acceptance gates:**
   - Local: the frontend specs and scripts above through the test selector; the backend tests that hold the hand-copied column lists in step; ruff, mypy, TypeScript typecheck; doc check.
   - Browser smoke on the integrated browser: the Judgement page with the hand marks present, then with every judge ledger absent, plus one cross-page visit; zero new console errors and zero new 404s.

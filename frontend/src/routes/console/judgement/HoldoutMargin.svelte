@@ -1,26 +1,22 @@
 <script lang="ts">
 	/** The pairs a person marked apart, and the room the merge line has left.
 	 *
-	 * One horizontal score axis, a rule at the line the newest day was built
-	 * with, every pair somebody read as two different stories on it, and the
-	 * pairs they read as one story on a range strip below.
+	 * One horizontal score axis, a rule at the merge line, every pair somebody
+	 * read as two different stories on it, and the pairs they read as one story
+	 * on a range strip below. The line is the floor in the committed config:
+	 * nothing fits or moves it, so the panel draws one rule and no zone.
 	 *
 	 * **The margin is the panel.** It is the distance between the rule and the
-	 * closest dot, and it is the whole safety case for fitting the line at all. A
-	 * negative margin - a dot to the RIGHT of the rule - means the line would
-	 * merge two stories a person read as two, and it is drawn exactly where the
-	 * arithmetic puts it. Clamping it to the rule would draw a panel that never
-	 * shows the state it exists for.
+	 * closest dot, and it is the whole safety case for the line. A negative
+	 * margin - a dot to the RIGHT of the rule - means the line would merge two
+	 * stories a person read as two, and it is drawn exactly where the arithmetic
+	 * puts it. Clamping it to the rule would draw a panel that never shows the
+	 * state it exists for.
 	 *
-	 * **The axis is the line and one day's legal fall, not the band.** On the
-	 * band the margin drew at 5.8 px of a 1033 px plot and the dot covered the
+	 * **The axis is the line and a narrow window either side, not the band.** On
+	 * the band the margin drew at 5.8 px of a 1033 px plot and the dot covered the
 	 * rule it was measured against, so a reader could not see which side of it
-	 * the dot was on. The band is already the axis of `MergeLinePlot` further up
-	 * this route.
-	 *
-	 * **The tinted zone is what tomorrow can fold.** A mark inside it clears the
-	 * line today and would not after one day's legal fall, which is the fact the
-	 * figure alone cannot carry.
+	 * the dot was on. The window is two route knobs in score units.
 	 *
 	 * **Every mark reads into a record strip under the plot.** A dot is one pair,
 	 * a chip is the pairs off one edge of the scale, and the strip below is the
@@ -42,20 +38,15 @@
 		holdoutDomain,
 		holdoutMargin,
 		holdoutNote,
-		holdoutReach,
 		holdoutState,
 		holdoutTone,
 		marginDistance,
 		markedApart,
-		reachNote,
-		reachZone,
 		scoreRange,
-		scoredNote,
 		skipNote,
 		weightsNote,
 		type HoldoutMark,
 		type HoldoutSkip,
-		type ScoredHoldout,
 		type ScoreWeights
 	} from '$lib/console/holdout';
 
@@ -65,11 +56,10 @@
 		agreedScores: inputAgreedScores,
 		skipped,
 		marked,
-		applied,
-		maxDownStep,
-		fitted,
+		line,
+		axisBelow,
+		axisAbove,
 		weights,
-		scored,
 		height,
 		width,
 		readoutMaxShare
@@ -88,18 +78,14 @@
 		skipped: HoldoutSkip[];
 		/** How many rows the file holds, scored or not. */
 		marked: number;
-		/** The line the newest day was built with. */
-		applied: number;
-		/** The furthest the line may fall in one day, off config. The unit this
-		 * whole panel is measured in - the axis, the zone and the sentence. */
-		maxDownStep: number;
-		/** False where no day has fitted a line yet. */
-		fitted: boolean;
+		/** The merge line: `assemble.same_story.floor_min` in the committed config. */
+		line: number;
+		/** How far below and above the line the score axis reaches, in score
+		 * units - the Judgement route's `holdout_axis_below_line` and
+		 * `holdout_axis_above_line`. */
+		axisBelow: number;
+		axisAbove: number;
 		weights: ScoreWeights;
-		/** The last committed reading of the line against these marks, or null
-		 * where nobody has taken one. A person types the verb that writes it, so
-		 * null is an ordinary state and the panel says so. */
-		scored: ScoredHoldout | null;
 		height: number;
 		width: number;
 		/** `chart.readout_max_share`. */
@@ -118,27 +104,25 @@
 	const agreedScores = $derived(inputAgreedScores ?? []);
 	const absent = $derived(inputMarks === null || inputAgreedScores === null);
 
-	const outcome = $derived(holdoutMargin(applied, marks));
+	const outcome = $derived(holdoutMargin(line, marks));
 	// Not `state`: Svelte reads `$state` as an auto-subscription to a local of
 	// that name, so the rune below stops compiling.
-	const reading = $derived(holdoutState(outcome, fitted));
+	const reading = $derived(holdoutState(outcome));
 	const apart = $derived(markedApart(marks));
-	const reach = $derived(holdoutReach(applied, maxDownStep, marks));
 	const skips = $derived(skipNote(skipped));
 	const agreedAt = $derived(scoreRange(agreedScores));
-	const agreedBelow = $derived(belowLine(agreedScores, applied));
+	const agreedBelow = $derived(belowLine(agreedScores, line));
 	const apartAt = $derived(scoreRange(apart.map((mark) => mark.score)));
 
 	const box = $derived(frame(chartWidth(measured, width), height));
-	const domain = $derived(holdoutDomain(applied, maxDownStep));
-	const zone = $derived(reachZone(applied, maxDownStep));
-	// The domain is the line and one knob, so rounding it outward would move
+	const domain = $derived(holdoutDomain(line, axisBelow, axisAbove));
+	// The domain is the line and two knobs, so rounding it outward would move
 	// every mark to buy a tick label that reads the same either way.
 	const xAxis = $derived(linearAxis(domain, [box.left, box.right], { zero: false, nice: false }));
 
 	/** A score as a position, clamped to the plot.
 	 *
-	 * The axis is a window a few days' legal fall wide, and a hand mark is not a
+	 * The axis is a narrow window around the line, and a hand mark is not a
 	 * line - two articles about nothing in common score nowhere near it. Widening
 	 * the axis to fit one would shrink the part the margin lives in, which is the
 	 * one part that has to stay readable. So a mark outside is counted at the edge
@@ -168,11 +152,11 @@
 		new Set([drawn[0]?.score, drawn[drawn.length - 1]?.score].filter((score) => score !== undefined))
 	);
 
-	const ruleX = $derived(xAxis.scale(applied));
+	const ruleX = $derived(xAxis.scale(line));
 	const markY = $derived(box.top + MARK_ROW);
 	const stripY = $derived(box.top + STRIP_ROW);
 	const violated = $derived(reading === 'violation');
-	const tone = $derived(holdoutTone(reading, reach));
+	const tone = $derived(holdoutTone(reading));
 
 	function reads(value: number): string {
 		return formatNumber(value, numberFormat, { si: false });
@@ -182,7 +166,7 @@
 		const scores = off.map((mark) => reads(mark.score)).join(', ');
 		return (
 			`${off.length} marked ${off.length === 1 ? 'pair scores' : 'pairs score'} ${side} this ` +
-			`scale, at ${scores}. The scale is a window a few days' fall wide around the line, so a ` +
+			`scale, at ${scores}. The scale is a narrow window around the line, so a ` +
 			'mark far from the line is off it rather than pinned to a place it is not.'
 		);
 	}
@@ -245,7 +229,7 @@
 						{
 							label: 'Against the line',
 							value:
-								point.mark.score >= applied
+								point.mark.score >= line
 									? 'at or above it, so the line merges this pair'
 									: 'below it, so the pair stays two stories'
 						},
@@ -291,15 +275,16 @@
 <Panel
 	id="holdout-margin"
 	title="The pairs a person marked apart"
-	note="Every pair somebody read as two different stories sets a floor the merge line has to stay above. The dots are those pairs, the rule is the line, and the tinted zone is as far as the line may fall in one day."
+	note="Every pair somebody read as two different stories sets a floor the merge line has to stay above. The dots are those pairs and the rule is the merge line, the floor in the committed config."
 	{tone}
+	wide
 >
 	<div
 		data-holdout
 		data-panel-question="How much room does the line leave above pairs a person marked apart?"
 		data-model-rule="no"
 		data-model-rule-name="holdout-margin"
-		data-model-rule-none="the judge's record, not how summaries are written"
+		data-model-rule-none="the merge line and the hand marks, not how summaries are written"
 		data-holdout-state={absent ? 'missing' : reading}
 		data-holdout-tone={tone}
 		data-readout-records={absent ? undefined : records.length}
@@ -307,15 +292,13 @@
 			? 'the hand-marked pairs are unavailable, so there is no pair to read; agreed with Susan'
 			: undefined}
 		data-holdout-domain={`${domain[0].toFixed(4)},${domain[1].toFixed(4)}`}
-		data-holdout-zone={`${zone[0].toFixed(4)},${zone[1].toFixed(4)}`}
 		data-holdout-margin={outcome.margin === null ? '' : marginDistance(outcome.margin, numberFormat)}
 		data-holdout-violations={outcome.violations}
-		data-holdout-reach={`${reach.today},${reach.tomorrow},${reach.dayAfter}`}
 	>
 		<p class="comparison" data-comparison="Each hand-marked pair's score against the merge line.">
 			Each hand-marked pair's score against the merge line.
 		</p>
-		{#each evidence as note}<p data-evidence-note>{note}</p>{/each}
+		{#each evidence as note}<p class="evidence" data-evidence-note>{note}</p>{/each}
 		{#if absent}
 			<p class="headline" data-empty="missing">
 				<span class="figure" data-lede>The hand-marked pairs are unavailable.</span>
@@ -335,15 +318,6 @@
 			{/if}
 		</p>
 
-		{#if apart.length > 0}
-			<!-- The consequence, not the bare number. A distance says how much room
-			     there is and never how fast it can be spent, and it can be spent in
-			     one night. -->
-			<p class="consequence" data-holdout-reach-note>
-				{reachNote(reach, maxDownStep, apart.length, numberFormat)}
-			</p>
-		{/if}
-
 		<div use:observeWidth={(next) => (measured = next)}>
 			<!-- One tab stop for every mark, never one per dot: Left and Right step
 			     them in reading order, Escape returns to the first. -->
@@ -356,7 +330,7 @@
 				viewBox={`0 0 ${box.width} ${box.height}`}
 				role="group"
 				tabindex="0"
-				aria-label={`Where the merge line sits against the pairs a person marked as two stories. ${holdoutNote(outcome, reading, marked, applied, numberFormat)} ${agreedNote(agreedScores, applied, numberFormat)}`}
+				aria-label={`Where the merge line sits against the pairs a person marked as two stories. ${holdoutNote(outcome, reading, line, numberFormat)} ${agreedNote(agreedScores, line, numberFormat)}`}
 				use:markReadout={{
 					hover: { name: 'holdout', readout: records },
 					count: points.length,
@@ -365,35 +339,6 @@
 					selected: picked
 				}}
 			>
-				<!-- The zone first, so every mark and both rules sit on top of it. A
-				     mark inside it clears the line today and would not after one day's
-				     legal fall. -->
-				<rect
-					x={at(zone[0])}
-					y={box.top}
-					width={Math.max(0, at(zone[1]) - at(zone[0]))}
-					height={box.bottom - box.top}
-					fill="var(--tint-warn)"
-					data-holdout-zone-mark={`${zone[0].toFixed(4)}`}
-				/>
-				<line
-					x1={at(zone[0])}
-					x2={at(zone[0])}
-					y1={box.top}
-					y2={box.bottom}
-					stroke="var(--color-rule-strong)"
-					data-holdout-zone-edge={zone[0].toFixed(4)}
-				/>
-				<text
-					x={at(zone[0]) + 4}
-					y={box.bottom - 6}
-					fill="var(--color-text-tertiary)"
-					font-size={box.labels.fontSize}
-					data-holdout-zone-label
-				>
-					one day's fall
-				</text>
-
 				<!-- The axis itself, so the panel draws a frame on a day it has
 				     nothing to plot. A panel that shrinks to one sentence on a quiet
 				     day is a panel an operator stops opening. -->
@@ -439,7 +384,7 @@
 					y2={box.bottom}
 					stroke="var(--color-text-tertiary)"
 					stroke-dasharray="3 3"
-					data-holdout-rule={applied.toFixed(4)}
+					data-holdout-rule={line.toFixed(4)}
 				/>
 				<text
 					x={ruleX}
@@ -449,7 +394,7 @@
 					font-size={box.labels.fontSize}
 					data-holdout-rule-label
 				>
-					the line, {reads(applied)}
+					the line, {reads(line)}
 				</text>
 
 				<text
@@ -470,14 +415,14 @@
 						cx={at(mark.score)}
 						cy={markY}
 						r="5"
-						fill={mark.score >= applied ? 'var(--fill-low)' : 'var(--chart-4)'}
+						fill={mark.score >= line ? 'var(--fill-low)' : 'var(--chart-4)'}
 						stroke={picked === pointAt.get(point.key) ? 'var(--color-text)' : 'var(--color-surface)'}
 						stroke-width="1.5"
 						role="img"
 						aria-label={pointName(point)}
 						data-readout-at={pointAt.get(point.key)}
 						data-holdout-dot={mark.score.toFixed(4)}
-						data-holdout-dot-side={mark.score >= applied ? 'wrong' : 'clear'}
+						data-holdout-dot-side={mark.score >= line ? 'wrong' : 'clear'}
 					/>
 					{#if labelled.has(mark.score)}
 						<text
@@ -531,9 +476,9 @@
 				</text>
 
 				{#if agreedAt !== null && agreedOnScale}
-					<!-- The shape `VerdictSplit` ships two of, on this panel's axis: the
-					     population the line is supposed to fold, so a reader sees both
-					     costs of the number rather than one. -->
+					<!-- A range strip on this panel's axis: the population the line is
+					     supposed to fold, so a reader sees both costs of the number
+					     rather than one. -->
 					<line
 						x1={at(agreedAt.min)}
 						x2={at(agreedAt.max)}
@@ -601,10 +546,10 @@
 		/>
 
 		<p class="reading" data-holdout-note>
-			{marked === 0 ? 'No hand marks were returned. This does not show whether a person has marked a pair.' : holdoutNote(outcome, reading, marked, applied, numberFormat)}
+			{marked === 0 ? 'No hand marks were returned. This does not show whether a person has marked a pair.' : holdoutNote(outcome, reading, line, numberFormat)}
 		</p>
 		<p class="reading" data-holdout-agreed={agreedScores.length}>
-			{agreedNote(agreedScores, applied, numberFormat)}
+			{agreedNote(agreedScores, line, numberFormat)}
 		</p>
 		{#each [{ off: offLow, side: 'below' }, { off: offHigh, side: 'above' }] as edge (edge.side)}
 			{#if edge.off.length > 0}
@@ -642,9 +587,6 @@
 			</details>
 		{/if}
 		{/if}
-		<p class="under" data-holdout-scored={scored === null ? 'none' : scored.date}>
-			{scoredNote(scored, numberFormat)}
-		</p>
 		{#if skips !== null}
 			<p class="under" data-holdout-skips={skipped.length}>{skips}</p>
 		{/if}
@@ -665,8 +607,16 @@
 		margin: 0 0 var(--space-3);
 	}
 
+	.evidence {
+		margin: 0 0 var(--space-2);
+		font-size: var(--text-xs);
+		line-height: var(--leading-xs);
+		color: var(--color-text-secondary);
+	}
+
 	.figure {
 		font-size: var(--text-2xl);
+		line-height: var(--leading-2xl);
 		font-variant-numeric: tabular-nums;
 		color: var(--color-text);
 	}
@@ -675,16 +625,6 @@
 		font-size: var(--text-sm);
 		line-height: var(--leading-sm);
 		color: var(--color-text-secondary);
-	}
-
-	/* The consequence sits between the figure and the chart, at reading weight
-	   rather than the caveat weight below: it is what the figure means, not a
-	   footnote to it. */
-	.consequence {
-		margin: 0 0 var(--space-3);
-		font-size: var(--text-base);
-		line-height: var(--leading-base);
-		color: var(--color-text);
 	}
 
 	.reading {
@@ -699,6 +639,15 @@
 		font-size: var(--text-xs);
 		line-height: var(--leading-sm);
 		color: var(--color-text-tertiary);
+	}
+
+	/* The line is drawn before every label, so a halo in the panel's own surface
+	   cuts the dashes behind the type instead of striking through it. */
+	svg text {
+		paint-order: stroke;
+		stroke: var(--color-surface);
+		stroke-width: calc(var(--console-chart-line-width) * 1.5);
+		stroke-linejoin: round;
 	}
 
 	/* Shut it drops its border and background, the way the verdict table does,

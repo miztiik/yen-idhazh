@@ -1,10 +1,10 @@
 """Does every hand-written list in the console still name what its contract declares?
 
-Eleven console modules carry a value that has to match what a Pydantic contract
+Console modules carry a value that has to match what a Pydantic contract
 declares - the eval panel's column map, the settings vocabulary,
 the bandwidth margin, the prompt-reuse column grammar, the date the
-busy share stopped holding the stolen half, the article, feed, holdout score,
-holdout mark and fitted line records' column lists, the columns the run
+busy share stopped holding the stolen half, the article, feed and
+holdout mark records' column lists, the columns the run
 timeline reads off every row, and the routes the strip draws. A copy that has
 fallen behind its contract draws a panel with a column missing from it, names a
 column no run writes, or prints a correction for the wrong day, and none of
@@ -32,11 +32,9 @@ from idhazh.contracts.console_band import RouteId
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.fingerprint import PipelineInputs
-from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.knobs.console import ConsoleChrome
 from idhazh.contracts.knobs.observability import ObservabilityConfig
-from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
 from idhazh.contracts.similarity_holdout_pair import SimilarityHoldoutPair
 from idhazh.contracts.visual_telemetry import VisualAttemptRow
 from idhazh.telemetry.publish.console_band import ROUTES
@@ -152,49 +150,6 @@ def test_the_attempt_record_asks_only_for_columns_the_contract_declares_in_its_o
     assert [name for name in declared if name in asked] == asked, (
         "VISUAL_ATTEMPT_COLUMNS in ledger-rows.ts is not part of VisualAttemptRow's columns in "
         f"order. Not declared: {[name for name in asked if name not in declared]}. "
-        "If that is empty, only the order differs: write them in the contract's order."
-    )
-
-
-def test_the_holdout_score_asks_only_for_columns_the_contract_declares_in_its_order() -> None:
-    """The Judgement page reads part of the holdout score, so its list is a part, in order.
-
-    `content-similarity-holdout.ts` spells the `MergeLineHoldoutScore` columns the panel
-    reads, because the door never offers every column. A column the contract
-    renames or drops would reach the panel as an empty reading rather than as an
-    error.
-    """
-    asked = quoted_strings(read_text(SERVER / "content-similarity-holdout.ts"), "HOLDOUT_SCORE_COLUMNS")
-    declared = list(MergeLineHoldoutScore.csv_columns())
-
-    assert asked, "HOLDOUT_SCORE_COLUMNS in content-similarity-holdout.ts names no column"
-    assert [name for name in declared if name in asked] == asked, (
-        "HOLDOUT_SCORE_COLUMNS in content-similarity-holdout.ts is not part of "
-        "MergeLineHoldoutScore's columns in order. Not declared: "
-        f"{[name for name in asked if name not in declared]}. "
-        "If that is empty, only the order differs: write them in the contract's order."
-    )
-
-
-def test_the_fitted_line_asks_only_for_columns_the_contract_declares_in_its_order() -> None:
-    """The Judgement page reads part of the fitted line, so its list is a part, in order.
-
-    `content-similarity-judge.ts` spells the `FittedSimilarityThreshold` columns the
-    merge line, the agreement strip and the record read, because the door never
-    offers every column. A column the contract renames or drops would reach a
-    panel as an empty reading rather than as an error.
-    """
-    asked = quoted_strings(read_text(SERVER / "content-similarity-judge.ts"), "FITTED_LINE_COLUMNS")
-    declared = list(FittedSimilarityThreshold.csv_columns())
-
-    assert asked, "FITTED_LINE_COLUMNS in content-similarity-judge.ts names no column"
-    assert {
-        "judge_policy_version", "pairs_refused", "disagreement_rate", "unclear_rate"
-    } <= set(asked)
-    assert [name for name in declared if name in asked] == asked, (
-        "FITTED_LINE_COLUMNS in content-similarity-judge.ts is not part of "
-        "FittedSimilarityThreshold's columns in order. Not declared: "
-        f"{[name for name in asked if name not in declared]}. "
         "If that is empty, only the order differs: write them in the contract's order."
     )
 
