@@ -34,7 +34,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from types import MappingProxyType
@@ -222,6 +222,18 @@ def _checked_canary_answers(text: str) -> str:
 
 #: The known-answer pairs' answers as one compact JSON object, empty before any were judged.
 CanaryAnswersText = Annotated[str, AfterValidator(_checked_canary_answers)]
+
+
+def canary_answers_text(answers: Mapping[str, Sequence[object]]) -> str | None:
+    """The known-answer pairs' answers as the one compact text the check above accepts.
+
+    Sorted keys, no spaces and ASCII only, which is what `canonical_compact_object` insists on,
+    so the same answers are always the same text. None for no answers and never an empty
+    object: an empty object would read as canaries that ran and had nothing to say, and none ran.
+    """
+    if not answers:
+        return None
+    return json.dumps(answers, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
 
 
 @dataclass(frozen=True, slots=True)

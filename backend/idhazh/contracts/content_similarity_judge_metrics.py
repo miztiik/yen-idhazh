@@ -24,6 +24,11 @@ own deadline, which is the shard this row exists to let report at all.
 nothing, and a zero there reads as a shard that measured everything and found
 nothing wrong. Those are opposite facts.
 
+**The known-answer pairs ride along in one column.** Each runner judges the few it was
+dealt before its own pairs, and `canary_answers` holds what the judge said, in the shape
+the night's threshold row keeps. They are in no count above and no clock: the funnel and
+the rates describe the night's own pairs only.
+
 **This row is a record and never an alarm.** The line-setting gates already fire
 on the day-grain rates, and a second threshold here would be an answer nobody
 could reconcile with the first.
@@ -37,6 +42,7 @@ may not import (CLAUDE.md section 4).
 
 from __future__ import annotations
 
+import json
 from math import isclose
 from typing import Any, ClassVar, Self
 
@@ -58,6 +64,7 @@ from idhazh.contracts.story_similarity_pair import (
     ContentSimilarityJudgeId,
     JudgeModelId,
 )
+from idhazh.contracts.story_similarity_threshold_history_row import CanaryAnswersText
 
 
 class ContentSimilarityJudgeMetrics(JudgeConfigStamp, Contract):
@@ -65,6 +72,11 @@ class ContentSimilarityJudgeMetrics(JudgeConfigStamp, Contract):
 
     __schema_stem__: ClassVar[str] = "content-similarity-judge-metrics"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-11-19",
+            change="canary_answers joins the reading: the known-answer pairs this runner judged.",
+            why="The collecting job folds each runner's answers onto the night's threshold row.",
+        ),
         ChangelogEntry(
             version="2026-11-05",
             change="Judge policy identifies valid-reading counts and unavailable rates.",
@@ -79,11 +91,6 @@ class ContentSimilarityJudgeMetrics(JudgeConfigStamp, Contract):
             version="2026-10-24",
             change="The Qwen 3.8 Distill Q5 model joins judge_model.",
             why="A shipped model file can be recorded in a future judge verdict.",
-        ),
-        ChangelogEntry(
-            version="2026-10-08",
-            change="shard is renamed work_part_index. An old shard heading is read under it.",
-            why="The ledger door writes its own shard cell on every row it files.",
         ),
         ChangelogEntry(
             version="2026-09-21",
@@ -197,6 +204,17 @@ class ContentSimilarityJudgeMetrics(JudgeConfigStamp, Contract):
         default=None,
         description="UTC date identifying judge interpretation; null on historical measurements.",
     )
+    canary_answers: CanaryAnswersText | None = Field(
+        default=None,
+        description=(
+            "What the judge answered on the known-answer pairs this runner was dealt, as one "
+            "compact JSON object keyed by canary id, in the shape the night's threshold row "
+            "keeps: the answer in file order, the answer swapped, the two first-token margins, "
+            "the file-order call's prompt tokens and the runner index, which is this row's own "
+            "work part. Empty when this runner was dealt none or judged none. The pairs are in "
+            "no count or clock on this row."
+        ),
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -247,6 +265,24 @@ class ContentSimilarityJudgeMetrics(JudgeConfigStamp, Contract):
                 raise ValueError("disagreement_rate must describe valid disagreeing pairs")
             if (self.unclear_rate is None) != (self.pairs_agreed == 0):
                 raise ValueError("unclear_rate is unavailable exactly when no pair agreed")
+        return self
+
+    @model_validator(mode="after")
+    def _the_known_answers_are_this_runners_own(self) -> Self:
+        """Every known-answer pair on this row was judged by this runner, and says so.
+
+        The night's row keeps each answer's runner index, and this row is the only place
+        the answer and the runner that gave it sit together. An index that is not this
+        row's own work part would put an answer on a runner that never judged it.
+        """
+        if self.canary_answers is None:
+            return self
+        for canary_id, answer in json.loads(self.canary_answers).items():
+            if answer[5] != self.work_part_index:
+                raise ValueError(
+                    f"canary_answers puts {canary_id} on runner {answer[5]}, and this row is "
+                    f"runner {self.work_part_index}'s"
+                )
         return self
 
     @classmethod

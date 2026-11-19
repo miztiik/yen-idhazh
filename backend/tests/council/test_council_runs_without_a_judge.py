@@ -52,9 +52,10 @@ JUDGE_CODE_PACKAGES: Final = ("idhazh.content_similarity_judge", "idhazh.similar
 
 #: The stage modules the content-similarity judge owns, spelled one by one. A
 #: stage is named for the work it does rather than for whose loop it is in, so a
-#: shared prefix would go blind to three of these four.
+#: shared prefix would go blind to four of these five.
 JUDGE_STAGE_MODULES: Final = (
     "idhazh.stages.file_pair_verdicts",
+    "idhazh.stages.judge_canary_pairs",
     "idhazh.stages.judge_item_pairs",
     "idhazh.stages.pick_item_pairs",
     "idhazh.stages.review_thresholds",
@@ -66,6 +67,7 @@ JUDGE_STAGE_MODULES: Final = (
 #: holds the tuple against the tree.
 JUDGE_CONTRACT_MODULES: Final = (
     "idhazh.contracts.content_similarity_judge_metrics",
+    "idhazh.contracts.knobs.content_similarity_canaries",
     "idhazh.contracts.knobs.content_similarity_judge",
     "idhazh.contracts.fitted_similarity_threshold",
     "idhazh.contracts.judge_call",

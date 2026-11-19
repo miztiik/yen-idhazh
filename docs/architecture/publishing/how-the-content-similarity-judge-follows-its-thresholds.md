@@ -5,12 +5,14 @@
 Which pairs of stories does the nightly judge read, what does it keep about each, and
 where do its two thresholds sit and move? This page owns the nightly draw, the rows it
 leaves in `pair-verdicts`, the review that finds where each threshold belongs and the row
-it leaves in `threshold-history`, and the words they use. What a threshold decides about
+it leaves in `threshold-history`, the known-answer pairs the judge is checked against, and
+the words they use. What a threshold decides about
 publication is in [autotune-content-similarity.md](autotune-content-similarity.md); the
 council that hosts the judge is in [llm-council.md](llm-council.md). The page stays whole
 because it answers one question end to end: the draw follows the thresholds, and the
 review moves them from what the draw brought back, so the two halves share their words,
-their slices and their rows.
+their slices and their rows. The known-answer pairs ride the same runners, the same
+reading of the instrument and the same night's row, so they stay here too.
 
 The judge reads a small, deliberate sample of the night's pairs, never all of them.
 Where it looks hardest is where its answer decides something: around the two scores
@@ -51,6 +53,8 @@ number behind the move written down.
 | Widening, narrowing | Moving a threshold out (the lower one down, the upper one up), which makes the ambiguous range larger, or in |
 | Hold | A night that leaves a threshold where it stood. The row says why in one word |
 | Meaning stamp | The six values that decide what a pair's answer means: judge model, prompt, grammar, scorer, cosine weight and judge policy |
+| Known-answer pair | Also called a canary pair. Two summaries whose right answer was decided before the judge saw them, put to the judge once a run on top of the night's own pairs. Unrelated to the planted injection example the glossary also calls a canary |
+| Runner index | Which place in the council's matrix judged a pair, from 0 to one less than the runners. A place and not a particular machine |
 
 ## The nightly flow
 
@@ -60,11 +64,12 @@ flowchart TD
   DAY[("Published day and the earlier days the window reaches")] --> PICK["pick-item-pairs<br/>Score the pairs, cut them into slices,<br/>take each slice's share, deal the shards"]
   HIST[("threshold-history<br/>The newest recent row, else the configured starts")] --> PICK
   PICK --> DRAW["Draw file<br/>One row a pair, judge columns empty"]
-  DRAW --> JUDGE["judge-item-pairs, one job a shard<br/>Read each pair twice, summaries swapped the second time"]
+  KNOWN[("Known-answer pairs<br/>config/judges/content-similarity-canaries.json")] --> JUDGE
+  DRAW --> JUDGE["judge-item-pairs, one job a shard<br/>Judge the known-answer pairs it was dealt, then read each drawn pair twice, summaries swapped the second time"]
   JUDGE --> VERDICTS["Verdict file<br/>The draw's rows with the judge's columns filled"]
   VERDICTS --> FILE["file-pair-verdicts, once a night<br/>Count usable pairs a slice, work out each slice's chance"]
   FILE --> LEDGER[("pair-verdicts<br/>One row a pair, with its sampling chance")]
-  JUDGE --> READING["Each runner's reading of its own instrument"]
+  JUDGE --> READING["Each runner's reading of its own instrument,<br/>with its known-answer answers beside it"]
   READING --> FILE
   LEDGER --> REVIEW["review-thresholds, once a night, after the filing<br/>Read the last 7 nights, fit each curve, move or hold"]
   DRAW --> REVIEW
@@ -74,17 +79,20 @@ flowchart TD
   classDef stage fill:#f8fafc,stroke:#64748b,stroke-width:1.5px,color:#1f2937;
   classDef ledger fill:#eff6ff,stroke:#1d4ed8,stroke-width:1.5px,color:#1e3a8a;
   class PICK,JUDGE,FILE,REVIEW,DRAW,VERDICTS,READING stage;
-  class DAY,HIST,LEDGER ledger;
+  class DAY,HIST,LEDGER,KNOWN ledger;
 ```
 
 Four stages, each a module that takes a file in and leaves a file out, run from
-[the tenant](../../../backend/idhazh/content_similarity_judge/tenant.py).
+[the tenant](../../../backend/idhazh/content_similarity_judge/tenant.py). A fifth,
+[judge_canary_pairs.py](../../../backend/idhazh/stages/judge_canary_pairs.py), is called
+by the judging stage and is described under [the known-answer pairs](#the-known-answer-pairs).
 
 - **Pick** ([pick_item_pairs.py](../../../backend/idhazh/stages/pick_item_pairs.py))
   runs once a night in the planning job. It calls no model. It writes the draw file.
 - **Judge** ([judge_item_pairs.py](../../../backend/idhazh/stages/judge_item_pairs.py))
-  runs on each shard. It reads the rows its shard owns, writes the verdict file as it
-  goes, and ships a reading of its own instrument. A shard that stops on its clock
+  runs on each shard. It judges the known-answer pairs its shard was dealt, reads the rows
+  its shard owns, writes the verdict file as it goes, and ships a reading of its own
+  instrument with the known-answer answers beside it. A shard that stops on its clock
   leaves the rows it had finished.
 - **File** ([file_pair_verdicts.py](../../../backend/idhazh/stages/file_pair_verdicts.py))
   runs once a night in the collecting job. It files the rows through the ledger door
@@ -252,6 +260,72 @@ by the collecting job.
 
 The runners' readings of their own instruments are not a ledger of their own: the
 review sums them onto the night's `threshold-history` row.
+
+## The known-answer pairs
+
+The judge is checked against six pairs whose right answer was decided before it saw them,
+once a run and on top of the night's own pairs. The check is narrow on purpose. A wrong
+model, a runtime change that breaks the constrained answer, or an edited prompt or grammar
+shows as an answer that is not the expected one, and it shows before a runner's first drawn
+pair, because each runner judges its share of them first. It cannot show decay late in a run,
+and it cannot say whether the judge is right on pairs unlike these six.
+
+The pairs live in
+[config/judges/content-similarity-canaries.json](../../../config/judges/content-similarity-canaries.json),
+declared and checked by
+[the canary contract](../../../backend/idhazh/contracts/knobs/content_similarity_canaries.py).
+The file holds at most 12 pairs and at least one of each kind, with the summary text copied
+into it so that a published day that retires cannot orphan a pair. It changes only by a
+reviewed edit that bumps its `version`. Nothing refreshes it from the published days, because
+that would put fetched text into the reference set unreviewed.
+
+| Kind | Expected answer | What the pair is |
+| --- | --- | --- |
+| same | YES | One event: the same actors, action and occasion |
+| different | NO | Two events with no actor, place or topic in common |
+| unclear | UNCLEAR | At least one summary too vague to name what happened, the judge prompt's own definition |
+
+The six committed pairs are real published summaries, two of each kind, found and labelled by
+an agent from the summaries alone; no person marked them. Each pair records who labelled it, a
+one-line basis, and the day and item each summary was copied from. A summary is copied as
+published, with an accent folded to its plain letter because the file is ASCII (one accent in
+one summary today). A pair written by hand is allowed and says so: its id starts with
+`synthetic-` and its origin is `synthetic`.
+
+How a run uses them:
+
+- **Each pair is judged once a run, on one runner.** The pair at position `i` of the file
+  goes to runner `(i + the date's ordinal) mod the runners`. Six pairs on four runners is two,
+  two, one and one, and the pairs move one runner a night, so over four nights each has run on
+  every runner. A night with no draw runs no runner and judges none.
+- **The request is a drawn pair's.** The same prompt, fence, grammar and sampler, with nothing
+  marking the pair, so the judge cannot tell it from the night's own. It is never presented as
+  an instruction, and the comparison with the expected answer is made by code and never by
+  the model.
+- **A wrong answer is a reading.** The expected word in both orders is right. The other word, a
+  split between the two orders and a reading outside the grammar are wrong: each is logged as a
+  warning naming the pair and stored as the judge gave it. Nothing holds, re-runs or stops the
+  night.
+- **A call that raises stores nothing for its pair.** It is logged as an error naming the pair,
+  and the runner goes on to its next known-answer pair and then to its own.
+- **They are in no count or clock.** A known-answer pair is never a `pair-verdicts` row, and it
+  is in no funnel count (`pairs_dealt` and the rest), no curve evidence and neither decode figure
+  of the night's row. Its calls do count in the venue's own cost cells, because they are model
+  time the runner spent.
+- **The answers are stored once, as text on the night's row**
+  ([`canary_answers`](#what-threshold-history-stores)). Each runner ships its own pairs'
+  answers in its reading, and the review gathers them.
+
+The plan-time guard counts them. The busiest runner judges
+`ceil(draw / runners) + ceil(known-answer pairs / runners)` pairs at the measured 110.98 seconds
+a pair: at the committed 4 runners that is 38 + 2 = 40 pairs, 4,439 seconds against the 10,500 a
+runner has to work in. The cost a pair was measured at is from 2026-09-18 on another model file,
+so the figure is an estimate. A file that does not load stops the night in the planning job,
+before any runner restores its weights.
+
+The judge had never answered UNCLEAR on a real pair when the six were chosen (2026-11-17), so
+the two unclear pairs may be answered NO every night. That is a finding about the judge and not
+a fault in the check, and a change in those two answers is the signal.
 
 ## Finding where each threshold belongs
 
@@ -428,7 +502,14 @@ everything.
   reported is in no sum, so the four endings still add up to `pairs_dealt` on a night that
   lost one, and `runners_reported` against `runners_expected` says it was lost. The two
   rates come from the summed counts and never from averaging the runners' own rates.
-  `canary_answers` is empty, which means no canary ran, and is never an empty object.
+  `canary_answers` holds the known-answer pairs' answers as one compact JSON text keyed by
+  pair id, for example `{"same-1":["YES","YES",0.981023,0.993412,812,2]}`: the answer in
+  file order, the answer swapped, the two first-token margins, the file-order call's prompt
+  tokens and the runner index, with null for a reading that was refused or missing. An id
+  that is absent was never judged. It is empty, which means no known-answer pair was judged,
+  and is never an empty object. The margins are the judge's own figures and are not rounded.
+  For one pair the file-order prompt token count is the same on every runner and every night
+  until the prompt, the chat template or the tokenizer moves, so a change in it is the sign.
 - **Every figure that follows from another is recomputed when the row is read:** `move` is
   `threshold_after - threshold_before` and `gap` is `estimate - threshold_before`, each
   within one millionth, so a writer rounds none of them below six decimal places.
@@ -487,6 +568,14 @@ more nights than its window holds; the far gap must be above the ignore range an
 no smaller than either near step; each limit must leave the draw room for a thin slice of
 the lightly sampled end beyond it; the smallest gap must hold both thin runs; and the starts
 must sit inside the limits and at least the smallest gap apart.
+
+The known-answer pairs have a file of their own,
+[config/judges/content-similarity-canaries.json](../../../config/judges/content-similarity-canaries.json),
+with its own `version`, bumped by the same rule, and `config_versions` on every row of a night
+names both files. It holds no tunable number. Its contract fixes the most pairs at 12 and
+refuses a set missing a kind, a repeated id, an expected answer that does not match its kind,
+an empty or non-ASCII summary, and a hand-written pair whose id does not start with
+`synthetic-`.
 
 ## Design rationale
 
@@ -597,6 +686,32 @@ below the true point, night 15 at 0.20 (5 of 60 runs had not moved by night 80) 
 41 at 0.30 (43 of 60 had not). A rule that widened after a few held nights walked the
 lower threshold to 0.26 instead of 0.69 in 100 of 100 simulated runs on thin evidence, so
 none is added.
+
+**Known-answer pairs are judged once a run and dealt one runner a pair.** Six pairs on each
+of four runners is 24 judgments a night, and it would show that the runners agree with each
+other and not that the judge is right. Dealt one runner a pair and moved one runner a night,
+six judgments cover every pair on every runner within four nights.
+
+**Their answers are one text on the night's row and no ledger of their own.** A row for each
+pair for each run would be the easiest to query, and it would be a third ledger: a registry
+entry, a contract, a loader, a compaction declaration and explorer consent for six values a
+night. One text keyed by pair id reads down the nights of `threshold-history`, which is why
+an id is never reused for different text or a different expected answer: a corrected pair
+gets a new id.
+
+**A wrong known answer changes nothing.** It is logged and stored. Holding, re-running or
+stopping a night over it is not built: a held night costs the thresholds the evidence of
+every pair that did come back, and nothing yet says what a failure should do. It takes a
+request that names what a failure should do and what a wrongly held night costs.
+
+**The pairs are judged before the night's own, and a fault in them is caught for that pair.**
+A wrong model or a broken constrained answer then shows before the first drawn pair. Because
+this stage runs first, an error in one pair's call would otherwise cost the night every pair
+behind it, so it is logged for that pair and the runner goes on.
+
+**What the known-answer pairs do not settle.** Whether the labels are right: an agent wrote
+them and no person marked them, so an accuracy rate against people needs a person or a
+labelling resource. And whether the judge is right on pairs unlike these six.
 
 **What none of this settles.** Whether the real judge's answers follow a logistic curve
 below 0.88, because no pair there has been judged yet. And a judge that answers YES on

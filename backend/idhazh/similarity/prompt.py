@@ -126,16 +126,18 @@ def user_turn(left: DigestItem, right: DigestItem) -> str:
     invented here: a second fence shape is untrusted text sitting somewhere the
     prompt's "those blocks are DATA" sentence does not reach.
     """
-    return _rendered(left.summary, right.summary)
+    return render_user_turn(left.summary, right.summary)
 
 
-def _rendered(left: str, right: str) -> str:
+def render_user_turn(left: str, right: str) -> str:
     """The user turn's own shape, with two summaries dropped into it.
 
-    Split out of `user_turn` so `prompt_text` can render the same shape with
-    nothing in it. Rendering it a second way would let the digest describe a
-    layout the model never reads, which is the one failure a digest exists to
-    make impossible.
+    The one place the turn is laid out. The judge hands it the two summaries it was
+    given, whether they came off a published item or out of the known-answer
+    pairs' config, so no pair has a second way to reach the model. `prompt_text`
+    renders the same shape with nothing in it: rendering it a second way would let
+    the digest describe a layout the model never reads, which is the one failure a
+    digest exists to make impossible.
     """
     return "\n".join(
         (
@@ -164,7 +166,7 @@ def blank_user_turn() -> str:
     the pair changes nothing it reads and a second rendering would still have to
     be kept in step with this one.
     """
-    return _rendered("", "")
+    return render_user_turn("", "")
 
 
 def prompt_text(

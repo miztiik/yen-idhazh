@@ -6,7 +6,9 @@ sharpest case").
 
 This shard opens no ledger, commits nothing, and decides nothing about the thresholds. It
 reads the draw the scoring stage wrote, judges the rows this shard owns, and
-leaves one file behind for the collecting job to pick up.
+leaves one file behind for the collecting job to pick up. Before the first of them it
+judges the few known-answer pairs the dealing gave it (`judge_canary_pairs`), and ships their
+answers beside the reading of its own instrument.
 
 It is handed the instant it must stop by. Where stopping is safe is this shard's
 own answer, because only it knows what a unit of work is here, and the file is
@@ -32,10 +34,12 @@ from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
 from idhazh.contracts.council_run_record import ShardOutcome
 from idhazh.contracts.digest_day import DigestItem
+from idhazh.contracts.knobs.content_similarity_canaries import CanaryPair
 from idhazh.contracts.story_similarity_pair import SameStoryVerdict
 from idhazh.contracts.story_similarity_pair_verdict import StorySimilarityPairVerdict
 from idhazh.similarity import judge, stamps
 from idhazh.similarity.statistics import reading_statistics
+from idhazh.stages import judge_canary_pairs
 from idhazh.stages.assemble import _earlier_days
 from idhazh.stages.common import LOG, _load_day
 
@@ -79,7 +83,9 @@ class ShardReport:
 
     #: What the calls cost, for the venue's own row. `model_calls` is counted at
     #: the seam rather than doubled from the pairs, because a pair read behind a
-    #: reasoning span makes four calls and not two.
+    #: reasoning span makes four calls and not two. The known-answer pairs' calls
+    #: are in these four figures, because they are model time the unit spent, and in
+    #: no figure of `metrics`, which describes the drawn pairs.
     model_calls: int
     tokens_in: int
     tokens_out: int
@@ -97,6 +103,7 @@ def stage_judge_item_pairs(
     draw_path: Path,
     verdict_path: Path,
     deadline: float,
+    canary_pairs: Sequence[CanaryPair],
     base_url: str | None = None,
     reader: ModelReader | None = None,
 ) -> ShardReport:
@@ -125,6 +132,15 @@ def stage_judge_item_pairs(
     reach this runner from the job that wrote it and the verdicts have to reach
     the job that counts them, so where each one sits is the council's answer
     rather than this stage's.
+
+    **The known-answer pairs this runner owns are judged before its own pairs**, by
+    `judge_canary_pairs` and through the same reader. A wrong model, a runtime change that
+    breaks the constrained answer or an edited prompt or grammar then shows before the first
+    drawn pair; decay late in a run is not something it can find. Their answers go on the
+    reading this stage ships and their calls into the cost figures, and no drawn pair, count,
+    rate or clock of the reading includes them. `canary_pairs` is required and not defaulted: a
+    caller that forgot it would run no check and say nothing, so the pairs a night checks itself
+    with are the caller's to name, and a test that is not about them names none.
     """
     stamp = stamps.judge_inputs(settings)
     execution = judge_settings.load(settings.config_dir)
@@ -136,6 +152,16 @@ def stage_judge_item_pairs(
         date,
         digest_root=digest_root,
         window_hours=settings.app.assemble.same_story_window_hours,
+    )
+
+    canaries = judge_canary_pairs.stage_judge_canary_pairs(
+        date,
+        shard=shard,
+        shards=shards,
+        settings=settings,
+        deadline=deadline,
+        reader=reader,
+        canary_pairs=canary_pairs,
     )
 
     path = verdict_path
@@ -160,7 +186,7 @@ def stage_judge_item_pairs(
         if left is None or right is None:
             unreadable += 1
             continue
-        verdicts = reader.read_pair(left, right, settings=settings)
+        verdicts = reader.read_pair(left.summary, right.summary, settings=settings)
         readings.append(verdicts)
         judged.append(_with_the_verdict(row, verdicts, stamp=stamp))
         if len(judged) % flush_every == 0:
@@ -213,11 +239,12 @@ def stage_judge_item_pairs(
             dealt=len(drawn),
             unreadable=unreadable,
             stamp=stamp,
+            canary_answers=canaries.answers,
         ),
-        model_calls=sum(one.calls for one in readings),
-        tokens_in=sum(one.prompt_tokens for one in readings),
-        tokens_out=sum(one.completion_tokens for one in readings),
-        model_seconds=sum(one.decode_seconds for one in readings),
+        model_calls=canaries.model_calls + sum(one.calls for one in readings),
+        tokens_in=canaries.tokens_in + sum(one.prompt_tokens for one in readings),
+        tokens_out=canaries.tokens_out + sum(one.completion_tokens for one in readings),
+        model_seconds=canaries.model_seconds + sum(one.decode_seconds for one in readings),
     )
     LOG.info(
         "judge-item-pairs shard=%s date=%s run=%s owned=%s judged=%s usable=%s "
@@ -244,6 +271,7 @@ def _instrument_reading(
     dealt: int,
     unreadable: int,
     stamp: stamps.JudgeStamp,
+    canary_answers: str | None,
 ) -> ContentSimilarityJudgeMetrics:
     """How this shard's own instrument behaved, as the row its ledger holds.
 
@@ -255,6 +283,10 @@ def _instrument_reading(
     **A rate over no rows is empty rather than zero.** A shard that read nothing
     measured nothing, and a zero there would read as a shard that measured
     everything and found nothing wrong.
+
+    **`canary_answers` is the one cell that is not about the drawn pairs.** It is what the
+    judge said on the known-answer pairs this shard owns, already in the compact text the night's
+    row keeps, and it is in none of the counts, rates or clocks here.
 
     `judge_id` is left to the contract's own default, which is the same one
     member this judge's tenant module narrows its slug to. Naming it here would
@@ -285,6 +317,7 @@ def _instrument_reading(
         "decode_seconds_max": max(
             (one.decode_seconds_max for one in readings), default=None
         ),
+        "canary_answers": canary_answers,
     }
     return ContentSimilarityJudgeMetrics.model_validate(payload)
 

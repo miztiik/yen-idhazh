@@ -1,6 +1,6 @@
 # Config
 
-**Last Updated**: 2026-11-18
+**Last Updated**: 2026-11-19
 
 Where tunable behaviour lives, and the rule that separates a knob from an identifier. Config-driven with sane defaults is a project principle ([principles.md](principles.md), Guardrail #6): a fresh clone runs on the defaults, and no threshold, cap or source list is hardcoded in code.
 
@@ -128,9 +128,9 @@ unrelated settings can follow the current config reader.
 
 ## Judge config files carry a revision date
 
-A config file that a judge reads on its nightly run carries `version`: the UTC date (`YYYY-MM-DD`, never an integer) of the last edit that changed one of its values. Whoever changes a value bumps `version` in the same commit. Nothing checks that the bump happened, so the diff of every value change should show it. The first such file is `config/judges/content-similarity-judge.json`; no other config file carries a revision date yet, and the offline evaluation settings file beside it has none because no night reads it.
+A config file that a judge reads on its nightly run carries `version`: the UTC date (`YYYY-MM-DD`, never an integer) of the last edit that changed one of its values. Whoever changes a value bumps `version` in the same commit. Nothing checks that the bump happened, so the diff of every value change should show it. Two files carry it: `config/judges/content-similarity-judge.json`, the draw and threshold settings, and `config/judges/content-similarity-canaries.json`, the known-answer pairs the judge checks itself against ([what a pair is](../architecture/publishing/how-the-content-similarity-judge-follows-its-thresholds.md#the-known-answer-pairs)). In the pairs file a value is any summary, label, expected answer or pair, so a pair changes by a reviewed edit that bumps `version`, and nothing refreshes it from the published days. No other config file carries a revision date yet, and the offline evaluation settings file beside them has none because no night reads it.
 
-`config_versions()` in `backend/idhazh/content_similarity_judge/settings.py` returns the date of each judge-owned file a night read as one line of ASCII JSON keyed by the file's path under `config/`: `{"judges/content-similarity-judge.json":"YYYY-MM-DD"}`. A new judge-owned file adds a key to that text and never a column to the records that carry it. The loader refuses a `version` that is missing, is not a real calendar date, or is later than today's date in UTC, which is how a local date that is already tomorrow in UTC reads, so write the UTC date.
+`config_versions()` in `backend/idhazh/content_similarity_judge/settings.py` returns the date of each judge-owned file a night read as one line of ASCII JSON keyed by the file's path under `config/`: `{"judges/content-similarity-canaries.json":"YYYY-MM-DD","judges/content-similarity-judge.json":"YYYY-MM-DD"}`. A new judge-owned file adds a key to that text and never a column to the records that carry it. The loader of each file refuses a `version` that is missing, is not a real calendar date, or is later than today's date in UTC, which is how a local date that is already tomorrow in UTC reads, so write the UTC date.
 
 It is a revision date and not a schema version, so it needs no changelog and no read-side migration (the [authored-input rule](#removing-a-config-field-updates-its-authored-inputs)); a file's shape still changes together with its model. The reasons for a date and for one text are under [Design rationale](#design-rationale).
 

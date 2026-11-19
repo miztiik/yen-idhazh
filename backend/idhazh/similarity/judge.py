@@ -32,7 +32,6 @@ from typing import Any, Final
 
 from idhazh import config
 from idhazh.contracts.base import fit_field
-from idhazh.contracts.digest_day import DigestItem
 from idhazh.contracts.knobs.models import ModelEntry
 from idhazh.contracts.story_similarity_pair import (
     ReadingRefusalReason,
@@ -123,6 +122,9 @@ class Judged:
     verdict_swapped: SameStoryVerdict | None
     usable: bool
     first_token_margin: float | None
+    #: The swapped call's own margin, beside the file-order one above. A pair keeps both
+    #: readings' confidence, and a reading outside the grammar keeps whatever window it had.
+    first_token_margin_swapped: float | None
     #: Wall clock for every call this pair made, which is two cold and four under
     #: a thinking envelope.
     decode_seconds: float
@@ -130,7 +132,12 @@ class Judged:
     #: thinking envelope is two calls, and the figure a venue sizing a timeout
     #: needs is the longest one thing it waited on.
     decode_seconds_max: float
+    #: Both calls' prompts added up, which is what the pair cost the server.
     prompt_tokens: int
+    #: The file-order call's prompt alone. For one pair it is the same on every runner and every
+    #: night until the prompt, the chat template or the tokenizer moves, which the sum cannot
+    #: show once the swapped call's prompt changes with it.
+    prompt_tokens_file_order: int
     completion_tokens: int
     #: How many calls this pair actually made, counted at the seam. Never twice
     #: the pairs: that arithmetic reports a thinking judge at half what it spent.
@@ -305,14 +312,19 @@ def decode_body(
 
 
 def read_once(
-    left: DigestItem,
-    right: DigestItem,
+    left_summary: str,
+    right_summary: str,
     *,
     client: Client,
     settings: config.Settings,
     markers: TurnMarkers,
 ) -> Reading:
     """One constrained decode, and the two checks that say it was constrained.
+
+    **It takes the two summaries and nothing else.** A summary is all the judge ever
+    reads of a story, so a pair that has no published item behind it - one of the
+    known-answer pairs, whose text lives in config - goes through this same function
+    and builds the same request, rather than through a second path that could drift.
 
     The model is `judge.entry_of` - the summariser's entry, or a judge role
     declared beside it on the same weights.
@@ -337,7 +349,7 @@ def read_once(
         system=prompt.system_turn(
             prompt_files=settings.app.prompt_files, config_dir=settings.config_dir
         ),
-        user=prompt.user_turn(left, right),
+        user=prompt.render_user_turn(left_summary, right_summary),
         markers=markers,
     )
     started = time.perf_counter()
@@ -417,8 +429,8 @@ def _metered(client: Client, meter: _Meter) -> Client:
 
 
 def judge_pair(
-    left: DigestItem,
-    right: DigestItem,
+    left_summary: str,
+    right_summary: str,
     *,
     client: Client,
     settings: config.Settings,
@@ -442,16 +454,22 @@ def judge_pair(
     """
     meter = _Meter()
     metered = _metered(client, meter)
-    forward = read_once(left, right, client=metered, settings=settings, markers=markers)
-    swapped = read_once(right, left, client=metered, settings=settings, markers=markers)
+    forward = read_once(
+        left_summary, right_summary, client=metered, settings=settings, markers=markers
+    )
+    swapped = read_once(
+        right_summary, left_summary, client=metered, settings=settings, markers=markers
+    )
     return Judged(
         verdict=forward.verdict,
         verdict_swapped=swapped.verdict,
         usable=forward.verdict is not None and forward.verdict == swapped.verdict,
         first_token_margin=forward.first_token_margin,
+        first_token_margin_swapped=swapped.first_token_margin,
         decode_seconds=forward.decode_seconds + swapped.decode_seconds,
         decode_seconds_max=meter.longest,
         prompt_tokens=forward.prompt_tokens + swapped.prompt_tokens,
+        prompt_tokens_file_order=forward.prompt_tokens,
         completion_tokens=forward.completion_tokens + swapped.completion_tokens,
         calls=meter.calls,
         grammar_applied=forward.grammar_applied and swapped.grammar_applied,

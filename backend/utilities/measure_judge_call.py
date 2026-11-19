@@ -398,7 +398,9 @@ def one_call(
     """
     left, right = (pair.left, pair.right) if order == ORDER_FILE else (pair.right, pair.left)
     kept = KeepsTheEnvelope(client)
-    read = judge.read_once(left, right, client=kept, settings=settings, markers=markers)
+    read = judge.read_once(
+        left.summary, right.summary, client=kept, settings=settings, markers=markers
+    )
     if kept.last is None:
         raise RuntimeError("the judge returned without a reply, so there is nothing to read")
     return reading_of(
