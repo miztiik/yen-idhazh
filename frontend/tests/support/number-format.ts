@@ -27,7 +27,7 @@ import {
 	mergeNote as writeMergeNote,
 	mergeRate as writeMergeRate,
 	type MergeTotals
-} from '../../src/lib/console/merge-line';
+} from '../../src/lib/console/merged-stories';
 import { faithfulness as reduceFaithfulness } from '../../src/lib/console/model/faithfulness';
 import { numberFormatter } from '../../src/lib/number-format';
 import type { NumberFormatConfig } from '../../src/lib/number-format';

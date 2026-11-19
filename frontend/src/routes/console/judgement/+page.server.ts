@@ -5,7 +5,7 @@ import {
 	consoleConfig,
 	holdoutReachDays
 } from '$lib/server/config';
-import { mergeCountsOf, type MergeDay } from '$lib/console/merge-line';
+import { mergeCountsOf, type MergeDay } from '$lib/console/merged-stories';
 import type { ScoreWeights } from '$lib/console/holdout';
 import { loadDay, publishedDates } from '$lib/server/payload';
 import { holdoutReading, markReach } from '$lib/server/content-similarity-holdout';

@@ -26,7 +26,7 @@ for (const [id, name] of PANELS) {
 		const lib = (file: string) => pathToFileURL(join(FRONTEND, 'src', 'lib', file)).href;
 		const rewrite: Rewrite[] = [
 			'charts/frame', 'charts/readout', 'charts/viewport',
-			'charts/series', 'console/merge-line',
+			'charts/series', 'console/merged-stories',
 			'console/span-words', 'console/holdout', 'format'
 		].map((file) => [`$lib/${file}`, lib(`${file}.ts`)] as const);
 		for (const child of ['Panel', 'ChartReadout']) {

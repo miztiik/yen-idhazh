@@ -38,7 +38,7 @@
 		mergeState,
 		mergeTotals,
 		type MergeDay
-	} from '$lib/console/merge-line';
+	} from '$lib/console/merged-stories';
 	import { countDays, nameSpan } from '$lib/console/span-words';
 	import { useNumberFormat } from '$lib/number-format-context';
 

@@ -27,7 +27,7 @@ import {
 	mergeNote as mergeNoteWithFormat,
 	mergeRate as mergeRateWithFormat,
 	mergeTotals
-} from '../src/lib/console/merge-line';
+} from '../src/lib/console/merged-stories';
 import { quietSentence } from '../src/lib/console/waiting';
 import { numberFormat } from './support/number-format';
 

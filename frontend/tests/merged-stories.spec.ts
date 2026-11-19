@@ -1,6 +1,6 @@
 /** What counts as a merge, and what the three states say.
  *
- * The arithmetic is lifted into `$lib/console/merge-line` so it can be driven
+ * The arithmetic is lifted into `$lib/console/merged-stories` so it can be driven
  * from a written-down array rather than from a day off the archive. A test that
  * walks the committed day tree costs more every published day (Guardrail #12),
  * and worse, it can only assert what the archive happens to contain today - the
@@ -20,7 +20,7 @@ import {
 	mergeTotals,
 	type MergeDay,
 	type MergeItem
-} from '../src/lib/console/merge-line';
+} from '../src/lib/console/merged-stories';
 
 /** Five stories. Two were folded behind `a`, so one group of three. */
 const DAY: MergeItem[] = [
