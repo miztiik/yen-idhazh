@@ -1,6 +1,6 @@
 # Elements: every fact in an article, with the characters that prove it
 
-**Last Updated**: 2026-11-17
+**Last Updated**: 2026-11-18
 
 The extraction subsystem's fact table. This page owns the element shape - the
 six kinds, the two tiers, and the span that makes a drawn figure checkable - the
@@ -15,8 +15,10 @@ quantities and it finds absolute dates. A third is the local
 article before the model reads it: it labels the organisations, people and places
 the patterns cannot reach, and the figures that are really dates, times or
 ordinals. It types nothing a reader sees, and the model is never asked for any of
-it. Historical quote/claim kinds remain readable, but have no current producer or
-reader-facing visual.
+it. The model is not shown this table either: code builds tables of names and figures
+from it ([the request](../summarize/prompt.md#the-model-is-shown-tables-of-figures-never-the-element-table)),
+and the validator checks every element a plan cites against it. Historical quote/claim
+kinds remain readable, but have no current producer or reader-facing visual.
 
 ## What an element is
 
@@ -55,12 +57,11 @@ counting a repeated figure here would call an article chartable that nothing
 could ever draw - and the rate built on it would carry that gap for ever while
 claiming to measure the picture. The empty unit is a group like any other.
 
-**This is not `chart_is_reachable` and is not meant to be.** That function asks
-whether a chart could survive the planner's own drops - the sixteen-fact cap and
-the floor under a magnitude of two. This asks what the article states. The gap
-between the two answers is what `extractable_but_unused_rate` reports
-([evaluation.md](../../concepts/evaluation.md)), so closing it here would delete
-the measurement.
+**This is not the question the table builder asks, and is not meant to be.** The builder
+asks whether sentences pair names with figures of one unit, which is stricter than the
+count here. This asks what the article states. The gap between the two answers is what
+`extractable_but_unused_rate` reports ([evaluation.md](../../concepts/evaluation.md)), so
+closing it here would delete the measurement.
 
 **Three classes, and it will say three until the diagram plan lands.**
 `comparative` and `processual` are claims about how an article is written rather
@@ -338,10 +339,14 @@ port, a timeout, a malformed or refused reply - gives no mentions, and the item 
 table the two patterns make (`CLAUDE.md` section 1a).
 
 **One element for each distinct name, not each occurrence.** An article repeats a name many
-times, and every row is read by the model again on every item. So the first occurrence of each
-kind and text stands, with whitespace folded and case ignored, and the repeats are dropped.
+times, and each element spends a slot of `elements.max_per_article`. So the first occurrence of
+each kind and text stands, with whitespace folded and case ignored, and the repeats are dropped.
 `candidates_found` for `entity` and `place` still counts every mention taken, before the repeats
-and before the cap, which is what keeps it able to say how many the service found.
+and before the cap, which is what keeps it able to say how many the service found. The table
+builder does not lose the repeats: it searches the text again for every occurrence of a kept
+name's words, because a repeat that is not an element would otherwise hide a pair ("Germany is in
+Europe. Denmark said Germany built 1,200 MW." would read as Denmark's figure). A row cites the first
+occurrence's element, which holds the same characters.
 
 **The mention draws, and there is no group name.** An element's drawn label is its own excerpt,
 the item's characters at an offset code computed. No producer writes a name beside its mentions,
@@ -361,7 +366,7 @@ than it does.
 
 | Failure | Why no check sees it | What the design does instead |
 | --- | --- | --- |
-| **Mislabelling** - right span, wrong label (a country the service calls an organisation) | The span is real. `text[span_start:span_end] == span_excerpt` passes at write and at read | The label only chooses between `entity` and `place`, and the planner's category, series and entity channels accept either. The model reads the excerpt beside the article, and the validator still checks every reference it cites |
+| **Mislabelling** - right span, wrong label (a country the service calls an organisation) | The span is real. `text[span_start:span_end] == span_excerpt` passes at write and at read | The label only chooses between `entity` and `place`, and the table builder and the plan's category, series and entity channels accept either. The model reads each name beside its figure and the article, and the validator still checks every element the plan cites |
 
 What re-slicing buys is that a wrong answer is still a fact the item states, at a location a
 reader can check, rather than a sentence a model wrote.
@@ -590,8 +595,8 @@ a language model once pointed at. The field names **who found it**, not what sha
 | Raise on a 200-digit run or a 600-character unit word | Degrade, do not fail (`CLAUDE.md` section 1a). A pattern over fetched bytes will meet both, and one hostile page must not take an article's whole table down | Andre |
 | Ask the model for coreference chains | Exact and prefix matching over spans code already holds does most of it, and the model's version cannot be span-validated | Andre, pseudo-plan 10.6 |
 | Run the settle rule over the labelled kinds | A quote holds every figure inside it, so precedence would delete one of the two. The rule is between the two patterns and the merge happens after it | Fowler |
-| Keep every mention as its own element | An article repeats a name many times and each row is read by the model again on every item, at about 34 tokens a row and so about 3.5 seconds an item on the configured weights (an estimate from 9.85 tokens a second). A chart cites a name by id and draws its words, so a repeat adds a row and no chart | Andre |
-| Keep only the names near a figure | It needs a distance, which is a new knob and so a design question; `elements.max_per_article` already bounds the menu | Andre |
+| Keep every mention as its own element | An article repeats a name many times and each mention would spend a slot of `elements.max_per_article`. A chart cites a name by id and draws its words, so a repeat adds an element and no chart; the table builder finds the repeats in the text itself, so nothing is lost by keeping one | Andre |
+| Keep only the names near a figure | It needs a distance, which is a new knob and so a design question; `elements.max_per_article` already bounds the table | Andre |
 
 ### Why the schema stem is `element-table`
 
@@ -605,5 +610,5 @@ every other stem here does.
 - [../publishing/visuals.md](../publishing/visuals.md) - the picture, which is decided from this table.
 - [../../../CLAUDE.md](../../../CLAUDE.md) Guardrail #12 - every read must have a fixed-size input.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #3 (contracts before logic), Guardrail #6 (no hardcoding), Guardrail #11 (fetched text is data), section 11 (schema versioning).
-- [../summarize/prompt.md](../summarize/prompt.md) - the call that reads this table, and why it is shaped as it is.
+- [../summarize/prompt.md](../summarize/prompt.md) - the call that is shown tables built from this table, and why it is shaped as it is.
 - [../text-analysis/text-analysis-api.md](../text-analysis/text-analysis-api.md) - the service whose labels become the entity and place elements.

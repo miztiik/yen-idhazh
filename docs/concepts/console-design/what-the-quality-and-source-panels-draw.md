@@ -67,7 +67,7 @@ already being printed. The longest single-call prompt the committed cap can
 produce sizes at 39,427 tokens, 60 percent of the 65,536 window
 ([../../reference/pipeline-cost.md](../../reference/pipeline-cost.md)). **What
 that window is held open for is the digest call, which this counter does not
-read** - it sizes at 61,607 tokens
+read** - it sizes at 52,874 tokens with no tables shown
 ([../../architecture/summarize/throughput.md](../../architecture/summarize/throughput.md#the-window-is-checked-before-the-call-is-sent)),
 and the call has an assertion of its own.
 
