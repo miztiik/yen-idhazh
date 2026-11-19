@@ -7,9 +7,10 @@ slowest one.** That is a whole pair - both readings of it, the second with the
 two summaries swapped - and not one model call.
 
 Measured on 2026-09-18 over the 82 pairs of run `2026-09-18-35339202390`, on four
-stock `ubuntu-latest` runners, on `Qwen3.5-9B-Q4_K_M`. The rows are committed at
-`state/content-similarity-judge/scored-pairs/2026/09/18.csv`, so every figure below can
-be recomputed from the repository.
+stock `ubuntu-latest` runners, on `Qwen3.5-9B-Q4_K_M`. Those rows were filed in the
+judge's earlier pair ledger, which is deleted, so every figure below is a recorded
+reading and cannot be recomputed from the repository. A re-run takes the same
+column from `pair-verdicts` ([how to take this reading again](#how-to-take-this-reading-again)).
 
 Before this run the judge's budget was sized from 77.6 seconds a call, which is a
 number taken from summarising articles rather than from judging pairs
@@ -100,11 +101,11 @@ had their runners to themselves.
 
 ## How to take this reading again
 
-The column is written by every judging night, so a later run needs no new
-instrument - only a different day file:
+Every judged pair row in `pair-verdicts` carries `decode_seconds`, so a later run needs
+no new instrument - only the day to read. Change the day in the list:
 
 ```powershell
-python -c "import csv,statistics as s; v=[float(r['decode_seconds']) for r in csv.DictReader(open('state/content-similarity-judge/scored-pairs/2026/09/18.csv',newline='',encoding='utf-8'))]; print(len(v), min(v), s.fmean(v), max(v), s.pstdev(v))"
+python -c "import statistics as s; from pathlib import Path; from idhazh import ledger; from idhazh.contracts.ledger_name import LedgerName as L; from idhazh.contracts.story_similarity_pair_verdict import StorySimilarityPairVerdict as P; v = [r.decode_seconds for r in ledger.load_days(Path('state'), L.CONTENT_SIMILARITY_JUDGE_PAIR_VERDICTS, ['2026-11-18'], model=P) if r.decode_seconds is not None]; print(len(v), min(v), s.fmean(v), max(v), s.pstdev(v))"
 ```
 
 A re-run replaces this page rather than adding a second one.
@@ -112,4 +113,4 @@ A re-run replaces this page rather than adding a second one.
 ## See also
 
 - [pipeline-cost.md](../pipeline-cost.md) - the 9.85 tokens a second reading the old derived figure came from.
-- [autotune-content-similarity.md](../../architecture/publishing/autotune-content-similarity.md) - what the judge is for, and what the pair budget buys.
+- [how-the-content-similarity-judge-follows-its-thresholds.md](../../architecture/publishing/how-the-content-similarity-judge-follows-its-thresholds.md) - what the judge reads each night, and what the pair budget buys.

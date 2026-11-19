@@ -9,10 +9,12 @@ and resource budgets. Plugins choose their own dates, including declining.
 This page says what the venue is and what it obliges; what
 each judge decides is on the page that owns that judge.
 
-**This page does not hold a verdict rule.** The same-story fold, its slots, its
-walk and its damping are
+**This page does not hold a verdict rule.** What the content-similarity judge reads,
+keeps and decides is
+[how-the-content-similarity-judge-follows-its-thresholds.md](how-the-content-similarity-judge-follows-its-thresholds.md),
+and the grouping rule it serves is
 [autotune-content-similarity.md](autotune-content-similarity.md). This page is
-the room, and that page is the one case being heard in it today.
+the room, and that judge is the one case being heard in it today.
 
 ## It is a separate workflow because of the budget, not the schedule
 
@@ -422,20 +424,16 @@ read; adding a council module requires adding its name to the test inputs.
 The fresh-interpreter checks in `test_session.py` cover dynamically loaded
 judge code without enumerating source files.
 
-**Three judge contracts still cross, and the list cannot grow.**
-`story_similarity_pair` and
-`fitted_similarity_threshold` arrive through
-[../../../backend/idhazh/ledger/csv_file.py](../../../backend/idhazh/ledger/csv_file.py), the one
-registry of CSV rows and the module the tenancy protocol reads its row types
-from; `story_similarity_distribution` arrives through the placement knob block
-`app_config` composes, which the registry loads to ask a tenant whether it can
-finish the night. **No judge CODE is on that list and none may join it** - these
-are declarations a deleted judge would take with it, which is what makes the
-exception survivable. `JUDGE_CONTRACTS_STILL_CROSSING` in
-`backend/tests/council/test_council_runs_without_a_judge.py` holds the exact
-set; an added or removed contract fails that check. Cutting either carrier means
-moving a shape every stage and the digest pipeline read, and that is a row of
-its own.
+**No judge contract crosses.** Every shape a judge owns lives in that judge's own
+module, so a judge deleted from the tree takes its shapes with it and every council
+verb still imports. `JUDGE_CONTRACTS_STILL_CROSSING` in
+`backend/tests/council/test_council_runs_without_a_judge.py` holds the exact set, and
+it is empty: a contract added to it fails review, and a judge contract that begins to
+arrive through a shared module, such as the placement knob block `app_config`
+composes or the registry of ledger rows the tenancy protocol reads its row types
+from, fails the named-inputs check. **No judge CODE may ever join the set** - a
+contract a deleted judge would take with it is the only exception that could be
+survivable, and the council imports the shape, never the judge.
 
 **The empty case is the test.** With nobody active, or every active plugin
 declining, preparation finishes an empty batch and the matrix contains no
@@ -730,8 +728,7 @@ together. So a shared judge-metrics contract is refused rather than deferred:
 the column would not be wrong on the day it was added, it would go wrong on the
 day a second judge filled it.
 
-Which ledger each reading lands in, and the one reading that is filed under a
-judge although the council is what runs it, is
+Which ledger each reading lands in is
 [../../concepts/telemetry.md](../../concepts/telemetry.md#where-a-judging-night-files-what-it-measured).
 
 ## A unit uploads what it measured, and the collecting job commits it
@@ -930,34 +927,11 @@ not.
   reading the platform's value would split a run that crossed midnight across
   two addresses with nothing able to say the two were one night.
 
-### Two meanings in one column, and how a reader tells them apart
-
-`run_id` on a row written before this change means **the run that published the
-day**. On a row written after it, it means **the run that judged it**. Two
-ledgers carry both across time: the judged pairs and the fitted lines. On
-2026-09-21 that was 82 pair rows and 1 fitted row, all under
-`2026-09-18-35339202390`.
-
-The **`version` stamp every row already carries is the discriminator** (maintainer
-ruling, 2026-09-21). It costs nothing, because the row carries it either way.
-
-There is a second test that needs no stamp at all, and it is exact rather than
-approximate. **A digest run's id is prefixed with the day it published, so on
-every row written the old way `run_id` starts with that row's own `date`.** A
-council name is prefixed with the day the council ran, which is the day after
-the one it judges. So `run_id[:10] == date` is the old meaning and
-`run_id[:10] > date` is the new one, on both ledgers, with nothing to look up.
-
-**What this does not change.** The judged date is still the `date` column and
-still decides which file a row lands in. And the pair row's own contract already
-said `run_id` was "the run that scored the pair" - the code was what disagreed
-with it.
-
 ## What is heard here
 
 | Case | Decides | Status |
 | --- | --- | --- |
-| Same-story pairs | which stories are one story, read by score slice | ships today, [autotune-content-similarity.md](autotune-content-similarity.md) |
+| Same-story pairs | which pairs the judge reads, and where its two thresholds belong, read by score slice | ships today, [how-the-content-similarity-judge-follows-its-thresholds.md](how-the-content-similarity-judge-follows-its-thresholds.md) |
 | Summary fluency | a 1-5 readability score, summary only, sampled | design of record, [autotune-summary-quality.md](autotune-summary-quality.md) |
 
 Every page named in the See also below describes a knob a person sets by hand
@@ -965,7 +939,8 @@ today. Where one of them gains a fitted line, this is the room it is fitted in.
 
 ## See also
 
-- [autotune-content-similarity.md](autotune-content-similarity.md) - the one case heard here today: the merge line, its fold, and how the nightly judge reads pairs near it.
+- [how-the-content-similarity-judge-follows-its-thresholds.md](how-the-content-similarity-judge-follows-its-thresholds.md) - the one case heard here today: how the nightly judge draws, reads and moves its two thresholds.
+- [autotune-content-similarity.md](autotune-content-similarity.md) - the grouping rule that judge serves.
 - [autotune-search-quality.md](autotune-search-quality.md) - research: what search returns, and a judge that would tune the similarity floor. Not built.
 - [autotune-summary-quality.md](autotune-summary-quality.md) - the next-day fluency judge, and the loop it feeds.
 - [autotune-story-prominence.md](autotune-story-prominence.md) - what decides a story's position, hand-set today.

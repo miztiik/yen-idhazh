@@ -1,6 +1,6 @@
 # Telemetry
 
-**Last Updated**: 2026-11-12
+**Last Updated**: 2026-11-19
 
 How the pipeline records progress, timings and outcomes. Logs explain a running process; committed, validated rows supply later runs and operator views.
 
@@ -186,7 +186,7 @@ Reuse the [persistence API](../architecture/contracts/persistence.md), not a sec
 
 ### Where a judging night files what it measured
 
-File a measurement by what it describes, not by which workflow executed it. The council records whether work started, finished or timed out. Each judge records its own selections, verdicts and quality measurements. A holdout score of a judge's output belongs to that judge, not to the council that scheduled it.
+File a measurement by what it describes, not by which workflow executed it. The council records whether work started, finished or timed out. Each judge records its own selections, verdicts and quality measurements. A judge's pair verdicts and threshold history belong to that judge, not to the council that scheduled it.
 
 The [council contract](../architecture/publishing/llm-council.md) and ledger registry own the exact shapes and paths. Keep judge-specific fields out of the shared council outcome.
 
