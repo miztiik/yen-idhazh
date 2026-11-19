@@ -17,16 +17,10 @@ Nothing here reads a file, a config file or a clock.
 from __future__ import annotations
 
 import bisect
-import math
 from dataclasses import dataclass, field
-from typing import Final
 
-from idhazh.contracts.knobs.content_similarity_judge import DrawConfig
+from idhazh.contracts.knobs.content_similarity_judge import DrawConfig, threshold_ticks
 from idhazh.contracts.story_similarity_pair_verdict import PairBucket
-
-#: A threshold within this of a grid line is on it. A threshold of 0.58 times 100 is
-#: 57.99999999999999, and a rounding down that trusted that digit would file 0.58 one slice low.
-GRID_NOISE: Final = 1e-9
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,8 +66,7 @@ def slice_grid(lower: float, upper: float, *, draw: DrawConfig) -> SliceGrid:
     per_unit = round(1.0 / draw.slice_width)
     coarse = round(draw.coarse_slice_width / draw.slice_width)
     thin = draw.thin_slices_each_end
-    lower_tick = math.floor(lower * per_unit + GRID_NOISE)
-    upper_tick = math.ceil(upper * per_unit - GRID_NOISE)
+    lower_tick, upper_tick = threshold_ticks(lower, upper, slice_width=draw.slice_width)
     if lower_tick <= -per_unit:
         raise ValueError(f"the lower threshold {lower} leaves no room below it for a slice")
     if upper_tick >= per_unit:

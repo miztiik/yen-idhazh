@@ -27,9 +27,10 @@ worst pair cost each, and a bound has to survive a bad night rather than an
 average one
 ([what a judge pair costs](../../reference/benchmarks/what-a-judge-pair-costs.md)).
 
-**The draw takes its whole budget every night, so there is no quiet night to
-size the shape from.** The weighted draw takes the pairs its budget allows
-whatever the day held, and a shape that only fits on a median day is a shape
+**The draw takes its whole budget on any night whose scores between the thresholds
+hold enough pairs, so there is no quiet night to size the shape from.** All eight
+nights replayed from 2026-11-09 to 2026-11-16 took the full 150, out of 330 to 6,208
+pairs between the thresholds, and a shape that only fits on a median day is a shape
 that finds out on a busy one.
 
 ### Design rationale: planning and collection keep separate total deadlines

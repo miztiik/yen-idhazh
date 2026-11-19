@@ -173,11 +173,12 @@ rule for the nights the judge is behind on are in
 Nothing counts verdicts into a cumulative record, nothing fits a line from one, and the
 site still groups at `floor_min`: the block that could apply a fitted line is off.
 
-**The diagram below, and the paragraphs on the record, the holds and the line's
-movement, describe the cumulative-record fit that the nightly flow no longer runs.**
-The paragraphs on how one pair is read still hold. The fit's ledgers, the record and
-the console panels that read them remain, and what they show is the last night the
-fit ran.
+**The diagram below, and the paragraphs on rates, calibration, the record, the holds
+and the line's movement, describe the cumulative-record fit that the nightly flow no
+longer runs.** The paragraphs on what the judge is handed, how a pair is read twice
+and what makes a reading valid still hold. The fit's ledgers, the record and the
+console panels that read them remain, and what they show is the last night the fit
+ran.
 
 **The name is about where this goes rather than where it is** - maintainer ruling,
 2026-09-18. The shards split a list today and never confer, so `judges` would be
@@ -717,7 +718,7 @@ new rule has nothing to compare - measured, and the reading is in
 
 **A refused reading is evidence, not an absent pair.** The shard records each
 order's verdict independently, leaves a refused order null, sets
-`grammar_applied` and `usable` false for the pair, and reads the next pair. One
+`grammar_applied` and `readings_agree` false for the pair, and reads the next pair. One
 valid order survives beside a refusal in the other; two refusals never become
 agreement. The shared [model reader](../../../backend/idhazh/content_similarity_judge/model_reader.py)
 retains production endpoint resolution, template checks and tokenizer checks,

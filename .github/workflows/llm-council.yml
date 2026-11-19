@@ -25,8 +25,9 @@ name: LLM-COUNCIL
 # 2026-09-18 over 82 pairs on four stock runners:
 # docs/reference/benchmarks/what-a-judge-pair-costs.md. So the draw is split over
 # the council's four units, 38 pairs each, before `digest.yml`'s own work is added
-# to any of them. The draw takes its whole budget every night, which is exactly
-# why sizing the shape off the median day is the wrong move.
+# to any of them. The draw takes its whole budget on any night whose scores
+# between the thresholds hold enough pairs, which is exactly why sizing the shape
+# off the median day is the wrong move.
 
 on:
   schedule:

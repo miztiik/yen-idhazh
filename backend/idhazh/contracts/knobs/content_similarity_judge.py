@@ -1,5 +1,6 @@
 """Which execution settings belong only to the content-similarity judge?"""
 
+import math
 from typing import Final, Self
 
 from pydantic import Field, model_validator
@@ -9,6 +10,22 @@ from idhazh.contracts.base import DateStamp, Model
 #: How far a quotient may sit from a whole number and still be one. A width such as 0.04 over
 #: 0.01 is 4.000000000000001 in floating point, and the grid is counted in whole slices.
 _WHOLE_NUMBER_NOISE: Final = 1e-9
+
+#: How far a threshold may sit from a grid line, counted in slices, and still be on it. 0.58
+#: over a slice of 0.01 is 57.99999999999999 slices, and a rounding down that trusted that last
+#: digit would put 0.58 one slice low.
+GRID_NOISE: Final = 1e-9
+
+
+def threshold_ticks(lower: float, upper: float, *, slice_width: float) -> tuple[int, int]:
+    """The grid lines the two thresholds round to, counted in slices from zero.
+
+    The lower threshold rounds down and the upper one up, so the range between them is never
+    narrower than they say. The draw cuts its slices from these two numbers and the loader
+    refuses starts that leave them no room, so the two read one answer.
+    """
+    per_unit = round(1.0 / slice_width)
+    return math.floor(lower * per_unit + GRID_NOISE), math.ceil(upper * per_unit - GRID_NOISE)
 
 
 class DrawBucketWeights(Model):
@@ -189,26 +206,28 @@ class ContentSimilarityJudgeConfig(Model):
     def _the_starts_leave_room_for_both_thin_runs_and_both_lightly_sampled_ends(self) -> Self:
         """A draw cut from these starts has every slice it names, with none overlapping.
 
-        The draw only widens the range when it rounds a threshold outward, so a start that
-        fits here fits after the rounding. The two thin runs sit at the two thresholds, so
-        they need the range between the thresholds to hold both, and each lightly sampled
-        end needs at least one thin slice of room before -1 or 1.
+        The starts are rounded onto the grid the way the draw rounds them, so a start that
+        fits here fits when the draw cuts its slices. The two thin runs sit at the two
+        thresholds, so they need the range between the rounded thresholds to hold both, and
+        each lightly sampled end needs at least one thin slice of room before -1 or 1.
         """
         width = self.draw.slice_width
+        thin = self.draw.thin_slices_each_end
         lower, upper = self.thresholds.lower_start, self.thresholds.upper_start
-        if lower < -1.0 + width - _WHOLE_NUMBER_NOISE:
+        lower_tick, upper_tick = threshold_ticks(lower, upper, slice_width=width)
+        per_unit = round(1.0 / width)
+        if lower_tick <= -per_unit:
             raise ValueError(
                 f"lower_start {lower} leaves the fully dissimilar end under one slice wide"
             )
-        if upper > 1.0 - width + _WHOLE_NUMBER_NOISE:
+        if upper_tick >= per_unit:
             raise ValueError(
                 f"upper_start {upper} leaves the fully similar end under one slice wide"
             )
-        needed = 2 * self.draw.thin_slices_each_end * width
-        if upper - lower < needed - _WHOLE_NUMBER_NOISE:
+        if upper_tick - lower_tick < 2 * thin:
             raise ValueError(
                 f"the starts {lower} and {upper} are {upper - lower:.4f} apart, and "
-                f"{self.draw.thin_slices_each_end} thin slices at each end need {needed:.4f}"
+                f"{thin} thin slices at each end need {2 * thin * width:.4f}"
             )
         return self
 

@@ -102,6 +102,8 @@ def test_a_missing_owned_knob_is_refused_at_the_judge_reader(tmp_path: Path, key
         ("thresholds", {"lower_start": 0.95}, "apart"),
         ("thresholds", {"upper_start": 1.0}, "fully similar end"),
         ("thresholds", {"lower_start": -1.0}, "fully dissimilar end"),
+        ("thresholds", {"upper_start": 0.9900000005}, "fully similar end"),
+        ("thresholds", {"lower_start": -0.9900000005}, "fully dissimilar end"),
     ],
 )
 def test_a_draw_the_slices_cannot_be_cut_from_is_refused_at_the_judge_reader(

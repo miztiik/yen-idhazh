@@ -104,7 +104,9 @@ follows it cannot disagree. Each pair row carries both thresholds in force, unro
 The two thresholds are rounded onto a grid of `draw.slice_width`, the lower one down and
 the upper one up, so the range between them is never narrower than they say and a
 lightly sampled end never reaches past the threshold it lies beyond. The grid is counted
-in whole slices, because `floor(0.58 / 0.01)` is 57 in floating point.
+in whole slices, because `floor(0.58 / 0.01)` is 57 in floating point. Starts that leave
+no room for both thin runs, or for a lightly sampled end, are refused when the file is
+read, by the same rounding the draw uses.
 
 At the committed starts of 0.70 and 0.93, the range from -1 to 1 is 17 slices:
 

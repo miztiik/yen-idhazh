@@ -108,8 +108,8 @@ both orders, a measured worst pair of 110.98 seconds is 4 hours 37 minutes of
 model time serially - over the 175 minutes one shard has to work in, and 1 hour
 23 minutes under the 6 h job ceiling where GitHub kills the job and nothing is
 written (Guardrail #2), before `digest.yml`'s own work is added. The draw takes
-its whole budget every night, which is exactly why sizing the shape off a median
-day is the wrong move.
+its whole budget on any night whose scores between the thresholds hold enough
+pairs, which is exactly why sizing the shape off a median day is the wrong move.
 
 **A shard that dies costs its own pairs and nothing else.** `fail-fast` is off and
 the collecting job runs anyway, filing every row the surviving shards produced.
