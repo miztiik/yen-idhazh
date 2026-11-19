@@ -163,6 +163,10 @@ version loses data:
 - **Order is by date then address**, never by arrival, so two runs that harvest
  the same items in a different order write the same file.
 
+Corpus tests check which rows are kept and whether they can be read back. The
+saved example checks the file format; it does not have to match the current
+prompt or model. Fine-tuning settings are checked with application settings.
+
 ### The prune rewrites history, and that costs something
 
 The `history` job of `idhazh-gardener.yml` wakes daily, reads `last_run` out of a shallow checkout with
