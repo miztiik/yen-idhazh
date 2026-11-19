@@ -9,7 +9,9 @@ Current production files are `write-digest-summary.txt`, `plan-visual.txt` and
 `continue-summary.txt`, selected through
 [the prompt configuration](../../architecture/summarize/prompt.md). The readings
 below were also taken with `config/prompts/generate-labels.txt`, which no longer
-exists. Historical filenames, token counts, weights and timings below still
+exists. `plan-visual.txt` and `continue-summary.txt` were rewritten when the element
+menu gave way to tables of names and figures, so the sizes below describe their earlier
+wording. Historical filenames, token counts, weights and timings below still
 identify the recorded measurement, not a new run.
 
 The two-call summariser sends the summarize-and-plan call with the label call's whole message array in front

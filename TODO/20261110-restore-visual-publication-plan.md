@@ -1,6 +1,6 @@
 # Restore source-backed visual publication
 
-**Last Updated**: 2026-11-12
+**Last Updated**: 2026-11-18
 **Level**: 3 for numeric publication repair; row #9 retires the actor-grid contracts and their unused label output with explicit read-side compatibility.
 
 ## 0. Operating contract
@@ -171,8 +171,8 @@ Table J - Roll-up completion evidence
 | --- | --- | --- |
 | J1 | Serialized numeric worker -> ordinary assembly -> native reader and stable recovery journey | DONE in [#2018](https://github.com/miztiik/yen-idhazh/pull/2018); row #9 preserves numeric coverage while removing actor coverage. This does not establish model generation |
 | J2 | Safe fixed-input model verification without production writes | Row #4 delivered in [#2023](https://github.com/miztiik/yen-idhazh/pull/2023); the retained observation verified isolation, provenance and truthful failures, not positive generation |
-| J3 | Reversible first-call addressing and usable numeric references | Rows #5 and #8 delivered addressing/reference enforcement; row #9 retains it while retiring range and claim-coverage requirements |
-| J4 | Fresh warranted numeric chart and legitimate no-visual outputs | Still unproved: the retained numeric call timed out. Actor outcomes are abandoned, not replacement evidence for a numeric positive |
+| J3 | First-call addressing and usable numeric references | Superseded: the first call and the element-id menu no longer exist. Code now lists tables of names and figures and the model answers by row code. Rows #5 and #8 delivered what this line asked for, and the replacement removed it |
+| J4 | Fresh warranted numeric chart and legitimate no-visual outputs | Seen once, on 2026-11-18, with the model reading name-and-figure tables: a hosted retained-article run drew a five-bar chart whose figures all came from the article, and another declined an article of separate facts. Two articles make a start and not a rate; the scheduled runs after the table change decide it |
 | J5 | Normal asset, digest/inventory and served-reader verification on the merged producer revision | Pending actual publication; workflow success without a delivered visual is not positive proof |
 
 ## 5. Row #4 - Replay retained articles on the controlled test runtime

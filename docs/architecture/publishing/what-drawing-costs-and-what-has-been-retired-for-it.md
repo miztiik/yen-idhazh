@@ -121,8 +121,9 @@ page a reader sees. Seven columns:
 | Minutes spent | `route_ms` summed over the runs that recorded one, in minutes. |
 | Minutes per visual | Minutes spent divided by charts published. |
 
-The two gaps are the point. Reached against asked is the reachability gate, running before any
-request. Drafted against published is the two post-model controls. A single funnel of bars would
+The two gaps are the point. Reached against asked is zero on every day since the single
+summarize-and-plan call, which asks the model about every item. Drafted against published is
+the two post-model controls. A single funnel of bars would
 make the last stage the shortest and hardest to read, and the last stage is where the decision sits -
 so it is a table.
 

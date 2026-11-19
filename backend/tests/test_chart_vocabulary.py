@@ -49,7 +49,6 @@ from idhazh.stages.record import stage_record
 from idhazh.stages.summarize_one_item import _drawn
 from idhazh.stages.work import stage_work
 from idhazh.visual_outcomes import count_visual_outcomes, project_visual_outcome
-from idhazh.visual_planner import reachable_types
 from idhazh.visual_population import load_visual_population
 
 pytestmark = [pytest.mark.visual, pytest.mark.contract]
@@ -160,17 +159,6 @@ def test_active_requests_offer_the_forms_a_table_can_be_drawn_as_and_keep_histor
     for historical in set(VisualType) - set(active.select_types()):
         _, plan, _ = inputs(type=historical)
         assert plan.type is historical
-
-
-def test_retired_selections_cannot_make_a_numericless_article_reachable() -> None:
-    _, _, table = inputs()
-    empty = ElementTable.model_validate(table.model_dump(mode="json") | {"elements": []})
-    assert reachable_types(empty, visuals=settings(
-        type_selection_enabled=True, enabled_types=["quotecard", "whowhat"]
-    ).app.visuals) == ()
-    assert reachable_types(empty, visuals=settings(
-        type_selection_enabled=True, enabled_types=["bar"]
-    ).app.visuals) == ()
 
 
 def test_mixed_requests_preserve_types_source_figures_and_metric_denominators(

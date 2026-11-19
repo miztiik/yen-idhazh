@@ -9,7 +9,9 @@ Current production files are `write-digest-summary.txt`, `plan-visual.txt` and
 `continue-summary.txt`, selected through
 [the prompt configuration](../../architecture/summarize/prompt.md). The readings
 below were also taken with `config/prompts/generate-labels.txt`, which no longer
-exists. The filenames and readings below remain the provenance of the measured
+exists. `plan-visual.txt` and `continue-summary.txt` were rewritten when the element
+menu gave way to tables of names and figures, so the sizes below describe their earlier
+wording. The filenames and readings below remain the provenance of the measured
 inputs; this location pointer does not claim another measurement.
 
 The summarize-and-plan call's question used to sit in a user turn behind the article. It is

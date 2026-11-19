@@ -63,25 +63,6 @@ DEFINITION_SENTENCE_TOKENS: Final = TokenizerMeasured(
     ),
 )
 
-EMPTY_ROLE_TOKENS: Final = TokenizerMeasured(
-    value=30,
-    measures="the nine empty encoding roles on a visual plan that declines, in tokens",
-    taken_on=date(2026, 9, 14),
-    subject=QWEN35_9B_Q4_K_M,
-    method=(
-        "tokenized committed plan fixtures through /tokenize; nine empty roles "
-        "occupy 115 characters and 30 tokens."
-    ),
-    when_it_fires=(
-        "when weights or plan roles change, tokenize both plan fixtures again "
-        "and divide by their empty-role counts."
-    ),
-    why_a_number=(
-        "records the token cost of required empty roles; it does not set "
-        "WORST_CASE_REPLY_CHARACTERS."
-    ),
-)
-
 TOKENS_A_WORD_AT_THE_CUT: Final = TokenizerMeasured(
     value=1.3628,
     measures="tokens a word, used to spend a token cap as a word count at the cut",
@@ -121,16 +102,6 @@ SIZED_BY_A_READING_HERE: Final = (
         reading_name="DEFINITION_SENTENCE_TOKENS",
         derivation=(
             "240-character bound; recalculate using mean tokens per definition."
-        ),
-    ),
-    Unreached(
-        module="backend/idhazh/contracts/visual.py",
-        constant="WORST_CASE_REPLY_CHARACTERS",
-        reading=EMPTY_ROLE_TOKENS,
-        reading_name="EMPTY_ROLE_TOKENS",
-        derivation=(
-            "computed from schema bounds at import; remeasurement checks the token "
-            "cost of requiring all nine roles, not the character bound."
         ),
     ),
     Unreached(
@@ -262,11 +233,11 @@ WORST_TOKENS_A_WORD: Final = TokenizerMeasured(
     ),
 )
 
-# The three readings below were taken with /tokenize on eight 7,692-word corpus builds:
+# The two readings below were taken with /tokenize on eight 7,692-word corpus builds:
 # longest-first, densest-first, reverse-densest and five seeded shuffles. They were read
-# on the longest prompt this project has sent, which carried instructions, sentence
-# addresses and a menu column the digest call's prompt does not, so each one is a ceiling
-# on that prompt and not a reading of it.
+# on the longest prompt this project has sent, which carried instructions and sentence
+# addresses the digest call's prompt does not, so each one is a ceiling on that prompt and
+# not a reading of it.
 
 DIGEST_PROMPT_SCAFFOLD_TOKENS: Final = TokenizerMeasured(
     value=2167,
@@ -311,27 +282,6 @@ DIGEST_PROMPT_BODY_TOKENS_A_WORD: Final = TokenizerMeasured(
     ),
 )
 
-DIGEST_PROMPT_MENU_TOKENS_A_ROW: Final = TokenizerMeasured(
-    value=34.115,
-    measures=(
-        "a ceiling on one row of the digest call's element menu, in tokens, read on the "
-        "longer rows of the first call's menu"
-    ),
-    taken_on=date(2026, 9, 13),
-    subject=QWEN35_9B_Q4_K_M,
-    method=(
-        "8,665 tokens / 254 menu rows on the worst of eight cap-length builds; "
-        "row format: [element_id] excerpt = value unit (sentence sNN)."
-    ),
-    when_it_fires=(
-        "when planning_menu, element_id length or weights change, tokenize the menus of the "
-        "same builds again and remeasure the maximum tokens per row."
-    ),
-    why_a_number=(
-        "multiplies elements.max_per_article to budget a full element menu."
-    ),
-)
-
 EVERY_MEASURED: Final = (
     SITE_GROWTH_KB_A_DAY,
     WARNING_DAYS_REQUIRED,
@@ -339,5 +289,4 @@ EVERY_MEASURED: Final = (
     WORST_TOKENS_A_WORD,
     DIGEST_PROMPT_SCAFFOLD_TOKENS,
     DIGEST_PROMPT_BODY_TOKENS_A_WORD,
-    DIGEST_PROMPT_MENU_TOKENS_A_ROW,
 )

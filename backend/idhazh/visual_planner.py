@@ -11,8 +11,8 @@ contract test rather than a hope.
 so `none` is the default that everything else has to earn its way past.
 
 The call that reads the article is built in `idhazh.classify.calls`. This module
-holds what happens to its answer: the gate that refuses before a plan is
-drafted, the ladder that steps a plan down, and the reason every `none` carries.
+holds what happens to its answer: the `none` that leaves a picture out and the
+reason it carries, and the ladder that steps a refused plan down.
 """
 
 from __future__ import annotations
@@ -23,7 +23,6 @@ from math import ceil
 from typing import NamedTuple
 
 from idhazh.contracts.element import (
-    Element,
     ElementTable,
 )
 from idhazh.contracts.knobs.visuals import VisualsConfig
@@ -40,19 +39,13 @@ from idhazh.contracts.visual_decision import (
     VisualKind,
 )
 from idhazh.contracts.visual_telemetry import ValidatorCheck
-from idhazh.elements import (
-    read_value,
-)
 from idhazh.render.chart import can_compile
 from idhazh.sanitize import sanitize
 from idhazh.visual_validator import Rejection, validate_plan
 from idhazh.visual_vocabulary import (
     DOWNGRADE_EDGES,
-    ROLE_KINDS,
     TYPE_RULES,
-    VALUE_ROLES,
     DowngradeEdge,
-    commensurable,
 )
 
 
@@ -132,99 +125,7 @@ def plan_lost_to_the_window(
     )
 
 
-# --- The gate that refuses before the plan is drafted ------------------------
-
-
-def _drawable(table: ElementTable) -> list[Element]:
-    """The elements a plan could cite without the validator refusing it outright.
-
-    An element whose cell disagrees with its own characters fails
-    `no_invented_values` wherever it is drawn, so counting it here would make
-    the gate claim a width no plan can reach. Reading it with the producer's own
-    reader is what the validator does, and asking the same question with the
-    same function is what keeps the gate from drifting away from the thing it
-    predicts.
-    """
-    return [
-        element
-        for element in table.elements
-        if read_value(element.kind, element.span_excerpt) == element.value
-    ]
-
-
-def _widest_agreeing(elements: Sequence[Element]) -> int:
-    """The largest group of these that could share one measured axis.
-
-    The same greedy grouping `same_unit_bars` does, over `commensurable` rather
-    than over string equality, because that is the question `units_convertible`
-    asks. Deterministic: the groups are opened in the order the table holds.
-    """
-    groups: list[list[Element]] = []
-    for element in elements:
-        for group in groups:
-            if commensurable(group[0].unit, element.unit):
-                group.append(element)
-                break
-        else:
-            groups.append([element])
-    return max((len(group) for group in groups), default=0)
-
-
-def reachable_types(table: ElementTable, *, visuals: VisualsConfig) -> tuple[VisualType, ...]:
-    """Every type some plan over this article's elements could name and still validate.
-
-    **This is gate 1, and it reads the validator's own tables.** A plan is a set
-    of references into one table, so whether any choice of references could
-    survive is a question about the table alone - which kinds it holds, how many
-    of them, and how many of those measure the same thing. Asking it with
-    `TYPE_RULES`, `ROLE_KINDS`, `VALUE_ROLES` and `commensurable` is what stops
-    the gate and the validator answering differently: a gate written from a
-    reading of the rules drifts the first time a rule moves, silently, in the
-    direction that costs items their pictures.
-
-    Three of the ten checks cannot refuse a plan the gate has admitted, so the
-    gate does not ask them. `element_exists` is satisfied by choosing from the
-    table. `plan_version_current` is stamped by code. `numerals_matched` is
-    about prose, and a plan can always write prose with no numeral in it.
-
-    **It reads no word of the article.** Every input is a kind, a unit or a
-    count, so a stranger's page cannot steer our control flow (Guardrail #11) - the
-    same property the single-call gate above holds and for the same reason.
-    """
-    if VisualKind.CHART not in visuals.enabled_kinds:
-        return ()
-    drawable = _drawable(table)
-    reached: list[VisualType] = []
-    selected = visuals.select_types()
-    for visual_type, rules in TYPE_RULES.items():
-        if visual_type not in selected:
-            continue
-        fillable = {
-            role: [one for one in drawable if one.kind in ROLE_KINDS[role]]
-            for role in rules.required
-        }
-        if any(not elements for elements in fillable.values()):
-            continue
-        marks = fillable[rules.marks]
-        floor = (
-            visuals.histogram_bins
-            if visual_type is VisualType.HISTOGRAM
-            else visuals.min_chart_points
-        )
-        width = _widest_agreeing(marks) if rules.marks in VALUE_ROLES else len(marks)
-        if width >= floor:
-            reached.append(visual_type)
-    return tuple(reached)
-
-
-def plan_is_reachable(table: ElementTable, *, visuals: VisualsConfig) -> bool:
-    """Could this article carry any picture at all?
-
-    False suppresses the plan fields inside the summarize-and-plan call and never skips the call,
-    because the summarize-and-plan call is the call that writes the summary (O43). What is saved is
-    the plan's decode, not the request.
-    """
-    return bool(reachable_types(table, visuals=visuals))
+# --- The answers that leave a picture out --------------------------------------
 
 
 def suppressed_by_the_gate(
@@ -235,10 +136,8 @@ def suppressed_by_the_gate(
     That is no table built, charts switched off, or tables built and dropped because they
     would not fit the window.
 
-    `asked_the_model` stays true, and that is the difference between this and
-    the single-call planner's prefilter above: the model WAS asked, for the
-    summary, in the same request. Only the answer about a chart was taken off
-    the grammar.
+    `asked_the_model` stays true: the model WAS asked, for the summary, in the same
+    request. Only the answer about a chart was taken off the grammar.
     """
     return _nothing(
         summary,
