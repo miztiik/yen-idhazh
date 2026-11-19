@@ -1,6 +1,6 @@
 # Repository Layout
 
-**Last Updated**: 2026-11-09
+**Last Updated**: 2026-11-19
 
 Every top-level directory, what it holds, who writes it, and whether a reader
 ever sees it. Read this before adding a directory, or when deciding where a new
@@ -251,7 +251,9 @@ them. The prefix said which loop a stage was in and nothing about what the stage
 answers, so the directory listing told a reader nothing, and a second judge
 writing the same four steps could only repeat the prefix and lie or break the
 pattern. Renamed on 2026-09-21 to `pick_item_pairs`, `judge_item_pairs`,
-`count_verdicts` and `set_merge_line`. The test is the directory listing: read a
+`count_verdicts` and `set_merge_line`; the last two were deleted on 2026-11-19
+when the cumulative-record fit stopped, and `file_pair_verdicts` files the
+night's rows now. The test is the directory listing: read a
 filename and you know what the code inside answers, whoever calls it.
 
 ## Rejected alternatives

@@ -14,14 +14,12 @@ and a file out (CLAUDE.md section 1a).
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import date as date_type
-from datetime import timedelta
 from pathlib import Path
 from typing import Final
 
 from idhazh import config, ledger
+from idhazh.content_similarity_judge.ledger_reads import load_pair_verdicts
 from idhazh.contracts.base import DateStamp, RunId
-from idhazh.contracts.council_events import CouncilExit
 from idhazh.contracts.council_invocation import (
     JudgeSchedule,
     PreparationReceipt,
@@ -32,7 +30,7 @@ from idhazh.contracts.council_run_record import ShardOutcome
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.story_similarity_pair import ContentSimilarityJudgeId
-from idhazh.council import metrics_sink, session, trial_paths
+from idhazh.council import metrics_sink, session
 from idhazh.council.tenancy import ShardResult
 from idhazh.ledger import staging
 from idhazh.similarity.budget import refuse_a_night_this_tenant_cannot_finish
@@ -43,15 +41,8 @@ from idhazh.similarity.budget import refuse_a_night_this_tenant_cannot_finish
 #: second thing to keep in step with the ledger's directory name.
 JUDGE_ID: Final[ContentSimilarityJudgeId] = "content-similarity-judge"
 
-#: Every ledger this judge's own work writes: the pairs, the record and its
-#: archive, the fitted line and the instrument rows.
-WRITTEN_LEDGERS: Final = (
-    LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS,
-    LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION,
-    LedgerName.CONTENT_SIMILARITY_JUDGE_ARCHIVE,
-    LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS,
-    LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS,
-)
+#: Every ledger this judge's own work writes: the judged pairs.
+WRITTEN_LEDGERS: Final = (LedgerName.CONTENT_SIMILARITY_JUDGE_PAIR_VERDICTS,)
 
 #: Where each of those ledgers sits, as the collecting job stages it. Read off
 #: the registry rather than spelled, so a ledger that moves onto the ledger door
@@ -96,76 +87,41 @@ class ContentSimilarityJudge:
         return COMMITTED_PATHS
 
     def publication_inputs(self, *, date: str) -> tuple[str, ...]:
-        """The flat record, published day and fitted evidence's configured window."""
-        from idhazh.contracts.file_envelope import Period
-        from idhazh.ledger import paths
+        """No committed input: the collecting job reads only tonight's own files.
 
-        knobs = config.load().app.assemble.same_story.judging_knobs()
-        window = max(knobs.settled_window_days, knobs.step_change_window_rows * 2)
-        which = LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS
-        state = Path("state")
-        asked = {
-            ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION).as_posix(),
-            f"frontend/public/digest/{date.replace('-', '/')}/digest.json",
-        }
-        for period in Period:
-            asked.add(paths.compact_index_path(state, which, period).as_posix())
-        for offset in range(window):
-            day = (date_type.fromisoformat(date) - timedelta(days=offset)).isoformat()
-            asked.add((paths.raw_root(state, which) / day.replace("-", "/")).as_posix())
-            for period, covers in (
-                (Period.DAILY, day),
-                (Period.MONTHLY, day[:7]),
-                (Period.YEARLY, day[:4]),
-            ):
-                for suffix in (".json", ".parquet"):
-                    asked.add(
-                        paths.compact_path(state, which, period, covers)
-                        .with_suffix(suffix)
-                        .as_posix()
-                    )
-        return tuple(sorted(asked))
+        It reads the verdict files and the readings the units shipped, which arrive
+        as artifacts, and it files rows without reading any earlier night's. So the
+        collecting job's sparse checkout needs nothing of this judge's from the tree.
+        """
+        return ()
 
     def nights_outstanding(
         self, *, window: tuple[DateStamp, ...], state_dir: Path | None = None
     ) -> tuple[DateStamp, ...]:
-        """Which nights inside the council's window this judge has never read.
+        """Which nights inside the council's window have no pair-verdict row.
 
-        The record is one file of a fixed size and the window is handed in, so
-        this costs the same on the thousandth night as on the first (CLAUDE.md
-        Guardrail #12). No day file is opened and no directory is listed.
+        The window is handed in and is a handful of nights, so this reads the same few
+        days on the thousandth night as on the first (CLAUDE.md Guardrail #12): the ledger
+        is asked for exactly those days and never walked.
 
-        **A night is outstanding when the record has no memory of it at all.**
-        `judged_dates` holds every date this judge has ever counted, including
-        the ones an instrument move archived the counts for, so a date the record
-        once read is never named again. That is deliberate: the counts for it are
-        gone and a re-judge would not bring them back, because the record refuses
-        to count a date twice. Naming it would buy a runner-night of work that
-        cannot land.
+        **A night is outstanding when nothing has been filed for it.** Any one row
+        settles it: a night that lost a unit and filed the rows of the others is not
+        named again, since a repeat judges the whole night over and the evidence for
+        the thresholds counts each pair once. What it does name is a night that died
+        before it filed anything, and a night that drew nothing, which stays named
+        until it leaves the window.
 
-        **What it does name is the night that died.** A run that lost a shard
-        appended every row the surviving shards judged and left the date out of
-        both lists, because a partial day cannot be counted and cannot be
-        repaired later. That date is in neither list, so it comes back here and
-        the next council night dispatches it.
+        **An empty ledger names every night of the window.** A judge that has filed
+        nothing is behind on all of them, and the council's repair budget lets only a few
+        through a night, so the window fills over a few nights rather than at once.
 
-        **No record yet means nothing has been read.** The first run after this
-        judge moves in has no file to open, and the council's own floor is what
-        keeps the answer from reaching back to the venue's birth.
-
-        `state_dir` is this judge's own test seam and the council never passes
-        it. The default is the root the counting verb writes to, so the reader
-        and the writer cannot drift apart.
+        `state_dir` is this judge's own test seam and the council never passes it. The
+        default is the root the collecting job files under, so the reader and the writer
+        cannot drift apart.
         """
-        from idhazh.contracts.story_similarity_distribution import StorySimilarityDistribution
-
         state = state_dir if state_dir is not None else config.REPO_ROOT / ledger.STATE_DIRNAME
-        record_path = ledger.path(state, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION)
-        if not record_path.exists():
-            return ()
-        record = StorySimilarityDistribution.from_json(record_path.read_text(encoding="utf-8"))
-        read = set(record.judged_dates)
-        return tuple(night for night in window if night not in read)
+        filed = {row.date for row in load_pair_verdicts(state, window)}
+        return tuple(night for night in window if night not in filed)
 
     def schedule(self, *, request: ScheduleRequest) -> JudgeSchedule:
         """Choose the anchor, then the newest unread dates within both budgets."""
@@ -198,6 +154,7 @@ class ContentSimilarityJudge:
             settings=settings,
             draw_path=_draw_path(date),
             digest_root=common.PUBLIC_ROOT,
+            state_dir=common.STATE_ROOT,
         )
         return ShardResult(
             outcome=ShardOutcome.COMPLETED if drawn.taken else ShardOutcome.NOTHING_TO_DO,
@@ -266,53 +223,30 @@ class ContentSimilarityJudge:
         prepared: PreparationReceipt,
         reports: tuple[ShardReport, ...],
     ) -> ShardResult:
-        """Count what the units judged, collect what they measured, fit the line.
+        """File what the units judged, each pair with the chance its slice gave it.
 
-        The fit runs on a counted day and on a held one. A line that moves itself
-        has to leave a row on the days it stayed put, or a reader cannot tell a
-        day the evidence refused from a day nothing ran.
+        A night files whatever its units returned, so the reports say nothing the
+        files do not: a unit that died left no file, or a file of the pairs it had
+        finished, and either way the rows that exist are the rows that are filed.
 
-        Both stages write under the state root the council handed over, and both
-        file their rows through the ledger door under the council's writer
-        identity, each naming itself as the producer. The fit reads the day's pairs
-        back from that same root, so the two cannot part company on where tonight's
-        rows went.
+        The stage writes under the state root the council handed over, and files
+        its rows through the ledger door under the council's writer identity,
+        naming itself as the producer.
         """
-        from idhazh.stages import common, count_verdicts, set_merge_line
+        from idhazh.stages import file_pair_verdicts
 
-        settings = config.load()
-        counted = count_verdicts.stage_count_verdicts(
+        filed = file_pair_verdicts.stage_file_pair_verdicts(
             date,
             run_id=run_id,
             judge_id=JUDGE_ID,
             shipped_root=_shipping_dir(date),
             verdicts_dir=_verdicts_dir(date),
-            settings=settings,
             identity=identity,
-            state_dir=state_dir,
             expected_shards=prepared.shards,
-            reports_complete=(
-                len(reports) == prepared.shards
-                and {report.shard for report in reports} == set(range(prepared.shards))
-                and all(
-                    report.shards == prepared.shards
-                    and report.report_state == "reported"
-                    and report.code == CouncilExit.OK
-                    and report.outcome in (ShardOutcome.COMPLETED, ShardOutcome.NOTHING_TO_DO)
-                    for report in reports
-                )
-            ),
-        )
-        set_merge_line.stage_set_merge_line(
-            date,
-            run_id=run_id,
-            settings=settings,
-            identity=identity,
             state_dir=state_dir,
-            digest_root=trial_paths.public_root(common.PUBLIC_ROOT),
         )
         return ShardResult(
-            outcome=ShardOutcome.COMPLETED if counted.counted else ShardOutcome.NOTHING_TO_DO
+            outcome=ShardOutcome.COMPLETED if filed.rows_filed else ShardOutcome.NOTHING_TO_DO
         )
 
 

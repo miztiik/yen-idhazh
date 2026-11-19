@@ -4,7 +4,7 @@ One stage, one module. The router does not name it: the council reaches it
 through the tenant that owns this judge (CLAUDE.md section 1a, "A router is the
 sharpest case").
 
-This shard opens no ledger, commits nothing, and decides nothing about the line. It
+This shard opens no ledger, commits nothing, and decides nothing about the thresholds. It
 reads the draw the scoring stage wrote, judges the rows this shard owns, and
 leaves one file behind for the collecting job to pick up.
 
@@ -32,7 +32,8 @@ from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
 from idhazh.contracts.council_run_record import ShardOutcome
 from idhazh.contracts.digest_day import DigestItem
-from idhazh.contracts.story_similarity_pair import SameStoryVerdict, StorySimilarityPair
+from idhazh.contracts.story_similarity_pair import SameStoryVerdict
+from idhazh.contracts.story_similarity_pair_verdict import StorySimilarityPairVerdict
 from idhazh.similarity import judge, stamps
 from idhazh.similarity.statistics import reading_statistics
 from idhazh.stages.assemble import _earlier_days
@@ -43,11 +44,11 @@ from idhazh.stages.common import LOG, _load_day
 class ShardReport:
     """What one shard did, what its instrument read, and what its calls cost.
 
-    One payload with three readers - the log line below, this judge's own metrics
-    ledger, and the venue's record of the unit that ran. They are gathered here
-    because here is where the readings are: a pair's tokens and its call count
-    are never written to the verdict file, so a later reader of that file could
-    not recover them.
+    One payload with three readers - the log line below, the collecting job's
+    totals for the night, and the venue's record of the unit that ran. They are
+    gathered here because here is where the readings are: a pair's tokens and its
+    call count are never written to the verdict file, so a later reader of that
+    file could not recover them.
     """
 
     date: str
@@ -105,11 +106,10 @@ def stage_judge_item_pairs(
     by four would leave half its pairs unread, every shard would report success,
     and the day would be counted as though the missing pairs had never been drawn.
 
-    **`run_id` is the council's own and is handed in.** It goes on every pair this
-    shard reads and on the instrument row beside them, because the column the draw
-    already carries names the digest run that published the day - so two judging
-    runs over one date would write the identical string there and a reader could
-    not tell which night produced which verdict.
+    **`run_id` is the council's own and is handed in.** It goes on the instrument
+    row this shard ships. The pair rows keep the run id the draw wrote, which is the
+    same council run, because the council mints one name in its planning job and
+    hands it to the picking stage and to every unit alike.
 
     `deadline` is a `time.monotonic()` instant the caller hands over, and this
     shard reads no clock knob of its own. It is checked before a pair and never
@@ -139,7 +139,7 @@ def stage_judge_item_pairs(
     )
 
     path = verdict_path
-    judged: list[StorySimilarityPair] = []
+    judged: list[StorySimilarityPairVerdict] = []
     readings: list[judge.Judged] = []
     unreadable = 0
     outcome = ShardOutcome.COMPLETED if drawn else ShardOutcome.NOTHING_TO_DO
@@ -162,7 +162,7 @@ def stage_judge_item_pairs(
             continue
         verdicts = reader.read_pair(left, right, settings=settings)
         readings.append(verdicts)
-        judged.append(_with_the_verdict(row, verdicts, stamp=stamp, run_id=run_id))
+        judged.append(_with_the_verdict(row, verdicts, stamp=stamp))
         if len(judged) % flush_every == 0:
             atomic_write.write_atomic(path, _as_csv(judged))
 
@@ -200,7 +200,7 @@ def stage_judge_item_pairs(
         shard=shard,
         owned=len(drawn),
         judged=len(judged),
-        usable=sum(1 for row in judged if row.usable),
+        usable=sum(1 for row in judged if row.readings_agree),
         unreadable=unreadable,
         refused=refused,
         path=path,
@@ -291,7 +291,7 @@ def _instrument_reading(
 
 def _rows_this_shard_owns(
     path: Path, *, shard: int, shards: int
-) -> list[StorySimilarityPair]:
+) -> list[StorySimilarityPairVerdict]:
     """The draw, filtered to this shard, in the order it was drawn in.
 
     Read through the contract rather than by column index, so a draw written by a
@@ -306,7 +306,7 @@ def _rows_this_shard_owns(
             "outside that root is gone by the time a shard looks for it"
         )
     with path.open("r", encoding="utf-8", newline="") as handle:
-        rows = [StorySimilarityPair.from_csv_row(cells) for cells in csv.DictReader(handle)]
+        rows = [StorySimilarityPairVerdict.from_csv_row(cells) for cells in csv.DictReader(handle)]
     beyond = sorted({row.work_part_index for row in rows if row.work_part_index >= shards})
     if beyond:
         raise ValueError(
@@ -342,12 +342,11 @@ def _items_by_url_key(
 
 
 def _with_the_verdict(
-    drawn: StorySimilarityPair,
+    drawn: StorySimilarityPairVerdict,
     verdicts: judge.Judged,
     *,
     stamp: stamps.JudgeStamp,
-    run_id: str,
-) -> StorySimilarityPair:
+) -> StorySimilarityPairVerdict:
     """The drawn row with the judging columns filled in, config stamp and all.
 
     Rebuilt through the contract rather than copied, so the rule that a verdict
@@ -364,18 +363,18 @@ def _with_the_verdict(
     the whole point of recording the refusal: a shard that raised here left the
     pair absent, and absent already means nothing drew it.
 
-    **`judged_by_run_id` is filled here and nowhere else.** It is part of the
-    settlement key, so a re-judge of a pair lands beside the row it replaces
-    rather than being dropped as a repeat - which it would be while every row
-    carried the same empty cell.
+    **The slice columns are left as the draw wrote them.** The slice, how many pairs
+    it held and how many the draw took are known when the draw is made. How many of
+    them came back usable, and the chance that follows, are not known to any one
+    shard, and the collecting job fills them once it has every reading.
     """
-    return StorySimilarityPair.model_validate(
+    return StorySimilarityPairVerdict.model_validate(
         drawn.model_dump(mode="json")
         | {
-            "version": StorySimilarityPair.schema_version(),
+            "version": StorySimilarityPairVerdict.schema_version(),
             "verdict": _word(verdicts.verdict),
             "verdict_swapped": _word(verdicts.verdict_swapped),
-            "usable": verdicts.usable,
+            "readings_agree": verdicts.usable,
             "first_token_margin": verdicts.first_token_margin,
             "judge_model": stamp.judge_model,
             "prompt_digest": stamp.prompt_digest,
@@ -385,7 +384,6 @@ def _with_the_verdict(
             "grammar_applied": verdicts.grammar_applied,
             "first_token_probabilities": verdicts.first_token_window or None,
             "thinking_spans": verdicts.thinking_spans,
-            "judged_by_run_id": run_id,
             "judge_policy_version": stamp.judge_policy_version,
         }
     )
@@ -400,14 +398,14 @@ def _word(verdict: SameStoryVerdict | None) -> str | None:
     return None if verdict is None else verdict.value
 
 
-def _as_csv(rows: list[StorySimilarityPair]) -> str:
+def _as_csv(rows: list[StorySimilarityPairVerdict]) -> str:
     """The shard's whole file, header first, written even when the shard judged nothing.
 
     An empty file with a header is what says the shard ran and found no pair it
-    owned. A missing file says the shard died, and a day with a missing shard is
-    not counted into the record at all - so the two have to look different.
+    owned. A missing file says the shard died, and the collecting job counts the
+    shards that left a file, so the two have to look different.
     """
-    columns = StorySimilarityPair.csv_columns()
+    columns = StorySimilarityPairVerdict.csv_columns()
     buffer = io.StringIO()
     writer = csv.DictWriter(buffer, fieldnames=columns, lineterminator="\n")
     writer.writeheader()

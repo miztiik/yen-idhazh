@@ -18,13 +18,14 @@ import { buildLedger, everyDay, quietDays } from './support/ledger-lifecycle';
  * the packed files through the query door, and nothing else.
  *
  * The oracle runs the backend itself: the night before is a line a fit moved,
- * filed through the door the way the fitting stage files one, then the fitting
- * stage runs a night and its re-run over the contracts' own published day, and
- * the gardener's shipped compaction packs both days. The reader then returns the
+ * filed through the door the way the fitting stage filed one, then a night held at
+ * that line and its re-run are filed the same way from the contracts' own fixture,
+ * and the gardener's shipped compaction packs both days. The reader then returns the
  * values the backend reads back from the same packed files. Every file is
  * written under the test's own output folder, so nothing here reads the
- * committed archive (`CLAUDE.md` section 13). The backend's own half of the
- * move is `backend/tests/test_similarity_fit.py`.
+ * committed archive (`CLAUDE.md` section 13). No stage fits a line any more, so the
+ * rows are filed directly: what is asked is whether the page reads what the door
+ * holds, and the door does not care which writer filed it.
  *
  * The other cases read a packed record this file builds through the door's own
  * query engine, and the last binds the reader's folder to `config/ledgers.json`.
@@ -34,7 +35,7 @@ const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 const FIXTURES = path.join(REPO, 'tests', 'fixtures', 'contracts');
 const FITTED = ['content-similarity-judge', 'fitted-thresholds'] as const;
 
-/** The published day the contracts' own fixture holds, the night the stage fits. */
+/** The night the contracts' held fixture is moved to. */
 const NIGHT = '2026-08-21';
 /** The night before it, a line a fit moved. */
 const BEFORE = '2026-08-20';
@@ -44,17 +45,17 @@ const NIGHT_RUN = '2026-08-22-37000000002';
 const RERUN = '2026-08-22-37000000003';
 
 /**
- * File the night before through the door, fit the night twice, and pack both days.
+ * File the night before through the door, file the held night twice, and pack both days.
  *
  * A fixed program over fixed arguments, every path one this test made: the
  * contracts' fixtures, the folder the test owns, the dates and the runs above.
  * It prints every row the backend reads back from the packed files.
  */
 const A_FIXTURE_NIGHT = [
-	'import json, shutil, sys',
+	'import json, sys',
 	'from datetime import date, timedelta',
 	'from pathlib import Path',
-	'from idhazh import assemble, config, ledger',
+	'from idhazh import config, ledger',
 	'from idhazh.contracts.base import ServerJob',
 	'from idhazh.contracts.file_envelope import WriterIdentity',
 	'from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold',
@@ -62,21 +63,20 @@ const A_FIXTURE_NIGHT = [
 	'from idhazh.gardener.context import TaskContext',
 	'from idhazh.gardener.file_listing import FileListing',
 	'from idhazh.gardener.tasks import compaction',
-	'from idhazh.stages.set_merge_line import stage_set_merge_line',
 	'root, fixtures, night, before, before_run = Path(sys.argv[1]), Path(sys.argv[2]), *sys.argv[3:6]',
 	'runs = sys.argv[6:]',
-	'state, digest = root / "state", root / "digest"',
+	'state = root / "state"',
 	'which = LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS',
 	'def council(run, producer):',
 	'    return WriterIdentity(run_id=run, attempt=1, job=ServerJob.SAVE_COUNCIL_RESULTS, shard=0, producer=producer, git_sha="0" * 40)',
-	'moved = FittedSimilarityThreshold.from_json((fixtures / "fitted-similarity-threshold" / "the-clamp-held-a-fall-back-to-the-step.json").read_text(encoding="utf-8"))',
-	'moved = FittedSimilarityThreshold.model_validate(moved.model_dump() | {"date": before, "run_id": before_run})',
+	'def fixture(name):',
+	'    return FittedSimilarityThreshold.from_json((fixtures / "fitted-similarity-threshold" / name).read_text(encoding="utf-8"))',
+	'moved = FittedSimilarityThreshold.model_validate(fixture("the-clamp-held-a-fall-back-to-the-step.json").model_dump() | {"date": before, "run_id": before_run})',
 	'ledger.persist(state, [moved], ledger=which, covers=before, identity=council(before_run, "stages.set_merge_line"))',
-	'published = assemble.day_dir(digest, night)',
-	'published.mkdir(parents=True)',
-	'shutil.copyfile(fixtures / "digest-day" / "two-runs.json", published / "digest.json")',
+	'held = fixture("the-record-is-too-small-to-fit-on.json")',
 	'for run in runs:',
-	'    stage_set_merge_line(night, run_id=run, settings=config.load(), identity=council(run, "council.session"), state_dir=state, digest_root=digest)',
+	'    row = FittedSimilarityThreshold.model_validate(held.model_dump() | {"date": night, "run_id": run, "previous": moved.applied, "applied": moved.applied, "held_reason": "shards_missing"})',
+	'    ledger.persist(state, [row], ledger=which, covers=night, identity=council(run, "council.session"))',
 	'gardener = config.load_gardener()',
 	'policy = gardener.tasks[config.compaction_task(which)]',
 	'compaction.run(TaskContext(state_dir=state, repo_root=root, today=date.fromisoformat(night) + timedelta(days=2), policy=policy, run_id=night + "-1", attempt=1, job=ServerJob.RUN_TASKS, shard=0, git_sha="0" * 40, owned_folders=tuple(folder for folder in policy.owns if (root / folder).is_dir()), listing=FileListing.from_disk(root, policy.owns, paths=(root / folder for folder in policy.owns)), first_ledger_year=gardener.config.first_ledger_year))',
@@ -146,7 +146,7 @@ test('THE ORACLE: the page reads the fitted line the council files and the garde
 	// The page draws one line a date, the newest run's, with every value the backend holds.
 	const newest = filed.filter((row) => row.run_id !== NIGHT_RUN);
 	expect(lines).toEqual(newest.map(asLine).sort((left, right) => left.date.localeCompare(right.date)));
-	// The night was held, and its fit read the night before's line through the door.
+	// The night was held at the night before's line.
 	expect(lines.map((line) => [line.date, line.runId, line.previous, line.applied, line.heldReason])).toEqual([
 		[BEFORE, BEFORE_RUN, 0.94, 0.93, 'none'],
 		[NIGHT, RERUN, 0.93, 0.93, 'shards_missing']

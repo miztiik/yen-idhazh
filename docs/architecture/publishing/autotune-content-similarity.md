@@ -1,10 +1,12 @@
 # Autotuning the similarity line that groups one story
 
-**Last Updated**: 2026-11-18
+**Last Updated**: 2026-11-19
 
 A day runs the same story from more than one of our feeds. This page owns the
-line that decides when two items are one story, how that line fits itself once a
-night instead of being set by hand, and what every knob in it costs.
+line that decides when two items are one story, the cumulative-record fit that
+once moved it, and what every knob in it costs. The nightly judge that now reads
+pairs of stories is on its own page,
+[how-the-content-similarity-judge-follows-its-thresholds.md](how-the-content-similarity-judge-follows-its-thresholds.md).
 
 The shape the decision is written into, and the addresses a reader gets, are in
 [layout.md](layout.md).
@@ -147,28 +149,36 @@ The one false merge at 0.93 is on 2026-08-30: Ontario's pushback against the lak
 
 **The run writes down which number grouped it.** `same_story_floor_applied` on the run record, because without it a reader of a committed `run.json` cannot tell a day grouped at 0.94 from a day grouped at 0.937 - and the grouping is the thing this whole block moves. A run that published before the column existed carries no value, which is every run before that date. The console's Judgement page reads it: its empty merge-chart rule, verdict split and holdout margin name the line the newest published day's last build wrote down, and work the line out from the fitted rows only where that record holds none. The solid merge-chart series instead shows the nightly fit's final values, with the proposal and step band from that same fit. Its calculated history is not build history; [console design](../../concepts/console-design.md#design-rationale) rules the words. Worked out alone, the line could be one no build used, because the nightly fit below files its row after most of that day's builds ran.
 
-**The judge protects the line that build actually used, not today's configured
-floor.** Its draw uses the existing day-aware manifest reader for the named
-day's `run.json`. Supported legacy cumulative vertical counts are derived from
-the already-loaded day before native validation; no retained file is rewritten.
-The line selector receives that validated manifest and selects the greatest
-`completed_at`; missing completion is oldest and a later list entry wins a tie.
-Only that record's `same_story_floor_applied` is read.
-An absent manifest or null legacy value falls back to configured `floor_min`
-with an explicit `legacy-fallback` log. Malformed present input fails parsing
-or native validation; it never becomes a fallback or a search through older builds.
-The recorded line protects mandatory at-or-above-line pairs against the budget.
-The sampling band's configured edges do not move with it.
+**The nightly draw does not read the line a build used.** It follows the judge's own
+thresholds - the newest `threshold-history` row dated before the night, or the
+configured starts - and opens no day's `run.json`, so a night's draw cannot depend on
+which build ran. `same_story_floor_applied` is still written by every build, and the
+console still reads it.
 
-## The line fits itself, once a night
+## The nightly judge, and the line fit it replaced
 
-**A second workflow reads yesterday's published day and asks a model where the
-line should have been.** `LLM-COUNCIL`, in
+**A second workflow reads yesterday's published day and asks a model which pairs of
+stories are one story.** `LLM-COUNCIL`, in
 [../../../.github/workflows/llm-council.yml](../../../.github/workflows/llm-council.yml),
 runs on its own clock hours after the last digest slot. It is deliberately not
-part of `digest.yml`: at the cap the block permits, the model time alone would
-push the job past the 6 h ceiling GitHub kills a job at, and a shape that only
-fits on a median day is a shape that finds out on a busy one.
+part of `digest.yml`: the model time alone would push the job past the 6 h ceiling
+GitHub kills a job at if one job read every pair, and a shape that only fits on a
+median day is a shape that finds out on a busy one.
+
+**The nightly flow no longer fits the line.** It draws a small sample of the night's
+new pairs by score slice at known chances, reads each pair twice, and files one row a
+pair in `pair-verdicts` with the chance its slice gave it. The draw, the rows and the
+rule for the nights the judge is behind on are in
+[how-the-content-similarity-judge-follows-its-thresholds.md](how-the-content-similarity-judge-follows-its-thresholds.md).
+Nothing counts verdicts into a cumulative record, nothing fits a line from one, and the
+site still groups at `floor_min`: the block that could apply a fitted line is off.
+
+**The diagram below, and the paragraphs on rates, calibration, the record, the holds
+and the line's movement, describe the cumulative-record fit that the nightly flow no
+longer runs.** The paragraphs on what the judge is handed, how a pair is read twice
+and what makes a reading valid still hold. The fit's ledgers, the record and the
+console panels that read them remain, and what they show is the last night the fit
+ran.
 
 **The name is about where this goes rather than where it is** - maintainer ruling,
 2026-09-18. The shards split a list today and never confer, so `judges` would be
@@ -320,7 +330,7 @@ is what makes re-running a day free rather than damaging.
 still written, it carries yesterday's line, and it names what stopped the fit.
 Three of them are the gates the fit asks of the record and of the judge; the
 other two are the collecting job's own refusal, handed up.
-`gates` in [../../../backend/idhazh/similarity/fit.py](../../../backend/idhazh/similarity/fit.py)
+`gates` in the retired fit
 asks all five in one fixed order, so two runs over one held day name the same
 reason and an operator comparing two rows is comparing one answer. `none` is the
 sixth value the column can carry and it is not a hold: it says a fit ran.
@@ -360,11 +370,13 @@ owns that separate measurement.
 
 | Ledger | The one question it answers |
 | --- | --- |
-| `content-similarity-judge/scored-pairs`, under `state/raw/` and `state/compact/` | What did the judge say about this pair, in both orders, and under which models? |
-| `state/content-similarity-judge/score-distribution.json` | Across everything judged so far, how many YES, NO and UNCLEAR readings sit in each slice of the band? |
-| `content-similarity-judge/fitted-thresholds`, under `state/raw/` and `state/compact/` | On this day, what did the record propose, what shaped it, and what did the run apply? |
+| `content-similarity-judge/pair-verdicts`, under `state/raw/` and `state/compact/` | What did the judge say about this pair, in both orders, which slice of the night's scores held it, and what chance did a pair of that slice have of being read? |
+| `content-similarity-judge/threshold-history`, under `state/raw/` and `state/compact/` | On this night, where did each threshold sit and what did the evidence propose for it? Declared; no night files it yet |
 | `content-similarity-judge/holdout-pairs`, under `state/raw/` and `state/compact/` | Which pairs did a person mark, and which way? |
-| `content-similarity-judge/metrics`, under `state/raw/` and `state/compact/` | Over one unit of one night, how did this judge's own instrument behave - what was it dealt, what did it read, and what did that cost? |
+| `content-similarity-judge/scored-pairs`, under `state/raw/` and `state/compact/` | What did the judge say about this pair, in both orders, and under which models? No night writes it now |
+| `state/content-similarity-judge/score-distribution.json` | Across everything judged until the fit stopped, how many YES, NO and UNCLEAR readings sit in each slice of the band? No night writes it now |
+| `content-similarity-judge/fitted-thresholds`, under `state/raw/` and `state/compact/` | On this day, what did the record propose, what shaped it, and what did the run apply? No night writes it now |
+| `content-similarity-judge/metrics`, under `state/raw/` and `state/compact/` | Over one unit of one night, how did this judge's own instrument behave? No night writes it now: the collecting job logs the units' readings |
 
 The fields, the types and the bounds are in
 [../contracts/schemas.md](../contracts/schemas.md). How each ledger is partitioned,
@@ -377,19 +389,22 @@ The council hosts judges and depends on none of them
 This judge registers in `judge_names` in `config/llm_council.json` and declares
 itself in
 [../../../backend/idhazh/content_similarity_judge/tenant.py](../../../backend/idhazh/content_similarity_judge/tenant.py),
-which binds the venue's three units of work to the four stages above: pick the
-work, judge one unit of it, then count and fit. That module imports the venue;
+which binds the venue's three units of work to three stages: pick the work, judge
+one unit of it, then file what the units judged. That module imports the venue;
 nothing in the venue imports it.
 
 Its file, `config/judges/content-similarity-judge.json`, declares it active and
-model-running. The judge alone reads `pair_budget` (200), `flush_every_pairs`
-(1) and `judge_temperature` (0.0) from that file. These retain the previous
-draw size, completed-pair durability and greedy decoding. The council validates
-only status and model need before importing the package.
+model-running. The judge alone reads the `draw` block (the budget of 150 live pairs a
+night, the slice sizes and the shares), the `thresholds` block (the two starts),
+`flush_every_pairs` (1), `judge_temperature` (0.0) and `version`, the UTC date of the
+last edit that changed a value, which each filed row records beside the tuning it
+came from. The keys and what each sets are in
+[how-the-content-similarity-judge-follows-its-thresholds.md](how-the-content-similarity-judge-follows-its-thresholds.md#settings).
+The council validates only status and model need before importing the package.
 
 The band, fit gates, damping, movement caps and history windows stay under
-`assemble.same_story.adaptive_dedup_threshold` in `config/idhazh.json`.
-Counting, fitting and the applied-line reader still share them. The execution
+`assemble.same_story.adaptive_dedup_threshold` in `config/idhazh.json`. Only the
+applied-line reader and the console still read them. The execution
 settings loader lives under `content_similarity_judge`, not in the shared
 settings model, so it adds no judge contract to the council's import closure.
 
@@ -405,70 +420,32 @@ the deadline exists to let report at all.
 measured nothing; a zero would say it measured everything and found nothing
 wrong.
 
-**A unit ships its row as it finishes and commits nothing.** The row goes out as
-an artifact, the collecting job files it through the ledger door into the
-ledger above, and the trip belongs to the venue. A platform kill before upload
-can leave no report; only validated arrived bytes are evidence of completed
-work. Collection retains valid siblings without certifying the unfinished
-date. Each row names the part that took it as `work_part_index`.
+**A unit ships its reading as it finishes and commits nothing.** The reading goes out
+as an artifact, and the collecting job logs its totals and files none of it. A platform
+kill before upload can leave no report; only validated arrived bytes are evidence of
+completed work. Collection retains valid siblings without certifying the unfinished
+date. Each pair row names the part that took it as `work_part_index`.
 
 ### The nights this judge says it is behind on
 
 This judge's `schedule(request=...)` selects the offered anchor, then the newest
-unread older dates within both supplied date budgets. Choosing the anchor is
+older nights it is behind on within both supplied date budgets. Choosing the anchor is
 this judge's policy, not a council obligation. The
 [council selection contract](llm-council-dates.md#scheduled-dates-belong-to-each-judge)
 owns the offered window and answer validation.
 
-The judge's `nights_outstanding` helper reads older-date candidates from one
-named record. No day file is opened and no directory is listed, so the read
-does not expand into the archive (`CLAUDE.md` Guardrail #12).
-
-**A night is outstanding when the record has never read it.** The record keeps
-two date lists for that. `counted_dates` is the days whose verdicts are in the
-counts, and it is what makes a re-run free. `judged_dates` is every day the
-record has ever read, and it is what an instrument move leaves behind.
-
-| The list | What it holds | What a reset does to it |
-| --- | --- | --- |
-| `counted_dates` | the days behind the counts in this record | emptied, with the counts |
-| `judged_dates` | every day this judge has ever counted | kept |
-
-**The reset is why there are two lists rather than one.** Move the model, the
-prompt, a weight, sampler or policy and the counts are archived, because they
-answer a different question afterwards. Which nights were read is not a count, so it
-comes across. Without that, retuning the scorer on a Monday would have the
-council dispatch every night of its window that week - and every one of those
-jobs would file its rows and then be refused, because the record still counts
-a date once.
-
-**What it does name is the night that lost a unit.** Three units of four
-reporting is the failure this repair path exists for: every row those three
-judged was filed, and the date stayed out of both lists because a partial day
-cannot be counted and cannot be topped up later. That date comes back here, and
-the next council night judges it again from the top.
-
-**A judge with no record names no older repair dates.** Its schedule still
-selects the anchor. A manual run can name an earlier date explicitly; it selects
-that date alone and does not add scheduled repair work.
-
-**The counting step admits only rows the record's own stamp matches**, and that
-filter runs before the one-row-a-pair de-duplication. The ledger keeps each
-run's rows, so a day judged twice under two instruments holds both readings;
-adding them together would make the record's own stamp a lie with nothing able
-to separate them afterwards. Filtering first is what lets the right row win - a
-discarded row from the old instrument is the more recent one, so filtering
-second would let it take the pair on recency and then be thrown away, losing the
-fresh reading standing behind it.
-
-The fit uses that same order for daily health readings and today's subtractable
-slot contribution. Calibration then excludes unusable rows and headline
-overrides, while daily health retains those audit attempts. A later
-historical-policy row cannot hide a valid current reading by winning recency
-before being discarded. A held collection contributes no subtractable daily
-shift: its rows have not entered the current aggregate.
+A night is outstanding when `pair-verdicts` holds no row for it. The judge reads only
+the days the council offered, so the read does not expand into the archive (`CLAUDE.md`
+Guardrail #12). The rule and what follows from it are in
+[how-the-content-similarity-judge-follows-its-thresholds.md](how-the-content-similarity-judge-follows-its-thresholds.md#which-nights-the-judge-is-behind-on).
+A manual run can name an earlier date explicitly; it selects that date alone and does
+not add scheduled repair work.
 
 ## How the line moves: down fast, up slow
+
+**This section describes the damped line the retired fit moved.** No night moves a line
+now, and the applied-line reader reads these knobs only if the block that applies a fitted
+line is switched on.
 
 The line is allowed to move a little each day, and it is allowed to move further down than up. **Lowering the line publishes less.** Two feeds giving near-identical coverage is the feed's fault, and folding them is the answer, so the move that folds more arrives quickly and the move that folds fewer arrives over a month.
 
@@ -512,7 +489,7 @@ flowchart TD
 
 **A line resting on a band wall is a reported state, not silence.** A line at `band_high` folds nothing at all, which from the outside looks like the feature is switched off rather than pinned; a line at `band_low` folds everything in the band. Both get their own `clamp_kind` - `ceiling` and `floor` - and they are reported whether or not the wall moved the line that day, because resting there is the state worth knowing. `none` means the damped proposal stood as it was.
 
-**The draw is sampled against the config band and never against the applied line.** `similarity.draw.in_band` is handed `band_low` and `band_high` off the config file, and no fitted value reaches it. A band that opened at the applied line would narrow every time the line rose, and the next fit would then be reading a record it had shaped itself. A test holds that open.
+**The draw follows its own thresholds and never the applied line.** No fitted value reaches the nightly draw: the slices follow the judge's own threshold history, or the configured starts, so a line that moved could not change which evidence is drawn to move it.
 
 ## Design rationale: the console scores the hand marks, and what it leaves out
 
@@ -741,7 +718,7 @@ new rule has nothing to compare - measured, and the reading is in
 
 **A refused reading is evidence, not an absent pair.** The shard records each
 order's verdict independently, leaves a refused order null, sets
-`grammar_applied` and `usable` false for the pair, and reads the next pair. One
+`grammar_applied` and `readings_agree` false for the pair, and reads the next pair. One
 valid order survives beside a refusal in the other; two refusals never become
 agreement. The shared [model reader](../../../backend/idhazh/content_similarity_judge/model_reader.py)
 retains production endpoint resolution, template checks and tokenizer checks,

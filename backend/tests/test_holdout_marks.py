@@ -216,7 +216,7 @@ def a_drawn_tree(root: Path) -> tuple[Path, Path, Path]:
     with (draws / "draw.csv").open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(
             handle,
-            fieldnames=["date", "pair_key", "left_url_key", "right_url_key", "composite_score"],
+            fieldnames=["date", "pair_key", "left_url_key", "right_url_key", "similarity_score"],
         )
         writer.writeheader()
         writer.writerow(
@@ -225,7 +225,7 @@ def a_drawn_tree(root: Path) -> tuple[Path, Path, Path]:
                 "pair_key": "a-pair",
                 "left_url_key": derive_url_key(urls[0]),
                 "right_url_key": derive_url_key(urls[1]),
-                "composite_score": "0.95",
+                "similarity_score": "0.95",
             }
         )
     a_batch(sheet, "labels-batch-01.json", {"a-pair": False})

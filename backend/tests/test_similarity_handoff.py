@@ -14,14 +14,18 @@ section 13).
 from __future__ import annotations
 
 import shutil
+from collections import Counter
 from pathlib import Path
 from typing import Final
 
 import pytest
+from test_same_story import block, item, unit
 
+from idhazh import assemble, atomic_write
 from idhazh.content_similarity_judge import tenant
 from idhazh.contracts.council_invocation import SelectedJudge, Selection
 from idhazh.contracts.council_run_record import ShardOutcome
+from idhazh.contracts.digest_day import DigestDay, DigestRunRef, DigestVerticalRef
 from idhazh.contracts.knobs.council import JudgeLifecycleStatus
 from idhazh.council import session
 from idhazh.stages import common, judge_item_pairs
@@ -31,6 +35,31 @@ from idhazh.stages import common, judge_item_pairs
 A_NIGHT: Final = "2026-09-20"
 
 A_RUN: Final = "2026-09-21-35534060762"
+
+
+def a_published_day(root: Path, *, date: str) -> None:
+    """One day on disk: three stories from three mastheads, at angles that score as pairs."""
+    items = [
+        item("world-01", source="wire", outlet="The Wire"),
+        item("world-02", source="paper", outlet="The Paper"),
+        item("world-03", source="herald", outlet="The Herald"),
+    ]
+    day = DigestDay(
+        version=DigestDay.schema_version(),
+        date=date,
+        generated_at=f"{date}T06:00:00Z",
+        partial=False,
+        items_planned=len(items),
+        items_failed=0,
+        runs=[DigestRunRef(n=1, at=f"{date}T06:00:00Z", items_added=len(items))],
+        verticals=[
+            DigestVerticalRef(id=name, display_name=name.title(), count=count)
+            for name, count in sorted(Counter(one.vertical for one in items).items())
+        ],
+        items=items,
+        embeddings=block({one.item_id: unit(index * 12.0) for index, one in enumerate(items)}),
+    )
+    atomic_write.write_atomic(assemble.day_dir(root, date) / "digest.json", day.to_json())
 
 
 def _selection(*, shards: int = 8) -> Selection:
@@ -54,13 +83,16 @@ def _selection(*, shards: int = 8) -> Selection:
 
 
 def _one_runner(tmp_path: Path, name: str, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """A bare checkout with the council's root inside it, and nothing else.
+    """A bare checkout with the council's root inside it and an empty state root.
 
     Returned as the checkout rather than the root, so a path written anywhere
-    else in the tree is visible to the caller instead of invisible above it.
+    else in the tree is visible to the caller instead of invisible above it. The
+    state root is empty because the picking stage reads this judge's threshold
+    history from it, and a test must not read the committed one.
     """
     checkout = tmp_path / name
     monkeypatch.setattr(session, "COUNCIL_ROOT", checkout / session.COUNCIL_ROOT_RELPATH)
+    monkeypatch.setattr(common, "STATE_ROOT", checkout / "state")
     return checkout
 
 
@@ -89,8 +121,6 @@ def test_preparation_deals_real_pairs_at_the_admitted_width(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The selected width, not the configured maximum, decides pair ownership."""
-    from test_similarity_fit import a_published_day
-
     _one_runner(tmp_path, "picked-real-work", monkeypatch)
     monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "digest")
     a_published_day(common.PUBLIC_ROOT, date=A_NIGHT)

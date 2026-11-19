@@ -1,6 +1,6 @@
 # What one judged pair costs
 
-**Last Updated**: 2026-09-21
+**Last Updated**: 2026-11-19
 
 **The short answer: 94.53 seconds for an average pair, and 110.98 seconds for the
 slowest one.** That is a whole pair - both readings of it, the second with the
@@ -69,18 +69,19 @@ by up to that much before any article is read.
 
 ## What this settles
 
-**A shard's own budget.** At the committed cap of 200 pairs over four shards, one
-shard draws 50 pairs. That is 78.8 minutes of model time at the average pair and
-92.5 minutes at the slowest one, against the 175 minutes a unit has to work in -
+**A shard's own budget.** At the committed cap of 150 pairs over four shards, one
+shard draws at most 38 pairs. That is 59.9 minutes of model time at the average pair
+and 70.3 minutes at the slowest one, against the 175 minutes a unit has to work in -
 the 200-minute bound less the 13 the venue spends before the judging process
 starts and the 12 it keeps back for the records and the upload. So the committed
-budget uses 45 percent of its window at the average pair and 53 percent at the
+budget uses 34 percent of its window at the average pair and 40 percent at the
 slowest, and the clock is not what limits how many pairs a night may judge.
 
-**Why the judging night is a workflow of its own.** All 200 pairs in one job is
-5 hours 15 minutes at the average pair and 6 hours 10 minutes at the slowest,
-against the 6-hour ceiling GitHub kills a job at. One job is a coin toss against
-that ceiling before the digest pipeline's own work is counted at all.
+**Why the judging night is a workflow of its own.** All 150 pairs in one job is
+3 hours 56 minutes at the average pair and 4 hours 37 minutes at the slowest, which
+is over the 175 minutes a unit has to work in and leaves 1 hour 23 minutes under the
+6-hour ceiling GitHub kills a job at, before the digest pipeline's own work is
+counted at all.
 
 ## What this does not settle
 
@@ -91,9 +92,8 @@ committed judging prompt. Change either and the number is gone, not scaled.
 different amounts, and this run did not time them apart.
 
 **Whether a night at the cap behaves the same.** 82 pairs is what that night drew.
-The cap is 200, no night has reached it, and nothing schedules one - so the
-average over a full night is unmeasured. The spread above is what argues it would
-not move far.
+The cap is now 150, so the average over a full night is unmeasured until nights at
+the new cap are read. The spread above is what argues it would not move far.
 
 **What the judge costs when it is not the only thing running.** These four shards
 had their runners to themselves.

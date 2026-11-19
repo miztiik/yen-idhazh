@@ -1,6 +1,6 @@
 # Pipeline Loop
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-11-19
 
 The stages one article passes through, what each stage owns, and the rule that they talk in payloads rather than calls. This is the build-time equivalent of a product's core loop: it is the thing that happens over and over, and every other concept doc hangs off it.
 
@@ -96,28 +96,26 @@ Four invariants hold regardless of how the batches are sized:
 ## The judge runs on its own clock
 
 **`LLM-COUNCIL` is a second loop, once a night at 22:00 UTC, and it reads
-yesterday.** It draws the day's borderline same-story pairs, asks a model which
-of them are one story, counts the answers into a fixed-size record and fits the
-merge line off it. Four shards judge in parallel, one `llama-server` each, and
+yesterday.** It draws a weighted sample of the day's new same-story pairs by score
+slice, asks a model which of them are one story, and files each answer with the
+chance its slice gave it. Four shards judge in parallel, one `llama-server` each, and
 none of them commits anything: a `collect` job downloads every shard's verdicts
 and makes the writes, so two processes never share a path.
 
 **It is a separate workflow because of the budget the design permits, not the
-day the pipeline usually has.** At the configured cap of 200 pairs, judged in
-both orders, a measured worst pair of 110.98 seconds is 6 hours 10 minutes of
-model time serially - past the 6 h job ceiling, where GitHub kills the job and
-nothing is written (Guardrail #2). Today's median day of 33 pairs would fit
-inside `digest.yml` comfortably, which is exactly why sizing the shape off the
-median is the wrong move: the first busy day crosses the ceiling and writes
-nothing.
+day the pipeline usually has.** At the configured cap of 150 pairs, judged in
+both orders, a measured worst pair of 110.98 seconds is 4 hours 37 minutes of
+model time serially - over the 175 minutes one shard has to work in, and 1 hour
+23 minutes under the 6 h job ceiling where GitHub kills the job and nothing is
+written (Guardrail #2), before `digest.yml`'s own work is added. The draw takes
+its whole budget on any night whose scores between the thresholds hold enough
+pairs, which is exactly why sizing the shape off a median day is the wrong move.
 
 **A shard that dies costs its own pairs and nothing else.** `fail-fast` is off and
-the collecting job runs anyway, appending every row the surviving shards
-produced. **A day with a missing shard is not counted into the record**: the
-record counts a date once and refuses the same date twice, so three shards of
-four would make the fourth shard's verdicts unreachable for ever. The day's
-fitted row says `shards_missing` instead, and re-dispatching that date counts it
-cleanly.
+the collecting job runs anyway, filing every row the surviving shards produced.
+**A night with a missing shard is still filed**: the chance of each slice is
+worked out from the rows that came back, so the lost pairs lower it and the heavier
+weight of the usable pairs makes up for them.
 
 **It adds zero bytes to the cache.** The `judge` job writes the same weights key
 the daily run's work job writes, so it restores what is already there - and the

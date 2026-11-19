@@ -86,7 +86,7 @@ def test_sample_resolution_reads_only_named_days_and_draws(tmp_path: Path) -> No
     with draw.open("w", encoding="ascii", newline="") as handle:
         writer = csv.DictWriter(
             handle,
-            fieldnames=["date", "pair_key", "left_url_key", "right_url_key", "composite_score"],
+            fieldnames=["date", "pair_key", "left_url_key", "right_url_key", "similarity_score"],
         )
         writer.writeheader()
         writer.writerow(
@@ -95,7 +95,7 @@ def test_sample_resolution_reads_only_named_days_and_draws(tmp_path: Path) -> No
                 "pair_key": "pair",
                 "left_url_key": key,
                 "right_url_key": other,
-                "composite_score": "0.95",
+                "similarity_score": "0.95",
             }
         )
     (tmp_path / "unrelated.csv").write_bytes(b"\xff")

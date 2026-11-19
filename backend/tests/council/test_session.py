@@ -49,12 +49,11 @@ COUNCIL_VERBS = ("council-prepare", "council-settle")
 #: The stage modules the content-similarity judge owns, spelled one by one. A
 #: shared prefix used to stand in for the list, and a stage is now named for the
 #: work it does rather than for whose loop it is in - so a prefix would go blind
-#: to three of these four and the dictum would read green over a real import.
+#: to a stage and the dictum would read green over a real import.
 JUDGE_STAGE_MODULES = (
     "idhazh.stages.pick_item_pairs",
     "idhazh.stages.judge_item_pairs",
-    "idhazh.stages.count_verdicts",
-    "idhazh.stages.set_merge_line",
+    "idhazh.stages.file_pair_verdicts",
 )
 
 

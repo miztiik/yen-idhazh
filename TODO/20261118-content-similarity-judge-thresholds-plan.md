@@ -96,7 +96,7 @@ Table G - Status Reckoner
 | G1 | 1 | Judge only new pairs | - | A | DONE | animated-eureka | - | - |
 | G2 | 2 | Version the judge's config files | - | A | DONE | urban-memory | - | - |
 | G3 | 3 | Declare the two new ledgers | - | A | DONE | musical-happiness | - | - |
-| G4 | 4 | Draw by weighted slice and file pair verdicts | 1, 2, 3 | B | PENDING | - | - | - |
+| G4 | 4 | Draw by weighted slice and file pair verdicts | 1, 2, 3 | B | DONE | crispy-spoon | - | - |
 | G5 | 5 | Find and move both thresholds | 4 | C | PENDING | - | - | - |
 | G6 | 6 | Judge canary pairs once per run | 5 | D | PENDING | - | - | - |
 | G7 | 7 | Judgement page without the retired data | 4 | E | PENDING | - | - | - |
@@ -245,11 +245,12 @@ Table M - Row 3 rejected alternatives
 - **Files touched:**
   - `config/judges/content-similarity-judge.json`
   - `backend/idhazh/contracts/knobs/content_similarity_judge.py`
-  - `backend/idhazh/content_similarity_judge/settings.py`
   - `backend/idhazh/content_similarity_judge/tenant.py`
+  - `backend/idhazh/ledger/staging.py`
   - `backend/idhazh/similarity/slices.py`
   - `backend/idhazh/similarity/draw_allocation.py`
   - `backend/idhazh/similarity/sampling_chance.py`
+  - `backend/idhazh/similarity/thresholds_in_force.py`
   - `backend/idhazh/similarity/selection.py`
   - `backend/idhazh/similarity/budget.py`
   - `backend/idhazh/similarity/counting.py`
@@ -261,6 +262,7 @@ Table M - Row 3 rejected alternatives
   - `backend/idhazh/stages/count_verdicts.py`
   - `backend/idhazh/stages/set_merge_line.py`
   - `backend/utilities/sample_sheet.py`
+  - `.github/workflows/llm-council.yml`
   - `backend/tests/test_similarity_slices.py`
   - `backend/tests/test_similarity_draw_allocation.py`
   - `backend/tests/test_similarity_sampling_chance.py`
@@ -271,21 +273,33 @@ Table M - Row 3 rejected alternatives
   - `backend/tests/test_similarity_counting.py`
   - `backend/tests/test_similarity_fit.py`
   - `backend/tests/test_similarity_published_line.py`
+  - `backend/tests/test_similarity_handoff.py`
+  - `backend/tests/test_similarity_applied.py`
+  - `backend/tests/test_similarity_statistics.py`
   - `backend/tests/contracts/test_content_similarity_judge_config.py`
   - `backend/tests/council/test_session.py`
   - `backend/tests/council/test_council_runs_without_a_judge.py`
   - `backend/tests/test_holdout_marks.py`
   - `backend/tests/test_named_utility_inputs.py`
+  - `frontend/tests/similarity-ledgers.spec.ts`
   - `docs/architecture/publishing/how-the-content-similarity-judge-follows-its-thresholds.md`
   - `docs/architecture/publishing/autotune-content-similarity.md`
+  - `docs/architecture/publishing/llm-council.md`
+  - `docs/architecture/contracts/ledger-registry.md`
+  - `docs/architecture/contracts/persistence.md`
+  - `docs/architecture/contracts/schemas.md`
   - `docs/how-to/label-the-similarity-holdout.md`
   - `docs/concepts/growing-reads.md`
   - `docs/concepts/glossary.md`
+  - `docs/concepts/partitions.md`
+  - `docs/concepts/pipeline-loop.md`
+  - `docs/reference/repository-layout.md`
+  - `docs/reference/benchmarks/what-a-judge-pair-costs.md`
 - **Acceptance gates:**
   - Local: the new and edited tests through the test selector. In-memory tests: each bucket's pair count follows Tables C and D and the allocation rule (N2); every non-empty slice gets at least one pair and none more than its pool; the same night drawn twice gives the same pairs; a pair scoring below 0 is drawn and filed; every filed row carries `sampling_chance` equal to usable over available for its slice; no `threshold-history` row inside the lookback gives the configured starts and a newer row's `threshold_after` wins; the scheduler names a night with no `pair-verdicts` row and no other; the draw and verdict files read back through the contract; a night with a lost runner files its surviving rows; the council's judge-module lists name the new stage and no deleted one. Ruff, mypy, doc check.
   - Before merge: replay 2026-11-09 to 2026-11-16 through the new draw with the configured starts and record pairs judged a night per bucket against Table D's budget.
   - CI: the required checks are authoritative.
-  - Named observation: on the next council run the draw rows carry slice columns, `pair-verdicts` holds the night's rows with chances, and nothing is written to the old ledgers.
+  - Named observation: on the next council run the draw rows carry slice columns, `pair-verdicts` holds the night's rows with chances, and nothing is written to the old ledgers. That run also names older nights that have no `pair-verdicts` row, one a night (the repair budget), because the ledger starts empty. Read from `pair-verdicts` by run the share of pair rows a later run filed again for the same night, which was 24 percent on 2026-11-12, 2026-11-13 and 2026-11-15 before this row, against B7's trigger of 10 percent; it is measured only, and nothing resumes a re-run.
 - **Oracle:** on a fixed in-memory night the per-slice judged counts and every stored sampling chance equal a hand-worked table. It cannot settle whether the budget gives each threshold its evidence minimum; the first 7 nights of row 5 show it.
 - **Decisions:**
 
