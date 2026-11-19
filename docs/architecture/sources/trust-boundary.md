@@ -236,7 +236,7 @@ of the two strings supplied the source headline.
 ### The title is fenced in every prompt that carries it
 
 The digest's call builds its user turn in `classify.calls.summary_user_turn`: the
-title, the article and the menu of source elements are each a
+title, the article and the tables of figures are each a
 `sanitize.untrusted_block`. The title once was the one string that was not - the
 retired first call printed it as a bare line, `Title: ...`, directly in front of the
 fence. That bare line is a framing position. The prompt's own "the block below is
@@ -258,7 +258,7 @@ request for an item whose headline is an order and asserts every occurrence of t
 headline lies between fence markers.
 `test_source_stays_inside_the_sanitizer_boundary` plants a forged chat marker, and
 each fence marker, in the headline and the text, and asserts the turn still has
-exactly three fences and none of the forged markers.
+exactly two fences and none of the forged markers.
 
 **The read passes `extensive=False`, and that is a boundary decision rather than
 a speed one.** trafilatura's default metadata read asks `htmldate` for a
@@ -296,7 +296,7 @@ a promise from the service:
 | **Three fields read** | A mention is read as a label, a start and an end. Nothing else in the reply is kept or sent on. |
 | **Re-slice** | The words the reply carries are compared with what those offsets cut from `Article.text` and then thrown away. A mention that does not point at the words it names is dropped, and every excerpt a model later sees is cut from the article itself. |
 | **A lookup key, not text** | The label selects an entry of `elements.label_kinds`. It reaches no prompt, path, URL or command. |
-| **The menu code** | A mention becomes a row of the same fenced menu as every other element, so it passes the sanitizer and the fence like the rest of the article. |
+| **The table builder** | A mention may become the name in a row of a fenced table, offered only if its cell passes the checks [below](#the-tables-of-figures-are-article-words-inside-the-fence), so it passes the sanitizer and the fence like the rest of the article. |
 
 `test_words_the_service_says_it_read_never_reach_the_model_unless_the_article_has_them`
 drives a service that answers with an instruction at offsets that cut other words, and
@@ -307,12 +307,28 @@ A service that cannot answer costs the item its names and nothing else: no retry
 warning that carries the item's id and no text, and the item publishes on the figures
 and dates the patterns found.
 
+## The tables of figures are article words inside the fence
+
+The tables the model is shown are the article's own words, cut by code, so they are
+untrusted text and are handled as such. A cell is offered only if it is one line, holds no
+`|` and is unchanged by `sanitize`, because a line break or a `|` would let a name forge a
+row; a table with a cell that fails is refused whole. A name is cut to
+`visuals.max_label_characters` the way the chart compiler cuts it, so the model reads the
+label the chart will draw. The rows sit inside `untrusted_block` after the article, and the
+one line naming the chart forms on offer is written by code and sits outside it, so no word
+of the article reaches an instruction
+([the table rules](../summarize/prompt.md#the-model-is-shown-tables-of-figures-never-the-element-table)).
+`test_a_place_named_as_an_instruction_sits_only_inside_a_fence` plants an order as a place
+name and asserts that both places it appears in the request, the article and the row, lie
+between fence markers.
+
 ## Model output never becomes an action
 
 The output shape and address rejection are checked directly:
 
 - A `summary` payload declares **no address-shaped field**, so there is nothing on it to dereference.
 - `backend/tests/test_summarize.py` rejects a model reply that contains a source address.
+- A chart answer's `type` is one of a closed set of forms and its `focus` is looked up among the row codes code built; a value outside them is refused, so no word of the reply selects a path, an address or a command.
 
 ## Model output cannot carry a source address
 

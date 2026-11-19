@@ -35,6 +35,8 @@ the order below is load-bearing: `decision` and `purpose` are committed before
 `type`, and `confidence` decodes **after** `type` rather than before it. Second
 in the list, a confidence would condition every field after it - the model would
 be reading its own hedge back as evidence. It is recorded and it gates nothing.
+Since 2026-11-18 the plan is built by code from the row a model chose, which asks
+for no confidence, so it is null there.
 
 Code stamps `version` and `plan_version` and collects `element_ids` from the
 selected references. None is requested from the current decoder. The native
@@ -292,6 +294,11 @@ class VisualPlan(Contract):
     __schema_stem__: ClassVar[str] = "visual-plan"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-11-18",
+            change="confidence became optional.",
+            why="Code builds the plan from a table now: nothing reads it and none is asked.",
+        ),
+        ChangelogEntry(
             version="2026-10-26T09:41",
             change="Plans may name one independently declared whole for composition charts.",
             why="A sum of parts is not evidence that the source declared those parts exhaustive.",
@@ -308,8 +315,8 @@ class VisualPlan(Contract):
         ),
         ChangelogEntry(
             version="2026-09-09",
-            change="Initial shape: the plan a compiler draws from, carrying element references.",
-            why="Contracts before logic - the planner and the compiler both need a fixed shape.",
+            change="Earlier changes are in this file's git history.",
+            why="A changelog says what moved lately; git is the archive.",
         ),
     )
 
@@ -379,12 +386,13 @@ class VisualPlan(Contract):
     caption: PlanCaption | None = Field(
         description="One sentence of framing under the picture. Optional on any plan."
     )
-    confidence: float = Field(
+    confidence: float | None = Field(
+        default=None,
         ge=0.0,
         le=1.0,
         description=(
             "How sure the model was, decoded after the type so it conditions nothing. "
-            "Recorded, and it gates nothing."
+            "Null where none was asked. Recorded, and it gates nothing."
         ),
     )
     plan_version: _PlanVersion = Field(

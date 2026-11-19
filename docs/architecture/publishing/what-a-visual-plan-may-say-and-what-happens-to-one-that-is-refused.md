@@ -1,10 +1,10 @@
 # What a visual plan may say, and what happens to one that is refused
 
-**Last Updated**: 2026-11-12
+**Last Updated**: 2026-11-18
 
-The shape the model decodes into, the four things it may not carry, the ten
-deterministic checks a plan has to clear, and the ladder a refused plan may step
-down before it becomes no picture at all. Nothing here calls a model: every
+How a chart answer becomes a plan, the four things a plan may not carry, the
+deterministic checks it has to clear, and the ladder a refused plan may step
+down before it becomes no picture at all. Nothing after the answer calls a model: every
 check is code over the article's own element table. Where the figures on the
 finished chart came from is
 [where-every-drawn-figure-came-from.md](where-every-drawn-figure-came-from.md);
@@ -13,11 +13,12 @@ who decides a picture at all is [visuals.md](visuals.md).
 ## The plan a compiler draws from, and the four things it may not carry
 
 `VisualPlan` in [`backend/idhazh/contracts/visual.py`](../../../backend/idhazh/contracts/visual.py)
-is the shape a planner decodes into and the only thing a compiler is allowed to read. It carries
+is the only thing a compiler is allowed to read, and code builds it: the model never writes
+one ([how](#a-chart-answer-becomes-a-plan-in-code)). It carries
 element references and closed vocabularies: a decision, a purpose, a type, one channel per encoding
 role, the separately declared whole for a stacked bar, the elements it draws from, which of them name the marks and which one lands first, one
-sentence of reasoning, a title, a caption, a confidence and the vocabulary date-stamp it
-was planned against. It lands ahead of its producers, so nothing writes one yet (Guardrail #3).
+sentence of reasoning, a title, a caption, an optional confidence and the vocabulary date-stamp it
+was planned against.
 
 What it may not carry is as much of the contract as what it holds.
 
@@ -34,9 +35,9 @@ safe diagnosis without copying the rejected payload.
 
 | Prohibition | What refuses it |
 | --- | --- |
-| **No geometry** | Geometry is a number, and the schema admits exactly one number. A payload naming a pixel names a key the model does not declare, and an undeclared key does not load. |
-| **No literal values** | Same guard. Every drawn figure is reached by citing an element, so a number pushed into a reference field fails that field's own grammar. |
-| **No authored text where a reader reads a fact** | `labels` and `annotations` are element ids, not strings. Code cuts every character a reader sees off a chart; the model points at which characters. |
+| **No geometry** | Geometry is a number, and the plan's schema admits exactly one number, `confidence`, which is bounded and never drawn. The model's answer has none, and a payload that names a pixel names a key nothing declares; an undeclared key does not load. |
+| **No literal values** | Same guard. Every drawn figure is reached through an element, and code cites the elements: a figure is the characters of the figure element a row stands for, and the model's words carry no digit. |
+| **No authored text where a reader reads a fact** | `labels` and `annotations` are element ids, not strings, and code fills them. Code cuts every character a reader sees off a chart; the model points at a row. |
 | **No `alt_text`** | The field is not declared, it is named in `FORBIDDEN_FIELDS`, and the module refuses to import if one is added back. |
 
 **The geometry ban is what keeps the compiler swappable.** A plan that names a pixel is a plan bound
@@ -50,70 +51,68 @@ channel restating the chart's own data, and no validator can read prose to check
 the last unguarded channel in a design whose whole claim is that a stranger's page cannot reach a
 drawn figure.
 
-**Three prose channels remain, and the shape only bounds them.** `title`, `caption` and `why` are
-length-capped here. Whether a numeral inside one is matched by a cited element is the validator's
-check, not the shape's - it needs the article's element table, which the plan deliberately does not
-carry.
+**Three prose channels remain, and the answer holds them to no digit.** `title`, `caption` and `why` are
+length-capped by the plan contract. The validator's numeral check only proves that a numeral inside one
+appears among the cited figures, not that it belongs to the row the answer names, so a chart answer is
+refused by name when any of the three holds a digit
+([below](#a-chart-answer-becomes-a-plan-in-code)); the validator's check stays as the second line.
 
-**`confidence` decodes after `type`, and that ordering is the field's licence to exist.** Field order
-is decode order. Second in the list a confidence conditions every field after it, and the model reads
-its own hedge back as evidence. Last but one it records what the model thought and gates nothing.
+**`confidence` is optional, and null on a plan built from a table.** The model is not asked for one,
+nothing reads it, and it gates nothing. Field order is decode order, so where one is decoded it comes
+after `type`: second in the list it would condition every field after it, and the model would read
+its own hedge back as evidence.
 
-**Every array has a `maxItems` and every decoded string a `maxLength`, so the worst-case reply length
-is arithmetic.** At the bounds the contract declares, the longest plan the decoder can produce is
-**3,820 characters** - and a token spans at least one character, so that is also a ceiling of 3,820
-tokens. The two committed fixtures measure 838 characters for a four-bar plan citing eight elements
-and 368 for one that declines, between a fifth and a tenth of the ceiling. The derivation is field
-by field in the module docstring, it is recomputed from the generated schema, and the module refuses
-to import if a bound moves without the ceiling moving with it.
+**The answer is short by construction.** Its prose fields keep the plan contract's length bounds and
+its `type` and `focus` are one short value each, so the visual half of a reply is a few lines. The
+summary beside it carries no length bound, so the call runs under the model file's response limit
+([the output budget](../summarize/prompt.md#the-output-budget)).
 
-The ceiling is loose by construction and the arithmetic says where: `encodings` is 51 percent of it
-and `element_ids` a further 22 percent, because the schema can bound each channel at eight elements
-and cannot say that no type fills more than four channels. That last sentence is a validator rule,
-and a validator runs after the tokens are already spent.
+## A chart answer becomes a plan in code
+
+The model answers `{why, type, focus, title, caption}`
+([what it is shown](../summarize/prompt.md#the-model-is-shown-tables-of-figures-never-the-element-table));
+a `none` builds no plan, and its `why` becomes the recorded rationale. Code builds the plan from a chart answer: decision `visual`, purpose `comparison`,
+the chosen form, the table's name elements as the category channel and its figure elements as the
+quantity channel in row order, every other channel empty, no declared whole and no labels, the
+element ids those cite, the model's title and caption, and the vocabulary stamp. The one annotation
+is the focus row's figure, because the compiler needs exactly one emphasised mark and code never
+guesses it. The validator, the replacement ladder and the compiler then run unchanged.
+
+**A chart answer is refused by a named rule, so `failed_field` and `failed_rule` say which, and the
+item publishes with its summary and no chart**, when it has no `focus`
+(`visual_choice_focus_required`), when its title is empty after `sanitize`
+(`visual_choice_title_required`), or when `why`, `title` or `caption` holds a digit
+(`visual_choice_prose_has_digit`), for the reason given above. A form or a
+row the request did not offer is refused as well; the grammar makes that unreachable, so the code
+check behind it names no field.
 
 ## Every encoding role is a key, and an unused one is empty
 
 `encodings` is one object with a field per role, and the schema requires all nine. A `bar` fills
 `category` and `quantity` and emits `"bins": []`, `"size": []` and five more empty arrays beside
-them.
+them. Code writes the empty roles, so decoding them costs the model nothing.
 
-**Presence is what the shape guarantees; what may be empty is the validator's.** Left optional, a
-role is a role the model can simply not mention - and a plan that names `bar` and omits `quantity`
-reads as a complete answer rather than as a failure. That is "a confident chart with no bars in it",
-which happened twice on the first live run. Required, the same reply is a decode failure at the key.
+**Presence is what the shape guarantees; what may be empty is the validator's.** Code writes every
+role, so a plan cannot omit one, and a role it does not fill is an empty array. Left optional, a
+role would be one a writer can simply not mention - and a plan that names `bar` and omits `quantity`
+would read as a complete answer rather than as a failure. That is "a confident chart with no bars in
+it", which a model-written plan produced twice on the first live run.
 Which roles a given type may leave empty needs that type's own rule set, and a JSON Schema cannot say
 "at most four roles for a `bar`", so the per-type ruling belongs to the validator and this shape only
 guarantees the validator has something to rule on.
 
 The roles are fields rather than a map because a schema can require the keys of an object it
 declares and cannot require the keys of a map. An eighteen-branch union, one per type, would have
-reached the same place and was refused: the decoder would have to pick a branch before it has picked
+reached the same place and was refused: a writer would have to pick a branch before it has picked
 a type.
 
 **There is no `label` role, and `labels` is why.** `labels` is the one naming channel - the elements
 whose own characters name the marks and the axes, capped at eight marks and two axes. A `label` role
-would ask the model the same question a second time inside `encodings`, and a model that answers it
-twice can answer it two ways with nothing to settle which. So naming stays one field and `encodings`
+would name the same marks a second time inside `encodings`, and a plan that names them twice
+can name them two ways with nothing to settle which. So naming stays one field and `encodings`
 answers a different question: which elements are drawn, and by which channel. `event_label` is not
 the exception it looks like - a timeline's `time` channel places a dot and nothing else, so the event
 text is the mark rather than a name for one.
-
-**What that costs, measured.** An empty role is `"<name>":[]` and a comma. The nine role names cost
-114 characters on a plan that declines and the seven a `bar` leaves empty cost 87. Tokenized with the
-Qwen3 vocabulary (`Qwen3-8B-Q4_K_M.gguf` through `llama-tokenize`, 2026-09-09) that is 28 tokens and
-23 tokens, about 3.1 tokens an empty role.
-
-| At | Declining plan, 9 empty | Eight-bar plan, 7 empty | Over 80 items |
-| --- | --- | --- | --- |
-| 6.01 tok/s, the configured summarizer, `ubuntu-latest`, 2026-08-23 | 4.7 s | 3.8 s | 5.1 to 6.2 min |
-
-Eighty is `run.safety_ceiling_per_run` and is the most items a run plans for, so the run figure is an
-upper bound - an item the reachability gate refuses never reaches the summarize-and-plan call's plan half at all.
-`digest.yml` fires five scheduled runs a day, so the day's ceiling is 400 plans: 26 to 31 minutes of
-runner wall-clock, spread over four shards rather than paid serially. The worst-case reply ceiling
-did not move: it already counted every declared key, because a grammar-constrained decoder emits
-them all.
 
 ## The validator refuses, and each check refuses on its own
 
@@ -166,17 +165,18 @@ Its native `VisualType` enum is declared once in
 empty list. Retired names remain readable in historical configuration but are
 excluded from effective selection.
 
-`visuals.type_selection_enabled` is on in the committed configuration. It limits the derived
-request grammar, the ruled reachability choices and parsed requests to the
+`visuals.type_selection_enabled` is on in the committed configuration. It limits the forms the
+request offers and the types a parsed answer may name to the
 selected implemented types. The
 [capability table](where-a-drawing-becomes-pixels.md#declared-types-are-not-delivery-promises)
 names the abandoned forms. They remain readable in the complete native plan
 schema, not available as new production requests. The schema default remains
 false for older authored configurations; off still offers only the supported
 numeric chart types, never the full historical vocabulary. Defaults, effective
-selection and every request schema use that numeric capability set. Effective
-selection enters the input fingerprint and the shared
-type guide. Neither changes the prefix between an item's adjacent calls.
+selection and every request schema use that numeric capability set, and a table is
+then offered only as the forms among them that take a name and a figure a mark. Effective
+selection enters the input fingerprint and the forms line of the request. Neither changes
+the shared system turn.
 
 `visuals.min_chart_points`, `visuals.max_chart_points` and `visuals.histogram_bins` are knobs and
 are read from `config/` (Guardrail #6). The tables are not knobs, and since 2026-09-09 they are not the
@@ -381,16 +381,18 @@ outcomes. The
 [historical compatibility rule](where-a-drawing-becomes-pixels.md#historical-visual-kinds-do-not-enable-a-retired-reader)
 preserves old outcome facts without keeping the retired feature alive.
 
-**Why every field of the model's reply is required, including the empty ones.** A field with a
+**Why every field of the model's answer is required, including the null ones.** A field with a
 default is absent from the schema's `required` list, and a constrained decoder emits exactly what
-`required` forces. On the first live run the model returned a confident `kind` of `chart` with no
-bars in it, twice, because `points` was optional. Required-and-empty is the honest shape.
+`required` forces. On an earlier reply shape the model returned a confident `kind` of `chart` with no
+bars in it, twice, because `points` was optional. Required-and-null is the honest shape: every key is
+present, and one the answer does not use is null.
 
-**Why `reason` is decoded before `kind`.** Pydantic emits properties in declaration order and
-llama.cpp builds its grammar in that order, so **field order is decode order**. With `kind` first
-the model committed to an answer and then filled `reason` by copying the prompt's own rules back -
-observed live, verbatim. With `reason` first, one plain sentence about the item grounds the choice
-that follows.
+**Why the reason is decoded before the decision.** Pydantic emits properties in declaration order and
+llama.cpp builds its grammar in that order, so **field order is decode order**. With the decision first
+the model committed to an answer and then filled the reason by copying the prompt's own rules back -
+observed live, verbatim, on an earlier reply shape. With the reason first (`why` before `type`), one plain
+sentence about the item grounds the choice that follows. With thinking off it is the model's only room to
+reason; whether it improves answers is read off published runs.
 
 **Why the prompt states no base rate.** The first prompt said "Almost always it does not", "the
 right answer roughly two times in three", and "When in doubt, choose none". At `temperature=0`
@@ -401,7 +403,8 @@ branch of an ordered test, which reaches the same place without leaning on the l
 **Why the floor is a mark count and never `confidence`.** The ladder needs a number that rises with
 depth, and the only per-plan number in the contract is `confidence` - which the shape itself says is
 "recorded, and it gates nothing". Three reasons, and the cheapest one comes first: gating on it
-breaks the shape's own written guarantee. It is also the one free number the model writes, so
+breaks the shape's own written guarantee. It is also the one free number a model can write, and a plan
+built from a table carries none, so
 prohibition 2 - "the worst a prompt injection can do is pick the wrong bars; it cannot draw the
 wrong number" - would stop being true of publish decisions (Guardrail #11). `CLAUDE.md` section 1a now
 lets a model verdict decide what publishes, so this is a ruling this subsystem keeps rather than a
@@ -442,9 +445,9 @@ story text without a chart.
 | Return one refusal string from the validator | Cheaper to write and it makes every rule unfalsifiable at once. Nothing can then say which check fired, so no check can be retired, tuned or shown to work - and a fixture that trips three rules proves none of them. |
 | Compare unit strings for equality in the validator | Cheaper, and wrong in the direction that matters: it refuses `4,200 tonnes` beside `4.2 kt`, which is the pair a reader most needs joined, while accepting `tonnes` beside `t` only by accident of spelling. |
 | Put the per-type role table in `config/` | It is a relation between two Python enums, and a JSON file can reference neither - so the copy there would be a second spelling that drifts from both. It is also not a knob: a config edit that let a `bar` draw `bins` would publish a plan no compiler has a template for. |
-| An eighteen-branch union, one per type, instead of one encodings object | The decoder would have to pick a branch before it has picked a type. |
-| A `label` encoding role beside the `labels` field | It asks the model the same question twice inside one reply, and a model that answers it twice can answer it two ways with nothing to settle which. |
-| `confidence` as the ladder's escalating floor | The contract says it gates nothing, and it is the one free number the model writes - so gating it would let the model decide its own publication on its own say-so. `CLAUDE.md` section 1a permits a model verdict to decide publication; it does not make this number worth trusting, and gating it would also destroy it as a diagnostic. |
+| An eighteen-branch union, one per type, instead of one encodings object | A writer would have to pick a branch before it has picked a type. |
+| A `label` encoding role beside the `labels` field | It names the same marks twice inside one plan, and a plan that names them twice can name them two ways with nothing to settle which. |
+| `confidence` as the ladder's escalating floor | The contract says it gates nothing, and it is the one free number a model can write, which a plan built from a table does not carry - so gating it would let a model decide its own publication on its own say-so. `CLAUDE.md` section 1a permits a model verdict to decide publication; it does not make this number worth trusting, and gating it would also destroy it as a diagnostic. |
 | Waive the floor when no depth-0 visuals have been published | Depth 1 would publish on the validator alone, which is depth 1 quietly becoming the default path - the failure the escalating floor exists to prevent. |
 | A `line` to `bar` downgrade edge | The source document allows it "if the time axis is safely categorical", and nothing in this build can decide that. A condition nobody can evaluate is a condition nobody should encode. |
 | Any chart to `table` at depth 2 | `table` has no role rule, so the validator refuses it by name. A target that cannot pass rescues nothing, and listing it would be a rung nobody can stand on. |

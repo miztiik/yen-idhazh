@@ -1,6 +1,6 @@
 # Where every drawn figure came from
 
-**Last Updated**: 2026-10-26
+**Last Updated**: 2026-11-18
 
 Every number a reader reads off an axis has exactly one of two origins, and this
 page is the whole of that promise: it is characters the article itself wrote, or
@@ -14,14 +14,11 @@ who decides a picture at all is [visuals.md](visuals.md).
 
 | Dropped | Reason |
 | --- | --- |
-| A bare four-digit integer in 1900-2100 with no unit | It is a year. A year is a label, not a bar height. Dropping it costs nothing, because a label is a free string the model can still write. |
+| A bare four-digit integer in 1900-2100 with no unit | It is a year. A year is a label, not a bar height. Dropping it as a quantity costs nothing, because the date pass still reads it as a date. |
 | A number preceded by a hyphen after a word character | `COVID-19`, `GPT-4`, `Qwen3-4B`. Identifiers, not quantities. |
 | A magnitude of a bare `m` or `k` | `15 m` is fifteen metres or fifteen million. The model never writes a number, but the extractor does, and a guess here is a one-million-fold error on a published bar. The spelled-out words and the unambiguous `bn`/`mn`/`tn` are kept. |
 | Anything at or below 2 with no unit | A list marker. `2 percent` keeps its unit and survives. |
 | A repeat of the same value **in the same unit** | One figure quoted in a lead and a body paragraph is one fact. Twelve percent and twelve people are two. |
-
-The menu is capped at `visuals.max_facts` (default 16). A long indexed list is lost-in-the-middle
-for a small model choosing an integer.
 
 ## A number the article did not write, and the four ways code may reach one
 
@@ -33,10 +30,19 @@ written as a shape: exactly one of the two, never both, never neither. A figure 
 nothing does not load, so the walk over a plan proves the resolver never reaches for the exception
 rather than proving nobody happened to write one.
 
+**The route from the model's answer to a figure is a row, and the pairing is code's.** The model
+names a row; code looks up the name element and the figure element that row stands for, both cut
+from the article's own characters, and cites them. Which name sits beside which figure is the table
+builder's rule, which refuses any sentence it cannot pair for sure
+([the rules](../summarize/prompt.md#the-model-is-shown-tables-of-figures-never-the-element-table)),
+because no check here can see a wrong pairing: `no_invented_values` proves a figure reads out of its
+element's characters, not that it belongs beside its name.
+
 **Four functions, and the list is closed.** Its shortness is the guarantee rather than a starting
-point: the model picks the type and points at elements, and it cannot name a function, cannot supply
-an operand, and has no numeric field anywhere in its schema - `contracts/visual.py` refuses to import
-if it grows one. So the worst a prompt injection can do stays "pick the wrong elements". A fifth
+point: the model picks a form and a row and words a title with no digit, and it cannot name a
+function, cannot supply an operand, and has no numeric field anywhere in its answer or its plan -
+`contracts/visual.py` refuses to import if the plan grows one. So the worst a prompt injection can
+do stays "pick the wrong table, form or row". A fifth
 function is a maintainer decision and `contracts/derived.py` raises at import if one appears, which is
 why the argument for the list being short is written beside the constant rather than only here.
 
@@ -69,8 +75,8 @@ Nothing is lost, which is what makes conversion safe here. An element's Tier 1 `
 article's own characters and is never overwritten, so a reader who wants the figure the article
 printed can always be given it.
 
-**The target unit is code's choice, never the plan's.** Taking the first entry's unit would hand the
-choice to the model, which orders the channel. So the target is the smallest scale present, and among
+**The target unit is code's choice, never the plan's.** Taking the first entry's unit would let the
+order of the channel pick the unit, and the plan sets that order. So the target is the smallest scale present, and among
 units sharing that scale the one that sorts first. Two properties fall out and both are load-bearing:
 it is a fact about the channel's contents rather than about the plan's order, and converting to the
 smallest present unit only ever multiplies, so no value is divided into a repeating decimal and no

@@ -15,7 +15,13 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
-from support.prompts import SUMMARIZE_AND_PLAN_REPLIES, summary_payload
+from support.prompts import (
+    SUMMARIZE_AND_PLAN_REPLIES,
+    WIND_NAMES,
+    WIND_TEXT,
+    summary_payload,
+    tables_over,
+)
 from support.visual_plans import current_plan
 
 from idhazh import config, summarize
@@ -315,10 +321,11 @@ class TestTheGateSuppressesThePlanAndNeverTheCall:
         both prompts share everything up to and including the article and only the
         trailing turn differs.
         """
-        whole = summary_payload(article_ok)
-        suppressed = summary_payload(article_ok, plan=False)
-        text = article_ok.text or ""
-        shared = whole["prompt"][: whole["prompt"].index(text) + len(text)]
+        wind = article_ok.model_copy(update={"text": WIND_TEXT})
+        _, tables = tables_over(article_ok, WIND_TEXT, WIND_NAMES)
+        whole = summary_payload(wind, tables=tables)
+        suppressed = summary_payload(wind)
+        shared = whole["prompt"][: whole["prompt"].index(WIND_TEXT) + len(WIND_TEXT)]
 
         assert suppressed["prompt"].startswith(shared)
         assert whole["prompt"] != suppressed["prompt"]
@@ -328,7 +335,7 @@ class TestTheGateSuppressesThePlanAndNeverTheCall:
         body = json.loads(read_text(SUMMARIZE_AND_PLAN_REPLIES / "summary-and-plan.json"))
         content = json.loads(body["choices"][0]["message"]["content"])
 
-        reply = parse_summarize_and_plan(json.dumps(content["summary"]), plan=False)
+        reply = parse_summarize_and_plan(json.dumps(content["summary"]))
 
         assert reply.visual is None
         assert reply.summary.title == content["summary"]["title"]

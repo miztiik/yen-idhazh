@@ -47,11 +47,12 @@ from itertools import pairwise
 from types import MappingProxyType
 from typing import Final, NamedTuple
 
+from idhazh.contracts.base import derive_text_digest
 from idhazh.contracts.element import Element, ElementKind, ElementTable
 from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.visual import MAX_IDS_PER_ROLE, VisualPurpose, VisualType
 from idhazh.contracts.visual_decision import VisualKind
-from idhazh.elements import sentence_starts
+from idhazh.elements import SpanDriftError, sentence_starts
 from idhazh.sanitize import sanitize
 from idhazh.text_fit import fit_source_span
 
@@ -128,8 +129,14 @@ def tables_of_figures(
     """Every table of names and figures in `text`, which is the string `table` indexes.
 
     Reads the table's names and figures and the text around them, and nothing else: no model,
-    no network, and no word of the article decides anything but where a name stands.
+    no network, and no word of the article decides anything but where a name stands. A table
+    built over a different string than `text` is refused, because every offset in it would point
+    into a document the rows were not read from.
     """
+    if derive_text_digest(text) != table.source_text_hash:
+        raise SpanDriftError(
+            f"{table.item_id}: the table indexes a different string than the text read"
+        )
     if not forms_on_offer(visuals):
         return []
     names = _outermost(

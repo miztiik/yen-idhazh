@@ -16,8 +16,9 @@ plans into visual data. Who decides a visual at all is
 2026-09-13, under `CLAUDE.md` section 0.
 
 **The chain, end to end.** Code reads the article and finds every quantity it can, with the
-offsets that prove where each one came from. The model labels those quantities, names the
-chart type and selects which elements it is drawn from. Code compiles those references
+offsets that prove where each one came from, and builds tables of names and figures from them.
+The model says whether a table is worth a chart, chooses the form and the row the item turns on,
+and writes the title. Code builds the plan from that answer and compiles its references
 into validated chart data. The day payload points to a separate per-item JSON file;
 the reader's browser draws its SVG with d3 scale arithmetic and Svelte elements.
 Nothing draws a chart at build time and no SVG is committed.
@@ -150,8 +151,8 @@ range includes its upper edge, so the largest cited value is counted once.
 
 **What this ruling does NOT change, because each has been read as following from it.** The
 pages stay prerendered; prerendering a route and prerendering a chart are different acts and
-only the second one ends. The model still never writes a number - it labels, names and
-selects, and code cuts every character a reader sees. The validator, the downgrade ladder
+only the second one ends. The model still never writes a number - it chooses a form and a row and
+words a title, and code cuts every character a reader sees. The validator, the downgrade ladder
 and the sufficiency bar all stay; what moves is only where the spec becomes pixels. The
 console keeps its own chart engine and is not migrated.
 
@@ -282,12 +283,16 @@ back to several of them. Nothing in the compiler can reach a number from anywher
 
 **Category `i` names quantity `i`.** The resolver returns each channel in the plan's own order, so
 the pairing is the plan's rather than a rule invented in the compiler, and the bars are drawn in
-that order. Re-ranking them here would be the compiler deciding what the comparison says.
+that order. A plan built from a table of figures lists its names and its figures in row order, so
+the pairing is the one the article's sentence states. Re-ranking them here would be the compiler
+deciding what the comparison says.
 
 **Only a supported type is compiled.** This build compiles `bar`, `dot`, `slope`,
 `line`, `scatter`, `bubble`, `stacked_bar`, `pie` and `histogram`; a plan for any
 other declared chart type raises `CompileError` naming it rather than publishing
-a picture nobody planned.
+a picture nobody planned. The model is offered only `bar` and `dot`
+([the request](../summarize/prompt.md#the-model-is-shown-tables-of-figures-never-the-element-table)),
+so no model answer reaches the other forms today.
 
 ### Declared types are not delivery promises
 
@@ -313,8 +318,8 @@ The [text-only proposal rationale](what-a-visual-plan-may-say-and-what-happens-t
 and [diagram boundary](visuals.md#diagrams-deferred) remain relevant.
 Abandonment is distinct from the
 [planner-evidence handoff](../summarize/prompt.md#one-call-writes-the-summary-and-plans-the-visual-and-the-article-is-read-once):
-adding a compiler cannot recover a request that was suppressed, declined or
-failed to parse before reaching it.
+adding a compiler cannot recover a request that was never asked, declined or
+refused before reaching it.
 
 **A pie needs a separately stated whole.** `pie_exhaustive` checks that its parts
 use one measure and unit and exactly make that independent source quantity.
@@ -458,6 +463,8 @@ still publishes. No largest-value or first-bar fallback invents a priority.
 The general plan vocabulary remains zero to four element references; the
 current bar compiler requires one resolved bar. This may reduce chart count
 for otherwise valid plans, which the maintainer accepted instead of invented emphasis.
+The model's answer therefore names the row the item turns on, and code cites that row's figure
+as the one annotation.
 
 Framing changes no values, mark count, channel order or provenance. The flat
 mark pool stays intact; the emphasized id points to its measured member, not a

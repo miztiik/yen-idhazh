@@ -272,7 +272,7 @@ DIGEST_PROMPT_SCAFFOLD_TOKENS: Final = TokenizerMeasured(
     value=2167,
     measures=(
         "a ceiling on what the digest call's prompt costs before a word of the article or a "
-        "menu row lands, read on the longer prompt of the first call it replaced"
+        "table row lands, read on the longer prompt of the first call it replaced"
     ),
     taken_on=date(2026, 9, 13),
     subject=QWEN35_9B_Q4_K_M,
@@ -282,7 +282,7 @@ DIGEST_PROMPT_SCAFFOLD_TOKENS: Final = TokenizerMeasured(
     ),
     when_it_fires=(
         "when prompts, turn markers or weights change, render calls.build_summary_request for a "
-        "seven-word article and an empty element table, tokenize the whole prompt, and "
+        "seven-word article and no tables, tokenize the whole prompt, and "
         "replace this ceiling with the count."
     ),
     why_a_number=(

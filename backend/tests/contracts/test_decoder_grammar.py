@@ -13,10 +13,11 @@ import re
 from typing import Any
 
 import pytest
-from support.paths import FIXTURES_DIR
+from support.paths import CONTRACT_FIXTURES_DIR
+from support.prompts import WIND_NAMES, WIND_TEXT, tables_over
 
 from idhazh.classify import calls
-from idhazh.contracts.element import ElementTable
+from idhazh.contracts.article import Article
 
 pytestmark = pytest.mark.contract
 
@@ -76,13 +77,13 @@ def _patterns(node: Any, path: str = "") -> list[tuple[str, str]]:
 
 def _decoder_schemas() -> dict[str, dict[str, Any]]:
     """Every schema this pipeline sends a decoder, built the way the run builds it."""
-    table = ElementTable.read(FIXTURES_DIR / "visual-validator" / "tables" / "wind.json")
-    empty = ElementTable.model_validate(table.model_dump() | {"elements": []})
+    _, tables = tables_over(
+        Article.read(CONTRACT_FIXTURES_DIR / "article" / "ok.json"), WIND_TEXT, WIND_NAMES
+    )
     return {
         "summarize_and_plan": calls.summarize_and_plan_schema(plan=True),
         "summarize_only": calls.summarize_and_plan_schema(plan=False),
-        "article_references": calls.summarize_and_plan_schema(table=table),
-        "empty_references": calls.summarize_and_plan_schema(table=empty),
+        "article_rows": calls.summarize_and_plan_schema(tables=tables),
     }
 
 

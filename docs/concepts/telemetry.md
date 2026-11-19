@@ -123,7 +123,7 @@ Workers file settled items. Assemble accounts for missing work after it knows wh
 
 The work stage records each settled visual decision before writing the summary
 or starting scoring. Items that never reached visual planning write no attempt.
-Model none, reachability refusal, output-budget and window cuts, validation,
+Model none, no-table refusal, output-budget and window cuts, validation,
 shape/config/compiler refusals, chart delivery and render failure all use
 the same mapping in `telemetry/visual_attempts.py` and the standard ledger writer.
 Completed immutable writes remain available to the publisher if later work fails.

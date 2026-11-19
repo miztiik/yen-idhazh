@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import threading
@@ -119,35 +120,30 @@ def finding_the_wind_countries(
 
 
 def declining_wind_reply() -> bytes:
-    """Keep the source-backed summary while the boundary answer declines decoration."""
+    """Keep the source-backed summary while the boundary answer declines a chart.
+
+    The row, title and caption the recorded chart answer carried are left in place on purpose:
+    `none` is final, so a decline that still names a row must be read as a decline.
+    """
     answer = json.loads(DRAWS_SUMMARIZE_AND_PLAN.read_bytes())
     content = json.loads(answer["choices"][0]["message"]["content"])
     content["visual"].update(
-        decision="none",
-        purpose=None,
-        type=None,
-        encodings={role: [] for role in content["visual"]["encodings"]},
-        element_ids=[],
-        labels=[],
-        annotations=[],
-        title=None,
-        caption=None,
+        type="none",
         why="The summary already gives the approvals; another display would repeat it.",
     )
     answer["choices"][0]["message"]["content"] = json.dumps(content)
     return json.dumps(answer).encode("utf-8")
 
 
-def assert_planning_references(server: RecordedEndpoint, references: set[str]) -> None:
-    """The actual request must expose and admit the compiled source ids."""
+def assert_planning_rows(server: RecordedEndpoint, rows: list[str]) -> None:
+    """The actual request must show the rows, admit only their codes and carry no element id."""
     assert server.served == 1, "one item must run the one production call"
     request = server.sent[0]
-    menu = str(request["prompt"]).split("Source elements found in the item.", maxsplit=1)[1]
-    offered = request["json_schema"]["$defs"]["PlanEncodings"]["properties"]["entity"][
-        "items"
-    ]["enum"]
-    assert references <= set(offered)
-    assert all(f'"{reference}"' in menu for reference in references)
+    prompt = str(request["prompt"])
+    assert all(row in prompt for row in rows)
+    assert re.search(r"\b[a-z]+-\d+-\d+\b", prompt) is None
+    offered = request["json_schema"]["$defs"]["PlanChoice"]["properties"]["focus"]["anyOf"][0]
+    assert offered["enum"] == [row.split(" | ", 1)[0] for row in rows]
 
 
 def assert_reader_accepts(path: Path, *, item_id: str) -> None:

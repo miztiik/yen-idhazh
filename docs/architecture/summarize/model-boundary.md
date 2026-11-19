@@ -1,6 +1,6 @@
 # The model boundary
 
-**Last Updated**: 2026-11-17
+**Last Updated**: 2026-11-18
 
 How the summarizer stays generic while the model behind it changes. This page
 owns the shape of the boundary - what crosses it, which side each fact lives
@@ -181,8 +181,9 @@ Three steps, in order, all reading the entry and never a model name.
 2. **Wrap the turns.** Substitute the role into the opening, append the
    closing, and end with the reply opening the model expects.
 3. **Build the request.** Attach the output schema, ask for the prompt cache,
-   and set the budgets. Request-only reference choices may narrow the native
-   shape; compatible native bounds still determine reply budgets.
+   and set the budgets. Request-only choices may narrow the native shape: the
+   answer about a chart is held to the forms and rows the request offered. The
+   budget is the model file's response limit.
 
 The system turn is the same bytes on every item, which is what lets the prefix
 cache hold from one item to the next. That property lives in the expression itself
@@ -301,9 +302,9 @@ at the bottom of the dependency graph, since the schema builder imports it.
 
 Article-specific choices need a separate full-schema check: compile the actual
 request with the pinned native C++ converter and exercise complete valid and
-invalid objects with the native grammar validator. Include correlated range
-endpoints, original-source excerpt eligibility and empty pools, not just one
-sampled valid reply. The stock validator's explicit validity verdict is the
+invalid objects with the native grammar validator. Include a `none` answer, an
+answer naming a row or a form the request did not offer, and a request with no
+tables, not just one sampled valid reply. The stock validator's explicit validity verdict is the
 result; its exit status alone does not distinguish an accepted object from a
 rejected one. This model-free check proves native grammar acceptance, not
 observed token masking, inference quality or useful visual selection.
@@ -339,16 +340,14 @@ finer is a second implementation of the runtime, kept in a docstring, drifting.
 
 ## Design rationale
 
-**Request choices narrow selection, not the saved contract.** The call
-can select only printed references the menu offers. Complete native-derived range branches keep correlated endpoints
-together; independent enums or constraints beside a union can admit unusable
-pairs when converted to a grammar. Historical reply readers retain the native
-shape. A request-local definition shares the unchanged speaker leaf instead
-of recompiling its bounded string in every range branch; expanding that one
-reference reproduces the direct schema, including field and alternative order.
-Schema/grammar size, native conversion/initialization and peak memory
-are separate costs from prompt-token capacity; measure the dense source-cap
-case before choosing an equivalent factoring.
+**Request choices narrow selection, not the saved contract.** The call can answer only
+`none` or a form on the request's forms line, and only a row code the tables show: the
+request's schema holds `type` and `focus` to those values. Code builds the plan from the
+answer, so the native `VisualPlan` is not changed by what a request offers. A request
+described without its tables holds `focus` to the shape of a row code instead. The grammar
+lists every offered row code, so its size follows the number of rows; schema/grammar size,
+native conversion/initialization and peak memory are separate costs from prompt-token
+capacity, and none is measured on this page.
 
 **Tests describe behavior, not the selected model.** Generic tests supply
 explicit turn markers, reasoning keywords and server flags. A new valid model

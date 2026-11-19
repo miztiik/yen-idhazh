@@ -23,7 +23,7 @@ Table B - Out of scope and its cost
 
 | ID | What is out | What it costs to leave out | What would bring it in |
 | --- | --- | --- | --- |
-| B1 | Offering line, slope, scatter, bubble, pie, stacked bar and histogram; the validator and compiler keep supporting them | Stories of those shapes draw nothing. Pie and stacked bar need a stated whole code cannot find, line and slope need date-and-figure tables, scatter and bubble need each figure's subject; none has published since 2026-09-14 either | One more table shape added to the builder, once row 1's check shows name-and-figure tables yield real charts |
+| B1 | Offering line, slope, scatter, bubble, pie, stacked bar and histogram; the validator and compiler keep supporting them | Stories of those shapes draw nothing, and the replacement ladder (bubble to scatter, pie to stacked bar, comparison to bar) has no input from a model answer, so it stays dormant. Pie and stacked bar need a stated whole code cannot find, line and slope need date-and-figure tables, scatter and bubble need each figure's subject; none has published since 2026-09-14 either | One more table shape added to the builder, once row 1's check shows name-and-figure tables yield real charts |
 | B2 | Shortening the summary half of the system turn | About 165 tokens (an estimate) stay in a turn the server reads once a shard; the summary is the product, so a cut needs its own before-and-after comparison | A summary comparison on the same articles |
 
 ## 1. Status Reckoner
@@ -33,7 +33,7 @@ Table C - Status Reckoner
 | ID | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | 1 | Build name-and-figure tables from an article | - | A | DONE | cuddly-dollop | own pull request | - |
-| C2 | 2 | Let the model choose among the tables | 1 | B | PENDING | - | - | - |
+| C2 | 2 | Let the model choose among the tables | 1 | B | DONE | cuddly-dollop | own pull request | - |
 | C3 | 3 | Delete what only the id menu served | 2 | C | PENDING | - | - | - |
 
 ## 2. Row #1 - Build name-and-figure tables from an article
@@ -75,14 +75,15 @@ Table E - Row #2 decisions
 | E3 | Plan: code builds a complete `VisualPlan` from a chart answer: decision `visual`, purpose `comparison`, the chosen form, category = the table's name elements and quantity = its figure elements in row order, every other channel empty, no declared whole, no labels, annotations = the focus row's figure (the compiler needs exactly one emphasised mark and code never guesses it), the element ids those cite, the model's title and caption, and the vocabulary stamp. `VisualPlan.confidence` becomes optional, with a changelog line: nothing reads it and the model no longer writes it. The plan is not persisted, so nothing migrates |
 | E4 | A chart answer is refused by a named rule, so `failed_field` and `failed_rule` say which, when it has no `focus`, when its title is empty after `sanitize`, or when `why`, `title` or `caption` holds a digit: the validator's numeral check only proves a numeral appears among the cited figures, not that it belongs to the row it names. The item publishes with its summary and no chart |
 | E5 | A table built means the plan is asked for; none built means it is left off, recorded as `not_reachable`. That value now means no table was on offer; before this change it meant no choice over the elements could have validated. The enum's comment, the `VisualDecision` changelog and the docs say so; no field, value or column is added or removed, and rows written before keep the old meaning |
-| E6 | The window check bounds the offered tables from what the builder can emit (one token a character: a token spans at least one character) and not from the old per-row rate, and the contract test keeps the longest article the cap allows inside the window. The run's prompt stamp renders the user turn with one fixed example table, so a change to the table wording moves it; it still counts `visuals.enabled_kinds` and the selected types |
+| E6 | The window check bounds the offered tables from what the builder can emit (one token a UTF-8 byte: a token spans at least one byte, whereas a rare character can cost several tokens) and not from the old per-row rate, and the contract test keeps the longest article the cap allows inside the window. The tables are optional where the article is not: an article that does not fit alone is refused, and one whose tables do not fit is read without them. The run's prompt stamp appends one fixed example table framed exactly as a real one is, so a change to the table wording moves it; it still counts `visuals.enabled_kinds` and the selected types |
 
 ## 4. Row #3 - Delete what only the id menu served
 
-- **Scope:** Remove the id menu, the reply shape that cited ids, the numeric chart guide, the old gate and everything else a search shows only they served; keep the validator, the ladder, the compiler and `VisualPlan`. If OBS-1 later calls for a revert of row #2, this row is reverted first.
+- **Scope:** Remove what row #2 left unused: the old gate, the worst-case-reply arithmetic and its measured records, the per-row menu rate, a reply fixture nothing reads, and every doc section that still presents the id menu or the old gate as current design; keep the validator, the ladder, the compiler and `VisualPlan`. If OBS-1 later calls for a revert of row #2, this row is reverted first.
 - **Files touched:** (from a search for the names being deleted; re-run at dispatch)
-  - Code: `backend/idhazh/classify/plan_visual_request.py`, `backend/idhazh/classify/calls.py`, `backend/idhazh/visual_planner.py`, `backend/idhazh/contracts/visual.py`, `backend/idhazh/measured.py`, `backend/utilities/measure_budgets.py`
-  - Tests: `backend/tests/test_classify.py`, `backend/tests/test_chart_vocabulary.py`, `backend/tests/test_prompt_files.py`, `backend/tests/test_visual_planner.py`, `backend/tests/test_measure_budgets.py`, `backend/tests/contracts/test_visual_plan.py`, `backend/tests/contracts/test_decoder_grammar.py`
+  - Code: `backend/idhazh/visual_planner.py`, `backend/idhazh/contracts/visual.py`, `backend/idhazh/measured.py`, `backend/utilities/measure_budgets.py`
+  - Fixtures: `tests/fixtures/completions/summarize-and-plan/canary-page-title.json` (a reply in the old shape, read by nothing)
+  - Tests: `backend/tests/test_chart_vocabulary.py`, `backend/tests/test_visual_planner.py`, `backend/tests/test_measure_budgets.py`, `backend/tests/contracts/test_visual_plan.py`
   - Docs: `docs/architecture/publishing/visuals.md`; `docs/reference/benchmarks/two-call-re-read.md`, `docs/reference/benchmarks/instructions-in-front.md` and `docs/reference/benchmarks/two-call-window-sizing.md` (pointers only); `TODO/20261110-restore-visual-publication-plan.md` (its pending row names files already deleted, and the menu)
 - **Acceptance gates:** Local: the shared selector over the changed tests; `-m contract`; ruff and mypy over `backend/`. CI: the complete suite.
 - **Oracle:** A search of `backend/`, `config/`, `docs/`, `frontend/src`, `tests/`, `tools/` and `.github/` for each deleted name finds only history (changelogs, dated benchmark pages), and the validator, ladder and compiler test modules pass with no change to their assertions. It cannot settle that no reader outside the repository uses a deleted name; `docs/architecture/contracts/ledger-registry.md` lists the readers of persisted data.
@@ -93,5 +94,5 @@ Table F - Row #3 decisions
 | ID | Decision |
 | --- | --- |
 | F1 | Keep `VisualPlan`, the validator, the replacement ladder, the compiler and the vocabulary tables: the drawn figure's trust rests on them and only the model's route to them moved |
-| F2 | Delete a name only when a search after row #2 finds no reader. Expected: the id menu and its columns, the id-citing reply shape with its reader of older replies, the numeric chart guide, the old gate (`reachable_types`, `plan_is_reachable`) with its tests, the worst-case-reply arithmetic with its measured record, and the per-row menu rate |
+| F2 | Delete a name only when a search after row #2 finds no reader. Expected: the old gate (`reachable_types`, `plan_is_reachable`) with its tests, the worst-case-reply arithmetic with its measured record, the per-row menu rate, and the unread old-shape reply fixture. Row #2 already removed the id menu, the id-citing reply shape with its reader of older replies, and the numeric chart guide, because it rewrote their tests |
 | F3 | Sections that present the id menu or the old gate as current design are deleted, not archived; dated benchmark pages keep their history and gain a pointer; the other chart plan's pending row is corrected to the new design |
