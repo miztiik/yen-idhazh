@@ -20,6 +20,7 @@ from idhazh.contracts.appearance_config import AppearanceConfig, ChartConfig
 from idhazh.contracts.knobs.console import ConsoleConfig
 from idhazh.contracts.knobs.evaluation import DriftConfig, EvaluationConfig
 from idhazh.contracts.knobs.extract import ElementsConfig
+from idhazh.contracts.knobs.finetune import FinetuneConfig
 from idhazh.contracts.knobs.ledger import LedgerConfig
 from idhazh.contracts.knobs.model_server import ModelServerConfig, is_loopback, resolve_base_url
 from idhazh.contracts.knobs.observability import LoggingConfig, ObservabilityConfig
@@ -433,6 +434,30 @@ def test_request_accounting_refuses_ambiguous_or_unbounded_response_limits() -> 
     for request in ({}, {"n_predict": -1}, {"max_tokens": True}, {"max_tokens": 2, "n_predict": 1}):
         with pytest.raises(ValueError, match="response-token limit"):
             dag.response_tokens(request)
+
+
+def test_finetune_row_limits_fit_the_corpus_window() -> None:
+    with pytest.raises(ValidationError, match="train_rows cannot exceed"):
+        FinetuneConfig(corpus_rows=600, min_rows=500, train_rows=1000)
+    with pytest.raises(ValidationError, match="min_rows cannot exceed"):
+        FinetuneConfig(corpus_rows=500, train_rows=100, min_rows=600)
+
+
+def test_finetune_rejects_an_unknown_teacher_role() -> None:
+    payload = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
+    payload["finetune"]["teacher"] = "unknown_role"
+
+    with pytest.raises(ValidationError, match=r"finetune\.teacher must name one of models"):
+        AppConfig.model_validate(payload)
+
+
+def test_finetune_teacher_has_a_distinct_base_repository() -> None:
+    settings = config.load(CONFIG_DIR)
+    teacher = settings.app.finetune.teacher
+    ref = getattr(settings.models, teacher)
+
+    assert ref.hf_base_repo, "the configured teacher needs a base repository for fine-tuning"
+    assert ref.hf_base_repo != ref.repo, "the base repository must not point to the GGUF weights"
 
 
 def test_the_training_window_covers_the_longest_row_the_cap_allows() -> None:
