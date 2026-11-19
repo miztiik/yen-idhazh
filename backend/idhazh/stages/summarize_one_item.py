@@ -1,10 +1,10 @@
 """How does one article become a summary and a picture, in one call?
 
 This is the path the digest and pipeline tests use. The model reads the item once: its
-summary and, when code finds a chart reachable, its visual plan come back in the one
-reply. The names and places the picture may cite arrive as `mentions` from the
-text-analysis service, asked for before this runs, so the model is not asked to find
-them.
+summary and, when code has built a table of names and figures from it, its answer about a
+chart come back in the one reply. The names and places the tables are made of arrive as
+`mentions` from the text-analysis service, asked for before this runs, so the model is not
+asked to find them.
 """
 
 
@@ -30,12 +30,14 @@ from idhazh import (
 )
 from idhazh.anchor_mentions import Mention
 from idhazh.classify import calls, dag
+from idhazh.classify.pair_names_with_figures import FigureTable, forms_on_offer, tables_of_figures
+from idhazh.classify.plan_visual_request import render_tables
 from idhazh.contracts.article import Article
 from idhazh.contracts.call_cost import COST_FIELDS, CallCost, CallKind
 from idhazh.contracts.element import ElementTable
 from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.summary import Summary, SummaryStatus
-from idhazh.contracts.visual import PlanDecision, VisualPlan, VisualType
+from idhazh.contracts.visual import VisualPlan, VisualType
 from idhazh.contracts.visual_decision import VisualDecision
 from idhazh.contracts.visual_telemetry import ValidatorCheck
 from idhazh.fingerprint import (
@@ -449,7 +451,9 @@ def summarize_one_item(
     `recovered_completion` salvages the summary, and the item publishes with
     `window_exhausted` recorded where the picture would have been. Refusing it up
     front is still the better answer, because the whole decode is paid for before
-    that reason can be written.
+    that reason can be written. The tables are optional where the article is not:
+    an item whose tables would not fit is read without them and asked no question
+    about a chart.
 
     **The reply is read whole, and the summary survives the plan.** The summary
     is decoded first and closed before the plan starts, so a decode the output
@@ -507,30 +511,38 @@ def summarize_one_item(
             table = elements.element_table(
                 article, config=settings.app.elements, mentions=mentions
             )
+            visuals = settings.app.visuals
             if not dag.fits_the_window(
-                article,
-                model.server,
-                menu_rows=len(table.elements),
-                sampling=model.sampling,
+                article, model.server, table_bytes=0, sampling=model.sampling
             ):
                 LOG.warning(
-                    "the call would not fit the window id=%s tokens=%s menu=%s",
+                    "the call would not fit the window id=%s tokens=%s",
                     article.item_id,
                     article.token_count,
-                    len(table.elements),
                 )
                 return failed(FailureCode.CONTEXT_EXCEEDED)
-            wants_a_plan = visual_planner.plan_is_reachable(table, visuals=settings.app.visuals)
+            tables = tables_of_figures(article.text or "", table, visuals=visuals)
+            shown = len(render_tables(tables, forms_on_offer(visuals)).encode("utf-8"))
+            if tables and not dag.fits_the_window(
+                article, model.server, table_bytes=shown, sampling=model.sampling
+            ):
+                LOG.warning(
+                    "the tables would not fit the window and the item is read without them "
+                    "id=%s tokens=%s table_bytes=%s",
+                    article.item_id,
+                    article.token_count,
+                    shown,
+                )
+                tables = []
             request = calls.build_summary_request(
                 article,
-                table,
+                tables,
                 model_id=model_id,
                 server=model.server,
                 sampling=model.sampling,
                 markers=markers,
-                plan=wants_a_plan,
                 prompt_config=settings.app.summarize,
-                visuals=settings.app.visuals,
+                visuals=visuals,
                 prompt_files=settings.app.prompt_files,
                 config_dir=settings.config_dir,
             )
@@ -569,7 +581,7 @@ def summarize_one_item(
             return failed(no_reply)
         split = calls.split_the_decode(reply)
         kept.note(
-            run_visual_decision=wants_a_plan,
+            run_visual_decision=bool(tables),
             **_call_cells(CALL_SLOT, CallKind.SUMMARIZE_AND_PLAN, reply, wall_ms=summary_ms),
             **_item_cells(reply),
             **_split_cells(split),
@@ -628,10 +640,10 @@ def summarize_one_item(
             summary,
             reply,
             table,
+            tables=tables,
             settings=settings,
             date=date,
             stamp=stamp,
-            wants_a_plan=wants_a_plan,
             run_id=run_id,
             recorder=kept,
             render_root=render_root,
@@ -652,10 +664,10 @@ def _decide_the_visual(
     completion: Completion,
     table: ElementTable,
     *,
+    tables: Sequence[FigureTable],
     settings: config.Settings,
     date: str,
     stamp: Mapping[str, str],
-    wants_a_plan: bool,
     run_id: str | None,
     recorder: ItemRecorder | None = None,
     render_root: Path | None = None,
@@ -664,9 +676,9 @@ def _decide_the_visual(
     """Which of the routes to a picture, or to none, this reply took.
 
     Six outcomes and five `none_reason` members, because the member names the
-    gate rather than the call site: a reply whose plan half will not hold
-    `VisualPlan`'s own rules and a plan the compiler could not draw are one
-    answer to an operator - a plan was drafted and this build refuses it.
+    gate rather than the call site: an answer about a chart that breaks one of
+    its rules and a plan the compiler could not draw are one answer to an
+    operator - a chart was chosen and this build refuses it.
 
     **A cut reply is two different findings and the server reports one.** Under
     `--no-context-shift` a decode that runs into the end of the window stops
@@ -676,7 +688,7 @@ def _decide_the_visual(
     the prompt, and the call's response limit is the model file's. Less room
     left than that limit means the window was the wall.
     """
-    if not wants_a_plan:
+    if not tables:
         return visual_planner.suppressed_by_the_gate(summary, **stamp)
     if completion.hit_the_budget:
         n_ctx = window(settings.models.summarizer.server)
@@ -692,7 +704,7 @@ def _decide_the_visual(
             return visual_planner.plan_lost_to_the_window(summary, **stamp)
         return visual_planner.plan_lost_to_the_budget(summary, **stamp)
     try:
-        reply = calls.parse_summarize_and_plan(completion.content)
+        reply = calls.parse_summarize_and_plan(completion.content, tables=tables)
     except (ValidationError, ValueError, json.JSONDecodeError) as error:
         shape = _shape_cells(error)
         LOG.warning(
@@ -711,9 +723,9 @@ def _decide_the_visual(
             **stamp,
         )
     plan = reply.visual
-    if plan is None or plan.decision is not PlanDecision.VISUAL:
+    if plan is None:
         return visual_planner.declined_by_the_model(
-            summary, why=plan.why if plan is not None else "the reply carried no plan", **stamp
+            summary, why=reply.why or "the model declined a chart", **stamp
         )
     return _drawn(
         summary, plan, table, settings=settings, date=date, stamp=stamp,

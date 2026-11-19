@@ -363,10 +363,11 @@ def _worst_one_call_sequence_tokens(committed: AppConfig) -> tuple[int, int]:
 
     A second derivation and not a widening of the one above, because the two
     paths render different prompts. The standalone summarizer sends one system
-    turn and the article. The digest call sends its own system turn, the article
-    and a menu of every element the extractor and the text-analysis service
-    already cut, up to `elements.max_per_article` rows, and then writes up to
-    the model file's response limit.
+    turn and the article. The digest call sends its own system turn and the
+    article, and then writes up to the model file's response limit. The tables
+    of figures ride behind the article only where the work stage finds they fit:
+    it reads an item without them otherwise, so the worst case the window has to
+    hold is the article alone.
 
     **The arithmetic itself is `classify.dag`'s and this is the gate over it.**
     It used to be written out here, which put the number the production path
@@ -375,12 +376,11 @@ def _worst_one_call_sequence_tokens(committed: AppConfig) -> tuple[int, int]:
     here is the cap, the knob and the window, all three read from `config/`
     (Guardrail #6).
     """
-    rows = committed.elements.max_per_article
     cap = committed.extract.truncation_cap_tokens
     sampling = committed_models().summarizer.sampling
     return (
-        dag.prompt_tokens(cap, menu_rows=rows),
-        dag.call_tokens(cap, menu_rows=rows, sampling=sampling),
+        dag.prompt_tokens(cap, table_bytes=0),
+        dag.call_tokens(cap, table_bytes=0, sampling=sampling),
     )
 
 
@@ -398,7 +398,7 @@ def test_the_call_fits_the_window_at_the_cap() -> None:
     assert sequence <= n_ctx, (
         f"the longest article extract.truncation_cap_tokens "
         f"({committed.extract.truncation_cap_tokens}) lets through makes a {prompt}-token "
-        f"prompt at elements.max_per_article of {committed.elements.max_per_article}. The "
+        f"prompt. The "
         f"{response_limit(models.summarizer.sampling)}-token response limit puts the call at "
         f"{sequence} against a window of {n_ctx}, over by {sequence - n_ctx}. Measure the "
         "complete request before proposing a configuration or article-admission change."
@@ -409,10 +409,17 @@ def test_the_gate_holds_room_for_the_whole_response_limit_the_model_file_names()
     """The reply has no length bound, so its reserve is the limit itself."""
 
     def held(sampling: dict[str, int]) -> int:
-        return dag.call_tokens(1000, menu_rows=10, sampling=sampling)
+        return dag.call_tokens(1000, table_bytes=10, sampling=sampling)
 
     assert held({"max_tokens": 9000}) - held({"max_tokens": 8000}) == 1000
     assert held({}) == held({"max_tokens": DEFAULT_MAX_TOKENS})
+
+
+def test_the_tables_are_held_at_a_token_a_byte_on_top_of_the_article() -> None:
+    """A token spans at least one byte, so the bytes shown are a ceiling."""
+    assert dag.prompt_tokens(1000, table_bytes=300) - dag.prompt_tokens(
+        1000, table_bytes=0
+    ) == 300
 
 
 @pytest.mark.parametrize("key, limit", [("n_predict", 4213), ("max_tokens", 8192)])

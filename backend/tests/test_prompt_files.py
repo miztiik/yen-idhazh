@@ -12,17 +12,16 @@ from pydantic import ValidationError
 from support.judge_reader import ProtocolReplies, native_reply
 from support.models import a_markers
 from support.paths import CONFIG_DIR
+from support.prompts import WIND_NAMES, WIND_TEXT, tables_over
 
 from idhazh import config, summarize
 from idhazh.classify import calls
-from idhazh.classify.plan_visual_request import type_role_guide
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import derive_text_digest, derive_url_key
 from idhazh.contracts.digest_day import DigestItem
 from idhazh.contracts.eval_row import ConfidenceBand
 from idhazh.contracts.knobs.prompts import PromptFilesConfig
-from idhazh.elements import element_table
 from idhazh.load_prompt_text import load_prompt_text
 from idhazh.similarity import judge, prompt, stamps
 from utilities import model_runtime, reference_set
@@ -195,28 +194,23 @@ def test_real_consumers_and_stamps_follow_two_selected_roots(tmp_path: Path) -> 
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(text, encoding="utf-8", newline="\n")
         options: PromptLocation = {"prompt_files": settings.app.prompt_files, "config_dir": root}
-        source = Article.model_validate(
-            article().model_dump() | {"text": "The library bought 12 desks."}
-        )
-        table = element_table(source, config=settings.app.elements)
-        for plan in (True, False):
+        source = Article.model_validate(article().model_dump() | {"text": WIND_TEXT})
+        _, tables = tables_over(source, WIND_TEXT, WIND_NAMES, config_dir=root)
+        assert tables
+        for shown in (tables, ()):
             request = calls.build_summary_request(
                 source,
-                table,
+                shown,
                 model_id=settings.models.summarizer.id,
                 server=settings.models.summarizer.server,
                 sampling=settings.models.summarizer.sampling,
                 markers=a_markers(),
-                plan=plan,
                 visuals=settings.app.visuals,
                 **options,
             )
             rendered = str(request["prompt"])
             assert label in rendered
-            assert type_role_guide(settings.app.visuals) in rendered
-            if plan:
-                assert table.elements
-                assert all(element.element_id in rendered for element in table.elements)
+            assert ("r1 | Denmark | 1200 MW" in rendered) is bool(shown)
         assert label in summarize.system_prompt(settings.app.summarize, **options)
         built, fault = reference_set.target_is_shaped_right(
             reference_set.Task(

@@ -20,9 +20,10 @@ from typing import Any, Final
 
 from pytest import LogCaptureFixture, MonkeyPatch
 from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR
-from test_classify import declining_reply
+from support.prompts import WIND_NAMES, WIND_TEXT, tables_over
+from test_classify import a_reply
 
-from idhazh import config, elements
+from idhazh import config
 from idhazh.contracts.article import Article
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.run_plan import RunPlan
@@ -248,6 +249,9 @@ def test_a_passing_item_carries_no_failure_detail(
     assert server.served == 1
     assert decision.kind is VisualKind.NONE
     assert decision.none_reason is NoneReason.MODEL_DECLINED
+    assert decision.rationale == (
+        "The summary already gives the approvals; another display would repeat it."
+    )
     assert decision.asked_the_model is True
     assert decision.data_path is None
     assert recorded is not None
@@ -262,13 +266,14 @@ def test_a_passing_item_carries_no_failure_detail(
     assert day.items[0].visual is None
 
 
-def test_a_malformed_visual_decline_keeps_shape_diagnostics_off_the_success_detail(
+def test_a_malformed_chart_answer_keeps_shape_diagnostics_off_the_success_detail(
     tmp_path: Path, caplog: LogCaptureFixture,
 ) -> None:
     caplog.set_level(logging.WARNING, logger="idhazh")
     settings = config.load(CONFIG_DIR)
     article = Article.read(CONTRACT_FIXTURES_DIR / "article" / "ok.json")
     summary = Summary.read(CONTRACT_FIXTURES_DIR / "summary" / "ok.json")
+    table, tables = tables_over(article, WIND_TEXT, WIND_NAMES)
     recorder = _silent_recorder()
     recorder.note(**ItemHealthRow.read(
         CONTRACT_FIXTURES_DIR / "item-health-row" / "published.json"
@@ -276,21 +281,24 @@ def test_a_malformed_visual_decline_keeps_shape_diagnostics_off_the_success_deta
 
     decision = _decide_the_visual(
         summary,
-        Completion(content=declining_reply(title="model-only words"), finish_reason="stop"),
-        elements.element_table(article, config=settings.app.elements),
+        Completion(
+            content=a_reply(focus=None, caption="model-only words"), finish_reason="stop"
+        ),
+        table,
+        tables=tables,
         settings=settings, date="2026-08-21",
         stamp={
             "version": VisualDecision.schema_version(), "model_id": "fixture-model",
             "decided_at": "2026-08-21T12:00:00Z",
         },
-        wants_a_plan=True, run_id="2026-08-21-1", recorder=recorder,
+        run_id="2026-08-21-1", recorder=recorder,
     )
     row = ItemHealthRow.read(persist(tmp_path, recorder.close()))
 
     assert summary.status is SummaryStatus.OK and summary.summary
     assert row.outcome.value == "ok" and row.detail is None
-    assert row.failed_field == "title"
-    assert row.failed_rule == "visual_plan_decline_empty"
+    assert row.failed_field == "visual.focus"
+    assert row.failed_rule == "visual_choice_focus_required"
     assert decision.rationale and row.failed_field in decision.rationale
     assert row.failed_rule in decision.rationale
     assert "model-only words" not in caplog.text

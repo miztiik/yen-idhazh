@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import re
 from typing import Final
 
 import pytest
 from support.paths import CONFIG_DIR
+from support.prompts import WIND_NAMES, WIND_TEXT, tables_over
 
 from idhazh import config
-from idhazh.anchor_mentions import Mention
 from idhazh.classify.pair_names_with_figures import (
     TABLE_FORMS,
     FigureTable,
@@ -17,53 +16,20 @@ from idhazh.classify.pair_names_with_figures import (
     tables_of_figures,
 )
 from idhazh.contracts.article import Article
-from idhazh.contracts.element import ElementTable
 from idhazh.contracts.knobs.visuals import VisualsConfig
-from idhazh.contracts.visual import (
-    EncodingRole,
-    PlanDecision,
-    PlanEncodings,
-    VisualPlan,
-    VisualType,
-)
-from idhazh.elements import element_table
-from idhazh.render.chart import compile_chart
-from idhazh.visual_validator import validate_plan
-from idhazh.visual_vocabulary import PLAN_VOCABULARY_VERSION, TYPE_RULES
+from idhazh.contracts.visual import EncodingRole, VisualType
+from idhazh.elements import SpanDriftError
+from idhazh.visual_vocabulary import TYPE_RULES
 
 APP: Final = config.load(CONFIG_DIR).app
 VISUALS: Final = APP.visuals
 
-WIND_NAMES: Final = ("Denmark", "Germany", "Poland", "Ireland")
-WIND: Final = (
-    "Denmark approved 1200 MW of offshore wind this week, the largest single award the country "
-    "has made. Germany approved 900 MW on the same day, and Poland approved 640 MW. Ireland "
-    "approved 410 MW, completing the round. None of the four regulators published the prices."
-)
+WIND: Final = WIND_TEXT
 COUNTRIES: Final = (
     "Denmark", "Germany", "Poland", "Ireland", "France", "Spain", "Italy", "Norway", "Sweden",
 )
 
-
-def built(
-    article: Article,
-    text: str,
-    names: tuple[str, ...],
-    *,
-    others: tuple[tuple[str, str], ...] = (),
-    visuals: VisualsConfig = VISUALS,
-) -> tuple[ElementTable, list[FigureTable]]:
-    """The real element pass over `text`, with the service labelling every place a name stands."""
-    labelled = [("GPE", name) for name in names] + list(others)
-    mentions = [
-        Mention(label, found.start(), found.end())
-        for label, name in labelled
-        for found in re.finditer(re.escape(name), text)
-    ]
-    table = element_table(
-        article.model_copy(update={"text": text}), config=APP.elements, mentions=mentions
-    )
-    return table, tables_of_figures(text, table, visuals=visuals)
+built = tables_over
 
 
 def rows_of(tables: list[FigureTable]) -> list[list[tuple[str, str, str]]]:
@@ -296,32 +262,8 @@ def test_every_offered_form_takes_one_name_and_one_figure_a_mark() -> None:
         assert TYPE_RULES[form].required == {EncodingRole.CATEGORY, EncodingRole.QUANTITY}
 
 
-def test_the_validator_and_the_compiler_accept_each_offered_form_over_an_offered_table(
-    article_ok: Article,
-) -> None:
-    table, [offered] = built(article_ok, WIND, WIND_NAMES)
-    names = [row.name.element_id for row in offered.rows]
-    figures = [row.figure.element_id for row in offered.rows]
+def test_a_table_built_over_another_text_is_refused(article_ok: Article) -> None:
+    table, _ = built(article_ok, WIND, WIND_NAMES)
 
-    for form in forms_on_offer(VISUALS):
-        plan = VisualPlan(
-            version=VisualPlan.schema_version(),
-            decision=PlanDecision.VISUAL,
-            purpose=TABLE_FORMS[form],
-            type=form,
-            encodings=PlanEncodings(
-                category=names, quantity=figures, quantity_x=[], time=[], series=[],
-                size=[], bins=[], entity=[], event_label=[],
-            ),
-            element_ids=[*names, *figures],
-            labels=[],
-            annotations=[figures[0]],
-            why="Four countries, one unit.",
-            title="Offshore wind approved",
-            caption=None,
-            confidence=0.5,
-            plan_version=PLAN_VOCABULARY_VERSION,
-        )
-
-        assert validate_plan(plan, table, visuals=VISUALS) == []
-        assert compile_chart(plan, table, visuals=VISUALS).data.type is form
+    with pytest.raises(SpanDriftError):
+        tables_of_figures(WIND + " ", table, visuals=VISUALS)

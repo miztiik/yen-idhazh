@@ -2,9 +2,10 @@
 
 The control that matters is not the prompt. It is that **the model never emits a
 number**. Numbers are pulled out of the article text deterministically, and the
-model is only allowed to choose which of them to plot, by index. A chart value
-that is not in the article is therefore unreachable rather than unlikely, and
-the oracle for this stage is a contract test rather than a hope.
+model is only allowed to choose which table to draw, which row to emphasise and
+how to word a title, by row code. A chart value that is not in the article is
+therefore unreachable rather than unlikely, and the oracle for this stage is a
+contract test rather than a hope.
 
 "Nothing" is the common and correct answer. Two items in three carry no visual,
 so `none` is the default that everything else has to earn its way past.
@@ -229,19 +230,22 @@ def plan_is_reachable(table: ElementTable, *, visuals: VisualsConfig) -> bool:
 def suppressed_by_the_gate(
     summary: Summary, *, model_id: str, decided_at: str, version: str
 ) -> VisualDecision:
-    """The `none` an item gets when no choice over its elements could have validated.
+    """The `none` an item gets when no table of names and figures was on offer.
+
+    That is no table built, charts switched off, or tables built and dropped because they
+    would not fit the window.
 
     `asked_the_model` stays true, and that is the difference between this and
     the single-call planner's prefilter above: the model WAS asked, for the
-    summary, in the same request. Only the plan fields were taken off the
-    grammar.
+    summary, in the same request. Only the answer about a chart was taken off
+    the grammar.
     """
     return _nothing(
         summary,
         model_id=model_id,
         reason=(
-            "no picture over this article's elements could have passed the validator, "
-            "so the plan was left off the request"
+            "no table of names and figures was on offer for this article, "
+            "so the question about a chart was left off the request"
         ),
         decided_at=decided_at,
         version=version,
@@ -254,7 +258,7 @@ def declined_by_the_model(
 ) -> VisualDecision:
     """The `none` an item gets when the model was asked and answered `none`.
 
-    The ordinary answer. `why` is the plan's own prose and is sanitized on the
+    The ordinary answer. `why` is the model's own sentence and is sanitized on the
     way into the rationale, because it is a string a model wrote about a page we
     did not write (Guardrail #11).
     """

@@ -1,38 +1,22 @@
-When requested, finish "summary" before "visual".
+Only when tables of figures are listed after the item, also write "visual" after "summary". Its fields, in this order:
+  "why": one sentence in words, with no digits. Say what the table compares, or why no table is worth drawing. Write about the item, not about these rules.
+  "type": "none", or one chart form offered for the tables.
+  "focus": the row the item turns on, such as "r2". Only with a chart, otherwise null.
+  "title": a short factual title with no digits. Only with a chart, otherwise null.
+  "caption": one sentence with no digits, only if the figures are estimates or forecasts, otherwise null.
 
-Choose "visual" only when a supported numeric comparison or relationship is
-quicker to grasp than prose. Reusing summary facts is allowed; numeric density
-alone is insufficient. Otherwise choose "none".
+Choose a chart only if the item is about how the figures in one table compare across names. Choose "none" if the figures are separate facts, are mentioned in passing, or measure different things for different names. Check the table against the item, not against your summary. Never write a figure that is not in the table.
 
-For "none": set "purpose", "type", "declared_whole_element_id", "title" and
-"caption" to null; leave every list and encoding channel empty; explain in "why".
+Example. Rows:
+r1 | Berrow | 3,150 t
+r2 | Aldia | 4,200 t
+r3 | Cardia | 2,900 t
+The item says Aldia's wheat harvest was a record.
+"visual": {"why": "Three countries' wheat harvests, with Aldia the record.", "type": "bar", "focus": "r2", "title": "Wheat harvest by country", "caption": null}
 
-For "visual":
-  "purpose": the reader's task, chosen before "type".
-  "type": an offered form satisfying the generated guide.
-  "encodings": source IDs, aligned by displayed observation. Include every
-  channel; unused channels are empty. Within each measured channel, compare
-  compatible measures, definitions, populations and denominators with
-  convertible units. For scatter/bubble, each point's measures must share one
-  subject; points must have distinct subjects. Pair dates with values only
-  where the article establishes the association; never resolve relative dates.
-  "declared_whole_element_id": null except for pie/stacked_bar. Cite an
-  independently stated whole, never a part or calculated total. Parts must
-  exhaust that same whole. For stacked_bar, category cites the whole and series
-  names parts; for pie, category names parts.
-  "labels": source IDs whose own words name marks and axes.
-  "annotations": source references resolving to exactly one displayed numeric
-  measurement, including through its source inputs.
-  "why": a short reason for this comparison and form.
-  "title": a short factual title.
-  "caption": essential scope, attribution or qualification; null if unnecessary.
-  Keep estimates, forecasts and population/denominator distinctions visible.
-  Choose "none" if necessary distinctions cannot be preserved.
-
-"confidence": your self-rating from 0 to 1, not source uncertainty.
-
-Use only IDs from the source-element menu. Any number in title, caption or why must be
-supported by the selected chart references; do not add unplotted numeric facts.
-Check meaning against the original article, not just the summary. Do not supply
-plotted values, dates or layout settings; code resolves measurements from the
-selected IDs. Source names may retain their written digits.
+Example. Rows:
+r1 | Northfield | 5.2 billion dollars
+r2 | Eastgate | 4.9 billion dollars
+r3 | Westmere | 0.4 billion dollars
+The item gives Northfield's revenue, Eastgate's forecast revenue and Westmere's profit.
+"visual": {"why": "The three figures measure different things: revenue, forecast and profit.", "type": "none", "focus": null, "title": null, "caption": null}

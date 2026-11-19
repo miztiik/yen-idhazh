@@ -12,10 +12,9 @@ Every run is one fixture item, so the cost does not move when the archive grows
 
 from __future__ import annotations
 
-import json
 import logging
 import re
-from collections.abc import Callable, Iterable
+from collections.abc import Callable
 from contextlib import ExitStack
 from pathlib import Path
 from typing import Any, Final
@@ -55,24 +54,10 @@ from ._builders import (
 #: clock cannot round it away, short enough that the case costs half a second.
 HUNG_DEADLINE_S: Final = 0.5
 
-#: What the patterns alone find in the wind page. The page names no other kind.
-REGEX_ONLY_KINDS: Final = {"date", "quantity"}
-
-CountrySpans = Callable[[str], Iterable[Span]]
-
 
 def the_countries(text: str) -> list[Span]:
     """The four countries, labelled the way config maps to an entity element."""
     return first_of("ORG", *WIND_COUNTRIES)(text)
-
-
-def a_time_and_an_ordinal_page(url: str) -> FetchResult:
-    """The wind page with one more sentence, whose "3rd" and "10 am" the patterns read as figures."""
-    fetched = drawable_article_fetch(url)
-    page = fetched.body.decode("utf-8").replace(
-        "</article>", "<p>The 3rd round closed at 10 am.</p></article>"
-    )
-    return FetchResult(fetched.outcome, status=fetched.status, body=page.encode("utf-8"))
 
 
 def run_one_item(
@@ -94,12 +79,22 @@ def run_one_item(
     return items, run_plan.items[0].item_id, server
 
 
-def menu_rows(request: dict[str, Any]) -> list[list[Any]]:
-    """The rows of the source-element menu the model was shown, as it read them."""
-    after = str(request["prompt"]).split("Source elements found in the item.", maxsplit=1)[1]
+def shown_rows(request: dict[str, Any]) -> list[list[str]]:
+    """The `code | label | figure` rows of the tables the model was shown, or none."""
+    prompt = str(request["prompt"])
+    if "Tables of figures found in the item." not in prompt:
+        return []
+    after = prompt.split("Tables of figures found in the item.", maxsplit=1)[1]
     block = after.split(FENCE_OPEN + "\n", maxsplit=1)[1].split("\n" + FENCE_CLOSE, maxsplit=1)[0]
-    rows: list[list[Any]] = json.loads(block)["rows"]
-    return rows
+    return [line.split(" | ") for line in block.splitlines() if line]
+
+
+def asked_about_no_chart(request: dict[str, Any]) -> bool:
+    """Whether the request left the question about a chart off: no tables, the summary alone."""
+    return not shown_rows(request) and set(request["json_schema"]["properties"]) == {
+        "title",
+        "summary",
+    }
 
 
 def health(items: Path, item_id: str) -> ItemHealthRow:
@@ -135,39 +130,13 @@ def test_every_row_the_model_is_shown_is_cut_from_the_article_text(
         )
 
     text = Article.read(items / f"{item_id}.article.json").text or ""
-    rows = menu_rows(server.sent[0])
+    rows = shown_rows(server.sent[0])
 
-    assert {"entity-55-62", "entity-155-162", "entity-200-206", "entity-224-231"} <= {
-        row[0] for row in rows
-    }
-    for element_id, _kind, excerpt, *_ in rows:
-        _, start, end = element_id.rsplit("-", maxsplit=2)
-        assert text[int(start) : int(end)] == excerpt, element_id
-
-
-def test_a_quantity_row_the_service_labels_a_time_or_an_ordinal_is_gone(
-    tmp_path: Path, monkeypatch: MonkeyPatch
-) -> None:
-    """The patterns read "3rd" and "10 am" as figures; the service knows they are not."""
-
-    def figures(where: Path, spans_of: CountrySpans) -> set[str]:
-        with RecordedAnalysis(spans_of) as service:
-            _, _, server = run_one_item(
-                where,
-                monkeypatch,
-                pointed_at(config.load(CONFIG_DIR), service.base_url),
-                fetcher=a_time_and_an_ordinal_page,
-            )
-        return {row[2] for row in menu_rows(server.sent[0]) if row[1] == "quantity"}
-
-    patterns_alone = figures(tmp_path / "alone", lambda _text: [])
-    with_the_service = figures(
-        tmp_path / "service",
-        lambda text: [*first_of("ORDINAL", "3rd")(text), *first_of("TIME", "10 am")(text)],
-    )
-
-    assert {"3rd", "10 am"} <= patterns_alone
-    assert with_the_service == patterns_alone - {"3rd", "10 am"}
+    assert [(code, label) for code, label, _ in rows] == [
+        ("r1", "Denmark"), ("r2", "Germany"), ("r3", "Poland"), ("r4", "Ireland")
+    ]
+    for _, label, figure in rows:
+        assert label in text and figure in text, (label, figure)
 
 
 @pytest.mark.parametrize("outcome", ["unreachable", "malformed"])
@@ -187,7 +156,7 @@ def test_an_item_the_service_could_not_read_still_publishes_on_the_patterns_alon
 
     assert Summary.read(items / f"{item_id}.summary.json").status is SummaryStatus.OK
     assert server.served == 1
-    assert {row[1] for row in menu_rows(server.sent[0])} == REGEX_ONLY_KINDS
+    assert asked_about_no_chart(server.sent[0]), "figures alone make no table"
     assert f"text analysis gave no mentions id={item_id} outcome={outcome}" in caplog.text
     assert health(items, item_id).analyze_ms is not None
 
@@ -210,7 +179,7 @@ def test_a_hung_service_costs_the_item_its_deadline_and_the_wait_is_not_the_mode
     row = health(items, item_id)
 
     assert Summary.read(items / f"{item_id}.summary.json").status is SummaryStatus.OK
-    assert {kind for _, kind, *_ in menu_rows(server.sent[0])} == REGEX_ONLY_KINDS
+    assert asked_about_no_chart(server.sent[0])
     assert f"text analysis gave no mentions id={item_id} outcome=timed_out" in caplog.text
     assert row.analyze_ms is not None and row.analyze_ms >= int(HUNG_DEADLINE_S * 900)
     assert row.queue_wait_ms is not None and row.queue_wait_ms < row.analyze_ms
@@ -230,6 +199,6 @@ def test_words_the_service_says_it_read_never_reach_the_model_unless_the_article
         )
 
     assert injected not in str(server.sent[0]["prompt"])
-    assert {row[1] for row in menu_rows(server.sent[0])} == REGEX_ONLY_KINDS
+    assert asked_about_no_chart(server.sent[0])
     assert f"text analysis mentions dropped id={item_id} dropped=1 kept=0" in caplog.text
     assert injected not in (items / f"{item_id}.summary.json").read_text(encoding="utf-8")
