@@ -298,7 +298,7 @@
 		<p class="comparison" data-comparison="Each hand-marked pair's score against the merge line.">
 			Each hand-marked pair's score against the merge line.
 		</p>
-		{#each evidence as note}<p data-evidence-note>{note}</p>{/each}
+		{#each evidence as note}<p class="evidence" data-evidence-note>{note}</p>{/each}
 		{#if absent}
 			<p class="headline" data-empty="missing">
 				<span class="figure" data-lede>The hand-marked pairs are unavailable.</span>
@@ -607,8 +607,16 @@
 		margin: 0 0 var(--space-3);
 	}
 
+	.evidence {
+		margin: 0 0 var(--space-2);
+		font-size: var(--text-xs);
+		line-height: var(--leading-xs);
+		color: var(--color-text-secondary);
+	}
+
 	.figure {
 		font-size: var(--text-2xl);
+		line-height: var(--leading-2xl);
 		font-variant-numeric: tabular-nums;
 		color: var(--color-text);
 	}
@@ -631,6 +639,15 @@
 		font-size: var(--text-xs);
 		line-height: var(--leading-sm);
 		color: var(--color-text-tertiary);
+	}
+
+	/* The line is drawn before every label, so a halo in the panel's own surface
+	   cuts the dashes behind the type instead of striking through it. */
+	svg text {
+		paint-order: stroke;
+		stroke: var(--color-surface);
+		stroke-width: calc(var(--console-chart-line-width) * 1.5);
+		stroke-linejoin: round;
 	}
 
 	/* Shut it drops its border and background, the way the verdict table does,
