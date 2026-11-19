@@ -1,21 +1,21 @@
 {
   "first_date": "2026-08-23",
-  "harvested_date": "2026-11-12",
-  "last_date": "2026-11-12",
+  "harvested_date": "2026-11-19",
+  "last_date": "2026-11-19",
   "last_run": "2026-10-30",
   "models": {
-    "ornith-1-5-9b-q5-k-m": 260,
+    "ornith-1-5-9b-q5-k-m": 280,
     "qwen3-5-9b-q4-k-m": 695,
     "qwen3-8b-q4-k-m": 1015
   },
-  "prompt_digest": "b4f14ea0ffd07a6132a181f8b67c9b82ddabb945e86d9fb1844126797c6f80e4",
-  "rows": 1970,
+  "prompt_digest": "e57674b95b811a2672c3310d6e512edb1b990a8fd8328863ad934117bb1704db",
+  "rows": 1990,
   "version": "2026-09-28T21:00",
   "verticals": {
-    "ai": 492,
-    "business-economy": 172,
-    "energy": 277,
-    "india": 578,
-    "world": 451
+    "ai": 496,
+    "business-economy": 173,
+    "energy": 279,
+    "india": 584,
+    "world": 458
   }
 }
