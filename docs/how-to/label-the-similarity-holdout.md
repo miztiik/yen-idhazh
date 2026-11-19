@@ -266,9 +266,8 @@ The verb exits 1 and prints how many it resolved.
 | `labeller=X appears in none of the N marks' notes` | The name does not match what the harvest wrote. Check `--labeller`. |
 | `the highest pair marked as two stories now scores A and HOLDOUT_TWO_STORY_MAX declares B` | New marks, or new weights, have moved the hardest pair. Retake the constant in `backend/idhazh/contracts/knobs/placement.py`. |
 
-`/console/judgement/` prints the newest row under the holdout panel once the
-gardener has packed its day, within about two days of the date it is filed
-under, and says the line has not been scored where there is none.
+The Judgement page does not read this row; the Data explorer reads it, once the
+gardener has packed its day, within about two days of the date it is filed under.
 
 ## The mark spelling
 

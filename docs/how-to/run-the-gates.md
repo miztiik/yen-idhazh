@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-11-17
+**Last Updated**: 2026-11-19
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -30,7 +30,7 @@ changes skip the application jobs, instead of starting one to do no code checks.
 | Group | What it checks | Preparation |
 | --- | --- | --- |
 | `backend` | Named module and integration tests, or the full backend for shared or unknown inputs; ruff and mypy | Existing Python development environment |
-| `logic` | Verified build-independent frontend functions | No site build, preview server or Chromium. One spec, `similarity-ledgers.spec.ts`, runs the Python backend |
+| `logic` | Verified build-independent frontend functions | No site build, preview server or Chromium. A few specs run the Python backend to file a night or read a schema |
 | `reader` | A representative reading journey and shared layout | Canary build |
 | `console` | One real ledger query, answer and chart interaction, plus independent telemetry-month recovery | Canary build |
 | `offline` | Cached reading and service-worker retirement | Canary build |
@@ -68,9 +68,9 @@ expected failures; unrelated console errors and missing files still fail.
 The launcher checks the dependencies the selection needs before waiting for a
 test slot. A logic-only run does not probe Python packages or run pytest. It
 uses the existing Python standard-library lock helper for coordination only.
-One logic spec still runs the backend: `similarity-ledgers.spec.ts` files a
-fixture night through the ledger door and packs it, so the Python the launcher
-names needs the backend installed, as CI's site job installs it before
+A few logic specs still run the backend: they file a fixture night through the
+ledger door, build the canary day or read a contract schema, so the Python the
+launcher names needs the backend installed, as CI's site job installs it before
 `test:logic`.
 The tooling self-tests run when the test infrastructure changes, or with
 `--group all`; they are not added to every frontend run. Browser preparation
@@ -97,8 +97,8 @@ Private Voices fixtures reuse that verified build's compiled server and client
 output. A separate SvelteKit `Server` prerenders the real route with the
 fixture's unpublished source census and packed feed records. Only the generated
 page, its dependencies and published ledgers are served. Changing a native
-record does not require compiling the source again. The generic Judgement
-fixture builder still compiles its fixed named source inventory.
+record does not require compiling the source again. The console window
+fixtures still compile their fixed named source inventory.
 A removed item-health file returns HTTP 404 even when a held request resumes
 during a state transition. Other filesystem errors still fail the private preview.
 

@@ -147,13 +147,13 @@ The one false merge at 0.93 is on 2026-08-30: Ontario's pushback against the lak
 
 **The floor on the diagram is a number the run chooses, since 2026-09-18.** With the flag off - which is how it ships - it is `assemble.same_story.floor_min` and the diagram reads exactly as it always has. With it on, `similarity.applied.effective_same_story` replaces that one field with the newest line a fit applied inside `applied_lookback_days`, and the rest of the block is untouched: same weights, same figure veto, same all-pairs rule. Four things each mean the committed floor rather than a fitted one, and each is an ordinary day: the flag is off, the tree is absent, every row inside the lookback was held, or the newest row carries no line.
 
-**The run writes down which number grouped it.** `same_story_floor_applied` on the run record, because without it a reader of a committed `run.json` cannot tell a day grouped at 0.94 from a day grouped at 0.937 - and the grouping is the thing this whole block moves. A run that published before the column existed carries no value, which is every run before that date. The console's Judgement page reads it: its empty merge-chart rule, verdict split and holdout margin name the line the newest published day's last build wrote down, and work the line out from the fitted rows only where that record holds none. The solid merge-chart series instead shows the nightly fit's final values, with the proposal and step band from that same fit. Its calculated history is not build history; [console design](../../concepts/console-design.md#design-rationale) rules the words. Worked out alone, the line could be one no build used, because the nightly fit below files its row after most of that day's builds ran.
+**The run writes down which number grouped it.** `same_story_floor_applied` on the run record, because without it a reader of a committed `run.json` cannot tell a day grouped at 0.94 from a day grouped at 0.937 - and the grouping is the thing this whole block moves. A run that published before the column existed carries no value, which is every run before that date. No console page reads it: the Judgement page draws the hand marks against `assemble.same_story.floor_min` in the committed config.
 
 **The nightly draw does not read the line a build used.** It follows the judge's own
 thresholds - the newest `threshold-history` row dated before the night, or the
 configured starts - and opens no day's `run.json`, so a night's draw cannot depend on
-which build ran. `same_story_floor_applied` is still written by every build, and the
-console still reads it.
+which build ran. `same_story_floor_applied` is still written by every build, and no
+console page reads it.
 
 ## The nightly judge, and the line fit it replaced
 
@@ -176,9 +176,8 @@ site still groups at `floor_min`: the block that could apply a fitted line is of
 **The diagram below, and the paragraphs on rates, calibration, the record, the holds
 and the line's movement, describe the cumulative-record fit that the nightly flow no
 longer runs.** The paragraphs on what the judge is handed, how a pair is read twice
-and what makes a reading valid still hold. The fit's ledgers, the record and the
-console panels that read them remain, and what they show is the last night the fit
-ran.
+and what makes a reading valid still hold. The fit's ledgers and the record remain,
+and no console panel reads them.
 
 **The name is about where this goes rather than where it is** - maintainer ruling,
 2026-09-18. The shards split a list today and never confer, so `judges` would be
@@ -361,8 +360,8 @@ measured what a normal day looks like.
 `adaptive_dedup_threshold.enabled` false, publication uses the committed
 `floor_min` regardless of the judge's recorded counts or fits. When enabled,
 the applied-line reader still requires an eligible fit inside the lookback.
-The [operator console](console.md) shows the loop's actual evidence, not an
-independent accuracy measurement. The
+The [operator console](console.md) holds the loop's actual evidence in the Data
+explorer, not an independent accuracy measurement. The
 [offline evaluation procedure](../../how-to/evaluate-content-similarity-judge.md)
 owns that separate measurement.
 
@@ -404,7 +403,7 @@ The council validates only status and model need before importing the package.
 
 The band, fit gates, damping, movement caps and history windows stay under
 `assemble.same_story.adaptive_dedup_threshold` in `config/idhazh.json`. Only the
-applied-line reader and the console still read them. The execution
+applied-line reader still reads them. The execution
 settings loader lives under `content_similarity_judge`, not in the shared
 settings model, so it adds no judge contract to the council's import closure.
 
@@ -497,11 +496,9 @@ flowchart TD
 
 **The marks are a door ledger, read over a reach.** A person saves each labelling with `backend/utilities/sample_sheet.py --harvest`, as one file under `state/raw/content-similarity-judge/holdout-pairs/` for the day the marks were made, and the gardener packs it under `state/compact/content-similarity-judge/holdout-pairs/` ([label-the-similarity-holdout.md](../../how-to/label-the-similarity-holdout.md)). Both readers - the scoring verb and the page - read `similarity.holdout_reach_days` UTC days back from the day they are about, 730 in `config/idhazh.json`, and no further. So the read stays one size however long the ledger grows (Guardrail #12), and a mark older than the reach stops counting until somebody harvests it again. The marks' compaction may not delete a day inside the reach, and the gardener's loader refuses one that would. **A pair marked again is read once, with its newest mark.** The door settles each day by the two addresses and the newer `marked_on`, and both readers apply that same rule across the days of the reach, so a corrected mark replaces the one it corrects rather than counting beside it. The verb reads each day from whichever file holds it, raw or packed, so it sees a mark as soon as a harvest saves it; the page reads packed days only, so a new mark reaches the panel once the gardener has packed its day.
 
-**The four cells are the exception, and since 2026-09-21 they come off a committed row.** `python -m idhazh score-merge-line-holdout` counts what the line did to every marked pair and writes one row through the ledger door under `state/raw/content-similarity-judge/merge-line-holdout-scores/`; the gardener packs it under `state/compact/content-similarity-judge/merge-line-holdout-scores/`. The page reads that packed row and prints it; it does not count the cells again. **Two answers to one question is what the commit exists to stop** - and a reading that exists only while a page renders cannot be held against one taken a month earlier. What the page still derives is the per-pair score, because no row carries one and the panel draws a dot for each.
+**The four cells are the exception, and since 2026-09-21 they come off a committed row.** `python -m idhazh score-merge-line-holdout` counts what the line did to every marked pair and writes one row through the ledger door under `state/raw/content-similarity-judge/merge-line-holdout-scores/`; the gardener packs it under `state/compact/content-similarity-judge/merge-line-holdout-scores/`. The page does not read that row and does not count the cells: it derives the per-pair score, because no row carries one and the panel draws a dot for each.
 
 **It scores the line, not the judge.** The marks carry no verdict and the step calls no model. A pair is joined exactly when the weighted score reaches the line, which is the one branch of the diagram above that the line decides. How well a judge agrees with the marks is a different measurement with a different budget, and no row here answers it.
-
-**On a date with no row the panel says the line has not been scored.** A person types the verb, so a tree where nobody has run it has no row at all - and four zeros would read as a line that merged nothing rather than as a reading nobody took.
 
 **Counts, and never one rate.** With 196 of the 200 marks on one side, always answering "one story" scores 98 percent and measures nothing. The row carries the four cells and the negative population beside them, so every rate a reader derives is derived with the denominator it came from in view (Guardrail #10). The two directions of a mistake stay apart for the reason the Editor gives above: a missed group shows the reader one story twice, a false merge hides one of them.
 
