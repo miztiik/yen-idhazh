@@ -442,10 +442,11 @@ draws at half the pixels, under the 14 px a dot needs.
 the clear state and wants context; a mark above it is the state the panel exists
 for, and needs room only to be read in.
 
-**The rule stays neutral and the panel takes the tone.** A line is a setting, so
-drawing it red would report a fault every day of its life. The panel is what
-changes hue - `bad` where a mark is on the wrong side of the line - because the
-fault is the reading, not the setting.
+**The rule stays neutral and the marks take the hue.** A line is a setting, so
+drawing it red would report a fault every day of its life. A dot is what changes hue - a
+mark at or above the line is drawn in `--fill-low` - because the fault is the
+reading, not the setting. The panel around them stays a neutral surface
+([console-design.md](../console-design.md)).
 
 **Both costs of the line are drawn, not one.** The pairs marked as two stories
 are dots; the pairs marked as one story are a range strip on the same axis.

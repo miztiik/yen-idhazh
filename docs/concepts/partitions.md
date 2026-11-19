@@ -341,7 +341,7 @@ Authority: `CLAUDE.md` section 5, 2026-09-11.
 
 - [../../CLAUDE.md](../../CLAUDE.md) Guardrail #12 - every read must have a fixed-size input.
 - [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md#a-ledger-partitions-only-when-its-read-carries-a-window) - why a ledger partitions at all, and which reads carry a window.
-- [../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md#published-shards) - the published projection of item health, one file a month.
+- [../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md) - where Pipelines' measurements come from now that item health's monthly public copy is retired.
 - [../architecture/publishing/what-a-month-shard-holds-and-how-it-reaches-a-browser.md](../architecture/publishing/what-a-month-shard-holds-and-how-it-reaches-a-browser.md#the-month-search-index) - the month search index, its ceilings, and what an unpublish owes each grain.
 - [../architecture/sources/item-health.md](../architecture/sources/item-health.md) - the fastest-growing collection, and what would move it to a shorter period.
 - [../reference/repository-layout.md](../reference/repository-layout.md) - what each top-level directory holds and who writes it.

@@ -1,6 +1,6 @@
 # Agent Notes - Gates and Builds
 
-**Last Updated**: 2026-11-18
+**Last Updated**: 2026-11-19
 
 Checks before trusting a test or build result. Commands belong in [run-the-gates.md](../../how-to/run-the-gates.md).
 
@@ -11,6 +11,15 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
 - Read the first failure and which later checks did not run. A missing tool, interrupted process, cached failure or skipped test is not a pass.
 - Inspect an existing run before starting another. Use the launcher's `--status`; use `--fresh` only when an unchanged run must be repeated.
 - `node scripts/build-state.ts --complete` took 112.5 s on the shared Windows machine on 2026-10-03, so wait for it rather than calling it hung.
+- **A build or `test:changed` stops with `Build inputs changed during compilation; the output was not certified. Build again.`; the build is fine, the checkout changed while it ran (seen 2026-11-19).**
+  The build fingerprints the checkout when it starts and again when it ends: the
+  committed tree, the diff of every tracked file against `HEAD`, and every untracked
+  file that is not ignored. Documentation, tests and plans count as much as source,
+  and so does a new scratch file. The message names no file; the tell is `git status`
+  showing a change you made after the build began. Leave the checkout alone until the
+  build ends, then build once more. The mechanism is in
+  [run-the-gates.md](../../how-to/run-the-gates.md), and the same message from a copy of
+  an older commit with no `.gitignore` has a different cause, described there.
 - A fresh worktree has no `.venv` and no `frontend/node_modules`, and setting both up is the slowest step: on 2026-10-07, on the shared Windows machine, `npm ci` took 513 s and `pip install -e ".[dev]"` took 1,583 s after one package-feed timeout and a retry (plan 62's row L19), and 114 s and 991 s in another worktree the same day. Start both before the first check needs them, and wait rather than calling either hung.
 - **`test:changed` stops with "The selected Python executable does not exist" in a worktree with no `.venv`, though `python` runs.** With no `.venv` the launcher falls back to the bare word `python`, hands it on as `IDHAZH_PYTHON`, and its second pass after the test-slot wait checks that word as a file path. The tell: the selection prints twice before the error. Name the full path first (seen 2026-10-08): `$env:IDHAZH_PYTHON = (Get-Command python).Source`.
 - **`bun install --frozen-lockfile` fails with `EPERM: failed copying files from cache` for a `file:` dependency that points at a sibling package (seen 2026-10-26, Bun 1.3.13, Windows).** The registry packages install; the sibling does not, and the Bun-backed backend tests then stop with `Cannot find module '@idhazh/common-contracts'`. Link each sibling by hand: `New-Item -ItemType Junction -Path <consumer>\node_modules\@idhazh\<name> -Target packages\<name>`, and repeat for each package that imports another one (`packages/ledger-file-writer` needs `common-contracts` too). Its imports also resolve from that sibling's `node_modules`; junction the sibling's declared runtime dependencies there from the installed service modules. The compaction test needs `apache-arrow`, `parquet-wasm` and `zod` for `packages/ledger-file-writer`, plus `zod` for `packages/common-contracts` and `services/host-probes` (seen 2026-10-27). The `node_modules` folders are Git-ignored.
@@ -45,6 +54,17 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
   python backend/utilities/plan_status.py --plan TODO/<plan>.md
   Remove-Item Env:PYTHONPATH
   ```
+- **`pip install -e ".[dev]"` ends with exit code 3221225477 in build isolation; the project is fine, the isolated build environment crashed.**
+  That code is the Windows access violation `0xC0000005`. Seen 2026-11-18 on Python
+  3.14.10. The tell is that code, where the entry above shows a feed error. Install the
+  build backend into the environment yourself and skip the isolated one:
+  ```powershell
+  .\.venv\Scripts\python.exe -m pip install hatchling editables
+  .\.venv\Scripts\python.exe -m pip install --no-build-isolation -e ".[dev]"
+  ```
+  Both steps passed on 2026-11-19 in a fresh environment (Python 3.14.10, `--no-deps`,
+  24 s) and `idhazh` imported from the worktree. A plain isolated install of the
+  project passed that day too, so the crash does not recur on every run.
 - **`pytest -m contract -q` ends on a `FAILED` line with no count after it, which reads as a run that stopped; it finished, and the extra `-q` hid the count.**
   `addopts` in `pyproject.toml` already carries `-q`, so one more is `-qq`, and
   pytest 9.1.1 then drops the `N passed, M failed` line (2026-10-06). The tell
@@ -130,6 +150,18 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
   Run it alone on a quiet box, or judge it by CI; do not raise the deadline.
   ```powershell
   python -m pytest -n 0 backend/tests/workflows/test_digest_recovery.py -k real_partial
+  ```
+
+- **`test_silicon.py::test_the_probe_and_the_job_clock_settle_into_one_row` fails on CI with `5549 != 5550` and passes when its job is re-run; the stage is fine, the test compares two wall-clock readings.**
+  The test builds `job_started_at` from `int(time.time())`, and the stage works out
+  `job_seconds` from its own later reading of the same clock, so the stage's number
+  can come out under the figure the test subtracted only if the runner's clock stepped
+  back between the two readings. Seen 2026-11-19 on the gates job of a pull request that
+  did not touch the stage: 1 failed and 7,131 passed, and the re-run of that job passed.
+  The tell is a result one second off the expected 5550. Re-run only the failed job
+  before touching the test:
+  ```powershell
+  gh run rerun <run-id> --failed --repo <account/repo>
   ```
 
 - **A test that reads source text stays green when production code is edited
