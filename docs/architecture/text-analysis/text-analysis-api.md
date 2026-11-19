@@ -30,6 +30,15 @@ validation, source routing and draining through shutdown EOF; the
 [operator guide](../../how-to/run-spacy-tests.md#console-and-saved-events)
 describes inspection and failures.
 
+Digest work and retained article replay log a `text analysis result` record to
+the invoking step's stderr for each article sent. The record carries the
+outcome, elapsed time, HTTP refusal status when present, count of rejected spans,
+and the labels and character offsets accepted by the pipeline. Search the
+workflow step by `item_id` or `url_key` from the saved Article. The log does not
+repeat the source URL, article words or raw response body; find the words by
+slicing the retained Article at the logged offsets. This is separate from the
+service's `text-analysis.log`, which contains service events, not mention results.
+
 ## Admission precedes executor submission
 
 The parent process owns one event-loop `CapacityLimiter` and one

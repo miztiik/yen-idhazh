@@ -24,14 +24,23 @@ from idhazh.contracts.knobs.text_analysis import TextAnalysisConfig
 SHORT_WAIT_S = 0.3
 
 
+def logged_answer(caplog: pytest.LogCaptureFixture, level: int) -> dict[str, object]:
+    (record,) = (record for record in caplog.records if record.name == "idhazh")
+    assert record.levelno == level
+    payload = json.loads(record.getMessage().removeprefix("text analysis result "))
+    assert isinstance(payload, dict)
+    return payload
+
+
 def test_one_post_carries_the_whole_text_and_the_mentions_come_back_with_three_fields(
-    article_ok: Article,
+    article_ok: Article, caplog: pytest.LogCaptureFixture
 ) -> None:
     """The request is the service's own, and every label comes back for `label_kinds` to map."""
     text = article_ok.text or ""
     lab = text.index("Example Lab")
     two = text.index("two")
     spans = [("ORG", lab, lab + 11), ("CARDINAL", two, two + 3)]
+    caplog.set_level(logging.INFO, logger="idhazh")
 
     with RecordedAnalysis(lambda _text: spans) as service:
         config = TextAnalysisConfig(base_url=service.base_url, language="zh")
@@ -42,6 +51,18 @@ def test_one_post_carries_the_whole_text_and_the_mentions_come_back_with_three_f
     assert service.content_types == ["application/json"]
     assert answer.outcome is Outcome.OK and answer.http_status is None
     assert answer.mentions == (Mention("ORG", lab, lab + 11), Mention("CARDINAL", two, two + 3))
+    assert logged_answer(caplog, logging.INFO) == {
+        "item_id": article_ok.item_id,
+        "url_key": article_ok.url_key,
+        "outcome": "ok",
+        "http_status": None,
+        "elapsed_ms": answer.elapsed_ms,
+        "dropped_mentions": 0,
+        "mentions": [
+            {"label": "ORG", "start_char": lab, "end_char": lab + 11},
+            {"label": "CARDINAL", "start_char": two, "end_char": two + 3},
+        ],
+    }
 
 
 @pytest.mark.parametrize(
@@ -69,7 +90,9 @@ def test_a_mention_that_does_not_cut_the_words_it_names_is_dropped_and_its_sibli
 
     assert answer.outcome is Outcome.OK
     assert answer.mentions == (Mention("ORG", 0, 11),)
-    assert "dropped=1 kept=1" in caplog.text and article_ok.item_id in caplog.text
+    payload = logged_answer(caplog, logging.WARNING)
+    assert payload["item_id"] == article_ok.item_id and payload["dropped_mentions"] == 1
+    assert payload["mentions"] == [{"label": "ORG", "start_char": 0, "end_char": 11}]
 
 
 def a_failing_service(kind: str, text: str) -> RecordedAnalysis:
@@ -121,10 +144,15 @@ def test_a_service_that_cannot_answer_costs_the_item_its_names_and_one_warning(
     assert answer.mentions == () and answer.outcome is outcome and answer.http_status == status
     if outcome is Outcome.TIMED_OUT:
         assert answer.elapsed_ms >= int(SHORT_WAIT_S * 1000) - 50
-    warned = [r.getMessage() for r in caplog.records if r.name == "idhazh" and r.levelno >= 30]
-    assert len(warned) == 1
-    assert article_ok.item_id in warned[0] and outcome.value in warned[0]
-    assert text not in warned[0] and "Example Lab" not in warned[0]
+    assert logged_answer(caplog, logging.WARNING) == {
+        "item_id": article_ok.item_id,
+        "url_key": article_ok.url_key,
+        "outcome": outcome.value,
+        "http_status": status,
+        "elapsed_ms": answer.elapsed_ms,
+        "dropped_mentions": 0,
+        "mentions": [],
+    }
 
 
 def test_a_closed_port_is_unreachable_and_asks_nothing_of_the_item(article_ok: Article) -> None:

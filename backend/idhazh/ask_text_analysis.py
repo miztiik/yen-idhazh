@@ -17,9 +17,9 @@ into `elements.label_kinds` and reaches no prompt, path, URL or command.
 
 **The service failing costs the item its names and nothing else.** A closed port, a
 service that never answers, a refusal and a reply this build cannot read each return no
-mentions, name the reason, and log one warning that carries the item's id and no text.
-There is no retry: a second try against a hung service would double the time a bad
-runner can spend on one item.
+mentions and name the reason. The caller logs the outcome and the spans it kept, keyed
+by the item's identity instead of the URL itself. There is no retry: a second try against
+a hung service would double the time a bad runner can spend on one item.
 """
 
 from __future__ import annotations
@@ -110,18 +110,35 @@ class _Reply(BaseModel):
     features: tuple[_EntitiesFeature]
 
 
-def _failed(
-    article: Article, outcome: Outcome, *, started: float, status: int | None = None
+def _record_answer(
+    article: Article,
+    outcome: Outcome,
+    *,
+    started: float,
+    mentions: tuple[Mention, ...] = (),
+    dropped_mentions: int = 0,
+    status: int | None = None,
 ) -> Answer:
-    elapsed_ms = int((time.monotonic() - started) * 1000)
-    LOG.warning(
-        "text analysis gave no mentions id=%s outcome=%s http_status=%s elapsed_ms=%s",
-        article.item_id,
-        outcome.value,
-        status if status is not None else "-",
-        elapsed_ms,
-    )
-    return Answer((), outcome, elapsed_ms, status)
+    answer = Answer(mentions, outcome, int((time.monotonic() - started) * 1000), status)
+    level = logging.WARNING if outcome is not Outcome.OK or dropped_mentions else logging.INFO
+    if LOG.isEnabledFor(level):
+        LOG.log(
+            level,
+            "text analysis result %s",
+            json.dumps(
+                {
+                    "item_id": article.item_id,
+                    "url_key": article.url_key,
+                    "outcome": answer.outcome.value,
+                    "http_status": answer.http_status,
+                    "elapsed_ms": answer.elapsed_ms,
+                    "dropped_mentions": dropped_mentions,
+                    "mentions": [mention._asdict() for mention in answer.mentions],
+                },
+                separators=(",", ":"),
+            ),
+        )
+    return answer
 
 
 def _anchored(text: str, read: _Read) -> bool:
@@ -154,23 +171,23 @@ def ask_for_mentions(article: Article, config: TextAnalysisConfig) -> Answer:
         # Before URLError and OSError, which it subclasses: a service that answered
         # is not an unreachable one.
         with error:
-            return _failed(article, Outcome.REFUSED, started=started, status=error.code)
+            return _record_answer(article, Outcome.REFUSED, started=started, status=error.code)
     except TimeoutError:
-        return _failed(article, Outcome.TIMED_OUT, started=started)
+        return _record_answer(article, Outcome.TIMED_OUT, started=started)
     except urllib.error.URLError as error:
         timed_out = isinstance(error.reason, TimeoutError)
-        return _failed(
+        return _record_answer(
             article, Outcome.TIMED_OUT if timed_out else Outcome.UNREACHABLE, started=started
         )
     except OSError:
-        return _failed(article, Outcome.UNREACHABLE, started=started)
+        return _record_answer(article, Outcome.UNREACHABLE, started=started)
     except http.client.HTTPException:
-        return _failed(article, Outcome.MALFORMED, started=started)
+        return _record_answer(article, Outcome.MALFORMED, started=started)
 
     try:
         reply = _Reply.model_validate_json(body)
     except ValidationError:
-        return _failed(article, Outcome.MALFORMED, started=started)
+        return _record_answer(article, Outcome.MALFORMED, started=started)
 
     reads = reply.features[0].data.mentions
     kept = tuple(
@@ -178,11 +195,6 @@ def ask_for_mentions(article: Article, config: TextAnalysisConfig) -> Answer:
         for read in reads
         if _anchored(text, read)
     )
-    if len(kept) != len(reads):
-        LOG.warning(
-            "text analysis mentions dropped id=%s dropped=%s kept=%s",
-            article.item_id,
-            len(reads) - len(kept),
-            len(kept),
-        )
-    return Answer(kept, Outcome.OK, int((time.monotonic() - started) * 1000))
+    return _record_answer(
+        article, Outcome.OK, started=started, mentions=kept, dropped_mentions=len(reads) - len(kept)
+    )
