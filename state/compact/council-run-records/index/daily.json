@@ -43,10 +43,11 @@
     {"bytes": 9437,"covers": "2026-11-10","lost_days": [],"rows": 6,"set_aside": 0,"state": "packed"},
     {"bytes": 9440,"covers": "2026-11-11","lost_days": [],"rows": 6,"set_aside": 0,"state": "packed"},
     {"bytes": 9614,"covers": "2026-11-12","lost_days": [],"rows": 11,"set_aside": 0,"state": "packed"},
-    {"bytes": 9744,"covers": "2026-11-13","lost_days": [],"rows": 15,"set_aside": 0,"state": "packed"},
+    {"bytes": 9930,"covers": "2026-11-13","lost_days": [],"rows": 21,"set_aside": 0,"state": "packed"},
     {"bytes": 9432,"covers": "2026-11-14","lost_days": [],"rows": 6,"set_aside": 0,"state": "packed"},
     {"bytes": 9753,"covers": "2026-11-15","lost_days": [],"rows": 15,"set_aside": 0,"state": "packed"},
-    {"bytes": 9453,"covers": "2026-11-16","lost_days": [],"rows": 6,"set_aside": 0,"state": "packed"}
+    {"bytes": 9453,"covers": "2026-11-16","lost_days": [],"rows": 6,"set_aside": 0,"state": "packed"},
+    {"bytes": 9456,"covers": "2026-11-17","lost_days": [],"rows": 6,"set_aside": 0,"state": "packed"}
   ],
   "ledger": "council-run-records",
   "period": "daily",
