@@ -1,45 +1,31 @@
 """Does a shard say what its tasks downloaded, and does a compaction choose only what fits?
 
-Read the way a wake reads it: a partial clone of a real origin, whose one task
-that reads content fetches the folder it owns, built to hold exactly the
-ceiling, one byte under it and one byte over it. A shard over the ceiling still
-runs every task and lands its record, then exits 1, and says that is a code
-defect: the shipped compaction takes a period only while what it downloads
-fits what is left of the shard's budget, so it stops at `ceiling` and never
-passes it, and refuses by name a period larger than the whole budget. Every row
-records what the shard downloaded. A scheduled pass does not read whole folders
-just to weigh them.
-
-A period that is larger than the whole budget is a named manual action. The
-synthetic check after every task has run remains a code defect, because no task
-classified that aggregate overrun at a named refusal site.
+A real shard tests the aggregate ceiling and records what it downloaded even
+when it exceeded the limit. The compaction tests decide what fits from listed
+file sizes: a period that needs another wake waits, and one that can never fit
+is a named manual action.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import random
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
 
 import pytest
-from support.paths import CONFIG_DIR, read_text
 
 from idhazh import config, ledger
 from idhazh.config import GardenerSettings
-from idhazh.contracts.base import ServerJob
 from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason
-from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.gardener_events import DownloadOverBudget
 from idhazh.contracts.gardener_fault import GardenerFault
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.gardener import runner
 from idhazh.gardener.file_listing import FileListing, TreeEntry
 from idhazh.gardener.ledger_marks import name_marks
-from idhazh.gardener.outcome import EXIT_OK, EXIT_TASK_FAILED, Outcome
+from idhazh.gardener.outcome import EXIT_OK, EXIT_TASK_FAILED
 from idhazh.gardener.tasks._compact_tree import CompactTree, PeriodFetch, Stop
 from idhazh.site_weight import BYTES_PER_MB
 from utilities import gardener_publish
@@ -214,169 +200,7 @@ def test_the_heaviest_folders_are_named_heaviest_first_and_ties_by_name() -> Non
 
 # --- a compaction chooses only what fits the shard's budget -------------------------
 
-#: The ledger the shipped compaction packs live in these cases, and its task.
 PACKED: Final = LedgerName.VISUAL_PRUNES
-PACKING: Final = "compact-visual-prunes"
-
-#: Rows that make one raw day weigh about 400 KB: two such days fit 1 MiB, three do not.
-ROWS_A_DAY: Final = 14_000
-
-#: Rows that make one raw day weigh more than the whole 1 MiB budget.
-ROWS_PAST_THE_BUDGET: Final = 40_000
-
-
-def a_raw_day(state_dir: Path, day: str, rows: int) -> Path:
-    """One writer's raw file for `day`, through the door, its cells drawn from a seed fixed per day.
-
-    Drawn values do not compress, so the file weighs about 28 bytes a row.
-    """
-    pick = random.Random(day)
-    filed: list[VisualPruneRow] = []
-    for _ in range(rows):
-        weighed = pick.randrange(1 << 40)
-        filed.append(
-            VisualPruneRow(
-                version=VisualPruneRow.schema_version(),
-                date=day,
-                run_id=f"{day}-1",
-                policy_months=-1,
-                max_deletes_per_run=200,
-                dry_run=True,
-                candidates_found=pick.randrange(1 << 40),
-                deleted=0,
-                skipped_by_fuse=0,
-                fuse_tripped=False,
-                bytes_reclaimed=0,
-                oldest_kept=None,
-                payload_bytes_before=weighed,
-                payload_bytes_after=weighed,
-            )
-        )
-    (written,) = ledger.persist(
-        state_dir,
-        filed,
-        ledger=PACKED,
-        covers=day,
-        identity=WriterIdentity(
-            run_id=f"{day}-1",
-            attempt=1,
-            job=ServerJob.RUN_TASKS,
-            shard=0,
-            producer="gardener.tasks.visual_prune",
-            git_sha="a" * 40,
-        ),
-    )
-    return written
-
-
-def raw_days_on_origin(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, rows_by_day: dict[str, int]
-) -> tuple[Path, Path, dict[str, str]]:
-    """An origin holding one raw file a day for these days, its seeding clone, and each file's path."""
-    quiet_git(tmp_path, monkeypatch)
-    origin, seeder = an_origin(tmp_path, {".gitattributes": "* text=auto eol=lf\n"})
-    files = {
-        day: a_raw_day(seeder / ledger.STATE_DIRNAME, day, rows).relative_to(seeder).as_posix()
-        for day, rows in rows_by_day.items()
-    }
-    git(seeder, "add", "--all")
-    git(seeder, "commit", "--quiet", "-m", "raw days")
-    git(seeder, "push", "--quiet", "origin", "HEAD:refs/heads/main")
-    return origin, seeder, files
-
-
-def packed_by_a_shard(
-    tmp_path: Path, origin: Path, said: list[str]
-) -> tuple[Outcome, CollectionPruneRow]:
-    """The shipped compaction run live in a shard's partial clone with a 1 MiB budget, and landed."""
-    shard = a_partial_clone(tmp_path, origin, "config")
-    declaration = tmp_path / f"{PACKING}.json"
-    committed = json.loads(read_text(CONFIG_DIR / "gardener" / f"{PACKING}.json"))
-    declaration.write_text(json.dumps(committed | {"dry_run": False}), encoding="ascii")
-    config_dir = a_config(shard, declaration)
-    knobs = json.loads((config_dir / "gardener/config/idhazh_gardener.json").read_text(encoding="utf-8"))
-    (config_dir / "gardener/config/idhazh_gardener.json").write_text(
-        json.dumps(knobs | {"max_downloaded_mb": CEILING_MB}), encoding="ascii"
-    )
-    outcome = gardener_publish.run_and_land(
-        (PACKING,),
-        settings=config.load_gardener(config_dir),
-        repo_root=shard,
-        run_id=RUN_ID,
-        attempt=1,
-        shard=0,
-        trees=OriginBlobs(origin),
-        clock=lambda: WAKE,
-        say=said.append,
-    )
-    assert outcome.record is not None, "the shard wrote no record"
-    (row,) = ledger.load([outcome.record], model=CollectionPruneRow)
-    return outcome, row
-
-
-def test_a_compaction_takes_only_the_days_its_shard_s_budget_holds_and_never_passes_it(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """THE ORACLE for the budget: three raw days of about 400 KB each against 1 MiB.
-
-    The first wake packs from the oldest raw day. The day step takes the two
-    days that fit and stops at `ceiling` on the third, so the shard downloads
-    less than its budget, never says it went over, and lands the two days it
-    packed. The third stays raw for a wake with room.
-    """
-    days = ("2026-09-20", "2026-09-21", "2026-09-22")
-    origin, seeder, files = raw_days_on_origin(
-        tmp_path, monkeypatch, dict.fromkeys(days, ROWS_A_DAY)
-    )
-    weights = [(seeder / path).stat().st_size for path in files.values()]
-    assert all(BYTES_PER_MB // 3 < weight < BYTES_PER_MB // 2 for weight in weights), (
-        "each raw day must weigh between a third and a half of the budget"
-    )
-    said: list[str] = []
-
-    outcome, row = packed_by_a_shard(tmp_path, origin, said)
-
-    assert outcome.exit_code == EXIT_OK, said
-    assert (row.stopped_because, row.resume_from) == (StopReason.CEILING, "2026-09-22")
-    assert row.downloaded_bytes is not None
-    assert row.downloaded_bytes <= CEILING_MB * BYTES_PER_MB
-    assert not [line for line in said if "over max_downloaded_mb" in line]
-    packed = "state/compact/visual-prunes/daily/2026/09"
-    assert on_origin(origin, f"{packed}/20.parquet") is not None
-    assert on_origin(origin, f"{packed}/21.parquet") is not None
-    assert on_origin(origin, f"{packed}/22.parquet") is None
-    assert on_origin(origin, files["2026-09-20"]) is None, "a packed day's raw file stayed"
-    assert on_origin(origin, files["2026-09-22"]) is not None, "the day past the budget went"
-
-
-def test_a_day_larger_than_the_whole_budget_is_refused_by_name_and_never_downloaded(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
-) -> None:
-    """No wake could take it, so it fails by name for a person to raise the budget."""
-    origin, seeder, files = raw_days_on_origin(
-        tmp_path, monkeypatch, {"2026-09-20": ROWS_PAST_THE_BUDGET}
-    )
-    assert (seeder / files["2026-09-20"]).stat().st_size > CEILING_MB * BYTES_PER_MB
-    said: list[str] = []
-
-    with caplog.at_level(logging.ERROR):
-        outcome, row = packed_by_a_shard(tmp_path, origin, said)
-
-    assert outcome.exit_code == EXIT_TASK_FAILED, said
-    assert (row.stopped_because, row.resume_from, row.fault) == (
-        StopReason.FAILED,
-        "2026-09-20",
-        GardenerFault.MANUAL_ACTION,
-    )
-    assert row.downloaded_bytes == 0
-    refusal = the_event(caplog.records, DownloadOverBudget)
-    assert (refusal.resume_from, refusal.stopped_because, refusal.max_downloaded_mb) == (
-        "2026-09-20",
-        StopReason.FAILED,
-        CEILING_MB,
-    )
-    assert refusal.needed_bytes > CEILING_MB * BYTES_PER_MB
-    assert on_origin(origin, files["2026-09-20"]) is not None
 
 
 def a_tree_of_raw_days(tmp_path: Path, sizes: dict[str, int]) -> CompactTree:

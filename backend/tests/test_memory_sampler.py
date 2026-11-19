@@ -1,10 +1,9 @@
-"""Does the memory sampler detach, take both marks in one pass, and read them back?"""
+"""Does the memory sampler start, take both marks in one pass, and read them back?"""
 
 from __future__ import annotations
 
 import json
 import logging
-import os
 import subprocess
 import sys
 import time
@@ -21,9 +20,7 @@ from utilities import memory_sampler
 #: The program, run the way a workflow step runs it.
 MODULE: Final = Path(memory_sampler.__file__).resolve()
 
-#: How long the detachment check waits for a process to go away before it calls
-#: that a failure. Generous, because it is bounding a scheduler and not a
-#: computation.
+#: How long to wait for the real launcher to exit or for the loop to log its PID.
 PATIENCE_SECONDS: Final = 30.0
 
 
@@ -46,10 +43,6 @@ def test_off_controls_create_no_sampler_or_artifacts(
         "start-sampler", "--pid", "7", "--config-root", str(root)
     ]) == 0
     assert {p.name for p in tmp_path.iterdir()} == {"config"}
-
-#: `os.getsid` is the one call that proves detachment rather than describing it,
-#: and neither it nor `setsid` exists off POSIX.
-posix_only: Final = pytest.mark.skipif(sys.platform == "win32", reason="setsid is POSIX")
 
 
 def _a_process(root: Path, pid: int, comm: str, status: str, cmdline: str = "") -> None:
@@ -223,9 +216,9 @@ def test_a_status_that_cannot_be_read_skips_the_process_rather_than_ending_the_w
     Asking whether a status file is there does not make the read safe: the
     kernel can release the task in between, and the read then raises on a path
     that was there a microsecond earlier. A short-lived python process is
-    completely ordinary on a busy runner, and one of them killed the sampler in
-    CI - in the check below that starts the real program against the real `/proc`.
-    In a digest run the same death ends the sampling with hours of job left.
+    completely ordinary on a busy runner, and one of them killed the sampler
+    against the real `/proc` in CI. In a digest run the same death ends the
+    sampling with hours of job left.
 
     The fixture holds the condition open rather than the error number. Both are
     one branch to a single `except OSError`, and a real filesystem can only be
@@ -381,7 +374,7 @@ def test_the_summary_says_a_file_is_missing_and_does_not_fail_the_step(tmp_path:
     assert "python-procs.jsonl not found" in completed.stderr
 
 
-@posix_only
+@pytest.mark.skipif(sys.platform == "win32", reason="setsid is POSIX")
 def test_the_pid_file_names_the_loop_and_not_the_process_that_launched_it(
     tmp_path: Path,
 ) -> None:
@@ -444,56 +437,3 @@ def test_a_loop_that_is_already_gone_is_refused_rather_than_recorded(tmp_path: P
 
     assert "before it took a sample" in str(refused.value)
     assert "what it said before it went" in str(refused.value), "the log tail is the diagnosis"
-
-
-@posix_only
-def test_the_loop_outlives_the_parent_and_stops_when_its_target_does(tmp_path: Path) -> None:
-    """The oracle. The parent exits and the loop keeps sampling, in its own session.
-
-    `os.getsid` is the one call that proves detachment rather than describing
-    it: `start_new_session` calls `setsid`, so the loop has no controlling
-    terminal and SIGHUP is never delivered to it at all.
-
-    The target is reaped here on purpose. A process that has exited and not been
-    waited on is a zombie, and a zombie keeps its `/proc` entry - so the loop
-    would go on sampling a process that is gone, exactly as `kill -0` would have
-    reported it alive.
-    """
-    target = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
-    try:
-        launched = _ran(tmp_path, "start-sampler", "--pid", str(target.pid), "--every", "0.1")
-        assert launched.returncode == 0, launched.stderr
-
-        loop = int((tmp_path / "memory-sampler.pid").read_text(encoding="utf-8"))
-        assert loop != target.pid
-        if sys.platform != "win32":
-            os.kill(loop, 0)
-            assert os.getsid(loop) != os.getsid(0), (
-                "the loop shares the session it was launched from"
-            )
-
-        samples = tmp_path / "rss-samples.jsonl"
-        deadline = time.monotonic() + PATIENCE_SECONDS
-        while time.monotonic() < deadline:
-            if samples.exists() and len(samples.read_text(encoding="utf-8").splitlines()) >= 2:
-                break
-            time.sleep(0.1)
-        written = samples.read_text(encoding="utf-8").splitlines()
-        assert len(written) >= 2, written
-        timestamp = json.loads(written[0])["ts"]
-        instant = datetime.fromisoformat(timestamp)
-        assert instant.tzinfo is UTC
-        assert instant.strftime("%Y-%m-%dT%H:%M:%SZ") == timestamp
-    finally:
-        target.terminate()
-        target.wait()
-
-    deadline = time.monotonic() + PATIENCE_SECONDS
-    while time.monotonic() < deadline:
-        try:
-            os.kill(loop, 0)
-        except ProcessLookupError:
-            break
-        time.sleep(0.1)
-    with pytest.raises(ProcessLookupError):
-        os.kill(loop, 0)

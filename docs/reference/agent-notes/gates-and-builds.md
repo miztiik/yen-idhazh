@@ -142,8 +142,9 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
 - **The partial-assembly recovery test fails with `preparation-failure` and
   `timed out after 0.1 seconds`; recovery is fine, the box was slow.**
   `test_real_partial_assembly_and_delivery_keep_source_and_writer_separate`
-  runs the real publisher under its real deadline, `deadline_seconds.default`
-  in `config/push-retry.json` (300 s). On 2026-11-17, on a loaded Windows 11
+  restores, assembles and lands once to check both identities on the remote.
+  The publisher still uses `deadline_seconds.default` in `config/push-retry.json`
+  (300 s). On 2026-11-17, on a loaded Windows 11
   developer box, one run, that test took 333 s and the budget ran out with
   0.11 s left. The tell is `Status.PREPARATION_FAILURE` carrying a
   `TimeoutExpired` from a `git` command, not a failed assertion about content.
