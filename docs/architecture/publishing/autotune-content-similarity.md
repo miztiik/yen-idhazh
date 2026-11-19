@@ -149,6 +149,8 @@ The one false merge at 0.93 is on 2026-08-30: Ontario's pushback against the lak
 
 **The judge does not set the line.** Its two thresholds steer which pairs it reads and decide nothing about publication, and the nightly draw follows them rather than the floor a build used ([the thresholds in force](how-the-content-similarity-judge-follows-its-thresholds.md#the-thresholds-in-force)).
 
+**What is not decided.** Whether the hand marks should become a live floor that refuses to apply a line at or below the highest pair marked as two stories, rather than a number copied into config. It would have refused today's 0.94, which sits 0.0007 below the 0.9407 pair. It is the structural fix for the negative margin above, and it changes what publishes, so a person decides it; the four marks it would rest on come from one news cluster, so more labels come first.
+
 ## What the Judgement page draws from the hand marks
 
 The Judgement page of the console draws the margin above: the line minus the highest score among the pairs marked as two stories, and how many pairs marked as one story sit below the line. The line is `assemble.same_story.floor_min` from the committed config, and the route's build-time `load` scores every hand-marked pair itself (`frontend/src/routes/console/judgement/`, `frontend/src/lib/console/holdout.ts` and `frontend/src/lib/server/content-similarity-holdout.ts`).

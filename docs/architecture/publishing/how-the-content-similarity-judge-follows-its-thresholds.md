@@ -5,15 +5,18 @@
 Which pairs of stories does the nightly judge read, what does it keep about each, and
 where do its two thresholds sit and move? This page owns the nightly draw, the rows it
 leaves in `pair-verdicts`, the review that finds where each threshold belongs and the row
-it leaves in `threshold-history`, the known-answer pairs the judge is checked against, and
-the words they use. What makes two items one story on the published day, and the fixed
+it leaves in `threshold-history`, the known-answer pairs the judge is checked against, the
+words they use, what to read once real nights exist, and what the design leaves out. What
+makes two items one story on the published day, and the fixed
 line that decides it, is in [autotune-content-similarity.md](autotune-content-similarity.md);
 nothing this judge writes moves that line. The
 council that hosts the judge is in [llm-council.md](llm-council.md). The page stays whole
 because it answers one question end to end: the draw follows the thresholds, and the
 review moves them from what the draw brought back, so the two halves share their words,
 their slices and their rows. The known-answer pairs ride the same runners, the same
-reading of the instrument and the same night's row, so they stay here too.
+reading of the instrument and the same night's row, so they stay here too. The first-nights
+readings and the leave-outs each point at a setting or a column defined here, so they stay
+too.
 
 The judge reads a small, deliberate sample of the night's pairs, never all of them.
 Where it looks hardest is where its answer decides something: around the two scores
@@ -275,11 +278,14 @@ ledger ([evaluation.md](../../concepts/evaluation.md)).
 **The judge is handed the two summaries and nothing else.** Not the score, which would hand
 it the number its answers are used to place a threshold against. Not the source names, which
 invite a verdict about publishers rather than about events. Not the publication times, which
-answer the question by proxy. `user_turn` in
-[prompt.py](../../../backend/idhazh/similarity/prompt.py) is the only thing that builds the
-ask. Each summary goes in fenced as untrusted data, like every other piece of text that came
-off the open web ([trust-boundary.md](../sources/trust-boundary.md)), and the ask is repeated
-after both, so the last words the model reads before it answers are ours.
+answer the question by proxy. `render_user_turn` in
+[prompt.py](../../../backend/idhazh/similarity/prompt.py) is the only place the ask is laid
+out: a published item reaches it through `user_turn` and a known-answer pair through its own
+summaries, so no pair has a second way to reach the model, and the digest of the prompt
+describes the layout the model reads. Each summary goes in fenced as untrusted data, like
+every other piece of text that came off the open web
+([trust-boundary.md](../sources/trust-boundary.md)), and the ask is repeated after both, so
+the last words the model reads before it answers are ours.
 
 **Every pair is read twice, and a pair the two readings disagree about is not usable.** The
 second read puts the summaries the other way round. A model that answers one way on a pair and
@@ -620,8 +626,10 @@ runner is not named again, because a repeat judges the whole night over. A night
 gardener recorded as quiet and the judge has repaired since counts as filed too, because
 the read opens each window day's raw files as well as the compact index. A night that
 drew nothing files no row, so it stays named until it leaves the window. A judge that
-has filed nothing is behind on every night of its window, and the council's repair
-budget lets one older night through a night.
+has filed nothing is behind on every night of its window (7 at the committed council
+settings), and the council's repair budget lets one older night through a night, newest
+first. So a night that drew nothing can take that slot while an older night the judge
+lost waits, and the older night can leave the window first.
 
 ## Settings
 
@@ -674,6 +682,44 @@ refuses a set missing a kind, a repeated id, an expected answer that does not ma
 an empty or non-ASCII summary, and a hand-written pair whose id does not start with
 `synthetic-`.
 
+## What to read after the first nights
+
+The first real nights settle the `draw` settings, which rest on one replay of eight nights,
+and the `thresholds` settings, which rest on a simulation. Each row is one reading, when to
+take it, and what to change if it is wrong. Nothing here runs by itself: a person reads the
+rows, and a setting changes by an edit that bumps its file's `version`
+([settings](#settings)).
+
+| When | What to read | If it is wrong |
+| --- | --- | --- |
+| First council run | The night's draw rows carry the slice columns, `pair-verdicts` holds the night's rows each with a `sampling_chance`, and `threshold-history` holds the night's row | The stage that writes the first missing item did not run: the pick writes the draw rows, the filing `pair-verdicts`, the review `threshold-history` |
+| First council run | Every drawn pair names at least one item of the night's published day | Revert the guard in `assemble.cross_source_pairs`. [What the guard gives up](autotune-content-similarity.md#design-rationale) is a story added to the day after the council read it |
+| First council run | `canary_answers` on the night's `threshold-history` row holds all six ids once, and a lost runner's ids are absent. Read each answer against its expected one. The two `unclear` pairs may answer NO: that is a predicted finding about the judge, and not a fault | A wrong answer on a `same` or `different` pair points at the model, runtime, prompt, grammar or label (an agent wrote the labels). Nothing holds or re-runs the night, so a person reads it. A missing id while every runner reported means its call raised, which the log names ([the check](#the-known-answer-pairs)) |
+| First council run | Older nights with no `pair-verdicts` row are named one a night, newest first, until the 7-night window has slid past the rest | A night that has rows and is named again is a fault in the scheduler's read ([which nights](#which-nights-the-judge-is-behind-on)) |
+| First gardener run | Three compaction tasks for this judge: `pair-verdicts`, `threshold-history` and `holdout-pairs` | A ledger missing from the list is never packed: its compaction declaration or its name in the gardener's task list is missing ([adding a ledger](../contracts/ledger-registry.md#onboarding-and-offboarding)) |
+| First 7 real nights | Per threshold, whether `usable_pairs_used` reached `minimum_usable_pairs` (240), and where `estimate` sits against the configured start (0.70 and 0.93) | Short of 240: raise `draw.pair_budget` (the guard has [room](#the-known-answer-pairs)) or reweight `draw.bucket_weights`. Far from its start: nothing to edit, because the threshold walks to the estimate and a start is read only while no row is in the last 14 days. A `thresholds` setting the rows contradict is re-derived from them |
+| First week | The share of usable `fully_dissimilar` pairs answered YES: at most 28 pairs, 4 a night | More than 1 in 20 (2 of 28 is 7 percent, 1 of 28 is 3.6 percent): move `lower_share_level` from 0.05 to 0.10 ([why](#design-rationale)) |
+| First 14 real nights | Per threshold, the nights held as `fit_failed` with `usable_pairs_used` of at least 240 | Three in a row on one threshold: the window cannot place it, so price a rule ([why none is added](#design-rationale)) |
+| First 14 real nights | Nights that have pair rows and no history row | Each is a failed review: it is not named again, and the next night follows the newest earlier row. The collecting job's log has the error |
+| First 14 real nights | By `run_id`, the share of a night's pair rows that a later run filed again for the same night. It was 24 percent over the old design's 14 nights | Above 10 percent: build a re-run that judges only what it lacks ([why not yet](#design-rationale)) |
+| First 14 real nights | Moves that a later night takes back (false moves) | None in 14 nights: set `nights_running_required` to 1, so a move waits one night less ([why 2](#design-rationale)) |
+
+## What this design leaves out, and what would bring each in
+
+Each is left out on purpose. None is a gap to fill unasked.
+
+| Left out | What leaving it out costs | What would bring it in |
+| --- | --- | --- |
+| Using a threshold to decide what publishes | The site groups stories at its fixed `floor_min` (0.94) while the judge tracks the evidence, so the two can disagree | A request naming which threshold the site follows and which mistake costs more, merging two stories or publishing a duplicate; then a plan |
+| A Judgement-page panel for threshold history or known-answer answers | Both are read in the Data explorer and not drawn ([why](console.md#judgement-draws-the-published-merges-and-the-hand-marks)) | A request naming the question the panel answers; then a design consult |
+| Remembering judged pairs from earlier nights | A pair drawn again is judged again. In the old design's 14 nights, none of the 767 pairs that held a story of the night's own day had been judged on an earlier night | Repeats counted by `pair_key` over the first 10 nights of `pair-verdicts`. A bounded read of two nights plus a match on the meaning stamp prices it ([the reason](autotune-content-similarity.md#design-rationale)) |
+| Re-measuring the seconds a pair is budgeted at (`SECONDS_A_JUDGED_PAIR`, 110.98 s) | The guard stays conservative: at 150 pairs it expects 4,439 s of a runner's 10,500 s (42 percent), from a figure measured on 2026-09-18 on another model file | 14 nights of `decode_seconds_total` in `threshold-history` ([the reading](../../reference/benchmarks/what-a-judge-pair-costs.md#how-to-take-this-reading-again)) |
+| Dating the other config files | A night's rows name the judge's own two files and no other tuning | A plan that gives every config file a `version` and a bump rule ([the rule so far](../../concepts/config.md#judge-config-files-carry-a-revision-date)) |
+
+Three more are stated with their reasons under [Design rationale](#design-rationale): reacting
+to a wrong known answer, accuracy evidence from people, and a re-run that judges only what it
+lacks.
+
 ## Design rationale
 
 **Slices, because the judge's answer changes where it is read.** A single sample of the
@@ -697,6 +743,17 @@ and holding the night back would delete the evidence of the units that did run t
 the one that did not. The collecting job refuses only a row that is not the night's own,
 because the ledger door would file a foreign row under its own date and let its own run
 id stand, and a foreign row would skew its slice's chance unseen.
+
+**A re-run judges the whole night again, and a re-run that judges only what it lacks is not
+built.** A second run of a night draws the same pairs and puts all of them to the judge
+again: 150 pairs and the six known-answer pairs, shared over four runners.
+[The guard](#the-known-answer-pairs) prices the busiest runner's share, 40 pairs (38 drawn
+and 2 known-answer), at 4,439 s of its 10,500 s. The thresholds are not harmed, because the
+evidence counts each pair once, by its newest row; what a re-run costs is model time.
+Resuming would save the share of a night's rows that a later run files again. That share was
+24 percent over the old design's 14 nights, at a budget of 200 pairs, and the budget is now
+150. It is measured from `pair-verdicts` by `run_id`, and resuming is built when the share is
+above 10 percent.
 
 **The deal and the file are ordered apart.** One order cannot serve both failures: a deal
 by the hash can leave a small slice entirely on one runner, and a file by the hash puts
@@ -732,6 +789,13 @@ evidence could move a threshold by tilting the curve. Holding the steepness near
 recent median leaves the curve free to shift, which is the only move the evidence is there
 to show.
 
+**The curve is fitted by this repository's own code, because the library that has a fit is
+not installed.** `scikit-learn` and `scipy` are in the development extra only, so using
+either in a night's run would put a new dependency in the default install. `scikit-learn`'s
+logistic regression also pulls the steepness toward zero, where this fit pulls it toward its
+recent median. Two parameters and at most 1,050 points (150 pairs a night over 7 nights)
+need no library: Newton's method with the step halved takes at most 50 steps.
+
 **Out is fast and in is slow.** A threshold sitting too far inside the doubtful range
 leaves wrong answers in a bucket the draw barely checks, while one sitting too far out
 only spends some pairs on near-certain ones. The merge line that decides what publishes is
@@ -748,6 +812,12 @@ and not four times as fast as the steps of 0.02 and 0.005 suggest.
 a lowest score raised above where the lower threshold already stands. A limit that jumped
 the threshold to it would be a move nobody asked for, so the threshold stays where it is,
 cannot go further that way, and can still come in by a step.
+
+**A gap must stand two nights before a threshold moves.** One night's gap can be noise. In a
+simulation of steady nights, asking for a second night cut false moves from 17 to 14 in every
+100 nights, which is 3 fewer for a delay of one night on every real move. It stays at 2 until
+real nights show whether that gain exists: if the first 14 show no false moves,
+`nights_running_required` goes to 1.
 
 **The previous night counts only when it is the day before.** "Nights in a row" means
 consecutive nights, and counting across a hole would confirm a gap on evidence a week
@@ -817,12 +887,15 @@ behind it, so it is logged for that pair and the runner goes on.
 
 **What the known-answer pairs do not settle.** Whether the labels are right: an agent wrote
 them and no person marked them, so an accuracy rate against people needs a person or a
-labelling resource. And whether the judge is right on pairs unlike these six.
+labelling resource, run through [the offline evaluation](../../how-to/evaluate-content-similarity-judge.md).
+And whether the judge is right on pairs unlike these six.
 
 **What none of this settles.** Whether the real judge's answers follow a logistic curve
 below 0.88, because no pair there has been judged yet. And a judge that answers YES on
 about 3 percent of clearly different pairs, which raises the lower estimate by about 0.014
-and which no test here can see. The lower share level is a setting for that reason.
+and which no test here can see. The lower share level is a setting for that reason: it moves
+from 0.05 to 0.10 if, in the first week, the fully dissimilar end shows YES on more than 1 in
+20 of its usable pairs, which is a rate above the 0.05 the lower threshold is defined at.
 
 **No cumulative record runs beside the draw.** A running total of every pair ever judged
 would assume one sampling chance for the whole history, and the draw's chances change every
