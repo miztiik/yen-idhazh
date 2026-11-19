@@ -84,7 +84,7 @@ def _earlier_days(date: str, *, window_hours: float) -> list[assemble.EarlierDay
     """The published days the same-story window can still reach, newest first.
 
     **Guardrail #12 declaration.** This read is bounded by the window and never
-    by the archive. The count is `ceil(window_hours / 24)` days - one at the
+    by the archive. The count is `ceil(window_hours / 24)` days - two at the
     36-hour default - so it is the same work on the thousandth day as on the
     third, and raising the window is the only thing that can make it more. Each
     day is one `digest.json` already on disk, opened once.
