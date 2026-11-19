@@ -33,8 +33,11 @@ from idhazh.contracts.council_invocation import (
 from idhazh.contracts.council_run_record import ShardOutcome
 from idhazh.contracts.knobs.council import JudgeLifecycleStatus
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.story_similarity_pair import JUDGE_POLICY_VERSION
-from idhazh.contracts.story_similarity_pair_verdict import PairBucket, StorySimilarityPairVerdict
+from idhazh.contracts.story_similarity_pair_verdict import (
+    JUDGE_POLICY_VERSION,
+    PairBucket,
+    StorySimilarityPairVerdict,
+)
 from idhazh.council import metrics_sink, session
 from idhazh.similarity.sampling_chance import with_sampling_chance
 from idhazh.stages import file_pair_verdicts

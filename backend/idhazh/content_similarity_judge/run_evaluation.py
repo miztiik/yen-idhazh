@@ -33,7 +33,7 @@ from idhazh.contracts.content_similarity_judge_evaluation import (
 )
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.knobs.models import ModelRef
-from idhazh.contracts.story_similarity_pair import JUDGE_POLICY_VERSION
+from idhazh.contracts.story_similarity_pair_verdict import JUDGE_POLICY_VERSION
 from idhazh.llm.server import Completion, turn_markers_digest
 from idhazh.similarity import judge, prompt
 

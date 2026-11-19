@@ -38,11 +38,10 @@ from idhazh.contracts.story_similarity_distribution import (
 )
 from idhazh.contracts.story_similarity_pair import (
     DROPPED_CELLS,
-    JUDGE_POLICY_VERSION,
     RENAMED_CELLS,
-    SameStoryVerdict,
     StorySimilarityPair,
 )
+from idhazh.contracts.story_similarity_pair_verdict import JUDGE_POLICY_VERSION, SameStoryVerdict
 from idhazh.ledger import parquet
 from idhazh.ledger.arrow_schema import columns_of
 

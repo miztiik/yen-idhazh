@@ -14,7 +14,7 @@ from idhazh import config
 from idhazh.contracts.digest_day import DigestItem
 from idhazh.contracts.eval_row import ConfidenceBand
 from idhazh.contracts.knobs.models import ModelsConfig
-from idhazh.contracts.story_similarity_pair import SameStoryVerdict
+from idhazh.contracts.story_similarity_pair_verdict import SameStoryVerdict
 from idhazh.llm import server
 from idhazh.llm.server import Completion, one_reply, parse_completion
 from idhazh.similarity import judge

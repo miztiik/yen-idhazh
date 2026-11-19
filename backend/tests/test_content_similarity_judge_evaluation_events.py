@@ -11,7 +11,7 @@ from idhazh.content_similarity_judge.evaluation_events import (
     EvaluationReadingRefused,
     configure_logging,
 )
-from idhazh.contracts.story_similarity_pair import ReadingRefusalReason
+from idhazh.contracts.story_similarity_pair_verdict import ReadingRefusalReason
 
 
 def test_progress_and_library_diagnostics_are_json_utc_and_text_free() -> None:

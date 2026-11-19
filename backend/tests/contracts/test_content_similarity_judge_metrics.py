@@ -31,7 +31,7 @@ from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.judge_call import JudgeConfigStamp
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain
-from idhazh.contracts.story_similarity_pair import JUDGE_POLICY_VERSION
+from idhazh.contracts.story_similarity_pair_verdict import JUDGE_POLICY_VERSION
 from idhazh.contracts.story_similarity_threshold_history_row import canary_answers_text
 
 pytestmark = pytest.mark.contract

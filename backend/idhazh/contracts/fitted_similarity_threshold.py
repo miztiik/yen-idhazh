@@ -33,7 +33,11 @@ from idhazh.contracts.base import (
     Sha256,
     without_retired_keys,
 )
-from idhazh.contracts.story_similarity_pair import JUDGE_POLICY_VERSION, JudgeModelId, ScorerModelId
+from idhazh.contracts.story_similarity_pair_verdict import (
+    JUDGE_POLICY_VERSION,
+    JudgeModelId,
+    ScorerModelId,
+)
 
 #: Headings an earlier row carried that this row no longer names and that
 #: nothing replaced. `key_point_weight` went with the key points themselves:

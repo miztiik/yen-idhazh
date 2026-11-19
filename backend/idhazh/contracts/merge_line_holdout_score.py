@@ -46,7 +46,7 @@ from idhazh.contracts.base import (
     RunId,
     without_retired_keys,
 )
-from idhazh.contracts.story_similarity_pair import ScorerModelId
+from idhazh.contracts.story_similarity_pair_verdict import ScorerModelId
 
 #: Who marked the holdout, as one printable line. Free text rather than a model
 #: id on purpose: the committed labels name a model from outside this

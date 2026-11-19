@@ -33,7 +33,7 @@ from idhazh.config import DEFAULT_CONFIG_DIR
 from idhazh.contracts.base import derive_text_digest
 from idhazh.contracts.digest_day import DigestItem
 from idhazh.contracts.knobs.prompts import PromptFilesConfig
-from idhazh.contracts.story_similarity_pair import SameStoryVerdict
+from idhazh.contracts.story_similarity_pair_verdict import SameStoryVerdict
 from idhazh.load_prompt_text import load_prompt_text
 from idhazh.sanitize import untrusted_block
 

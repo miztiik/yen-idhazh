@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
-from idhazh.contracts.story_similarity_pair import SameStoryVerdict
+from idhazh.contracts.story_similarity_pair_verdict import SameStoryVerdict
 
 
 class PairReadings(Protocol):

@@ -38,11 +38,8 @@ from idhazh.contracts.base import (
     records_json,
     without_retired_keys,
 )
-from idhazh.contracts.story_similarity_pair import (
-    DROPPED_CELLS,
-    JudgeModelId,
-    ScorerModelId,
-)
+from idhazh.contracts.story_similarity_pair import DROPPED_CELLS
+from idhazh.contracts.story_similarity_pair_verdict import JudgeModelId, ScorerModelId
 
 #: How far off its own grid a slot edge may sit before the record is refused.
 #: A band divided into 120 slots is 120 additions of a float, so the top edge

@@ -59,11 +59,10 @@ from idhazh.contracts.base import (
 from idhazh.contracts.judge_call import JudgeConfigStamp
 from idhazh.contracts.story_similarity_pair import (
     DROPPED_CELLS,
-    JUDGE_POLICY_VERSION,
     RENAMED_CELLS,
     ContentSimilarityJudgeId,
-    JudgeModelId,
 )
+from idhazh.contracts.story_similarity_pair_verdict import JUDGE_POLICY_VERSION, JudgeModelId
 from idhazh.contracts.story_similarity_threshold_history_row import CanaryAnswersText
 
 

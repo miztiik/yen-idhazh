@@ -49,14 +49,12 @@ from idhazh.contracts.base import (
     DateStamp,
     RunId,
 )
-from idhazh.contracts.story_similarity_pair import (
-    JudgeModelId,
-    SameStoryVerdict,
-    ScorerModelId,
-)
 from idhazh.contracts.story_similarity_pair_verdict import (
     RECOMPUTED_TOLERANCE,
     ConfigVersionsText,
+    JudgeModelId,
+    SameStoryVerdict,
+    ScorerModelId,
     canonical_compact_object,
 )
 

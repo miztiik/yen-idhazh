@@ -27,12 +27,13 @@ from idhazh.contracts.council_run_record import ShardOutcome
 from idhazh.contracts.digest_day import DigestDay, DigestItem, DigestRunRef, DigestVerticalRef
 from idhazh.contracts.eval_row import ConfidenceBand
 from idhazh.contracts.knobs.models import ModelsConfig
-from idhazh.contracts.story_similarity_pair import (
+from idhazh.contracts.story_similarity_pair_verdict import (
     JUDGE_POLICY_VERSION,
+    PairBucket,
     ReadingRefusalReason,
     SameStoryVerdict,
+    StorySimilarityPairVerdict,
 )
-from idhazh.contracts.story_similarity_pair_verdict import PairBucket, StorySimilarityPairVerdict
 from idhazh.council.deadline import compute_shard_deadline
 from idhazh.llm.server import (
     TokenChoice,

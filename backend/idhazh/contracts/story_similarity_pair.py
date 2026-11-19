@@ -23,25 +23,29 @@ columns filled in.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from enum import StrEnum
 from types import MappingProxyType
-from typing import Annotated, Any, ClassVar, Final, Literal, Self
+from typing import Any, ClassVar, Final, Literal, Self
 
-from pydantic import Field, StringConstraints, model_validator
+from pydantic import Field, model_validator
 
 from idhazh.contracts.base import (
-    PRINTABLE_LINE_PATTERN,
     ChangelogEntry,
     Contract,
     DateStamp,
     RunId,
     Sha256,
-    Slug,
     UrlKey,
-    canonical_json,
     derive_text_digest,
     renamed_keys,
     without_retired_keys,
+)
+from idhazh.contracts.story_similarity_pair_verdict import (
+    JUDGE_POLICY_VERSION,
+    RECOMPUTED_TOLERANCE,
+    FirstTokenWindow,
+    JudgeModelId,
+    SameStoryVerdict,
+    ScorerModelId,
 )
 
 #: Headings an earlier row carried that this row no longer names and that
@@ -68,95 +72,12 @@ DROPPED_CELLS: Final[frozenset[str]] = frozenset(
 #: readers of the row cannot rename a heading two ways.
 RENAMED_CELLS: Final[Mapping[str, str]] = MappingProxyType({"shard": "work_part_index"})
 
-#: How far a recomputed composite may sit from the one on the row before the row
-#: is refused. The score is a product of two floats, so the rule and the row can
-#: differ in the last bit or two without anybody having changed a weight.
-#: A millionth is far below the resolution any fitted line is read at.
-SCORE_TOLERANCE: Final = 1e-6
-
-# This date identifies emitted-evidence semantics, not an operator setting.
-JUDGE_POLICY_VERSION: Final[DateStamp] = "2026-11-05"
-
-
-class ReadingRefusalReason(StrEnum):
-    """Why a completed model response is not a valid judge reading."""
-
-    INVALID_LITERAL = "invalid_literal"
-    MISSING_EMISSION = "missing_emission"
-    INVALID_EMISSION = "invalid_emission"
-    AMBIGUOUS_EMISSION = "ambiguous_emission"
-    MISMATCHED_EMISSION = "mismatched_emission"
-
-
-class SameStoryVerdict(StrEnum):
-    """The three words a judge may answer with, and nothing else.
-
-    Upper case on the wire deliberately. The grammar handed to the decoder emits
-    these spellings, and the three differ at the first generated token - which is
-    what makes `first_token_margin` a reading about this pair rather than about
-    where the three words happen to agree.
-    """
-
-    YES = "YES"
-    NO = "NO"
-    UNCLEAR = "UNCLEAR"
-
-
-#: Recorded model identities use the config's slug format, not its current
-#: membership. Retired weights must remain readable without relabelling them.
-ScorerModelId = Slug
-JudgeModelId = Slug
-
 #: The slug this judge files its readings under. A closed set is honest here in
 #: the way it could not be on the shared call stamp: that stamp is inherited by
 #: judges nobody has written yet, and every row that carries this one is written
 #: by this judge and no other. Its software identity is fixed even when the
 #: weights it runs change.
 ContentSimilarityJudgeId = Literal["content-similarity-judge"]
-
-#: A first-token window as one cell: printable ASCII, one line, at most 1024
-#: characters. A character class rather than an identity, so a writer folds the
-#: decoder's own tokens into it with `base.fit_field` and a token no ASCII
-#: spelling covers costs a `?` rather than the row.
-FirstTokenWindow = Annotated[
-    str, StringConstraints(pattern=PRINTABLE_LINE_PATTERN, max_length=1024)
-]
-
-
-def scorer_stamp(
-    *,
-    scorer_model: ScorerModelId,
-    cosine_weight: float,
-) -> str:
-    """The two scorer columns as one value, for the places that need one."""
-    return derive_text_digest(
-        canonical_json(
-            {
-                "cosine_weight": cosine_weight,
-                "scorer_model": scorer_model,
-            }
-        )
-    )
-
-
-def judge_stamp(
-    *,
-    judge_model: JudgeModelId,
-    prompt_digest: str,
-    grammar_digest: str,
-    judge_policy_version: DateStamp | None = None,
-) -> str:
-    """The three judge columns as one value, for the places that need one."""
-    return derive_text_digest(
-        canonical_json(
-            {
-                "grammar_digest": grammar_digest,
-                "judge_model": judge_model,
-                "prompt_digest": prompt_digest,
-                "judge_policy_version": judge_policy_version,
-            }
-        )
-    )
 
 
 class StorySimilarityPair(Contract):
@@ -445,14 +366,14 @@ class StorySimilarityPair(Contract):
         here is what stops a row recording a score no rule on this row produces.
         """
         if self.headline:
-            if abs(self.composite_score - 1.0) > SCORE_TOLERANCE:
+            if abs(self.composite_score - 1.0) > RECOMPUTED_TOLERANCE:
                 raise ValueError(
                     "a headline match scores 1.0 outright, and this row scores "
                     f"{self.composite_score}"
                 )
             return self
         weighted = self.cosine * self.cosine_weight
-        if abs(self.composite_score - weighted) > SCORE_TOLERANCE:
+        if abs(self.composite_score - weighted) > RECOMPUTED_TOLERANCE:
             raise ValueError(
                 f"composite_score is {self.composite_score}, and the term and weight on "
                 f"this row come to {weighted}"

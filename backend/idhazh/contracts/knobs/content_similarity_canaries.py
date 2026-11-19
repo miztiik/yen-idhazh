@@ -37,7 +37,7 @@ from idhazh.contracts.base import (
     Slug,
     normalize_prose,
 )
-from idhazh.contracts.story_similarity_pair import SameStoryVerdict
+from idhazh.contracts.story_similarity_pair_verdict import SameStoryVerdict
 
 #: The most pairs the file may hold. Each pair is two calls on one runner at about the cost of a
 #: drawn pair (110.98 s measured), so twelve pairs on four runners is three pairs and about five

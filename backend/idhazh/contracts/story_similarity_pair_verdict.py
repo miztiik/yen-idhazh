@@ -29,6 +29,11 @@ it under `state/compact/content-similarity-judge/pair-verdicts/`. The folder is 
 `idhazh.ledger`, which is where a path belongs and which this module may not import
 (CLAUDE.md section 4).
 
+**The words a verdict is written in sit here too.** The three answers a judge may give, the
+reasons a reading is refused, and the recorded model identities are declared once, beside the
+row that carries them, and every contract and stage that names a verdict imports them from
+here.
+
 Nothing here decides what publishes. A verdict is a label on a pair.
 """
 
@@ -40,37 +45,82 @@ import re
 from enum import StrEnum
 from typing import Annotated, Any, ClassVar, Final, Self
 
-from pydantic import AfterValidator, BeforeValidator, ConfigDict, Field, model_validator
+from pydantic import (
+    AfterValidator,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    model_validator,
+)
 
 from idhazh.contracts.base import (
     DATE_PATTERN,
+    PRINTABLE_LINE_PATTERN,
     REL_PATH_PATTERN,
     ChangelogEntry,
     Contract,
     DateStamp,
     RunId,
     Sha256,
+    Slug,
     UrlKey,
     derive_text_digest,
 )
-from idhazh.contracts.story_similarity_pair import (
-    SCORE_TOLERANCE,
-    FirstTokenWindow,
-    JudgeModelId,
-    SameStoryVerdict,
-    ScorerModelId,
-)
 
-#: How far a stored number may sit from the one its own columns give: a slice edge from the
-#: score it holds, a chance from its two counts, a gap from its two ends. Each is a sum or a
-#: ratio of values the writer also held in floating point, and a writer that rounds to six
-#: places must not lose its night for it, so the bound is the one the score rule already uses.
-RECOMPUTED_TOLERANCE: Final = SCORE_TOLERANCE
+# This date identifies emitted-evidence semantics, not an operator setting.
+JUDGE_POLICY_VERSION: Final[DateStamp] = "2026-11-05"
+
+#: How far a stored number may sit from the one its own columns give: a score from its two
+#: terms, a slice edge from the score it holds, a chance from its two counts, a gap from its
+#: two ends. Each is a product, a sum or a ratio of values the writer also held in floating
+#: point, so the two can differ in the last bit or two without anybody having changed a
+#: weight, and a writer that rounds to six places must not lose its night for it. A millionth
+#: is far below the resolution any threshold is read at.
+RECOMPUTED_TOLERANCE: Final = 1e-6
 
 #: How far past 1 or -1 a cosine may land from floating-point noise alone. A cosine is a dot
 #: product over two norms, and on two identical vectors the quotient can come out one bit past
 #: 1.0. A billionth is far above that noise and far below any real fault.
 UNIT_RANGE_NOISE: Final = 1e-9
+
+
+class ReadingRefusalReason(StrEnum):
+    """Why a completed model response is not a valid judge reading."""
+
+    INVALID_LITERAL = "invalid_literal"
+    MISSING_EMISSION = "missing_emission"
+    INVALID_EMISSION = "invalid_emission"
+    AMBIGUOUS_EMISSION = "ambiguous_emission"
+    MISMATCHED_EMISSION = "mismatched_emission"
+
+
+class SameStoryVerdict(StrEnum):
+    """The three words a judge may answer with, and nothing else.
+
+    Upper case on the wire deliberately. The grammar handed to the decoder emits
+    these spellings, and the three differ at the first generated token - which is
+    what makes `first_token_margin` a reading about this pair rather than about
+    where the three words happen to agree.
+    """
+
+    YES = "YES"
+    NO = "NO"
+    UNCLEAR = "UNCLEAR"
+
+
+#: Recorded model identities use the config's slug format, not its current
+#: membership. Retired weights must remain readable without relabelling them.
+ScorerModelId = Slug
+JudgeModelId = Slug
+
+#: A first-token window as one cell: printable ASCII, one line, at most 1024
+#: characters. A character class rather than an identity, so a writer folds the
+#: decoder's own tokens into it with `base.fit_field` and a token no ASCII
+#: spelling covers costs a `?` rather than the row.
+FirstTokenWindow = Annotated[
+    str, StringConstraints(pattern=PRINTABLE_LINE_PATTERN, max_length=1024)
+]
 
 
 class PairBucket(StrEnum):
@@ -453,14 +503,14 @@ class StorySimilarityPairVerdict(Contract):
         recording a score no rule on this row produces.
         """
         if self.headline:
-            if abs(self.similarity_score - 1.0) > SCORE_TOLERANCE:
+            if abs(self.similarity_score - 1.0) > RECOMPUTED_TOLERANCE:
                 raise ValueError(
                     "a headline match scores 1.0 outright, and this row scores "
                     f"{self.similarity_score}"
                 )
             return self
         weighted = self.cosine * self.cosine_weight
-        if abs(self.similarity_score - weighted) > SCORE_TOLERANCE:
+        if abs(self.similarity_score - weighted) > RECOMPUTED_TOLERANCE:
             raise ValueError(
                 f"similarity_score is {self.similarity_score}, and the term and weight on "
                 f"this row come to {weighted}"

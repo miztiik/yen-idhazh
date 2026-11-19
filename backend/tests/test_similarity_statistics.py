@@ -9,7 +9,7 @@ import pytest
 from support.judged_pairs import a_reading
 
 from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
-from idhazh.contracts.story_similarity_pair import SameStoryVerdict
+from idhazh.contracts.story_similarity_pair_verdict import SameStoryVerdict
 from idhazh.similarity.statistics import (
     PairStatistics,
     combined_statistics,

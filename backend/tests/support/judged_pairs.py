@@ -18,8 +18,10 @@ from idhazh.content_similarity_judge import settings as judge_settings
 from idhazh.contracts.base import ServerJob, derive_text_digest, derive_url_key
 from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
 from idhazh.contracts.file_envelope import WriterIdentity
-from idhazh.contracts.story_similarity_pair import JUDGE_POLICY_VERSION
-from idhazh.contracts.story_similarity_pair_verdict import StorySimilarityPairVerdict
+from idhazh.contracts.story_similarity_pair_verdict import (
+    JUDGE_POLICY_VERSION,
+    StorySimilarityPairVerdict,
+)
 from idhazh.similarity.sampling_chance import with_sampling_chance
 from idhazh.similarity.slices import slice_grid
 from support.ledger import SEED_COMMIT

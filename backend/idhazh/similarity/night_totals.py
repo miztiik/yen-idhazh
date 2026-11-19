@@ -20,8 +20,11 @@ from collections.abc import Callable, Sequence
 from typing import Any, Final
 
 from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
-from idhazh.contracts.story_similarity_pair import SameStoryVerdict
-from idhazh.contracts.story_similarity_pair_verdict import PairBucket, StorySimilarityPairVerdict
+from idhazh.contracts.story_similarity_pair_verdict import (
+    PairBucket,
+    SameStoryVerdict,
+    StorySimilarityPairVerdict,
+)
 from idhazh.contracts.story_similarity_threshold_history_row import canary_answers_text
 from idhazh.similarity.statistics import combined_statistics, shipped_statistics
 

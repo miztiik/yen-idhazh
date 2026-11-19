@@ -7,7 +7,7 @@ from typing import Literal, TextIO
 
 from idhazh import event_lines
 from idhazh.contracts.base import Model, RelPath, Sha256
-from idhazh.contracts.story_similarity_pair import ReadingRefusalReason
+from idhazh.contracts.story_similarity_pair_verdict import ReadingRefusalReason
 
 
 class EvaluationCaptureStarted(Model):

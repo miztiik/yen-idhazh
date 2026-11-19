@@ -18,7 +18,11 @@ from dataclasses import dataclass
 
 from idhazh import config
 from idhazh.contracts.base import DateStamp
-from idhazh.contracts.story_similarity_pair import JUDGE_POLICY_VERSION, JudgeModelId, ScorerModelId
+from idhazh.contracts.story_similarity_pair_verdict import (
+    JUDGE_POLICY_VERSION,
+    JudgeModelId,
+    ScorerModelId,
+)
 from idhazh.embed import EMBEDDER_ID
 from idhazh.similarity import judge, prompt
 

@@ -35,8 +35,10 @@ from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJ
 from idhazh.contracts.council_run_record import ShardOutcome
 from idhazh.contracts.digest_day import DigestItem
 from idhazh.contracts.knobs.content_similarity_canaries import CanaryPair
-from idhazh.contracts.story_similarity_pair import SameStoryVerdict
-from idhazh.contracts.story_similarity_pair_verdict import StorySimilarityPairVerdict
+from idhazh.contracts.story_similarity_pair_verdict import (
+    SameStoryVerdict,
+    StorySimilarityPairVerdict,
+)
 from idhazh.similarity import judge, stamps
 from idhazh.similarity.statistics import reading_statistics
 from idhazh.stages import judge_canary_pairs
