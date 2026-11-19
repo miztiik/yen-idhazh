@@ -8,6 +8,7 @@ from typing import Final
 from pydantic import TypeAdapter, ValidationError
 
 from idhazh import config
+from idhazh.contracts.knobs.content_similarity_canaries import ContentSimilarityCanaryConfig
 from idhazh.contracts.knobs.content_similarity_judge import (
     ContentSimilarityEvaluationConfig,
     ContentSimilarityJudgeConfig,
@@ -15,6 +16,10 @@ from idhazh.contracts.knobs.content_similarity_judge import (
 
 #: The config file a night's judge reads, as a path relative to `config/`.
 JUDGE_FILE: Final = "judges/content-similarity-judge.json"
+
+#: The known-answer pairs the judge checks itself against each run, as a path relative to
+#: `config/`.
+CANARY_FILE: Final = "judges/content-similarity-canaries.json"
 
 
 def _refuse_a_version_that_is_not_a_past_date(version: str, *, file: str) -> None:
@@ -53,15 +58,33 @@ def load(config_dir: Path | None = None) -> ContentSimilarityJudgeConfig:
     return settings
 
 
+def load_canaries(config_dir: Path | None = None) -> ContentSimilarityCanaryConfig:
+    """Read the known-answer pairs, refusing a file whose date has not arrived."""
+    root = config.DEFAULT_CONFIG_DIR if config_dir is None else config_dir
+    path = root / CANARY_FILE
+    try:
+        canaries = ContentSimilarityCanaryConfig.model_validate_json(
+            path.read_text(encoding="utf-8")
+        )
+    except ValidationError as error:
+        raise ValueError(f"config/{CANARY_FILE} is refused: {error}") from error
+    _refuse_a_version_that_is_not_a_past_date(canaries.version, file=CANARY_FILE)
+    return canaries
+
+
 def config_versions(config_dir: Path | None = None) -> str:
     """The revision date of each config file the judge reads, as one line of ASCII JSON.
 
     An object keyed by path relative to `config/`, with sorted keys and no spaces, so two
     nights that read the same revisions produce the same bytes. It exists so a night's
     records can say which tuning produced them; a new judge-owned file adds a key to this
-    text rather than a column to those records.
+    text rather than a column to those records. The two files are the judge's settings and
+    the known-answer pairs.
     """
-    versions = {JUDGE_FILE: load(config_dir).version}
+    versions = {
+        JUDGE_FILE: load(config_dir).version,
+        CANARY_FILE: load_canaries(config_dir).version,
+    }
     return json.dumps(versions, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
 
 

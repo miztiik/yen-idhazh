@@ -9,6 +9,7 @@ from support.paths import CONFIG_DIR, read_text
 
 from idhazh.content_similarity_judge import settings as judge_settings
 from idhazh.contracts.app_config import AppConfig
+from idhazh.contracts.knobs.content_similarity_canaries import ContentSimilarityCanaryConfig
 from idhazh.contracts.knobs.content_similarity_judge import ContentSimilarityJudgeConfig
 from idhazh.contracts.knobs.council import CouncilConfig
 from idhazh.council.deadline import compute_shard_deadline
@@ -27,23 +28,35 @@ def _with(pair_budget: int) -> ContentSimilarityJudgeConfig:
     )
 
 
-def _check(pair_budget: int, *, council: CouncilConfig) -> None:
+def _check(
+    pair_budget: int,
+    *,
+    council: CouncilConfig,
+    canaries: ContentSimilarityCanaryConfig | None = None,
+) -> None:
     budget.refuse_a_night_this_tenant_cannot_finish(
         AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")),
         council=council,
         judge_knobs=_with(pair_budget),
+        canaries=canaries,
     )
 
 
-def _the_widest_draw_that_fits(council: CouncilConfig) -> int:
+def _the_widest_draw_that_fits(
+    council: CouncilConfig, *, canaries: ContentSimilarityCanaryConfig | None = None
+) -> int:
     """How many pairs a night may draw and still finish, derived rather than written.
 
     Driven from the council's own window function and the judge's own cost, so a
     later reading of either moves this with it instead of freezing the numbers
-    these tests were written against.
+    these tests were written against. The busiest runner also judges its share of
+    the known-answer pairs, so what is left for the draw is the pairs that fit less
+    that share.
     """
+    known = canaries or judge_settings.load_canaries(CONFIG_DIR)
     window = compute_shard_deadline(council, started=0.0)
-    return math.floor(window / budget.SECONDS_A_JUDGED_PAIR) * council.shards
+    checks = math.ceil(len(known.pairs) / council.shards)
+    return (math.floor(window / budget.SECONDS_A_JUDGED_PAIR) - checks) * council.shards
 
 
 def test_the_committed_draw_finishes_inside_the_window_the_council_leaves() -> None:
@@ -77,6 +90,27 @@ def test_a_draw_one_pair_too_wide_is_refused_and_a_longer_night_takes_it() -> No
 
     longer = CouncilConfig(shard_timeout_minutes=council.shard_timeout_minutes + 10)
     _check(fits + 1, council=longer)
+
+
+def test_the_known_answer_pairs_take_their_share_of_the_busiest_runners_window() -> None:
+    """The pairs a runner checks itself with are judged before its own, so the guard counts them.
+
+    A draw that fits beside three of them (one pair on the busiest of four runners) is refused
+    beside the committed six (two pairs), and the refusal says the pairs are why. The widest
+    draw beside six is accepted, so a guard that refused every draw would not pass this.
+    """
+    council = CouncilConfig()
+    committed = judge_settings.load_canaries(CONFIG_DIR)
+    fewer = committed.model_copy(update={"pairs": committed.pairs[::2]})
+    assert math.ceil(len(fewer.pairs) / council.shards) < math.ceil(
+        len(committed.pairs) / council.shards
+    ), "the committed pairs no longer cost a runner more than three do, so this proves nothing"
+    fits_beside_three = _the_widest_draw_that_fits(council, canaries=fewer)
+
+    _check(fits_beside_three, council=council, canaries=fewer)
+    with pytest.raises(ValueError, match="known-answer pairs add"):
+        _check(fits_beside_three, council=council, canaries=committed)
+    _check(_the_widest_draw_that_fits(council, canaries=committed), council=council)
 
 
 def test_the_window_is_the_bound_less_what_the_venue_spends_around_the_work() -> None:

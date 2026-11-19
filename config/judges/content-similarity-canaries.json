@@ -1,0 +1,113 @@
+{
+  "version": "2026-11-19",
+  "pairs": [
+    {
+      "id": "same-1",
+      "kind": "same",
+      "expected": "YES",
+      "origin": "published",
+      "labelled_by": "agent",
+      "basis": "One listed company's filing: a director retires on one date at one age under one governance rule",
+      "left": {
+        "date": "2026-11-07",
+        "item_id": "india-4at2refk8ng9fhy3",
+        "summary": "Titan Company said Noel N. Tata will retire as Director and Vice-Chairman on November 12, 2026, upon reaching the age of 70 under Tata Group Governance Guidelines filed in an exchange filing dated November 5. The company noted he was appointed to Titan's board in March 2022. The filing covers only his Titan role and does not address positions at other group companies like Trent, Voltas or Tata Steel, where no retirement announcement has been established from the filings reviewed."
+      },
+      "right": {
+        "date": "2026-11-07",
+        "item_id": "india-689nbq3f7gm8ja9d",
+        "summary": "Titan Company Limited announced that Noel N. Tata will retire as Director and Vice-Chairman on November 12, 2026 upon reaching age 70 under the Tata Group Governance Guidelines, per a filing dated November 5. The disclosure covers only his Titan role; no retirement was confirmed for his other group positions at Trent, Voltas, or Tata Steel."
+      }
+    },
+    {
+      "id": "same-2",
+      "kind": "same",
+      "expected": "YES",
+      "origin": "published",
+      "labelled_by": "agent",
+      "basis": "One technology firm ends visa sponsorship for one division, with a year-end deadline",
+      "left": {
+        "date": "2026-11-11",
+        "item_id": "india-6zsc86d0xcfnqvx8",
+        "summary": "IBM ends visa and employment-based green card sponsorship for its US-based Consulting division, per an internal memo, amid a broader pullback in foreign hiring. Affected employees have until the end of 2026 to relocate abroad or leave; those staying must find another sponsoring employer. IBM cited changing client requirements and local skills availability. The company's H-1B approvals fell from nearly 3,000 in FY 2024 to 1,611 in fiscal year 2026."
+      },
+      "right": {
+        "date": "2026-11-11",
+        "item_id": "india-aeeq7vvdytycwhwr",
+        "summary": "IBM is ending US visa and green card sponsorship for most roles in IBM Consulting, its largest division with more than 150,000 employees. Visa holders can keep working from abroad or leave the company by year-end; IBM has not said how many are affected. The decision follows years of declining high-skilled-visa use: H-1B petitions fell to just over 1,600 in fiscal year 2026 from more than 2,000 in FY2025 and nearly 3,000 in FY2024. IBM called it a business decision amid the Trump administration's push against foreign tech hiring."
+      }
+    },
+    {
+      "id": "different-1",
+      "kind": "different",
+      "expected": "NO",
+      "origin": "published",
+      "labelled_by": "agent",
+      "basis": "A school graduation and a company's data-centre investment: nothing in common. One accent is folded to ASCII in the first summary (Fatima)",
+      "left": {
+        "date": "2026-11-04",
+        "item_id": "world-0dc4qgdn09ta6vae",
+        "summary": "On Tuesday, 55 graduates of the Escola de Papai Noel do Brasil in Rio de Janeiro marked their completion beneath Christ the Redeemer on Corcovado. The free course requires men aged 50 and over with naturally white or grey hair and beards, and covers acting, diction, costume and Brazilian Sign Language. Founded in 1993 by actors Limachem Cherem and Conrado Freitas with designer Fatima Tavares Cherem, the school has trained more than 1,000 Santas over 33 years, along with about 300 Noeletes."
+      },
+      "right": {
+        "date": "2026-11-04",
+        "item_id": "business-economy-2nhmc06msp85an7w",
+        "summary": "Alphabet's Google announced a US$15 billion investment in Malaysia spanning 2027 to 2028, directed toward data centre campuses, clean energy, water security and worker upskilling. The spending will fund new campuses in Selangor and Negeri Sembilan alongside its operational Elmina Business Park site. Google projects the construction phase could add an annual average of US$1. 1 billion to Malaysia's GDP and support more than 37,000 local jobs per year during building, with facilities expected to sustain over 9,000 jobs once running at wages averaging 45% above the national median."
+      }
+    },
+    {
+      "id": "different-2",
+      "kind": "different",
+      "expected": "NO",
+      "origin": "published",
+      "labelled_by": "agent",
+      "basis": "A climate summit opening and a youth cricket match: nothing in common",
+      "left": {
+        "date": "2026-11-10",
+        "item_id": "world-7pcx0fkda710c87y",
+        "summary": "Delegates arrived at the conference venue beneath national flags and COP31 signs, with buses lining surrounding roads. The summit runs until 20 November, focusing on emissions cuts, electrification expansion, methane reduction and resilient cities. Talks proceed amid global energy turmoil as Iran's war reportedly closes the Strait of Hormuz, raising fuel and fertiliser prices. UN climate chief Simon Stiell warned progress is 'nowhere near far enough or fair enough', urging governments to honour existing promises."
+      },
+      "right": {
+        "date": "2026-11-08",
+        "item_id": "india-w7s3sydgkhr0bkna",
+        "summary": "Pakistan Under-19 defeated arch-rivals India by three wickets at Al Amerat, Oman, on Sunday during the ACC Men's U19 Asia Cup 2026. Chasing 209 after being bowled out for 208 in 46.3 overs, Pakistan recovered from 63/5 through a century by captain Hamza Zahoor and a 107-run partnership with Hasnain Abbas Dar. Arjun Rajput's 107 off 85 deliveries gave India their total, supported by Kavya Patel (23). The win secured an important Group A result as Pakistan advanced toward the semi-finals."
+      }
+    },
+    {
+      "id": "unclear-1",
+      "kind": "unclear",
+      "expected": "UNCLEAR",
+      "origin": "published",
+      "labelled_by": "agent",
+      "basis": "Two one-line cartoon captions; neither says what happened",
+      "left": {
+        "date": "2026-11-07",
+        "item_id": "ai-gp9n67v36c3r4t64",
+        "summary": "A single-sentence cartoon caption attributes a warning about dangerous technology innovations to Steve Jones, without further context or explanation of the subject's remarks. The item offers no figures, sources, or supporting detail beyond this one line."
+      },
+      "right": {
+        "date": "2026-10-24",
+        "item_id": "ai-q5vhq5s6p62e7sb2",
+        "summary": "Becky Barnicoat is the subject of a cartoon titled 'Becky Barnicoat on scary outfits for Halloween.' The item presents this title as the sole content, offering no further details, quotes, or claims regarding the cartoon's specific content or Barnicoat's statements."
+      }
+    },
+    {
+      "id": "unclear-2",
+      "kind": "unclear",
+      "expected": "UNCLEAR",
+      "origin": "published",
+      "labelled_by": "agent",
+      "basis": "A one-line cartoon caption on an election's aftermath beside a specific report from it; the caption names no event",
+      "left": {
+        "date": "2026-11-07",
+        "item_id": "ai-act5etj22gy5jvdn",
+        "summary": "The item is a single-sentence caption identifying an editorial cartoon by Martin Rowson, titled 'on the aftermath of the US midterm elections.' No figures, dates, or direct statements are given. The only location named in the text is the United States."
+      },
+      "right": {
+        "date": "2026-11-07",
+        "item_id": "world-t4n61hawy70wkg6h",
+        "summary": "President Donald Trump named longtime aide Stephen Miller chief of staff on Friday, replacing Susie Wiles. The appointment came after Republicans lost control of Congress in Tuesday's midterm elections. Miller is described as the architect of some of Trump's toughest domestic policies and a proponent of expansive presidential authority. He takes over as Trump prepares to confront Democratic-led chambers amid congressional investigations into his administration."
+      }
+    }
+  ]
+}

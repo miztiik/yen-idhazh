@@ -712,6 +712,10 @@ def test_a_written_judge_file_moves_the_thresholds_the_draw_starts_from(
     raw["thresholds"]["upper_start"] = 0.99
     target = tmp_path / "config" / "judges" / "content-similarity-judge.json"
     atomic_write.write_atomic(target, json.dumps(raw))
+    atomic_write.write_atomic(
+        target.with_name("content-similarity-canaries.json"),
+        read_text(CONFIG_DIR / "judges" / "content-similarity-canaries.json"),
+    )
     settings = replace(config.load(CONFIG_DIR), config_dir=target.parent.parent)
 
     _, committed_rows = draw_the_night(tmp_path, monkeypatch, out="committed")

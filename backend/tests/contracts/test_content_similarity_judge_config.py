@@ -27,6 +27,18 @@ def declaration(root: Path, **changes: object) -> Path:
     return path
 
 
+def known_answer_pairs(root: Path, **changes: object) -> Path:
+    """Write the known-answer pairs file beside the judge's, with some keys changed."""
+    path = root / "judges" / "content-similarity-canaries.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    raw = json.loads(
+        (CONFIG_DIR / "judges" / "content-similarity-canaries.json").read_text(encoding="utf-8")
+    )
+    raw.update(changes)
+    path.write_text(json.dumps(raw), encoding="utf-8", newline="\n")
+    return path
+
+
 def committed(block: str) -> dict[str, object]:
     """One nested block of the committed judge file, for a test to change one key of."""
     raw = json.loads(
@@ -153,9 +165,10 @@ def test_the_versions_a_night_read_are_one_line_of_ascii_json_keyed_by_file(
     tmp_path: Path,
 ) -> None:
     declaration(tmp_path, version="2026-11-17")
-    assert (
-        judge_settings.config_versions(tmp_path)
-        == '{"judges/content-similarity-judge.json":"2026-11-17"}'
+    known_answer_pairs(tmp_path, version="2026-11-18")
+    assert judge_settings.config_versions(tmp_path) == (
+        '{"judges/content-similarity-canaries.json":"2026-11-18",'
+        '"judges/content-similarity-judge.json":"2026-11-17"}'
     )
 
 

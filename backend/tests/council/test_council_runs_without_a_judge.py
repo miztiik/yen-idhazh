@@ -66,6 +66,7 @@ JUDGE_STAGE_MODULES: Final = (
 #: holds the tuple against the tree.
 JUDGE_CONTRACT_MODULES: Final = (
     "idhazh.contracts.content_similarity_judge_metrics",
+    "idhazh.contracts.knobs.content_similarity_canaries",
     "idhazh.contracts.knobs.content_similarity_judge",
     "idhazh.contracts.fitted_similarity_threshold",
     "idhazh.contracts.judge_call",
