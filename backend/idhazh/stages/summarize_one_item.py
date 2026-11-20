@@ -244,7 +244,7 @@ def _drawn(
     if rejections:
         outcome["rejection_reason"] = rejections[0].check
     drawable = plan
-    reason = "the plan passed every check and this build could not draw it"
+    reason = plan.why
     if rejections or not can_compile(plan.type):
         replacement_rejections: list[Rejection] = []
         cause = (
