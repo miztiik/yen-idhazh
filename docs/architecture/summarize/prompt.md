@@ -118,7 +118,9 @@ configuration; Python does not rank or shortlist forms based on the article.
 before committing to a form. Matching examples in
 [`plan-visual.txt`](../../../config/prompts/plan-visual.txt) distinguish two
 share prices from a share price and an amount raised. Separately stated
-figures can be comparable, and two readings can be enough.
+figures can be comparable, and two readings can be enough. The model
+looks for the strongest comparable subset before considering a decline;
+unrelated figures do not disqualify that subset.
 
 The model chooses which readings and roles to use and cites label phrases
 in the article's own words. Code turns those citations into the
