@@ -328,11 +328,11 @@ def _silent_recorder() -> ItemRecorder:
 def _shape_cells(error: Exception) -> dict[str, Any]:
     """The first native field/rule refusal, without rejected values or unknown keys."""
     if isinstance(error, PydanticCustomError):
-        field = f"visual.{error.context['field']}" if error.context else "visual"
-        detail = f"{field}: {error.type}; {error.message()}"
+        visual_field = f"visual.{error.context['field']}" if error.context else "visual"
+        detail = f"{visual_field}: {error.type}; {error.message()}"
         return {
             "detail": telemetry.detail_cell(detail),
-            "failed_field": field,
+            "failed_field": visual_field,
             "failed_rule": error.type,
         }
     detail = type(error).__name__
