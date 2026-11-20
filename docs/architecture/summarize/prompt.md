@@ -85,7 +85,9 @@ field in its grammar.
 
 The chart grammar branches on the type the model writes, using the same role
 rules as the validator. A line cannot assign its values to a scatter axis,
-and chart prose cannot repeat digits from the reference block.
+and a categorical comparison keeps each label beside its reading rather than
+relying on parallel lists. Chart prose cannot repeat digits from the reference
+block.
 
 ## One call writes the summary and plans the visual, and the article is read once
 

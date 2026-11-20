@@ -14,7 +14,13 @@ from pydantic import BaseModel
 
 from idhazh import summarize
 from idhazh.classify.plan_visual_request import VisualInput, chart_capabilities, example_data
-from idhazh.classify.resolve_visual_choice import NO_CHART, ChartReferences, PlanChoice
+from idhazh.classify.resolve_visual_choice import (
+    COMPARISONS,
+    NO_CHART,
+    ChartReferences,
+    ComparisonPoint,
+    PlanChoice,
+)
 from idhazh.config import DEFAULT_CONFIG_DIR
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import Model as ContractModel
@@ -67,11 +73,16 @@ def _chart_reply_schema(
         needed = rules.required - ({EncodingRole.CATEGORY} if form is VisualType.STACKED_BAR
                                    else set())
         allowed = {role.value for role in needed | rules.optional}
+        required_roles = [key for key in roles if key in {role.value for role in needed}]
+        if form in COMPARISONS:
+            allowed.difference_update({"category", "quantity"})
+            allowed.add("points")
+            required_roles = ["points"]
         fields["encodings"] = {
             "type": "object",
             "additionalProperties": False,
             "properties": {key: value for key, value in roles.items() if key in allowed},
-            "required": [key for key in roles if EncodingRole(key) in needed],
+            "required": required_roles,
         }
         fields["focus"] = fields["focus"]["anyOf"][0]
         fields["title"] = _words_only(fields["title"]["anyOf"][0])
@@ -102,6 +113,7 @@ def summarize_and_plan_schema(
     answer = definitions[PlanChoice.__name__]
     answer_fields = answer["properties"]
     roles = definitions.pop(ChartReferences.__name__)["properties"]
+    roles["points"]["minItems"] = 2
     forms = data.forms if data is not None else chart_capabilities(visuals or VisualsConfig())
     if data is not None:
         quantities = [code for code, e in data.refs.items() if e.kind is ElementKind.QUANTITY]
@@ -109,6 +121,7 @@ def summarize_and_plan_schema(
         quantity = {"type": "string", "enum": quantities}
         for role in VALUE_ROLES:
             roles[role.value]["items"] = quantity
+        definitions[ComparisonPoint.__name__]["properties"]["quantity"] = quantity
         if dates:
             roles["time"]["items"] = {"type": "string", "enum": dates}
         else:

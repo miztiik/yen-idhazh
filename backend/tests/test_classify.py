@@ -172,7 +172,10 @@ class TestTheSummarizeAndPlanOracle:
         choice = parse_summarize_and_plan(a_reply(
             type=form, focus="q2", title="Offer and opening prices",
             why="The opening share price exceeded the offer price.",
-            encodings={"category": ["offer price", "shares opened"], "quantity": ["q1", "q2"]},
+            encodings={"points": [
+                {"category": "offer price", "quantity": "q1"},
+                {"category": "shares opened", "quantity": "q2"},
+            ]},
         )).visual
         plan, grounded = resolve_visual_choice(choice, data, PRICES, table)
         assert plan.type is VisualType(form)
@@ -241,6 +244,10 @@ class TestTheSummarizeAndPlanOracle:
         assert list(schema["properties"]) == ["summary", "visual"]
         assert list(answers) == ["none", *(form.value for form in VISUALS.select_types())]
         assert answers["bar"]["focus"]["enum"] == ["q1", "q2", "q3"]
+        assert answers["bar"]["encodings"]["required"] == ["points"]
+        assert schema["$defs"]["ComparisonPoint"]["properties"]["quantity"]["enum"] == [
+            "q1", "q2", "q3",
+        ]
         line = answers["line"]["encodings"]
         assert line["required"] == ["quantity", "time"]
         assert "quantity_x" not in line["properties"]

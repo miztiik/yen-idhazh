@@ -5,11 +5,11 @@ First find the strongest comparison that explains the main story. Start with two
 Write "why" first, in one sentence without digits: name that comparison and the takeaway. If no comparable subset would clarify the main story, name what is missing or incompatible and choose "none". A mixture of measures elsewhere in the article does not make the useful subset incompatible.
 
 Choose "type" from the renderer capabilities based on the data, or "none" if no useful chart can be supported. Use these "encodings" (omit unused keys):
-- bar or dot: "category" and "quantity", paired in the same order.
+- bar or dot: "points", one object per reading with "category" then "quantity".
 - line: "quantity" and "time", paired in date order. Use it for measurements over time, not just two named stages.
 - slope: two dates in "time", before and after quantities consecutive for each subject, and one "entity" or "series" per subject.
 - scatter or bubble: one "entity", "quantity_x", and "quantity" per point in matching order. Bubble also needs "size".
-- pie: "category" and "quantity" for exhaustive, non-overlapping parts, with an independently stated "whole".
+- pie: "points" for exhaustive, non-overlapping parts, with an independently stated "whole".
 - stacked_bar: "series" and "quantity" for exhaustive parts; cite "whole" and copy the common "measure" beside it.
 - histogram: "bins" lists comparable individual readings, not precomputed counts.
 
@@ -19,4 +19,4 @@ Example: "The offer price was $$12 per share. The offering generated $$17 millio
 "visual": {"why":"The offer price is per share, while the proceeds are for the entire offering.","type":"none","encodings":{},"focus":null,"whole":null,"title":null,"caption":null}
 
 Example: "The offer price was $$12 per share. The first trade was $$17 per share, a gain of about 42%. The sale raised $$5 million." Data: q1 is $$12, q2 is $$17, q3 is 42%, and q4 is $$5 million.
-"visual": {"why":"The first trade was above the offer price on the same per-share basis.","type":"bar","encodings":{"category":["offer price","first trade"],"quantity":["q1","q2"]},"focus":"q2","whole":null,"title":"Offer price and first trade","caption":null}
+"visual": {"why":"The first trade was above the offer price on the same per-share basis.","type":"bar","encodings":{"points":[{"category":"offer price","quantity":"q1"},{"category":"first trade","quantity":"q2"}]},"focus":"q2","whole":null,"title":"Offer price and first trade","caption":null}

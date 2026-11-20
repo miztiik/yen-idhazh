@@ -47,6 +47,12 @@ DateRef = Annotated[str, StringConstraints(pattern=DATE_CODE)]
 _Names = Annotated[list[PlanTitle], Field(max_length=MAX_IDS_PER_ROLE)]
 _Quantities = Annotated[list[QuantityRef], Field(max_length=MAX_IDS_PER_ROLE)]
 _Dates = Annotated[list[DateRef], Field(max_length=MAX_IDS_PER_ROLE)]
+COMPARISONS: Final = frozenset({VisualType.BAR, VisualType.DOT, VisualType.PIE})
+
+
+class ComparisonPoint(Model):
+    category: PlanTitle
+    quantity: QuantityRef
 
 
 class ChartReferences(Model):
@@ -58,6 +64,9 @@ class ChartReferences(Model):
     series: _Names = Field(default_factory=list)
     size: _Quantities = Field(default_factory=list)
     bins: _Quantities = Field(default_factory=list)
+    points: Annotated[list[ComparisonPoint], Field(max_length=MAX_IDS_PER_ROLE)] = Field(
+        default_factory=list
+    )
 
 
 class PlanChoice(Model):
@@ -255,6 +264,18 @@ def resolve_visual_choice(
     whole = _source_ref(choice.whole, request, "whole") if choice.whole is not None else None
     if whole is not None and form not in {VisualType.PIE, VisualType.STACKED_BAR}:
         raise _refusal("visual_choice_unexpected_whole", "only composition cites a whole", "whole")
+    references = choice.encodings
+    if references.points:
+        if form not in COMPARISONS or references.category or references.quantity:
+            raise _refusal(
+                "visual_choice_unexpected_points",
+                "category points belong to comparisons and replace the parallel channels",
+                "encodings.points",
+            )
+        references = references.model_copy(update={
+            "category": [point.category for point in references.points],
+            "quantity": [point.quantity for point in references.points],
+        })
     source = {element.element_id: element for element in table.elements}
     known = source.copy()
     sentences = sentence_starts(text)
@@ -265,12 +286,12 @@ def resolve_visual_choice(
     ):
         field = f"encodings.{role.value}"
         channels[role] = [
-            _source_ref(code, request, field) for code in getattr(choice.encodings, role.value)
+            _source_ref(code, request, field) for code in getattr(references, role.value)
         ]
     quantities = channels[EncodingRole.QUANTITY]
     for role in (EncodingRole.CATEGORY, EncodingRole.ENTITY, EncodingRole.SERIES):
         field = f"encodings.{role.value}"
-        for index, phrase in enumerate(getattr(choice.encodings, role.value)):
+        for index, phrase in enumerate(getattr(references, role.value)):
             scope = _label_scope(role, form, index, quantities)
             if re.fullmatch(DATE_CODE, phrase):
                 element = _source_ref(phrase, request, field)
@@ -298,7 +319,7 @@ def resolve_visual_choice(
     if form is VisualType.STACKED_BAR and whole is not None and not channels[EncodingRole.CATEGORY]:
         # A stacked chart's sole row label is its independently stated whole.
         channels[EncodingRole.CATEGORY].append(whole)
-    if form in {VisualType.BAR, VisualType.DOT, VisualType.PIE}:
+    if form in COMPARISONS:
         _check_category_order(channels[EncodingRole.CATEGORY], quantities)
     if form in {VisualType.SCATTER, VisualType.BUBBLE}:
         _bind_relationship(channels, known)
