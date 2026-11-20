@@ -75,6 +75,14 @@ A feed is a stranger's list of addresses, and the pipeline dials them from insid
 - **The loopback, private, link-local and reserved ranges are refused**, by literal and again after DNS resolution. A cloud metadata endpoint is otherwise one feed entry away, and it is the single highest-value target on a build runner.
 - **Names that resolve inward are refused** - `localhost`, and the `.local` / `.internal` / `.localdomain` suffixes.
 
+An offered address can be an internationalized URL even though HTTP request
+targets are ASCII. Discovery converts Unicode host labels to IDNA and UTF-8
+encodes Unicode path, query and fragment characters as percent escapes. The
+same reusable conversion runs again at address validation, robots matching and
+the socket edge, so a raw Unicode URL and its already escaped spelling have
+one identity and one permission decision. Conversion failure blocks that
+address; it does not stop its feed or shard.
+
 This is Guardrail #11 applied one step earlier than it is usually read. "Fetched text never becomes a URL to fetch" is the well-known half; the half that bites in CI is that a *feed entry* is fetched text too.
 
 **An unreachable `robots.txt` is a refusal, not a permission.** Assuming consent from silence is how a polite crawler becomes an impolite one, and the failure mode is asymmetric: the cost of skipping a host wrongly is one missing item, and the cost of crawling one wrongly is a complaint we cannot take back.

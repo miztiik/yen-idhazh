@@ -158,6 +158,37 @@ def test_a_root_path_keeps_its_slash() -> None:
     assert canonicalise("https://x.example/") == "https://x.example/"
 
 
+def test_unicode_addresses_canonicalise_to_one_ascii_resource() -> None:
+    raw = (
+        "https://dw.com/en/xi-jinping-donald-trump-and-vladimir-putin-have-held-"
+        "trilateral-talks-\u2015-but-what-did-they-achieve/a-79996668"
+        "?maca=en-rss-en-world-4025-rdf"
+    )
+    encoded = raw.replace("\u2015", "%E2%80%95")
+    assert canonicalise(raw) == encoded
+    assert canonicalise(encoded) == encoded
+    assert canonicalise(encoded.replace("%E2%80%95", "%e2%80%95")) == encoded
+
+
+def test_unicode_hosts_and_query_values_are_serialized_for_transport() -> None:
+    assert canonicalise(
+        "https://m\u00fcnich.example/stra\u00dfe?topic=\u4e16\u754c"
+    ) == (
+        "https://xn--mnich-kva.example/stra%C3%9Fe?"
+        "topic=%E4%B8%96%E7%95%8C"
+    )
+
+
+def test_an_invalid_entry_does_not_stop_its_feed() -> None:
+    body = """<?xml version="1.0"?>
+    <rss version="2.0"><channel><title>URL boundary</title>
+      <item><title>Invalid</title><link>https://x.example:not-a-port/article</link></item>
+      <item><title>Valid</title><link>https://x.example/article</link></item>
+    </channel></rss>
+    """
+    assert [candidate.title for candidate in candidates_from_feed(LAB, body)] == ["Valid"]
+
+
 # --- Reading a feed ---------------------------------------------------------
 
 

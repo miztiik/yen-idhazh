@@ -26,10 +26,11 @@ from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceTier
 from idhazh.health_order import availability_evidence
 from idhazh.sanitize import sanitize
+from idhazh.url_transport import InvalidTransportUrlError, encode_url_for_transport
 
 #: Bumped when canonicalisation or title handling changes, because either moves
 #: `url_key` and therefore what counts as the same story.
-DISCOVERY_VERSION: Final = "idhazh-discover-1"
+DISCOVERY_VERSION: Final = "idhazh-discover-2"
 
 TITLE_MAX_CHARS: Final = 500
 
@@ -70,9 +71,10 @@ def canonicalise(url: str) -> str:
 
     Lowercases the scheme and host, drops the default port and a leading `www.`,
     strips campaign identifiers and the fragment, sorts what remains of the
-    query, and removes a trailing slash from a non-root path.
+    query, removes a trailing slash from a non-root path, and serializes the
+    address as an ASCII URI.
     """
-    parts = urlsplit(url.strip())
+    parts = urlsplit(encode_url_for_transport(url))
     scheme = parts.scheme.lower()
     host = _WWW.sub("", parts.hostname or "")
     if parts.port and str(parts.port) != _DEFAULT_PORTS.get(scheme):
@@ -85,7 +87,7 @@ def canonicalise(url: str) -> str:
         if key.lower() not in _TRACKING_KEYS and not key.lower().startswith(_TRACKING_PREFIXES)
     )
     query = "&".join(f"{key}={value}" for key, value in kept)
-    return urlunsplit((scheme, host, path, query, ""))
+    return encode_url_for_transport(urlunsplit((scheme, host, path, query, "")))
 
 
 def clean_title(
@@ -190,7 +192,10 @@ def candidates_from_feed(feed: FeedDef, body: str | bytes) -> list[Candidate]:
         link = (getattr(entry, "link", "") or "").strip()
         if not link.lower().startswith(("http://", "https://")):
             continue
-        canonical = canonicalise(link)
+        try:
+            canonical = canonicalise(link)
+        except InvalidTransportUrlError:
+            continue
         if canonical in seen:
             continue
         seen.add(canonical)

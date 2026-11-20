@@ -149,6 +149,13 @@ def test_an_ordinary_public_address_is_dialable(url: str) -> None:
     assert address_is_dialable(url) == (True, None)
 
 
+def test_a_non_numeric_port_is_an_invalid_address_not_an_exception() -> None:
+    assert address_is_dialable("https://x.example:not-a-port/article") == (
+        False,
+        "port is not a number",
+    )
+
+
 # --- Asking the host -------------------------------------------------------
 
 ROBOTS = FIXTURES_DIR / "robots"
@@ -422,6 +429,16 @@ def test_a_target_whose_rules_nobody_answered_for_is_never_asked() -> None:
     assert result.robots is RobotsOutcome.UNREACHABLE
 
 
+def test_an_invalid_target_is_blocked_before_a_socket_edge_is_asked() -> None:
+    recorder = Recorder(FetchResult(FetchOutcome.OK, status=200, body=b""))
+    result = common.live_fetcher(
+        config.load(CONFIG_DIR), read_address=recorder
+    )("https://x.example:not-a-port/article")
+    assert result.outcome is FetchOutcome.BLOCKED
+    assert result.detail == "port is not a number"
+    assert recorder.asked == []
+
+
 def test_one_host_is_asked_for_its_rules_once_a_run() -> None:
     """However many of its pages a run reads, and however the addresses are spelled."""
     settings = config.load(CONFIG_DIR)
@@ -483,11 +500,13 @@ class _LoopbackSite:
         self.first_byte_delay = first_byte_delay
         self.failures = failures
         self.served = 0
+        self.requested_paths: list[str] = []
         site = self
 
         class Handler(BaseHTTPRequestHandler):
             def do_GET(self) -> None:
                 site.served += 1
+                site.requested_paths.append(self.path)
                 time.sleep(site.first_byte_delay)
                 if site.served <= site.failures:
                     self.send_response(503)
@@ -551,6 +570,21 @@ def _delay_the_handshake(monkeypatch: pytest.MonkeyPatch, seconds: float) -> Non
 def test_every_timing_names_a_census_column() -> None:
     """The cells go straight into the item record, which refuses an unknown key."""
     assert set(FetchTimings().cells()) <= set(ItemHealthRow.csv_columns())
+
+
+def test_a_unicode_path_is_encoded_before_the_http_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with _LoopbackSite() as site:
+        _let_the_loopback_be_dialled(monkeypatch)
+        result = fetch(
+            f"{site.url}-\u2015",
+            config=ExtractConfig(),
+            permission=RobotsOutcome.ALLOWED,
+        )
+
+    assert result.ok
+    assert site.requested_paths == ["/article-%E2%80%95"]
 
 
 def test_the_handshake_and_the_wait_land_in_different_columns(
