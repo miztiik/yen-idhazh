@@ -142,7 +142,7 @@ def assert_planning_readings(server: RecordedEndpoint, readings: list[tuple[str,
     request = server.sent[0]
     prompt = str(request["prompt"])
     for code, reading in readings:
-        assert re.search(rf"^{code}:[^\n]*\[{re.escape(reading)}\]", prompt, re.MULTILINE)
+        assert f"[{code}: {reading}]" in prompt
     assert re.search(r"\b[a-z]+-\d+-\d+\b", prompt) is None
     offered = chart_reply_fields(request["json_schema"])["bar"]["focus"]
     assert offered["enum"] == [code for code, _ in readings]

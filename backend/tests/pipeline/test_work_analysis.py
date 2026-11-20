@@ -88,7 +88,7 @@ def shown_readings(request: dict[str, Any]) -> list[tuple[str, str]]:
         return []
     after = prompt.split(DATA_INTRO, maxsplit=1)[1]
     block = after.split(FENCE_OPEN + "\n", maxsplit=1)[1].split("\n" + FENCE_CLOSE, maxsplit=1)[0]
-    return re.findall(r"^([qd]\d+):[^\n]*?\[([^\[\]\n]+)\]", block, re.MULTILINE)
+    return re.findall(r"\[([qd]\d+): ([^\[\]\n]+)\]", block)
 
 
 def health(items: Path, item_id: str) -> ItemHealthRow:

@@ -208,7 +208,7 @@ def test_real_consumers_and_stamps_follow_two_selected_roots(tmp_path: Path) -> 
             )
             rendered = str(request["prompt"])
             assert label in rendered
-            assert ("Denmark approved [1200 MW]" in rendered) is bool(shown)
+            assert ("Denmark approved [q1: 1200 MW]" in rendered) is bool(shown)
         assert label in summarize.system_prompt(settings.app.summarize, **options)
         built, fault = reference_set.target_is_shaped_right(
             reference_set.Task(

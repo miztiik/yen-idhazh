@@ -1,8 +1,8 @@
 When source data references follow the item, write "visual" after "summary".
 
-First find the strongest comparison that explains the main story. Start with two actual readings of the same measure on the same basis. Look for an earlier and later value, two places measured the same way, or parts of a stated whole. Readings can be in separate sentences. Check their unit, denominator, and scope. Use the comparable subset; leave other figures out. For a price move, compare the two prices, not percentage changes alongside prices. Do not mix prices per share with total proceeds, even though both are in dollars.
+Start with the item headline: what numerical comparison would explain the main finding? Find the two readings that answer it before considering other figures. For a rise or fall, find the starting value and the later value of the same measure, not the percentage change. For a comparison across places or groups, check that the unit, denominator and scope match. The readings may be far apart in the item.
 
-Write "why" first, in one sentence without digits: name that comparison and the takeaway. If no comparable subset would clarify the main story, name what is missing or incompatible and choose "none". A mixture of measures elsewhere in the article does not make the useful subset incompatible.
+Write "why" first, in one sentence without digits. If the readings show a meaningful difference, trend or relationship, name it and what it shows, then chart that subset. It is fine if the summary already names the readings. Omit unrelated figures rather than declining the comparison. Choose "none" when no subset supports a useful chart; say exactly what does not match or what is missing.
 
 Choose "type" from the renderer capabilities based on the data, or "none" if no useful chart can be supported. Use these "encodings" (omit unused keys):
 - bar or dot: "points", one object per reading with "category" then "quantity".
@@ -13,10 +13,10 @@ Choose "type" from the renderer capabilities based on the data, or "none" if no 
 - stacked_bar: "series" and "quantity" for exhaustive parts; cite "whole" and copy the common "measure" beside it.
 - histogram: "bins" lists comparable individual readings, not precomputed counts.
 
-Use the shown q codes for quantities and d codes for dates. Brackets in the excerpts identify the reading each code points to. For category, entity or series labels, copy the exact words right beside the reading, such as "offer price" or "subsequently trading". Do not use a day or a name mentioned in a different sentence as a label. Keep the title factual and leave dates and numbers to the chart, not its title or caption. A caption is only for context the chart does not show, such as a forecast; otherwise use null. Use "focus" for one drawn q code. Only composition sets "whole" to a q code; otherwise use null. For "none", use empty encodings and null focus, whole, title and caption.
+Each bracketed code marks the reading at that place in the source: q for quantity, d for date. Copy a short exact label next to its reading. Different stages of one subject can have different labels, such as "opening price" or "previous close". Give a short title naming the measure, without a date, number, or trailing punctuation. Use a caption only to identify a forecast or similar context. Use "focus" for one drawn q code. Only composition sets "whole" to a q code; otherwise use null. For "none", use empty encodings and null focus, whole, title and caption.
 
-Example: "The offer price was $$12 per share. The offering generated $$17 million in proceeds." Data: q1 is $$12 and q2 is $$17 million.
+Example: The offer price was [q1: $$12] per share. The offering generated [q2: $$17 million] in proceeds.
 "visual": {"why":"The offer price is per share, while the proceeds are for the entire offering.","type":"none","encodings":{},"focus":null,"whole":null,"title":null,"caption":null}
 
-Example: "The offer price was $$12 per share. The first trade was $$17 per share, a gain of about 42%. The sale raised $$5 million." Data: q1 is $$12, q2 is $$17, q3 is 42%, and q4 is $$5 million.
+Example: The offer price was [q1: $$12] per share. The first trade was [q2: $$17] per share, a gain of about [q3: 42%]. The sale raised [q4: $$5 million].
 "visual": {"why":"The first trade was above the offer price on the same per-share basis.","type":"bar","encodings":{"points":[{"category":"offer price","quantity":"q1"},{"category":"first trade","quantity":"q2"}]},"focus":"q2","whole":null,"title":"Offer price and first trade","caption":null}

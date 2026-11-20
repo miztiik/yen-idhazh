@@ -114,8 +114,10 @@ not have to find category names for a chart to be considered.
 
 [`plan_visual_request.py`](../../../backend/idhazh/classify/plan_visual_request.py)
 assigns a `q` code to each quantity and a `d` code to each date in the bounded
-element table. Short excerpts bracket the reading so repeated values can be
-distinguished. The excerpts stay [inside their own untrusted fence](../sources/trust-boundary.md#data-references-are-article-words-inside-the-fence).
+element table. In short excerpts, the code sits on the reading itself so a
+price cannot be mistaken for a nearby percent change. Overlapping excerpts
+are joined rather than repeating the numbers beside each other. The excerpts
+stay [inside their own untrusted fence](../sources/trust-boundary.md#data-references-are-article-words-inside-the-fence).
 The capabilities line outside it is the same for every article under one
 configuration; Python does not rank or shortlist forms based on the article.
 

@@ -12,7 +12,7 @@ from idhazh.contracts.element import Element, ElementKind, ElementTable
 from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.visual import VisualType
 from idhazh.contracts.visual_decision import VisualKind
-from idhazh.elements import SpanDriftError, sentence_starts
+from idhazh.elements import SpanDriftError, quantity_elements, sentence_starts
 from idhazh.render import can_compile
 from idhazh.sanitize import untrusted_block
 
@@ -33,8 +33,28 @@ def chart_capabilities(visuals: VisualsConfig) -> tuple[VisualType, ...]:
     return tuple(form for form in visuals.select_types() if can_compile(form))
 
 
-def _row(code: str, excerpt: str, before: str, after: str) -> str:
-    return re.sub(r"\s+", " ", f"{code}: {before}[{excerpt}]{after}").rstrip()
+def _readings_in_context(text: str, refs: Mapping[str, Element], width: int) -> list[str]:
+    """Mark each reading once, merging overlapping context without making data pairs."""
+    offsets = [0, *sentence_starts(text), len(text)]
+    rows: list[str] = []
+    parts: list[str] = []
+    cursor = right = 0
+    for code, element in refs.items():
+        start, end = element.span_start, element.span_end
+        sentence = bisect_right(offsets, start) - 1
+        left = max(offsets[sentence], start - width)
+        edge = min(offsets[bisect_right(offsets, end - 1)], end + width)
+        if not parts or left >= right:
+            if parts:
+                rows.append("".join([*parts, text[cursor:right]]))
+            parts = []
+            cursor = left
+        parts += [text[cursor:start], f"[{code}: {text[start:end]}]"]
+        cursor = end
+        right = edge
+    if parts:
+        rows.append("".join([*parts, text[cursor:right]]))
+    return [re.sub(r"\s+", " ", row).strip() for row in rows]
 
 
 def _frame(rows: Sequence[str], forms: Sequence[VisualType]) -> str:
@@ -48,18 +68,15 @@ def _frame(rows: Sequence[str], forms: Sequence[VisualType]) -> str:
 def visual_input(text: str, table: ElementTable, *, visuals: VisualsConfig) -> VisualInput | None:
     """Index independent numeric and date spans, without deciding what compares.
 
-    Small excerpts distinguish repeated values. This uses the existing display
-    label limit for the context on either side, not for the value itself.
+    Show each span where it occurs in a short excerpt. This uses the existing
+    display label limit for context, not for the value itself.
     """
     forms = chart_capabilities(visuals)
     if not forms:
         return None
     if drift := table.span_drift(text):
         raise SpanDriftError(f"{table.item_id}: {drift}")
-    offsets = [0, *sentence_starts(text), len(text)]
-    width = visuals.max_label_characters
     refs: dict[str, Element] = {}
-    rows = []
     counts = {ElementKind.QUANTITY: 0, ElementKind.DATE: 0}
     for element in table.elements:
         if element.kind not in counts:
@@ -67,16 +84,13 @@ def visual_input(text: str, table: ElementTable, *, visuals: VisualsConfig) -> V
         counts[element.kind] += 1
         code = f"{element.kind.value[0]}{counts[element.kind]}"
         refs[code] = element
-        start, end = element.span_start, element.span_end
-        sentence = bisect_right(offsets, start) - 1
-        left = max(offsets[sentence], start - width)
-        right = min(offsets[sentence + 1], end + width)
-        rows.append(_row(code, element.span_excerpt, text[left:start], text[end:right]))
     # Every numeric form needs at least two distinct source readings, even if a
     # given form or operator setting needs more. No unit or pairing test here.
     if counts[ElementKind.QUANTITY] < 2:
         return None
-    return VisualInput(forms, refs, _frame(rows, forms))
+    return VisualInput(
+        forms, refs, _frame(_readings_in_context(text, refs, visuals.max_label_characters), forms)
+    )
 
 
 def example_data(visuals: VisualsConfig) -> str:
@@ -84,4 +98,7 @@ def example_data(visuals: VisualsConfig) -> str:
     forms = chart_capabilities(visuals)
     if not forms:
         return ""
-    return _frame([_row("q1", "figure", "before ", " after")], forms)
+    # The prompt fingerprint uses the same excerpt renderer as the live request.
+    text = "before 20 MW after"
+    span, = quantity_elements(text, limit=1).elements
+    return _frame(_readings_in_context(text, {"q1": span}, visuals.max_label_characters), forms)

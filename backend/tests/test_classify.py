@@ -236,8 +236,11 @@ class TestTheSummarizeAndPlanOracle:
     ) -> None:
         _, data = chart_data_over(article_ok, OIL_FORECAST)
         payload = a_request(article_ok.model_copy(update={"text": OIL_FORECAST}), data)
-        assert "annually through [2035]" in payload["prompt"]
-        assert "q2:" in payload["prompt"] and "Africa at [2.8%]" in payload["prompt"]
+        assert "annually through [d1: 2035]" in data.prompt
+        assert "India at [q1: 3%], Africa at [q2: 2.8%] and Southeast Asia at [q3: 1.4%]" in (
+            data.prompt
+        )
+        assert data.prompt.count("2.8%") == 1
         assert re.search(r"\b(?:quantity|date)-\d+-\d+\b", payload["prompt"]) is None
         schema = payload["json_schema"]
         answers = chart_reply_fields(schema)
