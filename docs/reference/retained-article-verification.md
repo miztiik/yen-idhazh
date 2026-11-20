@@ -75,7 +75,8 @@ retention window. All replay files stay below the private directory
 - `outputs/<item-id>/items/<item-id>.summary.json`, `<item-id>.visual.json` and
   `<item-id>.health.json`: fresh native products, including truthful failures.
 - `outputs/<item-id>/captures/`: the actual native summary capture,
-  with its request, reply and available call cost.
+  with its request, reply and available call cost, and `<item-id>.text-analysis.log`
+  with the caller's span diagnostics.
 - `outputs/<item-id>/assets/`: compiled numeric chart data at the native
   relative asset path. This directory is not a publication tree.
 - `llama-server.log`: the owned runtime's log.

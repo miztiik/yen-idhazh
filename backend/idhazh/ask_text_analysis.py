@@ -17,9 +17,10 @@ into `elements.label_kinds` and reaches no prompt, path, URL or command.
 
 **The service failing costs the item its names and nothing else.** A closed port, a
 service that never answers, a refusal and a reply this build cannot read each return no
-mentions and name the reason. The caller logs the outcome and the spans it kept, keyed
-by the item's identity instead of the URL itself. There is no retry: a second try against
-a hung service would double the time a bad runner can spend on one item.
+mentions and name the reason. The caller logs each returned label and range with its
+validation result, keyed by the item's identity instead of the URL itself. A caller
+with a capture directory keeps the same record there. There is no retry: a second try
+against a hung service would double the time a bad runner can spend on one item.
 """
 
 from __future__ import annotations
@@ -31,10 +32,12 @@ import time
 import urllib.error
 import urllib.request
 from enum import StrEnum
+from pathlib import Path
 from typing import Final, Literal, NamedTuple
 
 from pydantic import BaseModel, ConfigDict, StrictInt, StrictStr, ValidationError
 
+from idhazh import atomic_write
 from idhazh.anchor_mentions import Mention
 from idhazh.contracts.article import Article
 from idhazh.contracts.knobs.text_analysis import TextAnalysisConfig
@@ -110,52 +113,62 @@ class _Reply(BaseModel):
     features: tuple[_EntitiesFeature]
 
 
-def _record_answer(
+class _SpanStatus(StrEnum):
+    ACCEPTED = "accepted"
+    INVALID_OFFSETS = "invalid_offsets"
+    TEXT_MISMATCH = "text_mismatch"
+
+
+def _record_result(
     article: Article,
-    outcome: Outcome,
+    answer: Answer,
+    spans: tuple[tuple[Mention, _SpanStatus], ...],
     *,
-    started: float,
-    mentions: tuple[Mention, ...] = (),
-    dropped_mentions: int = 0,
-    status: int | None = None,
-) -> Answer:
-    answer = Answer(mentions, outcome, int((time.monotonic() - started) * 1000), status)
-    level = logging.WARNING if outcome is not Outcome.OK or dropped_mentions else logging.INFO
-    if LOG.isEnabledFor(level):
-        LOG.log(
-            level,
-            "text analysis result %s",
-            json.dumps(
-                {
-                    "item_id": article.item_id,
-                    "url_key": article.url_key,
-                    "outcome": answer.outcome.value,
-                    "http_status": answer.http_status,
-                    "elapsed_ms": answer.elapsed_ms,
-                    "dropped_mentions": dropped_mentions,
-                    "mentions": [mention._asdict() for mention in answer.mentions],
-                },
-                separators=(",", ":"),
-            ),
-        )
-    return answer
-
-
-def _anchored(text: str, read: _Read) -> bool:
-    """Whether the offsets cut out of the article the very words the service returned."""
-    return 0 <= read.start_char < read.end_char <= len(text) and (
-        text[read.start_char : read.end_char] == read.text
+    capture_root: Path | None,
+) -> None:
+    dropped_mentions = len(spans) - len(answer.mentions)
+    level = logging.INFO
+    if answer.outcome is not Outcome.OK or dropped_mentions:
+        level = logging.WARNING
+    if capture_root is None and not LOG.isEnabledFor(level):
+        return
+    line = "text analysis result " + json.dumps(
+        {
+            "item_id": article.item_id,
+            "url_key": article.url_key,
+            "outcome": answer.outcome.value,
+            "http_status": answer.http_status,
+            "elapsed_ms": answer.elapsed_ms,
+            "dropped_mentions": dropped_mentions,
+            "returned_spans": [
+                mention._asdict() | {"status": status.value} for mention, status in spans
+            ],
+        },
+        separators=(",", ":"),
     )
+    LOG.log(level, "%s", line)
+    if capture_root is not None:
+        try:
+            atomic_write.write_atomic(
+                capture_root / f"{article.item_id}.text-analysis.log", line + "\n"
+            )
+        except OSError as error:
+            LOG.warning(
+                "text analysis capture failed id=%s error=%s", article.item_id, type(error).__name__
+            )
 
 
-def ask_for_mentions(article: Article, config: TextAnalysisConfig) -> Answer:
-    """Every labelled span the service finds in `Article.text`, or why it found none.
+def _span_status(text: str, read: _Read) -> _SpanStatus:
+    if not 0 <= read.start_char < read.end_char <= len(text):
+        return _SpanStatus.INVALID_OFFSETS
+    if text[read.start_char : read.end_char] != read.text:
+        return _SpanStatus.TEXT_MISMATCH
+    return _SpanStatus.ACCEPTED
 
-    **Every label comes back, mapped or not.** What a label becomes is
-    `elements.label_kinds`' to say, so a new use of a label is a config line here too.
-    """
-    text = article.text or ""
-    started = time.monotonic()
+
+def _read_mentions(
+    text: str, config: TextAnalysisConfig
+) -> tuple[list[_Read], Outcome, int | None]:
     request = urllib.request.Request(
         config.base_url + ANALYZE_PATH,
         data=json.dumps({"text": text, "language": config.language, "features": [FEATURE]}).encode(
@@ -171,30 +184,40 @@ def ask_for_mentions(article: Article, config: TextAnalysisConfig) -> Answer:
         # Before URLError and OSError, which it subclasses: a service that answered
         # is not an unreachable one.
         with error:
-            return _record_answer(article, Outcome.REFUSED, started=started, status=error.code)
+            return [], Outcome.REFUSED, error.code
     except TimeoutError:
-        return _record_answer(article, Outcome.TIMED_OUT, started=started)
+        return [], Outcome.TIMED_OUT, None
     except urllib.error.URLError as error:
         timed_out = isinstance(error.reason, TimeoutError)
-        return _record_answer(
-            article, Outcome.TIMED_OUT if timed_out else Outcome.UNREACHABLE, started=started
-        )
+        return [], Outcome.TIMED_OUT if timed_out else Outcome.UNREACHABLE, None
     except OSError:
-        return _record_answer(article, Outcome.UNREACHABLE, started=started)
+        return [], Outcome.UNREACHABLE, None
     except http.client.HTTPException:
-        return _record_answer(article, Outcome.MALFORMED, started=started)
+        return [], Outcome.MALFORMED, None
 
     try:
         reply = _Reply.model_validate_json(body)
     except ValidationError:
-        return _record_answer(article, Outcome.MALFORMED, started=started)
+        return [], Outcome.MALFORMED, None
+    return reply.features[0].data.mentions, Outcome.OK, None
 
-    reads = reply.features[0].data.mentions
-    kept = tuple(
-        Mention(read.label, read.start_char, read.end_char)
+
+def ask_for_mentions(
+    article: Article, config: TextAnalysisConfig, *, capture_root: Path | None = None
+) -> Answer:
+    """Every valid span the service finds in `Article.text`, or why it found none.
+
+    **Every label comes back, mapped or not.** What a label becomes is
+    `elements.label_kinds`' to say, so a new use of a label is a config line here too.
+    """
+    text = article.text or ""
+    started = time.monotonic()
+    reads, outcome, status = _read_mentions(text, config)
+    spans = tuple(
+        (Mention(read.label, read.start_char, read.end_char), _span_status(text, read))
         for read in reads
-        if _anchored(text, read)
     )
-    return _record_answer(
-        article, Outcome.OK, started=started, mentions=kept, dropped_mentions=len(reads) - len(kept)
-    )
+    kept = tuple(mention for mention, check in spans if check is _SpanStatus.ACCEPTED)
+    answer = Answer(kept, outcome, int((time.monotonic() - started) * 1000), status)
+    _record_result(article, answer, spans, capture_root=capture_root)
+    return answer

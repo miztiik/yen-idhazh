@@ -31,13 +31,14 @@ validation, source routing and draining through shutdown EOF; the
 describes inspection and failures.
 
 Digest work and retained article replay log a `text analysis result` record to
-the invoking step's stderr for each article sent. The record carries the
-outcome, elapsed time, HTTP refusal status when present, count of rejected spans,
-and the labels and character offsets accepted by the pipeline. Search the
-workflow step by `item_id` or `url_key` from the saved Article. The log does not
-repeat the source URL, article words or raw response body; find the words by
-slicing the retained Article at the logged offsets. This is separate from the
-service's `text-analysis.log`, which contains service events, not mention results.
+the invoking step's stderr for each article sent. The same record is retained as
+`<item-id>.text-analysis.log` beside the model captures. It gives the request
+outcome, elapsed time, HTTP refusal status when present, and every returned label
+and character range, including spans rejected for invalid offsets or a mismatch
+with the article. Search the workflow step by `item_id` or `url_key` from the
+saved Article. The log does not repeat the source URL, article words or raw
+response body; use an in-bounds range to find the article words in the saved
+Article. The service's separate `text-analysis.log` still holds service events.
 
 ## Admission precedes executor submission
 

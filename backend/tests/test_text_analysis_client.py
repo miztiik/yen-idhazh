@@ -10,6 +10,7 @@ import json
 import logging
 import re
 import urllib.request
+from pathlib import Path
 
 import pytest
 from support.analysis_service import RecordedAnalysis, closed_base_url, entities_reply
@@ -58,25 +59,29 @@ def test_one_post_carries_the_whole_text_and_the_mentions_come_back_with_three_f
         "http_status": None,
         "elapsed_ms": answer.elapsed_ms,
         "dropped_mentions": 0,
-        "mentions": [
-            {"label": "ORG", "start_char": lab, "end_char": lab + 11},
-            {"label": "CARDINAL", "start_char": two, "end_char": two + 3},
+        "returned_spans": [
+            {"label": "ORG", "start_char": lab, "end_char": lab + 11, "status": "accepted"},
+            {"label": "CARDINAL", "start_char": two, "end_char": two + 3, "status": "accepted"},
         ],
     }
 
 
 @pytest.mark.parametrize(
-    "spoiled",
+    ("spoiled", "status"),
     [
-        {"text": "Other Lab"},
-        {"start_char": 5_000, "end_char": 5_011},
-        {"start_char": -11, "end_char": 0},
-        {"start_char": 11, "end_char": 0},
+        ({"text": "Other Lab"}, "text_mismatch"),
+        ({"start_char": 5_000, "end_char": 5_011}, "invalid_offsets"),
+        ({"start_char": -11, "end_char": 0}, "invalid_offsets"),
+        ({"start_char": 11, "end_char": 0}, "invalid_offsets"),
     ],
     ids=["other words", "past the end", "negative", "reversed"],
 )
 def test_a_mention_that_does_not_cut_the_words_it_names_is_dropped_and_its_siblings_stand(
-    article_ok: Article, spoiled: dict[str, object], caplog: pytest.LogCaptureFixture
+    article_ok: Article,
+    spoiled: dict[str, object],
+    status: str,
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path,
 ) -> None:
     """Offsets are believed only when they cut out of `Article.text` the words returned."""
     text = article_ok.text or ""
@@ -86,13 +91,26 @@ def test_a_mention_that_does_not_cut_the_words_it_names_is_dropped_and_its_sibli
     caplog.set_level(logging.WARNING, logger="idhazh")
 
     with RecordedAnalysis(body=json.dumps(reply).encode()) as service:
-        answer = ask_for_mentions(article_ok, TextAnalysisConfig(base_url=service.base_url))
+        answer = ask_for_mentions(
+            article_ok, TextAnalysisConfig(base_url=service.base_url), capture_root=tmp_path
+        )
 
     assert answer.outcome is Outcome.OK
     assert answer.mentions == (Mention("ORG", 0, 11),)
     payload = logged_answer(caplog, logging.WARNING)
     assert payload["item_id"] == article_ok.item_id and payload["dropped_mentions"] == 1
-    assert payload["mentions"] == [{"label": "ORG", "start_char": 0, "end_char": 11}]
+    assert payload["returned_spans"] == [
+        {"label": "ORG", "start_char": 0, "end_char": 11, "status": "accepted"},
+        {
+            "label": "ORG",
+            "start_char": mentions[1]["start_char"],
+            "end_char": mentions[1]["end_char"],
+            "status": status,
+        },
+    ]
+    assert (tmp_path / f"{article_ok.item_id}.text-analysis.log").read_text(
+        encoding="utf-8"
+    ).splitlines() == caplog.messages
 
 
 def a_failing_service(kind: str, text: str) -> RecordedAnalysis:
@@ -151,7 +169,7 @@ def test_a_service_that_cannot_answer_costs_the_item_its_names_and_one_warning(
         "http_status": status,
         "elapsed_ms": answer.elapsed_ms,
         "dropped_mentions": 0,
-        "mentions": [],
+        "returned_spans": [],
     }
 
 
