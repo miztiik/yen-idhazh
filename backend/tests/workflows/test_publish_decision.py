@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Final
 
 import pytest
+from support.paths import REPO_ROOT, read_text
 
 from utilities.pages_ci_evidence import CiRun, select_ci_anchor
 
@@ -67,9 +68,10 @@ def decision(workspace: Path, **step_env: str) -> dict[str, str]:
     return dict(line.split("=", 1) for line in result.stdout.splitlines())
 
 
-def scheduled(
+def automatic(
     repo: Path,
     *,
+    event: str = "schedule",
     tip: str,
     checked: str = "",
     deployed: str = "",
@@ -78,7 +80,7 @@ def scheduled(
 ) -> dict[str, str]:
     return decision(
         repo,
-        EVENT_NAME="schedule",
+        EVENT_NAME=event,
         CONCLUSION=conclusion,
         CHECKED=checked,
         DEPLOYED=deployed,
@@ -133,7 +135,10 @@ def test_missing_code_gate_blocks_and_no_recent_code_gate_needs_evidence() -> No
     assert docs.sha == ""
 
 
-def test_generated_updates_can_reuse_deployed_code(repository: tuple[Path, str]) -> None:
+@pytest.mark.parametrize("event", ["schedule", "workflow_run"])
+def test_generated_updates_can_reuse_deployed_code(
+    repository: tuple[Path, str], event: str
+) -> None:
     repo, deployed = repository
     tip = _commit(
         repo,
@@ -145,7 +150,7 @@ def test_generated_updates_can_reuse_deployed_code(repository: tuple[Path, str])
             "docs/page.md": "# Updated\n",
         },
     )
-    result = scheduled(repo, tip=tip, deployed=deployed)
+    result = automatic(repo, event=event, tip=tip, deployed=deployed)
     assert result["publish"] == "true"
     assert result["ref"] == tip
 
@@ -153,7 +158,7 @@ def test_generated_updates_can_reuse_deployed_code(repository: tuple[Path, str])
 def test_generated_updates_can_use_a_full_ci_anchor(repository: tuple[Path, str]) -> None:
     repo, checked = repository
     tip = _commit(repo, {"frontend/public/digest/day.json": "{}\n"})
-    result = scheduled(repo, tip=tip, checked=checked, conclusion="success")
+    result = automatic(repo, tip=tip, checked=checked, conclusion="success")
     assert result["publish"] == "true"
     assert result["ref"] == tip
 
@@ -172,10 +177,10 @@ def test_unverified_code_changes_block_publication(
 ) -> None:
     repo, anchor = repository
     tip = _commit(repo, {path: "changed\n"})
-    assert scheduled(repo, tip=tip, checked=anchor, deployed=anchor, conclusion="success")[
+    assert automatic(repo, tip=tip, checked=anchor, deployed=anchor, conclusion="success")[
         "publish"
     ] == "false"
-    assert scheduled(repo, tip=tip, checked=tip, deployed=anchor, conclusion="success")[
+    assert automatic(repo, tip=tip, checked=tip, deployed=anchor, conclusion="success")[
         "publish"
     ] == "true"
 
@@ -186,32 +191,33 @@ def test_generated_directories_cannot_be_replaced_by_files(
 ) -> None:
     repo, anchor = repository
     tip = _commit(repo, {path: "not a data directory\n"})
-    assert scheduled(repo, tip=tip, deployed=anchor)["publish"] == "false"
+    assert automatic(repo, tip=tip, deployed=anchor)["publish"] == "false"
 
 
 def test_failed_or_pending_push_ci_blocks_even_when_code_was_deployed(
     repository: tuple[Path, str]
 ) -> None:
     repo, tip = repository
-    assert scheduled(repo, tip=tip, deployed=tip, conclusion="blocked")["publish"] == "false"
+    assert automatic(repo, tip=tip, deployed=tip, conclusion="blocked")["publish"] == "false"
 
 
-def test_scheduled_publish_is_limited_to_the_default_branch(
-    repository: tuple[Path, str]
+@pytest.mark.parametrize("event", ["schedule", "workflow_run"])
+def test_automatic_publish_is_limited_to_the_default_branch(
+    repository: tuple[Path, str], event: str
 ) -> None:
     repo, tip = repository
-    assert scheduled(repo, tip=tip, checked=tip, conclusion="success", branch="other")[
+    assert automatic(repo, event=event, tip=tip, checked=tip, conclusion="success", branch="other")[
         "publish"
     ] == "false"
 
 
 def test_missing_evidence_cannot_publish(repository: tuple[Path, str]) -> None:
     repo, tip = repository
-    assert scheduled(repo, tip=tip)["publish"] == "false"
+    assert automatic(repo, tip=tip)["publish"] == "false"
     with pytest.raises(subprocess.CalledProcessError):
-        scheduled(repo, tip=tip, deployed="invalid")
+        automatic(repo, tip=tip, deployed="invalid")
     with pytest.raises(subprocess.CalledProcessError):
-        scheduled(repo, tip=tip, deployed=tip, conclusion="invalid")
+        automatic(repo, tip=tip, deployed=tip, conclusion="invalid")
 
 
 def test_a_shallow_checkout_fetches_the_named_anchor(
@@ -221,15 +227,28 @@ def test_a_shallow_checkout_fetches_the_named_anchor(
     tip = _commit(origin, {"frontend/public/publication.json": "{}\n"})
     shallow = tmp_path / "shallow"
     _git(tmp_path, "clone", "--quiet", "--no-local", "--depth=1", str(origin), str(shallow))
-    result = scheduled(shallow, tip=tip, checked=checked, conclusion="success")
+    result = automatic(shallow, tip=tip, checked=checked, conclusion="success")
     assert result["publish"] == "true"
     assert result["ref"] == tip
 
 
 def test_unavailable_deployment_does_not_hide_passing_ci(repository: tuple[Path, str]) -> None:
     repo, tip = repository
-    result = scheduled(repo, tip=tip, checked=tip, deployed="f" * 40, conclusion="success")
+    result = automatic(repo, tip=tip, checked=tip, deployed="f" * 40, conclusion="success")
     assert result["publish"] == "true"
+
+
+def test_pages_workflow_starts_after_content_refresh_and_ci_success() -> None:
+    workflow = read_text(REPO_ROOT / ".github/workflows/pages.yml")
+    trigger = workflow.split("  workflow_run:", 1)[1].split("  workflow_dispatch:", 1)[0]
+    assert "- Content refresh" in trigger
+    assert "- CI" in trigger
+    assert "types: [completed]" in trigger
+    assert "github.event.workflow_run.conclusion == 'success'" in workflow
+    assert (
+        "github.event.workflow_run.head_branch == github.event.repository.default_branch"
+        in workflow
+    )
 
 
 @pytest.mark.parametrize(("dispatched", "published"), [("main", "true"), ("other", "false")])
@@ -248,7 +267,7 @@ def test_manual_publish_runs_from_main_only(
     assert result["ref"] == tip
 
 
-@pytest.mark.parametrize("event", ["push", "pull_request", "workflow_run"])
+@pytest.mark.parametrize("event", ["push", "pull_request"])
 def test_other_events_do_not_publish(tmp_path: Path, event: str) -> None:
     result = decision(
         tmp_path,

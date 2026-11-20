@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-11-18
+**Last Updated**: 2026-11-20
 
 Which workflows run, when they run, and what they may publish.
 The [workflow declarations](../../.github/workflows/) are authoritative.
@@ -13,7 +13,7 @@ All schedules and run dates are UTC. Every workflow supports manual dispatch.
 | `ci.yml` | `CI` | Pull request; push to `main` | Backend, native TypeScript, site and browser checks |
 | `digest.yml` | `Content refresh` | `20 2 * * *`, `20 6 * * *`, `20 10 * * *`, `20 14 * * *`, `20 18 * * *` | Digest and production state |
 | `llm-council.yml` | `LLM-COUNCIL` | `0 22 * * *` | Model judges' verdicts |
-| `pages.yml` | `Pages publication` | Every 30 minutes; manual dispatch | Static site |
+| `pages.yml` | `Pages publication` | Every 30 minutes; successful `Content refresh` or `CI` on `main`; manual dispatch | Static site |
 | `drift.yml` | `Drift review` | `0 8 * * 0` | Quality drift review |
 | `idhazh-gardener.yml` | `Idhazh Gardener` | `40 0 * * *` | Retention and history maintenance |
 | `backfill.yml` | `Vector backfill` | none | Repair closed days' vectors |
@@ -238,20 +238,23 @@ ordinary required CI remains independent. See the
   not producer or model execution.
 - [`publish_decision.py`](../../backend/utilities/publish_decision.py) holds the
   rule, one case per trigger, and every publish builds the run's main commit:
-  - The schedule runs every 30 minutes. Generated data and documentation can
-    advance beyond the last successful deployment or a full passing CI run
-    without requiring CI on the generated commit.
-  - A pending or failed push CI blocks the schedule unless a later full CI run
-    passes. Changed code must match a full passing CI run;
+  - Automatic publication runs every 30 minutes and when `Content refresh` or
+    `CI` completes successfully on `main`. The completed workflow starts a new
+    decision; the 30-minute schedule remains the fallback if a completion
+    trigger is delayed or dropped. Generated data and documentation can advance
+    beyond the last successful deployment or a full passing CI run without
+    requiring CI on the generated commit.
+  - A pending or failed push CI blocks automatic publication unless a later
+    full CI run passes. Changed code must match a full passing CI run;
     documentation-only CI runs do not establish that proof. The lookup reads
     at most the latest 100 push runs and the latest successful manual CI run.
     If it finds no proof and the code differs from the last deployment,
     dispatch CI on `main` or publish manually. Comparisons inspect only named
     tree levels, not the contents of generated data or source directories.
   - A manual publish from `main` always publishes.
-- PR checks, merges and content-generation workflows run independently of site
-  publication. New digest content can wait until the next schedule; the
-  scheduler can start runs late when busy.
+- PR checks and merges still run independently of site publication. Successful
+  `Content refresh` and `CI` completions on `main` now request publication directly,
+  subject to the same CI and deployment evidence used by the schedule.
 - Cancel superseded builds, but let an active deployment finish. Deploy requires
   a successful build and its complete artifact. These are separate job groups.
 

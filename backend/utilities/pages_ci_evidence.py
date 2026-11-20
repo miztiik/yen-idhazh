@@ -1,4 +1,4 @@
-"""Find bounded CI and deployment evidence for scheduled Pages publication."""
+"""Find bounded CI and deployment evidence for automatic Pages publication."""
 
 from __future__ import annotations
 
