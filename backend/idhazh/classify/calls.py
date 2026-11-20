@@ -23,9 +23,11 @@ from idhazh.contracts.element import ElementKind
 from idhazh.contracts.knobs.prompts import PromptFilesConfig
 from idhazh.contracts.knobs.summarize import SummarizeConfig
 from idhazh.contracts.knobs.visuals import VisualsConfig
+from idhazh.contracts.visual import EncodingRole, VisualType
 from idhazh.llm.server import Completion, TurnMarkers, completion_payload, render_prompt
 from idhazh.load_prompt_text import load_prompt_text
 from idhazh.sanitize import untrusted_block
+from idhazh.visual_vocabulary import TYPE_RULES, VALUE_ROLES
 
 _FENCED_JSON = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL)
 
@@ -41,32 +43,81 @@ def summarize_and_plan_model(*, plan: bool = True) -> type[BaseModel]:
     return SummarizeAndPlanDraft if plan else summarize.SummaryDraft
 
 
+def _words_only(schema: dict[str, Any]) -> dict[str, Any]:
+    # The native decoder uses the pattern instead of maxLength. Bound the
+    # repeat and keep it within one JSON string, excluding digits and escapes.
+    length = schema["maxLength"]
+    return {"type": "string", "pattern": rf'^[^"\\\r\n0-9]{{1,{length}}}$'}
+
+
+def _chart_reply_schema(
+    form: VisualType | None,
+    answer: dict[str, Any],
+    roles: dict[str, Any],
+) -> dict[str, Any]:
+    null = {"type": "null"}
+    fields = answer["properties"] | {"why": _words_only(answer["properties"]["why"])}
+    fields["type"] = {"const": form.value if form is not None else NO_CHART}
+    required: list[str] = answer["required"].copy()
+    composition = form in {VisualType.PIE, VisualType.STACKED_BAR}
+    if form is not None:
+        rules = TYPE_RULES[form]
+        # A stacked row is labelled by its whole, which the resolver puts in
+        # the category role; the model cites it only once.
+        needed = rules.required - ({EncodingRole.CATEGORY} if form is VisualType.STACKED_BAR
+                                   else set())
+        allowed = {role.value for role in needed | rules.optional}
+        fields["encodings"] = {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {key: value for key, value in roles.items() if key in allowed},
+            "required": [key for key in roles if EncodingRole(key) in needed],
+        }
+        fields["focus"] = fields["focus"]["anyOf"][0]
+        fields["title"] = _words_only(fields["title"]["anyOf"][0])
+        fields["caption"] = {"anyOf": [_words_only(fields["caption"]["anyOf"][0]), null]}
+    else:
+        fields["encodings"] = {"type": "object", "properties": {}, "additionalProperties": False}
+        fields["focus"] = fields["title"] = fields["caption"] = null
+    fields["whole"] = fields["whole"]["anyOf"][0] if composition else null
+    if form is VisualType.STACKED_BAR:
+        fields["measure"] = fields["measure"]["anyOf"][0]
+        required.append("measure")
+    else:
+        del fields["measure"]
+    return answer | {"properties": fields, "required": required}
+
+
 def summarize_and_plan_schema(
     *,
     plan: bool = True,
     visuals: VisualsConfig | None = None,
     data: VisualInput | None = None,
 ) -> dict[str, Any]:
-    """Bind the form to capabilities and measured channels to the shown references."""
+    """Keep all capabilities selectable and constrain the roles after type is chosen."""
     schema = summarize_and_plan_model(plan=plan).model_json_schema()
     if not plan:
         return schema
-    answer = schema["$defs"][PlanChoice.__name__]["properties"]
+    definitions = schema["$defs"]
+    answer = definitions[PlanChoice.__name__]
+    answer_fields = answer["properties"]
+    roles = definitions.pop(ChartReferences.__name__)["properties"]
     forms = data.forms if data is not None else chart_capabilities(visuals or VisualsConfig())
-    answer["type"]["enum"] = [NO_CHART, *(form.value for form in forms)]
     if data is not None:
-        encodings = schema["$defs"][ChartReferences.__name__]["properties"]
         quantities = [code for code, e in data.refs.items() if e.kind is ElementKind.QUANTITY]
         dates = [code for code, e in data.refs.items() if e.kind is ElementKind.DATE]
         quantity = {"type": "string", "enum": quantities}
-        for field in ("quantity", "quantity_x", "size", "bins"):
-            encodings[field]["items"] = quantity
+        for role in VALUE_ROLES:
+            roles[role.value]["items"] = quantity
         if dates:
-            encodings["time"]["items"] = {"type": "string", "enum": dates}
+            roles["time"]["items"] = {"type": "string", "enum": dates}
         else:
-            encodings["time"]["maxItems"] = 0
+            roles["time"]["maxItems"] = 0
         for field in ("focus", "whole"):
-            answer[field]["anyOf"] = [quantity, {"type": "null"}]
+            answer_fields[field]["anyOf"] = [quantity, {"type": "null"}]
+    definitions[PlanChoice.__name__] = {
+        "anyOf": [_chart_reply_schema(form, answer, roles) for form in (None, *forms)]
+    }
     return schema
 
 

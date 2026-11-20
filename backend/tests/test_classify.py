@@ -19,6 +19,7 @@ from support.prompts import (
     WIND_NAMES,
     WIND_TEXT,
     chart_data_over,
+    chart_reply_fields,
     mentions_of,
 )
 from support.server import RecordedEndpoint
@@ -236,11 +237,16 @@ class TestTheSummarizeAndPlanOracle:
         assert "q2:" in payload["prompt"] and "Africa at [2.8%]" in payload["prompt"]
         assert re.search(r"\b(?:quantity|date)-\d+-\d+\b", payload["prompt"]) is None
         schema = payload["json_schema"]
-        answer = schema["$defs"]["PlanChoice"]["properties"]
+        answers = chart_reply_fields(schema)
         assert list(schema["properties"]) == ["summary", "visual"]
-        assert answer["type"]["enum"] == ["none", *(form.value for form in VISUALS.select_types())]
-        assert answer["focus"]["anyOf"][0]["enum"] == ["q1", "q2", "q3"]
-        assert schema["$defs"]["ChartReferences"]["properties"]["time"]["items"]["enum"] == ["d1"]
+        assert list(answers) == ["none", *(form.value for form in VISUALS.select_types())]
+        assert answers["bar"]["focus"]["enum"] == ["q1", "q2", "q3"]
+        line = answers["line"]["encodings"]
+        assert line["required"] == ["quantity", "time"]
+        assert "quantity_x" not in line["properties"]
+        assert line["properties"]["time"]["items"]["enum"] == ["d1"]
+        assert re.fullmatch(answers["line"]["title"]["pattern"], "Global EGDI")
+        assert not re.fullmatch(answers["line"]["title"]["pattern"], "Global EGDI in 2026")
 
     def test_without_chart_data_the_question_is_left_off_the_request(
         self, dense: Article

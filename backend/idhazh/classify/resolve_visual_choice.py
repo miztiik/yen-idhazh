@@ -76,7 +76,7 @@ class PlanChoice(Model):
             return self
         if self.title is None or not sanitize(self.title).strip():
             raise _refusal("visual_choice_title_required", "a chart answer has a title", "title")
-        if self.focus is None and self.type != VisualType.PIE:
+        if self.focus is None:
             raise _refusal(
                 "visual_choice_focus_required", "a chart highlights one drawn reading", "focus"
             )

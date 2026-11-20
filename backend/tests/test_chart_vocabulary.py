@@ -22,7 +22,7 @@ from pipeline._builders import (
 )
 from support.models import a_markers
 from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
-from support.prompts import WIND_TEXT, chart_data_over
+from support.prompts import WIND_TEXT, chart_data_over, chart_reply_fields
 from support.server import RecordedEndpoint
 from support.visual_plans import current_plan
 
@@ -118,17 +118,15 @@ def test_selection_controls_the_actual_request_grammar_and_the_stamp() -> None:
         sampling=entry.sampling,
         markers=markers,
     )
-    answer = request["json_schema"]["$defs"]["PlanChoice"]["properties"]
+    answer = chart_reply_fields(request["json_schema"])
     assert chart_capabilities(selected) == (VisualType.DOT,)
-    assert answer["type"]["enum"] == ["none", "dot"]
+    assert list(answer) == ["none", "dot"]
     assert "Renderer capabilities (not recommendations): dot." in request["prompt"]
-    full = calls.summarize_and_plan_schema(visuals=off)["$defs"]["PlanChoice"]["properties"]
-    assert full["type"]["enum"] == [
+    full = chart_reply_fields(calls.summarize_and_plan_schema(visuals=off))
+    assert list(full) == [
         "none", *(kind.value for kind in VisualType if can_compile(kind))
     ]
-    assert calls.summarize_and_plan_schema()["$defs"]["PlanChoice"]["properties"]["type"] == (
-        full["type"]
-    )
+    assert chart_reply_fields(calls.summarize_and_plan_schema()) == full
     assert VisualPlan.json_schema()["$defs"]["VisualType"]["enum"] == [
         kind.value for kind in VisualType
     ]
@@ -150,8 +148,8 @@ def test_active_requests_offer_compiler_capabilities_and_keep_historical_names()
     assert active.type_selection_enabled
     assert not active.downgrade_enabled
     assert [kind.value for kind in active.enabled_types] == selected
-    answer = calls.summarize_and_plan_schema(visuals=active)["$defs"]["PlanChoice"]["properties"]
-    assert answer["type"]["enum"] == ["none", *selected]
+    answer = chart_reply_fields(calls.summarize_and_plan_schema(visuals=active))
+    assert list(answer) == ["none", *selected]
     assert set(active.select_types()) == {
         kind for kind in VisualType if can_compile(kind)
     }
@@ -312,8 +310,8 @@ def test_real_shard_projects_outcomes_before_sealing(
             run_plan, settings=read, scorer=None, fetcher=drawable_article_fetch,
             model_endpoint=server.endpoint,
         )
-        offered = server.sent[-1]["json_schema"]["$defs"]["PlanChoice"]["properties"]
-        assert offered["type"]["enum"] == [
+        offered = chart_reply_fields(server.sent[-1]["json_schema"])
+        assert list(offered) == [
             "none", *(kind.value for kind in VisualType if can_compile(kind))
         ]
     assert stage_record(run_plan, settings=knobs, commit_sha="a" * 40)[0] == len(run_plan.items)

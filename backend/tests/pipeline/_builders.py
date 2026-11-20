@@ -16,6 +16,7 @@ from typing import Any, Final
 from pytest import MonkeyPatch
 from support.analysis_service import RecordedAnalysis, Span, first_of, pointed_at
 from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
+from support.prompts import chart_reply_fields
 from support.server import RecordedEndpoint, render_template_response
 
 from idhazh import assemble, config
@@ -143,7 +144,7 @@ def assert_planning_readings(server: RecordedEndpoint, readings: list[tuple[str,
     for code, reading in readings:
         assert re.search(rf"^{code}:[^\n]*\[{re.escape(reading)}\]", prompt, re.MULTILINE)
     assert re.search(r"\b[a-z]+-\d+-\d+\b", prompt) is None
-    offered = request["json_schema"]["$defs"]["PlanChoice"]["properties"]["focus"]["anyOf"][0]
+    offered = chart_reply_fields(request["json_schema"])["bar"]["focus"]
     assert offered["enum"] == [code for code, _ in readings]
 
 

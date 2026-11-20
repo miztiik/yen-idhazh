@@ -104,3 +104,11 @@ def summary_payload(
         prompt_files=settings.app.prompt_files,
         config_dir=settings.config_dir,
     )
+
+
+def chart_reply_fields(schema: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """The allowed choices and the JSON object each constrains."""
+    return {
+        choice["properties"]["type"]["const"]: choice["properties"]
+        for choice in schema["$defs"]["PlanChoice"]["anyOf"]
+    }

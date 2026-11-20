@@ -582,6 +582,7 @@ def _emphasized_chart_mark(
             VisualType.LINE: "line measurements",
             VisualType.SCATTER: "scatter points",
             VisualType.BUBBLE: "bubbles",
+            VisualType.PIE: "pie parts",
             VisualType.HISTOGRAM: "histogram bins",
         }[visual_type]
         raise CompileError(
