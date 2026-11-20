@@ -34,7 +34,7 @@
 			<p class="finding" data-lede>{view.failed} of {plural(view.checked, 'checked feed', 'checked feeds')} failed at least once.</p>
 		{/if}
 		<p class="detail">
-			{#if view.start !== view.end}<time datetime={view.start}>{shortDate(view.start)}</time> to {/if}<time datetime={view.end}>{shortDate(view.end)}</time> UTC,
+			{#if view.start !== view.end}<time datetime={view.start}>{shortDate(view.start)}</time>{' to '}{/if}<time datetime={view.end}>{shortDate(view.end)}</time> UTC,
 			{plural(view.runs, 'recorded run', 'recorded runs')}.
 		</p>
 		{#if view.partial}

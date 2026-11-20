@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { chronological, failing, feedDays, resting, settled, streak, type FeedEvent, type FeedRead } from '../src/lib/feed-health';
 import { sourceHealth } from '../src/lib/console/voices/source-health';
-import { feedInput } from '../src/lib/console/voices/feeds-failed';
+import { feedInput, feedsFailed } from '../src/lib/console/voices/feeds-failed';
 import { feedFailurePreview } from '../src/lib/console/voices/feed-failure-preview';
 import type { RecordRead } from '../src/lib/console/recording';
 import type { SourceHealthView } from '../src/lib/server/payload';
@@ -223,6 +223,17 @@ test.describe('THE ORACLE: one result per feed per run, in both languages', () =
                 expect(feedFailurePreview(input, '2026-08-31', 1, 3)).toMatchObject({
                     start: through, end: through, partial: true, checked: 0, preview: []
                 });
+            });
+
+            test('the combined chart still includes an article failure for a feed that answered', () => {
+                const rows = [feed('clean-feed', first, 1, 'ok', '1'), feed('later-feed', through, 1, 'permanent')];
+                const input = feedInput({ rows, columns: [], read });
+                const combined = feedsFailed(input, [{
+                    date: first, source_id: 'clean-feed', stage: 'fetch', outcome: 'failed', code: 'http_server_error'
+                }], { from: first, to: through, asked: 2, days: 2 }, 10, 1, 3);
+                expect(combined.sources.map(({ sourceId }) => sourceId)).toEqual(['clean-feed']);
+                expect(combined.sources[0]).toMatchObject({ fired: 1, feed: { counts: { quiet: 1 } }, article: { counts: { fired: 1 } } });
+                expect(combined.feedWaiting).toContain(`Feed results after ${first} wait for their article fetches`);
             });
         });
     }
