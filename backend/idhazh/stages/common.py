@@ -35,6 +35,7 @@ from idhazh.classification import assign as classify
 from idhazh.contracts.article import Article
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.feed_health import (
+    FetchOutcome,
     RobotsOutcome,
 )
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemStage
@@ -57,6 +58,7 @@ from idhazh.llm.server import (
     thinking_span,
 )
 from idhazh.telemetry.record import recorded_row
+from idhazh.url_transport import InvalidTransportUrlError
 
 LOG: Final = logging.getLogger("idhazh")
 
@@ -167,7 +169,12 @@ def live_fetcher(
     read_one = read_address if read_address is not None else _permitted_reader(settings)
 
     def read(url: str) -> fetch.FetchResult:
-        where = fetch.origin(url)
+        try:
+            where = fetch.origin(url)
+        except InvalidTransportUrlError as error:
+            return fetch.FetchResult(
+                FetchOutcome.BLOCKED, detail=str(error)
+            )
         asking = time.monotonic()
         with trace.span(telemetry.SpanName.ROBOTS) as span:
             span.set(telemetry.AttrKey.ROBOTS_CACHED, where in rules)

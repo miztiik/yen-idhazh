@@ -38,16 +38,17 @@ from urllib.parse import urlsplit
 
 from idhazh.contracts.feed_health import FetchOutcome, RobotsOutcome
 from idhazh.contracts.knobs.extract import ExtractConfig
+from idhazh.url_transport import InvalidTransportUrlError, encode_url_for_transport
 
 if TYPE_CHECKING:
     from protego import Protego
 
-#: Bumped when fetch policy changes. `-2` reads robots.txt with `protego`
-#: rather than `urllib.robotparser`, which changes what some files mean - see
-#: `robots_allows`. Nothing records this yet: `PipelineInputs` carries the
-#: extractor and the sanitizer versions and not this one, so a fetch-policy
-#: change leaves the run's recorded inputs where they were.
-FETCHER_VERSION: Final = "idhazh-fetch-2"
+#: Bumped when fetch policy changes. `-2` reads robots.txt with `protego`;
+#: `-3` serializes international URLs as ASCII before each transport decision.
+#: Nothing records this yet: `PipelineInputs` carries the extractor and the
+#: sanitizer versions and not this one, so a fetch-policy change leaves the
+#: run's recorded inputs where they were.
+FETCHER_VERSION: Final = "idhazh-fetch-3"
 
 #: Why a target was not asked for, written once. `telemetry` reads these back to
 #: type the failure, so a reworded reason cannot quietly become an untyped one.
@@ -136,6 +137,7 @@ BLOCKED_REASONS: Final[frozenset[str]] = frozenset(
     {
         "no host in address",
         "port is not a number",
+        "address is not valid",
         "address resolves inward",
         "address is not on the public internet",
     }
@@ -148,7 +150,10 @@ def address_is_dialable(url: str) -> tuple[bool, str | None]:
     A hostname still has to be checked once resolved - this catches the literal
     cases and the schemes, which is what a hostile feed reaches for first.
     """
-    parts = urlsplit(url)
+    try:
+        parts = urlsplit(encode_url_for_transport(url))
+    except InvalidTransportUrlError as error:
+        return False, str(error)
     if parts.scheme.lower() not in ALLOWED_SCHEMES:
         return False, f"scheme {parts.scheme!r} is not fetchable"
     host = (parts.hostname or "").lower()
@@ -181,7 +186,7 @@ def origin(url: str) -> str:
     `https://example.com:8443/c` is a different one. Lower-casing and dropping
     the default port is what stops a run asking one host twice.
     """
-    parts = urlsplit(url)
+    parts = urlsplit(encode_url_for_transport(url))
     scheme = parts.scheme.lower()
     host = (parts.hostname or "").lower()
     if ":" in host:  # an IPv6 literal, which `hostname` hands back unbracketed
@@ -218,7 +223,9 @@ def robots_allows(robots_txt: str, user_agent: str, url: str) -> bool:
     """
     from protego import Protego
 
-    return bool(Protego.parse(robots_txt).can_fetch(url, user_agent))
+    return bool(
+        Protego.parse(robots_txt).can_fetch(encode_url_for_transport(url), user_agent)
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -236,7 +243,7 @@ class RobotsRules:
         """What this host said about this exact path. Unknown fails closed."""
         if self.document is None:
             return RobotsOutcome.UNREACHABLE
-        if self.document.can_fetch(url, user_agent):
+        if self.document.can_fetch(encode_url_for_transport(url), user_agent):
             return RobotsOutcome.ALLOWED
         return RobotsOutcome.DENIED
 
@@ -462,12 +469,18 @@ def fetch(url: str, *, config: ExtractConfig, permission: RobotsOutcome) -> Fetc
     produced the result, and `retry_total_ms` is everything before that attempt
     started - the failed attempts and the backoff they earned.
     """
-    dialable, why = address_is_dialable(url)
+    try:
+        request_url = encode_url_for_transport(url)
+    except InvalidTransportUrlError as error:
+        return FetchResult(
+            FetchOutcome.BLOCKED, detail=str(error), robots=permission
+        )
+    dialable, why = address_is_dialable(request_url)
     if not dialable:
         return FetchResult(FetchOutcome.BLOCKED, detail=why, robots=permission)
     if permission is not RobotsOutcome.ALLOWED:
         return refused(permission)
-    host = urlsplit(url).hostname or ""
+    host = urlsplit(request_url).hostname or ""
     if not resolves_to_public(host):
         return FetchResult(
             FetchOutcome.BLOCKED,
@@ -475,7 +488,7 @@ def fetch(url: str, *, config: ExtractConfig, permission: RobotsOutcome) -> Fetc
             robots=permission,
         )
 
-    outbound = request.Request(url, headers={"User-Agent": config.user_agent})
+    outbound = request.Request(request_url, headers={"User-Agent": config.user_agent})
     opener = _timing_opener()
     last: FetchResult = FetchResult(
         FetchOutcome.TRANSIENT, detail="never attempted", robots=permission
