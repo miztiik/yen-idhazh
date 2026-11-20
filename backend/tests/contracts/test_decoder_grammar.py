@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 from support.paths import CONTRACT_FIXTURES_DIR
-from support.prompts import WIND_NAMES, WIND_TEXT, tables_over
+from support.prompts import WIND_TEXT, chart_data_over
 
 from idhazh.classify import calls
 from idhazh.contracts.article import Article
@@ -77,13 +77,11 @@ def _patterns(node: Any, path: str = "") -> list[tuple[str, str]]:
 
 def _decoder_schemas() -> dict[str, dict[str, Any]]:
     """Every schema this pipeline sends a decoder, built the way the run builds it."""
-    _, tables = tables_over(
-        Article.read(CONTRACT_FIXTURES_DIR / "article" / "ok.json"), WIND_TEXT, WIND_NAMES
-    )
+    _, data = chart_data_over(Article.read(CONTRACT_FIXTURES_DIR / "article" / "ok.json"), WIND_TEXT)
     return {
         "summarize_and_plan": calls.summarize_and_plan_schema(plan=True),
         "summarize_only": calls.summarize_and_plan_schema(plan=False),
-        "article_rows": calls.summarize_and_plan_schema(tables=tables),
+        "article_references": calls.summarize_and_plan_schema(data=data),
     }
 
 

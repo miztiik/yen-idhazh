@@ -516,7 +516,7 @@ prompt overhead, up to 30,238 for the longest and hardest-tokenizing article
 `extract.truncation_cap_tokens` lets through, and 8,192 of answer, the response
 limit the model file names: **39,427 of the
 committed 49,152, or 80 percent**. The serving window is wider because it holds
-the digest call, whose prompt carries the chart rules and, where they fit, the tables of figures,
+the digest call, whose prompt carries the chart rules and, where they fit, the data references,
 and nothing trains on that. Both windows are still asserted in
 `backend/tests/contracts/` and against the cap, so a later move of the cap fails
 rather than drifts - **against two sums now rather than one**, because the two

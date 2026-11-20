@@ -22,13 +22,13 @@ from pipeline._builders import (
 )
 from support.models import a_markers
 from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
-from support.prompts import WIND_NAMES, WIND_TEXT, tables_over
+from support.prompts import WIND_TEXT, chart_data_over
 from support.server import RecordedEndpoint
 from support.visual_plans import current_plan
 
 from idhazh import config, ledger
 from idhazh.classify import calls
-from idhazh.classify.pair_names_with_figures import forms_on_offer
+from idhazh.classify.plan_visual_request import chart_capabilities
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.element import ElementTable
@@ -109,22 +109,23 @@ def test_selection_controls_the_actual_request_grammar_and_the_stamp() -> None:
         type_selection_enabled=True, enabled_types=["dot", "whowhat", "quotecard"]
     ).app.visuals
     markers = a_markers()
-    _, tables = tables_over(article, WIND_TEXT, WIND_NAMES, visuals=selected)
+    _, data = chart_data_over(article, WIND_TEXT, visuals=selected)
     request = calls.build_summary_request(
         article.model_copy(update={"text": WIND_TEXT}),
-        tables,
+        data,
         model_id=entry.id,
         server=entry.server,
         sampling=entry.sampling,
         markers=markers,
-        visuals=selected,
     )
     answer = request["json_schema"]["$defs"]["PlanChoice"]["properties"]
-    assert forms_on_offer(selected) == (VisualType.DOT,)
+    assert chart_capabilities(selected) == (VisualType.DOT,)
     assert answer["type"]["enum"] == ["none", "dot"]
-    assert "Every table can be drawn as: dot." in request["prompt"]
+    assert "Renderer capabilities (not recommendations): dot." in request["prompt"]
     full = calls.summarize_and_plan_schema(visuals=off)["$defs"]["PlanChoice"]["properties"]
-    assert full["type"]["enum"] == ["none", "bar", "dot"]
+    assert full["type"]["enum"] == [
+        "none", *(kind.value for kind in VisualType if can_compile(kind))
+    ]
     assert calls.summarize_and_plan_schema()["$defs"]["PlanChoice"]["properties"]["type"] == (
         full["type"]
     )
@@ -140,7 +141,7 @@ def test_selection_controls_the_actual_request_grammar_and_the_stamp() -> None:
     )
 
 
-def test_active_requests_offer_the_forms_a_table_can_be_drawn_as_and_keep_historical_names() -> None:
+def test_active_requests_offer_compiler_capabilities_and_keep_historical_names() -> None:
     active = config.load(CONFIG_DIR).app.visuals
     selected = [
         "bar", "dot", "line", "scatter", "bubble", "slope",
@@ -150,7 +151,7 @@ def test_active_requests_offer_the_forms_a_table_can_be_drawn_as_and_keep_histor
     assert not active.downgrade_enabled
     assert [kind.value for kind in active.enabled_types] == selected
     answer = calls.summarize_and_plan_schema(visuals=active)["$defs"]["PlanChoice"]["properties"]
-    assert answer["type"]["enum"] == ["none", "bar", "dot"]
+    assert answer["type"]["enum"] == ["none", *selected]
     assert set(active.select_types()) == {
         kind for kind in VisualType if can_compile(kind)
     }
@@ -312,7 +313,9 @@ def test_real_shard_projects_outcomes_before_sealing(
             model_endpoint=server.endpoint,
         )
         offered = server.sent[-1]["json_schema"]["$defs"]["PlanChoice"]["properties"]
-        assert offered["type"]["enum"] == ["none", "bar", "dot"]
+        assert offered["type"]["enum"] == [
+            "none", *(kind.value for kind in VisualType if can_compile(kind))
+        ]
     assert stage_record(run_plan, settings=knobs, commit_sha="a" * 40)[0] == len(run_plan.items)
     rows = ledger.load_days(
         common.STATE_ROOT, LedgerName.ITEM_HEALTH, [run_plan.date], model=ItemHealthRow

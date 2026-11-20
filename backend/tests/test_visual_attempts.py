@@ -9,12 +9,11 @@ import pytest
 from pydantic import ValidationError
 from support.ledger import writer_identity
 from support.paths import CONTRACT_FIXTURES_DIR, read_text
-from support.prompts import SUMMARIZE_AND_PLAN_REPLIES, WIND_NAMES, WIND_TEXT, tables_over
+from support.prompts import SUMMARIZE_AND_PLAN_REPLIES, WIND_TEXT, chart_data_over
 from test_chart_vocabulary import draw, inputs, settings
 from test_classify import a_reply
 
 from idhazh import completed_writes, elements, ledger
-from idhazh.classify import calls
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.element import ElementKind, ElementTable
@@ -94,10 +93,10 @@ def test_real_decisions_keep_refusals_replacements_floor_evidence_and_render_fai
 
 
 def test_production_decider_covers_exactly_the_five_implemented_none_gates(tmp_path: Path) -> None:
-    summary, _, table = inputs()
+    summary, _, _ = inputs()
     knobs = settings()
-    _, tables = tables_over(
-        Article.read(CONTRACT_FIXTURES_DIR / "article" / "ok.json"), WIND_TEXT, WIND_NAMES
+    table, data = chart_data_over(
+        Article.read(CONTRACT_FIXTURES_DIR / "article" / "ok.json"), WIND_TEXT
     )
     stamp = {
         "version": VisualDecision.schema_version(), "model_id": "fixture-model",
@@ -111,25 +110,24 @@ def test_production_decider_covers_exactly_the_five_implemented_none_gates(tmp_p
         knobs.models.summarizer.sampling
     )
     cases = (
-        (Completion(content="", finish_reason="stop"), ()),
-        (Completion(content=cut, finish_reason="length", prompt_tokens=room), tables),
-        (Completion(content=cut, finish_reason="length", prompt_tokens=room + 1), tables),
-        (Completion(content='{"visual":{"type":"bar"}', finish_reason="stop"), tables),
+        (Completion(content="", finish_reason="stop"), None),
+        (Completion(content=cut, finish_reason="length", prompt_tokens=room), data),
+        (Completion(content=cut, finish_reason="length", prompt_tokens=room + 1), data),
+        (Completion(content='{"visual":{"type":"bar"}', finish_reason="stop"), data),
     )
     decisions = [
         _decide_the_visual(
-            summary, reply, table, tables=shown, settings=knobs, date=DATE, stamp=stamp,
+            summary, reply, table, data=shown, text=WIND_TEXT,
+            settings=knobs, date=DATE, stamp=stamp,
             run_id=RUN,
         )
         for reply, shown in cases
     ]
-    declined = json.loads(read_text(SUMMARIZE_AND_PLAN_REPLIES / "summary-and-plan.json"))[
-        "choices"
-    ][0]["message"]["content"]
-    # Validate the recorded reply before exercising the production decision router.
-    assert calls.parse_summarize_and_plan(declined, tables=tables).visual is None
+    # A model decline remains final even with stray chart fields in a well-shaped reply.
+    declined = a_reply(type="none", title="Stray 2026 title")
     decisions.append(_decide_the_visual(
-        summary, Completion(content=declined, finish_reason="stop"), table, tables=tables,
+        summary, Completion(content=declined, finish_reason="stop"), table,
+        data=data, text=WIND_TEXT,
         settings=knobs, date=DATE, stamp=stamp, run_id=RUN,
     ))
     assert all(
@@ -147,7 +145,7 @@ def test_shape_evidence_and_missing_compiler_refusals_persist_without_invented_r
 ) -> None:
     summary, requested, table = inputs()
     article = Article.read(CONTRACT_FIXTURES_DIR / "article" / "ok.json")
-    _, tables = tables_over(article, WIND_TEXT, WIND_NAMES)
+    wind, data = chart_data_over(article, WIND_TEXT)
     knobs = settings()
     stamp = {
         "version": VisualDecision.schema_version(), "model_id": "fixture-model",
@@ -156,7 +154,7 @@ def test_shape_evidence_and_missing_compiler_refusals_persist_without_invented_r
     malformed = _decide_the_visual(
         summary,
         Completion(content=a_reply(focus=None, caption="model-only words"), finish_reason="stop"),
-        table, tables=tables, settings=knobs, date=DATE, stamp=stamp, run_id=RUN,
+        wind, data=data, text=WIND_TEXT, settings=knobs, date=DATE, stamp=stamp, run_id=RUN,
     )
     empty = ElementTable.model_validate(table.model_dump() | {"elements": []})
     evidence = _drawn(

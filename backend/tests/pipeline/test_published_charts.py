@@ -19,7 +19,7 @@ from idhazh.render.write import asset_relpath
 from ._builders import (
     DRAWS_SUMMARIZE_AND_PLAN,
     _work_stage,
-    assert_planning_rows,
+    assert_planning_readings,
     assert_reader_accepts,
     drawable_article_fetch,
     finding_the_wind_countries,
@@ -59,13 +59,13 @@ def test_assemble_publishes_a_chart_from_its_decision_alone(
     assert decision.data_path == relpath
     assert decision.spec is not None
     compiled = VisualData.from_json(decision.spec)
-    assert_planning_rows(
+    assert_planning_readings(
         server,
         [
-            "r1 | Denmark | 1200 MW",
-            "r2 | Germany | 900 MW",
-            "r3 | Poland | 640 MW",
-            "r4 | Ireland | 410 MW",
+            ("q1", "1200 MW"),
+            ("q2", "900 MW"),
+            ("q3", "640 MW"),
+            ("q4", "410 MW"),
         ],
     )
     marks = {mark.mark_id: mark for mark in compiled.marks}

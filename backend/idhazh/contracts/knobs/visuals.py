@@ -100,7 +100,7 @@ class VisualsConfig(Model):
     min_chart_points: int = Field(
         default=3,
         ge=2,
-        description="Below this a chart says less than the sentence it sits under.",
+        description="Minimum supported numeric readings for a chart.",
     )
     max_chart_points: int = Field(default=8, ge=2)
     max_pie_parts: int = Field(
@@ -121,9 +121,8 @@ class VisualsConfig(Model):
             "does, and a value outside it is refused here rather than left to refuse every "
             "histogram of every run for a reason no article can fix. It is also the floor "
             "on how many values a histogram may cite: fewer values than bins leaves a bin "
-            "empty, and a bar counting nothing has no chain and draws nothing. The default "
-            "is min_chart_points rather than a textbook rule for a sample size this stage "
-            "never sees."
+            "empty, and a bar counting nothing has no chain and draws nothing. This setting "
+            "can require more readings than other forms."
         ),
     )
     min_diagram_steps: int = Field(default=3, ge=2)

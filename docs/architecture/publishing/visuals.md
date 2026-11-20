@@ -35,25 +35,19 @@ idhazh work --date <D> # one call an item: the summary and the answer about a ch
 idhazh assemble --date <D> # the day payload picks up whatever was drawn
 ```
 
-The summarize-and-plan call writes the summary and, when code built a table of figures
-from the article, the answer about a chart in one reply. So the same model that read the
-article decides whether a chart is worth drawing, and `work` builds the plan from its
-answer and compiles the data while it still holds the text.
+The same model writes the summary and decides whether a chart would help, which
+form to use, and which readings fill its roles. `work` resolves the answer
+against the article and compiles chart data while it still holds the text.
 
 The shared system turn joins the separately configured
 `write_digest_summary` and `plan_visual` files; the later `continue_summary`
 turn reads its own file from the same selected config root. Their paths and
 rendering rules belong to [the prompt page](../summarize/prompt.md).
 
-Before the request is built, code finalizes the source element table and builds tables of
-names and figures from it, with no model
-([the table rules](../summarize/prompt.md#the-model-is-shown-tables-of-figures-never-the-element-table)).
-The request shows those tables after the article, and its grammar admits only `none` or a
-form on offer, and only a row code the tables show. A valid decline remains available. Only
-`bar` and `dot` are offered, because they are the forms whose marks are one name and one
-figure and that need no separately stated whole. The validator, the replacement ladder and
-the compiler still support the other numeric forms, but no model answer reaches them, so
-the ladder is not reachable from an answer today (it stays off by default). The
+The request shows [independent source readings](../summarize/prompt.md#the-model-is-shown-independent-source-readings)
+after the article. Its grammar admits `none` and the operator-enabled numeric
+forms the renderer supports. The capability list does not recommend a form for
+an article. The
 [compiler capability table](where-a-drawing-becomes-pixels.md#declared-types-are-not-delivery-promises)
 names the abandoned forms retained only for historical reading.
 
@@ -85,8 +79,8 @@ exactly where it was.
 **Numeric charts cross the actual worker and assembly boundary in tests.**
 `test_assemble_publishes_a_chart_from_its_decision_alone` runs
 the production call against a local boundary reply. Real extraction and anchoring finalize
-the evidence; the actual request must show the rows code built from it and admit their
-codes. Only named serialized article, summary, decision and item-health
+the evidence; the actual request must show the readings and admit their
+references. Only named serialized article, summary, decision and item-health
 outputs, plus their input fingerprint, cross into a fresh publisher tree.
 Neither the worker's public directory nor its captures cross.
 
@@ -105,17 +99,10 @@ reload. Navigation/reload retains the numeric observer lifecycle regression
 coverage. These are deterministic transport and rendering
 checks, not evidence that the current model generates useful plans.
 
-It needs an article a bar can legally be drawn from, which is rarer than it sounds.
-`tests/fixtures/pages/article.html` states three figures in three units - dollars, megawatts and
-customers - so no table of one unit can be built from it, and `units_convertible` would refuse every
-bar expressible from it anyway.
-`tests/fixtures/pages/wind.html` exists for this: four countries, four figures, one unit, matching
-the shape `tests/fixtures/visual-validator/` already keeps as the plan that passes. Its recorded
-reply is `summarize-and-plan/wind-summary-and-plan.json`: a `bar` answer whose `focus` is the
-Denmark row, `r1`, citing a row and no element id. The four rows it chooses among are the ones
-this pipeline builds from the page and from the four countries a loopback stand-in for the
-text-analysis service labels - so an extractor or table-builder change that
-moves or drops a row turns the test red rather than quietly turning the picture off.
+`tests/fixtures/pages/wind.html` supplies four comparable readings.
+`summarize-and-plan/wind-summary-and-plan.json` cites those readings and copies
+their country labels. An extractor or reference change that moves or drops a
+reading turns the test red rather than quietly turning the picture off.
 
 **Generation and normal publication require separate observations.** Retain
 the actual call for named warranted numeric chart examples and a
@@ -140,11 +127,10 @@ This is the whole safety design, and it is structural rather than instructed.
 
 1. Code cuts quantity and date spans, then anchors the mentions the text-analysis
    service returned against the same article text.
-2. Code builds tables of names and figures from those elements. The model is shown
-   the rows and answers with a form on offer and a row code the request showed,
-   enforced by the article-specific request grammar, and with words that carry no digit.
-3. The plan is built here in Python from the elements the chosen row's table stands
-   for, and the spec from the plan. Any derived value
+2. The model chooses a form and cites numeric readings, dates and short label
+   phrases as needed. Its chart prose contains no digits.
+3. Code checks the references, re-slices labels, and builds and validates the
+   plan before compiling the chart. Any derived value
    is arithmetic over source-backed elements through the closed, provenance-
    carrying rules in [where every drawn figure came from](where-every-drawn-figure-came-from.md).
 
@@ -157,64 +143,14 @@ What the extractor refuses to turn into an element in the first place, and what 
 that may reach a number the article did not write, are in
 [where-every-drawn-figure-came-from.md](where-every-drawn-figure-came-from.md).
 
-## The model is not asked a question already answered
-
-A published bar is one name beside one figure the article states. Every bar in a chart
-shares one unit, and a chart needs at least `visuals.min_chart_points` of them. So an
-article can carry a chart only if code can build a table of that many rows from it. **The
-table builder is the gate**: a table built means the question about a chart is asked; none
-built means it is left off, and the answer is `none` whatever the model would have replied.
-
-Two properties of how it is written, and each one is load-bearing:
-
-- **No word of the article is read as an instruction.** The builder uses a name's words to
- find where the name stands again in the text, and a figure's unit and place. A predicate
- that branched on what fetched prose says would let a stranger's page steer our control
- flow, which is Guardrail #11 with no prompt in sight
- ([the cell checks](../sources/trust-boundary.md#the-tables-of-figures-are-article-words-inside-the-fence)).
-- **A figure with no unit forms no table.** A byline or a page number has no unit and is not
- a measure to compare.
-
 ## The gate suppresses the question and never skips the call
 
-The summarize-and-plan call is the call that writes the summary, so the gate cannot skip it:
-what it takes away when no table was built is the answer about a chart, not the request. The
-grammar is what takes it: `summarize_and_plan_model(plan=False)` is the summary draft alone, with no `visual`
-property, so the decoder has nowhere to write an answer. A smaller budget on its own would not do it -
-the decoder would start the answer and meet the cap part-way through, which spends the decode the gate
-exists to save and returns a cut reply. So the gate does not touch the budget at all.
-
-| What the gate changes about the summarize-and-plan call | Table built | No table |
-| --- | --- | --- |
-| The decoder shape | `{summary, visual}` | the summary draft alone |
-| The output budget | the model file's response limit | the same |
-| The trailing user turn | the tables and the continuation | the continuation only |
-| The system turn and the article | unchanged | unchanged |
-
-The budget is the response limit the model file names (`sampling.max_tokens`, 8,192 in every committed
-model file), gated or not. With no length asked of the model there is no word bound to derive a budget
-from, and a second, smaller number for the gated call would be a cap on the summary a table-less item may
-write. What the gate saves is the decode of the answer about a chart, which the grammar removes.
-
-**What that saves is small and its size is an estimate.** The answer is a few short fields - a sentence
-for `why`, a title, usually a null caption - so the saving is likely small beside the summary's decode.
-Tokenising the summary half and the `visual` half of captured replies with the configured vocabulary
-would settle it. How often the gate fires is the other half of the bill: the share of items whose
-decision is `not_reachable`. Neither is measured here.
-
-**The trailing ask loses its visual field too, and that is the same rule read a second time.** A turn that
-asks for a `visual` the grammar has nowhere to put does not simply get ignored:
-constrained decoding renormalises onto the tokens the grammar allows, so the text goes into the only
-channel left open, which is the summary a reader reads.
-`config/prompts/continue-summary.txt` derives that last line from the selected
-reply shape. The chart rules in `plan-visual.txt` stay in the shared system prefix and open by saying the
-answer is written only when tables are listed after the item, so a request with no table reads them as not
-applying, and the two requests cannot drift before the article.
-A test asserts that cached prefix is identical with and without tables.
-
-**Leaving the question off moves nothing in front of the article.** Both differences sit after the
-system turn and the article, so the cached prefix a gated item reuses is the prefix
-an ungated one reuses.
+The chart question is left off only when no numeric form is enabled and
+supported, fewer than two quantities were found, or the data references do not
+fit beside the article. The request keeps the same model, response budget and
+cached prefix; only the trailing data and the grammar's `visual` field go
+away. Compatibility and the configured mark count are checked after the model
+chooses a chart, not used to screen articles for comparability.
 
 ## Every `none` says which gate refused it
 
@@ -225,15 +161,14 @@ because a console counts members and cannot count prose.
 
 | Member | The route it names |
 | --- | --- |
-| `not_reachable` | No table of names and figures was on offer, so no question about a chart was asked. The call still ran and still wrote the summary. A row written before 2026-11-18 means instead that no choice over the article's elements could have validated. |
+| `not_reachable` | No chart data references were sent. The call still wrote the summary. Between 2026-11-18 and this change, the gate checked for a table of names and figures. Earlier rows meant no choice over the elements could have validated. |
 | `model_declined` | The model was asked and answered `none`. The ordinary answer, and the one the design wants to stay common. |
 | `validation_failed` | A plan was drafted, the validator refused it, and the ladder reached no depth that validates. |
 | `output_budget_cut` | The reply ran out of output budget after the summary closed, so the plan was never written. The item publishes; the picture is what was lost. |
 | `window_exhausted` | The prompt filled the context window, so the plan was cut before it was written. |
 
 **One member per gate, never one per call site.** The gate that leaves the question about a
-chart off the request records `not_reachable` wherever it fires - no table built, and tables
-dropped because they would not fit the window - because
+chart off the request records `not_reachable` wherever it fires, because
 what an operator acts on is the gate rather than the line of code. And **which** check refused is
 `ValidatorCheck`'s to say: one fact with two homes is a fact that can disagree with itself.
 
@@ -293,7 +228,7 @@ null, not zero. Declines, suppressed or unparseable requests and historical
 unknown outcomes do not enter its denominator. The stored item rows preserve
 the inputs, not a second copy of the derived rate.
 
-**Five members, because five routes have writers.** No table, model decline,
+**Five members, because five routes have writers.** No chart question, model decline,
 drafted-plan refusal, output-budget cut and context-window cut each have a
 producer. A proposed gate without a writer gets no member. The oracle holds the
 enum to that: every route is driven from its own fixture and the set collected
@@ -303,20 +238,6 @@ The retired single-call planner writes null. Its causes are sentences in
 `rationale`, and several - no summary to illustrate, a reply that lost its
 shape, a kind with no renderer - are not gates at all. A payload written before the field existed writes null for the same reason, and
 that is the honest reading: nothing committed says which gate refused it.
-
-## Two controls that run after the model has answered
-
-**Bars must measure the same thing.** The largest group of chosen bars that share a unit is kept
-and the rest are dropped. This never invents a bar and never mixes units; it only ever removes. If
-what remains is below `visuals.min_chart_points`, the item is decided to nothing.
-
-**One quantity may fill one bar.** A draft that names the same `fact_index` twice is decided to
-nothing. Without this the model can name index 3 three times, `same_unit_bars` groups all three
-under one unit, the width check passes, and a chart of one number under three invented labels
-publishes - every value true and the comparison fabricated.
-
-**A caption written about dropped bars is discarded.** If any bar was removed, the model's caption
-described a chart that no longer exists.
 
 ## The whole flow, drawn, so nobody has to infer it again
 
@@ -337,10 +258,10 @@ flowchart TD
     CP["<b>CANDIDATE PASS</b> - code<br/>finds every quantity the number pattern matches<br/>mints element_id, span_start, span_end"]
     TA["<b>TEXT ANALYSIS</b> - local service, not the language model<br/>labels organisations, people and places<br/>its reply is data: a label and two offsets"]
     ANC["<b>ANCHORING</b> - code<br/>one rule per shape<br/>what will not anchor is dropped"]
-    TE[("<b>TRUSTED ELEMENTS</b><br/>TIER 1 byte-exact, cut from the article<br/>TIER 2 retired, readable and never written")]
-    TB["<b>FIGURE TABLES</b> - code<br/>pairs a name with the figure written beside it<br/>a sentence it cannot pair for sure pairs nothing"]
-    C2["<b>SUMMARIZE-AND-PLAN CALL</b> - model<br/>writes the summary AND answers: chart or none, a form, a row, a title<br/>names a row by its code, never an element id<br/>no schema field accepts a value, a unit or an offset"]
-    VP["<b>VISUAL PLAN</b> - built by code from the chosen row<br/>type + role -&gt; element_ids<br/>no geometry, no literal value, no authored text"]
+    TE[("<b>TRUSTED ELEMENTS</b><br/>byte-exact, cut from the article")]
+    TB["<b>SOURCE DATA REFERENCES</b> - code<br/>independent readings in a fenced block"]
+    C2["<b>SUMMARIZE-AND-PLAN CALL</b> - model<br/>summary, then chart choice with type and role citations or none<br/>no schema field accepts a value, a unit or an offset"]
+    VP["<b>VISUAL PLAN</b> - code resolves citations against source<br/>type + role -&gt; element_ids<br/>no geometry or literal value"]
     VV{"<b>VALIDATOR</b> - deterministic, no model<br/>is this type drawable from these elements?"}
     DL["<b>DOWNGRADE LADDER</b><br/>depth 1, depth 2, then refuse"]
     VC["<b>CHART COMPILER</b> - code<br/>plan + elements =&gt; VisualData<br/>every number traced to an element or a derived value"]
@@ -406,11 +327,11 @@ flowchart TD
 
 | Node | What it holds |
 |---|---|
-| `CP` | Code reads first and finds every quantity it can, and the tables of figures the model is shown are built from what it found. It emits `element_id`, `kind`, `span_excerpt`, `span_start`, `span_end`, `value`, `unit`, `sentence_index`, `extractor` |
+| `CP` | Code extracts quantities and dates, with the characters and offsets recording their source. |
 | `TA` | A local process the run starts, asked once per article before the model reads it. The pipeline reads a label and two offsets of each mention and nothing else; the words it returns are compared with the characters those offsets cut from `Article.text`, and a mention whose words differ is dropped. No word it returns reaches a prompt, path, URL or command |
-| `TB` | Reads the element table and the article text with no model. A table is a run of consecutive sentences that each pair names with exactly one figure of one unit. A wrong pairing is worse than a missed one, so a sentence it cannot pair for sure pairs nothing ([the rules](../summarize/prompt.md#the-model-is-shown-tables-of-figures-never-the-element-table)). Each row keeps its name element and its figure element; the model is shown only the row code, the name and the figure's words |
-| `C2` | The model's whole vocabulary for what to draw is the row codes the request shows and the forms on its forms line. **It writes no number**: no field of its answer is numeric, which is a property of the grammar, and a chart answer whose `why`, `title` or `caption` holds a digit is refused by name. The validator's numeral check is the second line |
-| `VP` | `decision`, `purpose`, `type`, `encodings`, `declared_whole_element_id`, `element_ids`, `labels`, `annotations`, `why`, `title`, `caption`, `confidence`, `plan_version`. Four prohibitions: no geometry, no literal value, no authored text, no `alt_text`. Code fills it from the chosen row: purpose `comparison`, the offered form, the table's names as the category channel and its figures as the quantity channel in row order, no other channel, no declared whole, no labels, and the focus row's figure as the one annotation. `confidence` is optional and null here |
+| `TB` | [Independent quantity and date references](../summarize/prompt.md#the-model-is-shown-independent-source-readings), with brief source excerpts. |
+| `C2` | Decides from the article and cites the readings and label text for the chosen form; cannot author a measured value. |
+| `VP` | Resolves source references into the existing typed plan; no geometry, literal value, authored labels or alt text. |
 | `VV` | Ten checks: elements exist; semantically compatible; units convertible; roles valid for the type; enough data; no duplicate in a role; no invented values; numerals matched; plan version current; stacked parts equal a separate declared whole |
 | `VC` | The chart compiler: the one place chart numbers come into being, each arithmetic result resolved over Tier 1 elements through the closed four-function allow-list - `count`, `sum`, `share_of_declared_whole`, `convert` |
 | `DJ` | The day's text, and for each item a pointer: the visual's `kind`, its `state`, and where its file is. **No visual data, ever** |
@@ -420,7 +341,8 @@ flowchart TD
 
 **Three things this drawing rules out, and a plan-doc may not relax any of them.**
 
-**The model names the form and a row; it never draws and never writes a number.** Code builds the plan from the row's table. Every displayed value is cut by code from the article's own bytes, or derived from those by the allow-list.
+**The model names the form and cites the readings; it never writes a drawn number.**
+Every value is cut from source by code or derived from it by the allow-list.
 
 **Nothing is drawn at build time.** There is no SVG on disk, no headless browser, and no Node in the pipeline. `BE` ends at data.
 
@@ -442,34 +364,11 @@ facts from `VisualDecision` instead of parsing `rationale`. A search may
 compare several numeric floors, so nullable boolean evidence records whether
 any floor excluded a candidate without presenting one floor as representative.
 
-**Why the model picks a row instead of writing a spec.** The obvious design is to ask the model
-for a Vega-Lite object. It is also the design where a hallucinated axis value is one sampling
-accident away, and where the only defence is checking the output against the article afterwards -
-a check that has to parse an arbitrary spec and decide which of its numbers are data. Row codes
-invert that: the model's entire vocabulary for what to draw is the codes the request showed, a
-bound check is an enum in the grammar, and the property holds for specs nobody has thought of yet.
-
-**Why the feed floor of one prompt rule became two code controls.** "Do not chart a year" and "do
-not chart quantities that measure different things" were requests. A request is negotiable by a
-4B reading an article that mentions years. Both are now enforced - the first in the extractor, the
-second after the model answers - and the prompt is shorter for it.
-
-**Why a table-less item still writes a decision.** Silence is what turns a gate into a quiet descope.
-`none_reason` of `not_reachable` plus a rationale naming the reason means a later reader of the payload
-does not have to infer why an item has no picture.
-
-**Why the table gate is pinned to the validator's role table.** The forms a table is offered as are a
-prediction of what the validator accepts, and a prediction written from somebody's reading of the rules is
-wrong the first day a rule moves - silently, and in the direction that costs items their pictures. A test
-holds each offered form to the validator's role table (a name and a figure a mark), so a rule can only
-move in one place and a move the builder has not followed fails the build.
-
-**Why the question about a chart is left off the request when there is no table.** A turn that asks for
-fields the grammar cannot hold is
-not ignored: constrained decoding renormalises onto the allowed tokens, so the text goes into the
-only channel still open, which is the summary a reader reads. So the grammar and the trailing ask lose the
-visual field together, and the chart rules stay in the shared system turn, which opens by saying the answer
-is written only when tables are listed after the item.
+**Why citations instead of a drawing spec.** A model-written drawing spec can
+contain a hallucinated axis value. References limit numeric values to readings
+code cut from the article. Removing the name-and-figure table gate lets the
+model compare two readings for one subject or choose non-categorical roles
+without opening up a new way to write a value.
 
 **Why `none_reason` lives on the decision and not on the plan.** Three of its five members fire when
 no plan object exists at all - the gate leaves the question about a chart off the request, and the budget cut and

@@ -12,7 +12,7 @@ from pydantic import ValidationError
 from support.judge_reader import ProtocolReplies, native_reply
 from support.models import a_markers
 from support.paths import CONFIG_DIR
-from support.prompts import WIND_NAMES, WIND_TEXT, tables_over
+from support.prompts import WIND_TEXT, chart_data_over
 
 from idhazh import config, summarize
 from idhazh.classify import calls
@@ -163,7 +163,7 @@ def test_undeclared_placeholders_never_reach_a_request(tmp_path: Path, task: str
         elif task == "compare_articles":
             prompt.system_turn(prompt_files=files, config_dir=tmp_path)
         elif task == "continue_summary":
-            calls.summarize_and_plan_user_turn(prompt_files=files, config_dir=tmp_path)
+            calls.summary_user_turn("", "", prompt_files=files, config_dir=tmp_path)
         else:
             calls.summary_system_prompt(prompt_files=files, config_dir=tmp_path)
 
@@ -195,9 +195,8 @@ def test_real_consumers_and_stamps_follow_two_selected_roots(tmp_path: Path) -> 
             target.write_text(text, encoding="utf-8", newline="\n")
         options: PromptLocation = {"prompt_files": settings.app.prompt_files, "config_dir": root}
         source = Article.model_validate(article().model_dump() | {"text": WIND_TEXT})
-        _, tables = tables_over(source, WIND_TEXT, WIND_NAMES, config_dir=root)
-        assert tables
-        for shown in (tables, ()):
+        _, data = chart_data_over(source, WIND_TEXT, config_dir=root)
+        for shown in (data, None):
             request = calls.build_summary_request(
                 source,
                 shown,
@@ -205,12 +204,11 @@ def test_real_consumers_and_stamps_follow_two_selected_roots(tmp_path: Path) -> 
                 server=settings.models.summarizer.server,
                 sampling=settings.models.summarizer.sampling,
                 markers=a_markers(),
-                visuals=settings.app.visuals,
                 **options,
             )
             rendered = str(request["prompt"])
             assert label in rendered
-            assert ("r1 | Denmark | 1200 MW" in rendered) is bool(shown)
+            assert ("Denmark approved [1200 MW]" in rendered) is bool(shown)
         assert label in summarize.system_prompt(settings.app.summarize, **options)
         built, fault = reference_set.target_is_shaped_right(
             reference_set.Task(

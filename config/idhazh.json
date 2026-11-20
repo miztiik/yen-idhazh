@@ -419,7 +419,7 @@
     "max_label_characters": 40,
     "max_output_tokens": 400,
     "max_pie_parts": 5,
-    "min_chart_points": 3,
+    "min_chart_points": 2,
     "min_diagram_steps": 3,
     "number_format": {
       "locale": "en-GB",

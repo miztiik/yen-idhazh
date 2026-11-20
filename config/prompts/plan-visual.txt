@@ -1,22 +1,20 @@
-Only when tables of figures are listed after the item, also write "visual" after "summary". Its fields, in this order:
-  "why": one sentence in words, with no digits. Say what the table compares, or why no table is worth drawing. Write about the item, not about these rules.
-  "type": "none", or one chart form offered for the tables.
-  "focus": the row the item turns on, such as "r2". Only with a chart, otherwise null.
-  "title": a short factual title with no digits. Only with a chart, otherwise null.
-  "caption": one sentence with no digits, only if the figures are estimates or forecasts, otherwise null.
+When source data references follow the item, write "visual" after "summary".
 
-Choose a chart only if the item is about how the figures in one table compare across names. Choose "none" if the figures are separate facts, are mentioned in passing, or measure different things for different names. Check the table against the item, not against your summary. Never write a figure that is not in the table.
+First write "why": one sentence without digits. Name the shared measure and what the reader would see, or name the specific mismatch, missing evidence, or reason a chart would not help. Two points can make a useful comparison, even for one subject or when stated in different sentences. Check the measure, denominator, population, and period against the article. The same unit alone is not enough. Ignore unrelated figures if a useful comparison remains; do not combine prices per share with total proceeds, or a share of new additions with a share of everything installed.
 
-Example. Rows:
-r1 | Berrow | 3,150 t
-r2 | Aldia | 4,200 t
-r3 | Cardia | 2,900 t
-The item says Aldia's wheat harvest was a record.
-"visual": {"why": "Three countries' wheat harvests, with Aldia the record.", "type": "bar", "focus": "r2", "title": "Wheat harvest by country", "caption": null}
+Choose "type" from the renderer capabilities based on the data, or "none" if no useful chart can be supported. Use these "encodings" (omit unused keys):
+- bar or dot: "category" and "quantity", paired in the same order.
+- line: "time" and "quantity", paired in date order. Use it for measurements over time, not just two named stages.
+- slope: two dates in "time", before and after quantities consecutive for each subject, and one "entity" or "series" per subject.
+- scatter or bubble: one "entity", "quantity_x", and "quantity" per point in matching order. Bubble also needs "size".
+- pie: "category" and "quantity" for exhaustive, non-overlapping parts, with an independently stated "whole".
+- stacked_bar: "series" and "quantity" for exhaustive parts; cite "whole" and copy the common "measure" beside it.
+- histogram: "bins" lists comparable individual readings, not precomputed counts.
 
-Example. Rows:
-r1 | Northfield | 5.2 billion dollars
-r2 | Eastgate | 4.9 billion dollars
-r3 | Westmere | 0.4 billion dollars
-The item gives Northfield's revenue, Eastgate's forecast revenue and Westmere's profit.
-"visual": {"why": "The three figures measure different things: revenue, forecast and profit.", "type": "none", "focus": null, "title": null, "caption": null}
+Use the shown q codes for quantities and the shown d codes for dates. Brackets in the excerpts identify the reading each code points to. For category, entity or series labels, copy short exact words from the source sentence that supports each point; never paraphrase a label. For a chart, give a short factual "title" and a "caption" only if needed for framing, without digits. Use "focus" for the q code of one drawn reading (null for pie). Only composition sets "whole" to a q code; otherwise use null. For "none", use empty encodings and null focus, whole, title and caption.
+
+Example: "The offer price was $$12 per share. The first trade was $$17 per share." Data: q1 is $$12 and q2 is $$17.
+"visual": {"why":"The first trade was above the offer price on the same per-share basis.","type":"bar","encodings":{"category":["offer price","first trade"],"quantity":["q1","q2"]},"focus":"q2","whole":null,"title":"Offer price and first trade","caption":null}
+
+Example: "The offer price was $$12 per share. The offering generated $$17 million in proceeds." Data: q1 is $$12 and q2 is $$17 million.
+"visual": {"why":"The offer price is per share, while the proceeds are for the entire offering.","type":"none","encodings":{},"focus":null,"whole":null,"title":null,"caption":null}

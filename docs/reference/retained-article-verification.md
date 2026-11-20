@@ -85,12 +85,11 @@ retention window. All replay files stay below the private directory
 The adapter supplies a configured `ItemRecorder` and explicit capture/render
 roots to the real `summarize_one_item()`, after asking the text-analysis service
 for the article's mentions as the work stage does. Where no service answers, the
-replay finds no names or places: the element table is the one the patterns alone make, so no
-table of figures is built and no question about a chart is asked. The
+replay uses pattern readings alone. It can still ask about a chart and ground
+labels in the article. The
 [caller's `text analysis result` record](../architecture/text-analysis/text-analysis-api.md#one-service-one-bounded-listener)
 appears in the `Run fresh native call pairs` step log, as a warning when the
-service fails; `analyze_ms` records what the failed request cost. Judge such a
-replay by its summary and its health row, not by whether a chart was drawn.
+service fails; `analyze_ms` records what the failed request cost.
 Configured prompt and reply capture
 must both be enabled. Existing source and output paths reject traversal,
 symlinks and junctions. A pre-existing output directory refuses a replay rather
@@ -102,10 +101,10 @@ no-visual result. A successful native decline remains visible and does not
 become an error merely because the operator hoped for a visual. Additional
 quality postconditions are observations over these saved outputs; they cannot
 force the producer to draw or weaken native validation.
-A call offered no table of figures records `not_reachable` while the call ran.
+A call with no chart data references records `not_reachable` while the call ran.
 Preserve native `asked_the_model`: it stays true for the shared summary request
 even when the question about a chart was left off. Use `run_visual_decision`, which
-is true when a table was offered, and the actual
+is true when chart references were sent, and the actual
 request to distinguish visual admission, and the capture to establish what was
 sent.
 

@@ -64,20 +64,14 @@ either resolve to the article's own characters or be deterministic arithmetic
 over source-backed elements with a traceable chain. See
 [where each drawn figure comes from](../architecture/publishing/where-every-drawn-figure-came-from.md).
 
-**What a number means is a different question, and it is not closed.** A pattern can find `4,200 tonnes`. It cannot know whether that is exports or production. Code pairs a name with the figure written beside it, under rules that pair nothing they cannot pair for sure ([the table rules](../architecture/summarize/prompt.md#the-model-is-shown-tables-of-figures-never-the-element-table)); the model reads that pair against the article and says whether it is worth a chart - and that judgement is the one part of a visual nothing verifies. Two failures follow, and neither raises an error:
-
-- **Mis-pairing.** Code pairs a name with a figure that belongs to another name. The words are real, so every check on the words passes. The rules refuse every sentence shape known to do this, and a wrong pairing is held to be worse than a missed one.
-- **Mis-labelling.** The right figure, the wrong measure, unit or entity. A table of one unit can still put unlike things side by side, and no string search reaches a judgement. The model is asked to answer `none` for such a table; the validator checks units and magnitudes, not what a figure measures.
-
-Three controls narrow it, and none of them closes it:
-
-- A table forms only where every name in a run of sentences has exactly one figure of one unit, so an ambiguous sentence pairs nothing instead of a coin toss.
-- A chart is built from the elements the chosen row stands for, never from a free string, so every drawn value can be checked against that element's own unit and magnitude.
-- The model never types a value. No field of its answer accepts a number, and a digit in its words is refused by name, so authorship is refused by the grammar and a named rule rather than caught by a later check.
-
-**This is a permanent property of the design, not a defect waiting for a fix.** The alternative is to draw only what a pattern can name, which produces charts whose axis reads "number" - correct, verifiable, and worth nobody's attention. A digest that will not say what a figure means is not publishing a fact, it is publishing a decoration with better provenance.
-
-Note the split this implies, because it is easy to lose: **code finds and cuts every character a reader sees and pairs each name with its figure; the model chooses which table is worth drawing and which row the item turns on.** A value is never model-authored. A choice always is.
+**What a number means is a different question.** A pattern can find
+`4,200 tonnes`; it cannot say whether it measures exports or production.
+The model reads the article and [chooses readings and roles](../architecture/summarize/prompt.md#the-model-is-shown-independent-source-readings).
+Dates, figures and labels must resolve to the source, and the plan's roles
+and units have to pass code checks. Unit compatibility alone cannot prove
+two figures share a basis. For example, a per-share price and total proceeds
+may use the same currency but cannot be compared as prices. That judgement,
+and whether the comparison is useful, remain the model's.
 
 ## Honesty is a design requirement
 
