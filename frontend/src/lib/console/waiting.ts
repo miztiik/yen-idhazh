@@ -6,6 +6,8 @@ import type { NumberFormatConfig } from '../number-format';
 import { nameSpan } from '$lib/console/span-words';
 import type { AskRefusal } from '$lib/data/ledger';
 import { isDay } from '$lib/data/slice-shapes';
+import { daysBetween, windowOfDays } from '$lib/charts/viewport';
+import { utcSpan } from './window-coverage';
 
 export type PanelState = 'ready' | 'loading' | 'quiet' | 'missing' | 'unreachable' | 'refused';
 export type ChartState = PanelState | 'too-few';
@@ -50,26 +52,30 @@ export interface RecordWindow {
 	through: string | null;
 }
 
+export function recordWindowBounds(record: RecordWindow | null) {
+	if (record === null) return null;
+	if (!Number.isSafeInteger(record.asked) || record.asked < 1) throw new Error('A record window needs a positive preset.');
+	if (record.first === null || record.through === null) return null;
+	if (!isDay(record.first) || !isDay(record.through) || record.first > record.through) {
+		throw new Error('A record window needs ordered UTC days.');
+	}
+	const { start, end } = windowOfDays(record.through, record.asked, 'right');
+	return { start: start < record.first ? record.first : start, end };
+}
+
 /** Freshness is anchored on the returned record, never on the current clock. */
 export function recordWindowSentence(record: RecordWindow, label?: string): string {
-	if (!Number.isSafeInteger(record.asked) || record.asked < 1) throw new Error('A record window needs a positive preset.');
-	if (record.first === null || record.through === null) return '';
-	if (!isDay(record.first) || !isDay(record.through)) throw new Error('A record window needs ordered UTC days.');
-	const start = Date.parse(`${record.first}T00:00:00Z`);
-	const end = Date.parse(`${record.through}T00:00:00Z`);
-	if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) throw new Error('A record window needs ordered UTC days.');
-	const dayMs = 86_400_000;
-	const available = Math.floor((end - start) / dayMs) + 1;
-	const days = Math.min(record.asked, available);
+	const bounds = recordWindowBounds(record);
+	if (bounds === null) return '';
+	const days = daysBetween(bounds.start, bounds.end);
 	if (label !== undefined) {
-		const from = new Date(end - (days - 1) * dayMs).toISOString().slice(0, 10);
-		const span = from === record.through ? shortDate(from) : `${shortDate(from)} - ${shortDate(record.through)}`;
-		return `${label}: ${span} UTC.${days < record.asked ? ` ${days} of ${record.asked} requested days are available.` : ''}`;
+		return `${label}: ${utcSpan(bounds)}.${days < record.asked ? ` ${days} of ${record.asked} requested days are available.` : ''}`;
 	}
-	const shown = `Showing ${days} ${days === 1 ? 'day' : 'days'}, to ${shortDate(record.through)}.`;
-	if (available >= record.asked) return shown;
-	const fills = new Date(start + (record.asked - 1) * dayMs).toISOString().slice(0, 10);
-	return `${shown} The record starts on ${shortDate(record.first)}; the ${record.asked}-day window fills on ${shortDate(fills)}.`;
+	const start = Date.parse(`${record.first}T00:00:00Z`);
+	const shown = `Showing ${days} ${days === 1 ? 'day' : 'days'}, to ${shortDate(bounds.end)}.`;
+	if (days >= record.asked) return shown;
+	const fills = new Date(start + (record.asked - 1) * 86_400_000).toISOString().slice(0, 10);
+	return `${shown} The record starts on ${shortDate(bounds.start)}; the ${record.asked}-day window fills on ${shortDate(fills)}.`;
 }
 
 export function quietSentence(days: number, widen: number | null): string {

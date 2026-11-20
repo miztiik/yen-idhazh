@@ -47,5 +47,5 @@
 <style>
 	.timing-track { display: block; position: relative; block-size: var(--space-3); }
 	.timing-part { position: absolute; inset-block: 0; }
-	.timing-whole { display: block; block-size: 100%; background: var(--chart-1); }
+	.timing-whole { display: block; block-size: 100%; background: var(--chart-measure); }
 </style>

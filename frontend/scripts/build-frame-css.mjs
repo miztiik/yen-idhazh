@@ -71,6 +71,7 @@ async function consoleColors(style, mode, theme, choice) {
 		'color-accent-strong': colors.accent_hover, 'color-on-accent': colors.on_accent,
 		'color-focus': colors.focus, 'color-mark': colors.selected, 'console-selected': colors.selected,
 		'chart-axis': colors.chart_axis, 'chart-grid': colors.chart_grid, 'chart-label': colors.text_secondary,
+		'chart-measure': colors.chart_measure,
 		'chart-marker': colors.text_secondary, 'chart-readout-bg': colors.inset, 'chart-readout-text': colors.text,
 		'chart-identity-highlight': mode === 'light' ? colors.surface : colors.text,
 		'item-edge': colors.rule,

@@ -12,11 +12,11 @@
 	import { useChartFrame } from '$lib/charts/label-context';
 	import { useNumberFormat } from '$lib/number-format-context';
 	import { grouped } from '$lib/charts/series';
-	import { shortDate } from '$lib/format';
+	import WindowCoverage from '$lib/components/WindowCoverage.svelte';
 	import type { ConsoleConfig, ChartConfig } from '$lib/server/config';
 
-	let { days, read, window, knobs, chart }: {
-		days: VisualAttemptDay[]; read: RecordRead; window: TimeWindow; knobs: ConsoleConfig; chart: ChartConfig;
+	let { days, read, window, common = null, knobs, chart }: {
+		days: VisualAttemptDay[]; read: RecordRead; window: TimeWindow; common?: TimeWindow | null; knobs: ConsoleConfig; chart: ChartConfig;
 	} = $props();
 	const numberFormat = useNumberFormat();
 	const frame = useChartFrame(() => chart);
@@ -29,7 +29,7 @@
 
 <div data-visual-attempt-view="refusals" data-record-incomplete={evidence.state !== 'read' || evidence.notes.length > 0 ? '' : undefined}>
 	{#if evidence.state === 'read' && days.length > 0}
-		<p data-source-window data-range-from={window.start} data-range-to={window.end}>Packed visual attempts: {shortDate(window.start)}{window.start === window.end ? '' : ` - ${shortDate(window.end)}`} UTC.</p>
+		<WindowCoverage span={window} {common} source="Visual attempts" />
 	{/if}
 	<p>Counts of the first failed plan check recorded on each UTC day, including plans later written. These are not failed articles or counts of all omitted visuals.</p>
 	<p data-comparison="Each recorded reason has a daily line on the same UTC dates and count scale.">Each recorded reason has a daily line on the same UTC dates and count scale. A gap is not zero.</p>

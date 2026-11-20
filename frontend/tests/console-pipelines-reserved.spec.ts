@@ -114,8 +114,8 @@ async function holdMonths(page: Page) {
  */
 const FETCHED_PANELS = ['What is failing, by stage', "Where an item's time went",
 	'Time per item by stage', 'What one summary cost',
-	'Model processing time by run', 'Recorded article timings by shard',
-	'Longest article work in the latest recorded run', 'Article age when processing began'];
+	'Model processing time by run', 'Article timings by recorded shard',
+	'Longest article work in the latest recorded run', 'Article age at processing start'];
 
 /** The one the waiting and retry rows drive. Either would do; one is named so
  * those tests read about a single box rather than a set. */

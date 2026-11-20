@@ -123,7 +123,7 @@
 		display: block;
 		block-size: 100%;
 		border-radius: var(--radius-full);
-		background: var(--chart-1);
+		background: var(--chart-measure);
 	}
 
 	/* Quarantine is a health fact and the row carries the word as well, so this

@@ -43,7 +43,8 @@ const STRUCTURE = [
 	'--color-accent',
 	'--band-high',
 	'--band-medium',
-	'--band-low'
+	'--band-low',
+	'--chart-measure'
 ] as const;
 
 export type ChartToken = ChartPaletteToken | (typeof STRUCTURE)[number];

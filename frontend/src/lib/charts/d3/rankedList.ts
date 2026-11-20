@@ -108,7 +108,7 @@ function segmentsOf(row: RankedInput, max: number): RankedSegment[] {
 		}
 		const start = sum;
 		sum += part.value;
-		return { label: part.label, value: part.value, token: part.token ?? '--chart-1', start: percentOf(start / max), size: percentOf(part.value / max) };
+		return { label: part.label, value: part.value, token: part.token ?? '--chart-measure', start: percentOf(start / max), size: percentOf(part.value / max) };
 	});
 	// Adding fractions can land a hair over the row; the bound is the rounding
 	// error of the sum itself. Past it, the parts claim more than the row does.

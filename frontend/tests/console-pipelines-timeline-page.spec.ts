@@ -35,7 +35,8 @@ test('shard timings rank recorded windows and work independently, with articles 
 	const panel = page.locator('[data-run-timeline]');
 	await expect(panel).toHaveAttribute('data-timeline-view', 'elapsed');
 	await expect(panel).toHaveAttribute('data-timeline-shards', shards.join(' '));
-	await expect(panel).toContainText(`${shards.length} recorded shards`);
+	await expect(panel.locator('[data-timeline-coverage]')).toContainText(`${shards.length} shards with article records.`);
+	await expect(panel.locator('[data-timeline-coverage]')).toContainText('Workers without linked article records are not listed.');
 	await expect(panel).toHaveAttribute('data-timeline-span-ms', String(end - zero));
 	await expect(panel.locator('[data-timeline-bar]')).toHaveCount(shards.length);
 	await expect(panel).not.toContainText('Items at once');

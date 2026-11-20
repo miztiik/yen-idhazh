@@ -31,7 +31,7 @@ export const UNRECORDED_STOP = RESERVED_GREY;
 /** The one hue the speed ramp mixes. One hue, because a speed has a direction
  * and nobody can rank several hues; the first chart hue, because it holds the
  * most contrast against the panel in both themes. */
-export const MACHINE_HUE: ChartToken = '--chart-1';
+export const MACHINE_HUE: ChartToken = '--chart-measure';
 
 /** One whole-record machine identity and its established speed-group metadata. */
 export interface MachineIdentity {

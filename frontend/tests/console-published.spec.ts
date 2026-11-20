@@ -108,7 +108,7 @@ test.describe('the published cards draw their calendar, not just the selected da
         expect(body).not.toContain('data-comparison=');
         expect(body).not.toContain('readout-swatch');
         expect(body.match(/class="chart-readout[^"]*\bcompact\b/g)).toHaveLength(2);
-        expect(body.match(/fill="var\(--chart-1\)"/g)).toHaveLength(2);
+        expect(body.match(/fill="var\(--chart-measure\)"/g)).toHaveLength(2);
         expect(body).toContain('data-readout-row="Articles published"');
         expect(body).toContain('data-readout-row="Visuals published"');
         expect(body).not.toMatch(/<dt[^>]*basis-full/);

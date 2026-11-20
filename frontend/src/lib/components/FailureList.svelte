@@ -32,12 +32,31 @@
 </script>
 
 <section class="mt-8">
-	<fieldset class="stage-choices" data-failure-stages>
-		<legend>Stage</legend>
-		{#each stages.options as option (option)}
-			<label><input type="radio" name={stageName} value={option} checked={stage === option}
-				onchange={() => chosenStage = option} />{option}</label>
-		{/each}
-	</fieldset>
+	<h3>Failure rule ranking</h3>
+	{#if stages.options.length > 1}
+		<fieldset data-failure-stages>
+			<legend>Show rules for stage</legend>
+			<div class="stage-choices">
+				{#each stages.options as option (option)}
+					<label><input type="radio" name={stageName} value={option} checked={stage === option}
+						onchange={() => chosenStage = option} />{option}</label>
+				{/each}
+			</div>
+		</fieldset>
+	{/if}
 	<FailureRuleRanking rows={ranking} {window} {stage} {max} {readoutMaxShare} />
 </section>
+
+<style>
+	h3 { margin: 0; font-size: var(--console-panel-title-size); font-weight: var(--console-panel-title-weight); }
+	fieldset { min-inline-size: 0; margin: var(--space-2) 0; padding: 0; border: 0; }
+	legend { color: var(--color-text-secondary); font-size: var(--text-sm); }
+	.stage-choices { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+	label {
+		display: inline-flex; align-items: center; gap: var(--space-2);
+		min-block-size: var(--console-control-min-height); padding-inline: var(--console-control-padding-inline);
+		border-radius: var(--radius-sm); text-transform: capitalize; cursor: pointer;
+	}
+	label:has(input:checked) { background: var(--color-surface-sunken); font-weight: 600; }
+	input { accent-color: var(--color-accent); }
+</style>

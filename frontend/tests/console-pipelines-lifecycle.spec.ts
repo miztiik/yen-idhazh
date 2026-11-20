@@ -124,15 +124,14 @@ test('article timing panels follow the newest item record despite lagging host/c
 	await hydrated(page);
 	await settled(page);
 	await expect(page.locator('[data-run-timeline]')).toHaveAttribute('data-run-timeline', `${THROUGH}-1`);
-	await expect(page.locator('[data-run-timeline]')).toContainText('2 recorded shards.');
+	await expect(page.locator('[data-timeline-coverage]')).toContainText('2 shards with article records.');
 	const ranking = page.locator('[data-console-panel-id="slowest-articles"]');
 	await expect(ranking).toHaveCount(1);
 	await expect(ranking.locator('[data-slowest-run]')).toHaveAttribute('data-slowest-run', `${THROUGH}-1`);
-	await expect(ranking.locator('[data-native-window]')).toContainText(`${THROUGH} through ${THROUGH} UTC`);
-	await expect(page.locator('[data-console-panel-id="stage-timings"] [data-native-window]'))
-		.toHaveText(`Native record: ${older} through ${THROUGH} UTC.`);
-	await expect(page.locator('[data-console-panel-id="tail-trend"] [data-native-window]'))
-		.toHaveText(`Native record: ${older} through ${THROUGH} UTC.`);
+	await expect(ranking.locator('[data-coverage-exception]')).toHaveCount(0);
+	await expect(page.locator('[data-window-status]')).toHaveAttribute('data-range-to', THROUGH);
+	await expect(page.locator('[data-console-panel-id="stage-timings"] [data-coverage-exception]')).toHaveCount(0);
+	await expect(page.locator('[data-console-panel-id="tail-trend"] [data-coverage-exception]')).toHaveCount(0);
 	await expect(ranking.locator('[data-ranked-row]').first()).toContainText('latest-clock');
 	await expect(ranking.locator('[data-ranked-row]')).toHaveCount(1);
 	await expect(ranking.locator('.ranked-rule')).toHaveAttribute('aria-label', 'Run median: 1.2');

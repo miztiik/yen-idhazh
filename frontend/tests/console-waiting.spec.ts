@@ -2,6 +2,17 @@
 import { expect, test } from '@playwright/test';
 import { emptyState, recordEmptyState } from '../src/lib/charts/d3/empty';
 import { recordWindowSentence, routeStanding, STATE_WORDS } from '../src/lib/console/waiting';
+import { coverageException } from '../src/lib/console/window-coverage';
+
+test('only different chart coverage warrants a local window label', () => {
+	const common = { start: '2026-11-04', end: '2026-11-17' };
+	expect(coverageException({ ...common }, common)).toBeNull();
+	expect(coverageException({ ...common, start: '2026-11-08' }, common)).toBe('Shorter coverage');
+	expect(coverageException({ ...common, end: '2026-11-16' }, common)).toBe('Older records only');
+	expect(coverageException({ ...common, end: '2026-11-18' }, common)).toBe('Later records');
+	expect(coverageException({ ...common, start: '2026-11-01' }, common)).toBe('Wider coverage');
+	expect(coverageException(common, null)).toBe('Separate record');
+});
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { render } from 'svelte/server';

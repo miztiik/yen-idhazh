@@ -8,6 +8,7 @@ const rewrite: Rewrite[] = [
 	['./ChartReadout.svelte', './ChartReadout.server.mjs'],
 	['../components/ChartReadout.svelte', './ChartReadout.server.mjs'],
 	['$lib/components/Panel.svelte', './Panel.server.mjs'],
+	['$lib/components/WindowCoverage.svelte', './WindowCoverage.server.mjs'],
 	['$lib/components/TargetBar.svelte', './TargetBar.server.mjs'],
 	['$lib/components/ShapeSwitch.svelte', './ShapeSwitch.server.mjs'],
 	['./RankedList.svelte', './RankedList.server.mjs'],
@@ -20,6 +21,7 @@ const rewrite: Rewrite[] = [
 const files = [
 	['src/lib/components/ChartReadout.svelte', 'ChartReadout'],
 	['src/lib/components/Panel.svelte', 'Panel'],
+	['src/lib/components/WindowCoverage.svelte', 'WindowCoverage'],
 	['src/lib/components/TargetBar.svelte', 'TargetBar'],
 	['src/lib/components/ShapeSwitch.svelte', 'ShapeSwitch'],
 	['src/lib/components/RankedList.svelte', 'RankedList'],

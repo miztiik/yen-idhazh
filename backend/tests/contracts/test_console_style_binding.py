@@ -77,6 +77,7 @@ def test_real_css_producer_substitutes_nondefault_style_without_changing_reader_
     reader, operator = css.split("/* The selector includes the outer canvas", 1)
     assert "--console-" not in reader
     assert "--color-bg:" not in reader
+    assert "--chart-measure:" not in reader
     assert "--color-bg: #1a1a18;" in operator
     assert "--color-bg: #f3f2ee;" in operator
     assert "--console-small-size: 0.875rem;" in operator
@@ -84,3 +85,5 @@ def test_real_css_producer_substitutes_nondefault_style_without_changing_reader_
     assert "--console-rail-width: 13rem;" in operator
     assert "--console-chart-grid-dash: 2 4;" in operator
     assert "--series-1: var(--chart-1);" in operator
+    assert f"--chart-measure: {style.colors.light.chart_measure};" in operator
+    assert f"--chart-measure: {style.colors.dark.chart_measure};" in operator

@@ -5,6 +5,7 @@
 	import Reserved from '$lib/components/Reserved.svelte';
 	import type { PanelState } from '../waiting';
 	import FailureList from '$lib/components/FailureList.svelte';
+	import WindowCoverage from '$lib/components/WindowCoverage.svelte';
 	import { failureRuleRows } from '../failure-rules';
 	import type { TimeWindow } from '$lib/charts/viewport';
 	import { emptyState } from '$lib/charts/d3/empty';
@@ -16,11 +17,13 @@
 	import type { ConsoleConfig, ChartConfig } from '$lib/server/config';
 	import { formatNumber } from '$lib/number-format';
 	import { useNumberFormat } from '$lib/number-format-context';
-	let { rows, ruleRows, knobs, chart, rule, calendar, nativeState, rulesState, rulesWindow }: {
+	let { rows, ruleRows, knobs, chart, rule, calendar, nativeState, rulesState, rulesWindow, ruleCoverage = null, commonCoverage = null }: {
 		rows: Row[]; ruleRows: Row[]; knobs: ConsoleConfig; chart: ChartConfig; rule: ModelRule;
 		calendar?: readonly string[];
 		nativeState: PanelState; rulesState: PanelState;
 		rulesWindow: TimeWindow;
+		ruleCoverage?: TimeWindow | null;
+		commonCoverage?: TimeWindow | null;
 	} = $props();
 	const numberFormat = useNumberFormat();
 	const frame = useChartFrame(() => chart);
@@ -45,12 +48,13 @@
 	{width} height={knobs.chart_height} readout={geometry === null ? null : { ...geometry.readout, columns: geometry.dates.map(shortDate) }} readoutMaxShare={chart.readout_max_share} />
 </Reserved>
 <Reserved record panelState={rulesState} height={knobs.chart_height} width={knobs.chart_width} name="failed-rule" label="Native failed-rule readings">
+<WindowCoverage span={ruleCoverage} common={commonCoverage} source="Failure rule ranking" />
 {#if failed.stages.length > 0}
 	<FailureList {ranking} stages={{ options: failed.stages, chosen: failed.chosenStage! }}
 		window={rulesWindow} max={knobs.failure_list_max}
 		readoutMaxShare={chart.readout_max_share} />
 {:else}
-	<p>No recorded row failed at any stage in this window.</p>
+	<p>No recorded failures to rank.</p>
 {/if}
 </Reserved>
 </div>

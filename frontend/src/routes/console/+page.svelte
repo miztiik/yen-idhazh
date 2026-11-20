@@ -4,6 +4,8 @@
 	import { consoleKnobs, routeConsole, routeKnobs } from '$lib/console/route-console';
 	import { rangeFor, routeReach, sliceOnce, retryAsks, type PanelQuery, type Range, type RouteReach } from '$lib/console/queries/window';
 	import { pipelinesRecord, retryReach } from '$lib/console/pipelines/record-window';
+	import { recordWindowBounds } from '$lib/console/waiting';
+	import { rangeBounds } from '$lib/console/window-coverage';
 	import { PIPELINES_QUERY_GROUPS } from '$lib/console/pipelines/query-groups';
 	import * as queries from '$lib/console/queries/pipelines';
 	import { settingsRules } from '$lib/console/settings-moved';
@@ -17,6 +19,7 @@
 	import Reserved from '$lib/components/Reserved.svelte';
 	import RouteStatus from '$lib/components/RouteStatus.svelte';
 	import WindowControlSource from '$lib/components/WindowControlSource.svelte';
+	import WindowCoverage from '$lib/components/WindowCoverage.svelte';
 	import AtAGlance from '$lib/console/pipelines/AtAGlance.svelte';
 	import RunHealth from '$lib/console/pipelines/RunHealth.svelte';
 	import SiteCostPerItem from '$lib/console/pipelines/SiteCostPerItem.svelte';
@@ -67,6 +70,7 @@
 	const settings = $derived(settingsRules(data, { from: viewport.start, to: viewport.end }, 'none'));
 	const charts = $derived(data.charts.filter((day) => day.date >= viewport.start && day.date <= viewport.end));
 	const record = $derived(recordReady ? pipelinesRecord(reach, windowDays) : null);
+	const packedWindow = $derived(recordWindowBounds(record));
 
 	async function ask(selected: readonly PanelQuery[], retryWindow = false, days = windowDays) {
 		if (selected.length === 0) return;
@@ -129,6 +133,9 @@
 		const range = ranges[query.name];
 		return range === undefined ? viewport : { start: range.from, end: range.to };
 	}
+	function coverage(query: PanelQuery) {
+		return ['ready', 'quiet'].includes(panelState(query)) ? rangeBounds(ranges[query.name]) : null;
+	}
 	function queryRule(query: PanelQuery) {
 		const span = queryWindow(query);
 		return settingsRules(data, { from: span.start, to: span.end }, 'none');
@@ -145,12 +152,12 @@
 		'at-a-glance': 'At a glance', 'run-health': 'Run health', 'site-cost-per-item': 'What one more article costs',
 		'failure-mix': 'What is failing, by stage', 'item-time-split': "Where an item's time went",
 		'stage-timings': 'Time per item by stage',
-		'write-cost': 'What one summary cost', 'run-timeline': 'Recorded article timings by shard',
+		'write-cost': 'What one summary cost', 'run-timeline': 'Article timings by recorded shard',
 		'tail-trend': 'Model processing time by run',
 		'slowest-articles': 'Longest article work in the latest recorded run',
 		'chart-drawing': 'Visuals drawn for articles',
 		'visual-refusals': 'Recorded refusal reasons over time',
-		'article-age': 'Article age when processing began'
+		'article-age': 'Article age at processing start'
 	};
 	const panelQueries: Record<string, PanelQuery> = {
 		'failure-mix': queries.failureMixQuery, 'item-time-split': queries.itemTimeSplitQuery,
@@ -174,8 +181,9 @@
 					{@const answer = answers[queries.tailTrendQuery.name]}
 					{@const range = ranges[queries.tailTrendQuery.name]}
 					<RecordFrame {id} title={titles[id]} heading="h2" state={answer === 'pending' ? 'loading' : answer.state}
-						height={knobs.chart_height} width={knobs.chart_width} {retry} {range}
+						height={knobs.chart_height} width={knobs.chart_width} {retry}
 						windowed={{ name: 'machine-latency', days: windowDays }}>
+						{#snippet coverage()}<WindowCoverage span={rangeBounds(range)} common={packedWindow} />{/snippet}
 						{#if range !== undefined}
 							<TailTrendPanel rows={rows(queries.tailTrendQuery)} {range} shell={data} chart={data.chart}
 								{windowDays} floor={knobs.min_attempts_for_rate} />
@@ -197,17 +205,20 @@
 						{:else if id === 'chart-drawing'}
 							<ChartDrawing days={charts} {windowDays} {knobs} />
 						{:else if id === 'visual-refusals'}
-							<VisualRefusals days={data.visualAttempts.days} read={data.visualAttempts.read} window={attemptWindow ?? viewport} {knobs} chart={data.chart} />
+							<VisualRefusals days={data.visualAttempts.days} read={data.visualAttempts.read} window={attemptWindow ?? viewport} common={publishedWindow} {knobs} chart={data.chart} />
 						{:else if id === 'run-timeline'}
 							<RunTimeline {knobs} chart={data.chart} answer={answers[queries.runTimelineQuery.name]} />
 						{:else if id === 'failure-mix'}
+							<WindowCoverage span={coverage(queries.failureMixQuery)} common={packedWindow} />
 							<FailureMix rows={rows(queries.failureMixQuery)} ruleRows={rows(queries.failedRuleQuery)}
 								nativeState={panelState(queries.failureMixQuery)} rulesState={panelState(queries.failedRuleQuery)}
 								rulesWindow={queryWindow(queries.failedRuleQuery)}
+								ruleCoverage={coverage(queries.failedRuleQuery)} commonCoverage={coverage(queries.failureMixQuery) ?? packedWindow}
 								calendar={calendar(queries.failureMixQuery)} {knobs} chart={data.chart} rule={queryRule(queries.failureMixQuery)} />
 							{#each [...new Set(notes)] as note}<p data-record-note>{note}</p>{/each}
 						{:else if panelQueries[id] !== undefined}
 							{@const query = panelQueries[id]}
+							{#if id !== 'slowest-articles'}<WindowCoverage span={coverage(query)} common={packedWindow} />{/if}
 							<Reserved record panelState={panelState(query)} height={knobs.chart_height} width={knobs.chart_width} name={id} label={titles[id]}>
 								{#if id === 'item-time-split'}
 									<ItemTimeSplit rows={rows(query)} calendar={calendar(query)} {knobs} chart={data.chart} rule={queryRule(query)} />
@@ -221,10 +232,6 @@
 									<SlowestArticles rows={rows(query)} chart={data.chart} limit={ranking.slowest_articles_rows} />
 								{/if}
 							</Reserved>
-						{/if}
-						{#if panelQueries[id] !== undefined && ranges[panelQueries[id].name] !== undefined}
-							{@const range = ranges[panelQueries[id].name]}
-							<p data-native-window data-range-from={range.from} data-range-to={range.to}>Native record: {range.from} through {range.to} UTC.</p>
 						{/if}
 						</div>
 					</Panel>

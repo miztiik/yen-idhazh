@@ -3,14 +3,14 @@
 	export { rangeTrack, endsTrack };
 </script>
 
-{#snippet rangeTrack(mark: RangeMark, token = '--chart-2', classes = '')}
+{#snippet rangeTrack(mark: RangeMark, token = '--chart-measure', classes = '')}
 	<span class="range-fill chart-bar {classes}" style="inline-size: {mark.medianWidth}; background: var({token})"></span>
 	{#if mark.max !== null}
 		<span class="range-notch" style="inset-inline-start: {mark.notchWidth}"></span>
 	{/if}
 {/snippet}
 
-{#snippet endsTrack(valuePercent: string, endPercent: string | null, vertical = false, outlined = false, token = '--chart-3')}
+{#snippet endsTrack(valuePercent: string, endPercent: string | null, vertical = false, outlined = false, token = '--chart-measure')}
 	<span class:vertical class:outlined class="ends-fill bar floor chart-bar" style="{vertical ? `block-size: ${valuePercent}` : `inline-size: ${valuePercent}`}; background: var({token})"></span>
 	{#if endPercent !== null}
 		<span class:vertical class="ends-notch notch" style={vertical ? `inset-block-end: ${endPercent}` : `inset-inline-start: ${endPercent}`}></span>
@@ -146,9 +146,9 @@
 						{:else if track}
 							{@render track(row)}
 						{:else if row.range}
-							<span class="ranked-range">{@render rangeTrack(row.range, '--chart-1')}</span>
+							<span class="ranked-range">{@render rangeTrack(row.range)}</span>
 						{:else if row.ends}
-							<span class="ranked-range">{@render endsTrack(row.ends.valuePercent, row.ends.endPercent, false, false, '--chart-1')}</span>
+							<span class="ranked-range">{@render endsTrack(row.ends.valuePercent, row.ends.endPercent)}</span>
 						{:else if row.segments.length > 0}
 							<span class="ranked-parts chart-bar-stack" style:--chart-filled-width={row.percent}>
 								{#each row.segments.filter((part) => part.value > 0) as part (part.label)}
@@ -188,7 +188,7 @@
 <style>
 	.range-fill { display: block; block-size: 100%; }
 	.range-notch { position: absolute; inset-block: 0; inline-size: 2px; background: var(--chart-marker); transform: translateX(-1px); }
-	.ends-fill { display: block; block-size: 100%; background: var(--chart-3); }
+	.ends-fill { display: block; block-size: 100%; background: var(--chart-measure); }
 	.ends-fill.vertical { inline-size: 100%; }
 	.ends-fill.outlined { outline: 1px solid var(--color-text); outline-offset: 0; }
 	.ends-notch { position: absolute; inset-block: 0; inline-size: 2px; background: var(--color-text); }
@@ -364,7 +364,7 @@
 		display: block;
 		block-size: 100%;
 		border-radius: var(--radius-full);
-		background: var(--chart-1);
+		background: var(--chart-measure);
 	}
 
 	.ranked-trend {

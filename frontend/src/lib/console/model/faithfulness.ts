@@ -14,7 +14,7 @@ export function faithfulness(
 	return {
 		days, floor, rules: matchRules(thresholds, floor), wider: widerNote(days, numberFormat),
 		series: [{
-			label: 'Median (p50)', token: '--chart-1' as const, unit: '%',
+			label: 'Median (p50)', token: '--chart-measure' as const, unit: '%',
 			spreadLabels: { low: 'Lower quartile (p25)', high: 'Upper quartile (p75)' },
 			points: days.map((day) => ({
 				date: day.date, value: day.matchMid,

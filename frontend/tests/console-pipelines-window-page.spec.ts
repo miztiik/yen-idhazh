@@ -196,6 +196,7 @@ test('lagging native endpoints do not move private published-day evidence', asyn
 	const publishedDay = document.match(/data-glance[^>]*data-range-to="([^"]+)"/)?.[1];
 	if (publishedDay === undefined) throw new Error('The prerendered route must name its published-day window.');
 	const nativeThrough = dayBefore(publishedDay, 2);
+	const scoreThrough = dayBefore(nativeThrough, 1);
 	const nativeWeek = windowOfDays(nativeThrough, 7, 'right');
 	const dates = Array.from({ length: 10 }, (_, at) => dayBefore(publishedDay, 9 - at));
 	const item = Object.fromEntries(ITEM_HEALTH_COLUMNS.map((column) => [column, null]));
@@ -208,7 +209,7 @@ test('lagging native endpoints do not move private published-day evidence', asyn
 					published_at: new Date(Date.parse(`${date}T12:00:00Z`) - (index + 1) * 3_600_000).toISOString() })
 			}))
 		})),
-		dates.filter((date) => date <= nativeThrough).map((date) => ({
+		dates.filter((date) => date <= scoreThrough).map((date) => ({
 			covers: date, rows: [{ ...score, date, url_key: 'fixture-url', extraction_suspect: false }]
 		})));
 	await servePipelines(page, root);
@@ -223,8 +224,11 @@ test('lagging native endpoints do not move private published-day evidence', asyn
 	await expect(page.locator('[data-private-window]')).toHaveAttribute('data-range-to', publishedDay);
 	await expect(page.locator('[data-private-window]')).toContainText('Published charts:');
 	await expect(page.locator('[data-console-data-dates]')).toContainText('not live raw files');
-	await expect(page.locator('[data-windowed="item-time-split"] [data-native-window]'))
-		.toContainText(`${nativeWeek.start} through ${nativeWeek.end} UTC`);
+	await expect(page.locator('[data-windowed="item-time-split"] [data-coverage-exception]')).toHaveCount(0);
+	const writeCoverage = page.locator('[data-console-panel-id="write-cost"] [data-coverage-exception]');
+	await expect(writeCoverage).toHaveCount(1);
+	await expect(writeCoverage).toContainText('Older records only:');
+	await expect(writeCoverage).toHaveAttribute('data-range-to', scoreThrough);
 	await expect(page.locator(`[data-published-bar="${publishedDay}"]`).first()).toBeVisible();
 	await page.locator('[data-console-panel-id="article-age"]').scrollIntoViewIfNeeded();
 	const age = page.locator('[data-chart-name="article-age"]');
@@ -248,15 +252,17 @@ test('lagging native endpoints do not move private published-day evidence', asyn
 	await expect(page.locator('[data-private-window]')).toHaveAttribute('data-range-from', publishedDay);
 	await expect(page.locator('[data-private-window]')).toHaveAttribute('data-range-to', publishedDay);
 	await expect(page.locator('[data-window-status]')).toHaveText(`Main packed window: ${shortDate(nativeThrough)} UTC.`);
-	await expect(page.locator('[data-windowed="item-time-split"] [data-native-window]'))
-		.toContainText(`${nativeThrough} through ${nativeThrough} UTC`);
-	await expect(page.locator('[data-console-panel-id="article-age"] h2')).toHaveText('Article age when processing began');
+	await expect(page.locator('[data-windowed="item-time-split"] [data-coverage-exception]')).toHaveCount(0);
+	await expect(page.locator('[data-console-panel-id="article-age"] h2')).toHaveText('Article age at processing start');
 	await page.locator('a[href*="/console/model/"]').first().click();
 	await expect(page.locator('[data-console-panels="model"]')).not.toHaveAttribute('data-route-state', 'loading');
 	await expect(page.locator('[data-private-window]')).toHaveAttribute('data-range-from', publishedDay);
 	await expect(page.locator('[data-private-window]')).toHaveAttribute('data-range-to', publishedDay);
-	await expect(page.locator('[data-model-query="model-throughput"] [data-native-window]'))
-		.toContainText(`${nativeThrough} through ${nativeThrough} UTC`);
+	await expect(page.locator('[data-window-status]')).toHaveAttribute('data-range-to', scoreThrough);
+	await expect(page.locator('[data-model-query="model-throughput"] [data-coverage-exception]')).toHaveCount(0);
+	const itemCoverage = page.locator('[data-model-query="item-cost"] [data-coverage-exception]');
+	await expect(itemCoverage).toHaveCount(1);
+	await expect(itemCoverage).toHaveText(`Later records: ${shortDate(nativeThrough)} UTC.`);
 	await expect(page.locator('[data-model-cards]')).toHaveAttribute('data-model-cards-from', publishedDay);
 	await expect(page.locator('[data-model-cards]')).toHaveAttribute('data-model-cards-to', publishedDay);
 });

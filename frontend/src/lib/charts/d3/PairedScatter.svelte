@@ -87,7 +87,7 @@
 			{/if}
 		{/each}
 		{#each geometry.marks as mark, index (index)}
-			<circle cx={mark.cx} cy={mark.cy} r={DOT} fill="none" stroke="var(--chart-1)" aria-label={`${mark.label}: ${mark.x}, ${mark.y}`} data-readout-at={index} />
+			<circle cx={mark.cx} cy={mark.cy} r={DOT} fill="none" stroke="var(--chart-measure)" aria-label={`${mark.label}: ${mark.x}, ${mark.y}`} data-readout-at={index} />
 		{/each}
 	</svg>
 	{@const shown = records[selected ?? resting]}

@@ -6,9 +6,13 @@
 	import { recordEmptyState } from '../../charts/d3/empty';
 	import { modelSlice } from './slice';
 	import { noRecordSentence, setAsideSentence } from '../recording';
+	import type { TimeWindow } from '$lib/charts/viewport';
+	import { rangeBounds } from '../window-coverage';
+	import WindowCoverage from '$lib/components/WindowCoverage.svelte';
 
-	let { queries, reach, preset, presets, retry, height, width, name, onAnswer, children }: {
+	let { queries, reach, common, preset, presets, retry, height, width, name, onAnswer, children }: {
 		queries: readonly PanelQuery[]; reach: RouteReach | null; preset: number; presets: readonly number[];
+		common: TimeWindow | null;
 		retry: number; height: number; width: number; name: string;
 		onAnswer: (name: string, answer: SliceResult | LedgerReach | 'pending') => void;
 		children: Snippet<[readonly Row[][], Range]>;
@@ -46,9 +50,6 @@
 			notes = results.flatMap(({ answer, selected }, index) => {
 				if ((answer.state !== 'ok' && answer.state !== 'quiet') || !('rows' in answer) || !('from' in selected)) return [];
 				const lines: string[] = [];
-				const first = Object.values(currentReach.ledgers).flatMap((ledger) => ledger?.state === 'ok' ? [ledger.first] : []).sort()[0];
-				const own = currentReach.ledgers[asked[index].ledger];
-				if (first !== undefined && own?.state === 'ok' && own.first > first) lines.push(`Recorded from ${own.first}; earlier days on this page have no ${asked[index].ledger} record.`);
 				if (answer.lostDays.length) lines.push(noRecordSentence('This record', answer.lostDays, (days) => `these figures do not show ${days}`));
 				const aside = setAsideSentence('This record', asked[index].ledger, answer.setAside, 'these figures');
 				if (aside !== null) lines.push(aside);
@@ -62,15 +63,15 @@
 <div data-readout-fetched={queries.map((query) => query.ledger).join(' ')} data-model-query={name}
 	data-query-state={panelState} data-query-asked={range?.asked} data-window-days={range?.days}
 	data-range-from={range?.from} data-range-to={range?.to}>
+	{#if panelState === 'ready' || panelState === 'quiet'}
+		<WindowCoverage span={rangeBounds(range)} {common} />
+	{/if}
 	{#if panelState === 'ready'}
 		{#if range !== null}
 			{@render children(rows, range)}
 		{/if}
 	{:else}
 		<EmptyState drawing={recordEmptyState(panelState)} {height} {width} {name} label={name} />
-	{/if}
-	{#if range !== null}
-		<p data-native-window data-range-from={range.from} data-range-to={range.to}>Native record: {range.from} through {range.to} UTC.</p>
 	{/if}
 	{#each notes as note}<p data-record-note>{note}</p>{/each}
 </div>

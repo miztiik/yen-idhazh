@@ -8,6 +8,7 @@
 	import { consoleKnobs, holdoutAxisRules, routeConsole } from '$lib/console/route-console';
 	import { judgementEvidence } from '$lib/console/judgement-evidence';
 	import WindowControlSource from '$lib/components/WindowControlSource.svelte';
+	import WindowCoverage from '$lib/components/WindowCoverage.svelte';
 	import PanelGroup from '$lib/components/PanelGroup.svelte';
 	import MergedStoriesPanel from './MergedStoriesPanel.svelte';
 	import HoldoutMargin from './HoldoutMargin.svelte';
@@ -44,6 +45,13 @@
 	const publishedWindow = $derived(windowFromDates(data.merges.map((day) => day.date), windowDays));
 	const viewport = $derived(publishedWindow ?? windowOfDays(data.windowDay, windowDays, 'right'));
 	const markNotes = $derived(judgementEvidence(data.holdout.read, data.holdout.reach, data.holdout.reach));
+	const markSpan = $derived.by(() => {
+		const { read, reach } = data.holdout;
+		if (read.state !== 'read') return null;
+		const start = read.first > reach.start ? read.first : reach.start;
+		const end = read.through < reach.end ? read.through : reach.end;
+		return start <= end ? { start, end } : null;
+	});
 </script>
 
 <svelte:head>
@@ -78,6 +86,8 @@
 
 	{:else if id === 'holdout-margin'}
 	<HoldoutMargin
+		coverage={markSpan}
+		commonCoverage={publishedWindow}
 		marks={data.holdout.read.state === 'read' ? data.holdout.marks : null}
 		agreedScores={data.holdout.read.state === 'read' ? data.holdout.agreedScores : null}
 		evidence={markNotes}

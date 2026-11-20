@@ -332,7 +332,7 @@
 		position: absolute;
 		inset-block: 2px;
 		border-radius: var(--radius-sm);
-		background: color-mix(in oklch, var(--chart-1) var(--chart-spread-mix), transparent);
+		background: color-mix(in oklch, var(--chart-measure) var(--chart-spread-mix), transparent);
 		opacity: 0.55;
 	}
 
@@ -341,7 +341,7 @@
 		inset-block: 0;
 		inline-size: 2px;
 		margin-inline-start: -1px;
-		background: var(--color-accent-strong);
+		background: var(--chart-measure);
 	}
 
 	.zero {

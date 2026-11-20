@@ -48,14 +48,14 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'SourceCutRange.svelte', 'SourceLink.svelte', 'SourceMark.svelte', 'Sparkline.svelte',
 		'StageTimings.svelte', 'StatusChip.svelte', 'TargetBar.svelte',
 		'ThemeToggle.svelte', 'ThroughputTrend.svelte', 'TimeHistogram.svelte',
-		'WindowControl.svelte', 'WindowControlSource.svelte', 'WindowStatus.svelte'
+		'WindowControl.svelte', 'WindowControlSource.svelte', 'WindowCoverage.svelte', 'WindowStatus.svelte'
 	],
 	'src/lib/console': [
 		'band.ts', 'chrome.ts', 'completeness.ts', 'console-style.ts', 'daily-figures.ts',
 		'duration-cohort.ts', 'eval-instruments.ts', 'failure-rules.ts',
 		'holdout.ts', 'judgement-evidence.ts', 'merged-stories.ts', 'model-cards.ts',
 		'query-state.ts', 'rates.ts', 'recording.ts', 'RecordNotes.svelte', 'route-console.ts', 'run-square.ts', 'series-tokens.ts',
-		'settings-moved.ts', 'span-words.ts', 'TimeCost.svelte', 'waiting.ts', 'window-preference.ts', 'window-slot.ts'
+		'settings-moved.ts', 'span-words.ts', 'TimeCost.svelte', 'waiting.ts', 'window-coverage.ts', 'window-preference.ts', 'window-slot.ts'
 	],
 	'src/lib/console/queries': ['machine.ts', 'model.ts', 'pipelines.ts', 'shared.ts', 'voices.ts', 'window.ts'],
 	'src/lib/console/pipelines': [

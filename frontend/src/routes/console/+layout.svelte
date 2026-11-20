@@ -14,6 +14,8 @@
 	import { consoleHoverReadout, consoleKnobs, routeConsole } from '$lib/console/route-console';
 	import { completenessOf, completenessSentence, untilNextUtcDay } from '$lib/console/completeness';
 	import { provideWindowSlot, type WindowSource } from '$lib/console/window-slot';
+	import { recordWindowBounds } from '$lib/console/waiting';
+	import { sameBounds, utcSpan } from '$lib/console/window-coverage';
 	import { createWindowPreference } from '$lib/console/window-preference';
 	import { provideNumberFormat } from '$lib/number-format-context';
 	import { provideChartLabels, measureChartLabels } from '$lib/charts/label-context';
@@ -43,6 +45,8 @@
 		route: active, days: chosen, presets: configured.window_presets, busy: false, ready: false,
 		statusLine: null, monthsFor: () => 0, onChange: preference.select
 	});
+	const combined = $derived(windowSource.ready &&
+		sameBounds(windowSource.publishedWindow ?? null, recordWindowBounds(windowSource.record ?? null)));
 	let labels = $state.raw<ChartLabels | null>(null);
 	provideChartLabels(() => labels);
 
@@ -101,27 +105,23 @@
 		{#if !workbench}
 			<div class="console-window-evidence">
 				<div class="console-date-readings">
-					{#if windowSource.publishedWindow}
+					{#if windowSource.publishedWindow && !combined}
 						{@const span = windowSource.publishedWindow}
 						<p data-private-window data-range-from={span.start} data-range-to={span.end}>
-							Published charts: {shortDate(span.start)}{span.start === span.end ? '' : ` - ${shortDate(span.end)}`} UTC.
+							Published charts: {utcSpan(span)}.
 						</p>
 					{/if}
 					{#if windowSource.record || windowSource.statusLine || !windowSource.publishedWindow}
 						<WindowStatus days={windowSource.days} presets={windowSource.presets}
 							monthsFor={windowSource.monthsFor} busy={windowSource.busy} ready={windowSource.ready}
 							statusLine={windowSource.statusLine ?? null} record={windowSource.record ?? null}
-							recordLabel="Main packed window" />
+							recordLabel={combined ? 'Published charts and packed records' : 'Main packed window'} />
 					{/if}
 				</div>
 				<details class="console-data-dates" data-console-data-dates>
 					<summary>Data sources</summary>
 					<div class="console-date-readings">
-						{#if windowSource.publishedWindow}
-							<p>Published counts and private chart inputs are included when the site is built. Browser-loaded charts read staged compact ledgers, not live raw files. Each panel names its own dates when they differ from the main packed window.</p>
-						{:else}
-							<p>Browser-loaded charts read staged compact ledgers, not live raw files. Private chart inputs are included when the site is built. Each panel names its own dates when they differ from the main packed window.</p>
-						{/if}
+						<p>Published charts use data included at build time. Browser-loaded charts read packed records, not live raw files. A panel names dates only when they differ from its shared window.</p>
 						{#if completeness.kind !== 'unread'}
 							{@const finished = new Date(completeness.finished).toISOString()}
 							<p>Site built: <time datetime={finished}>{shortDate(finished.slice(0, 10))}, {clockUtc(finished)}</time>.</p>

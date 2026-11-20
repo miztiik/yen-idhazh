@@ -1,14 +1,13 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import type { Range } from '../queries/window';
 	import { countDays } from '../span-words';
 	import Panel from '$lib/components/Panel.svelte';
 	import Reserved from '$lib/components/Reserved.svelte';
-	let { id, title, state, height, width, children, retry, heading = 'h3', range, windowed }: {
+	let { id, title, state, height, width, children, retry, heading = 'h3', coverage, windowed }: {
 		id: string; title: string; state: 'loading' | 'ok' | 'quiet' | 'missing' | 'unreachable';
 		height: number; width: number; children: Snippet; retry: () => void;
 		heading?: 'h2' | 'h3';
-		range?: Range;
+		coverage?: Snippet;
 		windowed?: { name: string; days: number };
 	} = $props();
 </script>
@@ -19,6 +18,7 @@
 	data-window-exempt={id === 'memory-held' ? 'newest-run' : undefined}>
 	{#if state === 'ok'}
 		{@render children()}
+		{@render coverage?.()}
 	{:else}
 		<Panel {id} {title} {heading}
 			note={state === 'loading' ? 'Loading the published record for this comparison.' : 'The published record has no usable answer for this comparison.'}>
@@ -31,9 +31,7 @@
 				</Reserved>
 				{#if state === 'unreachable'}<button type="button" onclick={retry}>Try this record again</button>{/if}
 			</div>
-			{#if range !== undefined}
-				<p data-native-window data-range-from={range.from} data-range-to={range.to}>Native record: {range.from} through {range.to} UTC.</p>
-			{/if}
+			{#if state === 'quiet'}{@render coverage?.()}{/if}
 		</Panel>
 	{/if}
 </div>

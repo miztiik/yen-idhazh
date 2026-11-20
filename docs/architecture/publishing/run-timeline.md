@@ -42,6 +42,8 @@ views. The displayed shard count is the size of that set, with no row cap or
 assumption that IDs are contiguous. It is not the current configuration's
 dispatch count. A worker with no recorded item identity cannot be reconstructed
 or timed from these rows; no placeholder or zero reading fills that absence.
+The panel puts the run and its recorded shard count above the plot and says
+that workers without linked article records are not listed.
 The selected run comes from the newest packed item-health day, which can be
 earlier than the newest published day elsewhere on the route.
 

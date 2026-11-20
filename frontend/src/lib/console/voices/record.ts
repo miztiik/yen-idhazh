@@ -21,7 +21,6 @@ export function datesOf(range: Range): string[] {
 export function evidenceOf(answer: Answer, range: Range | null): string[] {
 	if (answer === 'pending' || !('rows' in answer) || (answer.state !== 'ok' && answer.state !== 'quiet') || range === null) return [];
 	const notes: string[] = [];
-	if (range.days < range.asked) notes.push(`Only ${range.days} of the ${range.asked} requested days are recorded, from ${range.from}.`);
 	if (answer.through !== null && answer.through < range.to) notes.push(`The record stops on ${answer.through}; later days are not quiet days.`);
 	if (answer.lostDays.length > 0) notes.push(`${answer.lostDays.length} days lost their record: ${answer.lostDays.join(', ')}.`);
 	const missing = Object.values(answer.setAside).reduce((sum, count) => sum + count, 0);

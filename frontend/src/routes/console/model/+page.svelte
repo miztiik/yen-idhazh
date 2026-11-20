@@ -9,9 +9,11 @@
 	import { settingsRules } from '$lib/console/settings-moved';
 	import { windowFromDates, windowOfDays } from '$lib/charts/viewport';
 	import { nameSpan } from '$lib/console/span-words';
+	import { recordWindowBounds } from '$lib/console/waiting';
 	import RecordNotes from '$lib/console/RecordNotes.svelte';
 	import RouteStatus from '$lib/components/RouteStatus.svelte';
 	import WindowControlSource from '$lib/components/WindowControlSource.svelte';
+	import WindowCoverage from '$lib/components/WindowCoverage.svelte';
 	import Panel from '$lib/components/Panel.svelte';
 	import PanelGroup from '$lib/components/PanelGroup.svelte';
 	import Cards from '$lib/console/model/Cards.svelte';
@@ -34,10 +36,13 @@
 	const allAnswers = $derived(doorIds.map((id) => answers[id] ?? 'pending'));
 	const tally = $derived(tallyAsks(allAnswers));
 	const first = $derived(reach === null ? null : Object.values(reach.ledgers).flatMap((r) => r?.state === 'ok' ? [r.first] : []).sort()[0] ?? null);
+	const record = $derived({ asked: windowDays, first, through: reach?.through ?? null });
+	const packedWindow = $derived(recordWindowBounds(record));
 	const publishedWindow = $derived(windowFromDates(data.publishedDates, windowDays));
 	const span = $derived(publishedWindow ?? windowOfDays(data.windowDay, windowDays, 'right'));
-	const cardSpan = $derived(windowFromDates(Object.values(data.cardReads).flatMap((read) =>
-		read.state === 'read' ? [read.first, read.through] : []), windowDays) ?? span);
+	const cardCoverage = $derived(windowFromDates(Object.values(data.cardReads).flatMap((read) =>
+		read.state === 'read' ? [read.first, read.through] : []), windowDays));
+	const cardSpan = $derived(cardCoverage ?? span);
 	const shell = $derived(data);
 	const cardRule = $derived(settingsRules(shell, { from: cardSpan.start, to: cardSpan.end }, 'none', nameSpan(windowDays)));
 	const recording = $derived(data.recordingNotes[String(windowDays)]);
@@ -83,7 +88,7 @@
 </svelte:head>
 
 <WindowControlSource route="model" days={windowDays} presets={knobs.window_presets} {ready} busy={tally.state === 'loading'}
-	record={{ asked: windowDays, first, through: reach?.through ?? null }} {publishedWindow} monthsFor={() => 0} onChange={show} />
+	{record} {publishedWindow} monthsFor={() => 0} onChange={show} />
 <RouteStatus route="model" answers={allAnswers} days={windowDays} through={reach?.through ?? null}
 	recordScope="Native record"
 	shimmerAfterMs={knobs.shimmer_after_ms} onRetry={retryFailed}>
@@ -102,11 +107,12 @@
 					note={id === 'model-cards' ? "Model work and summary checks for each recorded day's articles." : null}>
 					<div data-panel-question={titles[id]}>
 					{#if id === 'model-cards'}
+						<WindowCoverage span={cardCoverage} common={publishedWindow} />
 						<Cards days={data.cardDays} reads={data.cardReads} instruments={data.instruments} start={cardSpan.start} end={cardSpan.end}
 							rule={cardRule} chart={data.chart} {windowDays} />
 					{:else if id in panelQueries}
 						{#if id === 'faithfulness'}<a href={data.faithfulnessReference}>How each of these measures is scored</a>{/if}
-						<Query queries={panelQueries[id]} reach={id === 'item-cost' ? itemCostReach : reach} preset={windowDays} presets={knobs.window_presets}
+						<Query queries={panelQueries[id]} reach={id === 'item-cost' ? itemCostReach : reach} common={packedWindow} preset={windowDays} presets={knobs.window_presets}
 							retry={id === 'item-cost' ? 0 : retry} height={knobs.chart_height} width={knobs.chart_width} name={id}
 							onAnswer={(name, answer) => { answers[name] = answer; }}>
 							{#snippet children(rows, range)}
