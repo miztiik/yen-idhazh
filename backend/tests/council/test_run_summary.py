@@ -68,6 +68,8 @@ def unit(
     judge: str = "one-judge",
     *,
     date: str = DATE,
+    shard: int = 0,
+    shards: int = 1,
     outcome: ShardOutcome | str = ShardOutcome.COMPLETED,
     step: EvaluationStep = EvaluationStep.EVALUATE_WORK_PART,
 ) -> UnitFinished:
@@ -77,19 +79,26 @@ def unit(
             "run_id": RUN,
             "judge_id": judge,
             "evaluation_step": step,
-            "work_part_index": 0 if step is EvaluationStep.EVALUATE_WORK_PART else None,
-            "work_part_count": 1,
+            "work_part_index": shard if step is EvaluationStep.EVALUATE_WORK_PART else None,
+            "work_part_count": shards,
             "outcome": outcome,
         }
     )
 
 
-def matrix(*judges: str, dates: tuple[str, ...] = (DATE,)) -> str:
+def matrix(*judges: str, dates: tuple[str, ...] = (DATE,), shards: int = 1) -> str:
     return json.dumps(
         [
-            {"tenant": judge, "date": date, "shard": 0, "shards": 1, "runs_model": False}
+            {
+                "tenant": judge,
+                "date": date,
+                "shard": shard,
+                "shards": shards,
+                "runs_model": False,
+            }
             for judge in judges
             for date in dates
+            for shard in range(shards)
         ]
     )
 
@@ -129,39 +138,92 @@ def test_each_exit_has_its_label_and_fixed_sentence(code: CouncilExit, tmp_path:
     assert isinstance(event, ProgramFinished) and event.sentence == code.sentence
 
 
+def test_publication_words_match_their_counts() -> None:
+    report = run_summary.Report(
+        events=[
+            NightPublished(
+                dates=(DATE,),
+                run_id=RUN,
+                landing="landed",
+                pushes=1,
+                writes=1,
+                code=CouncilExit.OK,
+            )
+        ]
+    )
+    assert "Publication: `landed`; 1 write; 1 push." in report.markdown()
+
+
 def test_each_judge_date_and_stage_is_reported_and_grouped_once(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     dates = (DATE, "2026-10-09")
+    judges = ("first-judge", "second-judge")
+    shards = 4
     root = tmp_path / "events"
-    for cell in run_summary.cells(matrix("first-judge", "second-judge", dates=dates)):
+    for cell in run_summary.cells(matrix(*judges, dates=dates, shards=shards)):
         write_events(
             cell.event_path(root),
-            unit(cell.tenant, date=cell.date),
+            unit(
+                cell.tenant,
+                date=cell.date,
+                shard=cell.shard,
+                shards=cell.shards,
+            ),
             ProgramFinished(program=CouncilProgram.SHARD, code=CouncilExit.OK),
         )
     write_events(
         root / "planner.jsonl",
-        unit("first-judge", step=EvaluationStep.SELECT_JUDGE_WORK),
+        *(
+            unit(
+                judge,
+                date=date,
+                shards=shards,
+                step=EvaluationStep.SELECT_JUDGE_WORK,
+            )
+            for judge in judges
+            for date in dates
+        ),
     )
     report = run_summary.Report(
         events=[
-            unit("second-judge", step=EvaluationStep.COMBINE_JUDGE_RESULTS),
+            *(
+                unit(
+                    judge,
+                    date=date,
+                    shards=shards,
+                    step=EvaluationStep.COMBINE_JUDGE_RESULTS,
+                )
+                for judge in judges
+                for date in dates
+            ),
             *collector(),
         ]
     )
-    report.load(matrix("first-judge", "second-judge", dates=dates), root, RUN)
+    report.load(matrix(*judges, dates=dates, shards=shards), root, RUN)
     assert not report.failed
     path = tmp_path / "summary.md"
     path.write_text("Earlier step.\n", encoding="utf-8", newline="\n")
     report.write(path)
     text = path.read_text("utf-8")
     assert text.startswith("Earlier step.\n") and text.count("### Council night") == 1
-    assert "prepare | completed" in text and "settle | completed" in text
-    for judge in ("first-judge", "second-judge"):
+    assert text.count("#### Judge `") == 2
+    assert text.count("2 of 2 dates completed; 8 of 8 judging jobs completed.") == 2
+    assert text.count("<details>") == 2 and text.count("</details>") == 2
+    first = text.split("#### Judge `first-judge`", 1)[1].split("#### Judge `second-judge`", 1)[0]
+    second = text.split("#### Judge `second-judge`", 1)[1]
+    for letter, judge, section in zip(("A", "B"), judges, (first, second), strict=True):
+        assert f"Table {letter} - `{judge}` by date (UTC)" in section
+        assert f"| {letter}1 | {dates[0]}" in section
+        assert f"| {letter}2 | {dates[1]}" in section
         for date in dates:
-            assert f"`{judge}` | {date} | shard 0 of 1" in text
+            assert f"- {date} prepare: completed" in section
+            for shard in range(shards):
+                assert (
+                    f"- {date} shard {shard} of {shards} (starts at 0): completed; exit 0 `ok`"
+                ) in section
+            assert f"- {date} settle: completed" in section
     commands = capsys.readouterr().out
     assert commands.count("::group::") == 2 and commands.count("::endgroup::") == 2
     assert "::error" not in commands
@@ -186,6 +248,7 @@ def test_missing_failed_and_invalid_reports_are_not_success(
     text = report.markdown()
     assert "**failed**; exit 1 `failed`" in text
     assert "**no report**" in text and "**invalid report**" in text
+    assert text.count("0/1 completed; **1 failed or incomplete**") == 3
     report.write(tmp_path / "summary.md")
     commands = capsys.readouterr().out
     assert commands.count("::error title=") == 3
@@ -203,6 +266,8 @@ def test_prepare_and_settle_failures_get_annotations(
         planning=(unit(step=EvaluationStep.SELECT_JUDGE_WORK, outcome=outcome),),
         events=[unit(step=EvaluationStep.COMBINE_JUDGE_RESULTS, outcome=outcome), *collector()],
     )
+    text = report.markdown()
+    assert " | not run | " in text
     report.write(tmp_path / "summary.md")
     output = capsys.readouterr().out
     assert output.count("::group::one-judge") == 1
@@ -361,10 +426,37 @@ def test_missing_preparation_is_unknown_not_no_work(
         }
     )
     report = run_summary.Report()
+    write_events(
+        tmp_path / "events" / "planner.jsonl",
+        unit(step=EvaluationStep.SELECT_JUDGE_WORK),
+    )
     report.load("[]", tmp_path / "events", RUN, selection=selected)
     assert report.missing_preparations == (("one-judge", DATE),)
     assert report.failed and report.units == ()
-    assert "unknown; no report" in report.markdown()
+    text = report.markdown()
+    assert "0 of 1 date completed" in text
+    assert "unknown; no report" in text
+    assert "judging job count unknown for 1 of 1 date" in text
+    assert "no judging jobs" not in text
+
+
+def test_no_work_date_is_complete_without_judging_jobs() -> None:
+    report = run_summary.Report(
+        planning=(
+            unit(
+                outcome=ShardOutcome.NOTHING_TO_DO,
+                step=EvaluationStep.SELECT_JUDGE_WORK,
+            ),
+        ),
+        events=[
+            unit(
+                outcome=ShardOutcome.NOTHING_TO_DO,
+                step=EvaluationStep.COMBINE_JUDGE_RESULTS,
+            ),
+            *collector(),
+        ],
+    )
+    assert "1 of 1 date completed; no judging jobs." in report.markdown()
 
 
 @pytest.mark.parametrize("layout", ["flat", "named"])
