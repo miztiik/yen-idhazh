@@ -13,6 +13,7 @@
   ],
   "judged": ["source-health", "feeds-failed", "fetch-time", "retiring", "source-cuts", "ranking-discount", "why-chosen"],
   "knobs": {
+    "feed_preview_rows": 3,
     "article_fails_marked": 1,
     "article_fails_named": 3,
     "why_chosen_rows": 20,

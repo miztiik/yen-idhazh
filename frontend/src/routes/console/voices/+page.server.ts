@@ -22,6 +22,7 @@ export async function load() {
 		sourceView: view,
 		retiring: retiring(view, knobs.source_rows),
 		feedInput: feedInput(feeds),
+		publishedOn: day,
 		chart: chartConfig()
 	};
 }

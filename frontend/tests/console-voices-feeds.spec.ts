@@ -4,6 +4,9 @@ import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { chronological, failing, feedDays, resting, settled, streak, type FeedEvent, type FeedRead } from '../src/lib/feed-health';
 import { sourceHealth } from '../src/lib/console/voices/source-health';
+import { feedInput } from '../src/lib/console/voices/feeds-failed';
+import { feedFailurePreview } from '../src/lib/console/voices/feed-failure-preview';
+import type { RecordRead } from '../src/lib/console/recording';
 import type { SourceHealthView } from '../src/lib/server/payload';
 const repo = resolve(process.cwd(), '..');
 const QUARANTINE_AFTER = (JSON.parse(readFileSync(join(repo, 'config', 'idhazh.json'), 'utf8')) as {
@@ -158,6 +161,69 @@ test.describe('THE ORACLE: one result per feed per run, in both languages', () =
                 items: Number(row.get('items') ?? 0) || 0,
                 feedId: row.get('feed_id') ?? ''
             };
+        });
+
+        test.describe('the feed-only preview', () => {
+            const first = '2026-08-29';
+            const through = '2026-08-30';
+            const read: Extract<RecordRead, { state: 'read' }> = {
+                state: 'read', first, through, lastRows: null, lostDays: [], setAside: {}
+            };
+            function feed(id: string, date: string, run: number, outcome: string, items = '0') {
+                return {
+                    run_id: `${date}-${run}`, date, feed_id: id,
+                    checked_at: `${date}T12:00:${String(run).padStart(2, '0')}Z`, outcome, items
+                };
+            }
+
+            test('ranks failed days before raw reads and keeps tied failures beyond the preview', () => {
+                const rows = [
+                    feed('anchor', first, 1, 'transient'),
+                    feed('anchor', through, 1, 'ok'), // Answered with no entries.
+                    feed('anchor', through, 2, 'ok', '5'),
+                    feed('beta', first, 1, 'ok', '1'),
+                    feed('beta', through, 1, 'blocked'),
+                    feed('delta', through, 1, 'permanent'),
+                    ...[1, 2, 3].map(run => feed('gamma', through, run, 'transient')),
+                    feed('polite', first, 1, 'robots_denied'),
+                    feed('clean', through, 1, 'transient'),
+                    feed('clean', through, 1, 'ok', '1') // The successful read settles this run.
+                ];
+                const view = feedFailurePreview(feedInput({ rows, columns: [], read }), through, 2, 3);
+                expect(view.state).toBe('read');
+                if (view.state !== 'read') throw new Error('Expected the packed feed record to be usable');
+                expect(view).toMatchObject({ checked: 5, failed: 4, runs: 4, tied: 1, cutoff: 1, moreFailedReads: 3, partial: false });
+                expect(view.preview.map(({ id }) => id)).toEqual(['anchor', 'beta', 'delta']);
+                expect(view.preview[0]).toMatchObject({
+                    failedDays: 2, observedDays: 2, failedReads: 2, reads: 3, last: through, reasons: ['answered with no entries']
+                });
+                expect(view.preview[1]).toMatchObject({ failedDays: 1, observedDays: 2, failedReads: 1, reads: 2 });
+                expect(view.more).toEqual([expect.objectContaining({ id: 'gamma', failedDays: 1, observedDays: 1, failedReads: 3 })]);
+            });
+
+            test('keeps absent and unreadable records separate from a read with no asks or no failures', () => {
+                const preview = (state: RecordRead, rows: ReturnType<typeof feed>[] = []) =>
+                    feedFailurePreview(feedInput({ rows, columns: [], read: state }), through, 2, 3);
+                expect(preview({ state: 'not-packed' }).state).toBe('not-packed');
+                expect(preview({ state: 'unreadable', at: through, fault: null }).state).toBe('unreadable');
+                expect(preview(read)).toMatchObject({ state: 'read', checked: 0, recordedDays: 0, failed: 0 });
+                expect(preview(read, [feed('resting', through, 1, 'skipped'), feed('refused', through, 2, 'robots_denied')]))
+                    .toMatchObject({ state: 'read', checked: 0, recordedDays: 1, failed: 0 });
+                expect(preview(read, [feed('clean', through, 1, 'ok', '1')]))
+                    .toMatchObject({ state: 'read', checked: 1, recordedDays: 1, failed: 0, preview: [], more: [] });
+            });
+
+            test('does not backfill a lost day with older rows or count newer published days', () => {
+                const rows = [feed('older', '2026-08-28', 1, 'permanent'), feed('today', first, 1, 'transient')];
+                const input = feedInput({ rows, columns: [], read: { ...read, lostDays: [through], setAside: { [through]: 1 } } });
+                expect(feedFailurePreview(input, '2026-08-31', 2, 3)).toMatchObject({
+                    start: first, end: through, recordedDays: 1, checked: 1, failed: 1,
+                    partial: true, lost: [through], setAside: 1, preview: [expect.objectContaining({ id: 'today' })]
+                });
+                expect(feedFailurePreview(input, '2026-08-31', 1, 3)).toMatchObject({
+                    start: through, end: through, partial: true, checked: 0, preview: []
+                });
+            });
         });
     }
     test('nine rows are seven events, and each distinct run is counted once', () => {

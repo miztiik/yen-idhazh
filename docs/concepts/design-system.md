@@ -28,9 +28,13 @@ Inline styles are for genuinely dynamic values such as coordinates or computed w
 The console's `console_style` family is generated over the entire operator page,
 including its canvas and header, before paint. It supplies neutral light/dark
 surfaces, actions, six paired type roles, compact controls and panel spacing.
-Reader tokens remain unchanged. Ordinary single-measure charts use slate blue
-for their marks and readings, not the first category colour. A stage has the
-same category colour in a timing stack, failure stack and article inspection.
+Reader tokens remain unchanged. Ordinary single-measure charts use violet for
+their marks and readings, not the first category colour. Fetch is cyan,
+Extract is cobalt, Summarize is berry and Analyze uses charcoal in light mode
+and silver in dark mode so it does not duplicate the violet measurement role.
+A stage has the same category colour in a timing stack, failure stack and
+article inspection. Use labels beside the fills, surface-coloured separators
+at stack joins and focus outlines against the surface rather than the fill.
 Distinct quantities and machine identities use category colours; absence keeps
 its reserved neutral. Green, amber and red express a declared status, not an
 ordinary measured length or count. Confidence and movement retain their own roles.

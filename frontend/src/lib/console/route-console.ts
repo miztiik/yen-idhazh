@@ -136,6 +136,10 @@ export function routeConsolesFrom(files: Readonly<Record<string, unknown>>): Rou
 			.some((key) => Object.hasOwn(finite, key))) tokenDeviationRules(finite);
 		if (route === 'judgement' && ['holdout_axis_below_line', 'holdout_axis_above_line']
 			.some((key) => Object.hasOwn(finite, key))) holdoutAxisRules(finite);
+		if (route === 'voices' && Object.hasOwn(finite, 'feed_preview_rows') &&
+			(!Number.isSafeInteger(finite.feed_preview_rows) || finite.feed_preview_rows < 1)) {
+			throw new Error(`${path} knobs.feed_preview_rows must be a positive whole number`);
+		}
 		result[route] = { panel_groups: groups, judged, knobs: finite };
 	}
 	return result;
