@@ -1,6 +1,6 @@
 # The LLM-COUNCIL, and why judging has its own clock
 
-**Last Updated**: 2026-11-19
+**Last Updated**: 2026-11-20
 
 The room a model verdict is taken in. `LLM-COUNCIL` is a workflow of its own -
 [../../../.github/workflows/llm-council.yml](../../../.github/workflows/llm-council.yml) -
@@ -187,13 +187,17 @@ places, never messages, paths, source lines or notes.
 
 ### What a person reads on the collecting job's page
 
-The collector appends one Markdown summary to `GITHUB_STEP_SUMMARY`, including
-its final exit code and label, publication result, and one row per reported
-judge, UTC date and step. Prepare and settle rows come from their own events.
-Each planned judging cell has a row even when it sends nothing. Each judge has
-one folded log group; a failed unit gets an error annotation outside that group.
-The summary contains only validated identities, closed words, counts, dates and
-fixed sentences. It never repeats an article, a verdict or an exception message.
+The collector appends one Markdown summary to `GITHUB_STEP_SUMMARY`. It leads
+with the final exit code, label and publication result, then groups the work by
+judge. Each judge has one table with one row per UTC date for prepare, judging
+job counts and settle; its validated unit reports sit in a folded details
+block. The judge names and dates come from the event-backed selection, so
+adding another judge needs no summary formatter edit and keeps the page
+readable. Each planned judging cell still appears when it sends nothing, each
+judge has one folded log group, and a failed unit gets an error annotation
+outside that group. The summary contains only validated identities, closed
+words, counts, dates and fixed sentences. It never repeats an article, a
+verdict or an exception message.
 
 `COUNCIL_EVENT_FILE` makes the shared event writer append declared events to a
 transient JSON-lines file, even when the configured log level hides progress.

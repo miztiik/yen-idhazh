@@ -75,7 +75,8 @@ retention window. All replay files stay below the private directory
 - `outputs/<item-id>/items/<item-id>.summary.json`, `<item-id>.visual.json` and
   `<item-id>.health.json`: fresh native products, including truthful failures.
 - `outputs/<item-id>/captures/`: the actual native summary capture,
-  with its request, reply and available call cost.
+  with its request, reply and available call cost, and `<item-id>.text-analysis.log`
+  with the caller's span diagnostics.
 - `outputs/<item-id>/assets/`: compiled numeric chart data at the native
   relative asset path. This directory is not a publication tree.
 - `llama-server.log`: the owned runtime's log.
@@ -85,10 +86,11 @@ The adapter supplies a configured `ItemRecorder` and explicit capture/render
 roots to the real `summarize_one_item()`, after asking the text-analysis service
 for the article's mentions as the work stage does. Where no service answers, the
 replay finds no names or places: the element table is the one the patterns alone make, so no
-table of figures is built and no question about a chart is asked, the
-item logs one `text analysis gave no mentions` warning, and `analyze_ms` records
-what the failed request cost. Judge such a replay by its summary and its health
-row, not by whether a chart was drawn.
+table of figures is built and no question about a chart is asked. The
+[caller's `text analysis result` record](../architecture/text-analysis/text-analysis-api.md#one-service-one-bounded-listener)
+appears in the `Run fresh native call pairs` step log, as a warning when the
+service fails; `analyze_ms` records what the failed request cost. Judge such a
+replay by its summary and its health row, not by whether a chart was drawn.
 Configured prompt and reply capture
 must both be enabled. Existing source and output paths reject traversal,
 symlinks and junctions. A pre-existing output directory refuses a replay rather

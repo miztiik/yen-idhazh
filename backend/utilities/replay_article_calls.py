@@ -245,7 +245,10 @@ def run_calls(
             **facts.shard_cells(),
         )
         recorder.start()
-        analysis = ask_text_analysis.ask_for_mentions(article, settings.app.text_analysis)
+        capture_root = item_root / "captures"
+        analysis = ask_text_analysis.ask_for_mentions(
+            article, settings.app.text_analysis, capture_root=capture_root
+        )
         recorder.note(analyze_ms=analysis.elapsed_ms)
         started = time.monotonic()
         result = summarize_one_item(
@@ -255,7 +258,7 @@ def run_calls(
             mentions=analysis.mentions,
             run_id=identity.run_id,
             recorder=recorder,
-            capture_root=item_root / "captures",
+            capture_root=capture_root,
             render_root=item_root / "assets",
         )
         summarize_ms = int((time.monotonic() - started) * 1000)
