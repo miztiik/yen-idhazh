@@ -38,8 +38,9 @@ class LedgerStaging:
     `test_every_store_is_filled_by_a_writer_this_test_can_follow`, which
     resolves it with `importlib` - a renamed or deleted writer fails that test
     rather than going unchecked. `symbol` is `None` only where there is no
-    single resolvable attribute to point at: a person's own run, or a
-    capability still ahead of its writer (Guardrail #3). The two fields can
+    single resolvable attribute to point at: a person's own run, a writer in
+    another language, or a capability still ahead of its writer (Guardrail
+    #3). The two fields can
     disagree in only one direction - `symbol` is `None` only when `writer`
     says there is nothing to follow - so a filled-in `symbol` always has a
     `writer` to match.
@@ -190,26 +191,6 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
         symbol="idhazh.stages.plan.stage_plan",
         job_labels=frozenset({"plan"}),
     ),
-    LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS: LedgerStaging(
-        writer=(
-            "idhazh.stages.count_verdicts.stage_count_verdicts, through the ledger door, "
-            "called from the council's tenant module in the job that saves the night's "
-            "results - resolved from config at call time rather than dispatched from a "
-            "`digest.yml` job"
-        ),
-        symbol="idhazh.stages.count_verdicts.stage_count_verdicts",
-        job_labels=frozenset(),
-    ),
-    LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS: LedgerStaging(
-        writer=(
-            "idhazh.stages.set_merge_line.stage_set_merge_line, through the ledger door, "
-            "called from the council's tenant module in the job that saves the night's "
-            "results - resolved from config at call time rather than dispatched from a "
-            "`digest.yml` job"
-        ),
-        symbol="idhazh.stages.set_merge_line.stage_set_merge_line",
-        job_labels=frozenset(),
-    ),
     LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS: LedgerStaging(
         writer=(
             "a person, running `backend/utilities/sample_sheet.py --harvest` to file the "
@@ -220,37 +201,24 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
         symbol="utilities.sample_sheet.harvest",
         job_labels=frozenset(),
     ),
-    LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION: LedgerStaging(
+    LedgerName.CONTENT_SIMILARITY_JUDGE_PAIR_VERDICTS: LedgerStaging(
         writer=(
-            "the council's shipping capability, through idhazh.content_similarity_judge.tenant and "
-            "idhazh.stages.count_verdicts: both write the record straight to its "
-            "address rather than calling a ledger writer"
+            "idhazh.stages.file_pair_verdicts.stage_file_pair_verdicts, through the ledger "
+            "door, called from the council's tenant module in the job that saves the "
+            "night's results - resolved from config at call time rather than dispatched "
+            "from a `digest.yml` job"
         ),
-        symbol=None,
+        symbol="idhazh.stages.file_pair_verdicts.stage_file_pair_verdicts",
         job_labels=frozenset(),
     ),
-    LedgerName.CONTENT_SIMILARITY_JUDGE_ARCHIVE: LedgerStaging(
-        writer="the fold, on the day a stamp under the record moves - nothing fills it yet",
-        symbol=None,
-        job_labels=frozenset(),
-    ),
-    LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS: LedgerStaging(
+    LedgerName.CONTENT_SIMILARITY_JUDGE_THRESHOLD_HISTORY: LedgerStaging(
         writer=(
-            "idhazh.council.metrics_sink.collect_judge_metrics, through the ledger door, "
-            "called by idhazh.stages.count_verdicts in the job that saves the night's "
-            "results"
+            "idhazh.stages.review_thresholds.stage_review_thresholds, through the ledger "
+            "door, called from the council's tenant module in the job that saves the "
+            "night's results, after that night's pair verdicts are filed - resolved from "
+            "config at call time rather than dispatched from a `digest.yml` job"
         ),
-        symbol="idhazh.council.metrics_sink.collect_judge_metrics",
-        job_labels=frozenset(),
-    ),
-    LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES: LedgerStaging(
-        writer=(
-            "a person, running `python -m idhazh score-merge-line-holdout`. The marked "
-            "file changes when somebody labels more pairs rather than when a day "
-            "publishes, so nothing in the daily pipeline calls it and no job stages it. "
-            "The stage writes through the ledger door"
-        ),
-        symbol="idhazh.stages.score_merge_line_holdout.stage_score_merge_line_holdout",
+        symbol="idhazh.stages.review_thresholds.stage_review_thresholds",
         job_labels=frozenset(),
     ),
     LedgerName.TRACES: LedgerStaging(
@@ -305,6 +273,4 @@ def staged_path(ledger: LedgerName) -> str:
     held = paths.entry(ledger)
     if held.grain is Grain.RAW_AND_COMPACT:
         return paths.raw_root(Path(paths.STATE_DIRNAME), ledger).as_posix()
-    if held.grain is Grain.FLAT:
-        return paths.relpath(ledger)
     return paths.tree_relpath(ledger)

@@ -33,7 +33,7 @@ from idhazh.contracts.content_similarity_judge_evaluation import (
 )
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.knobs.models import ModelRef
-from idhazh.contracts.story_similarity_pair import JUDGE_POLICY_VERSION
+from idhazh.contracts.story_similarity_pair_verdict import JUDGE_POLICY_VERSION
 from idhazh.llm.server import Completion, turn_markers_digest
 from idhazh.similarity import judge, prompt
 
@@ -120,7 +120,7 @@ def capture_reading(
     trace = ReadingCapture(reader.client)
     left, right = (case.right, case.left) if reverse else (case.left, case.right)
     reading = judge.read_once(
-        left, right, client=trace, settings=settings, markers=reader.markers,
+        left.summary, right.summary, client=trace, settings=settings, markers=reader.markers,
     )
     if reading.refusal_reason is not None:
         event_lines.emit(

@@ -12,7 +12,7 @@ export function faithfulness(
 	const days = evalDays(textRows(rows));
 	const floor = matchFloor(days, thresholds, axis);
 	return {
-		days, floor, rules: matchRules(thresholds, floor), wider: widerNote(days, days.length, numberFormat),
+		days, floor, rules: matchRules(thresholds, floor), wider: widerNote(days, numberFormat),
 		series: [{
 			label: 'Median (p50)', token: '--chart-1' as const, unit: '%',
 			spreadLabels: { low: 'Lower quartile (p25)', high: 'Upper quartile (p75)' },

@@ -147,6 +147,34 @@ def test_a_row_that_records_one_call_may_not_keep_the_other_call_s_total() -> No
         ItemHealthRow.model_validate({**row.model_dump(), **whole, **totals, "model_calls": 1})
 
 
+def test_a_row_may_record_the_summary_call_alone() -> None:
+    """The one call an item makes is the summary slot's, and the label slot stays empty.
+
+    A slot is held to being recorded whole, never to the order the calls ran in.
+    A row of one call keeps the flat totals equal to that call, and reads back
+    unchanged through the CSV row as well as the payload. Rows that fill both
+    slots stay valid (the tests above).
+    """
+    _, only = _two_calls()
+    fields = ("prefill_ms", "decode_ms", "input_tokens", "output_tokens", "cached_tokens")
+    row = ItemHealthRow.model_validate(
+        json.loads(read_text(CONTRACT_FIXTURES_DIR / "item-health-row" / "published.json"))
+    )
+    alone: dict[str, object] = {
+        "model_calls": 1,
+        "summary_kind": only.kind,
+        **{f"summary_{name}": getattr(only, name) for name in fields},
+        **{name: getattr(only, name) for name in fields},
+    }
+
+    built = ItemHealthRow.model_validate({**row.model_dump(), **alone})
+
+    assert built.label_kind is None and built.summary_kind is only.kind
+    assert ItemHealthRow.from_csv_row(built.csv_row()) == built
+    with pytest.raises(ValidationError, match="sum over the recorded calls"):
+        ItemHealthRow.model_validate({**row.model_dump(), **alone, "cached_tokens": 0})
+
+
 def test_a_shard_written_under_the_retired_headings_still_reads() -> None:
     """The read-side proof for the rename, taken by removing the new keys.
 

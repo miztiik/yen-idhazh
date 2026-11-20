@@ -1,6 +1,6 @@
 # Console Design
 
-**Last Updated**: 2026-11-17
+**Last Updated**: 2026-11-19
 
 How a figure on the operator console is worded, coloured, ranked and drawn. This
 page rules the words and the states; four pages under it rule the drawing. It is
@@ -46,10 +46,7 @@ Five rules hold for every number the console prints:
 - **A count of that day's items, not a score.** No value between zero and one
  reaches the screen, and a count stays exact. A share prints as a percent.
  The shared number formatter uses the declared locale and precision, never the
- machine's locale. Where an agreement share rounds to its mark's printed
- figure but is not equal to the mark, it prints `just above 15%` or
- `just below 15%`, using that mark's own figure. This applies to the sentence,
- the daily readout and the dot's name. At exact equality it prints `15%`.
+ machine's locale.
 - **No ledger column name on screen.** `hhem`, `compression` and
  `truncation_flagged` are how the file spells it. The page spells what it
  means.
@@ -62,10 +59,7 @@ Five rules hold for every number the console prints:
  invites a trend that is not there. Under `console.min_attempts_for_rate` a
  figure prints its counts and no share, in a strip and in a mark's name as in
  a sentence. The count is the
- one the share is taken over, and the floor counts it: Judgement's "Answered
- not sure both times" is a share of pairs with matching answers, so it prints
- `2% of 41 pairs with matching answers`, and
- `1 of 3 pairs with matching answers` under the floor.
+ one the share is taken over, and the floor counts it.
 
 **Use statistical names for statistical readings.** Name the central reading
 `median (p50)`, not "the middle article" or "the middle request". Name the
@@ -76,32 +70,6 @@ percentile. The interquartile range is `p25-p75`; its edges are the
 `lower quartile (p25)` and the `upper quartile (p75)`. Existing percentile
 calculations remain unchanged: observed-rank and interpolated readers retain
 their established conventions.
-
-**Status compares each percentage with its own limit, not why a day was held.**
-Judgement's `Does the judge give the same answer twice?` panel says
-`Neither rate exceeds its limit.` only when both rates are at or below their
-limits. Otherwise it names the rate above its limit, for example
-`The changed-answer rate is 20%, above its 15% limit.` or
-`The "not sure" rate is 39%, above its 35% limit.`, or says
-`Both rates exceed their limits.`
-When rounding would hide which side of a limit a percentage falls on, the
-status instead says `The changed-answer rate is just above its 15% limit.`
-or `The "not sure" rate is just above its 35% limit.`, with `just below` for
-the corresponding rate within its limit. Extra decimal places cannot settle
-this: a smaller difference would still round away.
-The run checks other reasons for holding a day first, such as too few recorded
-pairs, so a day held for another reason can still have a rate above its limit.
-Matching answers mean the judge repeated its answer, not that it called the
-pair one story. The panel states that consistency does not prove correctness.
-
-**Recorded days are not every day in the window.** Judgement's merge-line
-note names how many recorded days fitted nothing, without implying a fit on
-days with no row. Its resting heading says `the newest recorded day shown`,
-not the window's newest day; a strip with one column keeps the date alone.
-While the record fills, its sentence states the actual counts, then the
-minimum counts needed. A count that has passed its minimum is not a share:
-`49 pairs above the line; it needs at least ... 30 pairs above the line`,
-never `49 of 30 pairs`.
 
 **A count that leaves a run out says so, and says what still counts the run.**
 On Hardware, inconsistent run records are excluded from the count. A native
@@ -370,8 +338,7 @@ beside the day's tile, or names the first tile when the day has none.
 At the one-day preset, panel titles say `for this one day` rather than `day
 by day`, and the cost switch's daily choice says `This one day`. The stage
 timing note says `Median time per item for this one day`: the median is over
-items, not days. A merge chart's one-day note names the applied and proposed
-readings rather than promising lines or a standalone point it does not draw.
+items, not days.
 
 ## A section keeps the sentence that decides and loses the sentence that narrates
 
@@ -423,8 +390,10 @@ days; the common axis and window already say that.
 **Long routes expose their questions in the rail.** Named `panel_groups` in
 `config/console/<route>.json` supply the left-rail links and the matching
 `PanelGroup` headings and anchors. Pipelines groups publishing, time and digest
-output; Summaries groups model spend and summary quality; Judgement groups story
-merging and judge evidence. Hardware and Voices retain their existing groups.
+output; Summaries groups model spend and summary quality. Judgement and the Data
+explorer each keep one untitled group, because a heading over a single panel
+repeats its title and adds a rail link to nowhere new. Hardware and Voices retain
+their existing groups.
 Keep panel order, ids, readings and judged membership unchanged. The Data
 explorer is one workbench, not a stack of independent panels to split up.
 The same group links remain available in the existing narrow navigation.
@@ -442,19 +411,6 @@ does not acquire different separators or precision on different pages. The
 formatter's settings have one maintainer in `config/idhazh.json`; the Data explorer
 keeps engine values unchanged because operators need to read those values as
 written.
-
-**The calculated line is not a history of builds.** Judgement's solid merge
-series shows each nightly calculation's final value. Its proposal, daily step
-band and held counts describe that same calculation. A build can use another
-line, including while adaptive grouping is off. The note, readout and mark
-names must state the calculated meaning. Keep the panel's generic title.
-The tinted strip compares marked-apart scores with the calculated line:
-crossing it would clear a pair's score threshold if that line were used,
-not prove that a build grouped the pair. With no calculated row shown,
-the dashed rule and its note instead name the newest published day's
-build-used line. The verdict split and holdout margin keep that build-used
-comparison. Replacing only the solid values with build records would make
-the proposal and step band describe a different process from the line.
 
 **Two names for a window's days, not one.** One name everywhere was the fewest
 words to keep, and it breaks a count: `on 1 of this one day`. The bare count is

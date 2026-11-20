@@ -1,22 +1,17 @@
-/** What the existing packed reads let the Judgement panels establish. */
+/** What the packed read of the hand marks lets the Judgement panel establish. */
 import type { TimeWindow } from '../charts/viewport';
 import { shortDate } from '../format';
 import { coveredDays } from '../data/slice';
 import { noRecordSentence, setAsideSentence, type RecordRead } from './recording';
 
-const SOURCES = {
-	judge: { subject: 'judge record', ledger: 'fitted-thresholds' },
-	marks: { subject: 'hand-mark record', ledger: 'holdout-pairs' },
-	scores: { subject: 'holdout-score record', ledger: 'merge-line-holdout-scores' }
-} as const;
+const subject = 'hand-mark record';
+const ledger = 'holdout-pairs';
 
 export function judgementEvidence(
 	read: RecordRead,
 	shown: TimeWindow,
-	loaded: TimeWindow,
-	source: keyof typeof SOURCES
+	loaded: TimeWindow
 ): string[] {
-	const { subject, ledger } = SOURCES[source];
 	if (read.state === 'not-packed') return [`The ${subject} has not been packed yet. Its readings are unavailable.`];
 	if (read.state === 'unreadable') return [`The ${subject} could not be read. Its readings are unavailable.`];
 	const notes: string[] = [];

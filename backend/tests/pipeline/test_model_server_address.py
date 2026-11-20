@@ -25,6 +25,7 @@ from ._builders import (
     captured_article_fetch,
     isolate_ledgers,
     plan,
+    with_an_analysis_service,
 )
 
 
@@ -50,12 +51,13 @@ def test_a_stage_nobody_gave_an_address_posts_where_the_config_says(
         settings = a_config_pointing_at(tmp_path, server.base_url)
         assert settings.app.model_server.base_url == server.base_url
 
-        stage_work(
-            run_plan,
-            settings=settings,
-            scorer=None,
-            fetcher=captured_article_fetch,
-        )
+        with with_an_analysis_service(settings) as read:
+            stage_work(
+                run_plan,
+                settings=read,
+                scorer=None,
+                fetcher=captured_article_fetch,
+            )
 
     assert server.served > 0, (
         "the stage posted nothing to the server the config named, so the address it "
@@ -78,11 +80,12 @@ def test_moving_the_address_moves_where_the_stage_posts(
     with RecordedEndpoint(503, REFUSED_COMPLETION.read_bytes()) as named:
         with RecordedEndpoint(503, REFUSED_COMPLETION.read_bytes()) as ignored:
             settings = a_config_pointing_at(tmp_path, named.base_url)
-            stage_work(
-                run_plan,
-                settings=settings,
-                scorer=None,
-                fetcher=captured_article_fetch,
-            )
+            with with_an_analysis_service(settings) as read:
+                stage_work(
+                    run_plan,
+                    settings=read,
+                    scorer=None,
+                    fetcher=captured_article_fetch,
+                )
             assert named.served > 0, "the config named this server and it saw nothing"
             assert ignored.served == 0, "a server the config does not name was posted to"

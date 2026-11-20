@@ -1,6 +1,6 @@
 # Autotuning summary quality: the metrics and the loop
 
-**Last Updated**: 2026-11-15
+**Last Updated**: 2026-11-19
 
 How yen-idhazh measures whether a summary is good, and how the thresholds tune themselves with no human
 in the loop.
@@ -9,8 +9,8 @@ in the loop.
 on [../../concepts/evaluation.md](../../concepts/evaluation.md#faithfulness-scored-twice). Coherence is recorded today;
 fluency and the autotuning loop below are the target design. Plan 36 was to build it; on 2026-10-11 the maintainer moved plan 36 into
 [plan 65](../../../TODO/20261011-65-summary-fidelity-judge-plan.md), which decides, question by question, what of this design is built. The design
-reuses the `LLM-COUNCIL` workflow and the `Fit` pattern from the same-story similarity judge
-([autotune-content-similarity.md](autotune-content-similarity.md)).
+reuses the `LLM-COUNCIL` workflow that the same-story similarity judge runs in
+([how-the-content-similarity-judge-follows-its-thresholds.md](how-the-content-similarity-judge-follows-its-thresholds.md)).
 
 ## The retained and proposed metrics
 
@@ -56,7 +56,7 @@ number/copying heuristics are retired, not replacement gates.
 ## The autotuning loop
 
 No human labels. Each metric gets an adaptive floor - a percentile of its own rolling distribution,
-folded and fitted daily exactly like the same-story similarity line, flipped to the low tail because
+folded and fitted daily, flipped to the low tail because
 for a quality metric low = bad. The adaptive floor DOWNGRADES or WATCHES; the one line that WITHHOLDS
 is the proposed absolute HHEM 0.50 and does not drift. Sane defaults ship - faithfulness
 seeds its floor from the ~6,966 committed HHEM readings on day one - and the loop's own first fortnight
@@ -165,6 +165,6 @@ sample.
 
 - [../../concepts/evaluation.md](../../concepts/evaluation.md) - the eval ledger, HHEM, and the metrics that ship today. Faithfulness is defined there, not here.
 - [../../concepts/summary-metrics.md](../../concepts/summary-metrics.md) - what one number about one summary means, and what it cannot see.
-- [autotune-content-similarity.md](autotune-content-similarity.md) - the merge line that already fits itself: the `LLM-COUNCIL` workflow and the fold-fit pattern this loop reuses.
+- [how-the-content-similarity-judge-follows-its-thresholds.md](how-the-content-similarity-judge-follows-its-thresholds.md) - the council judge that ships today: the `LLM-COUNCIL` workflow this loop reuses.
 - [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - where the next-day council sits in the two loops.
 - [../../../TODO/20261011-65-summary-fidelity-judge-plan.md](../../../TODO/20261011-65-summary-fidelity-judge-plan.md) - plan 65, which took over plan 36 on 2026-10-11; its Table RE says what it takes from this page and what it leaves.

@@ -1,6 +1,6 @@
 # What the page is drawn from
 
-**Last Updated**: 2026-11-16
+**Last Updated**: 2026-11-19
 
 Every knob a reader's page or an operator's console is drawn from: the file that
 owns them, the rule that decides which file owns a key when two name it, the
@@ -32,7 +32,7 @@ The contract is `backend/idhazh/contracts/appearance_config.py`, and it imports 
 
 ### Every key has one maintainer, and the maintainer is whoever draws it
 
-The merge runs one way: `config/appearance.json` is the last layer, so it wins. A knob the legacy `ui`, `console` or `assist` block still carries therefore has to agree with the appearance file. Let the two differ and the loser is silent - a knob edited in the file somebody happened to open does nothing, and nothing says why.
+The merge runs one way: `config/appearance.json` is the last layer, so it wins. Let a knob the legacy `ui`, `console` or `assist` block still carries differ from the appearance file and the loser is silent - a knob edited in the file somebody happened to open does nothing, and nothing says why. Tune a knob in the file that owns it.
 
 Six keys were settled that way, and the rule is the same each time: **the file that owns a key is the file whose readers read it.** `digest.visual_side` on 2026-09-05, then the last five later the same day:
 
@@ -53,7 +53,7 @@ Encoder inputs and asset settings remain in the pipeline configuration.
 the requested UTC dates. A positive value selects that many newest eligible
 months. Day-page coverage remains separate.
 
-**Two more of the block are the pipeline's, and only the pipeline file declares them now.** `max_tokens` and `min_readable_letter_share` are the encoder's, read by `backend/idhazh/embed.py`. They sat in the appearance file as well as the pipeline one, with the same values, which the gate below tolerates - and the tolerance was correct while the page received them, because the appearance file was the last merge layer. It stopped being correct the moment the keep-list landed: from then on the browser was handed neither, so the appearance copies were read by nothing, which is where `assist.recall_min` had been an hour earlier. Both were deleted on 2026-09-05 for that reason. Until that keep-list all four of the pipeline's knobs were merged straight into the prerendered `/archive/` document, because `assistConfig` returned the raw merge. It now keeps exactly what `AssistConfig` declares. A keep-list rather than a strip-list: a strip-list has to be extended every time a knob lands in the block and ships it to readers in silence when somebody forgets, while a keep-list's own failure - a browser knob added to the file and not to the interface - is refused by the compiler at the component that reads it. Measured on a real build, 2026-09-05: `frontend/build/archive/index.html` went from 18,659 to 18,567 bytes, so the four knobs were 92 bytes on every load of that page.
+**Two more of the block are the pipeline's, and only the pipeline file declares them now.** `max_tokens` and `min_readable_letter_share` are the encoder's, read by `backend/idhazh/embed.py`. They sat in the appearance file as well as the pipeline one, with the same values, which was tolerated - and the tolerance was correct while the page received them, because the appearance file was the last merge layer. It stopped being correct the moment the keep-list landed: from then on the browser was handed neither, so the appearance copies were read by nothing, which is where `assist.recall_min` had been an hour earlier. Both were deleted on 2026-09-05 for that reason. Until that keep-list all four of the pipeline's knobs were merged straight into the prerendered `/archive/` document, because `assistConfig` returned the raw merge. It now keeps exactly what `AssistConfig` declares. A keep-list rather than a strip-list: a strip-list has to be extended every time a knob lands in the block and ships it to readers in silence when somebody forgets, while a keep-list's own failure - a browser knob added to the file and not to the interface - is refused by the compiler at the component that reads it. Measured on a real build, 2026-09-05: `frontend/build/archive/index.html` went from 18,659 to 18,567 bytes, so the four knobs were 92 bytes on every load of that page.
 
 **Five more are the build's, and neither file's readers are in a tab.** `model_base_url`, `model_cdn_origins`, `model_revision`, `model_digests` and `model_fetch_deadline_ms` are the encoder's failover leg, read by `vite.config.ts` and `svelte.config.js` through `frontend/asset-base.js`. The pipeline file declares them and the appearance file declares none of them, for the same reason as the two above: nothing the published surface is drawn from reads any of them. One of them is roughly 600 bytes of hex, so the keep-list matters more than it did - declared in `AssistConfig` on the frontend they would ride in the prerendered `/archive/` document and its `__data.json` twin, against a ceiling of 7,553 gzipped bytes, for a value no component reads.
 
@@ -68,13 +68,13 @@ The rule the two shapes of mirror follow:
 
 `ARCHIVE_RECENT_DAYS`, `payload_slow_ms` and `visual_side` are the first shape and pin to the default, correctly. `MAX_TOKENS` is the second shape and was pinned to the default by copying its neighbours. `test_the_oracle_the_cap_sits_at_or_above_the_p95_of_what_it_reads` had the same subject and now reads the committed knob too: the question it asks is whether the cap covers the ordinary item, and only the cap that ships can answer it.
 
-**The gate is `test_a_moved_block_is_declared_in_one_file_and_the_other_does_not_argue`**, in `backend/tests/test_appearance_config.py`, and it runs over all three moved blocks. It refuses two files naming one knob twice with two answers; it tolerates two files naming it twice with one answer, because that is the migration's middle layer doing its job. `backend/idhazh/config.py` already followed the same rule before any of this: it reads `console.max_window_days` out of the appearance file, and says in a comment that `AppConfig.console` is the layer underneath and can disagree.
+**Nothing compares the two files.** A check of committed values across two config files fails on any tune of one of them, and what it guarded - an edit made to the losing copy, which does nothing - is settled by the merge order above, where the appearance file wins. `backend/idhazh/config.py` follows the same rule: it reads `console.max_window_days` out of the appearance file, and says in a comment that `AppConfig.console` is the layer underneath and can disagree.
 
 **A mirror test has to hold the pair that decides the picture.** `test_the_console_chart_size_is_a_knob_the_frontend_agrees_with` used to compare the contract default against `config/idhazh.json` and then against the frontend's own fallback constant. All three were 600 and the console drew at 760, so the gate was green over three copies of a number nothing drew with - which is worse than no gate, because it reads as coverage. It now starts from what `config/appearance.json` declares, because that is the last merge layer and therefore what the console uses, and requires the contract default and the frontend fallback to be that same number.
 
 ### Why a frame width is a knob, when a 2026-08-28 ruling said it should not be
 
-The objection was that a config able to set the frame to 300px would need a code change to still look right. That is true of an unvalidated number and false of a validated one. **`frame.reading_max_px` cannot be set below 960 or above 1600; `measure_ch` cannot leave 52 to 80; `breakpoints_px` must be exactly three ascending, distinct widths; and a numeric `console_max_px` may not be narrower than `reading_max_px`.** A validator refuses a document that breaks any of them, so no reachable value breaks the design. The contract is the answer to the objection rather than a refusal of the knob, and `backend/tests/test_appearance_config.py` asserts every bound in both directions.
+The objection was that a config able to set the frame to 300px would need a code change to still look right. That is true of an unvalidated number and false of a validated one. **`frame.reading_max_px` cannot be set below 960 or above 1600; `measure_ch` cannot leave 52 to 80; `breakpoints_px` must be exactly three ascending, distinct widths; and a numeric `console_max_px` may not be narrower than `reading_max_px`.** A validator refuses a document that breaks any of them, so no reachable value breaks the design. The contract is the answer to the objection rather than a refusal of the knob, and `backend/tests/test_appearance_config.py` asserts that each of the four is refused.
 
 One cross-block rule keeps the initial coordinate frame within the shared shell:
 `chart.width_px` may not exceed a numeric `frame.console_max_px`. Null is the
@@ -146,10 +146,10 @@ missing or extra top-level keys, repeated ids and judged ids the route does not
 draw. These are repository-authored config files, not persisted telemetry, so
 their parser owns the validation; no second Pydantic model restates it.
 `console.panel_groups` and `console.judged_panel_ids` are removed from the shared
-appearance block. Named groups on Pipelines, Summaries, Hardware, Voices and
-Judgement supply the existing rail links and matching `PanelGroup` anchors.
-Grouping does not change panel ids, their order or judged membership. The Data
-explorer retains one untitled workbench group.
+appearance block. Named groups on Pipelines, Summaries, Hardware and Voices
+supply the existing rail links and matching `PanelGroup` anchors.
+Grouping does not change panel ids, their order or judged membership. Judgement
+and the Data explorer each keep one untitled group.
 
 `frontend/src/lib/server/config.ts` reads the named route files through
 `routeConsolesFrom` and exposes `routeConsoles()`. Vite supplies one build-time
@@ -242,14 +242,15 @@ delete shards the console can still ask for, and a deleted shard draws as a gap
 that reads like a day the pipeline did nothing
 ([retention-ages.md](retention-ages.md#why-14-and-not-13)).
 
-The preset control is the console's only shared span control. `pan_days` and
-`zoom_factor` have no surviving reader and are removed. `band_outlier_rows`
+The preset control is the console's only shared span control. `pan_days`,
+`zoom_factor` and `precision_axis_multiple` have no surviving reader and are
+removed. `band_outlier_rows`
 belonged only to the retired viewport. `plot_min_fill_share` belonged only to
-the removed per-panel picture gate. All four are absent from the contract,
+the removed per-panel picture gate. All five are absent from the contract,
 committed appearance file and full-knob fixtures. Unknown keys fail validation;
 an old local copy must delete them rather than expect a value to take effect.
 
-`min_attempts_for_rate` remains live for paired judge shares, Model comparisons
+`min_attempts_for_rate` remains live for Model comparisons
 and source shares, Hardware percentiles and Pipelines cost distributions. It is
 not a floor on the native failure mix's failed-row/recorded-row share.
 

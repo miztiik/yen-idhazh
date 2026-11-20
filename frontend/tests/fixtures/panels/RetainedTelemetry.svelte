@@ -7,7 +7,7 @@
 	import ItemCost from '$lib/console/model/ItemCost.svelte';
 	import { daysInWindow, monthsToFetch, windowOfDays } from '$lib/charts/viewport';
 	import { nameSpan } from '$lib/console/span-words';
-	import type { TelemetryRow } from '$lib/charts/series';
+	import type { TelemetryRow } from '../../support/telemetry-row';
 	import type { ConsoleConfig, ChartConfig } from '$lib/server/config';
 	import type { PanelState } from '$lib/console/waiting';
 	let { rows, config, chart, pinned, initialDays, panelState, months = [], held = [] }: {

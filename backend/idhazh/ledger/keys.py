@@ -90,33 +90,6 @@ VISUAL_PRUNE_KEY: Final = ("date", "run_id")
 COUNTERFACTUAL_SCORE_KEY: Final = ("date", "run_id", "vertical", "url_key")
 
 
-#: What makes two fitted-line rows the same record. One run fits one line for one
-#: date, so a second row under those two cells is a second attempt at one
-#: execution rather than a second answer. Both attempts read the same score
-#: record and walk the same counts, so the first row wins and there is nothing
-#: for a preference rule to choose between.
-#:
-#: The shape these two cells name is
-#: `idhazh.contracts.fitted_similarity_threshold`, and the door table below
-#: imports it only when its ledger is asked about, for the reason the holdout
-#: score's key gives.
-STORY_SIMILARITY_THRESHOLD_KEY: Final = ("date", "run_id")
-
-
-#: What makes two merge-line holdout rows the same record. One run scores one
-#: line against the marks it reads on one date, so a second row under those two
-#: cells is a second attempt at one execution rather than a second answer. The
-#: marks are hand-written and the day payloads are committed, so two attempts
-#: count the same cells and the first row wins.
-#:
-#: The shape these two cells name is `idhazh.contracts.merge_line_holdout_score`,
-#: and the door table below imports it only when its ledger is asked about: a
-#: council verb reaches this module for its own row types, and a judge contract
-#: imported here as the module loads would sit in the council's import closure
-#: (`backend/tests/council/test_council_runs_without_a_judge.py`).
-MERGE_LINE_HOLDOUT_SCORE_KEY: Final = ("date", "run_id")
-
-
 #: What makes two hand marks the same record: one pair of addresses, in the
 #: order the mark names them. The day is not in the key, because a pair a person
 #: marks again is the same pair with a newer mark, and a key that held the day
@@ -124,44 +97,33 @@ MERGE_LINE_HOLDOUT_SCORE_KEY: Final = ("date", "run_id")
 #:
 #: The shape these two cells name is `idhazh.contracts.similarity_holdout_pair`,
 #: and the door table below imports it only when its ledger is asked about, for
-#: the reason given beside `MERGE_LINE_HOLDOUT_SCORE_KEY`.
+#: the reason beside `_JUDGE_DOOR_SHAPES`.
 HOLDOUT_PAIR_KEY: Final = ("left_url", "right_url")
 
 
-#: What makes two judged-pair rows the same record. `run_id` is in the key
-#: because two runs of one day judge the same pair against different articles,
-#: and both readings are facts worth keeping. Drop it and the settlement would
-#: keep whichever landed first, which is the opposite of what a re-run means -
-#: the fold picks the newest run itself, over the whole day, rather than letting
-#: a line-by-line rewrite decide.
+#: What makes two pair-verdict rows the same record: one pair, put to the judge by
+#: one part of one council run. `run_id` is in the key because two runs of one
+#: night judge the same pair twice and both readings are facts worth keeping, and
+#: `work_part_index` follows it because a row about one part of the split is keyed
+#: on its part, so two parts of one run never settle into one record.
 #:
-#: `work_part_index` follows `run_id`, because a judge row about one part of the
-#: split is keyed on its part: two parts of one run never settle into one record.
-#:
-#: `judged_by_run_id` is in it because `run_id` names the DIGEST run that
-#: published the day, so two judging runs over one date write the identical
-#: string there. Without this cell the settlement would keep the row already in
-#: the checked-out file and discard every fresh verdict, while the record
-#: counted the fresh ones - two descriptions of one day with nothing able to
-#: tell them apart.
-#:
-#: The shape these cells name is `idhazh.contracts.story_similarity_pair`, and
-#: the door table below imports it only when its ledger is asked about, for the
-#: reason the holdout score's key gives.
-STORY_SIMILARITY_PAIR_KEY: Final = (
-    "date",
-    "run_id",
-    "work_part_index",
-    "pair_key",
-    "judged_by_run_id",
-)
+#: The shape these cells name is `idhazh.contracts.story_similarity_pair_verdict`,
+#: and the door table below imports it only when its ledger is asked about, for
+#: the reason beside `_JUDGE_DOOR_SHAPES`.
+STORY_SIMILARITY_PAIR_VERDICT_KEY: Final = ("date", "run_id", "work_part_index", "pair_key")
 
 
-#: What makes two metrics rows the same record: one part of one council run's
-#: night, for one judged date. The door table below imports the row contract,
-#: `idhazh.contracts.content_similarity_judge_metrics`, only when its ledger is
-#: asked about, for the reason the holdout score's key gives.
-CONTENT_SIMILARITY_JUDGE_METRICS_KEY: Final = ("date", "run_id", "work_part_index")
+#: What makes two threshold-history rows the same record. One run reads both
+#: thresholds for one date once, so a second row under those two cells is a second
+#: attempt at one execution rather than a second answer. Both attempts read the
+#: same pair verdicts and reach the same numbers, so the first row wins and there
+#: is nothing for a preference rule to choose between.
+#:
+#: The shape these cells name is
+#: `idhazh.contracts.story_similarity_threshold_history_row`, and the door table
+#: below imports it only when its ledger is asked about, for the reason beside
+#: `_JUDGE_DOOR_SHAPES`.
+STORY_SIMILARITY_THRESHOLD_HISTORY_KEY: Final = ("date", "run_id")
 
 
 #: What makes two retirement rows the same record. The address and nothing else:
@@ -271,9 +233,9 @@ def _holdout_pair_rule(later: dict[str, str], kept: dict[str, str]) -> bool:
     """The newer mark wins: a later `marked_on`, or the same day filed later.
 
     A person marks a pair again to correct the first mark, so the mark taken last
-    is the one the merge line is scored against. A later row with the same
-    `marked_on` is the same day's harvest run again, and it wins for the same
-    reason. Both cells are `YYYY-MM-DD` UTC days, so text order is day order.
+    is the one that stands. A later row with the same `marked_on` is the same
+    day's harvest run again, and it wins for the same reason. Both cells are
+    `YYYY-MM-DD` UTC days, so text order is day order.
     """
     return later.get("marked_on", "") >= kept.get("marked_on", "")
 
@@ -340,13 +302,6 @@ _DOOR_SHAPES: Final[dict[LedgerName, _DoorShape]] = {
 }
 
 
-def _merge_line_holdout_score() -> type[Contract]:
-    """The holdout score's row contract, imported when its ledger is first asked about."""
-    from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
-
-    return MergeLineHoldoutScore
-
-
 def _similarity_holdout_pair() -> type[Contract]:
     """The hand mark's row contract, imported when its ledger is first asked about."""
     from idhazh.contracts.similarity_holdout_pair import SimilarityHoldoutPair
@@ -354,27 +309,20 @@ def _similarity_holdout_pair() -> type[Contract]:
     return SimilarityHoldoutPair
 
 
-def _story_similarity_pair() -> type[Contract]:
-    """The judged pair's row contract, imported when its ledger is first asked about."""
-    from idhazh.contracts.story_similarity_pair import StorySimilarityPair
+def _story_similarity_pair_verdict() -> type[Contract]:
+    """The pair verdict's row contract, imported when its ledger is first asked about."""
+    from idhazh.contracts.story_similarity_pair_verdict import StorySimilarityPairVerdict
 
-    return StorySimilarityPair
+    return StorySimilarityPairVerdict
 
 
-def _content_similarity_judge_metrics() -> type[Contract]:
-    """The judge's per-part reading, imported when its ledger is first asked about."""
-    from idhazh.contracts.content_similarity_judge_metrics import (
-        ContentSimilarityJudgeMetrics,
+def _story_similarity_threshold_history_row() -> type[Contract]:
+    """The night's threshold row contract, imported when its ledger is first asked about."""
+    from idhazh.contracts.story_similarity_threshold_history_row import (
+        StorySimilarityThresholdHistoryRow,
     )
 
-    return ContentSimilarityJudgeMetrics
-
-
-def _fitted_similarity_threshold() -> type[Contract]:
-    """The fitted line's row contract, imported when its ledger is first asked about."""
-    from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
-
-    return FittedSimilarityThreshold
+    return StorySimilarityThresholdHistoryRow
 
 
 #: The door ledgers a judge writes, each with its key and the function that
@@ -387,25 +335,17 @@ def _fitted_similarity_threshold() -> type[Contract]:
 _JUDGE_DOOR_SHAPES: Final[
     dict[LedgerName, tuple[tuple[str, ...], Callable[[], type[Contract]]]]
 ] = {
-    LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES: (
-        MERGE_LINE_HOLDOUT_SCORE_KEY,
-        _merge_line_holdout_score,
-    ),
     LedgerName.CONTENT_SIMILARITY_JUDGE_HOLDOUT_PAIRS: (
         HOLDOUT_PAIR_KEY,
         _similarity_holdout_pair,
     ),
-    LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS: (
-        STORY_SIMILARITY_PAIR_KEY,
-        _story_similarity_pair,
+    LedgerName.CONTENT_SIMILARITY_JUDGE_PAIR_VERDICTS: (
+        STORY_SIMILARITY_PAIR_VERDICT_KEY,
+        _story_similarity_pair_verdict,
     ),
-    LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS: (
-        CONTENT_SIMILARITY_JUDGE_METRICS_KEY,
-        _content_similarity_judge_metrics,
-    ),
-    LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS: (
-        STORY_SIMILARITY_THRESHOLD_KEY,
-        _fitted_similarity_threshold,
+    LedgerName.CONTENT_SIMILARITY_JUDGE_THRESHOLD_HISTORY: (
+        STORY_SIMILARITY_THRESHOLD_HISTORY_KEY,
+        _story_similarity_threshold_history_row,
     ),
 }
 

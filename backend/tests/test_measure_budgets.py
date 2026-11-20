@@ -27,7 +27,6 @@ from support.paths import CONFIG_DIR, FIXTURES_DIR, REPO_ROOT, read_text
 from idhazh import config
 from idhazh import measured as measured_module
 from idhazh.contracts.taxonomy import LifecycleStatus
-from idhazh.contracts.visual import PlanEncodings
 from idhazh.measured import (
     SIZED_BY_A_READING_HERE,
     TokenizerMeasured,
@@ -35,15 +34,11 @@ from idhazh.measured import (
 )
 from idhazh.sanitize import FENCE_CLOSE, FENCE_OPEN
 from utilities.measure_budgets import (
-    PLAN_PROBES,
     ServerSilentError,
     corpus_bodies,
     definition_probe,
-    empty_role_fragment,
     main,
-    plan_roles,
     read_definition_budget,
-    read_empty_role_budget,
     read_tokens_a_word,
     render_check,
     render_paste,
@@ -52,7 +47,6 @@ from utilities.measure_budgets import (
 )
 
 PROBE: Final = FIXTURES_DIR / "llm" / "budget-probe.json"
-PLAN_FIXTURES: Final = FIXTURES_DIR / "contracts" / "visual-plan"
 CORPUS_ROW_FIXTURE: Final = FIXTURES_DIR / "contracts" / "corpus-row" / "harvested.json"
 STAMP: Final = {
     "subject": "a" * 64,
@@ -230,49 +224,7 @@ def test_a_vocabulary_that_offers_nothing_yields_no_reading(
         )
 
 
-# --- Probe two: the empty encoding roles -------------------------------------
-
-
-def test_the_roles_come_off_the_shape_and_not_off_the_fixture() -> None:
-    """A role a fixture omits is an empty role, and a decoder emits it either way."""
-    assert plan_roles() == tuple(PlanEncodings.model_fields)
-
-    declined = json.loads(read_text(PLAN_FIXTURES / "declined.json"))
-    fragment = empty_role_fragment(declined, plan_roles())
-
-    assert fragment.count("[]") == len(plan_roles()), (
-        "the declining plan fills no role, so every declared role has to appear in the "
-        "fragment even where the fixture has no key for it"
-    )
-    for role in plan_roles():
-        assert f'"{role}":[],' in fragment
-
-
-def test_a_filled_role_is_not_counted_as_an_empty_one() -> None:
-    """The other half: the fragment shrinks by exactly the roles a plan fills."""
-    roles = plan_roles()
-    filled = {"encodings": {roles[0]: ["quantity-1-2"]}}
-
-    fragment = empty_role_fragment(filled, roles)
-
-    assert fragment.count("[]") == len(roles) - 1
-    assert f'"{roles[0]}":[],' not in fragment
-
-
-def test_the_empty_role_reading_takes_the_wider_of_the_two_plans(
-    tokenizer: RecordedTokenizer,
-) -> None:
-    reading = read_empty_role_budget(tokenizer, fixtures=PLAN_FIXTURES, stamp=STAMP)
-
-    per_plan = [reading.working[f"{name}_tokens"] for name in PLAN_PROBES]
-    assert reading.value == max(per_plan), (
-        "the widest is what a window has to hold; an average of the two would be a "
-        "number no plan actually costs"
-    )
-    assert reading.working["roles_declared"] == len(plan_roles())
-
-
-# --- Probe three: the tokens-a-word ratio ------------------------------------
+# --- Probe two: the tokens-a-word ratio --------------------------------------
 
 
 def a_corpus(tmp_path: Path, *, rows: int) -> Path:
@@ -373,7 +325,6 @@ def test_every_reading_states_a_spread_rather_than_omitting_it(
     readings = take_every_reading(
         tokenizer,
         config_dir=CONFIG_DIR,
-        fixtures=PLAN_FIXTURES,
         corpus=a_corpus(tmp_path, rows=8),
         samples=5,
         stamp=STAMP,
@@ -381,7 +332,6 @@ def test_every_reading_states_a_spread_rather_than_omitting_it(
 
     assert [one.record for one in readings] == [
         "DEFINITION_SENTENCE_TOKENS",
-        "EMPTY_ROLE_TOKENS",
         "TOKENS_A_WORD_AT_THE_CUT",
     ], "the reader takes one reading for each constant sized by one"
     assert {one.record for one in readings} == {
@@ -403,7 +353,6 @@ def test_the_paste_block_names_the_record_and_stamps_the_configured_weights(
     readings = take_every_reading(
         tokenizer,
         config_dir=CONFIG_DIR,
-        fixtures=PLAN_FIXTURES,
         corpus=a_corpus(tmp_path, rows=8),
         samples=5,
         stamp=STAMP,
@@ -434,14 +383,14 @@ def test_the_paste_block_names_the_record_and_stamps_the_configured_weights(
 def test_the_check_names_every_stale_site_and_both_digests() -> None:
     """What it prints when a reading is stale, built rather than found.
 
-    All three were stale until row #13b retook them on 2026-09-14, so the check
+    All of them were stale until row #13b retook them on 2026-09-14, so the check
     now says nothing on the committed tree and this test drives it off a digest
     no entry names instead. Asserting the committed state would have made this
     test a clock: green only while somebody had not done the work.
     """
     swapped = "0" * 64
     stale = readings_awaiting_a_retake(configured_sha256=swapped)
-    assert len(stale) == len(SIZED_BY_A_READING_HERE) == 3
+    assert len(stale) == len(SIZED_BY_A_READING_HERE) == 2
 
     said = render_check(stale, swapped)
 

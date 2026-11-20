@@ -1,4 +1,4 @@
-"""Do retained native Articles produce fresh, isolated products through the real call pair?"""
+"""Do retained native Articles produce fresh, isolated products through the real call?"""
 
 from __future__ import annotations
 
@@ -12,10 +12,10 @@ from pathlib import Path
 
 import pytest
 from pipeline._builders import (
-    DRAWS_LABEL,
     DRAWS_SUMMARIZE_AND_PLAN,
-    declining_replies,
+    declining_wind_reply,
     drawable_article_fetch,
+    finding_the_wind_countries,
     plan,
     summary,
 )
@@ -157,14 +157,16 @@ def test_real_item_major_calls_keep_native_assets_captures_and_provenance_privat
     saved, articles, plan_file = prepared(root, source, archives, ids)
     monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "forbidden-public" / "digest")
     monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "forbidden-run")
-    positive = DRAWS_LABEL.read_bytes(), DRAWS_SUMMARIZE_AND_PLAN.read_bytes()
     caplog.set_level(logging.INFO, logger="idhazh")
     identity = replay_identity(saved)
-    with RecordedEndpoint(200, *positive, *declining_replies(), hold_s=0.01) as server:
-        replay.run_calls(
-            root, plan=saved, articles=articles, settings=settings_at(server), identity=identity,
-        )
-        assert server.served == 4
+    with RecordedEndpoint(
+        200, DRAWS_SUMMARIZE_AND_PLAN.read_bytes(), declining_wind_reply(), hold_s=0.01
+    ) as server:
+        with finding_the_wind_countries(settings_at(server)) as knobs:
+            replay.run_calls(
+                root, plan=saved, articles=articles, settings=knobs, identity=identity,
+            )
+        assert server.served == 2
         requests = server.sent
 
     envelope = read_registered_envelope(root / plan_file, ledger=LedgerName.RUN_PLAN)
@@ -183,7 +185,8 @@ def test_real_item_major_calls_keep_native_assets_captures_and_provenance_privat
         decision = VisualDecision.read(items / f"{article.item_id}{PAYLOAD_SUFFIX}")
         health = ItemHealthRow.read(items / f"{article.item_id}{HEALTH_SUFFIX}")
         assert health.run_id == identity.run_id
-        assert health.model_calls == 2
+        assert health.model_calls == 1
+        assert health.analyze_ms is not None
         assert fresh.duration_ms == fresh.summarize_ms == health.summarize_ms
         assert fresh.summarize_ms > 0
         assert fresh.fetch_ms == fresh.extract_ms == 0
@@ -191,12 +194,11 @@ def test_real_item_major_calls_keep_native_assets_captures_and_provenance_privat
         assert provenance.model_sha256 == config.load(CONFIG_DIR).models.summarizer.sha256
         assert provenance.extractor_version == article.extractor_version
         assert provenance.sanitizer_version == article.sanitizer_version
-        for turn, name in enumerate(("label", "summary")):
-            captured = json.loads(
-                (produced / "captures" / f"{article.item_id}.{name}.json").read_bytes()
-            )
-            assert captured["prompt"] == requests[index * 2 + turn]["prompt"]
-            assert captured["reply"] and captured["item_id"] == article.item_id
+        captured = json.loads(
+            (produced / "captures" / f"{article.item_id}.summary.json").read_bytes()
+        )
+        assert captured["prompt"] == requests[index]["prompt"]
+        assert captured["reply"] and captured["item_id"] == article.item_id
         if index == 0:
             assert decision.kind is VisualKind.CHART and decision.data_path
             assert (produced / "assets" / decision.data_path).is_file()
@@ -206,9 +208,9 @@ def test_real_item_major_calls_keep_native_assets_captures_and_provenance_privat
             assert decision.data_path is None
             assert not (produced / "assets" / "digest" / "2026" / "08" / "21" / f"{article.item_id}.json").exists()
         assert not (tmp_path / "forbidden-public" / "digest" / "2026" / "08" / "21" / f"{article.item_id}.json").exists()
-        assert not (tmp_path / "forbidden-run" / saved.date / common.CAPTURES_DIRNAME / f"{article.item_id}.label.json").exists()
+        assert not (tmp_path / "forbidden-run" / saved.date / common.CAPTURES_DIRNAME / f"{article.item_id}.summary.json").exists()
     assert "This update carries no additional figures." not in requests[0]["prompt"]
-    assert "This update carries no additional figures." in requests[2]["prompt"]
+    assert "This update carries no additional figures." in requests[1]["prompt"]
 
 
 @pytest.mark.parametrize("defect", ["missing", "failed", "identity", "escaping"])
@@ -229,7 +231,7 @@ def test_invalid_selected_inputs_fail_before_model_work(tmp_path: Path, defect: 
         selected.write_text(original[0].to_json(), encoding="utf-8")
     else:
         plan_file = "../foreign.parquet"
-    with RecordedEndpoint(200, DRAWS_LABEL.read_bytes()) as server:
+    with RecordedEndpoint(200, DRAWS_SUMMARIZE_AND_PLAN.read_bytes()) as server:
         with pytest.raises(ValueError):
             loaded, articles = replay.load_inputs(
                 root, plan_file=plan_file, execution=str(source.id), attempt=source.run_attempt,
@@ -256,7 +258,7 @@ def test_source_attempt_must_match_and_existing_output_cannot_be_fresh_proof(
             commit=source.head_sha, item_ids=ids,
         )
     (root / "outputs").mkdir()
-    with RecordedEndpoint(200, DRAWS_LABEL.read_bytes()) as server:
+    with RecordedEndpoint(200, DRAWS_SUMMARIZE_AND_PLAN.read_bytes()) as server:
         with pytest.raises(FileExistsError):
             replay.run_calls(
                 root, plan=saved, articles=articles, settings=settings_at(server),
@@ -289,8 +291,9 @@ def test_failed_summary_is_retained_and_never_reported_as_legitimate_none(
     ids = (original[0].item_id,)
     _, articles, _ = prepared(root, source, archives, ids)
     malformed = b'{"choices":[{"message":{"content":"{}"},"finish_reason":"stop"}]}'
-    with RecordedEndpoint(200, malformed) as server:
-        knobs = settings_at(server)
+    with RecordedEndpoint(200, malformed) as server, finding_the_wind_countries(
+        settings_at(server)
+    ) as knobs:
         if failure == "context_exceeded":
             articles = (Article.model_validate(articles[0].model_dump() | {
                 "token_count": window(knobs.models.summarizer.server),

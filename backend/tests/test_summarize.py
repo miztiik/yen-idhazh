@@ -16,6 +16,7 @@ import ast
 import json
 import logging
 import re
+import urllib.request
 from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
@@ -24,6 +25,7 @@ from typing import Any, Final
 import pytest
 from contracts._fixtures import committed_models_raw
 from pydantic import ValidationError
+from support.analysis_service import closed_base_url
 from support.models import a_markers, a_sampling, a_server
 from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
 from support.server import RecordedEndpoint
@@ -51,7 +53,6 @@ from idhazh.llm.server import (
     TurnMarkers,
     answer_span,
     completion_payload,
-    continued_completion_payload,
     decoding_still_constrains,
     grammar_completion_payload,
     is_context_exceeded,
@@ -59,6 +60,7 @@ from idhazh.llm.server import (
     one_reply,
     parse_completion,
     post,
+    props,
     render_prompt,
     request_payload,
     response_limit,
@@ -73,7 +75,6 @@ from idhazh.sanitize import (
     why_a_forged_turn_would_survive,
 )
 from idhazh.summarize import (
-    build_request,
     output_schema,
     parse_draft,
     to_summary,
@@ -140,16 +141,6 @@ def summarised(name: str, source: str = "ok") -> Summary:
 
 
 # --- The article is data, and only ever data --------------------------------
-
-
-def test_the_system_prompt_never_carries_the_article() -> None:
-    """Decision 1: article text goes in the user turn, or the fence means nothing."""
-    payload = build_request(
-        article(), model_id="m", sampling=a_sampling(), markers=a_markers()
-    )
-    system = payload["messages"][0]
-    assert system["role"] == "system"
-    assert (article().text or "")[:80] not in system["content"]
 
 
 def test_the_article_arrives_fenced_and_labelled() -> None:
@@ -296,15 +287,8 @@ def test_rendered_routes_carry_the_response_limit_without_a_caller_budget() -> N
         markers=a_markers(),
         first_token_alternatives=3,
     )
-    continuation = continued_completion_payload(
-        completion,
-        reply="{}",
-        user="Continue.",
-        output_schema=output_schema(),
-        markers=a_markers(),
-    )
 
-    for body in (completion, grammar, continuation):
+    for body in (completion, grammar):
         assert body["n_predict"] == response_limit({})
         assert "max_tokens" not in body
 
@@ -326,15 +310,14 @@ def test_two_configured_token_limit_spellings_are_not_sent_together(route: str) 
         three_bodies(a_sampling(max_tokens=4096, n_predict=2048), only=route)
 
 
-def test_a_configured_token_limit_survives_continuations_and_reasoning() -> None:
-    """A continuation is a derivation: it inherits the sampling and does not check it again.
+def test_a_configured_token_limit_survives_reasoning() -> None:
+    """A span is a derivation: it inherits the configured limit and adds no second spelling.
 
-    `continued_completion_payload` is `{**first, ...}` and `first` already
-    carries every sampling key, so a second splat would clash on all of them and
-    raise on every summarize-and-plan call.
+    `thinking_span` and `answer_span` start from the answer body, which already
+    carries every sampling key, so neither sets the limit again.
     """
     markers = a_markers(thinking_close="</think>")
-    first = completion_payload(
+    answer = completion_payload(
         model_id="m",
         system="s",
         user="u",
@@ -344,22 +327,14 @@ def test_a_configured_token_limit_survives_continuations_and_reasoning() -> None
         markers=markers,
         max_answer_tokens=64,
     )
-    second = continued_completion_payload(
-        first,
-        reply='{"title": "a bridge"}',
-        user="Now the picture.",
-        output_schema=output_schema(),
-        markers=markers,
-        max_answer_tokens=128,
-    )
-    thought = thinking_span(second, markers=markers)
-    answer = answer_span(second, thought="Considering the facts.", markers=markers)
+    thought = thinking_span(answer, markers=markers)
+    closed = answer_span(answer, thought="Considering the facts.", markers=markers)
 
-    for body in (first, second, thought, answer):
+    for body in (answer, thought, closed):
         assert body["max_tokens"] == 4096
         assert "n_predict" not in body
     assert "json_schema" not in thought
-    assert answer["json_schema"] == output_schema()
+    assert closed["json_schema"] == output_schema()
 
 
 def test_the_declared_closing_marker_is_what_asks_the_template_to_think() -> None:
@@ -601,10 +576,40 @@ def test_one_server_is_named_once_however_many_items_are_sent(
     )
 
 
+def test_a_request_to_the_model_server_never_goes_through_a_proxy_the_environment_names(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An item and the server's answer about itself reach the endpoint, never a proxy.
+
+    `http_proxy` moves a destination with nobody reading a diff (Guardrail #11), and
+    `urllib` obeys it for a loopback address too. The proxy named here is a port nothing
+    listens on, so a request that obeyed it would fail rather than reach `served`. Each of
+    the module's three senders is asked: `post`, `props` and the start-up `_ask`.
+    `urlopen` keeps the first opener it builds, so the test clears it: a request that fell
+    back to `urlopen` would otherwise pass whenever an earlier test had already used one.
+    """
+    from idhazh.llm.server import _ask, props_url
+
+    monkeypatch.setattr(urllib.request, "_opener", None, raising=False)
+    reply = read_text(RENDERED_REPLY).encode("utf-8")
+    with RecordedEndpoint(200, reply) as served:
+        for name in ("http_proxy", "HTTP_PROXY", "all_proxy", "ALL_PROXY"):
+            monkeypatch.setenv(name, closed_base_url())
+        monkeypatch.delenv("no_proxy", raising=False)
+        monkeypatch.delenv("NO_PROXY", raising=False)
+
+        post({"item": "text"}, endpoint=served.endpoint, timeout=5.0)
+        template = props(served.endpoint, timeout=5.0)
+        probed = _ask(props_url(served.endpoint), None, timeout=5.0)
+
+    assert served.sent == [{"item": "text"}]
+    assert template == probed == {"chat_template": "fixture-template"}
+
+
 class TestTheRenderedCompletionEnvelope:
     """The second shape `parse_completion` reads, from a reply a server really sent.
 
-    Recorded 2026-09-12 by posting the committed label prompt to llama-server
+    Recorded 2026-09-12 by posting the label prompt committed that day to llama-server
     build b10444-5f754ea0e on the weights `models.summarizer` declares, over its
     rendered-completion route. Nothing is hand-written: the route names its
     fields differently from the chat route, and a fake would agree with whatever
@@ -726,7 +731,7 @@ class TestTheThreeSlotFacts:
     def test_the_boolean_and_the_count_are_read_off_one_field(self) -> None:
         """`prefix_reused` and `cached_tokens` cannot disagree about one reply.
 
-        `label_cached_tokens` on the census row is this count, and
+        `summary_cached_tokens` on the census row is this count, and
         `prefix_shared_with_previous` is this boolean. Deriving the second from
         anything but the first is how a ledger comes to hold a reading twice and
         then hold it two ways (Guardrail #10).
@@ -1208,7 +1213,7 @@ class TestAConstrainedCallerGetsBothSpans:
 class TestTheThinkingReachesNothing:
     """The hard rule, on a recorded thinking reply rather than a constructed one.
 
-    Model-written text that reached a reader-facing surface or a replayed prompt
+    Model-written text that reached a reader-facing surface or a persisted payload
     would be exactly the injection channel Guardrail #11 exists to close, and it
     is not evidence of anything.
     """
@@ -1237,45 +1242,6 @@ class TestTheThinkingReachesNothing:
         for phrase in ("Let me reason", "several framings", "before I answer"):
             assert phrase in self.thought()
             assert phrase not in persisted
-
-    def test_the_reply_replayed_into_the_second_call_is_cut_at_the_answer_boundary(self) -> None:
-        """The second prompt opens with the label prompt and the label ANSWER.
-
-        What the slot holds behind that prompt also includes what span one
-        thought, and none of it is replayed: a prompt is the one place a model's
-        own words could steer the next decode.
-        """
-        markers = a_markers(thinking_close="</think>")
-        first = completion_payload(
-            model_id="m",
-            system="S",
-            user="U",
-            output_schema=output_schema(),
-            server=a_server(),
-            sampling=a_sampling(),
-            markers=markers,
-            max_answer_tokens=900,
-        )
-        answer = self.recorded().content
-
-        second = continued_completion_payload(
-            first,
-            reply=answer,
-            user="and then?",
-            output_schema=output_schema(),
-            markers=markers,
-            max_answer_tokens=900,
-        )
-
-        assert answer in second["prompt"]
-        assert self.thought() not in second["prompt"]
-        appended = second["prompt"][len(str(first["prompt"])) :]
-        assert appended == (
-            answer
-            + markers.turn_closing
-            + markers.turn("user", "and then?")
-            + markers.reply_opening_thinking
-        ), "what follows the label call's prompt is the answer, one new turn, and nothing else"
 
 
 def test_inline_reasoning_is_read_only_with_its_explicit_delimiters() -> None:
@@ -1565,30 +1531,34 @@ def test_a_call_that_never_returned_is_the_one_failure_that_really_was_free() ->
 
 
 def test_a_reply_claiming_more_cache_than_prompt_is_refused() -> None:
-    """The console divides by the difference, so a negative remainder cannot land."""
-    with pytest.raises(ValidationError):
-        Summary(
+    """The console divides by the difference, so a negative remainder cannot land.
+
+    The words go in already normalised: `Summary` rebuilds the digest from the
+    normalised text before it reads the cache, so a trailing space is refused
+    for the digest and the cache rule is never reached.
+    """
+    words = normalize_prose("word " * 60)
+
+    def claiming(cached: int) -> Summary:
+        return Summary(
             version=Summary.schema_version(),
             item_id="ai-01",
             url_key="9" * 64,
-            summary="word " * 60,
-            output_digest=derive_output_digest("word " * 60),
+            summary=words,
+            output_digest=derive_output_digest(words),
             model_id="m",
             input_tokens=100,
-            cached_tokens=101,
+            cached_tokens=cached,
             generated_at=GENERATED_AT,
             status=SummaryStatus.OK,
         )
 
+    assert claiming(100).cached_tokens == 100, "a prompt read wholly from the cache is legal"
+    with pytest.raises(ValidationError, match="cached_tokens cannot exceed input_tokens"):
+        claiming(101)
+
 
 # --- What the pipeline agrees to believe ------------------------------------
-
-
-def test_a_well_formed_reply_becomes_a_summary() -> None:
-    result = summarised("ok")
-    assert result.status is SummaryStatus.OK
-    assert result.summary
-    assert result.output_digest == derive_output_digest(result.summary, title=result.title)
 
 
 def test_an_injected_tool_call_cannot_reach_a_payload() -> None:

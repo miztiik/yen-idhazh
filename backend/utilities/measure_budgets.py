@@ -1,10 +1,10 @@
-"""Retake the three budgets a vocabulary sizes, and say out loud when they are stale.
+"""Retake the two budgets a vocabulary sizes, and say out loud when they are stale.
 
-Three constants in this repository were sized by asking a tokenizer a question,
-and all three sit where a loaded record cannot reach them: `DefinitionText` and
-`WORST_CASE_REPLY_CHARACTERS` are in `contracts/`, which is the bottom of the
-dependency graph and imports no other subpackage (`CLAUDE.md` section 4), and
-`TOKENS_PER_WORD` is read by an import-time assertion in `classify.calls`.
+Two constants in this repository were sized by asking a tokenizer a question,
+and both sit where a loaded record cannot reach them: `DefinitionText` is in
+`contracts/`, which is the bottom of the dependency graph and imports no other
+subpackage (`CLAUDE.md` section 4), and `TOKENS_PER_WORD` is read by an
+import-time assertion in `classify.calls`.
 `idhazh.measured.SIZED_BY_A_READING_HERE` pairs each site with the reading behind
 it, which is what makes the question askable at all.
 
@@ -12,11 +12,11 @@ Two verbs, and the split is deliberate.
 
 - `check` opens no socket. It compares each reading's `subject` against the
   weights `config/` names and exits non-zero on any that disagree. This is an
-  operator surface rather than a test, because all three are stale on every
+  operator surface rather than a test, because both are stale on every
   commit until somebody retakes them, and a test that is red on a state nobody
   has fixed yet is a test people learn to scroll past (`CLAUDE.md` section 13).
 - `read` needs a running `llama-server` and asks its `/tokenize` for each of the
-  three quantities. **It asks the server rather than reasoning about a
+  two quantities. **It asks the server rather than reasoning about a
   vocabulary**, which is the whole difference between a reading and an argument:
   the tokenizer ships inside the weights and it moves when they do.
 
@@ -52,7 +52,6 @@ from typing import Any, Final, Protocol
 from idhazh import config
 from idhazh.contracts.corpus import ChatRole, CorpusRow
 from idhazh.contracts.taxonomy import LifecycleStatus, Taxonomy
-from idhazh.contracts.visual import PlanEncodings
 from idhazh.measured import (
     SIZED_BY_A_READING_HERE,
     Unreached,
@@ -64,18 +63,6 @@ from idhazh.sanitize import FENCE_CLOSE, FENCE_OPEN
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
 CONFIG_DIR: Final = REPO_ROOT / "config"
 CORPUS: Final = REPO_ROOT / "corpus" / "corpus.jsonl"
-PLAN_FIXTURES: Final = REPO_ROOT / "tests" / "fixtures" / "contracts" / "visual-plan"
-
-#: The two committed plans, declining first. The empty-role cost is a per-role
-#: rate and the declining plan is where every role is empty, so it is the case
-#: that fixes the rate; the four-bar one is what says the rate holds when two
-#: roles are filled.
-PLAN_PROBES: Final = ("declined.json", "bar-chart.json")
-
-#: Every encoding role the plan shape declares, in the order the schema does. A
-#: role missing from a fixture is an empty role that the fixture omitted, so the
-#: list has to come from the shape rather than from the fixture.
-_PLAN_ENCODINGS: Final = "encodings"
 
 #: How many corpus rows the tokens-a-word probe reads. Bounded on purpose: the
 #: corpus grows with every harvest and a probe whose cost rises because a run
@@ -154,11 +141,10 @@ class BudgetReading:
 class Tokenizer:
     """The running server's own tokenizer, over its own HTTP.
 
-    The same shape `measure_two_calls.Tokenizer` uses and for the same reason:
-    asking the server is the only way to count with the vocabulary that is
-    actually loaded. It differs in one way - a server that will not answer raises
-    here rather than yielding `None`, because every caller below has exactly one
-    thing to do about it and that is to stop.
+    Asking the server is the only way to count with the vocabulary that is
+    actually loaded. A server that will not answer raises here rather than
+    yielding `None`, because every caller below has exactly one thing to do about
+    it and that is to stop.
     """
 
     base: str
@@ -183,7 +169,7 @@ class Tokenizer:
         return tokens_in_reply(body, base=self.base)
 
 
-# --- The three probes --------------------------------------------------------
+# --- The two probes ----------------------------------------------------------
 
 
 def definition_probe(config_dir: Path) -> tuple[str, int]:
@@ -203,28 +189,6 @@ def definition_probe(config_dir: Path) -> tuple[str, int]:
         if entry.status is LifecycleStatus.ACTIVE
     )
     return taxonomy.definition_block(), offered
-
-
-def empty_role_fragment(plan: dict[str, Any], roles: Sequence[str]) -> str:
-    """The JSON an empty encoding role costs, for every role this plan leaves empty.
-
-    `"<name>":[]` and a comma, which is what the 114 characters on the declining
-    plan and the 87 on the four-bar one are. Built from the role list rather than
-    from the fixture's own keys, because a role a fixture omits is an empty role
-    too and a grammar-constrained decoder emits it either way.
-    """
-    filled = plan.get(_PLAN_ENCODINGS) or {}
-    return "".join(f'"{role}":[],' for role in roles if not filled.get(role))
-
-
-def plan_roles() -> tuple[str, ...]:
-    """The encoding roles the plan shape declares, read off the shape itself.
-
-    Not a list written here. A role added to `PlanEncodings` is a role a decoder
-    starts emitting, and a probe that did not know about it would understate the
-    cost of the decision it is measuring.
-    """
-    return tuple(PlanEncodings.model_fields)
 
 
 def corpus_bodies(corpus: Path, *, samples: int) -> list[str]:
@@ -255,7 +219,7 @@ def corpus_bodies(corpus: Path, *, samples: int) -> list[str]:
     return bodies
 
 
-# --- Taking the three readings ----------------------------------------------
+# --- Taking the two readings -------------------------------------------------
 
 
 def read_definition_budget(
@@ -297,44 +261,6 @@ def read_definition_budget(
     )
 
 
-def read_empty_role_budget(
-    tokenizer: CountsTokens, *, fixtures: Path, stamp: dict[str, str]
-) -> BudgetReading:
-    roles = plan_roles()
-    working: dict[str, float] = {"roles_declared": len(roles)}
-    widest = 0
-    for name in PLAN_PROBES:
-        plan = json.loads((fixtures / name).read_text(encoding="utf-8"))
-        fragment = empty_role_fragment(plan, roles)
-        empty = fragment.count("[]")
-        tokens = tokenizer.count(fragment) if fragment else 0
-        working[f"{name}_empty_roles"] = empty
-        working[f"{name}_characters"] = len(fragment)
-        working[f"{name}_tokens"] = tokens
-        if empty:
-            working[f"{name}_tokens_a_role"] = round(tokens / empty, 4)
-        widest = max(widest, tokens)
-    return BudgetReading(
-        record="EMPTY_ROLE_TOKENS",
-        measures="the nine empty encoding roles on a visual plan that declines, in tokens",
-        value=widest,
-        unit="tokens",
-        spread=0.0,
-        probe=(
-            "the `\"<role>\":[],` fragment for every encoding role each of the two "
-            f"committed plan fixtures leaves empty ({', '.join(PLAN_PROBES)})"
-        ),
-        why_that_probe=(
-            "the fixtures are the narrowest and widest plans this pipeline has committed, "
-            "and the declining one is where all nine roles are empty - which is what fixes "
-            "the per-role rate rather than an average of it"
-        ),
-        probe_size=f"{len(roles)} encoding roles",
-        working=working,
-        **stamp,
-    )
-
-
 def read_tokens_a_word(
     tokenizer: CountsTokens, *, corpus: Path, samples: int, stamp: dict[str, str]
 ) -> BudgetReading:
@@ -369,14 +295,12 @@ def take_every_reading(
     tokenizer: CountsTokens,
     *,
     config_dir: Path,
-    fixtures: Path,
     corpus: Path,
     samples: int,
     stamp: dict[str, str],
 ) -> list[BudgetReading]:
     return [
         read_definition_budget(tokenizer, config_dir=config_dir, stamp=stamp),
-        read_empty_role_budget(tokenizer, fixtures=fixtures, stamp=stamp),
         read_tokens_a_word(tokenizer, corpus=corpus, samples=samples, stamp=stamp),
     ]
 
@@ -454,7 +378,7 @@ def render_readings(readings: Iterable[BudgetReading]) -> str:
             "",
         ]
     lines += [
-        "Spread is 0 on all three and is printed rather than omitted. A tokenizer is",
+        "Spread is 0 on both and is printed rather than omitted. A tokenizer is",
         "deterministic, so the same probe text on the same weights returns the identical",
         "count every time - there is nothing to repeat. A reading with no spread field at",
         "all would read as one that forgot to take it.",
@@ -522,7 +446,6 @@ def run_read(args: argparse.Namespace) -> int:
         readings = take_every_reading(
             tokenizer,
             config_dir=args.config,
-            fixtures=args.fixtures,
             corpus=args.corpus,
             samples=args.samples,
             stamp=stamp,
@@ -553,10 +476,9 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     check = verbs.add_parser("check", help="say which sized constants name retired weights")
     check.add_argument("--config", type=Path, default=CONFIG_DIR)
 
-    read = verbs.add_parser("read", help="retake all three against a running server")
+    read = verbs.add_parser("read", help="retake both against a running server")
     read.add_argument("--base", default="http://127.0.0.1:8080")
     read.add_argument("--config", type=Path, default=CONFIG_DIR)
-    read.add_argument("--fixtures", type=Path, default=PLAN_FIXTURES)
     read.add_argument("--corpus", type=Path, default=CORPUS)
     read.add_argument("--samples", type=int, default=DEFAULT_SAMPLES)
     read.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT)

@@ -9,7 +9,14 @@ import { CANARY, newestDate } from './support/published';
 import { uiConfig } from '../src/lib/server/config';
 
 /** One reading journey covers the shared shell; never expand it into route or presentation matrices. */
-test('a reader can load stories, filter the day and keep the layout usable on a phone', async ({ page }) => {
+const journey = process.env.IDHAZH_TEST_BUILD === 'real'
+	? 'a reader opens a dated story from the built archive'
+	: 'a reader can load stories, filter the day and keep the layout usable on a phone';
+
+test(journey, async ({ page }) => {
+	const build: BuildRecord = JSON.parse(readFileSync(
+		join(process.cwd(), '..', 'backend', 'var', 'checks', 'build.json'), 'utf8'
+	));
 	const errors: string[] = [];
 	const expectedMissing = new Set<string>();
 	const missingResponses: string[] = [];
@@ -35,6 +42,20 @@ test('a reader can load stories, filter the day and keep the layout usable on a 
 	const stories = page.locator('article.item');
 	await expect(stories.first()).toBeVisible();
 	await expect(stories.first().locator('[data-item-summary]').first()).not.toBeEmpty();
+	if (build.mode === 'real') {
+		// Check the dated route fetches and renders without depending on the day's
+		// topic counts, edition status or charts.
+		await page.goto('/archive/');
+		const link = page.locator('[data-story-list="rows"]').getByRole('link').first();
+		await link.click();
+		await dayReady(page);
+		const id = decodeURIComponent(new URL(page.url()).hash.slice(1));
+		const story = page.locator(`article.item[id=${JSON.stringify(id)}]`);
+		await expect(story).toBeVisible();
+		await expect(story.locator('[data-item-summary]').first()).not.toBeEmpty();
+		expect(errors).toEqual([]);
+		return;
+	}
 	const before = await stories.count();
 	expect(before).toBeGreaterThan(1);
 	const title = await stories.first().getByRole('heading').innerText();
@@ -51,6 +72,7 @@ test('a reader can load stories, filter the day and keep the layout usable on a 
 		const geometry = await stories.first().evaluate((article) => {
 			const body = article.querySelector<HTMLElement>('.item-body')!;
 			const prose = article.querySelector<HTMLElement>('.prose')!;
+			const rail = article.querySelector<HTMLElement>('.item-rail')!;
 			const stream = article.closest<HTMLElement>('.day-stream')!;
 			const day = article.closest<HTMLElement>('.day')!;
 			const style = getComputedStyle(article);
@@ -60,6 +82,8 @@ test('a reader can load stories, filter the day and keep the layout usable on a 
 				card: article.getBoundingClientRect().width,
 				body: body.getBoundingClientRect().width,
 				prose: prose.getBoundingClientRect().width,
+				bodyBottom: body.getBoundingClientRect().bottom,
+				footerTop: rail.getBoundingClientRect().top,
 				rightInset: article.getBoundingClientRect().right - body.getBoundingClientRect().right,
 				expectedInset: Number.parseFloat(style.paddingRight) + Number.parseFloat(style.borderRightWidth)
 			};
@@ -68,6 +92,7 @@ test('a reader can load stories, filter the day and keep the layout usable on a 
 		expect(Math.abs(geometry.stream - geometry.card)).toBeLessThanOrEqual(1);
 		expect(Math.abs(geometry.body - geometry.prose)).toBeLessThanOrEqual(1);
 		expect(Math.abs(geometry.rightInset - geometry.expectedInset)).toBeLessThanOrEqual(1);
+		expect(geometry.footerTop).toBeGreaterThanOrEqual(geometry.bodyBottom);
 	}
 	await expectFullArticleWidth();
 	await expect(page.locator('[data-time-note]')).toHaveCount(0);
@@ -185,9 +210,6 @@ test('a reader can load stories, filter the day and keep the layout usable on a 
 	await expect(page.locator('[data-reader-top]')).toHaveCount(0);
 	await page.emulateMedia({ reducedMotion: 'no-preference' });
 
-	const build: BuildRecord = JSON.parse(readFileSync(
-		join(process.cwd(), '..', 'backend', 'var', 'checks', 'build.json'), 'utf8'
-	));
 	let chartCase: {
 		date: string; itemId: string; path: string; data: VisualData; plainItemId: string
 	} | null = null;
@@ -251,7 +273,8 @@ test('a reader can load stories, filter the day and keep the layout usable on a 
 	const archiveProse = page.locator('.story-prose').first();
 	await expect(archiveProse).toBeVisible();
 	expect(await archiveProse.evaluate((node) =>
-		node.getBoundingClientRect().width <= Number.parseFloat(getComputedStyle(node).maxWidth) + 1
+		Math.abs(node.getBoundingClientRect().width -
+			node.closest('.story-row')!.getBoundingClientRect().width) <= 1
 	)).toBe(true);
 	if (chartCase) {
 		await page.setViewportSize({ width: 390, height: 844 });

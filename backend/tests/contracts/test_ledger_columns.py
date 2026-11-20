@@ -152,6 +152,7 @@ def test_the_item_health_ledger_columns_are_defined_once() -> None:
         "downgrade_depth",
         "marks",
         "visual_id",
+        "analyze_ms",
     )
 
 

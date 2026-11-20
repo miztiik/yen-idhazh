@@ -247,10 +247,10 @@ def test_a_call_slot_with_numbers_and_no_kind_is_half_a_call() -> None:
     `ItemHealthRow` holds a slot to filling whole or not at all, so five numbers
     under `label_*` and no `label_kind` is a row nothing can build - and while
     `close` handed back a mapping, that was a row nobody tried to build. Both
-    calls are driven through the work stage's own cell builder.
+    slots are driven through the work stage's own cell builder.
     """
     from idhazh.llm.server import Completion
-    from idhazh.stages.two_calls import _call_cells
+    from idhazh.stages.summarize_one_item import _call_cells
 
     label = Completion(
         content="{}", prompt_tokens=1497, completion_tokens=205,
@@ -294,7 +294,7 @@ def test_a_calls_clock_is_the_stopwatch_and_not_the_two_cells_beside_it() -> Non
     own number and not a figure this test chose (Guardrail #7).
     """
     from idhazh.llm.server import parse_completion
-    from idhazh.stages.two_calls import _call_cells
+    from idhazh.stages.summarize_one_item import _call_cells
 
     reply = parse_completion(
         (FIXTURES_DIR / "completions" / "rendered" / "label.json").read_text(encoding="utf-8")
@@ -313,18 +313,24 @@ def test_the_gap_is_the_item_minus_the_stages_that_named_themselves() -> None:
     """`stage_gap_ms` is the only cell that can catch a step nobody thought to time.
 
     Signed on purpose, and the arithmetic is asserted rather than described: the
-    four named stages are subtracted from the item's own wall clock and what is
+    five named stages are subtracted from the item's own wall clock and what is
     left is whatever the stage did between them.
     """
     subject = settled(
-        recorder(), fetch_ms=900, extract_ms=120, summarize_ms=475890, faithfulness_ms=1400
+        recorder(),
+        fetch_ms=900,
+        extract_ms=120,
+        analyze_ms=2300,
+        summarize_ms=475890,
+        faithfulness_ms=1400,
     )
 
     row = subject.close()
 
     total = row.item_total_ms
     assert isinstance(total, int)
-    named = 900 + 120 + 475890 + 1400
+    assert row.analyze_ms == 2300
+    named = 900 + 120 + 2300 + 475890 + 1400
     assert row.stage_gap_ms == total - named
 
 

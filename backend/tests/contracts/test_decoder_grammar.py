@@ -1,10 +1,10 @@
 """Does every schema we hand a constrained decoder bound its own decode length?
 
-Not "is there a `maxLength`". `visual.unbounded_leaves` already asks that, and it
-answered yes throughout 2026-09-14 while the decoder ran unbounded: llama.cpp's
-schema-to-grammar converter honours a `pattern` or a length bound, never both, so
-a `maxLength` beside `^[a-z]+-...$` is dropped and never reaches the grammar. The
-question that could disagree with that one is whether the pattern bounds itself.
+Not "is there a `maxLength`". That question answered yes throughout 2026-09-14 while
+the decoder ran unbounded: llama.cpp's schema-to-grammar converter honours a `pattern`
+or a length bound, never both, so a `maxLength` beside `^[a-z]+-...$` is dropped and
+never reaches the grammar. The question that could disagree with it is whether the
+pattern bounds itself.
 """
 
 from __future__ import annotations
@@ -13,13 +13,11 @@ import re
 from typing import Any
 
 import pytest
-from support.paths import FIXTURES_DIR
+from support.paths import CONTRACT_FIXTURES_DIR
+from support.prompts import WIND_NAMES, WIND_TEXT, tables_over
 
 from idhazh.classify import calls
 from idhazh.contracts.article import Article
-from idhazh.contracts.element import ElementTable
-from idhazh.contracts.knobs.extract import ElementsConfig
-from idhazh.elements import element_table
 
 pytestmark = pytest.mark.contract
 
@@ -79,22 +77,13 @@ def _patterns(node: Any, path: str = "") -> list[tuple[str, str]]:
 
 def _decoder_schemas() -> dict[str, dict[str, Any]]:
     """Every schema this pipeline sends a decoder, built the way the run builds it."""
-    table = ElementTable.read(FIXTURES_DIR / "visual-validator" / "tables" / "wind.json")
-    empty = ElementTable.model_validate(table.model_dump() | {"elements": []})
-    article = Article.read(FIXTURES_DIR / "contracts" / "article" / "ok.json")
-    bare = Article.model_validate(article.model_dump() | {"text": " \t"})
+    _, tables = tables_over(
+        Article.read(CONTRACT_FIXTURES_DIR / "article" / "ok.json"), WIND_TEXT, WIND_NAMES
+    )
     return {
-        "label": calls.label_schema(),
-        "label_request": calls.label_request_schema(
-            article, element_table(article, config=ElementsConfig())
-        ),
-        "empty_label_request": calls.label_request_schema(
-            bare, element_table(bare, config=ElementsConfig())
-        ),
         "summarize_and_plan": calls.summarize_and_plan_schema(plan=True),
         "summarize_only": calls.summarize_and_plan_schema(plan=False),
-        "article_references": calls.summarize_and_plan_schema(table=table),
-        "empty_references": calls.summarize_and_plan_schema(table=empty),
+        "article_rows": calls.summarize_and_plan_schema(tables=tables),
     }
 
 
@@ -130,7 +119,7 @@ def test_no_schema_builder_escapes_this_check() -> None:
         and callable(value)
         and getattr(value, "__module__", None) == calls.__name__
     }
-    covered = {"label_schema", "label_request_schema", "summarize_and_plan_schema"}
+    covered = {"summarize_and_plan_schema"}
     assert built == covered, (
         f"{built - covered} builds a schema for the decoder and no check above sends it "
         "through unbounded_quantifier"

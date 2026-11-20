@@ -23,15 +23,11 @@ import {
 	type GlanceDay
 } from '../src/lib/charts/glance';
 import { dailyFiguresPointer, dailyFiguresRows, dailyFiguresSummary } from '../src/lib/console/daily-figures';
-import { EVAL_PANELS, matchTitle } from '../src/lib/console/eval-instruments';
 import {
-	clampNote,
-	heldNote,
 	mergeNote as mergeNoteWithFormat,
 	mergeRate as mergeRateWithFormat,
-	mergeTotals,
-	type LineDay
-} from '../src/lib/console/merge-line';
+	mergeTotals
+} from '../src/lib/console/merged-stories';
 import { quietSentence } from '../src/lib/console/waiting';
 import { numberFormat } from './support/number-format';
 
@@ -42,21 +38,6 @@ const mergeNote = (totals: Parameters<typeof mergeNoteWithFormat>[0], span: numb
 	mergeNoteWithFormat(totals, span, numberFormat);
 const mergeRate = (totals: Parameters<typeof mergeRateWithFormat>[0], span: number) =>
 	mergeRateWithFormat(totals, span, numberFormat);
-
-/** One day of the merge line, the line held back by the daily cap or not. */
-function lineDay(date: string, over: Partial<LineDay> = {}): LineDay {
-	return {
-		date,
-		previous: 0.94,
-		proposed: 0.95,
-		applied: 0.943,
-		clampKind: 'none',
-		heldReason: 'none',
-		maxDownStep: 0.01,
-		maxUpStep: 0.003,
-		...over
-	};
-}
 
 test('a quiet panel says the days it read held nothing', () => {
 	expect(quietSentence(1, null)).toBe(
@@ -79,12 +60,6 @@ test('a sparse chart counts its measured days over the days it drew', () => {
 	);
 	// One day measured in full is never sparse, so no sentence is printed.
 	expect(coverageSentence(coverage([true]), 'We timed')).toBeNull();
-});
-
-test('one-day titles name one day, while seven-day words stay unchanged', () => {
-	expect(matchTitle(1)).toBe('Summary faithfulness for this one day');
-	expect(matchTitle(7)).toBe('Summary faithfulness, day by day');
-	expect(EVAL_PANELS.find((panel) => panel.id === 'faithfulness')?.title).toBe(matchTitle(7));
 });
 
 test('the chart-drawing verdict names the one day, since one day has no median day', () => {
@@ -140,20 +115,4 @@ test('the merge sentences name the days they counted', () => {
 	const folded = mergeTotals([{ date: '2026-10-06', published: 10, merges: 1, groups: 1, largest: 2 }]);
 	expect(mergeRate(folded, 1)).toBe('That is 10% of the 10 stories this one day published.');
 	expect(mergeRate(folded, 7)).toBe('That is 10% of the 10 stories these 7 days published.');
-});
-
-test('the clamp and fitting sentences count over the days on screen', () => {
-	const calm = [lineDay('2026-10-06')];
-	expect(clampNote(calm, 1)).toBe('The clamp has not held the line back in this one day.');
-	expect(clampNote(calm, 7)).toBe('The clamp has not held the line back in these 7 days.');
-
-	const held = [lineDay('2026-10-06', { clampKind: 'daily_up' })];
-	expect(clampNote(held, 1)).toBe('The clamp held the line back on 1 of 1 day.');
-	expect(clampNote([...held, lineDay('2026-10-05', { clampKind: 'guard' })], 7)).toBe(
-		'The clamp held the line back on 2 of 7 days.'
-	);
-
-	const unfitted = [lineDay('2026-10-06', { heldReason: 'sheet_too_small', proposed: null })];
-	expect(heldNote(unfitted, 1)).toBe('Nothing was fitted on 1 recorded day in this 1-day window.');
-	expect(heldNote(unfitted, 7)).toBe('Nothing was fitted on 1 recorded day in this 7-day window.');
 });

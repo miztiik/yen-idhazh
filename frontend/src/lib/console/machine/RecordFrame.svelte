@@ -16,11 +16,11 @@
 <div data-machine-panel-state={state} data-readout-fetched data-panel-query={id}
 	data-windowed={windowed?.name} data-window-days={windowed?.days}
 	aria-label={windowed === undefined ? undefined : `${title}, selected window ${countDays(windowed.days)}`}
-	data-window-exempt={['two-clocks', 'memory-held'].includes(id) ? 'newest-run' : undefined}>
+	data-window-exempt={id === 'memory-held' ? 'newest-run' : undefined}>
 	{#if state === 'ok'}
 		{@render children()}
 	{:else}
-		<Panel {id} {title} {heading} verdict={id === 'two-clocks'}
+		<Panel {id} {title} {heading}
 			note={state === 'loading' ? 'Loading the published record for this comparison.' : 'The published record has no usable answer for this comparison.'}>
 			<div data-readout-none="The requested record has no drawing yet; agreed with Susan"
 				data-empty-state={state === 'loading' ? undefined : state}

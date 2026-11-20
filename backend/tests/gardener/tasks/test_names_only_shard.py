@@ -1,24 +1,8 @@
-"""Does a shard with initial planner input land what a full checkout lands?
-
-Over one fixture tree - the tree the retention tasks' record was taken over -
-every shipped task a wake runs on this repository's files runs twice: once in
-a full clone, where every file is on disk, and once in a partial clone whose
-checkout includes config and saved planner namespaces. Other families learn
-members from the commit and fetch the periods they read. Each lands on an origin of its own, and
-the two must write the same record rows, apart from what each downloaded and
-how long each took, say the same of each task in its finished event, apart from
-how long it took, and change the same paths.
-
-The census summary is also run in a shard of its own, the way a wake can plan
-it apart from the census compaction. It must still find its due months from
-the census's names and read their rows, and with `reads` gone from its
-declaration it must fail rather than report a census it never saw.
-"""
+"""Can the standalone census summary find its input in a sparse checkout?"""
 
 from __future__ import annotations
 
 import json
-import logging
 import re
 import subprocess
 from datetime import UTC, datetime
@@ -32,14 +16,10 @@ from support.paths import CONFIG_DIR
 from idhazh import config, ledger
 from idhazh.config import GardenerSettings
 from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason
-from idhazh.contracts.gardener_events import TaskFinished
-from idhazh.contracts.knobs.gardener import TaskKind
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.gardener import event_log, shards
 from idhazh.gardener.outcome import EXIT_TASK_FAILED, Outcome
 from utilities import gardener_publish
 
-from .._events import events
 from .._garden import (
     OriginBlobs,
     a_config,
@@ -82,20 +62,6 @@ def a_live_garden(root: Path, **changed: dict[str, Any]) -> GardenerSettings:
         declared |= changed.get(source.stem.replace("-", "_"), {})
         (config_dir / "gardener" / source.name).write_text(json.dumps(declared), encoding="utf-8")
     return config.load_gardener(config_dir)
-
-
-def in_the_repository(settings: GardenerSettings) -> tuple[str, ...]:
-    """Every task a wake's shards run whose members are files in this repository."""
-    planned = shards.plan(settings)
-    elsewhere = (TaskKind.COLLECTION, TaskKind.HISTORY)
-    return tuple(
-        sorted(
-            name
-            for shard in planned.shards
-            for name in shard.task_names
-            if settings.tasks[name].kind not in elsewhere
-        )
-    )
 
 
 def origins(root: Path, count: int) -> tuple[Path, list[Path]]:
@@ -181,56 +147,6 @@ def comparable(rows: dict[str, CollectionPruneRow]) -> dict[str, dict[str, Any]]
     return {task: row.model_dump(exclude=_OWN_TO_THE_RUN) for task, row in rows.items()}
 
 
-def said_of(caplog: pytest.LogCaptureFixture) -> dict[str, str]:
-    """How each task the shard ran ended, as its finished event says it, but how long it took.
-
-    A name the ledger door mints fresh is written as its pattern, as the
-    changed paths are. The records are cleared once read, so the next shard's
-    are its own.
-    """
-    finished = {
-        held.task: _FILE_ID.sub(
-            "<file_id>", held.model_dump_json(exclude={"duration_ms"})
-        )
-        for held in events(caplog.records, TaskFinished)
-    }
-    caplog.clear()
-    return finished
-
-
-def test_a_shard_with_initial_planner_input_lands_what_a_full_checkout_lands(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
-) -> None:
-    quiet_git(tmp_path, monkeypatch)
-    seed, (full_origin, names_origin) = origins(tmp_path, 2)
-    settings = a_live_garden(tmp_path / "garden")
-    names = in_the_repository(settings)
-    full = a_full_clone(tmp_path, full_origin)
-    named_inputs = a_partial_clone(
-        tmp_path, names_origin, "config", "state/raw/feed-ingest-plan",
-        "state/compact/feed-ingest-plan", name="named-inputs",
-    )
-    package = named_task_package(tmp_path, monkeypatch)
-
-    with caplog.at_level(logging.INFO, logger=event_log.__name__):
-        whole, whole_rows, _ = landed(names, settings, full, full_origin, package)
-        whole_said = said_of(caplog)
-        lean, lean_rows, _ = landed(names, settings, named_inputs, names_origin, package)
-        lean_said = said_of(caplog)
-
-    assert lean.exit_code == whole.exit_code, (whole_said, lean_said)
-    assert lean_said == whole_said, "the two shards said different things of one task"
-    assert comparable(lean_rows) == comparable(whole_rows)
-    changes = changed_paths(names_origin, seed)
-    assert changes == changed_paths(full_origin, seed)
-    assert any(line.startswith("D\t") for line in changes), "nothing was deleted"
-    assert any(line.startswith("A\tstate/compact/") for line in changes), "no compaction wrote"
-    row = next(iter(lean_rows.values()))
-    assert row.cone_bytes is None and row.downloaded_bytes is not None
-    assert row.downloaded_bytes > 0, "the lean shard read no named period files"
-    assert {each.downloaded_bytes for each in whole_rows.values()} == {0}
-
-
 def test_the_census_summary_in_a_shard_of_its_own_reads_the_census_or_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -243,7 +159,6 @@ def test_the_census_summary_in_a_shard_of_its_own_reads_the_census_or_fails(
     quiet_git(tmp_path, monkeypatch)
     seed, (full_origin, names_origin, blind_origin) = origins(tmp_path, 3)
     settings = a_live_garden(tmp_path / "garden")
-    assert SUMMARY in in_the_repository(settings)
     full = a_full_clone(tmp_path, full_origin)
     only_code = a_partial_clone(tmp_path, names_origin, "config", name="only-code")
     package = named_task_package(tmp_path, monkeypatch)

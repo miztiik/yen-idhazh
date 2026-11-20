@@ -63,9 +63,10 @@ class NoneReason(StrEnum):
     with no cause makes the largest number an operator reads the one that
     explains nothing.
 
-    **One member per gate, never one per call site.** The reachability gate
-    refuses in two places and both record `not_reachable`, because what an
-    operator acts on is the gate rather than the line of code.
+    **One member per gate, never one per call site.** The gate that leaves the
+    question about a chart off the request records `not_reachable` wherever it
+    fires, because what an operator acts on is the gate rather than the line of
+    code.
 
     **And one member per gate that has a writer.** Proposed gates without a
     producer do not get a member until their behavior exists.
@@ -74,9 +75,10 @@ class NoneReason(StrEnum):
     sentences in `rationale`, and several are not gates at all.
     """
 
-    #: The reachability gate refused before a plan was drafted: no choice over
-    #: this article's elements could have survived the validator. The call still
-    #: ran and still wrote the summary, with the plan fields suppressed.
+    #: No table of names and figures was on offer, so no answer about a chart was
+    #: asked for and the call wrote the summary alone. Before 2026-11-18 it meant
+    #: that no choice over this article's elements could have survived the
+    #: validator; rows written before keep that meaning.
     NOT_REACHABLE = "not_reachable"
     #: The model was asked and answered `none`. The ordinary answer, and the one
     #: the design wants to stay common.
@@ -89,7 +91,7 @@ class NoneReason(StrEnum):
     #: was never written. The item publishes; the picture is what was lost.
     OUTPUT_BUDGET_CUT = "output_budget_cut"
     #: The reply was cut at the end of the context window rather than at the end
-    #: of its budget: the article and the label call's reply in front of it left less room
+    #: of its budget: the prompt in front of it left less room
     #: than the summarize-and-plan call's grammar may write. Separate from `output_budget_cut`
     #: because the two ask an operator for different things - a budget cut says look at
     #: the reply shape, and this one says look at
@@ -111,6 +113,11 @@ class VisualDecision(Contract):
     )
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-11-18",
+            change="not_reachable means no table of names and figures was on offer.",
+            why="The call that asks about a chart is built over tables now, not over elements.",
+        ),
+        ChangelogEntry(
             version="2026-11-11",
             change="Retire the actor-grid payload while preserving historical outcome metadata.",
             why="Historical outcome facts remain readable without a retired feature contract.",
@@ -124,11 +131,6 @@ class VisualDecision(Contract):
             version="2026-10-28",
             change="Add a separate whowhat grid payload and visual kind.",
             why="Actor/claim grids must not be encoded as chart data.",
-        ),
-        ChangelogEntry(
-            version="2026-10-25",
-            change="Record requested and delivered types, replacement depth and delivered marks.",
-            why="Refusals and replacements must not conceal the original visual request.",
         ),
         ChangelogEntry(
             version="2026-08-21",

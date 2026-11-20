@@ -6,6 +6,7 @@ import json
 import re
 from pathlib import Path
 from typing import Final
+from urllib.parse import urlsplit
 
 import pytest
 from pydantic import StrictBool, ValidationError
@@ -13,28 +14,23 @@ from support.paths import CONFIG_DIR, REPO_ROOT, read_text
 
 from idhazh import config
 from idhazh.classify import dag
-from idhazh.classify.calls import label_budget_tokens
-from idhazh.contracts import app_config, story_similarity_distribution
+from idhazh.contracts import app_config
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.appearance_config import AppearanceConfig, ChartConfig
-from idhazh.contracts.call_cost import CallKind
-from idhazh.contracts.knobs import placement
 from idhazh.contracts.knobs.console import ConsoleConfig
 from idhazh.contracts.knobs.evaluation import DriftConfig, EvaluationConfig
+from idhazh.contracts.knobs.extract import ElementsConfig
+from idhazh.contracts.knobs.finetune import FinetuneConfig
 from idhazh.contracts.knobs.ledger import LedgerConfig
 from idhazh.contracts.knobs.model_server import ModelServerConfig, is_loopback, resolve_base_url
 from idhazh.contracts.knobs.observability import LoggingConfig, ObservabilityConfig
-from idhazh.contracts.knobs.placement import SameStoryConfig, SimilarityThresholdConfig
 from idhazh.contracts.knobs.retention import PAGES_HARD_CAP_MB, RetentionConfig
 from idhazh.contracts.knobs.similarity import SimilarityConfig
+from idhazh.contracts.knobs.text_analysis import TextAnalysisConfig
 from idhazh.contracts.knobs.ui import UiConfig, VisualSide
 from idhazh.extract import TOKENS_PER_WORD
 from idhazh.llm.server import DEFAULT_MAX_TOKENS, response_limit, window
-from idhazh.measured import LABEL_BODY_TOKENS_A_WORD as _LABEL_A_WORD
-from idhazh.measured import LABEL_MENU_TOKENS_A_ROW as _MENU_A_ROW
-from idhazh.measured import LABEL_SCAFFOLD_TOKENS as _LABEL_SCAFFOLD
 from idhazh.measured import PROMPT_OVERHEAD_TOKENS as _PROMPT_OVERHEAD
-from idhazh.measured import SUMMARIZE_AND_PLAN_SEAM_TOKENS as _SUMMARIZE_AND_PLAN_SEAM
 from idhazh.measured import WORST_TOKENS_A_WORD as _WORST_TOKENS
 
 from ._fixtures import CONFIG_FILES, CONFIG_NOT_OWNED, committed_models, copy_config
@@ -56,14 +52,10 @@ def test_the_config_file_names_every_knob_it_owns(name: str) -> None:
     reading `config/` that the knob exists. Measured 2026-09-17 before this
     landed: `idhazh.json` named 16 fewer knobs than it owns and
     `appearance.json` 2 fewer, while the other four named all of theirs.
-    `summarize.asks_for_a_visual_plan` was among the missing.
 
     **Owns, not declares.** Three blocks sit on two models and only one file is
     their source; `CONFIG_NOT_OWNED` names the other side. Padding a legacy
-    block out to its model would give one knob two answers in two files, which
-    is exactly what `test_a_moved_block_is_declared_in_one_file_and_the_other_
-    does_not_argue` exists to refuse - it caught this test's first draft doing
-    it.
+    block out to its model would give one knob two answers in two files.
 
     Leaf paths rather than top-level keys, because a default nested inside a
     list entry is the shape that hides best: a block-level check cannot see one
@@ -262,23 +254,68 @@ def test_only_a_loopback_literal_or_localhost_answers_for_this_machine(
     assert is_loopback(ModelServerConfig(base_url=declared).base_url) is this_machine
 
 
+@pytest.mark.parametrize(
+    "declared",
+    [
+        "http://192.168.1.20:3020",
+        "http://a-box:3020",
+        "https://analysis.example:3020",
+        "http://127.0.0.1",
+        "http://127.0.0.1:3020/api",
+        "127.0.0.1:3020",
+    ],
+)
+def test_article_text_goes_to_an_analysis_service_on_this_machine_only(declared: str) -> None:
+    """The recipient of article text is an address a person reads in a diff (Guardrail #11).
+
+    A host that is not loopback is refused where the address is declared, and so
+    is anything that is not a scheme, a host and a port: the service the digest
+    job starts listens on the runner's own loopback and nowhere else. Every
+    string is the test's own, never the committed value.
+    """
+    with pytest.raises(ValidationError, match=r"text_analysis\.base_url"):
+        TextAnalysisConfig(base_url=declared)
+
+
+def test_the_text_analysis_address_is_the_one_the_service_listens_on() -> None:
+    """Two committed files name one port and neither reads the other.
+
+    A port edited in only one of them sends every article to a port nothing
+    listens on, and the run degrades quietly to the regex-only table.
+    """
+    listener = json.loads(read_text(CONFIG_DIR / "text-analysis" / "settings.json"))["listener"]
+    committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).text_analysis
+
+    for address in (committed.base_url, TextAnalysisConfig().base_url):
+        declared = urlsplit(address)
+        assert (declared.hostname, declared.port) == (listener["host"], listener["port"])
+
+
+@pytest.mark.parametrize("language", ["EN", "en-US", "e", "english", ""])
+def test_the_text_analysis_language_is_a_bare_lowercase_code(language: str) -> None:
+    """One value names the wheel the sidecar installs and the language every request asks for.
+
+    A workflow step reads it as a key, so it is a code a step never has to quote.
+    """
+    with pytest.raises(ValidationError, match="language"):
+        TextAnalysisConfig(language=language)
+
+
+def test_a_service_label_becomes_an_entity_a_place_or_not_a_quantity_and_nothing_else() -> None:
+    """A use nobody defined is refused, never ignored.
+
+    Ignoring it would turn a misspelt use into a label that silently does nothing.
+    """
+    with pytest.raises(ValidationError, match="label_kinds"):
+        ElementsConfig.model_validate({"label_kinds": {"PERSON": "person"}})
+
+
 #: What the summarize prompt costs before a word of the article reaches it, and
 #: the hardest any published item has tokenized. Both records, their method and
 #: what to do when either moves are in `idhazh.measured`.
 PROMPT_OVERHEAD_TOKENS: Final = int(_PROMPT_OVERHEAD.value)
 
 WORST_TOKENS_A_WORD: Final = _WORST_TOKENS.value
-
-
-#: The same four things for the two-call path, whose prompt this repository
-#: renders itself. Same module, same reason.
-LABEL_SCAFFOLD_TOKENS: Final = int(_LABEL_SCAFFOLD.value)
-
-LABEL_BODY_TOKENS_A_WORD: Final = _LABEL_A_WORD.value
-
-LABEL_MENU_TOKENS_A_ROW: Final = _MENU_A_ROW.value
-
-SUMMARIZE_AND_PLAN_SEAM_TOKENS: Final = int(_SUMMARIZE_AND_PLAN_SEAM.value)
 
 
 def _worst_sequence_tokens(committed: AppConfig) -> tuple[int, int]:
@@ -320,47 +357,34 @@ def test_the_longest_article_the_cap_allows_still_fits_the_window() -> None:
     )
 
 
-def _worst_two_call_sequence_tokens(committed: AppConfig) -> tuple[int, int]:
-    """The label call's prompt at the cap, and the whole sequence behind it.
+def _worst_one_call_sequence_tokens(committed: AppConfig) -> tuple[int, int]:
+    """The digest call's prompt at the cap, and the whole sequence behind it.
 
     A second derivation and not a widening of the one above, because the two
-    paths render different prompts. The single call sends one system turn and
-    the article. The label call sends a system turn that carries both jobs, the article
-    with an address in front of every sentence, and a menu of every quantity and
-    date the extractor already cut - then pays for its own reply twice, once as
-    a decode and once again inside the summarize-and-plan call's prompt.
+    paths render different prompts. The standalone summarizer sends one system
+    turn and the article. The digest call sends its own system turn and the
+    article, and then writes up to the model file's response limit. The tables
+    of figures ride behind the article only where the work stage finds they fit:
+    it reads an item without them otherwise, so the worst case the window has to
+    hold is the article alone.
 
     **The arithmetic itself is `classify.dag`'s and this is the gate over it.**
     It used to be written out here, which put the number the production path
     never checked and the number this file asserts in two places - and two
-    derivations of one quantity disagree the first time a term moves. The three
-    terms of the prompt and the per-turn seam are documented where they are
-    computed; what stays here is the cap, the knob and the window, all three
-    read from `config/` (Guardrail #6).
+    derivations of one quantity disagree the first time a term moves. What stays
+    here is the cap, the knob and the window, all three read from `config/`
+    (Guardrail #6).
     """
-    rows = committed.elements.max_per_article
     cap = committed.extract.truncation_cap_tokens
     sampling = committed_models().summarizer.sampling
     return (
-        dag.first_prompt_tokens(cap, menu_rows=rows),
-        dag.sequence_tokens(cap, menu_rows=rows, sampling=sampling),
+        dag.prompt_tokens(cap, table_bytes=0),
+        dag.call_tokens(cap, table_bytes=0, sampling=sampling),
     )
 
 
-def test_every_call_in_the_sequence_has_a_kind_the_ledger_can_record() -> None:
-    """The walk and the ledger have to agree about what a call was.
-
-    `dag.CallName` and `CallKind` spell the same names for the same calls. The
-    count and the order of the nodes are held by the import-time guards in
-    `classify.dag`.
-    """
-    assert {node.name.value for node in dag.NODES} <= {kind.value for kind in CallKind}, (
-        "a node the ledger has no CallKind for records its cost as nothing"
-    )
-
-
-def test_the_two_calls_fit_the_window_at_the_cap() -> None:
-    """Preserve admission under the existing pre-label estimate.
+def test_the_call_fits_the_window_at_the_cap() -> None:
+    """Preserve admission under the existing pre-call estimate.
 
     This does not certify a complete continuation with finalized evidence or
     an explicit response limit. Those are diagnosed from the actual request.
@@ -368,29 +392,33 @@ def test_the_two_calls_fit_the_window_at_the_cap() -> None:
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
     models = committed_models()
     n_ctx = window(models.summarizer.server)
-    prompt, sequence = _worst_two_call_sequence_tokens(committed)
+    prompt, sequence = _worst_one_call_sequence_tokens(committed)
 
     assert sequence <= n_ctx, (
         f"the longest article extract.truncation_cap_tokens "
         f"({committed.extract.truncation_cap_tokens}) lets through makes a {prompt}-token "
-        f"the label call prompt at elements.max_per_article of "
-        f"{committed.elements.max_per_article}. The label call's {label_budget_tokens()}-token "
-        f"reply, the {SUMMARIZE_AND_PLAN_SEAM_TOKENS}-token seam and the summarize-and-plan call's "
-        f"{response_limit(models.summarizer.sampling)}-token response limit put the pair at "
-        f"{sequence} against a window of {n_ctx}, over by "
-        f"{sequence - n_ctx}. Measure the complete request before proposing a "
-        "configuration or article-admission change."
+        f"prompt. The "
+        f"{response_limit(models.summarizer.sampling)}-token response limit puts the call at "
+        f"{sequence} against a window of {n_ctx}, over by {sequence - n_ctx}. Measure the "
+        "complete request before proposing a configuration or article-admission change."
     )
 
 
 def test_the_gate_holds_room_for_the_whole_response_limit_the_model_file_names() -> None:
-    """The summarize-and-plan reply has no length bound, so its reserve is the limit itself."""
+    """The reply has no length bound, so its reserve is the limit itself."""
 
     def held(sampling: dict[str, int]) -> int:
-        return dag.sequence_tokens(1000, menu_rows=10, sampling=sampling)
+        return dag.call_tokens(1000, table_bytes=10, sampling=sampling)
 
     assert held({"max_tokens": 9000}) - held({"max_tokens": 8000}) == 1000
     assert held({}) == held({"max_tokens": DEFAULT_MAX_TOKENS})
+
+
+def test_the_tables_are_held_at_a_token_a_byte_on_top_of_the_article() -> None:
+    """A token spans at least one byte, so the bytes shown are a ceiling."""
+    assert dag.prompt_tokens(1000, table_bytes=300) - dag.prompt_tokens(
+        1000, table_bytes=0
+    ) == 300
 
 
 @pytest.mark.parametrize("key, limit", [("n_predict", 4213), ("max_tokens", 8192)])
@@ -406,6 +434,30 @@ def test_request_accounting_refuses_ambiguous_or_unbounded_response_limits() -> 
     for request in ({}, {"n_predict": -1}, {"max_tokens": True}, {"max_tokens": 2, "n_predict": 1}):
         with pytest.raises(ValueError, match="response-token limit"):
             dag.response_tokens(request)
+
+
+def test_finetune_row_limits_fit_the_corpus_window() -> None:
+    with pytest.raises(ValidationError, match="train_rows cannot exceed"):
+        FinetuneConfig(corpus_rows=600, min_rows=500, train_rows=1000)
+    with pytest.raises(ValidationError, match="min_rows cannot exceed"):
+        FinetuneConfig(corpus_rows=500, train_rows=100, min_rows=600)
+
+
+def test_finetune_rejects_an_unknown_teacher_role() -> None:
+    payload = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
+    payload["finetune"]["teacher"] = "unknown_role"
+
+    with pytest.raises(ValidationError, match=r"finetune\.teacher must name one of models"):
+        AppConfig.model_validate(payload)
+
+
+def test_finetune_teacher_has_a_distinct_base_repository() -> None:
+    settings = config.load(CONFIG_DIR)
+    teacher = settings.app.finetune.teacher
+    ref = getattr(settings.models, teacher)
+
+    assert ref.hf_base_repo, "the configured teacher needs a base repository for fine-tuning"
+    assert ref.hf_base_repo != ref.repo, "the base repository must not point to the GGUF weights"
 
 
 def test_the_training_window_covers_the_longest_row_the_cap_allows() -> None:
@@ -748,12 +800,11 @@ def test_the_leading_block_is_a_knob_the_frontend_agrees_with() -> None:
 
 
 def test_the_holdout_reach_is_a_knob_the_frontend_agrees_with() -> None:
-    """The two readers of the hand marks open one reach, so a page and a reading count alike.
+    """The Judgement route's own copy of the reach is the contract's default.
 
-    The scoring verb reads `similarity.holdout_reach_days` off the contract and
-    the Judgement route reads it off the file, falling back to its own copy on a
-    clone with no `config/`. A drift between the two copies would let the panel
-    draw marks the reading never counted.
+    The route reads `similarity.holdout_reach_days` off the file, falling back to
+    its own copy on a clone with no `config/`. A drift between the two copies
+    would let a bare clone draw a different set of marks than a configured one.
     """
     reader = read_text(REPO_ROOT / "frontend" / "src" / "lib" / "server" / "config.ts")
     mirrored = re.search(r"const HOLDOUT_REACH_DAYS = (\d+);", reader)
@@ -898,87 +949,6 @@ def test_a_negative_heartbeat_is_refused_and_the_error_names_the_field() -> None
     assert LoggingConfig(waiting_heartbeat_seconds=0).waiting_heartbeat_seconds == 0
 
 
-def test_a_band_that_does_not_divide_into_whole_slots_is_refused() -> None:
-    """A part-slot at one end holds counts drawn from a smaller catchment than its neighbours.
-
-    The fit would read that as a dip in the judge's verdicts rather than as an
-    artefact of the arithmetic. Refused at the config rather than left to the
-    record, because the record's own validator fires hours later in CI with
-    nothing saying which of three knobs to move.
-    """
-    with pytest.raises(ValidationError, match="does not divide into whole slots"):
-        SimilarityThresholdConfig(bin_width=0.0007)
-
-
-def test_a_band_that_opens_above_todays_floor_is_refused() -> None:
-    """A band above the floor can only ever judge pairs the pass already merges.
-
-    The record then fills with confirmations and the line can never come down,
-    while every number in the file still looks legal. This is the one knob
-    combination that makes a downward move impossible without failing anything.
-    """
-    with pytest.raises(ValidationError, match="could only ever rise"):
-        SameStoryConfig(
-            floor_min=0.94,
-            adaptive_dedup_threshold=SimilarityThresholdConfig(band_low=0.95),
-        )
-
-
-def test_a_daily_step_that_outruns_the_band_is_refused() -> None:
-    """A step wider than the band can put the line where the record holds no slot.
-
-    This replaced the margin check on 2026-09-19. That one refused a step at or
-    above the gap between the line and the nearest pair marked as two stories;
-    the 200 labels marked that day put the nearest such pair at 0.9407, above
-    the 0.94 line, so there is no gap left for a step to eat.
-
-    The caps are slot counts, so the comparison is a count against the band's own
-    slot count rather than one decimal against another.
-    """
-    band = SimilarityThresholdConfig()
-    slots = round((band.band_high - band.band_low) / band.bin_width)
-    with pytest.raises(ValidationError, match="outside the record"):
-        SimilarityThresholdConfig(max_down_bins=slots)
-    with pytest.raises(ValidationError, match="outside the record"):
-        SimilarityThresholdConfig(max_up_bins=slots)
-    with pytest.raises(ValidationError, match="outside the record"):
-        SimilarityThresholdConfig(dead_zone_bins=slots)
-
-
-def test_a_config_that_makes_the_line_rise_faster_than_it_falls_is_refused() -> None:
-    """The line falls fast and rises slow, and the config is where that is held.
-
-    Lowering the line publishes less, which is the house rule, so both mechanisms
-    - the damping weight and the daily cap - are larger going down than going up.
-    The shape reads backwards to anyone who has not been told the rule, and the
-    obvious tidy-up is to point it the other way, so the refusal is here rather
-    than a comment somebody deletes.
-    """
-    with pytest.raises(ValidationError, match="meant to be quick"):
-        SimilarityThresholdConfig(fall_weight=0.15, rise_weight=0.5)
-    with pytest.raises(ValidationError, match="meant to be quick"):
-        SimilarityThresholdConfig(max_down_bins=3, max_up_bins=10)
-
-
-def test_a_config_still_spelling_a_retired_threshold_knob_is_refused() -> None:
-    """Two knobs changed unit as well as name, and one changed maintainer.
-
-    `max_down_step` was a score and `max_down_bins` is a count of slots, so an
-    operator who moves 0.005 across untouched has written a step two hundred
-    times too small. "extra inputs are not permitted" would not have told them.
-
-    `shards` left this block for `council` on 2026-09-21, so its replacement is
-    printed as a whole path - a person sent to a block-relative name would be
-    sent to a key inside the block the knob just left.
-    """
-    with pytest.raises(ValidationError, match="max_down_bins"):
-        SimilarityThresholdConfig.model_validate({"max_down_step": 0.005})
-    with pytest.raises(ValidationError, match="fall_weight"):
-        SimilarityThresholdConfig.model_validate({"smoothing_weight": 0.15})
-    with pytest.raises(ValidationError, match=re.escape("council.shards")):
-        SimilarityThresholdConfig.model_validate({"shards": 4})
-
-
 def test_a_config_still_spelling_the_judging_bound_under_run_is_refused() -> None:
     """The bound left `run` for `council`, and a stale file is answered by name.
 
@@ -1004,20 +974,22 @@ def test_a_config_still_spelling_the_fold_cover_under_run_is_refused() -> None:
         AppConfig.model_validate({"run": {"settled_fold_after_days": 7}})
 
 
-def test_a_band_that_cannot_draw_the_hardest_labelled_pair_is_refused() -> None:
-    """The pair a wrong line publishes first has to be inside the band the fit judges.
+def test_a_config_still_spelling_a_setting_of_the_first_model_call_is_refused() -> None:
+    """The model reads an item once now, and the two settings the first call read are gone.
 
-    A band opening above the highest two-story mark draws only pairs nobody has
-    marked apart, so the record fills with easy agreements and the line is never
-    tested against the case that would prove it wrong. This bites where the
-    floor_min check does not: a floor raised above that mark lets a band clear
-    the first ceiling and miss the second.
+    Whether a picture is asked for is decided by `visuals.enabled_kinds`, so a
+    leftover `summarize.asks_for_a_visual_plan` is refused and pointed there. No
+    task reads the labelling instructions, so a leftover `prompt_files.generate_labels`
+    is refused with nothing to point at. Either would otherwise be a number somebody
+    believes.
     """
-    with pytest.raises(ValidationError, match="the line most has to get right"):
-        SameStoryConfig(
-            floor_min=0.98,
-            adaptive_dedup_threshold=SimilarityThresholdConfig(band_low=0.95),
-        )
+    with pytest.raises(ValidationError, match=re.escape("is now visuals.enabled_kinds")):
+        AppConfig.model_validate({"summarize": {"asks_for_a_visual_plan": False}})
+    with pytest.raises(
+        ValidationError,
+        match=re.escape("prompt_files.generate_labels is gone and nothing replaces it"),
+    ):
+        AppConfig.model_validate({"prompt_files": {"generate_labels": "prompts/a.txt"}})
 
 
 def test_no_judges_own_measurement_reaches_the_shared_config_contract() -> None:
@@ -1044,33 +1016,3 @@ def test_no_judges_own_measurement_reaches_the_shared_config_contract() -> None:
         "config now carries one judge's measurement - and moving that measurement "
         "would re-size budgets nobody measured"
     )
-
-
-def test_the_two_contract_modules_share_one_grid_tolerance() -> None:
-    """Two literals for one rule drift the first time somebody loosens one.
-
-    The config and the record have to agree exactly, or a band the knob block
-    accepts is a band the record refuses - hours later, in CI, on the first day counted.
-    """
-    assert placement.GRID_TOLERANCE is story_similarity_distribution.GRID_TOLERANCE
-
-
-def test_a_config_with_no_judge_in_it_validates_and_stays_that_way() -> None:
-    """The zero-judge condition, expressed as a config test.
-
-    A block built by a default factory cannot express "no judge is configured":
-    absent and present-at-defaults read the same afterwards, so the condition
-    would be asserted and never tested. The block is optional and defaults to
-    absent, so the absence survives validation and this test can fail.
-
-    The council's own runner numbers are in their own block, so a file with no
-    judge in it still says how long a judging shard may run and how many of them
-    there are. The roster is taken out with the block, because a file with no
-    judge in it registers none either - and a slug naming a judge that is not
-    there is refused by name on the night it runs.
-    """
-    committed = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
-    del committed["assemble"]["same_story"]["adaptive_dedup_threshold"]
-    without_a_judge = AppConfig.model_validate(committed)
-
-    assert without_a_judge.assemble.same_story.adaptive_dedup_threshold is None

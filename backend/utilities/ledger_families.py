@@ -13,12 +13,11 @@ Counts cover only the named input files, never every file a ledger holds.
 
 The registry is read through its own contract, so a registry the build would
 refuse is refused here too, with the same message. A ledger's folder comes from
-its prefix, the same field every path builder reads; a ledger that is one file is
-counted as that file or nothing. A ledger that goes through the door has two
-folders, one under each of `state/raw/` and `state/compact/`, and each is counted
-on its own line, because they answer different questions: what runs wrote, and
-what compaction has kept of it. A name that opens on a dot, such as a
-`.gitkeep` placeholder, holds no rows and is not counted.
+its prefix, the same field every path builder reads. A ledger that goes through
+the door has two folders, one under each of `state/raw/` and `state/compact/`, and
+each is counted on its own line, because they answer different questions: what
+runs wrote, and what compaction has kept of it. A name that opens on a dot, such
+as a `.gitkeep` placeholder, holds no rows and is not counted.
 """
 
 from __future__ import annotations
@@ -44,9 +43,6 @@ def _files_in(root: Path, files: Sequence[Path]) -> int:
 
 def files_held(state_dir: Path, held: LedgerEntry, files: Sequence[Path]) -> int:
     """Count only the named files that belong to this ledger."""
-    if held.grain is Grain.FLAT:
-        path = state_dir.joinpath(*held.prefix, f"{held.stem}{held.suffix}")
-        return int(path in files and path.is_file())
     if held.grain is Grain.RAW_AND_COMPACT:
         return sum(
             _files_in(state_dir.joinpath(root, *held.prefix), files) for root in THE_TWO_ROOTS

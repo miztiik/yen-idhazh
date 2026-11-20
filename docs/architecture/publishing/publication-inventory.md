@@ -1,6 +1,6 @@
 # Publication Inventory
 
-**Last Updated**: 2026-10-08
+**Last Updated**: 2026-11-19
 
 How does a static build find source days and files without walking the archive?
 
@@ -108,12 +108,6 @@ after its ledger write. It derives only its own filenames from its UTC days
 and writer identity. The canary registers its fixed feed-health files through
 the same helper. A frontend consumer selects state entries with the `feed-health/`
 prefix; it does not list the state tree. Other ledger indexes remain separate.
-The merge-line stage registers nothing: it files the fitted line through the
-ledger door, and the Judgement page reads that ledger's packed days from the
-compact index the gardener writes, never from this inventory. The
-holdout-score stage registers the raw door file it wrote under
-`raw/content-similarity-judge/merge-line-holdout-scores/<YYYY>/<MM>/<DD>/`.
-The canary writes and registers these same named series before the site build.
 
 Initial migration can supply a second explicit list:
 

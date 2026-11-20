@@ -8,10 +8,10 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 from support.ledger import writer_identity
-from support.paths import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
-from support.prompts import SUMMARIZE_AND_PLAN_REPLIES
+from support.paths import CONTRACT_FIXTURES_DIR, read_text
+from support.prompts import SUMMARIZE_AND_PLAN_REPLIES, WIND_NAMES, WIND_TEXT, tables_over
 from test_chart_vocabulary import draw, inputs, settings
-from test_classify import declining_reply
+from test_classify import a_reply
 
 from idhazh import completed_writes, elements, ledger
 from idhazh.classify import calls
@@ -26,7 +26,7 @@ from idhazh.contracts.visual_telemetry import ValidatorCheck, VisualAttemptRow
 from idhazh.elements import ExtractionHealth
 from idhazh.llm.server import Completion, response_limit, window
 from idhazh.stages import common
-from idhazh.stages.two_calls import _decide_the_visual, _drawn
+from idhazh.stages.summarize_one_item import _decide_the_visual, _drawn
 from idhazh.telemetry import visual_attempts
 from idhazh.visual_validator import validate_plan
 from utilities.digest_publish import permissions
@@ -96,6 +96,9 @@ def test_real_decisions_keep_refusals_replacements_floor_evidence_and_render_fai
 def test_production_decider_covers_exactly_the_five_implemented_none_gates(tmp_path: Path) -> None:
     summary, _, table = inputs()
     knobs = settings()
+    _, tables = tables_over(
+        Article.read(CONTRACT_FIXTURES_DIR / "article" / "ok.json"), WIND_TEXT, WIND_NAMES
+    )
     stamp = {
         "version": VisualDecision.schema_version(), "model_id": "fixture-model",
         "decided_at": f"{DATE}T12:00:00Z",
@@ -108,32 +111,26 @@ def test_production_decider_covers_exactly_the_five_implemented_none_gates(tmp_p
         knobs.models.summarizer.sampling
     )
     cases = (
-        (Completion(content="", finish_reason="stop"), False),
-        (Completion(content=cut, finish_reason="length", prompt_tokens=room), True),
-        (Completion(content=cut, finish_reason="length", prompt_tokens=room + 1), True),
-        (Completion(content='{"visual":{"type":"bar"}', finish_reason="stop"), True),
+        (Completion(content="", finish_reason="stop"), ()),
+        (Completion(content=cut, finish_reason="length", prompt_tokens=room), tables),
+        (Completion(content=cut, finish_reason="length", prompt_tokens=room + 1), tables),
+        (Completion(content='{"visual":{"type":"bar"}', finish_reason="stop"), tables),
     )
     decisions = [
         _decide_the_visual(
-            summary, reply, table, settings=knobs, date=DATE, stamp=stamp,
-            wants_a_plan=wants, run_id=RUN,
+            summary, reply, table, tables=shown, settings=knobs, date=DATE, stamp=stamp,
+            run_id=RUN,
         )
-        for reply, wants in cases
+        for reply, shown in cases
     ]
-    original = json.loads(read_text(SUMMARIZE_AND_PLAN_REPLIES / "summary-and-plan.json"))[
+    declined = json.loads(read_text(SUMMARIZE_AND_PLAN_REPLIES / "summary-and-plan.json"))[
         "choices"
     ][0]["message"]["content"]
-    content = json.loads(original)
-    content["visual"] = {
-        name: value for name, value in json.loads(
-            read_text(FIXTURES_DIR / "visual-validator" / "plans" / "declines.json")
-        ).items() if name not in {"version", "plan_version"}
-    }
     # Validate the recorded reply before exercising the production decision router.
-    calls.parse_summarize_and_plan(json.dumps(content))
+    assert calls.parse_summarize_and_plan(declined, tables=tables).visual is None
     decisions.append(_decide_the_visual(
-        summary, Completion(content=json.dumps(content), finish_reason="stop"), table,
-        settings=knobs, date=DATE, stamp=stamp, wants_a_plan=True, run_id=RUN,
+        summary, Completion(content=declined, finish_reason="stop"), table, tables=tables,
+        settings=knobs, date=DATE, stamp=stamp, run_id=RUN,
     ))
     assert all(
         decision.planned_type is None and decision.rejection_reason is None
@@ -150,6 +147,7 @@ def test_shape_evidence_and_missing_compiler_refusals_persist_without_invented_r
 ) -> None:
     summary, requested, table = inputs()
     article = Article.read(CONTRACT_FIXTURES_DIR / "article" / "ok.json")
+    _, tables = tables_over(article, WIND_TEXT, WIND_NAMES)
     knobs = settings()
     stamp = {
         "version": VisualDecision.schema_version(), "model_id": "fixture-model",
@@ -157,8 +155,8 @@ def test_shape_evidence_and_missing_compiler_refusals_persist_without_invented_r
     }
     malformed = _decide_the_visual(
         summary,
-        Completion(content=declining_reply(title="model-only words"), finish_reason="stop"),
-        table, settings=knobs, date=DATE, stamp=stamp, wants_a_plan=True, run_id=RUN,
+        Completion(content=a_reply(focus=None, caption="model-only words"), finish_reason="stop"),
+        table, tables=tables, settings=knobs, date=DATE, stamp=stamp, run_id=RUN,
     )
     empty = ElementTable.model_validate(table.model_dump() | {"elements": []})
     evidence = _drawn(
@@ -193,7 +191,7 @@ def test_shape_evidence_and_missing_compiler_refusals_persist_without_invented_r
     )
 
     cases = (
-        (malformed, None, None, "visual_plan_decline_empty"),
+        (malformed, None, None, "visual_choice_focus_required"),
         (evidence, VisualType.BAR, ValidatorCheck.ELEMENT_EXISTS, "element_exists"),
         (unsupported, VisualType.AREA, None, "area has no compiler"),
     )
@@ -206,7 +204,7 @@ def test_shape_evidence_and_missing_compiler_refusals_persist_without_invented_r
         assert row.rendered_type is None and row.marks is None
         assert persisted.rationale and cause in persisted.rationale
         assert "model-only words" not in persisted.rationale
-    assert malformed.rationale and "title" in malformed.rationale
+    assert malformed.rationale and "focus" in malformed.rationale
 
 
 def test_distinct_actual_attempts_survive_reader_settlement_and_lossless_packing(

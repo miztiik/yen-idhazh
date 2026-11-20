@@ -1,6 +1,6 @@
 # Which console surfaces follow the window, and which say why not
 
-**Last Updated**: 2026-11-16
+**Last Updated**: 2026-11-19
 
 One control at the top of the console sets the span for the whole page. This page
 is the control, and the list of every surface that does not simply follow it -
@@ -29,7 +29,7 @@ owns the retained span bounds.
 **Chart axes end at their own source's available data, not the current day or
 another chart's endpoint.** `windowFromDates` bounds published charts to the
 published dates in their payload. Packed visual-attempt charts use their
-attempt dates; Judgement's packed comparisons use their returned record
+attempt dates; Judgement's hand-mark comparison uses its returned record
 coverage. Internal missing days remain gaps. An empty source invents no date.
 Build-time loading still uses `windowDay()` in
 `frontend/src/lib/server/window-day.ts` to bound the read to the site's newest
@@ -182,7 +182,7 @@ recorded shard-count answers supply the arithmetic; unknown counts remain
 unknown instead of being derived from the hosts that happened to answer.
 
 **A newest-day question is a snapshot, not a selected-window aggregate.**
-The Hardware clock check and memory-held panel name
+The Hardware memory-held panel names
 the newest day or its newest recorded run. They do not fall back to an older
 successful run when the newest one was refused. The widest host population
 supplies canonical full-identity palette slots and name qualifiers, so changing
@@ -207,15 +207,13 @@ matching, prior-run rule and warning readout.
 
 ## The surfaces that do not simply follow the span
 
-Each one says so on the page. Three are on Voices, one on Pipelines and one on
-Judgement.
+Each one says so on the page. Three are on Voices and one on Pipelines.
 
 | Surface | Route | What it does | Why |
 | --- | --- | --- | --- |
 | `Feeds that failed` | Voices | The count and its marker read every run on record; the strip of days beside them follows the span | A windowed recount would disagree with the resting the pipeline actually performed. Two numbers for one decision is the defect the run strip already avoids. The strip answers a different question - when it broke - and that one is only readable over a span. |
 | `Sources we may ask, and what they yield` | Voices | Permission, reading and retirement read every run on record; the publishing record reads `collect.source_yield_min_complete_days` complete days | It renders the run's own decisions, and the run rests on the whole count. The publishing record has a fixed span because that span is also its readability bar - one question, one number. |
 | `What the ranking makes of each feed` | Voices | Reads the factor the run applied, over the span the run reduced it on | The run reduced it over `collect.reliability_window_days` when it happened. Redrawing it over seven days would print a number no run ever applied. |
-| `What the record still needs` | Judgement | The three bars read the record's newest row on or before the window's last day, so they show the same counts at every preset; the strip of squares and the count of fitted days follow the span | The record is a running total that changes only when a run writes a row, so its newest row is what it holds whatever span is open. Read from the window's rows alone, a window with no row drew the bars at zero, which is the picture of a record that holds nothing. When the bars stand on a row before the window, the note names its day: `The bars show what the record held on 14 Jun 2030, before this one day.` |
 | `Minutes per visual` | Pipelines | Prints `The rule reads 14 days. Widen the window to see it.` under 14 days | The retirement rule is stated over 14 days. A median of the wrong span is the same figure with a different meaning and nothing on the page to say which one is being read. |
 
 Source truncation and item-cost panels now derive their answers from declared

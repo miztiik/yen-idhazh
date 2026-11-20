@@ -39,6 +39,21 @@ export function tokenDeviationRules(knobs: Readonly<Record<string, number>>): To
 	});
 }
 
+/** How far the hand-marks axis reaches below and above the merge line, in score units.
+ *
+ * Both are required and above zero: an axis with no width draws no margin. The
+ * names are the keys of `config/console/judgement.json`, the one home of these
+ * numbers.
+ */
+export function holdoutAxisRules(knobs: Readonly<Record<string, number>>): { below: number; above: number } {
+	const below = knobs.holdout_axis_below_line;
+	const above = knobs.holdout_axis_above_line;
+	if (!(below > 0 && above > 0)) {
+		throw new Error('config/console/judgement.json knobs.holdout_axis_below_line and knobs.holdout_axis_above_line must both be set above zero');
+	}
+	return { below, above };
+}
+
 function object(value: unknown, path: string): Record<string, unknown> {
 	if (value === null || typeof value !== 'object' || Array.isArray(value)) {
 		throw new Error(`${path} must be an object`);
@@ -119,6 +134,8 @@ export function routeConsolesFrom(files: Readonly<Record<string, unknown>>): Rou
 		}
 		if (route === 'machine' && ['read_write_history_runs', 'read_write_min_prior_runs', 'read_write_stddev_multiplier']
 			.some((key) => Object.hasOwn(finite, key))) tokenDeviationRules(finite);
+		if (route === 'judgement' && ['holdout_axis_below_line', 'holdout_axis_above_line']
+			.some((key) => Object.hasOwn(finite, key))) holdoutAxisRules(finite);
 		result[route] = { panel_groups: groups, judged, knobs: finite };
 	}
 	return result;

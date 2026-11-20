@@ -1,6 +1,6 @@
 # Design System
 
-**Last Updated**: 2026-11-16
+**Last Updated**: 2026-11-17
 
 Shared rules for typography, layout, colour, motion and controls. [Console design](console-design.md) owns panel-specific presentation; [appearance configuration](config/appearance.md) owns tunable values.
 
@@ -8,7 +8,7 @@ New designs, charts and visuals render in the browser. Do not add prerendered da
 
 ## Typography is the interface
 
-- Home, dated and topic pages share one full-window reading shell with configured gutters. Story prose fills the card's content width, including fragment-linked stories. Archive pages fill the window but retain the configured prose measure.
+- Home, dated, topic and archive pages share one full-window reading shell with configured gutters. Story prose fills the card's content width, including search results and fragment-linked stories.
 - The console fills the available window by default, after its labelled rail and configured gutters. A configured numeric console maximum remains available; every mounted drawing measures its own content width.
 - Keep an item's hierarchy to title, summary and provenance. Use the configured display face for titles and the reading face for prose; data uses tabular numerals.
 - Keep article type readable on phones. Reduce columns before reducing prose size. Pair each size token with its leading token.
@@ -101,11 +101,14 @@ sideways scrolling on reading pages.
 
 ### The reading page spends its width in four named zones
 
-Use the source mark, prose and item footer. Zone widths are configured relative units, not pixel substitutes. Every digest route places leading stories above the stream and the item footer beneath the prose, leaving the full card width for stories. Archive results may use the optional item footer rail.
+Use the source mark, prose and item footer. Zone widths are configured relative units, not pixel substitutes. Every digest route places leading stories above the stream. All reading routes, including archive results, place the item footer beneath the prose, leaving the full card width for stories.
 
-### The measure is one block, not one class per line
+### Story prose uses the available width
 
-In archive results, apply `--measure` once to the block holding title and summary, at the prose size. A `ch` width applied separately to different fonts or sizes produces different edges. Digest routes use the full prose width instead. Keep figures outside the prose cap. Verify zone widths also scale when the root font size changes.
+Titles and summaries share the full content width on digest and archive routes.
+Archive browse links and unavailable-summary fallbacks also use the available
+width rather than a separate prose cap. Verify zone widths also scale when the
+root font size changes.
 
 ### A chart's column is set by what the chart was drawn at
 

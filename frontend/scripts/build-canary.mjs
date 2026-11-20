@@ -180,8 +180,8 @@ function writeItemHealthCanary() {
 	// account - what the machine has, what was left at the item's worst moment
 	// and what was left when it ended - written row by row instead. That is the
 	// shape the committed archive has: the three columns landed late, so most
-	// days carry none of them. The memory board leads with that account, so a
-	// fixture without it could only ever reach the board's empty state.
+	// days carry none of them. The memory panels lead with that account, so a
+	// fixture without it could only ever reach their empty states.
 	//
 	// The fault count, the pinning setting and the disk copies are filled on three
 	// named days as well, and `memory` below says exactly which and why. They are
@@ -218,7 +218,7 @@ function writeItemHealthCanary() {
 		'temperature', 'failed_field', 'failed_rule', 'os_mem_available_bytes',
 		'os_mem_total_bytes', 'os_mem_cached_bytes', 'os_swap_free_bytes', 'os_swap_total_bytes',
 		'os_mem_available_min_bytes', 'planned_type', 'rendered_type', 'downgrade_depth', 'marks',
-		'visual_id'
+		'visual_id', 'analyze_ms'
 	];
 	/** What the machine itself had, on the days this fixture gives one.
 	 *
@@ -241,8 +241,8 @@ function writeItemHealthCanary() {
 	 * panel must never clamp - the two own-memory readings exceeding what the
 	 * kernel says is held - has no real row to render on.
 	 *
-	 * The newest day is left blank on purpose. The memory ceiling board reads the
-	 * newest run's rows, and a fixture that filled them would move that panel
+	 * The newest day is left blank on purpose. The memory-held panel reads the
+	 * newest day's rows, and a fixture that filled them would move that panel
 	 * while answering a different question.
 	 */
 	const READINGS = {
@@ -545,14 +545,14 @@ function writeItemHealthCanary() {
 		const waitMs = spread % 900;
 		const seat = place(rowDate, run, id, totalMs, waitMs);
 		// The one shard the machine record reached with no processor on it. Its item
-		// rows name none either, so the fallback cannot quietly fill the cell in and
-		// the board has a row that says "Not recorded".
+		// rows name none either, so the two records agree that its machine is not
+		// recorded, and no reading from it can be attributed to a processor.
 		const unrecorded = `${rowDate}-${run}-${seat.machine_shard}` === `${date}-2-1`;
 		// The kernel's own account, on the newest day and on every row of it but
 		// the refused one. `gapMs` is set by the refused builder and by nothing
 		// else, so it is what marks the row this fixture uses to carry states no
-		// committed day holds - here, an item drawn with no kernel reading, which
-		// is the memory board's hatched mark and its printed skip count.
+		// committed day holds - here, an item with no kernel reading, which the
+		// memory panels must leave out rather than read as zero.
 		const kernelRecorded = rowDate === date && gapMs === undefined;
 		// A day `READINGS` already answers is left alone below. An empty cell beats
 		// the reading spread in by `line`, so writing one here would draw a day that
@@ -674,8 +674,8 @@ function writeItemHealthCanary() {
 	};
 
 	/** An item the extractor threw away. Not a failure: dropping a page that is
-	 * not an article is the job, so the row is `ok` and it is not on the
-	 * failed-item list. It fetched and it parsed, so those two stages have a
+	 * not an article is the job, so the row is `ok` and no failure panel counts
+	 * it. It fetched and it parsed, so those two stages have a
 	 * number. The model never saw it, so summarize has none.
 	 *
 	 * It carries an item clock all the same, because it really did occupy a shard
@@ -701,35 +701,26 @@ function writeItemHealthCanary() {
 
 	/** An item the model read whole and then refused to answer for.
 	 *
-	 * **The five cost cells on a failed row are the state this row exists for.**
-	 * A refused reply costs the server the whole prompt, and until 2026-09-13 the
-	 * failure path threw that cost away - so the item ledger under-counted a
-	 * shard's reading while llama-server counted it. That is the one defect two
-	 * independent clocks catch and one clock cannot, and a fixture where every
-	 * row reads at the same rate could never put the panel in its red state.
+	 * It is the only failed row this fixture writes, so the failure panels have a
+	 * failure to draw rather than their empty state.
 	 *
-	 * So this row reads deliberately fast: 1,600 tokens in 64 seconds, or 25.00 a
-	 * second, against about 11 on every other row of the day. That is inside the
-	 * 9.80 to 42.58 a second one recorded run measured across its own shards, so
-	 * it is a rate the fleet really runs at, and it is near enough the rest that
-	 * the throughput axis still ticks without falling back to zero. Its shard
-	 * sits 1.1 percent from the server WITH it and 52 percent out without it,
-	 * which is what lets a test blank five cells and watch the panel turn.
+	 * **A failed row still carries its five cost cells.** A refused reply costs
+	 * the server the whole prompt, and until 2026-09-13 the failure path threw
+	 * that cost away. The Hardware cost panels read every row whatever its
+	 * outcome, so this is the one place a failed item's cost reaches them. Its
+	 * figures are pinned, with the rest of the day, by the recorded slices under
+	 * `tests/fixtures/console/`; changing one means re-recording them.
 	 *
 	 * Its three stage numbers are this day's own medians, so adding it moves
 	 * none of them.
 	 *
 	 * **Its unclaimed time is below zero, and no committed day holds that.** The
 	 * ledger's `stage_gap_ms` is signed on purpose: under zero says the named
-	 * steps claim more time than the item took, which is two clocks disagreeing
-	 * rather than an item that cost nothing. Nothing could draw that state until
-	 * a fixture carried it, and the failure path is where it would really come
-	 * from - a refused reply costs the server the whole prompt, and the item
-	 * ledger and the server have disagreed about that cost before. 852 ms is a
+	 * steps claim more time than the item took, and the item time split draws
+	 * that as overlap beside its stack rather than as an item that cost nothing.
+	 * Nothing could draw that state until a fixture carried it. 852 ms is a
 	 * fixture value chosen to stay inside this row's 982 ms of named stages, so
-	 * the item still costs more than nothing, and to be large enough that the
-	 * shard total it lands in stays under zero rather than being cancelled by the
-	 * two positive rows beside it.
+	 * the item still costs more than nothing.
 	 */
 	const UNCLAIMED_BELOW_ZERO_MS = -852;
 
@@ -960,11 +951,9 @@ function writeItemHealthCanary() {
 		// fetch and extract are that day's own medians, so neither median moves
 		// and the sixth item only widens the denominator.
 		dropped(date, 2, 'ai-05', 'boilerplate', 1180, 174, 200, 30),
-		// The model read this one whole and refused to answer. It shares shard 0 of
-		// the newest run with ai-03, which is what gives the two clocks panel a
-		// shard whose answer changes when one row's cost goes missing. It is also
-		// the only failed row this fixture writes, so the failed-item list, the
-		// failure code column and one stage's failure count draw something rather
+		// The model read this one whole and refused to answer. It is also the
+		// only failed row this fixture writes, so the failure mix and the run
+		// timeline's stage-and-code line for a failed item draw something rather
 		// than their empty states.
 		refused(date, 2, 'ai-09', [200, 30, 700], [64000, 10300, 1700, 60, 100]),
 		...sourceCutRows()
@@ -1006,32 +995,31 @@ function writeItemHealthCanary() {
 	return [date, longAgo];
 }
 
-/** The machines the canary's jobs drew, so the machine panels have cards to draw.
+/** The machines the canary's jobs drew, so the machine panels have machines to tell apart.
  *
  * `build_canary_day.py` fabricates a day rather than running the pipeline, so
  * nothing probes a processor and the panels would only ever show their empty
  * state - which is the state that needs the least proving.
  *
- * **The rows are chosen for the two things a browser cannot check any other
- * way.** One machine reports none of the watched AVX-512 entries and one
- * reports every watched flag, so the absent chips have to be drawn rather than
- * omitted; and one probe used a buffer smaller than that machine's L3, so the
- * reading has to say it measured cache rather than memory.
+ * **The two machines are chosen so they cannot be mistaken for one.** The
+ * processors differ in name, in L3 capacity and in fingerprint, so the platform
+ * mix has more than one group to draw and the speed colour has more than one
+ * machine kind to rank.
  *
- * **This file is also the machine half of the Hardware page**, and the four
- * cells after `measured_at` are the only place the server's own counters and
- * the job clock reach a screen. Every `work` row's `server_prompt_tokens` over
- * its `server_prompt_seconds` lands 1.0 to 1.1 percent from the same shard's
- * rate in the item ledger, inside the 5 percent the two clocks panel allows.
- * Equal figures would pass a check that had never run, so the gap is put there
- * on purpose and every shard carries one.
+ * **This file is also the machine half of the Hardware page.** Of the cells
+ * after `measured_at`, `job_seconds` is a job's Seconds, and
+ * `server_prompt_tokens` over `server_prompt_seconds` is its Speed, which is
+ * also what each machine kind is coloured by, as the median of its jobs. The
+ * figures are fixture values, pinned by the recorded slices under
+ * `tests/fixtures/console/`.
  *
  * Three states nothing else can reach are written here as well. Shard 1 of the
- * newest run carries the server's counters and neither clock, so the board has
- * a dash to rank last. The two runs forty days back carry both clocks and no
- * server counters, so the two clocks panel has a run it compared nothing on.
- * And the day two days back keeps an empty file, so a quiet day is not an
- * incident.
+ * newest run carries the server's counters and neither clock, so its job lists
+ * its seconds as not recorded and its machine as "Machine not recorded", and
+ * still has a speed. The two runs forty days back carry a job clock and a
+ * weights load and no server counters, so their jobs list "Speed not
+ * recorded". And the day two days back keeps an empty file, so a quiet day is
+ * not an incident.
  */
 function writeHostFingerprintCanary() {
 	const COLUMNS = [
@@ -1057,8 +1045,8 @@ function writeHostFingerprintCanary() {
 	// its two tail runs on.
 	const longAgo = back(40);
 
-	// The EPYC reports none of the watched AVX-512 entries, which is what the
-	// fleet's most common machine really does.
+	// The fleet's most common machine: an EPYC that reports none of the watched
+	// AVX-512 flags. The flags are part of what the fingerprint hashes.
 	const EPYC = {
 		cpu_model: 'AMD EPYC 7763 64-Core Processor',
 		cpu_vendor: 'AuthenticAMD',
@@ -1068,9 +1056,8 @@ function writeHostFingerprintCanary() {
 		memcpy_gib_s: 12.4, memcpy_probe_mib: 512,
 		vm_size: 'Standard_D4ads_v5', vm_location: 'eastus', vm_zone: '1', vm_fault_domain: '0'
 	};
-	// Every watched flag, and a probe buffer only 1.97 times its own L3 - the
-	// shape nine of the committed rows carry, and under the margin that proves
-	// the copy left the cache. So this card has to withhold its copy speed.
+	// Every watched flag and a much larger L3, so it hashes to its own
+	// fingerprint and takes its own L3 group.
 	const XEON = {
 		cpu_model: 'INTEL(R) XEON(R) PLATINUM 8573C',
 		cpu_vendor: 'GenuineIntel',
@@ -1138,9 +1125,9 @@ function writeHostFingerprintCanary() {
 		}),
 		// Absence drawn as absence. This shard carries the server's two counters and
 		// nothing else - no clock, no weights load, no processor - exactly as every
-		// row written before those columns landed. The board prints a dash for its
-		// job, says "Not recorded" for its machine and ranks it last, rather than
-		// reading a blank clock as a fast one.
+		// row written before those columns landed. Its job reads "not recorded" for
+		// its seconds and "Machine not recorded" for its machine, and still has a
+		// speed, rather than reading a blank clock as a fast one.
 		clocksOnly(date, 2, 'work', 1, {
 			server_prompt_tokens: 962, server_prompt_seconds: 83.73
 		}),
@@ -1169,8 +1156,8 @@ function writeHostFingerprintCanary() {
 		probe(back(1), 1, 'assemble', 0, EPYC),
 		// Forty days back, on the day the item ledger puts its widest-preset runs.
 		// They carry a job clock and a weights load and no server counters at all,
-		// which is the state every run before the server counters landed is in: the
-		// board draws them and the two clocks panel says it compared nothing.
+		// which is the state every run before the server counters landed is in:
+		// their jobs list "Speed not recorded".
 		probe(longAgo, 1, 'work', 0, EPYC, { model_load_ms: 2290.5, job_seconds: 780 }),
 		probe(longAgo, 1, 'work', 1, EPYC, { model_load_ms: 2284.9, job_seconds: 774 }),
 		probe(longAgo, 2, 'work', 0, XEON, { model_load_ms: 2602.7, job_seconds: 836 }),

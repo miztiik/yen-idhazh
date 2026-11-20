@@ -1,6 +1,6 @@
 # The run timeline
 
-**Last Updated**: 2026-11-16
+**Last Updated**: 2026-11-17
 
 What shape does the newest run's clock have, and where do its facts come from?
 
@@ -62,8 +62,9 @@ Pagination retains access to every article in that shard.
 
 Stage averages reuse the complete, reconciling cohort from
 [`duration-cohort.ts`](../../../frontend/src/lib/console/duration-cohort.ts):
-fetch, extract, summarize and checking, with positive unclaimed time and
-overlap kept separate. The cohort and excluded clocks are named; incomplete
+fetch, extract, analyze, summarize and checking, with positive unclaimed time and
+overlap kept separate. A row written before the analysis stage existed has no
+clock for it and reads as zero there. The cohort and excluded clocks are named; incomplete
 items still contribute their recorded costs to item work. Per-item inspection
 retains known stages, queue and robots readings, status, UTC endpoints and the
 signed gap. Label, summary and visual-plan readings are non-additive details;

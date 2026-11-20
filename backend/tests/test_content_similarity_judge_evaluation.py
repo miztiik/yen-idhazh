@@ -61,7 +61,7 @@ from idhazh.contracts.eval_row import ConfidenceBand
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.knobs.content_similarity_judge import ContentSimilarityEvaluationConfig
 from idhazh.contracts.knobs.models import ModelsConfig
-from idhazh.contracts.story_similarity_pair import ReadingRefusalReason, SameStoryVerdict
+from idhazh.contracts.story_similarity_pair_verdict import ReadingRefusalReason, SameStoryVerdict
 from idhazh.llm.server import Completion
 from idhazh.similarity import prompt
 from utilities.evaluate_content_similarity_judge import main
@@ -312,7 +312,7 @@ def test_exact_production_request_bytes_and_both_orders(settings: config.Setting
     run, captured = memory_run(frozen, settings)
     production = ProtocolReplies(native_reply("YES"))
     case = frozen.cases[0]
-    production.reader.read_pair(case.left, case.right, settings=settings)
+    production.reader.read_pair(case.left.summary, case.right.summary, settings=settings)
     expected = [json.dumps(body).encode() for body in production.decodes]
     actual = [body.encode() for reading in (run.cases[0].forward, run.cases[0].reverse)
               if reading is not None for body in reading.request_json]

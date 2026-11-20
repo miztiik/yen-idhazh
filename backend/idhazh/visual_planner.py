@@ -2,16 +2,17 @@
 
 The control that matters is not the prompt. It is that **the model never emits a
 number**. Numbers are pulled out of the article text deterministically, and the
-model is only allowed to choose which of them to plot, by index. A chart value
-that is not in the article is therefore unreachable rather than unlikely, and
-the oracle for this stage is a contract test rather than a hope.
+model is only allowed to choose which table to draw, which row to emphasise and
+how to word a title, by row code. A chart value that is not in the article is
+therefore unreachable rather than unlikely, and the oracle for this stage is a
+contract test rather than a hope.
 
 "Nothing" is the common and correct answer. Two items in three carry no visual,
 so `none` is the default that everything else has to earn its way past.
 
-The two calls that read the article are `idhazh.classify.calls`. This module
-holds what happens to their answer: the gate that refuses before a plan is
-drafted, the ladder that steps a plan down, and the reason every `none` carries.
+The call that reads the article is built in `idhazh.classify.calls`. This module
+holds what happens to its answer: the `none` that leaves a picture out and the
+reason it carries, and the ladder that steps a refused plan down.
 """
 
 from __future__ import annotations
@@ -22,7 +23,6 @@ from math import ceil
 from typing import NamedTuple
 
 from idhazh.contracts.element import (
-    Element,
     ElementTable,
 )
 from idhazh.contracts.knobs.visuals import VisualsConfig
@@ -39,18 +39,13 @@ from idhazh.contracts.visual_decision import (
     VisualKind,
 )
 from idhazh.contracts.visual_telemetry import ValidatorCheck
-from idhazh.elements import (
-    read_value,
-)
 from idhazh.render.chart import can_compile
 from idhazh.sanitize import sanitize
 from idhazh.visual_validator import Rejection, validate_plan
 from idhazh.visual_vocabulary import (
     DOWNGRADE_EDGES,
-    ROLE_KINDS,
     TYPE_RULES,
-    VALUE_ROLES,
-    commensurable,
+    DowngradeEdge,
 )
 
 
@@ -121,7 +116,7 @@ def plan_lost_to_the_window(
         summary,
         model_id=model_id,
         reason=(
-            "the article and the labelling reply filled the window, so the reply "
+            "the prompt filled the window, so the reply "
             "was cut at the wall before the plan was written"
         ),
         decided_at=decided_at,
@@ -130,121 +125,26 @@ def plan_lost_to_the_window(
     )
 
 
-# --- The gate that refuses before the plan is drafted ------------------------
-
-
-def _drawable(table: ElementTable) -> list[Element]:
-    """The elements a plan could cite without the validator refusing it outright.
-
-    An element whose cell disagrees with its own characters fails
-    `no_invented_values` wherever it is drawn, so counting it here would make
-    the gate claim a width no plan can reach. Reading it with the producer's own
-    reader is what the validator does, and asking the same question with the
-    same function is what keeps the gate from drifting away from the thing it
-    predicts.
-    """
-    seen: set[str] = set()
-    kept: list[Element] = []
-    for element in table.elements:
-        if element.element_id in seen:
-            continue
-        seen.add(element.element_id)
-        if read_value(element.kind, element.span_excerpt) == element.value:
-            kept.append(element)
-    return kept
-
-
-def _widest_agreeing(elements: Sequence[Element]) -> int:
-    """The largest group of these that could share one measured axis.
-
-    The same greedy grouping `same_unit_bars` does, over `commensurable` rather
-    than over string equality, because that is the question `units_convertible`
-    asks. Deterministic: the groups are opened in the order the table holds.
-    """
-    groups: list[list[Element]] = []
-    for element in elements:
-        for group in groups:
-            if commensurable(group[0].unit, element.unit):
-                group.append(element)
-                break
-        else:
-            groups.append([element])
-    return max((len(group) for group in groups), default=0)
-
-
-def reachable_types(table: ElementTable, *, visuals: VisualsConfig) -> tuple[VisualType, ...]:
-    """Every type some plan over this article's elements could name and still validate.
-
-    **This is gate 1, and it reads the validator's own tables.** A plan is a set
-    of references into one table, so whether any choice of references could
-    survive is a question about the table alone - which kinds it holds, how many
-    of them, and how many of those measure the same thing. Asking it with
-    `TYPE_RULES`, `ROLE_KINDS`, `VALUE_ROLES` and `commensurable` is what stops
-    the gate and the validator answering differently: a gate written from a
-    reading of the rules drifts the first time a rule moves, silently, in the
-    direction that costs items their pictures.
-
-    Three of the ten checks cannot refuse a plan the gate has admitted, so the
-    gate does not ask them. `element_exists` is satisfied by choosing from the
-    table. `plan_version_current` is stamped by code. `numerals_matched` is
-    about prose, and a plan can always write prose with no numeral in it.
-
-    **It reads no word of the article.** Every input is a kind, a unit or a
-    count, so a stranger's page cannot steer our control flow (Guardrail #11) - the
-    same property the single-call gate above holds and for the same reason.
-    """
-    if VisualKind.CHART not in visuals.enabled_kinds:
-        return ()
-    drawable = _drawable(table)
-    reached: list[VisualType] = []
-    selected = visuals.select_types()
-    for visual_type, rules in TYPE_RULES.items():
-        if visual_type not in selected:
-            continue
-        fillable = {
-            role: [one for one in drawable if one.kind in ROLE_KINDS[role]]
-            for role in rules.required
-        }
-        if any(not elements for elements in fillable.values()):
-            continue
-        marks = fillable[rules.marks]
-        floor = (
-            visuals.histogram_bins
-            if visual_type is VisualType.HISTOGRAM
-            else visuals.min_chart_points
-        )
-        width = _widest_agreeing(marks) if rules.marks in VALUE_ROLES else len(marks)
-        if width >= floor:
-            reached.append(visual_type)
-    return tuple(reached)
-
-
-def plan_is_reachable(table: ElementTable, *, visuals: VisualsConfig) -> bool:
-    """Could this article carry any picture at all?
-
-    False suppresses the plan fields inside the summarize-and-plan call and never skips the call,
-    because the summarize-and-plan call is the call that writes the summary (O43). What is saved is
-    the plan's decode, not the request.
-    """
-    return bool(reachable_types(table, visuals=visuals))
+# --- The answers that leave a picture out --------------------------------------
 
 
 def suppressed_by_the_gate(
     summary: Summary, *, model_id: str, decided_at: str, version: str
 ) -> VisualDecision:
-    """The `none` an item gets when no choice over its elements could have validated.
+    """The `none` an item gets when no table of names and figures was on offer.
 
-    `asked_the_model` stays true, and that is the difference between this and
-    the single-call planner's prefilter above: the model WAS asked, for the
-    summary, in the same request. Only the plan fields were taken off the
-    grammar.
+    That is no table built, charts switched off, or tables built and dropped because they
+    would not fit the window.
+
+    `asked_the_model` stays true: the model WAS asked, for the summary, in the same
+    request. Only the answer about a chart was taken off the grammar.
     """
     return _nothing(
         summary,
         model_id=model_id,
         reason=(
-            "no picture over this article's elements could have passed the validator, "
-            "so the plan was left off the request"
+            "no table of names and figures was on offer for this article, "
+            "so the question about a chart was left off the request"
         ),
         decided_at=decided_at,
         version=version,
@@ -257,7 +157,7 @@ def declined_by_the_model(
 ) -> VisualDecision:
     """The `none` an item gets when the model was asked and answered `none`.
 
-    The ordinary answer. `why` is the plan's own prose and is sanitized on the
+    The ordinary answer. `why` is the model's own sentence and is sanitized on the
     way into the rationale, because it is a string a model wrote about a page we
     did not write (Guardrail #11).
     """
@@ -272,54 +172,30 @@ def declined_by_the_model(
     )
 
 
-def refused_by_the_validator(
-    summary: Summary,
-    rejections: Sequence[Rejection],
-    *,
-    model_id: str,
-    decided_at: str,
-    version: str,
-) -> VisualDecision:
-    """The `none` an item gets when a plan was drafted and no depth of it validates.
-
-    The rationale names the checks rather than restating them, because a
-    `Rejection`'s detail is built out of element ids, role names and digits and
-    a rationale is a published cell.
-    """
-    return _nothing(
-        summary,
-        model_id=model_id,
-        reason=(
-            "the plan was refused on "
-            + ", ".join(sorted({rejection.check.value for rejection in rejections}))
-            + ", and the ladder reached no form that passes"
-        ),
-        decided_at=decided_at,
-        version=version,
-        drafted_chart=True,
-        none_reason=NoneReason.VALIDATION_FAILED,
-    )
-
-
 def not_drawable_here(
     summary: Summary, *, why: str, model_id: str, decided_at: str, version: str
 ) -> VisualDecision:
     """The `none` an item gets when a plan was drafted and this build drew nothing.
 
-    Its sibling above is for a plan the validator refused by name. This one is
-    for the two ways a drafted plan reaches no picture with no rejection to
-    quote, and both are reachable only from a stage that dispatches the summarize-and-plan call:
+    The one answer for every route from a drafted plan to no picture, and `why` -
+    ours rather than the model's - says which route it was. All of them are
+    reachable only from a stage that dispatches the summarize-and-plan call:
 
     - the reply's plan half will not hold `VisualPlan`'s own rules, which a
       grammar cannot enforce because they read one field against another;
+    - the plan names a type the operator did not select;
+    - the validator refused the plan, or its type has no compiler, and no
+      replacement cleared validation and its floor;
     - every check passed and the compiler still could not draw it.
 
-    One `none_reason` between them, and the same one the validator's refusal
-    records. `decided_without_the_model` states the rule this follows: one
-    member per gate, never one per call site - what an operator acts on is the
-    gate, and the gate here is "a plan was drafted and this build refuses it".
-    `why` is ours rather than the model's, so the rationale says which of the
-    two it was.
+    **`why` names the checks that refused a plan and never restates a
+    `Rejection`'s detail**, because a detail is built out of element ids, role
+    names and digits and a rationale is a published cell.
+
+    One `none_reason` between them. `decided_without_the_model` states the rule
+    this follows: one member per gate, never one per call site - what an
+    operator acts on is the gate, and the gate here is "a plan was drafted and
+    this build refuses it".
     """
     return _nothing(
         summary,
@@ -436,6 +312,7 @@ def downgrade(
     *,
     visuals: VisualsConfig,
     published_marks: Mapping[VisualType, Sequence[int]],
+    edges: Mapping[VisualType, tuple[DowngradeEdge, ...]] = DOWNGRADE_EDGES,
     rejected: list[Rejection] | None = None,
     evidence: DowngradeEvidence | None = None,
 ) -> Downgrade | None:
@@ -462,7 +339,10 @@ def downgrade(
     next depth is made of, which is what "falls to the next depth" means.
 
     The separate activation switch leaves this path off without reading history.
-    The percentile list bounds the permitted replacement depths.
+    The percentile list bounds the permitted replacement depths. `edges` is a
+    parameter so that a table other than the shipped one can be driven, and
+    every candidate still re-validates, so an injected table can only change
+    which forms are tried.
     """
     rungs = visuals.downgrade_floor_percentiles
     if (
@@ -482,7 +362,7 @@ def downgrade(
     for depth, percentile in enumerate(rungs, start=1):
         onward: list[VisualType] = []
         for source in frontier:
-            for edge in DOWNGRADE_EDGES.get(source, ()):
+            for edge in edges.get(source, ()):
                 if edge.target in walked or plan.purpose not in edge.purposes:
                     continue
                 walked.add(edge.target)

@@ -64,9 +64,9 @@ clamps to item-health's own first day. Its compact note prints the actual UTC
 bounds. Request epochs discard stale answers, retry retains the successful
 endpoint, and missing, quiet and unreachable stay distinct.
 
-Prompt reuse remains on Hardware, linked from the panel. Its per-call held
-tokens, fresh tokens, pooled shares and recorded cache percentages remain
-separate readings; an unknown cache count cannot become a whole-prompt read.
+The cached share of each prompt remains on Hardware, linked from the panel. Each
+call's pooled cached share is its own reading of its own prompt tokens; an
+unknown cache count cannot become a whole-prompt read.
 Per-call charging follows
 [the model's contract](../summarize/throughput.md#each-call-is-charged-on-its-own-and-the-item-is-their-sum).
 
@@ -94,10 +94,10 @@ missing retained readings stay unknown rather than becoming zero.
 | Summary and article lengths | Per-run shortest, median and longest summary |
 | Runtime | Writing and checking clocks, tokens, failures and call endings from their native records |
 
-`RECORDED` retains the coherence and compression labels and notes. Neither
-receives a new threshold, confidence tint or worst marker. Only coherence's are
-printed, under the daily table; compression is read in the length panel's legend
-and tooltip.
+`RECORDED` words only coherence (a label and a note), printed under the daily
+table; compression keeps its column and unit and is read in the length panel's
+legend and tooltip. Neither receives a new threshold, confidence tint or worst
+marker.
 
 **`hhem_full` and `hhem_delta` are a sentence, not a second chart.** The checker
 scores each summary twice, once against the text the machine was given and once

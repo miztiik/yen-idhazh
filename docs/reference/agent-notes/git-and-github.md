@@ -1,6 +1,6 @@
 # Agent Notes - Git and GitHub
 
-**Last Updated**: 2026-11-11
+**Last Updated**: 2026-11-19
 
 Checks for agents using Git and GitHub. Follow the
 [PR workflow](../../how-to/ship-a-pr.md) and [git rules](../../../CLAUDE.md#7-git-hygiene).
@@ -26,6 +26,11 @@ Checks for agents using Git and GitHub. Follow the
 - If `main` advances only run output, publish the fixed validated candidate rather than waiting for another data-only merge or missing-blob fetch. Check the actual diff first; reconcile relevant code or contract changes and preserve local work and any in-flight Git operation.
 - Resolve conflicts from both changes' intent. Do not take `--ours` or `--theirs` for every file without checking what it discards.
 - A documentation branch based on a feature branch can retain its old code after that feature is squash-merged. Merge current main, keep its tested code and verify that the final diff changes only the intended documents.
+- **A branch stacked on a squash-merged parent reports add/add conflicts on the parent's files.** Main holds the parent as one new commit, so every file the parent added reads as added on both sides, though the content is the same. The tell is an empty diff between the parent's last commit and main for exactly those files; any file that differs is a real conflict to resolve by hand. Then keep the branch's side for the identical ones:
+  ```powershell
+  git diff <parent-commit> origin/main -- <files>
+  git checkout --ours -- <files>
+  ```
 
 ## Git timestamps and REST replies
 
@@ -82,6 +87,21 @@ if (Test-Path Env:GITHUB_TOKEN) { Remove-Item Env:GITHUB_TOKEN }
 git -c credential.helper= -c credential.helper='!gh auth git-credential' push
 ```
 Confirm the keyring account first; do not change shared global authentication.
+
+**The first push of a new branch from a blobless clone stalls for minutes or ends with `remote: unable to write ... pack`; the branch is fine, the thin pack is what is slow.**
+A push sends a thin pack by default, which computes deltas against blobs the remote
+already holds. A blobless clone does not hold them (`git config --get
+remote.origin.partialclonefilter` prints `blob:none`), so Git fetches them lazily during
+the push. The tell is a push that prints nothing for minutes and then the remote's
+`unable to write` line (seen 2026-11-18 and 2026-11-19: one first push took about 13
+minutes before it was refused, and two others were dropped after about 4). Fetch first,
+then push a self-contained pack, with the credential reset above; the same branches then
+landed in 96 seconds and in about 2 minutes, and a two-commit docs branch in 17 seconds
+after the fetch (2026-11-19):
+```powershell
+git fetch origin
+git -c credential.helper= -c credential.helper='!gh auth git-credential' push --no-thin -u origin <branch>
+```
 
 ## Reading a run
 

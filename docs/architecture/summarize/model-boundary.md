@@ -1,6 +1,6 @@
 # The model boundary
 
-**Last Updated**: 2026-11-11
+**Last Updated**: 2026-11-18
 
 How the summarizer stays generic while the model behind it changes. This page
 owns the shape of the boundary - what crosses it, which side each fact lives
@@ -181,12 +181,13 @@ Three steps, in order, all reading the entry and never a model name.
 2. **Wrap the turns.** Substitute the role into the opening, append the
    closing, and end with the reply opening the model expects.
 3. **Build the request.** Attach the output schema, ask for the prompt cache,
-   and set the budgets. Request-only reference choices may narrow the native
-   shape; compatible native bounds still determine reply budgets.
+   and set the budgets. Request-only choices may narrow the native shape: the
+   answer about a chart is held to the forms and rows the request offered. The
+   budget is the model file's response limit.
 
-The second call of an item is a literal byte-extension of the first, which is
-what lets the prefix cache hold. That property lives in the expression itself
-rather than in an agreement between call sites.
+The system turn is the same bytes on every item, which is what lets the prefix
+cache hold from one item to the next. That property lives in the expression itself
+rather than in an agreement between call sites: the system turn takes no article.
 
 ## The outward shim
 
@@ -196,7 +197,7 @@ identically on any model. So only two things on the way out are model-shaped:
 which envelope the runtime wrapped the reply in, and whether a reasoning block
 is present and has to be dropped before anything reads it.
 
-`parse_completion` separates reasoning once, before a label, summary or recovery
+`parse_completion` separates reasoning once, before a summary or recovery
 parser reads the answer. It reads the runtime's `reasoning_content` channel and
 only parses an inline prefix when the selected entry declares its delimiters.
 The transient `reasoning` and `inline_reasoning` fields remain distinct, so
@@ -219,7 +220,7 @@ the server wrote it, and a reply that named no reason at all carries none.**
 Both used to arrive as `stop`, so a novel ending and an unreported one reached
 the census as an ordinary clean stop, with nothing left in the row to tell them
 apart by (Guardrail #10). It is not an enum for the reason
-`ItemHealthRow.label_finish_reason` gives: the vocabulary belongs to
+`ItemHealthRow.summary_finish_reason` gives: the vocabulary belongs to
 llama-server, and a row that would not validate because the runtime minted a
 word would lose the whole item over a label.
 
@@ -234,15 +235,16 @@ reading them costs no extra request (measured 2026-09-15 on build
 | `kv_tokens_at_start` | `tokens_cached` | what the slot holds once this prompt is in it - where the next call starts from |
 | `prefix_shared_with_previous` | `timings.cache_n` above zero | whether this call read anything back out of the slot |
 
-**An item makes two calls and the row has one set of those columns, so the row
-carries the FIRST call's.** The second call's prompt is the first one's extended
-- that is the whole point of the continuation - so its `cache_n` is above zero
-on every row and its slot state is a fact about the item itself. Only the first
-call's slot was last touched by the item *before* this one, which is the
-question these three exist to answer.
+**An item makes one call and the row has one set of those columns, so the row
+carries that call's.** Its prompt opens with the system turn every item shares, so
+`cache_n` above zero says the slot still held the previous item's prefix when this
+item arrived, and its slot state is what the slot holds once this item is in it.
+That is the question these three exist to answer. While an item made two calls the
+row carried the first call's instead, because the second call's prompt extended the
+first and its `cache_n` was above zero on every row.
 
 `timings.cache_n` is read once, in `parse_completion`, and both
-`label_cached_tokens` and `prefix_shared_with_previous` come off that one
+`summary_cached_tokens` and `prefix_shared_with_previous` come off that one
 reading. A boolean derived anywhere else would be the same reading written
 twice, and two writings drift (Guardrail #10).
 
@@ -300,9 +302,9 @@ at the bottom of the dependency graph, since the schema builder imports it.
 
 Article-specific choices need a separate full-schema check: compile the actual
 request with the pinned native C++ converter and exercise complete valid and
-invalid objects with the native grammar validator. Include correlated range
-endpoints, original-source excerpt eligibility and empty pools, not just one
-sampled valid reply. The stock validator's explicit validity verdict is the
+invalid objects with the native grammar validator. Include a `none` answer, an
+answer naming a row or a form the request did not offer, and a request with no
+tables, not just one sampled valid reply. The stock validator's explicit validity verdict is the
 result; its exit status alone does not distinguish an accepted object from a
 rejected one. This model-free check proves native grammar acceptance, not
 observed token masking, inference quality or useful visual selection.
@@ -338,17 +340,14 @@ finer is a second implementation of the runtime, kept in a docstring, drifting.
 
 ## Design rationale
 
-**Request choices narrow selection, not the saved contract.** The first call
-can select only printed references and source ranges its existing anchoring
-can use. Complete native-derived range branches keep correlated endpoints
-together; independent enums or constraints beside a union can admit unusable
-pairs when converted to a grammar. Historical reply readers retain the native
-shape. A request-local definition shares the unchanged speaker leaf instead
-of recompiling its bounded string in every range branch; expanding that one
-reference reproduces the direct schema, including field and alternative order.
-Schema/grammar size, native conversion/initialization and peak memory
-are separate costs from prompt-token capacity; measure the dense source-cap
-case before choosing an equivalent factoring.
+**Request choices narrow selection, not the saved contract.** The call can answer only
+`none` or a form on the request's forms line, and only a row code the tables show: the
+request's schema holds `type` and `focus` to those values. Code builds the plan from the
+answer, so the native `VisualPlan` is not changed by what a request offers. A request
+described without its tables holds `focus` to the shape of a row code instead. The grammar
+lists every offered row code, so its size follows the number of rows; schema/grammar size,
+native conversion/initialization and peak memory are separate costs from prompt-token
+capacity, and none is measured on this page.
 
 **Tests describe behavior, not the selected model.** Generic tests supply
 explicit turn markers, reasoning keywords and server flags. A new valid model
@@ -432,8 +431,7 @@ decoding controls cannot be replaced by sampling entries. The API and
 native request assembly, final-content reading and one bounded, nonredirecting
 transport. Each API call contains only its own complete system/user request.
 The default or exact request override has a prompt digest; no classification
-suffix enters this HTTP product. The production digest's label-then-summary
-continuation remains a separate flow.
+suffix enters this HTTP product. The production digest's call remains a separate flow.
 
 ## What the entry declares, and what refuses a declaration
 

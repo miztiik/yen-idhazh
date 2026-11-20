@@ -3,16 +3,18 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import threading
-from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from collections.abc import Callable, Iterable, Iterator
+from contextlib import AbstractContextManager, ExitStack, contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Final
 
 from pytest import MonkeyPatch
+from support.analysis_service import RecordedAnalysis, Span, first_of, pointed_at
 from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
 from support.server import RecordedEndpoint, render_template_response
 
@@ -82,47 +84,66 @@ def row(**overrides: object) -> EvalRow:
 #: is the server's own error shape (Guardrail #7).
 REFUSED_COMPLETION: Final = FIXTURES_DIR / "completions" / "errors" / "server-unavailable.json"
 
-#: The recorded pair for the one article in the fixture set a bar can be drawn
-#: from. Kept apart from the transport pair `test_two_calls` drives, because this
-#: pair's whole job is the picture, which needs four figures in one unit to exist
-#: at all. Served with `drawable_article_fetch`.
-DRAWS_LABEL: Final = FIXTURES_DIR / "completions" / "label" / "wind-labelled.json"
-
+#: The recorded answer for the one article in the fixture set a bar can be drawn
+#: from, which needs four figures in one unit to exist at all. Served with
+#: `drawable_article_fetch`.
 DRAWS_SUMMARIZE_AND_PLAN: Final = (
     FIXTURES_DIR / "completions" / "summarize-and-plan" / "wind-summary-and-plan.json"
 )
 
+#: The four countries that answer cites, each once in the page `drawable_article_fetch`
+#: serves. The recording cites them as `entity` elements, so the stand-in labels them with
+#: one config maps to that kind.
+WIND_COUNTRIES: Final = ("Denmark", "Germany", "Poland", "Ireland")
 
-def declining_replies() -> tuple[bytes, bytes]:
-    """Keep the source-backed summary while the boundary answer declines decoration."""
+
+@contextmanager
+def with_an_analysis_service(
+    settings: config.Settings, spans_of: Callable[[str], Iterable[Span]] | None = None
+) -> Iterator[config.Settings]:
+    """`settings` with the text-analysis service pointed at a loopback stand-in the test owns.
+
+    Every test that runs the work stage over an article that extracts needs one, because
+    the stage asks the service for each such article: without it the request goes to the
+    committed port, which is whatever this machine happens to have listening there. By
+    default the stand-in finds nothing, so the table is the one the patterns alone make.
+    """
+    with RecordedAnalysis(spans_of) as service:
+        yield pointed_at(settings, service.base_url)
+
+
+def finding_the_wind_countries(
+    settings: config.Settings,
+) -> AbstractContextManager[config.Settings]:
+    """The same, with a stand-in that labels the four countries the recorded wind plan cites."""
+    return with_an_analysis_service(settings, first_of("ORG", *WIND_COUNTRIES))
+
+
+def declining_wind_reply() -> bytes:
+    """Keep the source-backed summary while the boundary answer declines a chart.
+
+    The row, title and caption the recorded chart answer carried are left in place on purpose:
+    `none` is final, so a decline that still names a row must be read as a decline.
+    """
     answer = json.loads(DRAWS_SUMMARIZE_AND_PLAN.read_bytes())
     content = json.loads(answer["choices"][0]["message"]["content"])
     content["visual"].update(
-        decision="none",
-        purpose=None,
-        type=None,
-        encodings={role: [] for role in content["visual"]["encodings"]},
-        element_ids=[],
-        labels=[],
-        annotations=[],
-        title=None,
-        caption=None,
+        type="none",
         why="The summary already gives the approvals; another display would repeat it.",
     )
     answer["choices"][0]["message"]["content"] = json.dumps(content)
-    return DRAWS_LABEL.read_bytes(), json.dumps(answer).encode("utf-8")
+    return json.dumps(answer).encode("utf-8")
 
 
-def assert_planning_references(server: RecordedEndpoint, references: set[str]) -> None:
-    """The actual second request must expose and admit the compiled source ids."""
-    assert server.served == 2, "one item must run both production calls"
-    request = server.sent[1]
-    menu = str(request["prompt"]).split("Finalized source elements.", maxsplit=1)[1]
-    offered = request["json_schema"]["$defs"]["PlanEncodings"]["properties"]["entity"][
-        "items"
-    ]["enum"]
-    assert references <= set(offered)
-    assert all(f'"{reference}"' in menu for reference in references)
+def assert_planning_rows(server: RecordedEndpoint, rows: list[str]) -> None:
+    """The actual request must show the rows, admit only their codes and carry no element id."""
+    assert server.served == 1, "one item must run the one production call"
+    request = server.sent[0]
+    prompt = str(request["prompt"])
+    assert all(row in prompt for row in rows)
+    assert re.search(r"\b[a-z]+-\d+-\d+\b", prompt) is None
+    offered = request["json_schema"]["$defs"]["PlanChoice"]["properties"]["focus"]["anyOf"][0]
+    assert offered["enum"] == [row.split(" | ", 1)[0] for row in rows]
 
 
 def assert_reader_accepts(path: Path, *, item_id: str) -> None:
@@ -277,8 +298,8 @@ def drawable_article_fetch(_url: str) -> FetchResult:
     `article.html` states three figures in three units - dollars, megawatts and
     customers - so every bar the validator would accept from it mixes units and
     `units_convertible` refuses it. That is correct behaviour and it makes that
-    page unable to answer the question the two-call stage turns on, which is
-    whether the two calls still put a picture on disk. This page states four
+    page unable to answer the question the stage turns on, which is whether the
+    call still puts a picture on disk. This page states four
     figures in one unit, which is the shape `tests/fixtures/visual-validator/`
     already keeps as the plan that passes.
     """
@@ -365,12 +386,16 @@ def work_then_assemble(run_plan: RunPlan, settings: config.Settings) -> None:
     The summaries fail, which is the point: the record describes the pipeline
     rather than the words, so it has to reach the run record on a day no words
     arrived. The server is a real loopback one replaying recorded bytes, so
-    nothing here is mocked (Guardrail #7).
+    nothing here is mocked (Guardrail #7). The text-analysis stand-in finds
+    nothing, so no run depends on a port this machine happens to have open.
     """
-    with a_server_that_refuses_every_completion() as server:
+    with (
+        with_an_analysis_service(settings) as read,
+        a_server_that_refuses_every_completion() as server,
+    ):
         stage_work(
             run_plan,
-            settings=settings,
+            settings=read,
             scorer=None,
             fetcher=captured_article_fetch,
             model_endpoint=server.endpoint,
@@ -396,6 +421,7 @@ def _work_stage(
     run_plan: RunPlan | None = None,
     hold_s: float = 0.0,
     server_pid: int | None = None,
+    settings: config.Settings | None = None,
 ) -> tuple[RunPlan, Path, RecordedEndpoint]:
     """One real work stage over captured pages and recorded replies.
 
@@ -411,13 +437,24 @@ def _work_stage(
     `hold_s` makes the server take its time answering, which is the only way to
     drive a call that waited: the recorded bytes say what the real server spent
     and cannot say how long the caller stood there.
+
+    `settings` is how a caller names the text-analysis service. Without it the run
+    reads a stand-in that answers every request and finds nothing in it, so the
+    table is the regex-only one and no test depends on a port this machine
+    happens to have open.
     """
     run_plan = run_plan if run_plan is not None else plan()
     isolate_ledgers(tmp_path, monkeypatch)
-    with RecordedEndpoint(200, *replies, hold_s=hold_s) as server:
+    with ExitStack() as stack:
+        read = (
+            settings
+            if settings is not None
+            else stack.enter_context(with_an_analysis_service(config.load(CONFIG_DIR)))
+        )
+        server = stack.enter_context(RecordedEndpoint(200, *replies, hold_s=hold_s))
         stage_work(
             run_plan,
-            settings=config.load(CONFIG_DIR),
+            settings=read,
             scorer=None,
             fetcher=fetcher,
             model_endpoint=server.endpoint,
@@ -435,8 +472,8 @@ def worked(
 ) -> tuple[RunPlan, Path, int]:
     """The run, its items on disk, and how many requests the stage sent.
 
-    The third value is what tells two calls an item from one without reading a
-    payload either could produce.
+    The third value is what tells how many calls an item made without reading a
+    payload any of them could produce.
     """
     run_plan, items, server = _work_stage(tmp_path, monkeypatch, replies=replies, fetcher=fetcher)
     return run_plan, items, server.served

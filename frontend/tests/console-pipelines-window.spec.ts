@@ -1,14 +1,13 @@
 /** Pipelines draws only the windowed telemetry and refuses a too-narrow rule. */
 import { expect, test } from './support/browser';
 import { windowOfDays } from '../src/lib/charts/viewport';
-import type { TelemetryRow } from '../src/lib/charts/series';
 import { daysInWindow } from '../src/lib/charts/viewport';
 import { nativeFailureMix } from '../src/lib/console/pipelines/failure-mix';
 import { nativeTimeSplit, timeSplitReadout } from '../src/lib/console/pipelines/item-time-split';
 import { dateSeries, numberFormat } from './support/number-format';
 import { frame } from '../src/lib/charts/frame';
-import { telemetryRow } from './support/telemetry-row';
-import { JUDGED_THROUGH } from './support/console-window/judgement-fixtures';
+import { telemetryRow, type TelemetryRow } from './support/telemetry-row';
+import { DRAWN_THROUGH } from './support/console-window/readout';
 /** An item that published, timed from start to finish: 800 ms in all. */
 function timedItem(date: string, item: string): TelemetryRow {
     return telemetryRow({
@@ -41,7 +40,7 @@ test.describe("Pipelines' failure mix and time split draw the window's days, on 
     test("a day with no row draws no column, and its strip says so, while a day that ran clean is a real zero", () => {
         // Three days ending on the pinned day: an item failed at fetch on the first,
         // nothing ran on the second, and the third timed one item and failed none.
-        const window = windowOfDays(JUDGED_THROUGH, 3, 'right');
+        const window = windowOfDays(DRAWN_THROUGH, 3, 'right');
         const rows = [failedItem('2030-06-13', 'a', 'fetch'), timedItem('2030-06-15', 'b')];
         const calendar = daysInWindow(window);
         const mix = nativeFailureMix(rows.map((row) => ({ ...row })), calendar);
@@ -59,9 +58,9 @@ test.describe("Pipelines' failure mix and time split draw the window's days, on 
         const split = nativeTimeSplit(rows.map((row) => ({ ...row })), calendar);
         const strip = timeSplitReadout(split, numberFormat);
         expect(split.series.map((band) => band.points.map((point) => point.value))).toEqual(
-            [100, 20, 600, 30, 50].map((value) => [null, null, value]));
-        expect(strip.series.slice(0, 7).map((band) => band.values)).toEqual(
-            ['0.1 s', '0.02 s', '0.6 s', '0.03 s', '0.05 s', '0.8 s', '0 s'].map((value) => [null, null, value]));
+            [100, 20, 0, 600, 30, 50].map((value) => [null, null, value]));
+        expect(strip.series.slice(0, 8).map((band) => band.values)).toEqual(
+            ['0.1 s', '0.02 s', '0 s', '0.6 s', '0.03 s', '0.05 s', '0.8 s', '0 s'].map((value) => [null, null, value]));
         expect(strip.notMeasured).toBe('Not measured for the complete cohort');
     });
 });

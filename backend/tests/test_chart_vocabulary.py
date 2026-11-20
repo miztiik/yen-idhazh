@@ -11,48 +11,44 @@ from pathlib import Path
 
 import pytest
 from pipeline._builders import (
-    DRAWS_LABEL,
     DRAWS_SUMMARIZE_AND_PLAN,
     a_server_that_refuses_every_completion,
     drawable_article_fetch,
+    finding_the_wind_countries,
     isolate_ledgers,
 )
 from pipeline._builders import (
     plan as fixture_plan,
 )
-from support.ledger import seed_item_health
 from support.models import a_markers
 from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
-from support.prompts import a_table, label_payload
+from support.prompts import WIND_NAMES, WIND_TEXT, tables_over
 from support.server import RecordedEndpoint
 from support.visual_plans import current_plan
 
 from idhazh import config, ledger
 from idhazh.classify import calls
+from idhazh.classify.pair_names_with_figures import forms_on_offer
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.element import ElementTable
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.summary import Summary, SummaryStatus
+from idhazh.contracts.summary import Summary
 from idhazh.contracts.visual import VisualPlan, VisualType
 from idhazh.contracts.visual_data import VisualData
 from idhazh.contracts.visual_decision import (
     PAYLOAD_SUFFIX,
-    NoneReason,
     VisualDecision,
-    VisualKind,
     VisualState,
 )
-from idhazh.contracts.visual_telemetry import ValidatorCheck, VisualAttemptRow
-from idhazh.fetch import FetchResult
+from idhazh.contracts.visual_telemetry import VisualAttemptRow
 from idhazh.render import asset_relpath, can_compile
 from idhazh.stages import common
 from idhazh.stages.record import stage_record
-from idhazh.stages.two_calls import _drawn
+from idhazh.stages.summarize_one_item import _drawn
 from idhazh.stages.work import stage_work
 from idhazh.visual_outcomes import count_visual_outcomes, project_visual_outcome
-from idhazh.visual_planner import reachable_types
 from idhazh.visual_population import load_visual_population
 
 pytestmark = [pytest.mark.visual, pytest.mark.contract]
@@ -105,25 +101,33 @@ def record(decision: VisualDecision, number: int) -> ItemHealthRow:
     )
 
 
-def test_selection_controls_the_actual_request_grammar_without_changing_its_prefix() -> None:
+def test_selection_controls_the_actual_request_grammar_and_the_stamp() -> None:
     article = Article.read(CONTRACT_FIXTURES_DIR / "article/ok.json")
-    first = label_payload(article)
+    entry = config.load(CONFIG_DIR).models.summarizer
     off = settings(type_selection_enabled=False, enabled_types=["whowhat", "quotecard"]).app.visuals
     selected = settings(
         type_selection_enabled=True, enabled_types=["dot", "whowhat", "quotecard"]
     ).app.visuals
     markers = a_markers()
-    full = calls.summarize_and_plan_schema(visuals=off)
-    recorded = json.loads(read_text(DRAWS_LABEL))["choices"][0]["message"]["content"]
-    request = calls.build_summarize_and_plan_request(
-        first, recorded, a_table(article), markers=markers, visuals=selected
+    _, tables = tables_over(article, WIND_TEXT, WIND_NAMES, visuals=selected)
+    request = calls.build_summary_request(
+        article.model_copy(update={"text": WIND_TEXT}),
+        tables,
+        model_id=entry.id,
+        server=entry.server,
+        sampling=entry.sampling,
+        markers=markers,
+        visuals=selected,
     )
-    assert request["json_schema"]["$defs"]["VisualType"]["enum"] == ["dot"]
-    assert request["prompt"].startswith(first["prompt"])
-    assert full["$defs"]["VisualType"]["enum"] == [
-        kind.value for kind in VisualType if can_compile(kind)
-    ]
-    assert calls.summarize_and_plan_schema()["$defs"]["VisualType"] == full["$defs"]["VisualType"]
+    answer = request["json_schema"]["$defs"]["PlanChoice"]["properties"]
+    assert forms_on_offer(selected) == (VisualType.DOT,)
+    assert answer["type"]["enum"] == ["none", "dot"]
+    assert "Every table can be drawn as: dot." in request["prompt"]
+    full = calls.summarize_and_plan_schema(visuals=off)["$defs"]["PlanChoice"]["properties"]
+    assert full["type"]["enum"] == ["none", "bar", "dot"]
+    assert calls.summarize_and_plan_schema()["$defs"]["PlanChoice"]["properties"]["type"] == (
+        full["type"]
+    )
     assert VisualPlan.json_schema()["$defs"]["VisualType"]["enum"] == [
         kind.value for kind in VisualType
     ]
@@ -131,12 +135,12 @@ def test_selection_controls_the_actual_request_grammar_without_changing_its_pref
     assert calls.prompt_inputs(markers=markers, visuals=selected) != calls.prompt_inputs(
         markers=markers, visuals=off
     )
-    assert "VisualType" not in calls.summarize_and_plan_schema(plan=False, visuals=selected).get(
+    assert "PlanChoice" not in calls.summarize_and_plan_schema(plan=False, visuals=selected).get(
         "$defs", {}
     )
 
 
-def test_active_requests_offer_implemented_types_without_removing_historical_names() -> None:
+def test_active_requests_offer_the_forms_a_table_can_be_drawn_as_and_keep_historical_names() -> None:
     active = config.load(CONFIG_DIR).app.visuals
     selected = [
         "bar", "dot", "line", "scatter", "bubble", "slope",
@@ -145,7 +149,8 @@ def test_active_requests_offer_implemented_types_without_removing_historical_nam
     assert active.type_selection_enabled
     assert not active.downgrade_enabled
     assert [kind.value for kind in active.enabled_types] == selected
-    assert calls.summarize_and_plan_schema(visuals=active)["$defs"]["VisualType"]["enum"] == selected
+    answer = calls.summarize_and_plan_schema(visuals=active)["$defs"]["PlanChoice"]["properties"]
+    assert answer["type"]["enum"] == ["none", "bar", "dot"]
     assert set(active.select_types()) == {
         kind for kind in VisualType if can_compile(kind)
     }
@@ -154,17 +159,6 @@ def test_active_requests_offer_implemented_types_without_removing_historical_nam
     for historical in set(VisualType) - set(active.select_types()):
         _, plan, _ = inputs(type=historical)
         assert plan.type is historical
-
-
-def test_retired_selections_cannot_make_a_numericless_article_reachable() -> None:
-    _, _, table = inputs()
-    empty = ElementTable.model_validate(table.model_dump(mode="json") | {"elements": []})
-    assert reachable_types(empty, visuals=settings(
-        type_selection_enabled=True, enabled_types=["quotecard", "whowhat"]
-    ).app.visuals) == ()
-    assert reachable_types(empty, visuals=settings(
-        type_selection_enabled=True, enabled_types=["bar"]
-    ).app.visuals) == ()
 
 
 def test_mixed_requests_preserve_types_source_figures_and_metric_denominators(
@@ -299,60 +293,35 @@ def test_a_failed_write_keeps_the_request_and_selected_depth_without_claiming_de
     assert count_visual_outcomes([record(decision, 1)]).wasted_decode_rate == 1
 
 
-def test_real_shard_projects_outcomes_before_sealing_and_reuses_its_starting_population(
+def test_real_shard_projects_outcomes_before_sealing(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     isolate_ledgers(tmp_path, monkeypatch)
     run_plan = fixture_plan(item_count=2)
-    history = ItemHealthRow.model_validate(
-        json.loads(read_text(CONTRACT_FIXTURES_DIR / "item-health-row/published.json")) | {
-            "date": "2026-08-20", "run_id": "2026-08-20-1", "item_id": "energy-01",
-            "planned_type": "bar", "rendered_type": "bar", "downgrade_depth": 0, "marks": 4,
-        }
-    )
-    seed_item_health(common.STATE_ROOT, history.date, [history])
-    reply = json.loads(DRAWS_SUMMARIZE_AND_PLAN.read_bytes())
-    content = json.loads(reply["choices"][0]["message"]["content"])
-    content["visual"]["type"] = "comparison"
-    reply["choices"][0]["message"]["content"] = json.dumps(content)
-    knobs = settings(
-        downgrade_enabled=True,
-        downgrade_max_samples_per_type=1,
-        type_selection_enabled=False,
-        enabled_types=["bar", "comparison"],
-    )
-    appended = False
-
-    def fetch(url: str) -> FetchResult:
-        nonlocal appended
-        if not appended:
-            seed_item_health(common.STATE_ROOT, history.date, [
-                ItemHealthRow.model_validate(
-                    history.model_dump(mode="json") | {"item_id": "energy-02", "marks": 8}
-                )
-            ])
-            appended = True
-        return drawable_article_fetch(url)
+    knobs = settings(downgrade_enabled=True, type_selection_enabled=False)
 
     caplog.set_level(logging.INFO, logger="idhazh")
-    with RecordedEndpoint(200, DRAWS_LABEL.read_bytes(), json.dumps(reply).encode()) as server:
+    with (
+        finding_the_wind_countries(knobs) as read,
+        RecordedEndpoint(200, DRAWS_SUMMARIZE_AND_PLAN.read_bytes()) as server,
+    ):
         stage_work(
-            run_plan, settings=knobs, scorer=None, fetcher=fetch, model_endpoint=server.endpoint
+            run_plan, settings=read, scorer=None, fetcher=drawable_article_fetch,
+            model_endpoint=server.endpoint,
         )
-        assert server.sent[-1]["json_schema"]["$defs"]["VisualType"]["enum"] == [
-            kind.value for kind in VisualType if can_compile(kind)
-        ]
+        offered = server.sent[-1]["json_schema"]["$defs"]["PlanChoice"]["properties"]
+        assert offered["type"]["enum"] == ["none", "bar", "dot"]
     assert stage_record(run_plan, settings=knobs, commit_sha="a" * 40)[0] == len(run_plan.items)
     rows = ledger.load_days(
         common.STATE_ROOT, LedgerName.ITEM_HEALTH, [run_plan.date], model=ItemHealthRow
     )
     assert {row.item_id for row in rows} == {item.item_id for item in run_plan.items}
     assert all(
-        row.planned_type is VisualType.COMPARISON
+        row.planned_type is VisualType.BAR
         and row.rendered_type is VisualType.BAR
-        and row.downgrade_depth == 1
+        and row.downgrade_depth == 0
         and row.marks == 4
         for row in rows
     )
@@ -369,78 +338,15 @@ def test_real_shard_projects_outcomes_before_sealing_and_reuses_its_starting_pop
         assert row.elements_found is not None
         assert row.potential_primary is not None
         assert row.downgrade_depth == decision.deepest_downgrade_depth
-    assert load_visual_population(
-        common.STATE_ROOT, on=run_plan.date, visuals=knobs.app.visuals
-    ) == {VisualType.BAR: (8,)}
     report = next(
         json.loads(line) for line in caplog.messages
         if line.startswith("{") and json.loads(line).get("name") == "shard.done"
     )
     assert report["visual_outcomes"] == {
-        "requested_types": {"comparison": len(rows)},
+        "requested_types": {"bar": len(rows)},
         "measured_requests": len(rows),
-        "wasted_decode_rate": 1.0,
+        "wasted_decode_rate": 0.0,
     }
-
-
-def test_real_shard_keeps_story_when_pie_fallback_parts_do_not_match_its_whole(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    isolate_ledgers(tmp_path, monkeypatch)
-    run_plan = fixture_plan(item_count=1)
-    reply = json.loads(DRAWS_SUMMARIZE_AND_PLAN.read_bytes())
-    content = json.loads(reply["choices"][0]["message"]["content"])
-    visual = content["visual"]
-    categories = visual["encodings"]["category"][1:]
-    quantities = visual["encodings"]["quantity"]
-    whole, parts = quantities[0], quantities[1:]
-    visual.update(
-        purpose="composition",
-        type="pie",
-        declared_whole_element_id=whole,
-        element_ids=[whole, *categories, *parts],
-        labels=[whole, *categories],
-        annotations=[parts[0]],
-    )
-    visual["encodings"]["category"] = categories
-    visual["encodings"]["quantity"] = parts
-    reply["choices"][0]["message"]["content"] = json.dumps(content)
-    knobs = settings(
-        downgrade_enabled=True,
-        type_selection_enabled=True,
-        enabled_types=["pie", "stacked_bar"],
-    )
-
-    with RecordedEndpoint(200, DRAWS_LABEL.read_bytes(), json.dumps(reply).encode()) as server:
-        stage_work(
-            run_plan,
-            settings=knobs,
-            scorer=None,
-            fetcher=drawable_article_fetch,
-            model_endpoint=server.endpoint,
-        )
-
-    item = run_plan.items[0]
-    items_dir = common._run_dir(run_plan.date) / "items"
-    summary = Summary.read(items_dir / f"{item.item_id}.summary.json")
-    decision = VisualDecision.read(items_dir / f"{item.item_id}{PAYLOAD_SUFFIX}")
-    assert summary.status is SummaryStatus.OK and summary.summary
-    assert decision.kind is VisualKind.NONE
-    assert decision.none_reason is NoneReason.VALIDATION_FAILED
-    assert decision.planned_type is VisualType.PIE and decision.rendered_type is None
-    assert decision.rejection_reason is ValidatorCheck.PIE_EXHAUSTIVE
-    assert decision.deepest_downgrade_depth == 1
-    assert decision.gate_floor_applied is None
-    assert decision.spec is None and decision.data_path is None
-    assert decision.rationale and "stacked_bar_exhaustive" in decision.rationale
-    (attempt,) = ledger.load_days(
-        common.STATE_ROOT, LedgerName.VISUAL_DESIGN_ATTEMPTS,
-        [run_plan.date], model=VisualAttemptRow,
-    )
-    assert attempt.visual_id == decision.visual_id
-    assert attempt.downgrade_depth == 1
-    assert attempt.none_reason is NoneReason.VALIDATION_FAILED
 
 
 def test_settled_visuals_survive_a_later_summary_write_failure(
@@ -450,12 +356,13 @@ def test_settled_visuals_survive_a_later_summary_write_failure(
     run_plan = fixture_plan(item_count=2)
     items = common._run_dir(run_plan.date) / "items"
     (items / f"{run_plan.items[1].item_id}.summary.json").mkdir(parents=True)
-    with RecordedEndpoint(
-        200, DRAWS_LABEL.read_bytes(), DRAWS_SUMMARIZE_AND_PLAN.read_bytes()
-    ) as server:
+    with (
+        finding_the_wind_countries(settings()) as read,
+        RecordedEndpoint(200, DRAWS_SUMMARIZE_AND_PLAN.read_bytes()) as server,
+    ):
         with pytest.raises(OSError):
             stage_work(
-                run_plan, settings=settings(), scorer=None, fetcher=drawable_article_fetch,
+                run_plan, settings=read, scorer=None, fetcher=drawable_article_fetch,
                 model_endpoint=server.endpoint, commit_sha="a" * 40,
             )
     attempts = ledger.load_days(
@@ -475,9 +382,12 @@ def test_work_without_a_summary_does_not_invent_a_visual_attempt(
 ) -> None:
     isolate_ledgers(tmp_path, monkeypatch)
     run_plan = fixture_plan(item_count=1)
-    with a_server_that_refuses_every_completion() as server:
+    with (
+        finding_the_wind_countries(settings()) as read,
+        a_server_that_refuses_every_completion() as server,
+    ):
         stage_work(
-            run_plan, settings=settings(), scorer=None, fetcher=drawable_article_fetch,
+            run_plan, settings=read, scorer=None, fetcher=drawable_article_fetch,
             model_endpoint=server.endpoint,
         )
     assert ledger.load_days(

@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import pytest
 from pydantic import ValidationError
+from support.paths import CONTRACT_FIXTURES_DIR, read_text
 
+from idhazh.contracts.base import derive_text_digest, derive_url_key
 from idhazh.contracts.similarity_holdout_pair import SimilarityHoldoutPair
 
 pytestmark = pytest.mark.contract
@@ -54,3 +56,27 @@ def test_a_mark_written_out_reads_back_as_the_same_mark(same_story: bool) -> Non
     """Writer and reader agree on the spelling, which is what the round trip checks."""
     pair = SimilarityHoldoutPair.from_csv_row(_row(str(same_story)))
     assert SimilarityHoldoutPair.from_csv_row(pair.csv_row()).same_story is same_story
+
+
+def test_a_holdout_row_recomputes_its_own_keys() -> None:
+    """A person types this file, so no cell they could mistype decides identity.
+
+    The pair key is what joins a mark to the two stories it names, and a typed
+    digest is a mark that quietly attaches to the wrong pair.
+    """
+    path = (
+        CONTRACT_FIXTURES_DIR
+        / "similarity-holdout-pair"
+        / "two-stories-a-person-marked-apart.json"
+    )
+    mark = SimilarityHoldoutPair.from_json(read_text(path))
+
+    assert mark.same_story is False
+    assert mark.left_url_key == derive_url_key(mark.left_url)
+    assert mark.right_url_key == derive_url_key(mark.right_url)
+    low, high = sorted((mark.left_url_key, mark.right_url_key))
+    assert mark.pair_key == derive_text_digest(low + high)
+    assert "url_key" not in mark.model_dump(mode="json"), "a derived key is not a column"
+
+    with pytest.raises(ValidationError, match="two articles"):
+        SimilarityHoldoutPair.model_validate(mark.model_dump() | {"right_url": mark.left_url})

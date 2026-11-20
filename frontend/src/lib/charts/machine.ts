@@ -1,11 +1,9 @@
-/** What the native machine charts read from the independent clocks and article rows.
+/** What the native machine charts read from the article rows.
  *
  * An empty cell is unknown and never zero. The counters hand absence through
  * as null and so does this module: a zero is a measurement.
  */
 
-import { rankedList, type RankedGeometry } from './d3/rankedList';
-import type { MachineRun } from '$lib/console/machine/counters';
 import type { SeriesInput } from './d3/dateSeries';
 import { compareRuns } from '../console/queries/shared';
 import { readoutOf, type Readout, type ReadoutInput } from './readout';
@@ -19,10 +17,6 @@ import type { NumberFormatConfig } from '../number-format';
  * the three between them are what makes the line a shape rather than two dots.
  */
 export const PERCENTILES = [50, 75, 90, 95, 99] as const;
-
-function sum(values: readonly number[]): number {
-	return values.reduce((total, value) => total + value, 0);
-}
 
 /** Linear interpolation between the two nearest ranks.
  *
@@ -59,158 +53,11 @@ export function gib(value: number | null, numberFormat: NumberFormatConfig): str
 	return value === null ? '-' : `${formatNumber(value / 1024 / 1024 / 1024, numberFormat, { si: false })} GiB`;
 }
 
-// ---------------------------------------------------------------------------
-// The two clocks, compared
-// ---------------------------------------------------------------------------
-
-export interface ClockPair {
-	/** `shard 2` where the item ledger carries a shard, the run id otherwise. */
-	label: string;
-	/** Prompt tokens a second, as the item ledger counted them. */
-	ledger: number | null;
-	/** The same, as llama-server counted them. */
-	server: number | null;
-	/** How far the ledger sits from the server, as a percent of the server. */
-	gapPct: number | null;
-	/** Null where nothing was compared. Never `false` by default. */
-	agrees: boolean | null;
-}
-
-export interface ClockView {
-	/** Which grain the ledger allowed. */
-	grain: 'shard' | 'run';
-	pairs: ClockPair[];
-	/** Item rows that carry a shard, and item rows in the set. The sentence the
-	 * panel prints about its own grain is derived from these two. */
-	shardRows: number;
-	itemRows: number;
-	tolerancePct: number;
-	/** Pairs that disagree by more than the tolerance. */
-	disagreeing: number;
-	empty: boolean;
-}
-
-/** One item row's read tokens and read milliseconds, or nothing.
- *
- * `input_tokens - cached_tokens` is the definition, and it is defined HERE
- * rather than in the reader so there is exactly one of it: the runtime reused
- * the cached ones instead of reading them, so leaving them in reports a rate
- * the machine never ran at. `poolLedger` in the native machine counters
- * calls this, which is why that module imports a chart module rather than the
- * other way round for this one function.
- *
- * A row without either instrument is skipped, not counted as reading nothing.
- */
-export function itemRead(
-	row: Record<string, string>
-): { tokens: number; ms: number } | null {
-	const ms = cell(row.prefill_ms);
-	const input = cell(row.input_tokens);
-	if (ms === null || input === null) return null;
-	return { tokens: input - (cell(row.cached_tokens) ?? 0), ms };
-}
-
 /** An empty cell is absent, never zero. The same rule the reader applies. */
 function cell(value: string | undefined): number | null {
 	if (value === undefined || value === '') return null;
 	const parsed = Number(value);
 	return Number.isFinite(parsed) ? parsed : null;
-}
-
-/** Prompt tokens a second over a set of item rows, summed and then divided.
- *
- * Sum over sum, never a mean of per-item rates: a rate is a ratio, and
- * averaging ratios weighs a release note like a feature.
- */
-export function pooledReadRate(rows: readonly Record<string, string>[]): number | null {
-	const reads = rows
-		.map(itemRead)
-		.filter((read): read is { tokens: number; ms: number } => read !== null);
-	const ms = sum(reads.map((read) => read.ms));
-	return ms > 0 ? sum(reads.map((read) => read.tokens)) / (ms / 1000) : null;
-}
-
-/** The two instruments, side by side, at the finest grain the ledgers allow.
- *
- * The runtime ledger was created for exactly this check and nothing performed
- * it on a screen. Both sides count prompt tokens actually read, so a gap is one
- * of the two instruments being wrong rather than the two measuring different
- * things.
- */
-export function clockAgreement(
-	run: MachineRun | null,
-	health: readonly Record<string, string>[],
-	tolerancePct: number
-): ClockView {
-	if (run === null) {
-		return {
-			grain: 'run',
-			pairs: [],
-			shardRows: 0,
-			itemRows: 0,
-			tolerancePct,
-			disagreeing: 0,
-			empty: true
-		};
-	}
-	const mine = health.filter((row) => row.run_id === run.runId);
-	const withShard = mine.filter((row) => (row.machine_shard ?? '') !== '');
-	const grain: ClockView['grain'] =
-		withShard.length === mine.length && mine.length > 0 ? 'shard' : 'run';
-
-	const pairs: ClockPair[] =
-		grain === 'shard'
-			? run.reported.map((shard) => {
-					const rows = withShard.filter((row) => Number(row.machine_shard) === shard.shard);
-					return pair(
-						`shard ${shard.shard}`,
-						pooledReadRate(rows),
-						shard.readTokensPerSecond,
-						tolerancePct
-					);
-				})
-			: [pair(run.runId, run.clocks.ledger.rate, run.clocks.server.rate, tolerancePct)];
-
-	return {
-		grain,
-		pairs,
-		shardRows: withShard.length,
-		itemRows: mine.length,
-		tolerancePct,
-		disagreeing: pairs.filter((entry) => entry.agrees === false).length,
-		empty: pairs.every((entry) => entry.gapPct === null)
-	};
-}
-
-function pair(
-	label: string,
-	ledger: number | null,
-	server: number | null,
-	tolerancePct: number
-): ClockPair {
-	if (ledger === null || server === null || server <= 0) {
-		return { label, ledger, server, gapPct: null, agrees: null };
-	}
-	const gapPct = (Math.abs(ledger - server) / server) * 100;
-	return { label, ledger, server, gapPct, agrees: gapPct <= tolerancePct };
-}
-
-/** Rank each measured gap against the rule, retaining both independent readings. */
-export function clocksChart(
-	pairs: readonly ClockPair[],
-	tolerancePct: number,
-	numberFormat: NumberFormatConfig
-): RankedGeometry | null {
-	const ranked = rankedList(pairs.flatMap((pair) => pair.gapPct === null ? [] : [{
-		label: pair.label,
-		value: pair.gapPct,
-		context: `item ledger ${pair.ledger === null ? '-' : formatNumber(pair.ledger, numberFormat)}; server ${pair.server === null ? '-' : formatNumber(pair.server, numberFormat)} tokens a second`,
-		...(pair.agrees === false ? { status: 'disagrees' } : {})
-	}]), { rules: [{ at: tolerancePct, label: 'Allowed disagreement' }] });
-	for (const entry of ranked?.rows ?? []) {
-		entry.row.value = `${formatNumber(entry.value, numberFormat, { si: false })}%`;
-	}
-	return ranked;
 }
 
 // ---------------------------------------------------------------------------

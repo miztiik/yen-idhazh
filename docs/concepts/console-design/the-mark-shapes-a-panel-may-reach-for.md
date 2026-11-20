@@ -335,6 +335,16 @@ the band. An optional `unit` on the series is printed after each of those
 readings, so a share reads `92%`. Faithfulness is the one caller, with
 `Median (p50)`, `Lower quartile (p25)` and `Upper quartile (p75)`.
 
+The value axis says that unit too, so the axis and the strip cannot disagree
+about it. Where every series on the axis names one unit, each tick is the shared
+number style followed by it, so a faithfulness tick reads `95%` and not `95`.
+Series that differ, or none that names one, leave the ticks bare. A caller that
+draws its own strip, or whose ticks need more than a suffix, passes
+`valueFormat: (value) => string`, which writes every tick of that axis and wins
+over the unit. Hardware prompt reuse is the one caller, so its axis reads `0%`,
+`50%` and `100%`. It is a primary-contract option: `LegacyDateSeriesOptions`
+refuses it, as it refuses `domain`.
+
 For elapsed time, optional `reconciliation: {elapsed, overlap}` supplies two
 named `SeriesInput` readings alongside a duration stack. Every measured day
 must have all its stack parts, elapsed time and a non-negative overlap
@@ -346,7 +356,7 @@ Ordinary stacks still refuse negative parts.
 
 The item-time caller counts `summarize_ms` once. Its label, summary and visual
 plan readings are non-additive details, not extra stage height. All comparable
-means use one stated cohort with the four named stages, whole clock and signed
+means use one stated cohort with the five named stages, whole clock and signed
 gap recorded and reconciled. Positive gaps supply unnamed duration; negative
 gaps supply overlap deductions. Average these separately, so opposite signed
 rows cannot conceal overlap by cancellation. State the cohort's excluded
@@ -410,6 +420,7 @@ Machine keys still use `machine-colour.ts`; a spread uses its series' stop.
 | --- | --- |
 | fetch; failed-fetch tile | `--chart-1` |
 | extract | `--chart-2` |
+| analyze | `--chart-4`, shared with the label call's detail: analysis replaces that call, so only a day that spans the change shows both |
 | summarize; model time not split into calls | `--chart-3` |
 | label call | `--chart-4` |
 | summary call | `--chart-5` |
@@ -633,7 +644,8 @@ strongest form of it is mechanical and is the one to prefer: pass the identical
 `console-chrome.spec.ts` compares native lines and stacks against the same dates,
 values and readout. This is a shared shape contract, not a claim that current
 FailureMix or Hardware prompt reuse offers a shape switch. FailureMix draws one
-stack of failed-row counts; native prompt reuse draws its dated call readings.
+stack of failed-row counts; native prompt reuse draws one stacked bar a day per
+call, the cached share of its prompt tokens.
 
 One control per panel, never one per series and never a preference that follows
 the reader across the site. A Sankey is not a line and a histogram is not a

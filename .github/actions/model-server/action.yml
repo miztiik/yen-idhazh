@@ -165,10 +165,9 @@ runs:
     # One server a job, and one job a runner. Four servers on four logical CPUs
     # is an experiment this repository has already run: `llama-server` at 8
     # threads is slower than at 4 on this host at every prompt length, and 16
-    # percent slower at decode. And one server does not leave room for a second -
-    # measured over four captures of run 2026-08-29-3 on 2026-09-08, one server
-    # peaks at 12.57 to 13.16 GiB and reaches 14.31 GiB with the job's python,
-    # 96.0 percent of the 16 GB runner.
+    # percent slower at decode. For memory, measured over the eight work shards
+    # of run 2026-11-16-43901478491 on 2026-11-16: one server and the job's python
+    # held at most 10.04 to 11.62 GiB at once, of the runner's 15.61 GiB.
     #
     # The weights are not named here. The config root's own entry says which
     # file, and the flags come from that same entry, so the server this starts

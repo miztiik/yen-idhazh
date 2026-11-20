@@ -1,6 +1,6 @@
 # The LLM-COUNCIL, and why judging has its own clock
 
-**Last Updated**: 2026-11-16
+**Last Updated**: 2026-11-19
 
 The room a model verdict is taken in. `LLM-COUNCIL` is a workflow of its own -
 [../../../.github/workflows/llm-council.yml](../../../.github/workflows/llm-council.yml) -
@@ -9,25 +9,31 @@ and resource budgets. Plugins choose their own dates, including declining.
 This page says what the venue is and what it obliges; what
 each judge decides is on the page that owns that judge.
 
-**This page does not hold a verdict rule.** The same-story fold, its slots, its
-walk and its damping are
+**This page does not hold a verdict rule.** What the content-similarity judge reads,
+keeps and decides is
+[how-the-content-similarity-judge-follows-its-thresholds.md](how-the-content-similarity-judge-follows-its-thresholds.md),
+and the grouping rule it serves is
 [autotune-content-similarity.md](autotune-content-similarity.md). This page is
-the room, and that page is the one case being heard in it today.
+the room, and that judge is the one case being heard in it today.
 
 ## It is a separate workflow because of the budget, not the schedule
 
-At the cap the same-story block permits - 200 pairs, judged in both orders -
-that is 400 model calls. A pair costs a measured 110.98 seconds at its worst,
-so the cap is **6 hours 10 minutes of model time run serially**, and a GitHub
-job is killed at 6 hours with nothing written (`CLAUDE.md` Guardrail #2). At the
-average pair, 94.53 seconds, it is 5 hours 15 minutes - which clears the ceiling
-by 45 minutes, and a bound has to survive a bad night rather than an average one
+At the cap the same-story draw permits - 150 pairs, judged in both orders -
+that is 300 model calls. A pair costs a measured 110.98 seconds at its worst,
+so the cap is **4 hours 37 minutes of model time run serially**, against the
+175 minutes one unit has to work in (below) and the 6 hours at which a GitHub
+job is killed with nothing written (`CLAUDE.md` Guardrail #2). At the average
+pair, 94.53 seconds, it is 3 hours 56 minutes. One unit cannot hold either, so
+the draw is split over the council's four units, 38 pairs and 70 minutes at the
+worst pair cost each, and a bound has to survive a bad night rather than an
+average one
 ([what a judge pair costs](../../reference/benchmarks/what-a-judge-pair-costs.md)).
 
-**Today's median day is 33 pairs, and it would fit inside `digest.yml`
-comfortably.** That is the argument for the split rather than against it: sizing
-the shape off the median means the first busy day crosses the ceiling and writes
-nothing at all.
+**The draw takes its whole budget on any night whose scores between the thresholds
+hold enough pairs, so there is no quiet night to size the shape from.** All eight
+nights replayed from 2026-11-09 to 2026-11-16 took the full 150, out of 330 to 6,208
+pairs between the thresholds, and a shape that only fits on a median day is a shape
+that finds out on a busy one.
 
 ### Design rationale: planning and collection keep separate total deadlines
 
@@ -389,7 +395,8 @@ nothing.
 
 The content-similarity judge is what declares one today, in
 [../../../backend/idhazh/similarity/budget.py](../../../backend/idhazh/similarity/budget.py):
-its draw of pairs, at its own measured per-pair cost, against the window below.
+its draw of pairs plus the known-answer pairs its busiest runner judges first, at its own
+measured per-pair cost, against the window below.
 The number is that judge's reading, so the check is that judge's too.
 Composed application configuration must not load a judge's runtime budget
 check for callers that do not run it.
@@ -417,20 +424,16 @@ read; adding a council module requires adding its name to the test inputs.
 The fresh-interpreter checks in `test_session.py` cover dynamically loaded
 judge code without enumerating source files.
 
-**Three judge contracts still cross, and the list cannot grow.**
-`story_similarity_pair` and
-`fitted_similarity_threshold` arrive through
-[../../../backend/idhazh/ledger/csv_file.py](../../../backend/idhazh/ledger/csv_file.py), the one
-registry of CSV rows and the module the tenancy protocol reads its row types
-from; `story_similarity_distribution` arrives through the placement knob block
-`app_config` composes, which the registry loads to ask a tenant whether it can
-finish the night. **No judge CODE is on that list and none may join it** - these
-are declarations a deleted judge would take with it, which is what makes the
-exception survivable. `JUDGE_CONTRACTS_STILL_CROSSING` in
-`backend/tests/council/test_council_runs_without_a_judge.py` holds the exact
-set; an added or removed contract fails that check. Cutting either carrier means
-moving a shape every stage and the digest pipeline read, and that is a row of
-its own.
+**No judge contract crosses.** Every shape a judge owns lives in that judge's own
+module, so a judge deleted from the tree takes its shapes with it and every council
+verb still imports. `JUDGE_CONTRACTS_STILL_CROSSING` in
+`backend/tests/council/test_council_runs_without_a_judge.py` holds the exact set, and
+it is empty: a contract added to it fails review, and a judge contract that begins to
+arrive through a shared module, such as the placement knob block `app_config`
+composes or the registry of ledger rows the tenancy protocol reads its row types
+from, fails the named-inputs check. **No judge CODE may ever join the set** - a
+contract a deleted judge would take with it is the only exception that could be
+survivable, and the council imports the shape, never the judge.
 
 **The empty case is the test.** With nobody active, or every active plugin
 declining, preparation finishes an empty batch and the matrix contains no
@@ -547,9 +550,15 @@ keep their full checkout, with unchanged model, dependency and cache steps.
 Before settlement, the shared `publication_inputs.materialize` reads each
 active judge's `publication_inputs(date=...)` from the checkout's fixed commit.
 It lists only those named paths, periods and indexes and explicitly fetches
-their blobs. No declaration means refusal on a sparse checkout. An absent path
-in that commit remains absent; a listed blob that cannot be fetched fails
-collection, rather than being treated as missing data. Imported bytes are not
+their blobs. A tenant with no `publication_inputs` member is refused on a sparse
+checkout. An absent path in that commit remains absent; a listed blob that cannot
+be fetched fails collection, rather than being treated as missing data. A path
+the declaration omits is not noticed here: the ledger loaders read the days they
+find and never fail on a file that is not there, so a read with a missing input
+returns a shorter window and not an error. A tenant whose result depends on the
+window checks that itself. The similarity judge compares the thresholds its draw
+followed with the history it read, and files nothing when they differ. Imported
+bytes are not
 completed writes. Earlier outputs are not replaced when a later date names them.
 The publisher still builds its private candidate on fresh main and never reruns
 a judge.
@@ -568,9 +577,8 @@ council run, `job` `save_council_results`, `shard` 0, the run's attempt, and the
 `--commit` the job checked out. It files the council's own record with it and
 passes it to each tenant's `Tenant.settle`. A tenant names its own producer and
 changes nothing else, so every raw file the night commits says which run, job
-and commit wrote it. The similarity judge's `count_verdicts` files its scored
-pairs and its metrics this way, and its `set_merge_line` files the night's
-fitted merge line.
+and commit wrote it. The similarity judge's `file_pair_verdicts` and
+`review_thresholds` file the night's pair verdicts and its threshold row this way.
 
 There is no regeneration command on that call. The council is the only writer of
 a tenant's own ledger and `concurrency` runs one council at a time, so a lost
@@ -720,8 +728,7 @@ together. So a shared judge-metrics contract is refused rather than deferred:
 the column would not be wrong on the day it was added, it would go wrong on the
 day a second judge filled it.
 
-Which ledger each reading lands in, and the one reading that is filed under a
-judge although the council is what runs it, is
+Which ledger each reading lands in is
 [../../concepts/telemetry.md](../../concepts/telemetry.md#where-a-judging-night-files-what-it-measured).
 
 ## A unit uploads what it measured, and the collecting job commits it
@@ -872,8 +879,7 @@ case where more than one job commits into one ledger file - the digest pipeline
 has four to eight committing units on one day. The council has one
 committing writer, and its day file is already settled on every write by a key
 carrying the run id, which is the property a segment exists to provide. The
-council's record, the scored pairs, the judge's metrics and the fitted merge
-line now all file through the ledger door, where each write is a raw file named
+council's record and the judge's pair verdicts now both file through the ledger door, where each write is a raw file named
 for its writer, so no council write appends to a day file.
 
 **The second reason went with the staging ledger on 2026-09-22.** A compaction
@@ -921,34 +927,11 @@ not.
   reading the platform's value would split a run that crossed midnight across
   two addresses with nothing able to say the two were one night.
 
-### Two meanings in one column, and how a reader tells them apart
-
-`run_id` on a row written before this change means **the run that published the
-day**. On a row written after it, it means **the run that judged it**. Two
-ledgers carry both across time: the judged pairs and the fitted lines. On
-2026-09-21 that was 82 pair rows and 1 fitted row, all under
-`2026-09-18-35339202390`.
-
-The **`version` stamp every row already carries is the discriminator** (maintainer
-ruling, 2026-09-21). It costs nothing, because the row carries it either way.
-
-There is a second test that needs no stamp at all, and it is exact rather than
-approximate. **A digest run's id is prefixed with the day it published, so on
-every row written the old way `run_id` starts with that row's own `date`.** A
-council name is prefixed with the day the council ran, which is the day after
-the one it judges. So `run_id[:10] == date` is the old meaning and
-`run_id[:10] > date` is the new one, on both ledgers, with nothing to look up.
-
-**What this does not change.** The judged date is still the `date` column and
-still decides which file a row lands in. And the pair row's own contract already
-said `run_id` was "the run that scored the pair" - the code was what disagreed
-with it.
-
 ## What is heard here
 
 | Case | Decides | Status |
 | --- | --- | --- |
-| Same-story pairs | where the merge line should have been | ships today, [autotune-content-similarity.md](autotune-content-similarity.md) |
+| Same-story pairs | which pairs the judge reads, and where its two thresholds belong, read by score slice | ships today, [how-the-content-similarity-judge-follows-its-thresholds.md](how-the-content-similarity-judge-follows-its-thresholds.md) |
 | Summary fluency | a 1-5 readability score, summary only, sampled | design of record, [autotune-summary-quality.md](autotune-summary-quality.md) |
 
 Every page named in the See also below describes a knob a person sets by hand
@@ -956,7 +939,8 @@ today. Where one of them gains a fitted line, this is the room it is fitted in.
 
 ## See also
 
-- [autotune-content-similarity.md](autotune-content-similarity.md) - the one case heard here today: the merge line, its fold, and how it moves.
+- [how-the-content-similarity-judge-follows-its-thresholds.md](how-the-content-similarity-judge-follows-its-thresholds.md) - the one case heard here today: how the nightly judge draws, reads and moves its two thresholds.
+- [autotune-content-similarity.md](autotune-content-similarity.md) - the grouping rule that judge serves.
 - [autotune-search-quality.md](autotune-search-quality.md) - research: what search returns, and a judge that would tune the similarity floor. Not built.
 - [autotune-summary-quality.md](autotune-summary-quality.md) - the next-day fluency judge, and the loop it feeds.
 - [autotune-story-prominence.md](autotune-story-prominence.md) - what decides a story's position, hand-set today.

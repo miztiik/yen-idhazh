@@ -5,6 +5,7 @@ export const SERIES_TOKENS = {
 	fetch: '--chart-1',
 	'failed-fetch': '--chart-1',
 	extract: '--chart-2',
+	analyze: '--chart-4',
 	summarize: '--chart-3',
 	'model-time': '--chart-3',
 	'label-call': '--chart-4',

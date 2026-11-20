@@ -2,29 +2,6 @@
   "assemble": {
     "group_identical_titles": true,
     "same_story": {
-      "adaptive_dedup_threshold": {
-        "applied_lookback_days": 7,
-        "band_high": 1.0,
-        "band_low": 0.88,
-        "bin_width": 0.001,
-        "dead_zone_bins": 1,
-        "disagreement_max": 0.15,
-        "discard_share": 0.03,
-        "enabled": false,
-        "fall_weight": 0.5,
-        "max_down_bins": 10,
-        "max_up_bins": 3,
-        "minimum_above_line": 30,
-        "minimum_days": 10,
-        "minimum_negatives": 200,
-        "rise_weight": 0.15,
-        "settled_delta": 0.001,
-        "settled_window_days": 7,
-        "step_change_guard_enforced": false,
-        "step_change_multiple": 5.0,
-        "step_change_window_rows": 14,
-        "unclear_max": 0.35
-      },
       "cosine_weight": 1.0,
       "floor_min": 0.94
     },
@@ -204,6 +181,19 @@
     "year_over_year_pct": 5.0
   },
   "elements": {
+    "label_kinds": {
+      "DATE": "not_quantity",
+      "EVENT": "entity",
+      "FAC": "place",
+      "GPE": "place",
+      "LOC": "place",
+      "NORP": "entity",
+      "ORDINAL": "not_quantity",
+      "ORG": "entity",
+      "PERSON": "entity",
+      "PRODUCT": "entity",
+      "TIME": "not_quantity"
+    },
     "max_per_article": 256
   },
   "evaluation": {
@@ -306,6 +296,9 @@
     "payload_ceilings_bytes": {
       "config/ledgers.json": 3600,
       "console/band.json": 2000,
+      "state/compact/content-similarity-judge/holdout-pairs/index/": 2200,
+      "state/compact/content-similarity-judge/pair-verdicts/index/": 2200,
+      "state/compact/content-similarity-judge/threshold-history/index/": 2200,
       "state/compact/council-run-records/index/": 2088,
       "state/compact/counterfactual-scores/index/": 2200,
       "state/compact/feed-ingest-plan/discovered-articles/index/": 2200,
@@ -332,7 +325,6 @@
   "prompt_files": {
     "compare_articles": "prompts/compare-articles.txt",
     "continue_summary": "prompts/continue-summary.txt",
-    "generate_labels": "prompts/generate-labels.txt",
     "plan_visual": "prompts/plan-visual.txt",
     "summarize_article": "prompts/generate-summary.txt",
     "write_digest_summary": "prompts/write-digest-summary.txt"
@@ -364,8 +356,12 @@
     "holdout_reach_days": 730
   },
   "summarize": {
-    "asks_for_a_visual_plan": true,
     "max_verbatim_words": 20
+  },
+  "text_analysis": {
+    "base_url": "http://127.0.0.1:3020",
+    "language": "en",
+    "request_timeout_seconds": 15.0
   },
   "ui": {
     "archive_page_size": 25,
@@ -391,7 +387,7 @@
     "tagline": "Daily news summaries, with links to their sources.",
     "theme_default": "dark"
   },
-  "version": "2026-11-16",
+  "version": "2026-11-18",
   "visuals": {
     "asset_base_url": "",
     "downgrade_enabled": false,

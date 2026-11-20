@@ -1,8 +1,8 @@
 """What does one judge call cost on the machine that will write the verdicts?
 
 Every seconds figure the same-story judging rests on is derived rather than
-measured. `SimilarityThresholdConfig.SECONDS_A_CALL` is 764 read tokens divided
-by a read rate taken on the summarizer, on a different prompt at a different
+measured. `SECONDS_A_CALL` in `idhazh.contracts.knobs.placement` is 764 read tokens
+divided by a read rate taken on the summarizer, on a different prompt at a different
 length. Three load-bearing numbers sit on it: how many pairs a day may be
 judged, how long a judging shard may run, and the ruling that the judging cannot
 live inside the daily digest job. This is the run that replaces the derivation
@@ -398,7 +398,9 @@ def one_call(
     """
     left, right = (pair.left, pair.right) if order == ORDER_FILE else (pair.right, pair.left)
     kept = KeepsTheEnvelope(client)
-    read = judge.read_once(left, right, client=kept, settings=settings, markers=markers)
+    read = judge.read_once(
+        left.summary, right.summary, client=kept, settings=settings, markers=markers
+    )
     if kept.last is None:
         raise RuntimeError("the judge returned without a reply, so there is nothing to read")
     return reading_of(

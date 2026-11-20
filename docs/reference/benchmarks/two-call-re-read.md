@@ -5,11 +5,14 @@ Living, one question one answer. The reading below was taken on one day and
 the date is in the title; a re-run of this measurement REPLACES this page and
 moves **Last Updated**, and git history holds what it said.
 
-Current production files are `config/prompts/generate-labels.txt`,
-`write-digest-summary.txt`, `plan-visual.txt` and `continue-summary.txt`, selected
-through [the prompt configuration](../../architecture/summarize/prompt.md).
-Historical filenames, token counts, weights and timings below still identify
-the recorded measurement, not a new run.
+Current production files are `write-digest-summary.txt`, `plan-visual.txt` and
+`continue-summary.txt`, selected through
+[the prompt configuration](../../architecture/summarize/prompt.md). The readings
+below were also taken with `config/prompts/generate-labels.txt`, which no longer
+exists. `plan-visual.txt` and `continue-summary.txt` were rewritten when the element
+menu gave way to tables of names and figures, so the sizes below describe their earlier
+wording. Historical filenames, token counts, weights and timings below still
+identify the recorded measurement, not a new run.
 
 The two-call summariser sends the summarize-and-plan call with the label call's whole message array in front
 of it, so most of the summarize-and-plan call's prompt should be answered from the server's prefix
@@ -23,7 +26,7 @@ article - can be priced against their own numbers.
 
 | | |
 | --- | --- |
-| Instrument | `backend/utilities/measure_two_calls.py`, `--decode-cap 16 --items 2` |
+| Instrument | `backend/utilities/measure_two_calls.py` (deleted with the first call), `--decode-cap 16 --items 2` |
 | Weights | `Qwen3.5-9B-Q4_K_M.gguf`, sha256 `03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8` - the file `models.summarizer` declares, hashed by the harness before the server started |
 | Runtime | `llama-server` build **b10444-5f754ea0e**, Clang 20.1.8, Windows x86_64 |
 | Chat template | sha256 `7f0e529032c25183bcd66c7f238da2d377f43be754a94e2725a58c4e16d2ed67`, 7,816 characters, read off the server's own `/props` - a template ships with a build as well as with weights |

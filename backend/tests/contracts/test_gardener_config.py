@@ -109,11 +109,9 @@ MOVED_LEDGER_TASKS: Final = (
     "compact-feed-ingest-plan-rejected-articles",
     "compact-feed-ingest-plan-feed-health-state",
     "compact-feed-ingest-plan-plan-runs",
-    "compact-content-similarity-judge-merge-line-holdout-scores",
-    "compact-content-similarity-judge-scored-pairs",
-    "compact-content-similarity-judge-metrics",
     "compact-content-similarity-judge-holdout-pairs",
-    "compact-content-similarity-judge-fitted-thresholds",
+    "compact-content-similarity-judge-pair-verdicts",
+    "compact-content-similarity-judge-threshold-history",
 )
 
 
@@ -570,11 +568,12 @@ def test_the_lens_window_is_held_against_the_counterfactual_compaction(
 def test_the_holdout_reach_is_held_against_the_marks_compaction(
     tmp_path: Path, monthly: dict[str, Any], loads: bool
 ) -> None:
-    """Both readers of the hand marks open `similarity.holdout_reach_days`, so nothing deletes inside it.
+    """The Judgement page opens `similarity.holdout_reach_days`, so nothing deletes inside it.
 
-    The scoring verb and the Judgement page read the reach, and a mark the
-    compaction deleted inside it would be a mark the reader looks for and finds
-    gone. One month reaches back 73 days, far under the committed 730.
+    A mark the compaction deleted inside the reach would be a mark the page looks
+    for and finds gone. One month reaches back 73 days, far under the committed 730.
+    The marks are an explorer ledger, so a forever window also packs years, as the
+    committed declaration does.
     """
     folder = "content-similarity-judge/holdout-pairs"
     compaction = a_compaction(
@@ -582,6 +581,8 @@ def test_the_holdout_reach_is_held_against_the_marks_compaction(
         owns=[f"state/raw/{folder}", f"state/compact/{folder}"],
         monthly_window=monthly,
     )
+    if monthly["unit"] == "forever":
+        compaction["monthly_keep_days"] = 93
     config_dir = a_garden(tmp_path, compact_content_similarity_judge_holdout_pairs=compaction)
     reach = config.load(CONFIG_DIR).app.similarity.holdout_reach_days
     if loads:
@@ -767,8 +768,8 @@ def test_a_compaction_is_named_for_its_ledger(tmp_path: Path) -> None:
 
 
 #: A ledger the committed registry files inside its family's folder, and that folder.
-NESTED_LEDGER: Final = LedgerName.CONTENT_SIMILARITY_JUDGE_MERGE_LINE_HOLDOUT_SCORES
-NESTED_FOLDER: Final = "content-similarity-judge/merge-line-holdout-scores"
+NESTED_LEDGER: Final = LedgerName.CONTENT_SIMILARITY_JUDGE_PAIR_VERDICTS
+NESTED_FOLDER: Final = "content-similarity-judge/pair-verdicts"
 
 
 def a_nested_compaction() -> dict[str, Any]:

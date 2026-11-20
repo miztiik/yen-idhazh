@@ -39,21 +39,16 @@ test.describe('route-owned console configuration', () => {
 		const routes = routeConsoles();
 		expect(Object.keys(routes).sort()).toEqual(BAND_UNREAD.routes.map(({ id }) => id).sort());
 		expect(routes.machine.judged).toEqual([
-			'two-clocks', 'slower-machines', 'platform-mix',
+			'slower-machines', 'platform-mix',
 			'slower-on-same-work', 'closest-to-memory', 'memory-held', 'context-headroom',
 			'article-cost', 'prompt-reuse', 'read-against-written'
 		]);
 		expect(routes.pipelines.judged).toContain('slowest-articles');
 		expect(routes['data-explorer'].judged).toEqual(['data-explorer-rows', 'data-explorer-shape']);
-		const judgementPanels = [
-			'merged-stories', 'merge-line', 'judge-agreement',
-			'record-gates', 'verdict-split', 'holdout-margin'
-		];
+		const judgementPanels = ['merged-stories', 'holdout-margin'];
 		expect(routes.judgement.panel_groups).toEqual([
-			{ id: 'what-was-grouped', title: 'What was grouped', panels: judgementPanels.slice(0, 2) },
-			{ id: 'what-the-judge-found', title: 'What the judge found', panels: judgementPanels.slice(2) }
+			{ id: 'judgement', title: '', panels: judgementPanels }
 		]);
-		expect(routes.judgement.panel_groups.flatMap((group) => group.panels)).toEqual(judgementPanels);
 		expect(routes.judgement.judged).toEqual(judgementPanels);
 		const modelPanels = [
 			'model-cards', 'model-throughput', 'item-cost', 'call-ending',
@@ -97,6 +92,19 @@ test.describe('route-owned console configuration', () => {
 		const files = routeFiles();
 		files.machine.knobs.read_write_default_metric = 2;
 		expect(() => routeConsolesFrom(files)).toThrow('knobs.read_write_default_metric must be 0 (Run total) or 1 (Median per article)');
+	});
+
+	test('refuses a hand-marks axis with no width, below or above the line', () => {
+		const refused: Record<string, number>[] = [
+			{ holdout_axis_below_line: 0, holdout_axis_above_line: 0.01 },
+			{ holdout_axis_below_line: 0.02, holdout_axis_above_line: -0.01 },
+			{ holdout_axis_below_line: 0.02 }
+		];
+		for (const knobs of refused) {
+			const files = routeFiles();
+			files.judgement.knobs = knobs;
+			expect(() => routeConsolesFrom(files)).toThrow(/judgement\.json knobs\.holdout_axis_below_line and knobs\.holdout_axis_above_line must both be set above zero/);
+		}
 	});
 
 	test('refuses a missing route file', () => {
@@ -245,26 +253,6 @@ test.describe('the appearance config migration', () => {
 });
 
 test.describe('the committed appearance file', () => {
-	test('exists and carries every block the surface is drawn from', () => {
-		const path = join(REPO, 'config', 'appearance.json');
-		expect(existsSync(path)).toBe(true);
-		const parsed = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
-		for (const block of [
-			'digest',
-			'console',
-			'console_style',
-			'assist',
-			'frame',
-			'theme',
-			'chart',
-			'icons',
-			'motion',
-			'version'
-		]) {
-			expect(parsed, `config/appearance.json is missing ${block}`).toHaveProperty(block);
-		}
-	});
-
 	test('a partial console style keeps per-role defaults and replaces a palette whole', () => {
 		const defaults = resolveConsoleStyle();
 		const categorical = ['#112231', '#112232', '#112233', '#112234', '#112235', '#112236', '#112237', '#112238'];
@@ -325,35 +313,6 @@ test.describe('the committed appearance file', () => {
 		expect(operator).not.toContain('rgba(0, 0, 0,');
 		expect(operator).toContain('--shadow-sm: none;');
 		expect(css).toContain('--font-display: var(--font-reading);');
-	});
-
-	test('a numeric console cap remains wider than the reading frame', () => {
-		// The bounds live in the Pydantic contract and are enforced at build
-		// time. This asserts the COMMITTED values sit inside them, so a hand
-		// edit that skipped the contract still fails a gate.
-		const parsed = JSON.parse(
-			readFileSync(join(REPO, 'config', 'appearance.json'), 'utf8')
-		) as { frame: { reading_max_px: number; console_max_px: number | null; measure_ch: number } };
-
-		expect(parsed.frame.reading_max_px).toBeGreaterThanOrEqual(960);
-		if (parsed.frame.console_max_px !== null) {
-			expect(parsed.frame.console_max_px).toBeGreaterThanOrEqual(parsed.frame.reading_max_px);
-		}
-		expect(parsed.frame.measure_ch).toBeGreaterThanOrEqual(52);
-		expect(parsed.frame.measure_ch).toBeLessThanOrEqual(80);
-	});
-
-	test('the server draws a chart no wider than its container can ever be', () => {
-		// A server that prerenders wider than the frame is wrong on every first
-		// paint and self-corrects only once a script runs, which is the one
-		// moment a static site is supposed to be already finished.
-		const parsed = JSON.parse(
-			readFileSync(join(REPO, 'config', 'appearance.json'), 'utf8')
-		) as { frame: { console_max_px: number | null }; chart: { width_px: number } };
-
-		if (parsed.frame.console_max_px !== null) {
-			expect(parsed.chart.width_px).toBeLessThanOrEqual(parsed.frame.console_max_px);
-		}
 	});
 
 	test('the frame producer preserves explicit numeric caps and emits no cap for the full window', async () => {

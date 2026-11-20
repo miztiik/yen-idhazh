@@ -9,8 +9,7 @@ It calls no model, opens no socket and decides nothing. Nothing in the pipeline
 reads what it writes. The labels a reader produces from it are harvested back
 into the holdout marks, `holdout-pairs`, a ledger saved through the ledger door
 under `state/raw/content-similarity-judge/holdout-pairs/`. The console's holdout
-panel draws the marks, and `idhazh score-merge-line-holdout` scores the merge
-line against them.
+panel draws the marks.
 
 **It samples across the line, not across the four judged cells.** The sheet the
 plan first described sorted pairs by where the judge and the line disagreed,
@@ -266,9 +265,9 @@ def _drawn_rows(draw_root: Path, names: Sequence[str]) -> Iterator[dict[str, str
     """Every drawn pair under this root, and nothing a judging unit wrote.
 
     Scoped to the venue's selection slot rather than every CSV below the root: a
-    night leaves its verdicts and its instrument rows in the same tree, and those
-    carry no `composite_score`, so a wider read would quietly refuse them one by
-    one and shrink the sheet.
+    night leaves its verdicts and its instrument rows in the same tree, and the
+    instrument rows carry no `similarity_score`, so a wider read would quietly
+    refuse them one by one and shrink the sheet.
     """
     from utilities.named_inputs import named_files
 
@@ -312,7 +311,7 @@ def resolve(
         if left is None or right is None:
             refused["no-article"] += 1
             continue
-        raw = row.get("composite_score") or ""
+        raw = row.get("similarity_score") or ""
         try:
             score = float(raw)
         except ValueError:

@@ -211,7 +211,7 @@ def test_an_inactive_only_room_runs_every_step_without_import_or_output(
 @pytest.mark.parametrize("status", ["paused", "retired"])
 @pytest.mark.parametrize("tier", ["raw", "compact"])
 @pytest.mark.parametrize(
-    "which", [LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS, LedgerName.COUNCIL_RUN_RECORDS]
+    "which", [LedgerName.CONTENT_SIMILARITY_JUDGE_PAIR_VERDICTS, LedgerName.COUNCIL_RUN_RECORDS]
 )
 def test_any_inactive_committed_family_refuses_the_active_judge_by_name(
     venue: Path, monkeypatch: pytest.MonkeyPatch, status: str, tier: str, which: LedgerName

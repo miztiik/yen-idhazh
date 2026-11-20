@@ -12,12 +12,14 @@ from support.paths import FIXTURES_DIR, REPO_ROOT, read_text
 
 from idhazh import ledger
 from idhazh.contracts.base import Contract, ServerJob
-from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
 from idhazh.contracts.file_envelope import Format, Period, WriterIdentity
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain, LedgerEntry, LedgersConfig
-from idhazh.contracts.story_similarity_pair import StorySimilarityPair
+from idhazh.contracts.story_similarity_pair_verdict import StorySimilarityPairVerdict
+from idhazh.contracts.story_similarity_threshold_history_row import (
+    StorySimilarityThresholdHistoryRow,
+)
 from idhazh.ledger.persist import StoredRow
 
 pytestmark = pytest.mark.contract
@@ -28,8 +30,8 @@ PREFIXES = FIXTURES_DIR / "ledger-door" / "nested-prefixes.json"
 KEYS: Mapping[LedgerName, tuple[str, ...]] = {
     which: ledger.door_key(which)
     for which in (
-        LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS,
-        LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS,
+        LedgerName.CONTENT_SIMILARITY_JUDGE_PAIR_VERDICTS,
+        LedgerName.CONTENT_SIMILARITY_JUDGE_THRESHOLD_HISTORY,
     )
 }
 
@@ -63,7 +65,6 @@ def _registry_payload(prefixes: Mapping[str, str]) -> dict[str, object]:
                 continue
             held["grain"] = Grain.RAW_AND_COMPACT.value
             held["prefix"] = prefix.split("/")
-            held["stem"] = None
             held["suffix"] = None
     return payload
 
@@ -76,9 +77,11 @@ def _fixture_registry() -> tuple[LedgersConfig, dict[LedgerName, LedgerEntry]]:
 
 def _rows(model: type[Contract]) -> list[Contract]:
     paths = {
-        StorySimilarityPair: "story-similarity-pair/judged-the-same-in-both-orders.json",
-        ContentSimilarityJudgeMetrics: (
-            "content-similarity-judge-metrics/a-shard-that-read-its-pairs.json"
+        StorySimilarityPairVerdict: (
+            "story-similarity-pair-verdict/a-judged-pair-with-its-slice-and-chance.json"
+        ),
+        StorySimilarityThresholdHistoryRow: (
+            "story-similarity-threshold-history-row/a-night-that-held-both-thresholds.json"
         ),
     }
     return [model.from_json(read_text(FIXTURES_DIR / "contracts" / paths[model]))]
@@ -86,7 +89,7 @@ def _rows(model: type[Contract]) -> list[Contract]:
 
 def _row_day(row: Contract) -> str:
     """The fixture row's UTC day, refused if a future fixture no longer has one."""
-    if isinstance(row, StorySimilarityPair | ContentSimilarityJudgeMetrics):
+    if isinstance(row, StorySimilarityPairVerdict | StorySimilarityThresholdHistoryRow):
         return row.date
     raise TypeError(f"{type(row).__name__} has no string date")
 
@@ -130,17 +133,17 @@ def _compact_one_day[C: Contract](
     ("which", "model", "folder"),
     [
         (
-            LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS,
-            StorySimilarityPair,
-            "content-similarity-judge/scored-pairs",
+            LedgerName.CONTENT_SIMILARITY_JUDGE_PAIR_VERDICTS,
+            StorySimilarityPairVerdict,
+            "content-similarity-judge/pair-verdicts",
         ),
         (
-            LedgerName.CONTENT_SIMILARITY_JUDGE_METRICS,
-            ContentSimilarityJudgeMetrics,
-            "content-similarity-judge/deep/metrics",
+            LedgerName.CONTENT_SIMILARITY_JUDGE_THRESHOLD_HISTORY,
+            StorySimilarityThresholdHistoryRow,
+            "content-similarity-judge/deep/threshold-history",
         ),
     ],
-    ids=["scored-pairs", "metrics"],
+    ids=["pair-verdicts", "threshold-history"],
 )
 def test_a_door_ledger_files_under_its_declared_folder_only(
     tmp_path: Path, which: LedgerName, model: type[Contract], folder: str
@@ -179,15 +182,15 @@ def test_a_door_ledger_files_under_its_declared_folder_only(
 
 def test_a_door_prefix_must_end_with_the_ledger_value() -> None:
     prefixes: dict[str, str] = json.loads(PREFIXES.read_text(encoding="utf-8"))
-    prefixes["scored-pairs"] = "content-similarity-judge/deep"
+    prefixes["pair-verdicts"] = "content-similarity-judge/deep"
 
-    with pytest.raises(ValidationError, match="not scored-pairs"):
+    with pytest.raises(ValidationError, match="not pair-verdicts"):
         LedgersConfig.model_validate(_registry_payload(prefixes))
 
 
 def test_a_door_prefix_must_not_sit_inside_another_door_prefix() -> None:
     prefixes: dict[str, str] = json.loads(PREFIXES.read_text(encoding="utf-8"))
-    prefixes["metrics"] = "content-similarity-judge/scored-pairs/metrics"
+    prefixes["threshold-history"] = "content-similarity-judge/pair-verdicts/threshold-history"
 
-    with pytest.raises(ValidationError, match="metrics sits inside scored-pairs"):
+    with pytest.raises(ValidationError, match="threshold-history sits inside pair-verdicts"):
         LedgersConfig.model_validate(_registry_payload(prefixes))

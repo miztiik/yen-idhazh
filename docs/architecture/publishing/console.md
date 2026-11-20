@@ -1,6 +1,6 @@
 # Which console panel answers what
 
-**Last Updated**: 2026-11-17
+**Last Updated**: 2026-11-19
 
 The console tells an operator what happened to the pipeline; the digest tells a
 reader what happened in the world. This page owns the routes and panel placement.
@@ -15,7 +15,7 @@ reader what happened in the world. This page owns the routes and panel placement
 Private inputs remain build-time exceptions: Pipelines reads manifests, published
 item facts and day metrics; Summaries keeps its retained cards, daily coherence
 and bounded publication dates; Voices keeps the source census, source decisions and feed
-inputs; Judgement keeps its recorded judging and holdout evidence. Those inputs
+inputs; Judgement keeps its published merge counts and hand marks. Those inputs
 are not newly published by removing the chart engine. Hardware's page carries
 configuration and words, then asks its three native ledgers in the browser.
 Route shells remain prerendered; Data explorer retains its existing fallback
@@ -52,7 +52,8 @@ subsystems it covers. **What is broken?** A diagnostic panel shows the extreme
 and the individual responsible within one subsystem. Its heading and content
 must answer the same question.
 
-Every route starts with its own status summary before the detail it qualifies.
+Pipelines and Summaries open on a status summary before the detail it
+qualifies; the other routes open on their first comparison.
 Declare the question in `data-panel-question`. No repeated global verdict band
 or cross-route metric sentence sits above those comparisons.
 
@@ -62,8 +63,7 @@ or cross-route metric sentence sits above those comparisons.
 | Pipelines `Run health` | Published against planned, by day and run; the first panel below the glance cards |
 | Remaining Pipelines panels | Stage failures and costs |
 | Summaries, Judgement and Voices | Writing, judgement and source diagnostics below each route's summary |
-| Hardware `Whether the speed numbers can be trusted` | Whether the rates are comparable; the first panel on the route |
-| Remaining Hardware panels | Machine-specific constraints and failures |
+| Hardware panels | Machine-specific constraints and failures |
 
 Keep the first useful chart visible without making an operator scroll through
 diagnostics before reaching the status that explains them. Figures must be
@@ -76,7 +76,7 @@ legible, tables must fit their container, and titles must use plain words.
 | `/console/` | **Pipelines** | Did the runs work, and what did each stage cost? |
 | `/console/model/` | **Summaries** | What was written, how long did it take, and what went wrong? |
 | `/console/machine/` | **Hardware** | Which hardware ran the work, and how much did it vary? |
-| `/console/judgement/` | **Judgement** | What decisions were made about articles, and where did evaluation disagree? |
+| `/console/judgement/` | **Judgement** | Which stories did the day merge, and how close does the merge line sit to pairs a person marked apart? |
 | `/console/voices/` | **Voices** | Who supplied the day, and how are feeds discounted? |
 | `/console/data-explorer/` | **Data explorer** | What do the ledgers hold, and what does a question of my own return? |
 
@@ -135,77 +135,63 @@ what the operator learns; mechanism names alone are not enough.
 Copy changes keep stable addresses. Summaries' retained section is
 `Model figures by recorded day`, not a claim about live work today.
 
-## Judgement distinguishes published merges from judging evidence
+## Judgement draws the published merges and the hand marks
 
-The tab says: `Which stories the day merged, and where the judge and a person
-disagreed.` Six panels form one untitled group, in this order:
+The tab says: `Which stories the day merged, and how close the merge line sits to
+pairs a person marked apart.` Two panels form one untitled group, in this order:
 
 - `merged-stories` counts the published `same_story_as` decisions. Daily columns
   count stories merged behind another; dots count the largest group, including
   its retained story. The merge share stays in words with its denominator.
-- `merge-line` compares each nightly calculated line with its proposal. The
-  recorded line the newest day used is a separate fact. Neither a calculation
-  nor a pair above a threshold proves a published merge.
-- `judge-agreement`, titled `Does the judge give the same answer twice?`,
-  compares the judge's answers with the summaries swapped. Its lines say
-  `Changed answer after swapping` and `Answered "not sure" both times`.
-  The rates keep their own denominators and configured limits. A day below
-  the reporting floor keeps its counts but draws no rate dot.
-- `record-gates` compares each recorded count with the count needed to fit a
-  line. Its day strip keeps days without rows. Missing counts are not zero bars.
-- `verdict-split` separates pairs called one story from pairs called two stories,
-  on each side of the merge line. Its cells say eligible, not merged.
-- `holdout-margin` compares pairs a person marked apart with the merge line.
-  It keeps the score-range strip for pairs marked one story, the margin, and
-  the separate committed scoring result. See the
+- `holdout-margin`, titled `The pairs a person marked apart`, compares each pair
+  a person marked apart with the merge line, which is `floor_min` in the
+  committed config. It keeps the score-range strip for pairs marked one story and
+  the margin. See the
   [holdout drawing rule](../../concepts/console-design/the-rules-every-console-chart-obeys.md#the-holdout-margin-is-drawn-at-the-scale-of-the-margin-not-of-the-score).
 
-All six keep their build-time reads. The digest days and the content-similarity
-judge's records are not published ledgers. `content-similarity-judge.ts` and
-`content-similarity-holdout.ts` stay under `frontend/src/lib/server/`; the browser
-must not import them. Reads keep their existing window and holdout-reach bounds.
-The browser changes the window over those inlined results, without a fetch.
+Both panels span the full row, so the margin keeps its drawn width. The margin's
+axis reaches `holdout_axis_below_line` score points below the merge line and
+`holdout_axis_above_line` above it, both route knobs in
+`config/console/judgement.json` that must be above zero; a pair beyond either
+edge is drawn as a chip at that edge. A note under
+the window control says where the judge's own records are read: `pair-verdicts`
+and `threshold-history` are Data explorer ledgers, and the note links to that
+route using the address in the shared route table. It also says they do not
+change what the site merges.
+
+Both panels keep their build-time reads. The digest days are not published
+ledgers. The hand marks are one, because the Data explorer offers `holdout-pairs`,
+but this page still reads their packed files at build time and does not fetch
+them in the browser. `content-similarity-holdout.ts` stays under
+`frontend/src/lib/server/`; the browser must not import it. Reads keep their
+existing window and holdout-reach bounds. The browser changes the window over
+those inlined results, without a fetch; only `merged-stories` follows it, because
+the marks are read over their own reach.
 
 Each panel has a stable id, one leading figure or sentence, a visible comparison,
 a named question, a chart type, and a readout declaration. Each declines the
-summary-settings rule because it draws the judge's record, not how summaries
-are written. All six are judged and listed in the route's `BUILD_TIME`.
+summary-settings rule because it draws published merges or the merge line against
+hand marks, not how summaries are written. Both are in the route's `judged` list.
 
 The component boundary keeps absent evidence as `null` and supplied empty
 evidence as an empty array or a zero-count record. Missing evidence prints an
-unavailable sentence without measured zeros. Fitted rows and hand-mark rows
-retain their existing `RecordRead` alongside the rows. Derived holdout marks keep
-the same mark read; the committed holdout selection keeps `{ score, read }`.
-The page carries each read once with its loaded span or mark reach. Successful
-empty results say no rows were returned, not that no run, fit or scoring happened.
-Required blank measurements are not converted to zero.
-
-Judge-rate readings are retained independently of calculated-line and gate
-measurements. A missing gate count must not discard a valid bad judge reading
-and make the remaining window look healthy. Rejected measurements are named
-by day; unusable rate rows prevent a complete window verdict. The newest run
-is selected before validating its measurements, never replaced by an older
-valid run merely because its newer record is incomplete.
+unavailable sentence without measured zeros. Hand-mark rows retain their
+existing `RecordRead` alongside the rows, and the derived holdout marks keep the
+same mark read. The page carries each read once with its mark reach. Successful
+empty results say no rows were returned, not that nobody marked a pair. Required
+blank measurements are not converted to zero.
 
 Unavailable windowed panels still name the selected span. Geometry checks use
 the existing private route builder's real populated or successful-empty records;
 missing-source checks remain separate. A missing plot fails a geometry assertion,
 not a reason to skip it. The shared canary is not filled with invented judge data.
 
-Each rate needs its own known denominator. Unknown contributions make that
-window total unknown, not zero; the independent reading and known daily counts
-remain usable. A real zero with an adequate denominator is still a measured zero.
-No denominator means no rate dot. No gate row means no measured bars; a real
-zero-count row still draws all three bars and their targets. Earlier cumulative
-rows retain their dates and do not prove that nothing ran afterwards.
-
 Useful partial rows remain visible. Lost-day notes are narrowed to the displayed
 span. Set-aside counts describe the loaded input, not a newly inferred count for
 the preset. `lastRows` is a packed period, never an exact last execution date.
-Unreadable diagnostics are not rendered as paths, links or markup. Weight
-provenance names the config when the selected fitted row contains no weight.
-Real generated ledger and route tests cover these distinctions without a
-fabricated fetch, another archive read or another state vocabulary.
+Unreadable diagnostics are not rendered as paths, links or markup. Real generated
+ledger and route tests cover these distinctions without a fabricated fetch,
+another archive read or another state vocabulary.
 
 The old per-article desk and lens heading and its named absence are removed.
 These panels do not promise classification evidence they cannot show.
@@ -228,13 +214,14 @@ No current item query selects the last four. A column list, normalization or
 unused counter field is not an answer that reads a cell. Schema versions,
 writers and historical normalizers do not change for an ownership-only edit.
 
-Judgement keeps its existing questions and drawings. The agreement chart has
-no human verdict input, so calling it agreement with a person would mislabel
-evidence. Its leading disagreement share and comparison describe the two real
-readings; the hand-marked comparison remains in `holdout-margin`. Likewise, the
-merge-line drawing receives calculated lines, not individual pair scores, so
-its leading figure is the newest calculated line, not an invented pair count.
-These limits preserve the drawings without presenting absent evidence as fact.
+Judgement draws no panel from the judge's own ledgers. `pair-verdicts` and
+`threshold-history` are Data explorer ledgers, so the page names where to read
+them instead of drawing them, and it carries no hand-copied column list for
+contracts no ordinary panel reads. The hand-marks panel stays because it needs
+neither ledger: it reads the marks and the merge line the site applies. That
+line is the committed `floor_min`, read from config rather than from the newest
+run record, because the run record only restates the same number and a second
+reader of one value is a second answer. Authority: Jony, Fowler, 2026-11-19.
 
 | Alternative | Why not |
 | --- | --- |
@@ -243,6 +230,7 @@ These limits preserve the drawings without presenting absent evidence as fact.
 | Pick fallback server widths per chart | New charts measure their browser container; a guessed build-time width is not their layout |
 | Rename paths whenever display labels change | Breaks bookmarks without changing the question a route answers |
 | Treat a missing record as a zero or as agreement | Claims a result that was never measured |
+| Redraw the retired line panels on the new ledgers | Describes a threshold the site does not apply, and the Data explorer already answers questions about the new ledgers |
 
 ## See also
 

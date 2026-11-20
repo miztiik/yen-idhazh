@@ -1,26 +1,26 @@
-"""The day's draw: which borderline pairs get judged, in what order, on which shard.
+"""The night's draw: which pairs get judged, in what order, and on which shard.
 
 Nothing under test here calls a model or opens a socket, because the step does
 neither - it says which pairs are worth a model's time and writes them out with
 every verdict column empty.
 
-Unit tier for the four rules - across mastheads, the band's edges, what the
-budget may cut, and how the shards are dealt - and integration tier for the stage
-writing a file the contract can read back. Real quantised vectors through the
-encoder's own wire format and generated native manifests throughout. No mocks,
-no network.
+Unit tier for the rules - across mastheads, one pair of addresses once, what each
+slice gives, how the shards are dealt and the file is ordered - and integration tier
+for the stage writing a file the contract can read back. Real quantised vectors
+through the encoder's own wire format and generated native manifests throughout.
+No mocks, no network.
 
 **No test here walks committed data** (CLAUDE.md section 13). The day the
-integration test reads is built into the test's own tree, which is fixed in size
-and can carry the case the archive is thin on: two mastheads running the same
-headline, which scores 1.0 by a different rule than every other pair.
+integration tests read is built into the test's own tree, which is fixed in size
+and can carry the cases the archive is thin on: two mastheads running the same
+headline, which scores 1.0 by a different rule than every other pair, and an
+address that published on two days.
 """
 
 from __future__ import annotations
 
 import csv
 import json
-import logging
 import math
 from collections import Counter
 from dataclasses import replace
@@ -30,11 +30,12 @@ from typing import Final
 import pytest
 from pydantic import TypeAdapter, ValidationError
 from support.ledger import SEED_COMMIT
-from support.paths import CONFIG_DIR
+from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 
-from idhazh import assemble, atomic_write, config
+from idhazh import assemble, atomic_write, config, ledger
 from idhazh.assemble import ScoredPair, cross_source_pairs
-from idhazh.contracts.base import Sha256, derive_url_key
+from idhazh.content_similarity_judge import settings as judge_settings
+from idhazh.contracts.base import ServerJob, Sha256, derive_url_key
 from idhazh.contracts.digest_day import (
     DigestDay,
     DigestEmbeddings,
@@ -43,19 +44,28 @@ from idhazh.contracts.digest_day import (
     DigestVerticalRef,
 )
 from idhazh.contracts.eval_row import ConfidenceBand
+from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.knobs.placement import SameStoryConfig
-from idhazh.contracts.run_manifest import RunManifest, RunRecord, RunStatus, VerticalCount
-from idhazh.contracts.story_similarity_pair import StorySimilarityPair
+from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.story_similarity_pair_verdict import PairBucket, StorySimilarityPairVerdict
+from idhazh.contracts.story_similarity_threshold_history_row import (
+    StorySimilarityThresholdHistoryRow,
+)
 from idhazh.embed import DIMENSIONS, DTYPE, EMBEDDER_ID, to_base64
 from idhazh.similarity.selection import (
     Draw,
     assign_shards,
-    draw_order,
-    in_band,
+    draw_order_of,
+    one_pair_a_key,
     pair_key,
     select,
 )
 from idhazh.similarity.stamps import ScorerStamp, scorer_inputs
+from idhazh.similarity.thresholds_in_force import (
+    ThresholdsInForce,
+    lookback_days,
+    thresholds_in_force,
+)
 from idhazh.stages import common
 from idhazh.stages.pick_item_pairs import stage_pick_item_pairs
 
@@ -67,10 +77,9 @@ DATE: Final = "2026-08-21"
 #: run id after it.
 COUNCIL_RUN: Final = "2026-08-22-35534060762"
 
-#: A line and a band chosen for the tests below rather than read off config: a
-#: unit test about what a budget may cut is not a test about today's floor, and
-#: naming the number is what makes the assertion readable.
-LINE: Final = 0.94
+#: The committed draw settings and starts, which the hand-worked numbers below follow.
+JUDGE: Final = judge_settings.load(CONFIG_DIR)
+DRAW: Final = JUDGE.draw
 
 #: Digits spelled as letters, so a built item's headline carries no figure - a
 #: pair of headlines around two different numbers is vetoed before it is scored,
@@ -115,9 +124,9 @@ def scored(left: str, right: str, *, score: float) -> ScoredPair:
     """A pair at a chosen score, so a test names the number it is about.
 
     The terms are not the score's arithmetic here and do not need to be: the
-    band, the budget and the order read the composite alone, and the rule that
-    ties the terms to the composite is the contract's, exercised by the
-    integration test below.
+    slice, the budget and the order read the score alone, and the rule that ties
+    the terms to the score is the contract's, exercised by the integration tests
+    below.
     """
     return ScoredPair(left=left, right=right, cosine=score, headline=False, score=score)
 
@@ -126,15 +135,33 @@ def stamp(*, cosine_weight: float = 1.0) -> ScorerStamp:
     return ScorerStamp(scorer_model=EMBEDDER_ID, cosine_weight=cosine_weight)
 
 
-def a_band_of_four() -> list[ScoredPair]:
-    """Two merged pairs and two unmerged pairs show both sides of the line."""
-    above = [scored(f"above-{n:02d}", f"other-{n:02d}", score=0.95) for n in range(2)]
-    below = [scored(f"below-{n:02d}", f"other-{n:02d}", score=0.90) for n in range(2)]
-    return [*above, *below]
+#: Every slice of the committed starts, and how many pairs each holds in the night below:
+#: the end under 0.70, six thin slices, three coarse ones, six thin ones, the end over 0.93.
+SLICE_EDGES: Final = [
+    (-1.0, 0.70), *[(0.70 + n / 100, 0.71 + n / 100) for n in range(6)],
+    (0.76, 0.80), (0.80, 0.84), (0.84, 0.87),
+    *[(0.87 + n / 100, 0.88 + n / 100) for n in range(6)], (0.93, 1.0),
+]
+HELD: Final = [5000, *[30] * 6, *[60] * 3, *[20] * 6, 9]
 
 
-def named(drawn: Draw) -> list[tuple[str, str]]:
-    return [(pair.left, pair.right) for pair in drawn.taken]
+def a_night_of_pairs(
+    held: list[int] = HELD, *, prefix: str = "a"
+) -> list[ScoredPair]:
+    """Pairs spread through every slice, each at a score strictly inside its own slice."""
+    pairs: list[ScoredPair] = []
+    for index, ((low, high), count) in enumerate(zip(SLICE_EDGES, held, strict=True)):
+        for number in range(count):
+            score = low + (high - low) * (number + 1) / (count + 1)
+            pairs.append(
+                scored(f"{prefix}-{index:02d}-{number:05d}", f"z-{index:02d}-{number:05d}", score=score)
+            )
+    return pairs
+
+
+def taken_by_slice(drawn: Draw) -> dict[tuple[float, float], int]:
+    counts = Counter((one.slice.low, one.slice.high) for one in drawn.taken)
+    return {edges: counts.get(edges, 0) for edges in sorted(set(counts))}
 
 
 # --- across mastheads --------------------------------------------------------
@@ -163,107 +190,116 @@ def test_a_pair_from_one_outlet_is_never_drawn() -> None:
     ], "the two stories one masthead carried are not a pair"
 
 
-# --- the band ----------------------------------------------------------------
+# --- one pair of addresses, once ------------------------------------------------
 
 
-def test_the_band_keeps_the_edges_it_declares() -> None:
-    """Both edges are inside, because a pair on an edge belongs in the slot it opens.
+def test_a_pair_of_addresses_is_kept_once_and_as_the_night_s_own_copy() -> None:
+    """A story republished on a later day keeps its address and takes a new item id.
 
-    The record slices the band into slots and counts what lands in each. An edge
-    the band excluded would leave its slot able to hold nothing, and the fit
-    would then place the line on a slot no pair can reach.
+    So one pair of addresses arrives as two pairs of items, and a model call spent on the
+    second is a call spent twice. The copy kept is the one made of the night's own items,
+    because the judge reads the night's own copy of an address, and then the score the
+    slice is cut by is the score of the text judged.
     """
-    pairs = [
-        scored("a-one", "b-one", score=0.8799),
-        scored("a-two", "b-two", score=0.88),
-        scored("a-three", "b-three", score=0.95),
-        scored("a-four", "b-four", score=0.9501),
-    ]
+    address_of = {"old": "x", "new": "x", "other": "y", "also": "z"}
+    earlier_copy = scored("old", "other", score=0.77)
+    own_copy = scored("new", "other", score=0.95)
+    unrelated = scored("also", "other", score=0.5)
 
-    kept = in_band(pairs, band_low=0.88, band_high=0.95)
-
-    assert [pair.left for pair in kept] == ["a-two", "a-three"]
-
-
-# --- the budget --------------------------------------------------------------
-
-
-def test_every_pair_above_the_line_survives_a_budget_of_one() -> None:
-    """A merge the day already made is the whole of what precision is read off.
-
-    Sampling one away would leave the run unable to say how many of its own
-    merges were wrong, which is the one number this feature exists to produce.
-    So the budget is overspent rather than enforced, and this is the assertion
-    that says which way round it goes.
-    """
-    drawn = select(a_band_of_four(), line=LINE, budget=1, date=DATE, stamp=stamp())
-
-    assert sorted(named(drawn)) == [(f"above-{n:02d}", f"other-{n:02d}") for n in range(2)]
-
-
-def test_the_budget_records_what_it_cut_from() -> None:
-    """A day that hit the cap reads as partial rather than as a quiet truncation.
-
-    Four pairs and a budget of three are enough to distinguish the whole band
-    from a sample of it.
-    """
-    drawn = select(a_band_of_four(), line=LINE, budget=3, date=DATE, stamp=stamp())
-
-    assert drawn.pairs_in_band == 4, "the count is what the band held before the cut"
-    assert len(drawn.taken) == 3
-
-
-# --- the order ---------------------------------------------------------------
-
-
-def test_the_order_is_the_hash_and_not_the_input_order() -> None:
-    """Two runs over one day draw the same pairs, whatever order the day arrived in.
-
-    The pairs below the line are interchangeable evidence, so the thing that
-    chooses between them has to be a property of the pairs themselves. Input
-    order is a property of how the day was assembled, and it moves.
-    """
-    pairs = a_band_of_four()
-
-    forwards = select(pairs, line=LINE, budget=3, date=DATE, stamp=stamp())
-    backwards = select(list(reversed(pairs)), line=LINE, budget=3, date=DATE, stamp=stamp())
-
-    assert named(forwards) == named(backwards)
-
-
-def test_a_changed_scorer_stamp_changes_the_order() -> None:
-    """A re-weighted day is re-drawn rather than handed yesterday's sequence.
-
-    The scores moved, so which pairs are borderline moved with them. An order
-    that ignored the ruler would keep drawing the pairs that were interesting
-    under the old weights.
-    """
-    pairs = a_band_of_four()
-
-    under_cosine = select(pairs, line=LINE, budget=3, date=DATE, stamp=stamp())
-    under_both = select(
-        pairs,
-        line=LINE,
-        budget=3,
-        date=DATE,
-        stamp=stamp(cosine_weight=0.9),
+    kept = one_pair_a_key(
+        [earlier_copy, own_copy, unrelated],
+        address_of=address_of,
+        own={"new", "other", "also"},
     )
 
-    assert named(under_cosine) != named(under_both)
+    assert kept == [own_copy, unrelated]
+    assert one_pair_a_key(
+        [own_copy, earlier_copy], address_of=address_of, own={"new", "other"}
+    ) == [own_copy], "the order the copies arrive in does not decide it"
+    assert one_pair_a_key(
+        [earlier_copy, scored("old", "other", score=0.78)],
+        address_of=address_of,
+        own={"other"},
+    ) == [earlier_copy], "two copies equally the night's own keep the first"
+
+
+# --- what each slice gives -----------------------------------------------------
+
+
+def test_each_slice_gives_the_number_the_allocation_names_and_the_row_says_what_it_held() -> None:
+    """A hand-worked night: every slice holds more than its share except the similar end.
+
+    Under the committed starts 150 pairs go 4 to the dissimilar end, 62, 31 and 47 to the
+    thin lower, coarse and thin upper slices, and the similar end holds 9 and gives its
+    maximum of 6. Each pair says how many its slice held and how many the draw took.
+    """
+    drawn = select(
+        a_night_of_pairs(), lower=0.70, upper=0.93, draw=DRAW, date=DATE, stamp=stamp()
+    )
+
+    assert [taken_by_slice(drawn)[edges] for edges in SLICE_EDGES] == [
+        4, 11, 11, 10, 10, 10, 10, 11, 10, 10, 8, 8, 8, 8, 8, 7, 6,
+    ]
+    assert len(drawn.taken) == DRAW.pair_budget
+    assert drawn.pairs_available == sum(HELD)
+    assert {
+        ((one.slice.low, one.slice.high), one.slice_pairs_available, one.slice_pairs_judged)
+        for one in drawn.taken
+    } == {
+        (edges, held, given)
+        for edges, held, given in zip(
+            SLICE_EDGES, HELD, [4, 11, 11, 10, 10, 10, 10, 11, 10, 10, 8, 8, 8, 8, 8, 7, 6],
+            strict=True,
+        )
+    }
+
+
+def test_a_pair_scoring_below_zero_is_drawn() -> None:
+    """The draw reaches down to -1, where the lightly sampled end is the check on the judge."""
+    below = [scored(f"a-{n}", f"z-{n}", score=-0.9 + n / 10) for n in range(3)]
+
+    drawn = select(below, lower=0.70, upper=0.93, draw=DRAW, date=DATE, stamp=stamp())
+
+    assert len(drawn.taken) == len(below)
+    assert {one.slice.bucket for one in drawn.taken} == {PairBucket.FULLY_DISSIMILAR}
+    assert min(one.pair.score for one in drawn.taken) < 0
+
+
+def test_the_same_night_drawn_twice_gives_the_same_pairs_in_any_input_order() -> None:
+    """The order is the hash of the pair's own contents and there is no seed."""
+    pairs = a_night_of_pairs()
+
+    once = select(pairs, lower=0.70, upper=0.93, draw=DRAW, date=DATE, stamp=stamp())
+    again = select(
+        list(reversed(pairs)), lower=0.70, upper=0.93, draw=DRAW, date=DATE, stamp=stamp()
+    )
+
+    assert [one.pair for one in once.taken] == [one.pair for one in again.taken]
+
+
+def test_a_changed_date_or_scorer_stamp_draws_different_pairs() -> None:
+    """A re-scored day is re-drawn rather than handed yesterday's sequence."""
+    pairs = a_night_of_pairs()
+
+    def drawn(**changes: object) -> list[ScoredPair]:
+        arguments: dict[str, object] = {"date": DATE, "stamp": stamp()} | changes
+        return [
+            one.pair
+            for one in select(
+                pairs, lower=0.70, upper=0.93, draw=DRAW, **arguments  # type: ignore[arg-type]
+            ).taken
+        ]
+
+    assert drawn() != drawn(stamp=stamp(cosine_weight=0.9))
+    assert drawn() != drawn(date="2026-08-22")
 
 
 def test_the_order_ignores_which_side_of_a_pair_was_named_first() -> None:
-    """One pair has one sort key, whichever way round a caller built it.
+    """One pair has one sort key, whichever way round a caller built it."""
+    order = draw_order_of(date=DATE, stamp=stamp())
 
-    The two items are symmetric, so a key that read them in argument order would
-    put one pair in two places in the sequence and the budget would then cut a
-    pair it had already taken.
-    """
-    left_first = scored("world-01", "world-02", score=0.90)
-    right_first = scored("world-02", "world-01", score=0.90)
-
-    assert draw_order(left_first, date=DATE, stamp=stamp()) == draw_order(
-        right_first, date=DATE, stamp=stamp()
+    assert order(scored("world-01", "world-02", score=0.90)) == order(
+        scored("world-02", "world-01", score=0.90)
     )
 
 
@@ -285,33 +321,233 @@ def test_a_pair_key_is_the_full_digest_of_both_addresses_sorted() -> None:
         column.validate_python(key[:16])
 
 
-# --- the shards ----------------------------------------------------------------
+# --- the shards and the file -----------------------------------------------------
+
+
+def test_the_shards_are_even_to_within_one_and_every_slice_is_dealt_round_them() -> None:
+    """The deal runs over every slice in turn, so a lost runner takes a share of each slice.
+
+    A slice of two pairs or more reaches two shards, so one lost runner can never take a
+    whole slice of them, and the counts a shard holds differ by no more than one.
+    """
+    drawn = select(
+        a_night_of_pairs(), lower=0.70, upper=0.93, draw=DRAW, date=DATE, stamp=stamp()
+    )
+
+    dealt = assign_shards(drawn.taken, shards=4)
+
+    sizes = Counter(shard for shard, _ in dealt)
+    assert sorted(sizes) == [0, 1, 2, 3]
+    assert max(sizes.values()) - min(sizes.values()) <= 1
+    shards_of_a_slice: dict[tuple[float, float], set[int]] = {}
+    for shard, one in dealt:
+        shards_of_a_slice.setdefault((one.slice.low, one.slice.high), set()).add(shard)
+    assert all(
+        len(shards) >= 2
+        for edges, shards in shards_of_a_slice.items()
+        if taken_by_slice(drawn)[edges] >= 2
+    )
+
+
+def test_the_file_lists_every_slice_in_proportion_so_a_cut_off_tail_takes_a_share_of_each() -> None:
+    """A runner that stops on its clock loses the end of its file.
+
+    The first pair of every slice comes first and the last pair of each comes last, so the
+    end of a file is a similar share of every slice. A file ordered by the hash alone would
+    put the small slices last, because a big pool gives the pairs with the smallest hashes.
+    """
+    drawn = select(
+        a_night_of_pairs(), lower=0.70, upper=0.93, draw=DRAW, date=DATE, stamp=stamp()
+    )
+
+    places = [one.slice_rank / one.slice_pairs_judged for one in drawn.taken]
+    tail = drawn.taken[-30:]
+
+    assert places == sorted(places)
+    assert len({(one.slice.low, one.slice.high) for one in tail}) >= 10, (
+        "the last 30 of 150 pairs come from most of the 17 slices, not from a few"
+    )
 
 
 @pytest.mark.parametrize("count", [200, 199])
-def test_the_shards_are_even_to_within_one(count: int) -> None:
-    """Index modulo the shard count, so a draw the budget cut short still spreads.
-
-    A contiguous block would fill the first shard and starve the last on any day
-    the cap bit, and the shard that finished first would be the one with nothing
-    to do.
-    """
+def test_the_shards_stay_even_whatever_the_count(count: int) -> None:
+    """Index modulo the shard count, so a draw the budget cut short still spreads."""
     pairs = [scored(f"left-{n:03d}", f"right-{n:03d}", score=0.90) for n in range(count)]
+    drawn = select(pairs, lower=0.70, upper=0.93, draw=DRAW, date=DATE, stamp=stamp())
 
-    counts = Counter(shard for shard, _ in assign_shards(pairs, shards=4))
+    counts = Counter(shard for shard, _ in assign_shards(drawn.taken, shards=4))
 
     assert sorted(counts) == [0, 1, 2, 3], "every shard gets work"
     assert max(counts.values()) - min(counts.values()) <= 1
 
 
+# --- the thresholds the night follows ----------------------------------------------
+
+
+def a_history_row(date: str, *, lower: float, upper: float) -> StorySimilarityThresholdHistoryRow:
+    """A night that held both thresholds where it says, built from the contract's own fixture."""
+    raw = json.loads(
+        read_text(
+            CONTRACT_FIXTURES_DIR
+            / "story-similarity-threshold-history-row"
+            / "a-night-that-held-both-thresholds.json"
+        )
+    )
+    return StorySimilarityThresholdHistoryRow.model_validate(
+        raw
+        | {
+            "date": date,
+            "run_id": f"{date}-9",
+            "lower_threshold_before": lower,
+            "lower_threshold_after": lower,
+            "lower_estimate": lower + raw["lower_gap"],
+            "upper_threshold_before": upper,
+            "upper_threshold_after": upper,
+            "upper_estimate": upper + raw["upper_gap"],
+        }
+    )
+
+
+def test_the_newest_row_before_the_night_inside_the_lookback_sets_the_thresholds() -> None:
+    history = [
+        a_history_row("2026-08-10", lower=0.60, upper=0.90),
+        a_history_row("2026-08-19", lower=0.65, upper=0.95),
+        a_history_row("2026-08-19", lower=0.66, upper=0.96),
+        a_history_row("2026-08-21", lower=0.50, upper=0.99),
+        a_history_row("2026-08-22", lower=0.40, upper=0.98),
+    ]
+
+    followed = thresholds_in_force(
+        history, night=DATE, within_days=14, lower_start=0.70, upper_start=0.93
+    )
+
+    assert followed == ThresholdsInForce(lower=0.66, upper=0.96, set_on="2026-08-19"), (
+        "the last row of the newest day wins, and the night's own row and a later one never do"
+    )
+    assert followed.row is history[2], "the row that set them is handed back, not looked up again"
+
+
+def test_with_no_row_inside_the_lookback_the_configured_starts_set_the_thresholds() -> None:
+    old = [a_history_row("2026-08-01", lower=0.60, upper=0.90)]
+
+    assert thresholds_in_force(
+        old, night=DATE, within_days=14, lower_start=0.70, upper_start=0.93
+    ) == ThresholdsInForce(lower=0.70, upper=0.93, set_on=None)
+    starts = thresholds_in_force(
+        [], night=DATE, within_days=14, lower_start=0.70, upper_start=0.93
+    )
+    assert (starts.set_on, starts.row) == (None, None)
+
+
+def test_the_days_to_read_are_the_days_the_rule_keeps() -> None:
+    """The read names the lookback days, and the rule keeps a row dated inside the same window."""
+    days = lookback_days(DATE, within_days=14)
+
+    assert (days[0], days[-1], len(days)) == ("2026-08-07", "2026-08-20", 14)
+    for day in (days[0], days[-1]):
+        assert thresholds_in_force(
+            [a_history_row(day, lower=0.65, upper=0.95)],
+            night=DATE,
+            within_days=14,
+            lower_start=0.70,
+            upper_start=0.93,
+        ).set_on == day
+    assert thresholds_in_force(
+        [a_history_row("2026-08-06", lower=0.65, upper=0.95)],
+        night=DATE,
+        within_days=14,
+        lower_start=0.70,
+        upper_start=0.93,
+    ).set_on is None
+
+
 # --- the stage ---------------------------------------------------------------
 
 
+def publish(root: Path, date: str, items: list[DigestItem], angles: list[float]) -> None:
+    """One day on disk with vectors at the named angles."""
+    day = DigestDay(
+        version=DigestDay.schema_version(),
+        date=date,
+        generated_at=f"{date}T06:00:00Z",
+        partial=False,
+        items_planned=len(items),
+        items_failed=0,
+        runs=[DigestRunRef(n=1, at=f"{date}T06:00:00Z", items_added=len(items))],
+        verticals=[
+            DigestVerticalRef(id=name, display_name=name.title(), count=count)
+            for name, count in sorted(Counter(one.vertical for one in items).items())
+        ],
+        items=items,
+        embeddings=block({one.item_id: unit(angle) for one, angle in zip(items, angles, strict=True)}),
+    )
+    atomic_write.write_atomic(assemble.day_dir(root, date) / "digest.json", day.to_json())
+
+
+def a_published_day(root: Path) -> None:
+    """One day: six stories, five mastheads, one shared headline, scores from -0.17 to 1.0.
+
+    Built rather than read off the archive, because the case that matters most
+    here is two outlets running the same headline - which scores 1.0 by a rule
+    the weighted sum never reaches, and which the contract refuses a row for
+    unless the `headline` column agrees with the score. Few pairs sit above 0.93 so
+    the draw takes the shared headline's pair whatever the hash order is.
+    """
+    publish(
+        root,
+        DATE,
+        [
+            item("world-01", outlet="The Wire", title="Floods reach the delta"),
+            item("world-02", outlet="The Paper", title="Floods reach the delta"),
+            item("world-03", outlet="The Herald"),
+            item("world-04", outlet="The Gazette"),
+            item("business-01", outlet="The Ledger"),
+            item("business-02", outlet="The Wire"),
+        ],
+        [0.0, 0.6, 25.0, 45.0, 100.0, 70.0],
+    )
+
+
+def drawn_rows(path: Path) -> list[StorySimilarityPairVerdict]:
+    with path.open(encoding="utf-8", newline="") as handle:
+        return [StorySimilarityPairVerdict.from_csv_row(row) for row in csv.DictReader(handle)]
+
+
+def draw_the_night(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    settings: config.Settings | None = None,
+    state: Path | None = None,
+    out: str = "draw",
+) -> tuple[Draw, list[StorySimilarityPairVerdict]]:
+    """Run the stage over the day under `tmp_path` and read the file back through the contract."""
+    digest_root = tmp_path / "digest"
+    monkeypatch.setattr(common, "PUBLIC_ROOT", digest_root)
+    path = tmp_path / out / "draw.csv"
+    drawn = stage_pick_item_pairs(
+        DATE,
+        run_id=COUNCIL_RUN,
+        settings=settings or config.load(CONFIG_DIR),
+        digest_root=digest_root,
+        draw_path=path,
+        state_dir=state or tmp_path / "state",
+    )
+    return drawn, drawn_rows(path)
+
+
 @pytest.mark.parametrize("earlier_count", [0, 1, 2], ids=["same-day", "cross-day", "earlier-day"])
-def test_the_picker_excludes_self_pairs_before_population_budget_and_sharding(
+def test_the_picker_excludes_self_pairs_before_the_pool_is_counted_and_the_shards_dealt(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, earlier_count: int
 ) -> None:
-    """Removing the shared URL guard must fail before an invalid draw is written."""
+    """Removing the shared URL guard must fail before an invalid draw is written.
+
+    Three placements of one headline, two of them the same canonical article URL, laid out
+    on one day, across two days and with the two on the earlier day. The pair those two
+    make is not a pair. The other two comparisons name one pair of addresses, so the pool
+    holds it once, and with the guard gone the self-pair would be drawn and the contract
+    would refuse its row.
+    """
     first = item("world-01", outlet="The Wire", title="Floods reach the delta")
     duplicate = item("business-02", outlet="The Paper", title=first.title).model_copy(
         update={"source_url": first.source_url, "desk": "business"}
@@ -321,118 +557,48 @@ def test_the_picker_excludes_self_pairs_before_population_budget_and_sharding(
         one.model_copy(update={"published_at": "2026-08-20T23:00:00Z"})
         for one in (first, duplicate, distinct)
     ]
-    digest_root = tmp_path / "digest"
-    monkeypatch.setattr(common, "PUBLIC_ROOT", digest_root)
-
-    def publish(date: str, items: list[DigestItem]) -> None:
-        day = DigestDay(
-            version=DigestDay.schema_version(),
-            date=date,
-            generated_at=f"{date}T23:00:00Z",
-            partial=False,
-            items_planned=len(items),
-            items_failed=0,
-            runs=[DigestRunRef(n=1, at=f"{date}T23:00:00Z", items_added=len(items))],
-            verticals=[
-                DigestVerticalRef(id=name, display_name=name.title(), count=count)
-                for name, count in sorted(Counter(one.vertical for one in items).items())
-            ],
-            items=items,
-            embeddings=block({one.item_id: unit(0) for one in items}),
-        )
-        atomic_write.write_atomic(assemble.day_dir(digest_root, date) / "digest.json", day.to_json())
-
-    publish(DATE, placements[earlier_count:])
+    publish(tmp_path / "digest", DATE, placements[earlier_count:], [0.0] * (3 - earlier_count))
     if earlier_count:
-        publish("2026-08-20", placements[:earlier_count])
-    judge_config = tmp_path / "config" / "judges" / "content-similarity-judge.json"
-    raw = json.loads((CONFIG_DIR / "judges" / judge_config.name).read_text(encoding="utf-8"))
-    raw["pair_budget"] = 1
-    atomic_write.write_atomic(judge_config, json.dumps(raw))
-    settings = replace(config.load(CONFIG_DIR), config_dir=judge_config.parent.parent)
-    draw_path = tmp_path / "selection" / "draw.csv"
+        publish(tmp_path / "digest", "2026-08-20", placements[:earlier_count], [0.0] * earlier_count)
 
-    drawn = stage_pick_item_pairs(
-        DATE,
-        run_id=COUNCIL_RUN,
-        settings=settings,
-        digest_root=digest_root,
-        draw_path=draw_path,
-    )
+    drawn, rows = draw_the_night(tmp_path, monkeypatch)
 
-    assert draw_path.is_file()
-    rows = [
-        StorySimilarityPair.from_csv_row(row)
-        for row in csv.DictReader(draw_path.read_text(encoding="utf-8").splitlines())
-    ]
-    assert drawn.pairs_in_band == len(drawn.taken) == len(rows) == 2, (
-        "only the two valid above-line comparisons overspend the budget of one"
-    )
-    assert {(pair.left, pair.right) for pair in drawn.taken} == {
-        tuple(sorted((first.item_id, distinct.item_id))),
-        tuple(sorted((duplicate.item_id, distinct.item_id))),
-    }
+    assert drawn.pairs_available == len(drawn.taken) == len(rows) == 1
     keys = sorted((derive_url_key(first.source_url), derive_url_key(distinct.source_url)))
-    assert all([row.left_url_key, row.right_url_key] == keys for row in rows)
-    assert [row.work_part_index for row in rows] == [
-        index % settings.council.shards for index in range(len(rows))
-    ]
-    assert all(row.date == DATE and row.run_id == COUNCIL_RUN for row in rows)
-    assert all(row.headline and row.composite_score == 1.0 and not row.usable for row in rows)
-
-
-def a_published_day(root: Path, *, line: float | None = None) -> None:
-    """One day on disk with its manifest: six stories, five mastheads, one shared headline.
-
-    Built rather than read off the archive, because the case that matters most
-    here is two outlets running the same headline - which scores 1.0 by a rule
-    the weighted sum never reaches, and which the contract refuses a row for
-    unless the `headline` column agrees with the score.
-    """
-    items = [
-        item("world-01", outlet="The Wire", title="Floods reach the delta"),
-        item("world-02", outlet="The Paper", title="Floods reach the delta"),
-        item("world-03", outlet="The Herald"),
-        item("world-04", outlet="The Gazette"),
-        item("business-01", outlet="The Ledger"),
-        item("business-02", outlet="The Wire"),
-    ]
-    angles = [0.0, 0.6, 1.2, 4.0, 12.0, 32.0]
-    vectors = block({one.item_id: unit(angle) for one, angle in zip(items, angles, strict=True)})
-    manifest = RunManifest(version=RunManifest.schema_version(), date=DATE, runs=[
-        RunRecord(
-            run_id=f"{DATE}-1", n=1, started_at=f"{DATE}T06:00:00Z",
-            completed_at=f"{DATE}T06:01:00Z", status=RunStatus.COMPLETED,
-            commit_sha=SEED_COMMIT, runner="test", items_planned=len(items),
-            items_succeeded=len(items), items_failed=0, site_bytes=0, site_files=0,
-            same_story_floor_applied=line,
-        ),
-    ])
-    day = DigestDay(
-        version=DigestDay.schema_version(),
-        date=DATE,
-        generated_at=f"{DATE}T06:00:00Z",
-        partial=False,
-        items_planned=len(items),
-        items_failed=0,
-        runs=[
-            DigestRunRef(
-                n=run.n,
-                at=run.started_at,
-                items_added=sum(1 for one in items if one.introduced_by_run == run.n),
-            )
-            for run in manifest.runs
-        ],
-        verticals=[
-            DigestVerticalRef(id=name, display_name=name.title(), count=count)
-            for name, count in sorted(Counter(one.vertical for one in items).items())
-        ],
-        items=items,
-        embeddings=vectors,
+    assert [[row.left_url_key, row.right_url_key] for row in rows] == [keys], (
+        "the two placements of one article are one address, so they draw one pair of addresses"
     )
-    target = assemble.day_dir(root, DATE)
-    atomic_write.write_atomic(target / "digest.json", day.to_json())
-    atomic_write.write_atomic(target / "run.json", manifest.to_json())
+
+
+def test_a_pair_of_addresses_that_two_days_published_is_drawn_once_as_the_nights_copy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The night's story and an earlier day's republished copy of one address, each paired
+    with the same third story, are two pairs of items and one pair of addresses.
+
+    The copy that is kept is the night's own, so the stored score is the night's copy's:
+    10 degrees from the third story scores 0.985, where the earlier copy at 40 degrees
+    would have scored 0.766.
+    """
+    republished = item("world-01", outlet="The Wire")
+    earlier_copy = republished.model_copy(update={"item_id": "world-90"})
+    other = item("world-02", outlet="The Paper")
+    timed = [
+        republished.model_copy(update={"published_at": "2026-08-21T01:00:00Z"}),
+        other.model_copy(update={"published_at": "2026-08-21T02:00:00Z"}),
+    ]
+    publish(tmp_path / "digest", DATE, timed, [10.0, 0.0])
+    publish(
+        tmp_path / "digest",
+        "2026-08-20",
+        [earlier_copy.model_copy(update={"published_at": "2026-08-20T23:00:00Z"})],
+        [40.0],
+    )
+
+    drawn, rows = draw_the_night(tmp_path, monkeypatch)
+
+    assert len(rows) == len(drawn.taken) == 1, "one pair of addresses, drawn once"
+    assert rows[0].similarity_score == pytest.approx(math.cos(math.radians(10.0)), abs=1e-3)
 
 
 def test_the_draw_round_trips_through_the_contract(
@@ -440,187 +606,124 @@ def test_the_draw_round_trips_through_the_contract(
 ) -> None:
     """Every row the stage writes is one the contract will read back and accept.
 
-    The contract recomputes the pair key from the row's own two addresses and
-    recomputes the composite from the row's own terms and weights, and it does
-    both at WRITE time - so a stage that got either wrong would throw away a
-    day of model calls that had already been paid for. Reading the file back
-    through `from_csv_row` is what proves the columns survive the round trip as
-    well as the constructor.
+    The contract recomputes the pair key from the row's own two addresses and the score
+    from its own terms and weights, and it does both at WRITE time - so a stage that got
+    either wrong would throw away a night of model calls that had already been paid for.
+    Reading the file back through `from_csv_row` is what proves the columns survive the
+    round trip as well as the constructor.
 
-    It also fixes the two shapes a reader downstream depends on: nothing is
-    judged yet, and the shared headline arrives with `headline` true and a
-    composite of 1.0 rather than the weighted sum.
+    It also fixes the shapes a reader downstream depends on: nothing is judged yet, the
+    two columns the collecting job fills are empty, and the shared headline arrives with
+    `headline` true, a score of 1.0 and the similar end's slice.
     """
-    digest_root = tmp_path / "digest"
-    a_published_day(digest_root)
-    monkeypatch.setattr(common, "PUBLIC_ROOT", digest_root)
-    draw_path = tmp_path / "selection" / "draw.csv"
+    a_published_day(tmp_path / "digest")
 
-    drawn = stage_pick_item_pairs(
-        DATE,
-        run_id=COUNCIL_RUN,
-        settings=config.load(CONFIG_DIR),
-        digest_root=digest_root,
-        draw_path=draw_path,
-    )
+    drawn, rows = draw_the_night(tmp_path, monkeypatch)
 
-    written = draw_path.read_text(encoding="utf-8")
-    rows = [StorySimilarityPair.from_csv_row(row) for row in csv.DictReader(written.splitlines())]
-    assert rows, "the day holds pairs inside the band, so the draw is not empty"
-    assert len(rows) == len(drawn.taken) <= drawn.pairs_in_band
+    assert rows, "the day holds pairs, so the draw is not empty"
+    assert len(rows) == len(drawn.taken) <= drawn.pairs_available
     assert all(row.date == DATE and row.run_id == COUNCIL_RUN for row in rows), (
-        "a row names the run that scored it, which is the council night and not "
-        "the digest run that published the day it read"
+        "a row names the run that scored it, which is the council night"
     )
     assert all(row.left_url_key < row.right_url_key for row in rows)
     assert not any(
-        row.verdict or row.verdict_swapped or row.usable or row.judge_model for row in rows
-    ), "this step judges nothing"
-
+        row.verdict or row.verdict_swapped or row.readings_agree or row.judge_model
+        or row.slice_pairs_usable is not None or row.sampling_chance is not None
+        for row in rows
+    ), "this step judges nothing, and the collecting job fills the chance"
+    assert {row.config_versions for row in rows} == {judge_settings.config_versions(CONFIG_DIR)}
+    assert {(row.lower_threshold_in_force, row.upper_threshold_in_force) for row in rows} == {
+        (JUDGE.thresholds.lower_start, JUDGE.thresholds.upper_start)
+    }
     headline = [row for row in rows if row.headline]
     assert len(headline) == 1, "one pair of mastheads ran the same headline"
-    assert headline[0].composite_score == 1.0
+    assert (headline[0].similarity_score, headline[0].bucket) == (1.0, PairBucket.FULLY_SIMILAR)
+    shards = config.load(CONFIG_DIR).council.shards
+    assert all(0 <= row.work_part_index < shards for row in rows)
 
 
-def test_a_written_judge_budget_changes_the_real_draw_without_cutting_merged_pairs(
+def test_a_pair_scoring_below_zero_is_filed_in_the_dissimilar_end(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    digest_root = tmp_path / "digest"
-    line = 0.90
-    a_published_day(digest_root, line=line)
-    monkeypatch.setattr(common, "PUBLIC_ROOT", digest_root)
-    settings = config.load(CONFIG_DIR)
-    path = tmp_path / "config" / "judges" / "content-similarity-judge.json"
-    path.parent.mkdir(parents=True)
-    raw = json.loads((CONFIG_DIR / "judges" / path.name).read_text(encoding="utf-8"))
-    driven = replace(settings, config_dir=path.parent.parent)
+    """Two stories pointing opposite ways score -1, which the old floor of zero could not hold."""
+    publish(
+        tmp_path / "digest",
+        DATE,
+        [item("world-01", outlet="The Wire"), item("world-02", outlet="The Paper")],
+        [0.0, 180.0],
+    )
 
-    def draw(budget: int) -> Draw:
-        raw["pair_budget"] = budget
-        path.write_text(json.dumps(raw), encoding="utf-8", newline="\n")
-        return stage_pick_item_pairs(
-            DATE,
-            run_id=COUNCIL_RUN,
-            settings=driven,
-            digest_root=digest_root,
-            draw_path=tmp_path / f"draw-{budget}.csv",
-        )
+    _, rows = draw_the_night(tmp_path, monkeypatch)
 
-    full = draw(200)
-    limited = draw(1)
-    merged = [pair for pair in full.taken if pair.score >= line]
-    floor = settings.app.assemble.same_story.floor_min
-    assert line < floor
-    assert any(line <= pair.score < floor for pair in merged)
-    assert any(pair.score < line for pair in full.taken)
-    assert len(limited.taken) < len(full.taken) == full.pairs_in_band
-    assert limited.pairs_in_band == full.pairs_in_band
-    assert limited.taken == merged
-
-
-def test_the_draw_reads_legacy_cumulative_counts_without_changing_the_recorded_line(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
-) -> None:
-    items = [
-        item("world-01", outlet="Left"),
-        item("world-02", outlet="Right").model_copy(update={"introduced_by_run": 2}),
+    assert [(row.similarity_score, row.bucket, row.slice_low) for row in rows] == [
+        (-1.0, PairBucket.FULLY_DISSIMILAR, -1.0)
     ]
-    manifest = RunManifest(
-        version=RunManifest.schema_version(), date=DATE,
-        runs=[
-            RunRecord(
-                run_id=f"{DATE}-{n}", n=n, started_at=f"{DATE}T{started}:00:00Z",
-                completed_at=f"{DATE}T{completed}:00:00Z", status=RunStatus.COMPLETED,
-                commit_sha=SEED_COMMIT, runner="test", items_planned=1,
-                items_succeeded=1, items_failed=0, site_bytes=0, site_files=0,
-                verticals=[VerticalCount(id="world", planned=1, published=1)],
-                same_story_floor_applied=line,
-            )
-            for n, started, completed, line in (
-                (1, "06", "08", 0.94), (2, "12", "18", 0.90),
-            )
-        ],
+
+
+def a_filed_history(state: Path, row: StorySimilarityThresholdHistoryRow) -> None:
+    """One night's thresholds filed through the door, the way the save job files them."""
+    ledger.persist(
+        state,
+        [row],
+        ledger=LedgerName.CONTENT_SIMILARITY_JUDGE_THRESHOLD_HISTORY,
+        covers=row.date,
+        identity=WriterIdentity(
+            run_id=row.run_id,
+            attempt=1,
+            job=ServerJob.SAVE_COUNCIL_RESULTS,
+            shard=0,
+            producer="stages.review_thresholds",
+            git_sha=SEED_COMMIT,
+        ),
     )
-    day = DigestDay(
-        version=DigestDay.schema_version(), date=DATE,
-        generated_at=f"{DATE}T18:00:00Z", partial=False,
-        items_planned=2, items_failed=0, items=items,
-        runs=[
-            DigestRunRef(n=run.n, at=run.started_at, items_added=1)
-            for run in manifest.runs
-        ],
-        verticals=[DigestVerticalRef(id="world", display_name="World", count=2)],
-        embeddings=block({"world-01": unit(0), "world-02": unit(22)}),
-    )
-    payload = manifest.model_dump(mode="json") | {"version": "2026-08-21T02:00"}
-    payload["runs"][1]["verticals"][0]["published"] = 2
-    digest_root = tmp_path / "digest"
-    target = assemble.day_dir(digest_root, DATE)
-    atomic_write.write_atomic(target / "digest.json", day.to_json())
-    atomic_write.write_atomic(target / "run.json", json.dumps(payload))
-    previous_bytes = (target / "run.json").read_bytes()
-    monkeypatch.setattr(common, "PUBLIC_ROOT", digest_root)
-    draw_path = tmp_path / "selection" / "draw.csv"
-
-    with caplog.at_level(logging.INFO, logger="idhazh"):
-        drawn = stage_pick_item_pairs(
-            DATE, run_id=COUNCIL_RUN, settings=config.load(CONFIG_DIR),
-            digest_root=digest_root, draw_path=draw_path,
-        )
-
-    assert drawn.pairs_in_band == len(drawn.taken) == 1
-    assert 0.90 <= drawn.taken[0].score < 0.94
-    migrated = common._load_manifest(target / "run.json", day=day)
-    assert migrated is not None
-    assert migrated.runs[-1].verticals[0].published == 1
-    assert migrated.runs[-1].same_story_floor_applied == 0.90
-    assert draw_path.is_file()
-    assert "legacy-fallback" not in caplog.text
-    assert (target / "run.json").read_bytes() == previous_bytes
 
 
-def test_the_draw_samples_the_config_band_and_never_the_published_line(
+def test_the_draw_follows_the_thresholds_the_newest_filed_row_set(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The population the record counts from is the config band, whatever the line.
+    """With a row dated before the night, its `threshold_after` columns decide the slices."""
+    a_published_day(tmp_path / "digest")
+    state = tmp_path / "state"
+    a_filed_history(state, a_history_row("2026-08-20", lower=0.65, upper=0.95))
 
-    Moving the recorded build line must change only the mandatory/budget split.
-    A band that opened at that line would let the fit shape its own evidence.
+    _, rows = draw_the_night(tmp_path, monkeypatch, state=state)
+
+    assert {(row.lower_threshold_in_force, row.upper_threshold_in_force) for row in rows} == {
+        (0.65, 0.95)
+    }
+    assert all(row.slice_low >= 0.95 - 1e-9 for row in rows if row.bucket is PairBucket.FULLY_SIMILAR)
+
+
+def test_a_written_judge_file_moves_the_thresholds_the_draw_starts_from(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The starts are config, so a changed start changes the slice a pair is filed under.
+
+    A pair 12 degrees apart scores 0.978: the similar end under the committed 0.93, and a
+    thin slice under an upper start of 0.99.
     """
-    digest_root = tmp_path / "digest"
-    a_published_day(digest_root)
-    monkeypatch.setattr(common, "PUBLIC_ROOT", digest_root)
-    settings = config.load(CONFIG_DIR)
-    same_story = settings.app.assemble.same_story
-    tuning = same_story.judging_knobs()
-
-    manifest_path = assemble.day_dir(digest_root, DATE) / "run.json"
-    manifest = RunManifest.from_json(manifest_path.read_text(encoding="utf-8"))
-
-    def drawn_with(line: float, out: str) -> Draw:
-        changed = manifest.model_copy(update={
-            "runs": [
-                run.model_copy(update={"same_story_floor_applied": line})
-                for run in manifest.runs
-            ],
-        })
-        atomic_write.write_atomic(manifest_path, changed.to_json())
-        return stage_pick_item_pairs(
-            DATE,
-            run_id=COUNCIL_RUN,
-            settings=settings,
-            digest_root=digest_root,
-            draw_path=tmp_path / out / "draw.csv",
-        )
-
-    at_the_bottom = drawn_with(tuning.band_low, "bottom")
-    at_the_top = drawn_with(tuning.band_high, "top")
-
-    assert at_the_bottom.pairs_in_band > 0, "the day holds pairs inside the band"
-    assert at_the_top.pairs_in_band == at_the_bottom.pairs_in_band, (
-        "the band is the config's and the line does not narrow it"
+    publish(
+        tmp_path / "digest",
+        DATE,
+        [item("world-01", outlet="The Wire"), item("world-02", outlet="The Paper")],
+        [0.0, 12.0],
     )
-    assert sorted(named(at_the_top)) == sorted(named(at_the_bottom))
+    raw = json.loads(read_text(CONFIG_DIR / "judges" / "content-similarity-judge.json"))
+    raw["thresholds"]["upper_start"] = 0.99
+    target = tmp_path / "config" / "judges" / "content-similarity-judge.json"
+    atomic_write.write_atomic(target, json.dumps(raw))
+    atomic_write.write_atomic(
+        target.with_name("content-similarity-canaries.json"),
+        read_text(CONFIG_DIR / "judges" / "content-similarity-canaries.json"),
+    )
+    settings = replace(config.load(CONFIG_DIR), config_dir=target.parent.parent)
+
+    _, committed_rows = draw_the_night(tmp_path, monkeypatch, out="committed")
+    _, moved_rows = draw_the_night(tmp_path, monkeypatch, settings=settings, out="moved")
+
+    assert [row.bucket for row in committed_rows] == [PairBucket.FULLY_SIMILAR]
+    assert [row.bucket for row in moved_rows] == [PairBucket.UPPER_THIN]
+    assert moved_rows[0].upper_threshold_in_force == 0.99
 
 
 def test_a_day_that_is_not_on_disk_writes_an_empty_draw(tmp_path: Path) -> None:
@@ -638,19 +741,19 @@ def test_a_day_that_is_not_on_disk_writes_an_empty_draw(tmp_path: Path) -> None:
         settings=config.load(CONFIG_DIR),
         digest_root=tmp_path / "nothing-here",
         draw_path=out_dir / "draw.csv",
+        state_dir=tmp_path / "state",
     )
 
     written = (out_dir / "draw.csv").read_text(encoding="utf-8")
-    assert drawn == Draw(taken=[], pairs_in_band=0)
-    assert written.splitlines() == [",".join(StorySimilarityPair.csv_columns())]
+    assert drawn == Draw(taken=[], pairs_available=0)
+    assert written.splitlines() == [",".join(StorySimilarityPairVerdict.csv_columns())]
 
 
 def test_the_stamp_is_the_committed_config_and_the_encoder_that_ran() -> None:
     """A row records the ruler it was scored under, read off the shipped config.
 
     A stamp taken from anywhere else would describe a scorer nobody ran, and
-    the record would then reinterpret a year of counts under weights that never
-    produced them.
+    the evidence would then be read under weights that never produced it.
     """
     settings = config.load(CONFIG_DIR)
 

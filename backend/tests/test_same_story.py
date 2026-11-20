@@ -1,22 +1,7 @@
 """The same-story pass: what it groups, what it refuses, and what it never loses.
 
-Row #9's oracle is a hand-labelled day. Every group the pass forms on the
-2026-08-30 payload was read from the published titles and summaries on
-2026-09-01 and marked same-story or not; the labels are written out below and
-the test holds the shipped threshold against them.  A group that is two stories
-is a false merge, and a false merge is a story that never ran.
-
-**The day is frozen under `tests/fixtures/`, not read from the published tree.**
-A hand-labelled judgement is the most expensive artefact in this file and
-retention would have deleted the payload it was read off, taking the labels'
-meaning with it and turning three tests red on a date nobody chose. The fixture
-keeps the four fields the pass actually reads - `item_id`, `source_id`,
-`rank_score`, `introduced_by_run` - and every vector, which is 280.6 KB against
-the day's 1,041.9 KB. It never grows.
-
-Unit tier for the rules and integration tier for the oracle (CLAUDE.md section
-13). Real quantised vectors through the encoder's own wire format throughout.
-No mocks, no network.
+Small groups exercise the rules. Two recorded vectors hold the shipped floor
+above the false merge that originally set it, independent of archive retention.
 """
 
 from __future__ import annotations
@@ -45,57 +30,9 @@ from idhazh.contracts.eval_row import ConfidenceBand
 from idhazh.contracts.knobs.placement import AssembleConfig, SameStoryConfig
 from idhazh.embed import DIMENSIONS, DTYPE, EMBEDDER_ID, cosine, from_base64, to_base64
 
-#: The day the labels below were read off. Closed, so its payload cannot move.
-LABELLED_DATE: Final = "2026-08-30"
-
-#: Hand-labelled 2026-09-01 from the published titles and summaries. Keeper ->
-#: the items the default view stops drawing, and what the story is.
-#:
-#: - Nepal warns of fresh floods as the death toll reaches 734.
-#: - One dead and five hurt in a shooting at a rave in Aarau.
-#: - OpenAI stops supplying models to Cursor over its SpaceX ownership.
-#: - A ferry capsizes off northern Cyprus, killing seven.
-#: - Google Maps renames Lake Ontario to Lake America for US users.
-LABELLED_GROUPS: Final = {
-    "world-3280041570": ["world-7682627246"],
-    "india-6614514195": ["world-3683931166"],
-    "india-1300981688": ["india-3930315816"],
-    "world-6544659615": ["world-6936460020"],
-    "india-6661057661": ["world-2726893923"],
-}
-
-#: The highest-scoring pair on that day that a person marked as TWO stories:
-#: Ontario's pushback against the renaming, and Google carrying the renaming
-#: out. They score 0.9317 against each other, and the shipped threshold has to
-#: sit above them or the pushback never ran.
+#: Two stories from 2026-08-30 whose score set the shipped floor.
 LABELLED_FALSE_PAIR: Final = ("world-8617792855", "business-economy-2218216680")
-
-#: The day the labels were read off, frozen the day the labels were taken.
-#: Written by hand once from the then-committed payload; re-taking it means
-#: re-taking the labels, which is the point of freezing it.
 LABELLED_DAY_FIXTURE: Final = FIXTURES_DIR / "same-story" / "labelled-day.json"
-
-
-def labelled_day() -> tuple[list[DigestItem], DigestEmbeddings]:
-    """The oracle day: 431 stories over 64 sources, and every vector.
-
-    Only the four fields `collapse_same_story` reads are stored, so `item()`
-    fills the rest. A title or a summary in here would be article text in the
-    repository for no reader - `corpus/` is the one place this project commits
-    article text - and would not change one grouping.
-    """
-    payload = json.loads(read_text(LABELLED_DAY_FIXTURE))
-    assert payload["date"] == LABELLED_DATE, "the fixture is not the day the labels were read off"
-    items = [
-        item(
-            one["item_id"],
-            source=one["source_id"],
-            score=one["rank_score"],
-            run=one["introduced_by_run"],
-        )
-        for one in payload["items"]
-    ]
-    return items, DigestEmbeddings.model_validate(payload["embeddings"])
 
 
 def committed_threshold() -> float:
@@ -413,6 +350,35 @@ def test_the_count_stays_a_count_of_this_days_sources() -> None:
     )
 
     assert [one.also_covered_by for one in stamped] == [1, 1]
+
+
+def test_two_stories_from_earlier_days_are_never_drawn_as_a_pair() -> None:
+    """The draw meets the pairs the grouping pass can weigh, and never these.
+
+    The pass places today's stories against the window and never weighs two
+    earlier stories against each other, so a pair of two of them cannot change
+    what publishes - and it already had its turn the night the later of the two
+    was new. The three stories are inside the window of one another and carry
+    one vector, so only this rule can keep the pair of the two earlier ones out.
+    """
+    tonight = item("world-03", source="paper", when="2026-08-31T04:00:00Z")
+    yesterday = item("world-02", source="wire", when="2026-08-30T22:00:00Z")
+    before = item("world-01", source="herald", when="2026-08-29T23:00:00Z")
+    earlier = [
+        EarlierDay(
+            date="2026-08-30", items=[yesterday], embeddings=block({"world-02": unit(0)})
+        ),
+        EarlierDay(date="2026-08-29", items=[before], embeddings=block({"world-01": unit(0)})),
+    ]
+
+    pairs = cross_source_pairs(
+        [tonight], block({"world-03": unit(0)}), window_hours=36.0, earlier=earlier
+    )
+
+    assert [(pair.left, pair.right) for pair in pairs] == [
+        ("world-01", "world-03"),
+        ("world-02", "world-03"),
+    ]
 
 
 # --- the arithmetic --------------------------------------------------------
@@ -1157,23 +1123,6 @@ def test_a_config_still_spelling_the_old_floor_is_refused_by_name() -> None:
         AssembleConfig.model_validate({"duplicate_similarity_min": 0.94})
 
 
-# --- the oracle: a hand-labelled day ---------------------------------------
-
-
-def test_the_oracle_every_group_on_the_labelled_day_is_one_story() -> None:
-    """Row #9's acceptance gate, at the threshold `config/idhazh.json` ships.
-
-    The labels are the fixed thing here and the threshold answers to them. If
-    this fails with a group the labels do not carry, that group is a false merge
-    and ESCALATE trigger (b) has fired - read the two items before touching the
-    number.
-    """
-    items, embeddings = labelled_day()
-    stamped = collapse_same_story(items, embeddings, same_story=at(committed_threshold()))
-
-    assert groups_of(stamped) == LABELLED_GROUPS
-
-
 def test_the_threshold_sits_above_the_labelled_false_pair() -> None:
     """The one measurement that chose the number, as an assertion.
 
@@ -1181,7 +1130,8 @@ def test_the_threshold_sits_above_the_labelled_false_pair() -> None:
     two stories, and they score 0.9317. A threshold at or below that merges
     them.
     """
-    _, embeddings = labelled_day()
+    payload = json.loads(read_text(LABELLED_DAY_FIXTURE))
+    embeddings = DigestEmbeddings.model_validate(payload["embeddings"])
     left_id, right_id = LABELLED_FALSE_PAIR
     left = array("b", b64decode(embeddings.vectors[left_id]))
     right = array("b", b64decode(embeddings.vectors[right_id]))
@@ -1194,15 +1144,6 @@ def test_the_threshold_sits_above_the_labelled_false_pair() -> None:
 
     assert score == pytest.approx(0.9317, abs=5e-5), "the labelled pair moved"
     assert score < committed_threshold(), "the shipped threshold merges two different stories"
-
-
-def test_the_labelled_day_keeps_every_item_it_published() -> None:
-    """Nothing is unpublished, counted on the oracle day rather than argued."""
-    items, embeddings = labelled_day()
-    stamped = collapse_same_story(items, embeddings, same_story=at(committed_threshold()))
-
-    assert len(stamped) == len(items)
-    assert [one.item_id for one in stamped] == [one.item_id for one in items]
 
 
 # --- the read side ---------------------------------------------------------

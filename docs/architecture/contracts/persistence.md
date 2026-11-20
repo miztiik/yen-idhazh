@@ -1,6 +1,6 @@
 # The Ledger Door: Parquet and JSON Lines Under state/raw and state/compact
 
-**Last Updated**: 2026-10-27
+**Last Updated**: 2026-11-19
 
 How a contract payload reaches disk under `state/raw/` and `state/compact/`, how it comes back, and how the parquet engine is swapped. The door is `backend/idhazh/ledger/persist.py`; everything a producer needs is two calls, `ledger.persist` and `ledger.load`. The registry and the lifecycle statuses are [ledger-registry.md](ledger-registry.md), what each ledger answers is [state-ledgers.md](state-ledgers.md), and the shape of a contract is [schemas.md](schemas.md).
 
@@ -16,7 +16,7 @@ state/compact/<folders>/yearly/<YYYY>/<YYYY>.parquet      only where the compact
 state/compact/<folders>/index/<period>.json
 ```
 
-`<folders>` is the registry `prefix` for that ledger inside the door root. Most door ledgers' prefix is their `LedgerName` value. A ledger inside a family files under the family's folder: the similarity judge's scored pairs file under `content-similarity-judge/scored-pairs` while the file envelope still says `scored-pairs`. A **tier** is `raw` or `compact` - which root. A **period** is `daily`, `monthly` or `yearly` - how much time one compact file covers. The two words are never swapped.
+`<folders>` is the registry `prefix` for that ledger inside the door root. Most door ledgers' prefix is their `LedgerName` value. A ledger inside a family files under the family's folder: the similarity judge's pair verdicts file under `content-similarity-judge/pair-verdicts` while the file envelope still says `pair-verdicts`. A **tier** is `raw` or `compact` - which root. A **period** is `daily`, `monthly` or `yearly` - how much time one compact file covers. The two words are never swapped.
 
 **A raw file carries a minted name; a compact file carries a date.** Raw has many writers that never coordinate, so the minted `<file_id>` is what stops two of them taking one path. A compact period has exactly one writer, so its path is the period it covers and a reader can compute the address.
 
@@ -220,7 +220,7 @@ rule does not change `run-plan` settlement, despite their shared business key
 | `held_days(state_dir, ledger)`, `held_months(state_dir, ledger)` | which days and months the ledger holds rows for, read from the indexes and the raw folder names alone, so no data file is opened. A packed year names all its months and days |
 | `month_days(month)` | every UTC day of a `YYYY-MM` month, for a caller that reads a month through `load_days` |
 
-**`load_days` settles each day on its own.** So a key that carries no date - the eval ledger's - is settled within a day and never across days. The writer is what keeps one measurement off two days: it files a measurement only once. The hand marks are the exception a reader owns: a person marks a pair again on a later day, so `similarity.holdout.marked_pairs` applies the key's preference once more across the days it reads, and the pair is read once, with its newest mark.
+**`load_days` settles each day on its own.** So a key that carries no date - the eval ledger's - is settled within a day and never across days. The writer is what keeps one measurement off two days: it files a measurement only once. The hand marks are the exception a reader owns: a person marks a pair again on a later day, so the Judgement page's reader (`markedPairs` in `frontend/src/lib/server/content-similarity-holdout.ts`) applies the key's preference once more across the days it reads, and the pair is read once, with its newest mark.
 
 **A hole is served and reported.** From the first day the compact periods cover to the newest day they reach, every day must be named. A day that is not is a hole: its rows went somewhere no reader finds them. It is logged by name, and any raw files it still has are read. An index this build cannot read is read as absent, with a warning, so the reader serves the raw files it can still find rather than nothing.
 
@@ -313,10 +313,9 @@ Every ledger whose rows a later run settles files through the door. The table sa
 | feed health | `stages.plan`, through `ledger.persist` | `ledger.load_health`, and the Voices page through `feedHealthRows` in `frontend/src/lib/server/ledger-rows.ts` | the day its `date` names |
 | run plans | `stages.plan`, through `ledger.persist` | `stages.common._load_plan`, through `ledger.load_days` for one named UTC day, keeping the plan of the run `--execution` names | the day its `date` names |
 | council run records | `council.session._collect`, through `ledger.persist` in the `save_council_results` job | the Records explorer, through the ledger door | the judged day its `date` names |
-| similarity judge's scored pairs | `stages.count_verdicts`, through `ledger.persist` in the `save_council_results` job, under the council's writer identity | `stages.set_merge_line`, through `ledger.load_story_similarity_pairs` for the judged day | the judged day its `date` names |
-| similarity judge's metrics | `council.metrics_sink.collect_judge_metrics`, called by `stages.count_verdicts` in the same job and under the same identity | nothing yet | the judged day its `date` names |
-| similarity judge's fitted merge line | `stages.set_merge_line`, through `ledger.persist` in the same job and under the same identity | `stages.set_merge_line` and a build's `similarity.applied.applied_line`, through `ledger.load_fitted_thresholds`; the Judgement page through `fittedLines` in `frontend/src/lib/server/content-similarity-judge.ts`, which reads packed days only | the day its `date` names |
-| holdout marks | `backend/utilities/sample_sheet.py --harvest`, a person's command, through `ledger.persist` with job `operator` | `similarity.holdout.marked_pairs`, and the Judgement page through `markedPairs` in `frontend/src/lib/server/content-similarity-holdout.ts`, both over `similarity.holdout_reach_days` | the day the marks were made, because the row has no `date` field |
+| holdout marks | `backend/utilities/sample_sheet.py --harvest`, a person's command, through `ledger.persist` with job `operator` | the Judgement page through `markedPairs` in `frontend/src/lib/server/content-similarity-holdout.ts`, over `similarity.holdout_reach_days` | the day the marks were made, because the row has no `date` field |
+| similarity judge's pair verdicts | `stages.file_pair_verdicts`, through `ledger.persist` in the `save_council_results` job, under the council's writer identity | `content_similarity_judge.ledger_reads.load_pair_verdicts`, read by the tenant's scheduler over the days the council offers and by `stages.review_thresholds` over the last `window_nights` days, with tonight's own rows read raw through `load_pair_verdicts_filed_on` | the judged day its `date` names |
+| similarity judge's threshold history | `stages.review_thresholds`, through `ledger.persist` in the `save_council_results` job after the pair verdicts, under the same identity | `content_similarity_judge.ledger_reads.load_threshold_history`, read by `stages.pick_item_pairs` over `thresholds_lookback_days` days before the night and by `stages.review_thresholds` over the days `review_days` names | the judged day its `date` names |
 
 Each writer names the commit its run checked out, which is why `idhazh plan`, `record`, `fingerprint` and `job-clock` take `--commit` as `idhazh assemble` always did, and a gardener run takes `--git-sha`. No job has to ask for the parquet engine to reach these ledgers, because pyarrow is part of the base install ([What it costs to install](#what-it-costs-to-install)).
 

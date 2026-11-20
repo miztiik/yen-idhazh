@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
 from pytest import MonkeyPatch
-from support.paths import read_text
+from support.paths import CONFIG_DIR, read_text
 
-from idhazh import assemble
+from idhazh import assemble, config
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.visual_data import VisualData
 from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX, VisualDecision, VisualKind
@@ -16,12 +17,12 @@ from idhazh.publication import read_inventory
 from idhazh.render.write import asset_relpath
 
 from ._builders import (
-    DRAWS_LABEL,
     DRAWS_SUMMARIZE_AND_PLAN,
     _work_stage,
-    assert_planning_references,
+    assert_planning_rows,
     assert_reader_accepts,
     drawable_article_fetch,
+    finding_the_wind_countries,
     plan,
     publish_worker_items,
 )
@@ -42,13 +43,15 @@ def test_assemble_publishes_a_chart_from_its_decision_alone(
     if assemble stops writing it.
     """
     worker = tmp_path / "worker"
-    run_plan, items, server = _work_stage(
-        worker,
-        monkeypatch,
-        replies=(DRAWS_LABEL.read_bytes(), DRAWS_SUMMARIZE_AND_PLAN.read_bytes()),
-        fetcher=drawable_article_fetch,
-        run_plan=plan(item_count=1),
-    )
+    with finding_the_wind_countries(config.load(CONFIG_DIR)) as settings:
+        run_plan, items, server = _work_stage(
+            worker,
+            monkeypatch,
+            replies=(DRAWS_SUMMARIZE_AND_PLAN.read_bytes(),),
+            fetcher=drawable_article_fetch,
+            run_plan=plan(item_count=1),
+            settings=settings,
+        )
     item_id = run_plan.items[0].item_id
     decision = VisualDecision.read(items / f"{item_id}{PAYLOAD_SUFFIX}")
     relpath = asset_relpath(run_plan.date, item_id)
@@ -56,9 +59,23 @@ def test_assemble_publishes_a_chart_from_its_decision_alone(
     assert decision.data_path == relpath
     assert decision.spec is not None
     compiled = VisualData.from_json(decision.spec)
-    references = {mark.element_id for mark in compiled.marks if mark.element_id is not None}
-    assert references
-    assert_planning_references(server, references)
+    assert_planning_rows(
+        server,
+        [
+            "r1 | Denmark | 1200 MW",
+            "r2 | Germany | 900 MW",
+            "r3 | Poland | 640 MW",
+            "r4 | Ireland | 410 MW",
+        ],
+    )
+    marks = {mark.mark_id: mark for mark in compiled.marks}
+    assert [marks[name].text for name in compiled.encoding.category] == [
+        "Denmark", "Germany", "Poland", "Ireland"
+    ]
+    assert [Decimal(str(marks[name].value)) for name in compiled.encoding.quantity] == [
+        Decimal(1200), Decimal(900), Decimal(640), Decimal(410)
+    ]
+    assert compiled.emphasized_mark_id == compiled.encoding.quantity[0], "the row the model named"
 
     publisher = tmp_path / "publisher"
     publish_worker_items(run_plan, items, publisher, monkeypatch)

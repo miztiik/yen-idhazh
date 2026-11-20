@@ -19,10 +19,6 @@ from idhazh.ledger import paths
 
 pytestmark = pytest.mark.contract
 
-#: The grains a ledger files under: the door's own, and the two that address one
-#: JSON document by its name or by its stamp.
-DOOR_OR_ONE_DOCUMENT: Final = frozenset({Grain.RAW_AND_COMPACT, Grain.FLAT, Grain.STAMPED})
-
 #: The ledgers that still file by day outside the door, each with its grain and
 #: suffix. None is CSV: the day record is one JSON file a day, and a trace and a
 #: run's block of a day are JSON files inside a day folder. A ledger added here
@@ -43,7 +39,7 @@ def test_no_ledger_in_the_registry_files_csv() -> None:
     by_day = {
         name: (entry.grain, entry.suffix)
         for name, entry in held.items()
-        if entry.grain not in DOOR_OR_ONE_DOCUMENT
+        if entry.grain is not Grain.RAW_AND_COMPACT
     }
 
     assert as_csv == [], f"{', '.join(as_csv)} still file CSV; a ledger files through the door"

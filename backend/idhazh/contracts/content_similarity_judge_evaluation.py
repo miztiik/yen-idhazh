@@ -26,7 +26,7 @@ from idhazh.contracts.digest_day import DigestItem
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.knobs.content_similarity_judge import ContentSimilarityEvaluationConfig
 from idhazh.contracts.knobs.models import ModelRef
-from idhazh.contracts.story_similarity_pair import ReadingRefusalReason, SameStoryVerdict
+from idhazh.contracts.story_similarity_pair_verdict import ReadingRefusalReason, SameStoryVerdict
 
 EvaluationSplit = Literal["development", "confirmation"]
 EvaluationStream = Literal["representative", "challenge"]

@@ -1,6 +1,6 @@
 # Fine-tune a summarizer
 
-**Last Updated**: 2026-11-17
+**Last Updated**: 2026-11-18
 
 How the training corpus is built, what maintains it, and what a person does with
 it. Training itself does not happen here: the runner has no GPU, 4 vCPU and a
@@ -162,6 +162,10 @@ version loses data:
  nothing changed cannot be reviewed by diff.
 - **Order is by date then address**, never by arrival, so two runs that harvest
  the same items in a different order write the same file.
+
+Corpus tests check which rows are kept and whether they can be read back. The
+saved example checks the file format; it does not have to match the current
+prompt or model. Fine-tuning settings are checked with application settings.
 
 ### The prune rewrites history, and that costs something
 
@@ -512,7 +516,8 @@ prompt overhead, up to 30,238 for the longest and hardest-tokenizing article
 `extract.truncation_cap_tokens` lets through, and 8,192 of answer, the response
 limit the model file names: **39,427 of the
 committed 49,152, or 80 percent**. The serving window is wider because it holds
-the two-call pair, which nothing trains on. Both windows are still asserted in
+the digest call, whose prompt carries the chart rules and, where they fit, the tables of figures,
+and nothing trains on that. Both windows are still asserted in
 `backend/tests/contracts/` and against the cap, so a later move of the cap fails
 rather than drifts - **against two sums now rather than one**, because the two
 paths render different prompts.

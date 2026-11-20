@@ -58,7 +58,7 @@ test('native throughput uses the same nearest-rank readings for a day and its si
 	expect(day.items).toBe(2);
 	expect(day.read).toEqual({ min: 10, p25: 10, median: 100, p75: 100, max: 100 });
 	expect(day.write).toEqual({ min: 5, p25: 5, median: 50, p75: 50, max: 50 });
-	expect(day.runs).toEqual([{ runId: `${date}-1`, items: 2, read: 100, write: 50 }]);
+	expect(day.runs).toEqual([{ runId: `${date}-1`, read: 100, write: 50 }]);
 	expect(day.readTps).toBeCloseTo(200 / 11);
 	expect(day.writeTps).toBeCloseTo(200 / 22);
 });
@@ -75,8 +75,8 @@ test('native throughput keeps separate run populations and excludes an incomplet
 	expect(day.read.median).toBe(100);
 	expect(day.write.median).toBe(50);
 	expect(day.runs).toEqual([
-		{ runId: `${date}-1`, items: 2, read: 100, write: 50 },
-		{ runId: `${date}-2`, items: 2, read: 200, write: 100 }
+		{ runId: `${date}-1`, read: 100, write: 50 },
+		{ runId: `${date}-2`, read: 200, write: 100 }
 	]);
 	expect(modelThroughput(rows, { start: '2030-06-15', end: '2030-06-15' })).toEqual([]);
 });
@@ -98,8 +98,8 @@ test('build-time throughput keeps interpolated readings without changing its wei
 	expect(day.read).toEqual({ min: 500, p25: 500, median: 500, p75: 750, max: 1000 });
 	expect(day.write).toEqual({ min: 50, p25: 50, median: 50, p75: 75, max: 100 });
 	expect(day.runs).toEqual([
-		{ runId: `${date}-1`, items: 2, read: 750, write: 75 },
-		{ runId: `${date}-2`, items: 1, read: 500, write: 50 }
+		{ runId: `${date}-1`, read: 750, write: 75 },
+		{ runId: `${date}-2`, read: 500, write: 50 }
 	]);
 });
 
@@ -303,8 +303,6 @@ test('item-only timing panels share the newest article day despite lagging hardw
 	expect(rankedList(view.rows, { max: 1 })?.rows.map((row) => row.label)).toEqual(['long - source']);
 	expect(view.rows.every((row) => row.segments === undefined)).toBe(true);
 	for (const id of ['machine-cards', 'processor-lost', 'disk-reads', 'slowest-articles']) expect(PANEL_QUERIES).not.toHaveProperty(id);
-	expect(PANEL_QUERIES['two-clocks'].map((query) => query.name))
-		.toEqual(['twoClocksQuery', 'twoClocksHostsQuery', 'platformMixQuery', 'runShardsQuery']);
 	expect(PANEL_QUERIES['article-cost'].map((query) => query.name)).toEqual(['articleCostQuery', 'articleCostHostsQuery']);
 });
 

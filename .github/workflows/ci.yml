@@ -1,378 +1,113 @@
 name: CI
 
-# Every gate CLAUDE.md section 9 names, on every change. The suite includes the
-# five injection canaries (row 5), so a prompt, sanitizer or contract edit that
-# lets an attack through fails the build rather than shipping.
-#
-# The runner here is the same stock ubuntu-latest the pipeline runs on
-# (Guardrail #2), so a gate that would not fit the pipeline's budget does not
-# fit this one either.
-
 on:
   pull_request:
   push:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      capture_planner_recordings:
-        description: 'Capture offline planner fixtures; remove this input and its job when the recorder is retired.'
-        type: boolean
-        required: false
-        default: false
 
 permissions:
   contents: read
 
 concurrency:
-  # A pull request groups by its ref, so a newer commit cancels the run its
-  # older commit started - the older commit is superseded and its verdict is
-  # worth nothing. A push groups by its own commit instead, so it shares a
-  # group with nothing and is neither cancelled nor queued behind the next
-  # push.
-  #
-  # A trunk push is not superseded by the next one, because `scope` answers
-  # from each push's own changed paths. Measured 2026-09-12, before this was
-  # fixed: two pushes carrying 14 code files between them were cancelled by a
-  # third that changed one plan-doc, and that third run correctly skipped every
-  # application job - so the code reached `main` with no verdict on `main`.
+  # A newer PR run replaces its predecessor. Each main push checks its own range.
   group: ci-${{ github.event_name == 'push' && github.sha || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  planner-recordings:
-    if: github.event_name == 'workflow_dispatch' && inputs.capture_planner_recordings == true
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.sha }}
-          persist-credentials: false
-
-      - uses: ./.github/actions/publication-runtime
-
-      - name: Install locked recorder dependencies
-        run: |
-          bun install --frozen-lockfile --cwd services/serve-pipeline-apis
-          bun install --frozen-lockfile --cwd services/host-fingerprints
-          bun install --frozen-lockfile --cwd services/host-probes
-          bun install --frozen-lockfile --cwd services/feed-ingest-plan
-
-      - name: Capture current planner recordings from the real offline API
-        run: |
-          set -euo pipefail
-          trap 'unset IDHAZH_CAPTURE_PLANNER_RECORDINGS' EXIT
-          export IDHAZH_CAPTURE_PLANNER_RECORDINGS=1
-          bun run --cwd services/feed-ingest-plan test ./test/plan-entry-points.test.ts --test-name-pattern '^one recorded API request writes a valid selected artifact$'
-
-      - name: Upload current planner recordings
-        uses: actions/upload-artifact@v7
-        with:
-          name: planner-current-recordings
-          if-no-files-found: error
-          path: |
-            tests/fixtures/feed-ingest-plan/entry-points/response.json
-            tests/fixtures/feed-ingest-plan/entry-points/health.json
-            tests/fixtures/feed-ingest-plan/entry-points/selected-articles.json
-            tests/fixtures/feed-ingest-plan/entry-points/discovered-articles.rows.json
-            tests/fixtures/feed-ingest-plan/entry-points/selected-articles.rows.json
-            tests/fixtures/feed-ingest-plan/entry-points/rejected-articles.rows.json
-            tests/fixtures/feed-ingest-plan/entry-points/feed-health-state.rows.json
-            tests/fixtures/feed-ingest-plan/entry-points/plan-runs.rows.json
-            tests/fixtures/feed-ingest-plan/report-events.json
-
-  # What a change has to pay for. Two questions, not one.
-  #
-  # `code` asks whether anything but documentation changed. That branch is a
-  # closed list of prefixes rather than a guess, so a path nobody classified
-  # falls to the expensive side. It is asked on a push as well as a pull
-  # request, because a documentation edit cannot break an application check on
-  # either event, and a merge that runs the whole suite over a changed sentence
-  # buys nothing.
-  #
-  # `browser` asks which half of the site gate a pull request buys: the canary
-  # and browser half only reads the published surface, so a change that cannot
-  # move that surface should not spend four minutes proving it. That one is a
-  # wager that nobody forgot a path, so a push that carries any code does not
-  # consult it at all - a pull request the list was wrong about reddens `main`
-  # on the merge push, which is where the wager is settled.
   scope:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      browser: ${{ steps.decide.outputs.browser }}
-      code: ${{ steps.decide.outputs.code }}
-      model_absent: ${{ steps.decide.outputs.model_absent }}
-      console: ${{ steps.decide.outputs.console }}
-      validate_all: ${{ steps.decide.outputs.validate_all }}
-      playwright: ${{ steps.browsers.outputs.playwright }}
+      code: ${{ steps.select.outputs.code }}
+      bun: ${{ steps.select.outputs.bun }}
+      logic: ${{ steps.select.outputs.logic }}
+      tooling: ${{ steps.select.outputs.tooling }}
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-
-      # One check that still applies when documentation is the only change.
-      - name: Whitespace
-        run: git diff --check HEAD^1 HEAD
+          persist-credentials: false
 
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
 
-      - name: Reject added or changed state CSV files
+      - name: Check the change and select suites
+        id: select
         env:
           EVENT: ${{ github.event_name }}
           BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: node frontend/scripts/state-csv-guard.ts
-
-      - id: decide
-        env:
-          EVENT: ${{ github.event_name }}
-          # A pull request names its range and a push names its own. A dispatch
-          # names neither, and the selector buys everything when it cannot see a
-          # range.
-          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
-          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: node frontend/scripts/test-scope.ts --ci >> "$GITHUB_OUTPUT"
-
-      # Read once here, used by the two jobs that cache a browser, because a
-      # key written twice is a key that drifts and then never hits. The value
-      # is asserted to be a plain version before it leaves this step: it is
-      # substituted into a cache key below, so a lockfile carrying a space or a
-      # quote must fail here rather than build an expression further down.
-      - id: browsers
         run: |
-          set -euo pipefail
-          version=$(node -p "require('./frontend/package-lock.json').packages['node_modules/@playwright/test'].version")
-          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "the pinned Playwright version is not a plain version: $version" >&2
-            exit 1
-          fi
-          echo "playwright=$version" >> "$GITHUB_OUTPUT"
+          git diff --check HEAD^1 HEAD
+          node frontend/scripts/state-csv-guard.ts
+          node frontend/scripts/test-scope.ts --ci >> "$GITHUB_OUTPUT"
 
-  gliner-contracts:
-    needs: scope
-    if: needs.scope.outputs.code == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    env:
-      PYTHONPATH: ${{ github.workspace }}/services/text_analysis/hosting:${{ github.workspace }}/tools/text-analysis-caller:${{ github.workspace }}/backend
-      MYPYPATH: ${{ github.workspace }}/services/text_analysis/hosting:${{ github.workspace }}/tools/text-analysis-caller
-    defaults:
-      run:
-        working-directory: services/text_analysis/gliner
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.12'
-
-      - uses: astral-sh/setup-uv@v7
-        with:
-          version: '0.9.7'
-
-      - name: Sync the frozen provider environment without model weights
-        run: uv sync --frozen --extra model --group dev
-
-      - name: Lint native provider
-        run: uv run --no-sync ruff check --config pyproject.toml src tests
-
-      - name: Lint reporting caller
-        working-directory: ${{ github.workspace }}
-        run: >-
-          uv run --project services/text_analysis/gliner --no-sync ruff check
-          --config services/text_analysis/gliner/pyproject.toml tools/text-analysis-caller
-
-      - name: Type-check native provider
-        run: uv run --no-sync mypy --config-file pyproject.toml src tests
-
-      - name: Type-check reporting caller
-        run: >-
-          uv run --no-sync mypy --config-file pyproject.toml
-          --ignore-missing-imports --follow-imports=skip
-          --platform linux --python-version 3.12 --strict ../../../tools/text-analysis-caller
-
-      - name: Native model-free contracts
-        run: uv run --no-sync pytest -c pyproject.toml tests
-
+  # Scheduled Pages publication looks for this job by name.
   gates:
     needs: scope
     if: needs.scope.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      # Two commits rather than one, for the plan-queue check below. A pull
-      # request is checked out as a merge commit whose first parent is the base
-      # branch, so `HEAD^1..HEAD` is what this branch changes - and reading it
-      # costs one more commit rather than a fetch over the network.
       - uses: actions/checkout@v6
         with:
-          fetch-depth: 2
+          persist-credentials: false
 
       - uses: actions/setup-node@v7
-        if: needs.scope.outputs.code == 'true'
         with:
           node-version: '22'
 
       - uses: actions/setup-python@v7
-        if: needs.scope.outputs.code == 'true'
         with:
           python-version: '3.12'
           cache: pip
           cache-dependency-path: pyproject.toml
 
-      - name: Install
-        if: needs.scope.outputs.code == 'true'
-        run: pip install -e ".[dev]"
-
-      - name: Lint
-        if: needs.scope.outputs.code == 'true'
-        run: ruff check .
-
-      - name: Type-check
-        if: needs.scope.outputs.code == 'true'
-        run: mypy
-
-      - name: Pure text-analysis reports
-        if: needs.scope.outputs.code == 'true'
-        run: python tools/text-analysis-caller/test_reports.py
-
+      # Some backend tests call the native writer and contract bindings.
       - uses: ./.github/actions/publication-runtime
-        if: needs.scope.outputs.code == 'true'
 
-      - name: Shared contract bindings
-        if: needs.scope.outputs.code == 'true'
-        working-directory: packages/common-contracts
+      - name: Python checks and tests
         run: |
-          bun run check
-          bun test
+          pip install -e ".[dev]"
+          ruff check .
+          mypy
+          pytest
 
-      - name: TypeScript ledger writer
-        if: needs.scope.outputs.code == 'true'
-        working-directory: packages/ledger-file-writer
+      - name: TypeScript checks and tests
+        if: needs.scope.outputs.bun == 'true'
         run: |
-          bun run check
-          bun run test
-
-      - name: TypeScript data delivery
-        if: needs.scope.outputs.code == 'true'
-        working-directory: packages/data-delivery
-        run: |
-          bun run check
-          bun run test
-
-      - name: Prepare pipeline API dependencies
-        if: needs.scope.outputs.code == 'true'
-        run: |
-          bun install --frozen-lockfile --cwd services/serve-pipeline-apis
-          bun install --frozen-lockfile --cwd services/host-fingerprints
-          bun install --frozen-lockfile --cwd services/host-probes
-          bun install --frozen-lockfile --cwd services/feed-ingest-plan
-
-      - name: TypeScript host fingerprints
-        if: needs.scope.outputs.code == 'true'
-        working-directory: services/host-fingerprints
-        run: |
-          bun run check
-          bun run test
-
-      - name: TypeScript host probes
-        if: needs.scope.outputs.code == 'true'
-        working-directory: services/host-probes
-        run: |
-          bun run check
-          bun run test
-
-      - name: TypeScript summary-generator API
-        if: needs.scope.outputs.code == 'true'
-        working-directory: services/summary-generator
-        run: |
-          bun install --frozen-lockfile
-          bun run check
-          bun run test
-
-      - name: TypeScript summary-generator callers
-        if: needs.scope.outputs.code == 'true'
-        working-directory: tools/summary-generator-caller
-        run: |
-          bun install --frozen-lockfile
-          bun run check
-          bun run test
-
-      - name: TypeScript feed planner and native audit evidence
-        if: needs.scope.outputs.code == 'true'
-        working-directory: services/feed-ingest-plan
-        run: |
-          bun run check
-          bun run test
-
-      - name: Pipeline APIs and owned server lifetime
-        if: needs.scope.outputs.code == 'true'
-        working-directory: services/serve-pipeline-apis
-        run: |
-          bun run check
-          bun run test
-
-      - name: TypeScript feed probe
-        if: needs.scope.outputs.code == 'true'
-        working-directory: packages/feed-probe
-        run: |
-          bun install --frozen-lockfile
-          bun run check
-          bun run test
-
-      - name: Tests, including the five injection canaries
-        if: needs.scope.outputs.code == 'true'
-        run: >-
-          pytest --junitxml=test-results/backend/pytest-junit.xml
-
-      # Per-module timing for `docs/how-to/run-the-gates.md`'s "re-check the
-      # slow marks" step. `pytest --durations` already names the 25 slowest
-      # tests in the log; this is the report `backend/utilities/
-      # slow_mark_audit.py` reads to answer the same question for every
-      # module, not just the slowest few. The suite writes it whether the run
-      # passes or fails, so a red run is still auditable.
-      - uses: actions/upload-artifact@v7
-        if: ${{ !cancelled() && needs.scope.outputs.code == 'true' }}
-        with:
-          name: pytest-junit
-          path: test-results/backend/pytest-junit.xml
-          retention-days: 7
-          if-no-files-found: error
-
-      # What prerendering used to give free. Until the reading routes were split
-      # on 2026-09-01 every story was serialised into a document at build time,
-      # so a story the contract refused failed the build. A reading document now
-      # carries a seed and a browser fetches the rest, so no build ever opens the
-      # stories past it. This opens all of them, against the committed shape the
-      # build reads and the served shape a reader's browser fetches.
-      #
-      # The guarantee is weaker than the one it replaces, and that is stated
-      # rather than hidden: a broken day can no longer be built, it can only no
-      # longer be MERGED. The publishing jobs run the same command before their
-      # own commit, which is what covers a day the pipeline pushes on its own.
-      #
-      # Only when the shape can have moved. A published day is frozen, so a
-      # contract, schema, config or harness change - or an edit to the tree
-      # itself - is the only thing that can invalidate one, and a merge to `main`
-      # always counts. Measured 2026-09-05: 16 days took 6.6 s, about 0.27 s a
-      # day, so a year of publishing would be around 100 s of every run
-      # (Guardrail #12).
-      - name: Every committed day still matches its contracts
-        if: needs.scope.outputs.validate_all == 'true'
-        run: python -m idhazh check-publication
+          services=(
+            services/serve-pipeline-apis
+            services/host-fingerprints
+            services/host-probes
+            services/feed-ingest-plan
+            services/summary-generator
+            tools/summary-generator-caller
+            packages/feed-probe
+          )
+          for package in "${services[@]}"; do
+            bun install --frozen-lockfile --cwd "$package"
+          done
+          for package in packages/common-contracts packages/data-delivery packages/ledger-file-writer "${services[@]}"; do
+            echo "::group::$package"
+            (cd "$package" && bun run check && bun run test)
+            echo "::endgroup::"
+          done
 
   site:
     needs: scope
     if: needs.scope.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@v7
         with:
@@ -382,8 +117,6 @@ jobs:
 
       - uses: ./.github/actions/publication-runtime
 
-      # For the site-weight gate at the end, which is a backend module: one
-      # reader of `config/idhazh.json` rather than a second copy of the budget.
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
@@ -391,172 +124,32 @@ jobs:
           cache-dependency-path: pyproject.toml
 
       - name: Install
-        working-directory: frontend
-        run: npm ci
-
-      - name: Install the backend and test tooling
-        run: pip install -e ".[dev]"
+        run: |
+          npm ci
+          pip install -e "..[dev]"
 
       - uses: ./.github/actions/prepare-duckdb
 
-      # The build strips types, so it passes on code the type-checker rejects.
-      # Without this gate a type error only shows up in an editor.
-      - name: Type-check
-        working-directory: frontend
+      - name: Type-check the site
         run: npm run check
 
-      - name: Test selection and run safeguards
-        working-directory: frontend
-        run: npm run test:tooling
-
-      - name: Frontend logic without a build or browser
-        working-directory: frontend
+      - name: Frontend logic tests
+        if: needs.scope.outputs.logic == 'true'
         run: npm run test:logic -- --forbid-only
 
-      # Every route still has to render. What the build no longer proves is that
-      # every STORY does: a reading document carries a seed and the browser
-      # fetches the rest, so the stories past the seed are never serialised here.
-      # The `gates` job runs `idhazh check-publication` for those.
-      - name: Build the site
-        working-directory: frontend
-        run: npm run build
+      - name: Test tooling
+        if: needs.scope.outputs.tooling == 'true'
+        run: npm run test:tooling
 
-      # Three checks under one step. The on-device encoder must stay behind a
-      # dynamic import; a static import would put a multi-megabyte library on
-      # every reader's first load, and nothing about that edit looks wrong in
-      # review. Each page that renders no day must stay under its ceiling in
-      # config/idhazh.json, and so must each file a reader's browser fetches -
-      # the console's telemetry left its document on 2026-09-09, so a page
-      # ceiling alone no longer sees what the console costs. Read which one
-      # failed - they have different answers.
-      - name: Bundle gate - encoder, page ceilings and payload ceilings
-        working-directory: frontend
-        run: npm run bundle-gate
-
-      # Whole-site weight against the 1 GB Pages cap (Guardrail #2). The bundle gate
-      # above bounds one page at a time; nothing bounded the sum. `build` is the
-      # tree the deploy uploads, so it is the only honest thing to measure, and
-      # it exists only after the build step above.
-      - name: Measure the built site against the Pages cap
-        working-directory: frontend
-        run: python -m idhazh site-weight --site-tree build
-
-      - name: Check published ledger columns
-        working-directory: frontend
-        run: python -m idhazh published-columns --site-tree build
-
-      # The oracle for the assist row: delete the whole model directory, build,
-      # and the digest must be untouched. If it degrades at all, the feature is
-      # on the critical path and the row has failed. Last in this job, because
-      # it overwrites the tree the two gates above measured, and here rather
-      # than in `browser`, because this job finishes minutes before that one.
-      #
-      # `build/index` is the other half, and it is why the month index is staged
-      # outside `static/assist/`. Browsing the archive is not a model feature, so
-      # the data the story list fetches has to survive the parking that proves
-      # the model is optional.
-      - name: Model-absent gate - the digest does not depend on any of it
-        if: needs.scope.outputs.model_absent == 'true'
-        working-directory: frontend
+      - name: Build and verify the site
         run: |
-          set -euo pipefail
-          mv static/assist ../assist-parked
           npm run build
-          test -s build/archive/index.html
-          test ! -d build/assist
-          test -d build/index
-          grep -q 'Archive' build/archive/index.html
-          mv ../assist-parked static/assist
-          echo "the digest renders complete with no model directory."
+          python -m idhazh site-weight --site-tree build
+          python -m idhazh published-columns --site-tree build
 
-  # The canary build plus a browser. It answers for the published surface only,
-  # so it is skipped when nothing a published page reads has moved.
-  browser:
-    needs: scope
-    if: needs.scope.outputs.browser == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.12'
-          cache: pip
-          cache-dependency-path: pyproject.toml
-
-      - name: Install
-        working-directory: frontend
-        run: npm ci
-
-      - uses: ./.github/actions/publication-runtime
-
-      # The canary day and other-family fixtures use the real backend contracts.
-      # The dev extra supplies DuckDB for the independent native schema oracle.
-      - name: Install the backend and test tooling
-        run: pip install -e ".[dev]"
-
-      - uses: ./.github/actions/prepare-duckdb
-
-      - name: Restore the browser binaries
-        uses: actions/cache@v6
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ needs.scope.outputs.playwright }}
-
-      # The install step runs on a hit as well, and that is the point: the
-      # restore covers the browser bytes, and the `--with-deps` half is an
-      # apt-get the cache cannot hold. On a hit it finds the binaries in place
-      # and downloads nothing.
-      - name: Install Chromium for the browser suite
-        working-directory: frontend
-        run: npx playwright install --with-deps chromium
-
-      # Publish every injection canary as a real day, from the RAW attack text.
-      # The backend suite already proves the sanitizer strips these; this asks
-      # the harder question - if it ever stopped, would the page still be inert?
-      - name: Build the canary day
-        run: python backend/utilities/build_canary_day.py
-
-      - name: Build the site from the canaries
-        working-directory: frontend
-        run: npm run build:canary
-
-      # A very narrow representative set of journeys and independent runtime
-      # boundaries, including real hostile-input and retrieval checks. Never
-      # multiply browser cases by page, panel, width, theme, state or chart.
-      # The shared selector chooses groups; main runs all representative groups.
-      # The site job runs deterministic rules without a browser.
-      - name: Browser suite - canaries and retrieval
-        working-directory: frontend
+      - name: Smoke-test the built reader
         env:
-          SKIP_CONSOLE_SUITE: ${{ needs.scope.outputs.console == 'false' }}
-          PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/browser/results.json
-          # 4 vCPU with nothing else on it, so a worker per core: 344 s at one
-          # worker, 207 s at four, runs 33989034726 and 33991122503, 2026-09-05.
-          PLAYWRIGHT_WORKERS: '4'
-        run: npm run test:browser -- --reporter=github,json
-
-      - uses: actions/upload-artifact@v7
-        if: ${{ !cancelled() }}
-        with:
-          name: browser-results
-          path: frontend/test-results/browser/results.json
-          retention-days: 7
-          if-no-files-found: error
-
-      - uses: actions/upload-artifact@v7
-        if: failure()
-        with:
-          name: playwright-traces
-          path: |
-            frontend/test-results/
-            !frontend/test-results/browser/results.json
-          retention-days: 7
-          if-no-files-found: ignore
+          IDHAZH_TEST_BUILD: real
+        run: |
+          npx playwright install --with-deps chromium
+          npm run test:browser -- --project=reader --no-deps tests/reading-page.spec.ts

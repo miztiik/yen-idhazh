@@ -365,8 +365,8 @@ SUPERSEDED_ENTRY_NAMES: Final[Mapping[str, str]] = MappingProxyType(
 #: inherited numbers measured against the other. There is no lift onto the
 #: entries, because the lift IS the inheritance: it would hand a swapped entry
 #: the previous weights' numbers and raise nothing. `visual_planner` and its
-#: older spelling `route` named the retired small model; the two calls on the
-#: summarizer replaced it, so nothing answers for them. `summarize` named the
+#: older spelling `route` named the retired small model; the summarizer's calls
+#: replaced it, so nothing answers for them. `summarize` named the
 #: slot after the job rather than after what fills it, and a slot holds a model
 #: (`CLAUDE.md` section 1a).
 SUPERSEDED_MODELS_NAMES: Final[Mapping[str, str]] = MappingProxyType(
@@ -387,8 +387,8 @@ class ModelsConfig(Contract):
     own llama-server process, and one block over two roles is a measurement
     about one of them quietly applied to the other.
 
-    One role is left. The small visual planner is retired: the two calls the
-    work stage now makes per item run on these weights, so the picture is
+    One role is left. The small visual planner is retired: the call the
+    work stage now makes per item runs on these weights, so the picture is
     decided by the same model that wrote the summary.
 
     It is a file rather than a block of `config/idhazh.json` because everything

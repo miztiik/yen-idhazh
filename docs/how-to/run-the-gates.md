@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-11-16
+**Last Updated**: 2026-11-19
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -9,7 +9,7 @@ lifecycle that calls for them is
 A count printed by a command below shows the shape of its output, not a target.
 It moves as the repository grows.
 
-## Select local checks and let CI run the full suite
+## Select local checks and let CI verify the change
 
 Use the shared launcher from `frontend/`. It requires Node 22.18 or newer and
 the existing development environment. Inspect the selection before running it:
@@ -24,13 +24,18 @@ unstaged edits and untracked files. Use `--base <ref>` for a different base.
 Every selected group prints the path and reason that selected it. Shared
 contracts, config, styles, layouts and dependencies expand coverage. An unknown
 path or an unreadable base selects broader coverage, never an empty pass.
-The scope job runs a whitespace check for every change. Documentation-only
-changes skip the application jobs, instead of starting one to do no code checks.
+`scope` checks whitespace and the changed paths under `state/`.
+Documentation-only changes stop there unless a test reads the document.
+For code changes, `gates` runs the full Python suite, lint and type checks.
+It adds the native Bun suites only when their packages or shared inputs change.
+`site` type-checks and builds the real site once, checks the Pages size limit
+and published Parquet columns, and runs one browser smoke against that build.
+It runs frontend logic and tooling tests only when selected.
 
 | Group | What it checks | Preparation |
 | --- | --- | --- |
 | `backend` | Named module and integration tests, or the full backend for shared or unknown inputs; ruff and mypy | Existing Python development environment |
-| `logic` | Verified build-independent frontend functions | No site build, preview server or Chromium. One spec, `similarity-ledgers.spec.ts`, runs the Python backend |
+| `logic` | Verified build-independent frontend functions | No site build, preview server or Chromium. A few specs run the Python backend to file a night or read a schema |
 | `reader` | A representative reading journey and shared layout | Canary build |
 | `console` | One real ledger query, answer and chart interaction, plus independent telemetry-month recovery | Canary build |
 | `offline` | Cached reading and service-worker retirement | Canary build |
@@ -68,9 +73,9 @@ expected failures; unrelated console errors and missing files still fail.
 The launcher checks the dependencies the selection needs before waiting for a
 test slot. A logic-only run does not probe Python packages or run pytest. It
 uses the existing Python standard-library lock helper for coordination only.
-One logic spec still runs the backend: `similarity-ledgers.spec.ts` files a
-fixture night through the ledger door and packs it, so the Python the launcher
-names needs the backend installed, as CI's site job installs it before
+A few logic specs still run the backend: they file a fixture night through the
+ledger door, build the canary day or read a contract schema, so the Python the
+launcher names needs the backend installed, as CI's site job installs it before
 `test:logic`.
 The tooling self-tests run when the test infrastructure changes, or with
 `--group all`; they are not added to every frontend run. Browser preparation
@@ -97,8 +102,8 @@ Private Voices fixtures reuse that verified build's compiled server and client
 output. A separate SvelteKit `Server` prerenders the real route with the
 fixture's unpublished source census and packed feed records. Only the generated
 page, its dependencies and published ledgers are served. Changing a native
-record does not require compiling the source again. The generic Judgement
-fixture builder still compiles its fixed named source inventory.
+record does not require compiling the source again. The console window
+fixtures still compile their fixed named source inventory.
 A removed item-health file returns HTTP 404 even when a held request resumes
 during a state transition. Other filesystem errors still fail the private preview.
 
@@ -138,9 +143,8 @@ it. Its tests also prove
 that shared and unknown paths select broader coverage. New dependencies between
 areas need a selector regression test, not only a new group label. The selector
 lives in `frontend/scripts/test-scope.ts`; the group inventory lives beside it
-in `test-groups.ts`. CI uses that same selector for its browser/console choice,
-keeps the full backend suite, and runs all frontend groups on a `main` push that
-carries code.
+in `test-groups.ts`. CI uses the selector for the build-independent frontend
+tests and tooling, not to choose browser journeys.
 
 Build-independent machine arithmetic (`console-host-spans`, `console-machine-cards`,
 `console-machine-split`, `console-machine`) and token-file checks belong to
@@ -150,58 +154,13 @@ they read; they never depend on an earlier site or canary build.
 The selector job and the backend test job declare the same Node version,
 because backend selector tests execute that TypeScript selector. The backend job
 does not install frontend packages for it; the selector uses Node's built-ins.
-Full and `-m contract` backend runs also require Node on PATH for the real
-Python/browser CSV reader comparison in `test_cell_shapes.py`. Use the Node
-requirement at the start of this page. The test fails, rather than skips, if
-Node or the required reader `frontend/src/lib/charts/series.ts` is missing.
-It needs no frontend package installation.
 
-**A pull request runs the operator console's specs only when the change is the
-console's own, or the harness that chooses.** The console is a page one
-operator opens rather than anything a reader is served. What that costs, stated rather
-than implied: a shared component or a token edit that breaks the console is
-found on the merge push to `main` instead of on the pull request. A `main` push
-carrying code runs every group, which is what the deferral leans on - there is
-no separate nightly job, because a second copy of the browser job would be a
-second thing to keep correct. `ciAnswer` in `test-scope.ts` is the one place
-that decides, and the truth table is in
-`frontend/scripts/tests/test-scope.test.mjs`.
-
-`ciAnswer` returns decisions for code checks, browser and console journeys,
-the model-absent rebuild and committed-day validation. **`code` says whether the
-change carries anything but documentation, and `gates` and `site` skip when it
-does not** - a changed sentence cannot break an application check, on a branch
-or on a merge. The documentation branch is a closed list of prefixes rather
-than a guess, so a path nobody classified falls to full coverage instead; and a
-document that a test reads is that test's input rather than documentation, which is why an edit to
-the page listing chart vocabulary buys its logic spec. Such a page
-is named once, in `frontend/scripts/doc-test-inputs.ts`: the spec reads its
-path from there and the selector keys on the same constant, so a page that
-moves takes the selector with it. `validate_all` decides
-whether the `gates` job opens every committed day or none of them: a `main` push
-carrying code, and any change to the contracts, the tooling or a committed
-payload under `frontend/public/`, open all of them; every other change opens
-none.
-
-Python extraction remains in `gates`' full backend suite on its normal
-interpreter. CI provides no additional interpreter-parity evidence.
-
-**`model_absent` buys the second site build with model assets removed.**
-Every code push to `main` runs it. On a pull request, backend-only changes,
-test-only changes, and changes confined to console routes, charts, data helpers
-or styles skip it. Asset loading, build tooling, contracts, config and unknown
-inputs still run it.
-
-**There is no panel browser group or bulk capture job.** Shared drawing rules
-run in the logic tier; the representative journeys cover live layout and chart
-interaction. Design review uses a representative screen, not a generated
-width/theme/state collection.
-
-The browser job also uploads `browser-results`, a Playwright JSON report with
-each test's group, file, result and duration. Compare equivalent runs when
-measuring elapsed savings. Redundant coverage is removed on its merits, not
-retained until a timing threshold is met. Test durations sum worker time,
-not elapsed job time.
+`ciAnswer` uses each PR or push's changed paths. `code` selects the two
+application jobs. `bun` selects the native packages for changes to their
+code, configuration, contracts, recorded fixtures or workflow wiring.
+`logic` and `tooling` select the corresponding frontend tests. Dispatch
+and unreadable ranges select all these checks. A document named in
+`frontend/scripts/doc-test-inputs.ts` is a test input, not a docs-only edit.
 
 **A push to `main` keeps the run it started.** A pull request cancels its own
 older run, because a newer commit supersedes it. A push does not, and the two
@@ -218,12 +177,11 @@ rather than a filter this repository wrote. So the daily digest, visuals and
 state commits cost nothing here, and `digest.yml` and `backfill.yml` run
 `check-publication` before their own commit because `ci.yml` never sees it.
 
-A contract change selects both languages and re-reads every committed day,
-because the shape a day is read through is the only thing that can invalidate a
-frozen one. There is no export step and nothing to compare: the frontend hand
-copies are held by the binding tests listed in the
+A contract change selects both languages. The frontend hand copies are held
+by the binding tests listed in the
 [contract guide](../architecture/contracts/schemas.md#what-holds-the-copy-in-step),
-which run inside the backend group.
+which run inside the backend group. Check named historical days explicitly;
+the real site build and smoke do not certify the whole archive.
 
 ### Independent Python service contracts
 
@@ -495,10 +453,9 @@ it prepares both providers, sends one spaCy analysis request and concurrent
 GLiNER NER/classification requests for the same source, and reports their
 independent native results. Native GLiNER operations still share one model
 and execute serially. The report does not claim recognition quality.
-Ordinary required CI remains separate from that native observation. Its
-GLiNER contract job exercises model-free schemas, application refusals and
-shared-host construction on Linux; it does not fetch models, perform
-inference or test workflow declarations.
+The [explicit GLiNER checks](#independent-gliner2-api) exercise native schemas,
+application refusals and shared-host construction on Linux without downloading
+weights or running inference.
 
 ### Independent GLiNER2 API
 
@@ -526,14 +483,13 @@ host regression suites, and does not produce JUnit evidence. Inspect the
 shared changed-test selection and follow applicable ordinary CI gates
 independently. A result observation is not a test pass.
 
-The existing `ci.yml` runs `gliner-contracts` on Linux for code candidates.
-It syncs the frozen development group with the existing model extra for SDK
-imports, then runs
-the provider/caller lint and type checks and the existing model-free tests.
-The job supplies the named hosting/caller source roots and the schema-only
-backend source root. From the provider directory, on allowed Linux only:
+These checks are not part of routine CI. Run them on demand on allowed Linux
+when the provider, hosting code or caller changes. From
+`services/text_analysis/gliner/`:
 
 ```bash
+export PYTHONPATH="$PWD/../hosting:$PWD/../../../tools/text-analysis-caller:$PWD/../../../backend"
+export MYPYPATH="$PWD/../hosting:$PWD/../../../tools/text-analysis-caller"
 uv sync --frozen --extra model --group dev
 uv run --no-sync ruff check --config pyproject.toml src tests
 uv run --no-sync mypy --config-file pyproject.toml src tests
@@ -552,7 +508,8 @@ These are real SDK schema/validation and model-free application checks,
 without weights, inference or internal extraction mocks. They include
 current and exact previous settings, independent output controls, native
 record metadata/capability refusals, empty-root handling and caller
-configuration. The pure saved-report checks remain standard-library-only.
+configuration. The separate standard-library report tests are runnable from
+the repository root with `python tools/text-analysis-caller/test_reports.py`.
 Use the existing reporting workflow separately on the exact candidate
 after applicable CI passes to observe real native entity/event extraction
 and independent classification. That observation does not establish
@@ -870,6 +827,15 @@ content workflow or prove new summary quality.
 
 ## Design rationale
 
+### One real site build
+
+The existing reader journey checks a real dated payload after the site builds.
+The full canary, console, offline and model-search browser coverage stays
+available on demand; those regressions are no longer covered automatically.
+Neither rehearse a second build with model assets removed nor re-read the
+whole archive in routine CI. Publication workflows still validate the days
+they write. Inspect old days by name when changing how they are read.
+
 ### Model-free Linux verification
 
 The evaluator and its workflow caller have no automatic Linux CI gate. Their
@@ -943,8 +909,8 @@ Loopback transport tests count native responses at construction, before header
 parsing. The standard client closes a response when its headers fail; observing
 only successful `getresponse()` returns misses those owned resources.
 
-**Read the jobs, not the run's conclusion.** The `scope` job selects which of
-`gates`, `site` and `browser` run, so a commit that
+**Read the jobs, not the run's conclusion.** The `scope` job selects whether
+`gates` and `site` run, so a commit that
 touched no matching path produces a run marked success with most of them
 skipped. That is correct for the commit and worthless as a statement about the
 branch: a suite can be fatally broken while every run on `main` reads green,
@@ -1136,20 +1102,19 @@ fastest whole-suite run - is still six times. The two selectors that save least
 say why by themselves: `-m workflow` picks the slowest file in the repository,
 and `-m slow` picks the slow modules on purpose.
 
-**Re-check `slow` from a real run rather than guessing.** The gates job
-uploads its JUnit report as the `pytest-junit` artifact (7-day retention).
-After a run, `gh run download <run-id> -n pytest-junit -D <dir>`, then run
-`python -m utilities.slow_mark_audit <dir>/pytest-junit.xml` from `backend/`.
+**Re-check `slow` from a real run rather than guessing.** Generate a report
+explicitly with `python -m pytest --junitxml=backend/var/pytest-junit.xml`,
+then run `python -m utilities.slow_mark_audit var/pytest-junit.xml` from
+`backend/`. Routine CI does not upload a JUnit report.
 It reads the threshold from `config/test-marks.json`, averages each module's
 test times from the XML, and prints every module where the measured average
 disagrees with whether it carries `pytest.mark.slow` - both directions, each
 with its average. Add or remove the mark to match, and update
 `UNMARKED_MODULES` in `backend/tests/test_marks.py` for any module that lost
-its only mark. A local run is not a substitute: this repository's local
-timings run far slower than the CI box for subprocess-heavy tests, so only a
-CI-sourced report gives a reading worth acting on.
+its only mark. Compare timings from the same environment; subprocess-heavy
+tests run much slower on shared developer machines than on a runner.
 
-**CI runs everything, and always will.** A mark is a shortcut for the person
+**CI runs the full Python suite.** A mark is a shortcut for the person
 writing the change, never the thing that decides what a merge is checked
 against - so a test marked wrong costs a re-run rather than a missed regression.
 
@@ -1275,23 +1240,20 @@ story.** A reading document carries `ui.shell_seed_items` stories and
 the browser fetches the rest, so the build never opens the stories past the
 seed. `python -m idhazh check-publication` opens all of them, against the committed
 shape the build reads and the served shape a browser fetches, and it runs in
-`ci.yml` and before every publish. A run that finds no day at all fails rather
-than passes. What it checks, and how a rule is added to it, is
+the digest and backfill workflows for the days they publish. A run that finds
+no day at all fails rather than passes. What it checks, and how a rule is added to it, is
 [what-stops-a-broken-day-being-published.md](../architecture/publishing/what-stops-a-broken-day-being-published.md).
 
-**It takes `--day` and the flag repeats**, so a pull request that touched no
-committed day checks nothing and a publish checks the day it just wrote:
+**It takes `--day` and the flag repeats.** When changing a persisted contract
+or migrating payloads, validate the affected historical cases by name:
 
 ```powershell
 python -m idhazh check-publication --day 2026-08-30 --day 2026-08-31
 ```
 
-Naming no day checks every committed day, which is what a push to `main` does.
+Naming no day checks every committed day. Routine CI does not do that.
 **A named day that is not there exits non-zero** rather than reporting a clean
-run over nothing - a workflow typo must not read as a pass. Opening a published
-day costs a fraction of a second, so a year of them is about a hundred seconds a
-run, which is the reason the scope step decides
-([../reference/pipeline-cost.md](../reference/pipeline-cost.md)).
+run over nothing - a workflow typo must not read as a pass.
 
 `site-weight` is the fourth, and it is the only one that measures the whole
 site rather than one page. It sums `frontend/build/` - the directory the Pages
@@ -1409,8 +1371,17 @@ moves when somebody widens the window and never when we publish.
 
 ## The browser suite
 
-The browser gate runs against the **canary day**, not the real digest, so it
-does not change meaning when the pipeline publishes.
+CI runs only the reader smoke on the already-built real site. From `frontend/`
+after a real `npm run build`, reproduce it with:
+
+```powershell
+$env:IDHAZH_TEST_BUILD = 'real'
+npm run test:browser -- --project=reader --no-deps tests/reading-page.spec.ts
+Remove-Item Env:IDHAZH_TEST_BUILD
+```
+
+The full browser suite still runs on demand against the **canary day**, not
+the real digest. Its generated ledger rows are independent of the archive.
 
 Prefer `npm run test:changed` locally. In the manual full frontend sequence
 below, `test:logic` owns the build-independent group and `test:browser` owns
@@ -1428,14 +1399,8 @@ npm run test:browser
 cores with whatever else is running. The readings are in
 [../reference/pipeline-cost.md](../reference/pipeline-cost.md).
 
-**`PLAYWRIGHT_WORKERS` sets how many run at once: one locally, four in CI, and
-the two machines disagree about which is right.** A runner is 4 vCPU with
-nothing else on it (Guardrail #2), so extra workers cut the browser step
-substantially. A developer box sharing two performance cores with sibling
-checkouts has no spare capacity to hand a second worker, so the same change runs
-slower there - and both cases pass, so the local result reads as a clean win and
-is not one. Raise it locally only on an idle box, and never read a local worker
-figure as a runner figure.
+`PLAYWRIGHT_WORKERS` defaults to one. Raise it for the full suite only on an
+idle box; extra workers compete with sibling worktrees.
 
 **Delete redundant coverage before parallelising.** The browser set is very
 narrow and representative, as required by
@@ -1507,13 +1472,11 @@ ledger door, which validates every row against its contract. The fixture then
 packs the item-health, summary-quality-evals, host-fingerprint and feed-health
 ledgers with their own compaction tasks turned live, because the console reads
 only packed days. The
-score rows are shaped for the compression plot rather than picked at random -
-eight items from 38 to 6100 source words, so the log x axis spans four decades,
-and each of the five configured target zones has at least one mark under it.
-Four rows carry the truncation flag and three of those have a source word count,
-so the plot draws three diamonds; the other two rows have no source count and
-cannot be placed. A chart state the fixture does not reach is a chart state this
-suite cannot test.
+score rows are shaped rather than picked at random - eight items from 38 to 6100
+source words, cut and uncut, across all three confidence bands, and two of them
+record no length before the cut, so the console cannot say whether they were
+cut. A chart state the fixture does not reach is a chart state this suite cannot
+test.
 
 **The preview port derives from the checkout, so two worktrees cannot share one
 server.** `playwright.config.ts` hashes its own directory into a port between

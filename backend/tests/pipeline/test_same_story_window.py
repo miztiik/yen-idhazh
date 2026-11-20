@@ -48,8 +48,8 @@ def published(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return root
 
 
-def test_a_thirty_six_hour_window_opens_one_day(published: Path) -> None:
-    """`ceil(36 / 24)` is 2 - one earlier day, because today is the other."""
+def test_a_thirty_six_hour_window_opens_two_days(published: Path) -> None:
+    """`ceil(36 / 24)` is 2 - the two days before the day being judged, newest first."""
     for date in ("2026-08-28", "2026-08-29", "2026-08-30"):
         a_day_on(published, date)
 

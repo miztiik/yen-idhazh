@@ -1,4 +1,62 @@
-import type { TelemetryRow } from '../../src/lib/charts/series';
+/** The published telemetry row as the console specs spell it.
+ *
+ * Each column and what it means is `ItemHealthRow`'s
+ * (`backend/idhazh/contracts/item_health.py`); this is the typed copy the specs
+ * share. An absent measurement is `null`, and a text cell is empty when nothing
+ * was recorded.
+ */
+export interface TelemetryRow {
+	date: string;
+	run_id: string;
+	item_id: string;
+	vertical: string;
+	source_id: string;
+	stage: string;
+	outcome: string;
+	code: string;
+	source_words: number | null;
+	summary_words: number | null;
+	source_words_before_cap: number | null;
+	fetch_ms: number | null;
+	extract_ms: number | null;
+	analyze_ms: number | null;
+	summarize_ms: number | null;
+	prefill_ms: number | null;
+	decode_ms: number | null;
+	input_tokens: number | null;
+	output_tokens: number | null;
+	cached_tokens: number | null;
+	model_calls: number | null;
+	label_kind: string;
+	label_prefill_ms: number | null;
+	label_decode_ms: number | null;
+	label_input_tokens: number | null;
+	label_output_tokens: number | null;
+	label_cached_tokens: number | null;
+	summary_kind: string;
+	summary_prefill_ms: number | null;
+	summary_decode_ms: number | null;
+	summary_input_tokens: number | null;
+	summary_output_tokens: number | null;
+	summary_cached_tokens: number | null;
+	queue_wait_ms: number | null;
+	label_ms: number | null;
+	summary_ms: number | null;
+	visual_plan_ms: number | null;
+	visual_plan_ms_is_estimate: string;
+	faithfulness_ms: number | null;
+	model_wait_ms: number | null;
+	item_total_ms: number | null;
+	stage_gap_ms: number | null;
+	visual_plan_tokens_written: number | null;
+	label_prefill_tokens_per_s: number | null;
+	label_decode_tokens_per_s: number | null;
+	summary_prefill_tokens_per_s: number | null;
+	summary_decode_tokens_per_s: number | null;
+	cpu_model: string;
+	cpu_busy_pct: number | null;
+	load_1m: number | null;
+}
 
 /** One published telemetry row, spelled in full once.
  *
@@ -29,6 +87,7 @@ export function telemetryRow(over: Partial<TelemetryRow> = {}): TelemetryRow {
 		source_words_before_cap: null,
 		fetch_ms: null,
 		extract_ms: null,
+		analyze_ms: null,
 		summarize_ms: null,
 		prefill_ms: null,
 		decode_ms: null,

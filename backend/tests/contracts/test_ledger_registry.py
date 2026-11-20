@@ -34,7 +34,6 @@ REPO_ROOT: Final = Path(__file__).resolve().parents[3]
 REGISTRY: Final = REPO_ROOT / "config" / paths.REGISTRY_FILENAME
 
 A_DAY: Final = "2026-09-18"
-A_STAMP: Final = "20260918T120000Z"
 STATE: Final = Path("state")
 
 #: What each builder answered before the registry existed: the POSIX form, the
@@ -48,11 +47,9 @@ STATE: Final = Path("state")
 #: `telemetry-aggregate`, renamed to say what it holds while it had no
 #: committed file - so the old address held nothing to move.
 #:
-#: Two folders are not the old module's answer either, because it built no
-#: folder for a ledger filed by month or by stamp. Each is the folder its callers
-#: reached by joining the ledger's name onto the state root - `retention` for the
-#: item-health summary - or, for the judge's archive, the folder `path` files
-#: every record into.
+#: One folder is not the old module's answer either, because it built no folder
+#: for a ledger filed by month: the item-health summary's, which is the folder
+#: `retention` reached by joining the ledger's name onto the state root.
 AT_THE_BASE: Final[dict[str, tuple[str | None, str | None, str | None]]] = {
     "SEEN": ("state/seen/2026/09/18.csv", "state/seen/2026/09/18.csv", "state/seen"),
     "FEED_HEALTH": (
@@ -89,31 +86,6 @@ AT_THE_BASE: Final[dict[str, tuple[str | None, str | None, str | None]]] = {
         "state/counterfactual-scores/2026/09/18",
         "state/counterfactual-scores/2026/09/18",
         "state/counterfactual-scores",
-    ),
-    "CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS": (
-        "state/content-similarity-judge/scored-pairs/2026/09/18.csv",
-        "state/content-similarity-judge/scored-pairs/2026/09/18.csv",
-        "state/content-similarity-judge/scored-pairs",
-    ),
-    "CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS": (
-        "state/content-similarity-judge/fitted-thresholds/2026/09/18.csv",
-        "state/content-similarity-judge/fitted-thresholds/2026/09/18.csv",
-        "state/content-similarity-judge/fitted-thresholds",
-    ),
-    "CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION": (
-        None,
-        "state/content-similarity-judge/score-distribution.json",
-        None,
-    ),
-    "CONTENT_SIMILARITY_JUDGE_ARCHIVE": (
-        "state/content-similarity-judge/archive/20260918T120000Z.json",
-        "state/content-similarity-judge/archive/20260918T120000Z.json",
-        "state/content-similarity-judge/archive",
-    ),
-    "CONTENT_SIMILARITY_JUDGE_METRICS": (
-        "state/content-similarity-judge/metrics/2026/09/18.csv",
-        "state/content-similarity-judge/metrics/2026/09/18.csv",
-        "state/content-similarity-judge/metrics",
     ),
     # The three below were never in the old ledger module. Each row is what its
     # owning module built before the registry took its address: the trace day
@@ -167,11 +139,9 @@ CLAIMED_AT_THE_BASE: Final[frozenset[str]] = frozenset(
 )
 
 #: The period each grain is asked for, so one table drives every builder check.
-COVERS: Final[dict[Grain, str | None]] = {
-    Grain.FLAT: None,
+COVERS: Final[dict[Grain, str]] = {
     Grain.DAY_FILE: A_DAY,
     Grain.DAY_TREE: A_DAY,
-    Grain.STAMPED: A_STAMP,
 }
 
 #: The ledgers that file under `state/raw/` and `state/compact/` through the door.
@@ -281,6 +251,45 @@ def test_a_ledger_with_no_entry_stops_the_build_naming_it() -> None:
     assert "no entry for item-health" in str(refusal.value)
 
 
+#: The two ledgers that hold the judge's pair verdicts and the history of its two thresholds.
+PAIR_AND_THRESHOLD_LEDGERS: Final = (
+    LedgerName.CONTENT_SIMILARITY_JUDGE_PAIR_VERDICTS,
+    LedgerName.CONTENT_SIMILARITY_JUDGE_THRESHOLD_HISTORY,
+)
+
+
+@pytest.mark.parametrize("member", PAIR_AND_THRESHOLD_LEDGERS, ids=lambda m: m.value)
+def test_a_judge_ledger_files_inside_its_family_and_offers_itself_to_the_explorer(
+    member: LedgerName,
+) -> None:
+    held = paths.entry(member)
+
+    assert (held.grain, held.prefix, held.publish_to_data_explorer) == (
+        Grain.RAW_AND_COMPACT,
+        ("content-similarity-judge", member.value),
+        True,
+    )
+    registry = LedgersConfig.from_json(REGISTRY.read_text(encoding="utf-8"))
+    assert member in registry.data_explorer_ledgers
+
+
+@pytest.mark.parametrize("member", PAIR_AND_THRESHOLD_LEDGERS, ids=lambda m: m.value)
+def test_a_registry_copy_missing_one_of_these_entries_is_refused_naming_it(
+    member: LedgerName,
+) -> None:
+    """The oracle for a ledger's registration: drop its one entry and the build will not load."""
+    judge = a_family("content-similarity-judge")
+    remaining = [held for held in judge["ledgers"] if held["name"] != member.value]
+    assert len(remaining) == len(judge["ledgers"]) - 1, "the family never listed this ledger"
+
+    with pytest.raises(ValidationError) as refusal:
+        LedgersConfig.model_validate(
+            a_registry([{**judge, "ledgers": remaining}, *without("content-similarity-judge")])
+        )
+
+    assert f"no entry for {member.value}" in str(refusal.value)
+
+
 def test_a_ledger_named_twice_stops_the_build_naming_it() -> None:
     """Two entries for one ledger are two answers, and nothing chooses between them."""
     seen = a_family(LedgerName.SEEN.value)
@@ -309,13 +318,13 @@ def test_an_entry_for_no_ledger_is_refused_by_the_name_it_carries() -> None:
 def test_a_family_named_twice_stops_the_build_naming_it() -> None:
     """Two lists for one folder would give that folder two statuses.
 
-    The judge's seven ledgers split across two families of one name, so every
+    The judge's ledgers split across two families of one name, so every
     ledger is still listed exactly once and only the family repeats.
     """
     judge = a_family("content-similarity-judge")
     halves = [
-        {**judge, "ledgers": judge["ledgers"][:3]},
-        {**judge, "ledgers": judge["ledgers"][3:]},
+        {**judge, "ledgers": judge["ledgers"][:1]},
+        {**judge, "ledgers": judge["ledgers"][1:]},
     ]
 
     with pytest.raises(ValidationError) as refusal:
@@ -357,20 +366,10 @@ def test_a_ledger_outside_its_familys_folder_stops_the_build_naming_it() -> None
     ) in str(refusal.value)
 
 
-def test_a_ledger_with_no_folder_is_refused_even_when_it_is_one_file() -> None:
-    """Every family is a folder under `state/`, so no ledger sits loose at its top.
-
-    The retirements were the one ledger that did, as `state/feed-retirements.csv`,
-    and the family check named that family by the file's stem. They moved under
-    `state/raw/`, and the exception went with them: a flat file with no prefix
-    is refused now, the way every other grain already was.
-    """
+def test_a_ledger_with_no_folder_is_refused() -> None:
+    """Every family is a folder under `state/`, so no ledger sits loose at its top."""
     judge = a_family("content-similarity-judge")
-    loose = [
-        {**held, "prefix": []} if held["grain"] == Grain.FLAT.value else held
-        for held in judge["ledgers"]
-    ]
-    assert loose != judge["ledgers"], "the judge's family holds no flat ledger to lift out"
+    loose = [{**judge["ledgers"][0], "prefix": []}, *judge["ledgers"][1:]]
 
     with pytest.raises(ValidationError, match="has no prefix, so its files would sit loose"):
         LedgersConfig.model_validate(
@@ -430,35 +429,7 @@ def test_a_day_tree_root_is_where_it_was(member: LedgerName) -> None:
 def test_the_two_forms_of_one_folder_agree() -> None:
     """`tree_relpath` is `tree_root` in POSIX form, the way `relpath` is `path`'s."""
     for member in REGISTRY_ADDRESSED:
-        if paths.entry(member).grain is Grain.FLAT:
-            continue
         assert paths.tree_relpath(member) == paths.tree_root(STATE, member).as_posix()
-
-
-def test_every_stamped_ledger_has_a_folder() -> None:
-    """A ledger filed by stamp names each file after its stamp, in one folder.
-
-    That folder is what a caller walks to find every stamp, so it has to be the
-    directory each of the ledger's files sits in.
-    """
-    members = [member for member in LedgerName if paths.entry(member).grain is Grain.STAMPED]
-
-    assert members
-    for member in members:
-        filed = paths.path(STATE, member, COVERS[Grain.STAMPED])
-        assert filed.parent == paths.tree_root(STATE, member)
-
-
-def test_a_flat_ledger_has_no_folder_to_walk_and_the_refusal_names_it() -> None:
-    """A flat file shares its folder, so a walk handed that folder would read other files."""
-    flat = [member for member in LedgerName if paths.entry(member).grain is Grain.FLAT]
-
-    assert flat
-    for member in flat:
-        with pytest.raises(ValueError, match=f"^{member.value} is one file in a folder"):
-            paths.tree_root(STATE, member)
-        with pytest.raises(ValueError, match=f"^{member.value} is one file in a folder"):
-            paths.tree_relpath(member)
 
 
 def test_the_two_forms_of_one_address_agree() -> None:
@@ -483,12 +454,6 @@ def test_a_dated_ledger_handed_no_period_refuses(member: LedgerName) -> None:
     """`path` never guesses a day, because a guessed day files a row out of reach."""
     with pytest.raises(ValueError, match="needs the YYYY-MM-DD day"):
         paths.path(STATE, member)
-
-
-def test_a_flat_ledger_handed_a_period_refuses() -> None:
-    """One file has no period, so a caller passing one has the wrong ledger."""
-    with pytest.raises(ValueError, match="names no period"):
-        paths.path(STATE, LedgerName.CONTENT_SIMILARITY_JUDGE_SCORE_DISTRIBUTION, A_DAY)
 
 
 def test_the_claimed_roots_differ_from_the_base_only_by_the_names_given() -> None:
@@ -557,36 +522,30 @@ def test_the_three_owners_build_the_paths_they_built_before() -> None:
 
 
 @pytest.mark.parametrize(
-    ("grain", "stem", "suffix"),
+    ("grain", "suffix"),
     [
-        (Grain.FLAT, "score-distribution", ".json"),
-        (Grain.DAY_FILE, None, ".json"),
-        (Grain.DAY_TREE, None, None),
-        (Grain.STAMPED, None, ".json"),
-        (Grain.RAW_AND_COMPACT, None, None),
+        (Grain.DAY_FILE, ".json"),
+        (Grain.DAY_TREE, None),
+        (Grain.RAW_AND_COMPACT, None),
     ],
 )
-def test_a_grain_accepts_its_path_fields_and_refuses_the_other_shapes(
-    grain: Grain, stem: str | None, suffix: str | None
+def test_a_grain_accepts_its_suffix_and_refuses_the_other_shape(
+    grain: Grain, suffix: str | None
 ) -> None:
-    """Construct each valid shape and make its stem and suffix rules refuse edits."""
+    """Construct each valid shape and make its suffix rule refuse an edit."""
     payload = {
         "name": LedgerName.ITEM_HEALTH,
         "grain": grain,
         "prefix": ("item-health",),
         "publish_to_data_explorer": False,
-        "stem": stem,
         "suffix": suffix,
     }
     entry = LedgerEntry.model_validate(payload)
-    assert entry.stem == stem
     assert entry.suffix == suffix
 
-    wrong_stem = "unexpected" if stem is None else None
     wrong_suffix = ".json" if suffix is None else None
-    for field, value in (("stem", wrong_stem), ("suffix", wrong_suffix)):
-        with pytest.raises(ValidationError, match=rf"{field} must be"):
-            LedgerEntry.model_validate(payload | {field: value})
+    with pytest.raises(ValidationError, match=r"suffix must be"):
+        LedgerEntry.model_validate(payload | {"suffix": wrong_suffix})
 
 
 def test_a_ledger_under_the_two_roots_has_no_registry_address() -> None:
@@ -620,25 +579,20 @@ def test_a_door_ledger_that_is_its_own_family_keeps_its_own_prefix() -> None:
 def test_a_nested_door_ledger_prefix_must_end_with_its_value() -> None:
     """The envelope keeps the ledger value, so the folder ends with that value too."""
     judge = a_family("content-similarity-judge")
-    scored = next(
+    verdicts = next(
         held
         for held in judge["ledgers"]
-        if held["name"] == LedgerName.CONTENT_SIMILARITY_JUDGE_SCORED_PAIRS.value
+        if held["name"] == LedgerName.CONTENT_SIMILARITY_JUDGE_PAIR_VERDICTS.value
     )
     moved = {
         **judge,
         "ledgers": [
-            *[held for held in judge["ledgers"] if held is not scored],
-            {
-                **scored,
-                "grain": Grain.RAW_AND_COMPACT.value,
-                "prefix": ["content-similarity-judge", "deep"],
-                "suffix": None,
-            },
+            *[held for held in judge["ledgers"] if held is not verdicts],
+            {**verdicts, "prefix": ["content-similarity-judge", "deep"]},
         ],
     }
 
-    with pytest.raises(ValidationError, match="not scored-pairs"):
+    with pytest.raises(ValidationError, match="not pair-verdicts"):
         LedgersConfig.model_validate(a_registry([moved, *without("content-similarity-judge")]))
 
 

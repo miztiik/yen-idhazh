@@ -5,6 +5,11 @@ Living, one question one answer. The reading below was taken on one day and
 the date is in the title; a re-run of this measurement REPLACES this page and
 moves **Last Updated**, and git history holds what it said.
 
+The element menu this page prices is gone: the one call now carries small tables of
+names and figures after the article, and its window check counts their bytes
+([the prompt page](../../architecture/summarize/prompt.md)). The readings below still
+identify the recorded measurement, not a new run.
+
 Plan 11 row #3f had to raise `--ctx-size` on the summarize entry so both calls
 fit at the truncation cap, and it was dispatched with a table measured on one
 cap-length article. This session re-measured the whole sequence on eight, took
@@ -140,6 +145,12 @@ Three throwaway scripts, gitignored under `.tmp_*` and not committed, built on
 `LABEL_MENU_TOKENS_A_ROW` and `SUMMARIZE_AND_PLAN_SEAM_TOKENS` in
 [`../../../backend/idhazh/measured.py`](../../../backend/idhazh/measured.py),
 each carrying its own method and what to do when it moves.
+
+**Since this page was written** `measure_two_calls.py` was deleted with the first
+call. `SUMMARIZE_AND_PLAN_SEAM_TOKENS` went with it, and two of the other three became
+`DIGEST_PROMPT_SCAFFOLD_TOKENS` and `DIGEST_PROMPT_BODY_TOKENS_A_WORD`, which the one
+call's window check still reads as ceilings. The per-row menu rate went with the menu:
+the window check now counts the tables it adds in UTF-8 bytes, one token a byte.
 
 **One defect found in `measure_two_calls.py` and not fixed here.** Its printed
 ceiling subtracts the retired `max_output_tokens` as the label call's

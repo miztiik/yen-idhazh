@@ -57,10 +57,6 @@ FIXTURE_FILES: Final = (
     "content-similarity-judge-evaluation-labels/example.json",
     "content-similarity-judge-evaluation-run/example.json",
     "content-similarity-judge-evaluation-report/example.json",
-    "content-similarity-judge-merge-line-holdout-score/a-holdout-retention-has-eaten-into.json",
-    "content-similarity-judge-merge-line-holdout-score/a-line-scored-against-the-holdout.json",
-    "content-similarity-judge-metrics/a-shard-that-read-its-pairs.json",
-    "content-similarity-judge-metrics/a-shard-that-was-dealt-nothing.json",
     "corpus-meta/window.json",
     "corpus-row/harvested.json",
     "council-run-record/a-migrated-count-that-had-nothing-to-do.json",
@@ -91,8 +87,6 @@ FIXTURE_FILES: Final = (
     "feed-retirement-row/gone.json",
     "file-envelope/a-monthly-compact-file.json",
     "file-envelope/a-raw-file.json",
-    "fitted-similarity-threshold/the-clamp-held-a-fall-back-to-the-step.json",
-    "fitted-similarity-threshold/the-record-is-too-small-to-fit-on.json",
     "host-fingerprint-row/a-machine-that-reported-nothing.json",
     "host-fingerprint-row/every-reading-taken.json",
     "host-fingerprint-row/the-clock-a-job-kept.json",
@@ -137,10 +131,10 @@ FIXTURE_FILES: Final = (
     "story-candidate-vector-state/generated-new-candidate-only.json",
     "story-candidate-vector-unit/generated-float32-unit.json",
     "story-pinned-encoder-candidate/generated-unknown-legacy-control.json",
-    "story-similarity-distribution/a-narrow-band-with-one-day-counted.json",
-    "story-similarity-pair/a-headline-match-scores-one.json",
-    "story-similarity-pair/judged-the-same-in-both-orders.json",
-    "story-similarity-pair/scored-but-not-yet-judged.json",
+    "story-similarity-pair-verdict/a-judged-pair-with-its-slice-and-chance.json",
+    "story-similarity-runner-report/a-runner-that-read-its-pairs.json",
+    "story-similarity-runner-report/a-runner-that-was-dealt-nothing.json",
+    "story-similarity-threshold-history-row/a-night-that-held-both-thresholds.json",
     "summary/failed.json",
     "summary/ok.json",
     "summary/titled.json",
@@ -195,10 +189,10 @@ PIPELINE_OWNED = {
     "model_revision",
 }
 
-#: Dotted paths a config file's model declares but the file must NOT name,
+#: Dotted paths a config file's model declares but the file need not name,
 #: because another file owns them. Naming a knob in two files is how one of them
 #: goes silent: the frontend merges the appearance block over the legacy one, so
-#: the loser is edited and nothing happens (`test_appearance_config.py`).
+#: the loser is edited and nothing happens.
 #:
 #: `config/idhazh.json` keeps the three moved blocks only as the read-side
 #: migration's middle layer - a file written before 2026-08-29 still resolves to

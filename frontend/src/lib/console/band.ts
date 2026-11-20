@@ -166,7 +166,7 @@ const ROUTE_WORDS: Record<RouteId, { label: string; href: string; description: s
 	judgement: {
 		label: 'Judgement',
 		href: '/console/judgement/',
-		description: 'Which stories the day merged, and where the judge and a person disagreed.'
+		description: 'Which stories the day merged, and how close the merge line sits to pairs a person marked apart.'
 	},
 	voices: {
 		label: 'Voices',

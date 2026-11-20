@@ -9,7 +9,7 @@ export type FrontendGroup = (typeof FRONTEND_GROUPS)[number];
 
 const FILES: Record<FrontendGroup, readonly string[]> = {
 	logic: [
-		'appearance-config', 'applied-line', 'archive-calendar', 'archive-scope', 'asset-base',
+		'appearance-config', 'archive-calendar', 'archive-scope', 'asset-base',
 		'assist-guard', 'chart-types', 'chart-vocabulary', 'charts', 'console',
 		'console-article-cost', 'console-band', 'console-canary-host-halves',
 		'console-chart-days', 'console-charts-rule', 'console-chrome', 'console-coverage',
@@ -18,7 +18,7 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 		'console-data-explorer-examples', 'console-data-explorer-gaps',
 		'console-data-explorer-keep', 'console-data-explorer-shape', 'console-date-axis',
 		'console-drawn-cells', 'console-failure',
-		'console-failures', 'console-flow', 'console-frame', 'console-host-spans',
+		'console-flow', 'console-frame', 'console-host-spans',
 		'console-item-cost', 'console-judgement-nothings', 'console-machine',
 		'console-machine-data', 'console-machine-split', 'console-model',
 		'console-memory-board',
@@ -28,7 +28,7 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 		'console-pipelines-window', 'console-polarity',
 		'console-pipelines-native', 'console-pipelines-nothings',
 		'console-published', 'console-ranked', 'console-readout-data',
-		'console-run-health', 'console-shard-board', 'console-shell', 'console-site-size',
+		'console-run-health', 'console-shell', 'console-site-size',
 		'console-stage-timing-days', 'console-timings', 'console-voices', 'console-voices-cuts',
 		'console-visual-attempts', 'console-voices-fetch-time',
 		'console-voices-feeds', 'console-voices-retiring', 'console-voices-sources',
@@ -40,15 +40,15 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 		'frame', 'glance-and-rank', 'holdout', 'holdout-domain', 'icons',
 		'indexed-runs', 'item-meta', 'item-time', 'item-visual', 'judgement-evidence',
 		'layout-overflow', 'ledger-catalog', 'ledger-copy', 'ledger-door', 'ledger-lifecycle', 'ledger-rows',
-		'lenses', 'manifest', 'memory-held', 'merge-line', 'model-cards',
+		'lenses', 'manifest', 'memory-held', 'merged-stories', 'model-cards',
 		'number-format', 'one-pass-reductions', 'payload-ceilings',
 		'platform-mix', 'preview-port', 'prompt-reuse',
-		'publication', 'recorded-line',
+		'publication',
 		'recorded-slices', 'run-axis', 'run-yield', 'served-day', 'settings-moved',
 		'source-classification-binding',
-		'similarity-ledgers', 'span-sentences', 'span-words', 'statement',
-		'telemetry-header', 'telemetry-hold', 'throughput-window', 'time-split', 'tokens',
-		'topics', 'verdict-split', 'vocabulary', 'weights'
+		'span-sentences', 'span-words', 'statement',
+		'telemetry-hold', 'throughput-window', 'time-split', 'tokens',
+		'topics', 'vocabulary', 'weights'
 	],
 	reader: ['payload-state', 'reading-page', 'visual-legibility'],
 	offline: ['service-worker'],
@@ -58,7 +58,7 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 		'console-pipelines-lifecycle', 'console-pipelines-components',
 		'console-pipelines-cold', 'console-pipelines-days', 'console-pipelines-reserved',
 		'console-pipelines-retained-compression', 'console-pipelines-retained-failure',
-		'console-pipelines-retained-failures', 'console-pipelines-retained-item-cost',
+		'console-pipelines-retained-item-cost',
 		'console-pipelines-retained-window', 'console-pipelines-sufficiency',
 		'console-pipelines-timeline-page', 'console-pipelines-window-page'
 	],

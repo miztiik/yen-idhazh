@@ -1,6 +1,6 @@
 # What decides how much a feed is trusted
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-11-19
 
 How much weight one feed's stories get against another's, and what would make
 that weight fit itself instead of being chosen by hand.
@@ -45,4 +45,4 @@ If the two ever say the same thing, this page is the one that is wrong
 - [../sources/health.md](../sources/health.md) - what is measured per source today, the yield alarm, and what retires a feed.
 - [../sources/discovery.md](../sources/discovery.md) - how a feed's tier and weight reach the ranking arithmetic.
 - [llm-council.md](llm-council.md) - the room a fitted weight would be judged in.
-- [autotune-content-similarity.md](autotune-content-similarity.md) - the one line that already fits itself, and the shape any other would copy.
+- [how-the-content-similarity-judge-follows-its-thresholds.md](how-the-content-similarity-judge-follows-its-thresholds.md) - the one number that already moves on evidence, and the shape any other would copy.

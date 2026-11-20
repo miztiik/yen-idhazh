@@ -174,12 +174,12 @@ def test_a_store_that_has_never_been_written_prunes_nothing(tmp_path: Path) -> N
 # --- The vocabulary ------------------------------------------------------------
 
 
-def test_the_fitted_line_is_a_target_on_the_door() -> None:
-    """The fitted line's word names its door ledger, read off the registry."""
-    fitted = LedgerName.CONTENT_SIMILARITY_JUDGE_FITTED_THRESHOLDS
-    word = "-".join(ledger.entry(fitted).prefix)
+def test_the_threshold_history_is_a_target_on_the_door() -> None:
+    """The thresholds' history names its door ledger by its whole folder, read off the registry."""
+    history = LedgerName.CONTENT_SIMILARITY_JUDGE_THRESHOLD_HISTORY
+    word = "-".join(ledger.entry(history).prefix)
 
-    assert prune.DOOR_LEDGERS[word] is fitted
+    assert prune.DOOR_LEDGERS[word] is history
     assert prune.resolve(word, committed_tasks()) == word
 
 

@@ -1,6 +1,6 @@
 # The rules every console chart obeys
 
-**Last Updated**: 2026-11-17
+**Last Updated**: 2026-11-19
 
 Thirteen rules settled once so that no panel argues them again. Twelve are chart
 craft - what the drawing may do. The thirteenth is the question the panel
@@ -35,8 +35,10 @@ which shape a panel reaches for is
     than from the limit it is measured against.
   - **A share or a cumulative percentage runs 0 to 100**, because a curve that
     stops short of its own top reads as a curve that has not finished. Shipped in
-    `TimeHistogram.svelte`. Native failure mix draws stage counts, not rate
-    lines. Its failed-row share stays in words with its recorded-row divisor.
+    `TimeHistogram.svelte`, and in `PromptReusePanel.svelte` on
+    `/console/machine/`, whose stacked bars run 0 to 100 percent of each day's
+    prompt tokens. Native failure mix draws stage counts, not rate lines. Its
+    failed-row share stays in words with its recorded-row divisor.
   - **A ratio against a baseline is symmetric about that baseline and carries a
     minimum width**, or a two percent change fills the plot and reads as a rout.
     Shipped as `swapScale` in `series.ts`: no change is 100 percent and that
@@ -115,8 +117,8 @@ which shape a panel reaches for is
   whose title asks one question and whose shape answers the other is the
   commonest defect on this console: of the eight panels that failed review on
   2026-09-17, five failed on this rule and only three on their drawing. **What a
-  scattered verdict costs the operator:** he reads ten Hardware panels and only
-  then reaches the panel that tells him whether the instruments agree.
+  scattered verdict costs the operator:** he reads every panel on a route and
+  only then reaches the one that tells him whether to trust the readings.
 
 Which surface answers which of the two questions is
 [../../architecture/publishing/console.md](../../architecture/publishing/console.md);
@@ -412,69 +414,53 @@ attribute alone tells a reader nothing.
 ## The holdout margin is drawn at the scale of the margin, not of the score
 
 `The pairs a person marked apart` on `/console/judgement/` answers one question:
-would tonight's merge line fold together two articles a labeller read as two
+would the merge line fold together two articles a labeller read as two
 different stories? **The comparison it draws, written as a sentence: how far the
-closest marked-apart pair sits from the line, against how far the line may fall
-in one day.** That is a question about a distance, and the distance is **0.0007**
-as of 2026-09-19 while the scores it sits between run from 0.73 to 0.99. A panel
-that draws the population cannot draw the distance.
+closest marked-apart pair sits from the line.** That is a question about a
+distance, and the distance is **0.0007** as of 2026-09-19 while the scores it
+sits between run from 0.73 to 0.99. A panel that draws the population cannot
+draw the distance.
 
-**So the axis is the line and one day's legal fall, never the band.** It runs
-from two days' fall below the line to one day's fall above it. The line is the
-one the newest published day was built with: the line its last build wrote into
-that day's run record. Where the record holds none - a day built before 18 Sep
-2026, or a record the site build cannot read - the rule a build follows works
-it out. With `adaptive_dedup_threshold.enabled` off, that is `floor_min`. With
-it on, it is the newest line a fit applied in the days a build looks back over,
-or `floor_min` if no fit applied one
-([autotune-content-similarity.md](../../architecture/publishing/autotune-content-similarity.md#what-chose-094-measured-on-the-cosine-alone)).
-The record comes first because the nightly fit files its row after most of that
-day's builds ran, so the rule alone can name a line no build used. The merge
-line's rule and the verdict split are drawn at the same line.
-The fall cap is off `config/idhazh.json`, so the window is the same width every
-day and two days of this panel compare. The cap is not a score
-in the config: it is `max_down_bins` slots of `bin_width`, and the contract
-derives the score from them, so the panel multiplies the same two numbers.
+**So the axis is the line and a narrow window either side of it, never the
+band.** It runs from `holdout_axis_below_line` under the line to
+`holdout_axis_above_line` over it, two numbers in score units in
+`config/console/judgement.json` (0.02 and 0.01). The line is the floor in the
+committed config, `assemble.same_story.floor_min`. Nothing fits or moves it, so
+the panel reads the config and not a run record, which only restates the same
+number. The window is the same width every day, so two days of this panel
+compare.
 Measured on the built page at 1440: the margin drew at **5.8 px of a 1033 px
 plot** on the 0.88 to 1.00 band, and **24 px** on this one. At 5.8 px a dot 13 px
 across sits on top of the rule it is measured against, so a reader cannot see
 which side of the line the closest call is on - which is the whole of what the
 panel is for. The test gates on the 14 px a dot needs, not on the 24, because
-the reading moves whenever the fall cap does.
+the reading moves whenever either knob does. The panel takes the full row for
+the same reason: in half a row the plot is half as wide, and the same margin
+draws at half the pixels, under the 14 px a dot needs.
 
-**It reaches two days down because the sentence counts two days.** At the
-committed cap of 0.010 one day's legal fall already moves the count on the wrong
-side from 1 to all 4, and the day after adds none. The axis still draws both,
-because the headline names the day after and an axis stopping at one day would
-print a count for a line it had not drawn.
+**It reaches further below the line than above it.** A mark below the line is
+the clear state and wants context; a mark above it is the state the panel exists
+for, and needs room only to be read in.
 
-**The zone goes down and only down.** The clamp caps both directions, but only a
-fall folds a pair the line refuses today - a rise folds fewer. A corridor drawn
-either side of the line would tint scores tomorrow cannot reach. The tint says:
-every mark in here is a pair tomorrow could fold.
-
-**The rule stays neutral and the panel takes the tone.** A line is a setting, so
-drawing it red would report a fault every day of its life. The panel is what
-changes hue - `bad` where a mark is already on the wrong side, `warn` where one
-day's fall would put one there - because the fault is the reading, not the
-setting.
+**The rule stays neutral and the marks take the hue.** A line is a setting, so
+drawing it red would report a fault every day of its life. A dot is what changes hue - a
+mark at or above the line is drawn in `--fill-low` - because the fault is the
+reading, not the setting. The panel around them stays a neutral surface
+([console-design.md](../console-design.md)).
 
 **Both costs of the line are drawn, not one.** The pairs marked as two stories
-are dots; the pairs marked as one story are a range strip on the same axis, the
-shape `What the judge said about the line` already ships two of. 117 of the 196
-one-story marks score below the line, and each of those is a story the reader
-sees twice. Only their scores reach the document - 1.7 KB against 88 KB
-for the same rows carrying their addresses and headlines, which the strip does
-not draw. **They are carried at six decimal places and that is load-bearing**:
-the count is a comparison against the line, two of the 196 sit between 0.93995
-and 0.94, and at four places they round onto the line and the panel prints 115.
+are dots; the pairs marked as one story are a range strip on the same axis.
+117 of the 196 one-story marks score below the line, and each of those is a
+story the reader sees twice. Only their scores reach the document - 1.7 KB
+against 88 KB for the same rows carrying their addresses and headlines, which
+the strip does not draw. **They are carried at six decimal places and that is
+load-bearing**: the count is a comparison against the line, two of the 196 sit
+between 0.93995 and 0.94, and at four places they round onto the line and the
+panel prints 115.
 
-**This panel is not a time series, and the picture that has the dates ships on
-the chart above it.** Four marks spanning 0.0064 on a 0.12-tall axis is 10 px of
-a 190 px plot, and four rules inside 10 px is one grey smear. `Where the merge
-line sits` already has days on one axis and score on the other, so the same marks
-are a tinted strip across that plot. Two drawings, two halves of one question -
-this one has the distance and no date, that one has the date and no distance.
+**This panel is not a time series.** It has the distance and no date: four marks
+spanning 0.0064 on a 0.12-tall axis is 10 px of a 190 px plot, and four rules
+inside 10 px is one grey smear, which is why the window is narrow.
 
 **What the reader loses.** A mark far below the line is off this scale, so it is
 counted at the edge with its score printed in words rather than drawn. That is

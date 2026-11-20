@@ -54,6 +54,7 @@ from idhazh.contracts.knobs.retention import RetentionConfig
 from idhazh.contracts.knobs.run import RunConfig
 from idhazh.contracts.knobs.similarity import SimilarityConfig
 from idhazh.contracts.knobs.summarize import SummarizeConfig
+from idhazh.contracts.knobs.text_analysis import TextAnalysisConfig
 from idhazh.contracts.knobs.ui import UiConfig
 from idhazh.contracts.knobs.visuals import VisualsConfig
 
@@ -113,7 +114,11 @@ class AppConfig(Contract):
         json_schema_extra={
             "readCompatibility": (
                 "additive; absent archive controls use defaults; "
-                "absent prompt_files uses the declared task paths; retired visual type/kind "
+                "absent prompt_files uses the declared task paths; "
+                "absent text_analysis and elements.label_kinds use the declared defaults; "
+                "retired summarize.asks_for_a_visual_plan and prompt_files.generate_labels "
+                "are refused by name; "
+                "retired visual type/kind "
                 "tokens remain readable but never enable production choices; "
                 "retired console.doubt_rows and drift.extractiveness_rise are discarded; "
                 "retired finetune.prompt_iterations is discarded; "
@@ -123,6 +128,16 @@ class AppConfig(Contract):
     )
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-11-18",
+            change="Refuse two retired knobs by name.",
+            why="Neither does anything now, so a config that spells one is refused, not read.",
+        ),
+        ChangelogEntry(
+            version="2026-11-17",
+            change="Add the text-analysis service block and the label map for its mentions.",
+            why="Absent blocks use the declared defaults, so an older config reads unchanged.",
+        ),
+        ChangelogEntry(
             version="2026-11-16",
             change="Standalone summaries default to the shared generation prompt.",
             why="Absent prompt selections use the same title/summary instructions as the API.",
@@ -131,16 +146,6 @@ class AppConfig(Contract):
             version="2026-11-15",
             change="Retire diagnostic knobs and name the retained corpus compression ceiling.",
             why="Historical config drops retired limits and preserves the corpus ratio cutoff.",
-        ),
-        ChangelogEntry(
-            version="2026-11-12",
-            change="Clarify the existing machine appearance controls.",
-            why="Configuration fields, bounds, defaults and historical reads are unchanged.",
-        ),
-        ChangelogEntry(
-            version="2026-11-11",
-            change="Restrict effective visual choices and defaults to supported numeric charts.",
-            why="Retired visual names remain inert when reading historical configuration.",
         ),
         ChangelogEntry(
             version="2026-09-28",
@@ -191,6 +196,7 @@ class AppConfig(Contract):
     ledger: LedgerConfig = Field(default_factory=LedgerConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     model_server: ModelServerConfig = Field(default_factory=ModelServerConfig)
+    text_analysis: TextAnalysisConfig = Field(default_factory=TextAnalysisConfig)
     observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
 
     @model_validator(mode="before")

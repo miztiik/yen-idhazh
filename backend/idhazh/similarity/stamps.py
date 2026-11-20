@@ -1,11 +1,10 @@
 """What ruler a pair was scored and judged under, as the values rather than as a digest.
 
-A digest says that an input moved. These say WHICH one, which is what a reader
-of a line the run refused to move needs to know: the encoder changed, or a
+A digest says that an input moved. These say WHICH one: the encoder changed, or a
 weight did, or the judge read a reworded ask, or a reasoning span ran in front
-of the verdict. `scorer_stamp` and `judge_stamp` in the contract combine the same
-values into the one digest the places that need one use, so the two can never
-disagree.
+of the verdict. The draw orders its pairs from the scorer values, and each judging
+shard writes the judge values onto its rows and onto its own reading, so a row
+says what its answer meant.
 
 Nothing here calls a model. The judge half is read off what a run already holds -
 which entry the config names, the two digests `similarity.prompt` takes over its
@@ -18,7 +17,11 @@ from dataclasses import dataclass
 
 from idhazh import config
 from idhazh.contracts.base import DateStamp
-from idhazh.contracts.story_similarity_pair import JUDGE_POLICY_VERSION, JudgeModelId, ScorerModelId
+from idhazh.contracts.story_similarity_pair_verdict import (
+    JUDGE_POLICY_VERSION,
+    JudgeModelId,
+    ScorerModelId,
+)
 from idhazh.embed import EMBEDDER_ID
 from idhazh.similarity import judge, prompt
 
@@ -40,9 +43,9 @@ class JudgeStamp:
 
     Temperature and reasoning say how the verdict was decoded; the model,
     prompt and grammar say what was asked; policy identifies interpretation.
-    Two runs can read the identical ask under two samplers and
-    two envelopes, and before these were here the record counted both as one
-    population with nothing able to separate them afterwards.
+    Two runs can read the identical ask under two samplers and two envelopes,
+    and a row has to say which, because nothing else can separate them
+    afterwards.
     """
 
     judge_model: JudgeModelId

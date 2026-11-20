@@ -24,8 +24,11 @@ from idhazh.contracts.base import Model
 #: `.github/` starts its own server on the machine its stage runs on.
 DEFAULT_BASE_URL: Final = "http://127.0.0.1:8080"
 
+#: The knob's name as an operator reads it in a refusal.
+BASE_URL_KNOB: Final = "model_server.base_url"
 
-def resolve_base_url(declared: str) -> str:
+
+def resolve_base_url(declared: str, knob: str = BASE_URL_KNOB) -> str:
     """Scheme, host and port of the server this run talks to.
 
     A path, query or fragment is refused rather than dropped: every other route
@@ -36,19 +39,21 @@ def resolve_base_url(declared: str) -> str:
 
     The host is read as a host rather than as the whole authority: `http://:8080`
     leaves an authority that is not empty and a host that is.
+
+    `knob` names the setting being read, so a refusal points at the line a person
+    edits. Every address of this shape is read by this one rule.
     """
     parts = urlsplit(declared.rstrip("/"))
     if not parts.scheme or not parts.hostname or parts.path or parts.query or parts.fragment:
         raise ValueError(
-            "model_server.base_url must be a scheme, a host and a port and nothing "
-            f"else, not {declared!r}"
+            f"{knob} must be a scheme, a host and a port and nothing else, not {declared!r}"
         )
     try:
         port = parts.port
     except ValueError as error:
-        raise ValueError(f"model_server.base_url names no usable port: {declared!r}") from error
+        raise ValueError(f"{knob} names no usable port: {declared!r}") from error
     if port is None:
-        raise ValueError(f"model_server.base_url must name a port, not {declared!r}")
+        raise ValueError(f"{knob} must name a port, not {declared!r}")
     return urlunsplit((parts.scheme, parts.netloc, "", "", ""))
 
 

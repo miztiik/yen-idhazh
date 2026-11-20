@@ -95,23 +95,6 @@ export interface RunConfig {
 	 * day is not evidence the next one will be quiet, and a runway has to be the
 	 * worst case to be worth printing (Guardrail #10). */
 	safety_ceiling_per_run: number;
-	/** When the platform stops a work shard. The ceiling the machine page reads
-	 * `job_seconds` against - 4,208 seconds means nothing until 200 minutes sits
-	 * beside it. */
-	shard_timeout_minutes: number;
-}
-
-/** What the console needs to say how much room a prompt had left.
- *
- * One flag of the summarizer entry's `server` block, not the whole of it:
- * the machine page reads the longest sequence any item recorded against the
- * window, and a counter
- * without its ceiling is not a measurement. It is the summarizer's window
- * because the summarizer is what those shards ran; the visual planner carries
- * its own block and nothing here draws it.
- */
-export interface InferenceConfig {
-	n_ctx: number;
 }
 
 /** What the console needs to say how much room the site has left. */
@@ -198,52 +181,6 @@ export interface VisualsConfig {
 	number_format: NumberFormatConfig;
 }
 
-/** The band the merge line may move in, and the clamps that shape how it moves.
- *
- * Only the keys a console panel reads. The block carries more - the pair
- * budget, the damping weights, the guard's own window - and no panel reads
- * them, so none of them is declared here.
- * `band_low` and `band_high` are the score axis; `step_change_multiple` is what
- * the guard fires against. The envelope behind the applied line is drawn from
- * the fitted ROW rather than from config, because it is the cap the run used
- * and not the cap the file holds today.
- */
-export interface SimilarityConfig {
-	/** The lowest score the record holds a slot for. The bottom of the axis. */
-	band_low: number;
-	/** The top of the band. 1.00, because a cosine goes no higher. */
-	band_high: number;
-	/** The furthest the line may fall in one day, as a count of slots, and the
-	 * width of a slot. The fall cap is the product: the contract derives it the
-	 * same way rather than storing it, so the slot count is the only number set. */
-	max_down_bins: number;
-	bin_width: number;
-	/** What share of judged two-story pairs the fit leaves above the line. The
-	 * target the precision line is drawn against. */
-	discard_share: number;
-	/** How many times the typical daily shift a day has to beat before the guard
-	 * holds the line. On the row rather than on the chart, so a reader comparing
-	 * two days is comparing one question. */
-	step_change_multiple: number;
-	/** How often the two orders may disagree before the run holds. The lower of
-	 * the two markers on the agreement plot. */
-	disagreement_max: number;
-	/** What share of readings may be UNCLEAR before the run holds. The top of the
-	 * agreement axis, so a rate cannot leave the chart. */
-	unclear_max: number;
-	/** The three gates, as the counts the record has to reach. */
-	minimum_negatives: number;
-	minimum_above_line: number;
-	minimum_days: number;
-	/** Whether a build groups at a fitted line. Off, every build groups at
-	 * `floor_min`, the committed floor. */
-	enabled: boolean;
-	/** How many days before its own a build looks back for a fitted line. It
-	 * reads its own day too, so 7 is 8 days. With no line there, it groups at the
-	 * committed floor. */
-	applied_lookback_days: number;
-}
-
 export interface ConsoleConfig {
 	default_window_days: number;
 	/** The spans the window control offers, ascending. `default_window_days` is
@@ -258,11 +195,6 @@ export interface ConsoleConfig {
 	min_window_days: number;
 	max_window_days: number;
 	min_attempts_for_rate: number;
-	/** How many times the discard share the precision axis reaches. A bare 10 in
-	 * a component is a hard-coded axis, and this one has a reason worth writing
-	 * down: the fit aims for the discard share, and ten times it shows the target
-	 * and a tenfold overshoot on one fixed scale. */
-	precision_axis_multiple: number;
 	/** The grain the faithfulness plot's value axis floor rounds down to, and the
 	 * headroom it leaves under the lowest point drawn. A floor sitting exactly on
 	 * the lowest point puts that day's mark on the axis line, where it reads as a
@@ -578,30 +510,11 @@ const DEFAULTS: UiConfig = {
 
 const RUN_DEFAULTS: RunConfig = {
 	success_floor_pct: 70,
-	safety_ceiling_per_run: 80,
-	shard_timeout_minutes: 200
+	safety_ceiling_per_run: 80
 };
 const VISUALS_DEFAULTS: VisualsConfig = {
 	min_chart_points: 3,
 	number_format: NUMBER_FORMAT_DEFAULTS
-};
-// The same values `SimilarityThresholdConfig` declares in the contract, so a
-// checkout with no config file draws the axis the pipeline would have fitted
-// against rather than an axis this file invented.
-const SIMILARITY_DEFAULTS: SimilarityConfig = {
-	band_low: 0.88,
-	band_high: 1.0,
-	max_down_bins: 10,
-	bin_width: 0.001,
-	discard_share: 0.03,
-	step_change_multiple: 5,
-	disagreement_max: 0.15,
-	unclear_max: 0.35,
-	minimum_negatives: 200,
-	minimum_above_line: 30,
-	minimum_days: 10,
-	enabled: false,
-	applied_lookback_days: 7
 };
 // `SameStoryConfig.floor_min`'s own default, for a checkout with no config file.
 const SAME_STORY_FLOOR = 0.94;
@@ -609,12 +522,6 @@ const SAME_STORY_FLOOR = 0.94;
 // it on the cosine, which is how the floor above was measured and now the only
 // legal value.
 const SAME_STORY_WEIGHTS = { cosine_weight: 1.0 };
-// The value a checkout with no config file runs on. `config/models/` pins
-// `--ctx-size` at 65536 and every real page reads that; this only fires for a
-// checkout with no model file at all, and such a checkout summarizes nothing.
-// Naming the committed window here would have the console state a window the
-// unconfigured pipeline does not use.
-const INFERENCE_DEFAULTS: InferenceConfig = { n_ctx: 8192 };
 const RETENTION_DEFAULTS: RetentionConfig = { site_budget_mb: 800 };
 // The same three values `ObservabilityConfig` declares in the contract, so a
 // checkout with no config file prices a run at the documented starting rate
@@ -640,7 +547,6 @@ const CONSOLE_DEFAULTS: ConsoleConfig = {
 	min_window_days: 1,
 	max_window_days: 366,
 	min_attempts_for_rate: 5,
-	precision_axis_multiple: 10,
 	faithfulness_axis_step: 5,
 	faithfulness_axis_floor_max: 75,
 	chart_height: 220,
@@ -802,23 +708,10 @@ interface RawConfig {
 		same_story?: {
 			floor_min?: number;
 			cosine_weight?: number;
-			adaptive_dedup_threshold?: Partial<SimilarityConfig>;
 		};
 	};
-	/** Which file under `config/models/` holds the active model. The whole
-	 * model left `idhazh.json` on 2026-09-14; this names where it went. */
-	models_file?: string;
 	/** The one `similarity` knob the site reads: how far back the hand marks count. */
 	similarity?: { holdout_reach_days?: number };
-}
-
-/** The active model's own file. Only the one flag a console panel reads.
- *
- * The key is llama-server's own spelling, because that is what the file
- * carries: an entry's `server` block is the flags the binary is started with,
- * emitted verbatim. */
-interface RawModels {
-	summarizer?: { server?: Record<string, unknown> };
 }
 
 /** Keys the `digest` block carries that no page reads.
@@ -932,24 +825,6 @@ const raw = once<RawConfig>('config', 'idhazh.json');
  * fallback below exists for.
  */
 const appearance = once<RawAppearance>('config', 'appearance.json');
-
-/** The active model's file, found by following the pointer and never by name.
- *
- * Read the same way `once` reads a fixed path, but the path is a value rather
- * than a literal: a build that spelled the filename would keep reading the old
- * model on the day somebody swapped the pointer, and would show a context
- * window the run never used.
- */
-let heldModels: RawModels | undefined;
-function models(): RawModels {
-	if (heldModels === undefined) {
-		const pointer = raw().models_file;
-		const read =
-			pointer === undefined ? null : readJson<RawModels>('config', ...pointer.split('/'));
-		heldModels = frozen(read ?? ({} as RawModels));
-	}
-	return heldModels;
-}
 
 /** Three layers, most specific last: defaults, the legacy block, the new file.
  *
@@ -1066,36 +941,20 @@ export function runConfig(): RunConfig {
 	return { ...RUN_DEFAULTS, ...(raw().run ?? {}) };
 }
 
-/** The band and the clamps the merge-line chart draws against.
+/** The merge line: the floor in the committed config, which nothing fits or moves.
  *
- * Read off the committed config rather than off the data, because the axis is
- * the point: after the first fortnight the line moves under 0.002 a day, and an
- * axis fitted to the data would fill the panel with a two-thousandth move and
- * teach an operator that a normal day is an incident.
- */
-export function similarityConfig(): SimilarityConfig {
-	return {
-		...SIMILARITY_DEFAULTS,
-		...(raw().assemble?.same_story?.adaptive_dedup_threshold ?? {})
-	};
-}
-
-/** The committed merge line, before any fit has moved it.
- *
- * What the chart draws a rule at on a day nothing has been fitted: a panel that
- * opened with a blank box would say the line does not exist, when in fact every
- * published day so far was grouped at this number.
+ * What the hand-marks panel draws its rule at and measures every marked pair
+ * against. A checkout with no config file falls back to the contract's own
+ * default.
  */
 export function committedFloor(): number {
 	return raw().assemble?.same_story?.floor_min ?? SAME_STORY_FLOOR;
 }
 
-/** What the one term of the score is worth, before any fit has moved it.
+/** What the one term of the score is worth, in the committed config.
  *
- * The fallback the holdout panel scores under on a day no fit has run. A fitted
- * row carries its own weight and it wins, because the margin has to be read
- * under the ruler the line was set with rather than under the one the config
- * happens to hold today.
+ * The weight the hand marks are scored under: the one `assemble` scores a pair
+ * with, so the margin is read under the ruler the line is applied to.
  */
 export function committedWeights(): { cosine_weight: number } {
 	const block = raw().assemble?.same_story;
@@ -1145,11 +1004,6 @@ export function engineExtensionRepository(): string {
 export function ledgerArchiveBaseUrl(): string {
 	const value = raw().ledger?.archive_base_url;
 	return typeof value === 'string' ? value : '';
-}
-
-export function inferenceConfig(): InferenceConfig {
-	const declared = models().summarizer?.server?.['--ctx-size'];
-	return typeof declared === 'number' ? { n_ctx: declared } : { ...INFERENCE_DEFAULTS };
 }
 
 export function retentionConfig(): RetentionConfig {

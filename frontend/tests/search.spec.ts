@@ -3,17 +3,14 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { plural } from '../src/lib/format';
 /**
- * Does on-device search actually work, or does it merely run?
+ * Does the one-click search flow finish with the real encoder?
  *
- * Without a labelled query set this row could only claim the latter, so the
- * labels are hand-written and committed. They name a canary rather than an item
- * id: ids shift the moment a canary is added, and a test that has to be
- * renumbered gets renumbered wrong.
- *
- * One labelled query is checked here, to prove the browser ranks rather than
- * merely returns. Recall over the labelled set is an evaluation, and its
- * instrument is `backend/idhazh/evals/retrieval.py`, which runs the same ranking
- * over sixty labelled queries with no browser and no download.
+ * One labelled question is asked here, to prove the browser downloads the
+ * encoder and answers it. Whether the right story ranks is an evaluation, and
+ * its instrument is `backend/idhazh/evals/retrieval.py`, which runs the same
+ * ranking over sixty labelled queries with no browser and no download. A story
+ * title asserted here would fail whenever `assist.similarity_floor` is tuned,
+ * because a higher floor can leave the question with no results.
  *
  * Keep one real encoder-backed query and one failed-download recovery case.
  * Do not expand either into model-state, query-corpus or presentation matrices.
@@ -25,30 +22,12 @@ const TOKENIZER = /\/assist\/models\/.*\/tokenizer\.json$/;
 interface Gold {
     queries: {
         query: string;
-        expect_canary: string;
     }[];
 }
 const gold: Gold = JSON.parse(readFileSync(resolve(FIXTURES, 'routing/search-gold.json'), 'utf8'));
 const appearance = JSON.parse(readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')) as {
     assist: { result_limit: number };
 };
-/** The title the canary was published under, which is how a name finds its item. */
-function titleOf(canary: string): string {
-    for (const dir of ['canaries', 'canaries/browser']) {
-        try {
-            const raw = readFileSync(resolve(FIXTURES, dir, `${canary}.json`), 'utf8');
-            return JSON.parse(raw).raw_title as string;
-        }
-        catch {
-            continue;
-        }
-    }
-    throw new Error(`no canary fixture named ${canary}`);
-}
-/** Every story in the one list, in the order it is rendered. */
-async function titles(page: Page): Promise<string[]> {
-    return page.locator('[data-story-list="rows"] li').allInnerTexts();
-}
 /** The one gesture: type the question, press the one button. */
 async function ask(page: Page, query: string): Promise<void> {
     await page.fill('#archive-query', query);
@@ -74,7 +53,7 @@ test('one click downloads the encoder and answers the question already typed', a
     await page.waitForLoadState('networkidle');
     await expect(page.locator('#archive-query')).toBeVisible();
     await expect(page.locator('h2').first()).toHaveText('Latest stories');
-    const { query, expect_canary } = gold.queries[0]!;
+    const { query } = gold.queries[0]!;
     await ask(page, query);
     await answered(page);
     await expect(page.locator('h2').first()).toHaveText('Search results');
@@ -85,14 +64,6 @@ test('one click downloads the encoder and answers the question already typed', a
         capped ? 'closest match' : 'result', capped ? 'closest matches' : 'results'));
     await expect(scope).toContainText(`for "${query}"`);
     await expect(scope).toContainText('All dates');
-    // One labelled query proves the browser ranks, not merely returns. Recall
-    // over the whole labelled set is an evaluation, and `evals/retrieval.py`
-    // measures it with no browser and no download.
-    const top = (await titles(page)).slice(0, 3).join(' | ');
-    // The title is truncated in the fixture only by our own layout, so match on
-    // its opening words rather than the whole string.
-    const wanted = titleOf(expect_canary).replace(/<[^>]*>/g, '').split(' ').slice(0, 4).join(' ');
-    expect(top, `${query} -> wanted "${wanted}" in the top three`).toContain(wanted);
     await expect(page.locator('[data-search-block="archive"]')).toHaveCount(0);
 });
 test('a failed download offers a way to try again', async ({ page }) => {

@@ -25,14 +25,19 @@ export interface RouteStanding {
 	shimmer: boolean;
 }
 
+/** A count of parts of the record, never of panels: a route's answers are not
+ * all panels - Hardware's run count belongs to none and a Pipelines panel can
+ * ask twice - so a panel count would name a blank panel that is not there. */
+function partsOfTheRecord(count: number): string {
+	return `${count} ${count === 1 ? 'part' : 'parts'} of the record`;
+}
+
 export function routeStanding(reading: RouteStanding): string {
 	if (!Number.isInteger(reading.days) || reading.days < 1) throw new Error('A route standing needs a positive day count.');
 	if (reading.state === 'loading') return 'Loading chart data. Previously loaded windows are reused.';
-	if (reading.state === 'unreachable') {
-		return `Part of the record did not arrive, so ${reading.unreachable} ${reading.unreachable === 1 ? 'panel has' : 'panels have'} nothing to draw.`;
-	}
+	if (reading.state === 'unreachable') return `${partsOfTheRecord(reading.unreachable)} did not arrive.`;
 	if (reading.state === 'missing') {
-		return `${reading.missing} ${reading.missing === 1 ? 'panel reads' : 'panels read'} a record this site has not published yet, so ${reading.missing === 1 ? 'it has' : 'they have'} nothing to draw.`;
+		return `${partsOfTheRecord(reading.missing)} ${reading.missing === 1 ? 'is' : 'are'} not published yet.`;
 	}
 	if (reading.state === 'quiet') return `Nothing was recorded in ${nameSpan(reading.days)}.`;
 	if (!isDay(reading.through)) throw new Error('A loaded route standing must name the day its panels reach.');

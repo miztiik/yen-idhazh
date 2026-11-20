@@ -6,9 +6,12 @@ import hashlib
 import io
 import stat
 import zipfile
+import zlib
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+
+from pydantic import BaseModel, ValidationError
 
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import ServerJob
@@ -23,8 +26,9 @@ from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX, VisualDecision
 from idhazh.ledger.persist import load, read_registered_envelope
 from idhazh.stages import common
 from idhazh.telemetry.record import HEALTH_SUFFIX
+from utilities.digest_recovery_refusal import RecoveryRefusalError, RefusalReason
 from utilities.publication_git import Repository
-from utilities.publication_request import IntegrityError, Write, safe_file
+from utilities.publication_request import Write, safe_file
 
 type WorkerPayload = Article | Summary | EvalRow | ItemHealthRow | VisualDecision
 
@@ -44,26 +48,26 @@ def unpack(archive: bytes) -> dict[str, bytes]:
     try:
         zipped = zipfile.ZipFile(io.BytesIO(archive))
     except zipfile.BadZipFile as error:
-        raise IntegrityError("source artifact is not a readable ZIP archive") from error
+        raise RecoveryRefusalError(RefusalReason.NOT_A_ZIP_ARCHIVE) from error
     with zipped:
         for entry in zipped.infolist():
             mode = entry.external_attr >> 16
             name = entry.filename
+            # A directory entry's name ends in a separator, so the separator checks refuse it too.
             if (
                 not name
                 or "/" in name
                 or "\\" in name
                 or name in {".", ".."}
                 or ":" in name
-                or entry.is_dir()
                 or (stat.S_IFMT(mode) not in (0, stat.S_IFREG))
                 or name in files
             ):
-                raise IntegrityError("artifact contains an unsafe or duplicate file", (name,))
+                raise RecoveryRefusalError(RefusalReason.UNSAFE_OR_DUPLICATE_FILE, (name,))
             try:
                 files[name] = zipped.read(entry)
-            except zipfile.BadZipFile as error:
-                raise IntegrityError("source artifact has corrupt file bytes", (name,)) from error
+            except (zipfile.BadZipFile, zlib.error) as error:
+                raise RecoveryRefusalError(RefusalReason.CORRUPT_FILE_BYTES, (name,)) from error
     return files
 
 
@@ -79,33 +83,38 @@ def select_plan(
     found: list[tuple[RunPlan, str]] = []
     for name, data in files.items():
         if Path(name).suffix not in {".json", ".parquet"}:
-            raise IntegrityError("plan artifact contains a non-ledger file", (name,))
+            raise RecoveryRefusalError(RefusalReason.NON_LEDGER_PLAN_FILE, (name,))
         target = safe_file(scratch, name, exists=False)
         target.write_bytes(data)
         envelope = read_registered_envelope(target, ledger=LedgerName.RUN_PLAN)
         if Path(name).stem != str(envelope.file_id):
-            raise IntegrityError("plan filename does not match its native file identity", (name,))
+            raise RecoveryRefusalError(RefusalReason.PLAN_FILENAME_NOT_FILE_IDENTITY, (name,))
         if envelope.tier is not Tier.RAW:
-            raise IntegrityError("plan artifact is not raw planning output", (name,))
+            raise RecoveryRefusalError(RefusalReason.PLAN_NOT_RAW_OUTPUT, (name,))
         identity = envelope.identity
         if identity.run_id != f"{envelope.covers}-{execution}" or identity.attempt != attempt:
             continue
         if identity.git_sha != commit or identity.job != ServerJob.PLAN or identity.shard != 0:
-            raise IntegrityError("source plan has mismatched writer identity", (name,))
+            raise RecoveryRefusalError(RefusalReason.PLAN_WRITER_MISMATCH, (name,))
+        # Loading validates every row as a RunPlan, which already refuses a repeated item identity.
         stored = load([target], model=RunPlan)
         if len(stored) != 1:
-            raise IntegrityError("source plan file must contain one plan", (name,))
+            raise RecoveryRefusalError(RefusalReason.PLAN_FILE_NOT_ONE_PLAN, (name,))
         plan = stored[0]
         if plan.run_id != identity.run_id or plan.date != envelope.covers or plan.shards is None:
-            raise IntegrityError(
-                "source plan has mismatched run, date or missing shard count", (name,)
-            )
-        if len({item.item_id for item in plan.items}) != len(plan.items):
-            raise IntegrityError("source plan repeats an item identity", (name,))
+            raise RecoveryRefusalError(RefusalReason.PLAN_RUN_DATE_OR_SHARDS_MISMATCH, (name,))
         found.append((plan, name))
     if len(found) != 1:
-        raise IntegrityError("artifact must retain exactly one compatible source-attempt plan")
+        raise RecoveryRefusalError(RefusalReason.NO_ONE_SOURCE_ATTEMPT_PLAN)
     return found[0]
+
+
+def _validate_worker_payload[M: BaseModel](model: type[M], data: bytes, name: str) -> M:
+    """Read one worker file as its contract, refusing with a typed reason when it is not."""
+    try:
+        return model.model_validate_json(data)
+    except ValidationError as error:
+        raise RecoveryRefusalError(RefusalReason.WORKER_PAYLOAD_INVALID, (name,)) from error
 
 
 def worker_files(
@@ -116,7 +125,7 @@ def worker_files(
 ) -> dict[str, bytes]:
     """Validate named worker outputs; absent payloads remain absent, not regenerated."""
     if plan.shards is None:
-        raise IntegrityError("source plan has no dispatched shard count")
+        raise RecoveryRefusalError(RefusalReason.PLAN_HAS_NO_SHARD_COUNT)
     merged: dict[str, bytes] = {}
     contracts: dict[str, type[WorkerPayload]] = {
         ".article.json": Article,
@@ -127,14 +136,14 @@ def worker_files(
     }
     expected_artifacts = {f"items-{shard}" for shard in range(plan.shards)}
     if set(archives) - expected_artifacts:
-        raise IntegrityError("items artifact names an undispatched shard")
+        raise RecoveryRefusalError(RefusalReason.UNDISPATCHED_SHARD_ARTIFACT)
     for shard in range(plan.shards):
         archive = archives.get(f"items-{shard}")
         if archive is None:
             if shard not in failed_shards and common.shard_of(
                 plan, shard=shard, shards=plan.shards
             ):
-                raise IntegrityError("successful worker has no retained items artifact")
+                raise RecoveryRefusalError(RefusalReason.SUCCESSFUL_WORKER_ARTIFACT_MISSING)
             continue
         assigned = common.shard_of(plan, shard=shard, shards=plan.shards)
         names = {
@@ -145,35 +154,33 @@ def worker_files(
         files = unpack(archive)
         for name, data in files.items():
             if name == common.INPUTS_PAYLOAD:
-                PipelineInputs.model_validate_json(data)
+                _validate_worker_payload(PipelineInputs, data, name)
             elif name in names:
                 item, contract = names[name]
-                payload = contract.model_validate_json(data)
+                payload = _validate_worker_payload(contract, data, name)
                 if payload.item_id != item.item_id:
-                    raise IntegrityError("worker payload identifies another planned item", (name,))
+                    raise RecoveryRefusalError(RefusalReason.PAYLOAD_NAMES_ANOTHER_ITEM, (name,))
                 if payload.url_key != item.url_key:
-                    raise IntegrityError(
-                        "worker payload does not match its planned address", (name,)
-                    )
+                    raise RecoveryRefusalError(RefusalReason.PAYLOAD_ADDRESS_MISMATCH, (name,))
                 if isinstance(payload, (EvalRow, ItemHealthRow)) and (
                     payload.run_id != plan.run_id or payload.date != plan.date
                 ):
-                    raise IntegrityError("worker record belongs to another source run", (name,))
+                    raise RecoveryRefusalError(RefusalReason.RECORD_FROM_ANOTHER_RUN, (name,))
                 if isinstance(payload, ItemHealthRow) and (
                     payload.machine_shard != shard or payload.machine_job != ServerJob.WORK
                 ):
-                    raise IntegrityError("worker record belongs to another shard", (name,))
+                    raise RecoveryRefusalError(RefusalReason.RECORD_FROM_ANOTHER_SHARD, (name,))
             else:
-                raise IntegrityError("artifact contains an unplanned worker file", (name,))
+                raise RecoveryRefusalError(RefusalReason.UNPLANNED_WORKER_FILE, (name,))
             if name in merged and merged[name] != data:
-                raise IntegrityError("worker artifacts disagree on shared bytes", (name,))
+                raise RecoveryRefusalError(RefusalReason.SHARED_BYTES_DISAGREE, (name,))
             merged[name] = data
     for item in plan.items:
         article = f"{item.item_id}.article.json"
         if article not in merged and any(
             f"{item.item_id}{suffix}" in merged for suffix in contracts if suffix != ".article.json"
         ):
-            raise IntegrityError("worker output has no saved source article", (article,))
+            raise RecoveryRefusalError(RefusalReason.SOURCE_ARTICLE_MISSING, (article,))
     return merged
 
 
@@ -189,7 +196,7 @@ def restore(
 ) -> RestoredInputs:
     """Confirm the entire incoming set and all local baselines before copying any bytes."""
     if "plan" not in archives:
-        raise IntegrityError("source run has no retained plan artifact")
+        raise RecoveryRefusalError(RefusalReason.NO_PLAN_ARTIFACT)
     plans = unpack(archives["plan"])
     plan, name = select_plan(plans, scratch, execution=execution, attempt=attempt, commit=commit)
     items = worker_files(
@@ -198,7 +205,7 @@ def restore(
         failed_shards=failed_shards,
     )
     if plan.items and not items:
-        raise IntegrityError("source run has no retained worker output")
+        raise RecoveryRefusalError(RefusalReason.NO_WORKER_OUTPUT)
     plan_path = f"state/raw/run-plan/{plan.date.replace('-', '/')}/{name}"
     item_root = f"backend/var/run/{plan.date}/items"
     incoming = {
@@ -210,17 +217,17 @@ def restore(
     if item_dir.exists():
         extra = {path.name for path in item_dir.iterdir()} - items.keys()
         if extra:
-            raise IntegrityError(
-                "recovery item directory contains foreign files", tuple(sorted(extra))
+            raise RecoveryRefusalError(
+                RefusalReason.FOREIGN_ITEM_DIRECTORY_FILES, tuple(sorted(extra))
             )
     git = Repository(repo)
     head = git.git("rev-parse", "HEAD").strip()
     for path, data in incoming.items():
         target = safe_file(repo, path, exists=False)
         if git.index_entry(path) != git.entry(head, path):
-            raise IntegrityError("restore would touch foreign staged input", (path,))
+            raise RecoveryRefusalError(RefusalReason.FOREIGN_STAGED_INPUT, (path,))
         if target.exists() and target.read_bytes() != data:
-            raise IntegrityError("restore would replace foreign local bytes", (path,))
+            raise RecoveryRefusalError(RefusalReason.FOREIGN_LOCAL_BYTES, (path,))
     for path, data in incoming.items():
         target = safe_file(repo, path, exists=False)
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -240,7 +247,7 @@ def plan_import(
     """Authorize only the checked original plan file, never new planning or relabelled bytes."""
     path = safe_file(repo, restored.plan_path, exists=True)
     if hashlib.sha256(path.read_bytes()).hexdigest() != restored.plan_sha256:
-        raise IntegrityError("restored source plan bytes changed", (restored.plan_path,))
+        raise RecoveryRefusalError(RefusalReason.RESTORED_PLAN_BYTES_CHANGED, (restored.plan_path,))
     envelope = read_registered_envelope(path, ledger=LedgerName.RUN_PLAN)
     identity = envelope.identity
     if (
@@ -251,8 +258,8 @@ def plan_import(
         or identity.shard != 0
         or load([path], model=RunPlan) != [restored.plan]
     ):
-        raise IntegrityError(
-            "restored plan no longer matches source identity", (restored.plan_path,)
+        raise RecoveryRefusalError(
+            RefusalReason.RESTORED_PLAN_IDENTITY_CHANGED, (restored.plan_path,)
         )
     return Write(
         restored.plan_sha256,

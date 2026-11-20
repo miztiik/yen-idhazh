@@ -3,7 +3,6 @@
     {
       "id": "what-the-machine-was-doing",
       "panels": [
-        "two-clocks",
         "slower-machines",
         "platform-mix"
       ],
@@ -36,7 +35,6 @@
     }
   ],
   "judged": [
-    "two-clocks",
     "slower-machines",
     "platform-mix",
     "slower-on-same-work",
@@ -48,7 +46,6 @@
     "read-against-written"
   ],
   "knobs": {
-    "clocks_agree_within_pct": 5,
     "slower_machines_min_articles": 10,
     "slowest_articles_rows": 20,
     "closest_to_memory_rows": 20,

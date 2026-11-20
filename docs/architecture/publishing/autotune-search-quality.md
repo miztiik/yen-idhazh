@@ -1,6 +1,6 @@
 # Autotuning search quality
 
-**Last Updated**: 2026-10-03
+**Last Updated**: 2026-11-19
 
 **This page is research, not a description of what runs.** Nothing here is built.
 It records what search does today, what was measured about it, what was found
@@ -13,8 +13,9 @@ and none of them is settled.
 The same ranker serves the front page search box and the archive search, so
 this page owns both. It does not own the grouping line that decides two items
 are one story - that is
-[autotune-content-similarity.md](autotune-content-similarity.md), and it is the
-closest working precedent for everything proposed here.
+[autotune-content-similarity.md](autotune-content-similarity.md). The closest
+working precedent for everything proposed here is the content-similarity judge in
+[how-the-content-similarity-judge-follows-its-thresholds.md](how-the-content-similarity-judge-follows-its-thresholds.md).
 
 ## What search actually does
 
@@ -269,33 +270,32 @@ A model verdict can answer it, and `CLAUDE.md` section 1a permits one to run in
 a production workflow, score live content and determine publication. The venue
 already exists: [llm-council.md](llm-council.md) owns the workflow, the three
 verbs, the tenancy protocol and the 6 h arithmetic. The closest working tenant
-is the merge-line judge in
-[autotune-content-similarity.md](autotune-content-similarity.md).
+is the content-similarity judge in
+[how-the-content-similarity-judge-follows-its-thresholds.md](how-the-content-similarity-judge-follows-its-thresholds.md).
 
 **The shape, sketched and not designed.** A judging night samples questions from
 the self-hydrating key plus a sample of real result lists, asks a model whether
 each returned story answers its question, and turns the verdicts into a
-precision reading. That reading proposes a floor. The proposal is damped,
-step-capped and clamped exactly as
-`backend/idhazh/contracts/fitted_similarity_threshold.py` already does for the
-grouping line: `previous`, `proposed`, `after_damping`, `applied`, `clamp_kind`,
-`clamp_movement`, `held_reason`, `settled`, plus the asymmetric `max_down_step`
-and `max_up_step`. That contract is the template; do not invent a second one.
+precision reading. That reading proposes a floor. The proposal moves in capped
+steps, with the evidence, the estimate, the gap and the reason a night held
+written beside it, the way
+`backend/idhazh/contracts/story_similarity_threshold_history_row.py` does for the
+judge's two thresholds. That contract is the template; do not invent a second one.
 
 **The wall stays.** A judge may not move the floor below the measured noise
 level, whatever it scores. That is a floor on the floor, and it is not the
 judge's to move.
 
 **This is not in the current work.** It is written here so the plan that builds
-it does not start by rediscovering that the venue, the damping and the clamp
-shapes already exist.
+it does not start by rediscovering that the venue and the threshold-history
+shape already exist.
 
 ## Already true - do not research this again
 
 | id | Path | What it already gives |
 | --- | --- | --- |
-| D1 | `backend/idhazh/contracts/fitted_similarity_threshold.py` | A working autotuned-threshold row: proposed, damped, applied, clamp kind, held reason, asymmetric step caps |
-| D2 | [autotune-content-similarity.md](autotune-content-similarity.md) | Damping, dead zone, step cap, band walls, and a judge that is already a council tenant |
+| D1 | `backend/idhazh/contracts/story_similarity_threshold_history_row.py` | A working autotuned-threshold row: the evidence read, the estimate, the gap, the capped move and the reason a night held |
+| D2 | [how-the-content-similarity-judge-follows-its-thresholds.md](how-the-content-similarity-judge-follows-its-thresholds.md) | An ignore range, capped steps, limits, and a judge that is already a council tenant |
 | D3 | [llm-council.md](llm-council.md) | The venue, three verbs, tenancy protocol, the 6 h arithmetic |
 | D4 | `backend/idhazh/ledger/filenames.py` | `SEGMENT_NAME`, the one-writer-per-path filename; `idhazh.path_classes` checks it |
 | D5 | `backend/utilities/measure_retrieval.py --quality` | Noise 95th percentile **0.2716** over **126,843** pairs, 2026-08-26; off-domain probes at 0.235, 0.295, 0.258, 0.194 |
@@ -340,7 +340,8 @@ story published**.
 ## See also
 
 - [llm-council.md](llm-council.md) - the venue a judge for this would be a tenant of.
-- [autotune-content-similarity.md](autotune-content-similarity.md) - the working precedent: a judged line that fits itself nightly.
+- [how-the-content-similarity-judge-follows-its-thresholds.md](how-the-content-similarity-judge-follows-its-thresholds.md) - the working precedent: a judge whose two thresholds follow its own answers nightly.
+- [autotune-content-similarity.md](autotune-content-similarity.md) - the grouping line this page does not own.
 - [autotune-desk-assignment.md](autotune-desk-assignment.md) - how semantic targets use current vocabulary and why older month shards need a bounded update rule.
 - [../../concepts/search-quality.md](../../concepts/search-quality.md) - the measured baseline, the bar, and why the number is a lower bound.
 - [../../../CLAUDE.md](../../../CLAUDE.md) Guardrail #12 - every read must have a fixed-size input.

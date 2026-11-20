@@ -327,7 +327,15 @@ jobs:
             --shard ${{ matrix.shard }} \
             --job work
 
-          # Share runtime setup and caches with the other model workflows.
+      # The service follows the fingerprint, which wants an idle runner, and
+      # precedes the model server, while the runner's memory is still free. The
+      # action never fails the shard: without the service the work stage still runs.
+      - name: Start the text-analysis service
+        uses: ./.github/actions/text-analysis-service
+        with:
+          mode: start
+
+      # Share runtime setup and caches with the other model workflows.
       - uses: ./.github/actions/model-server
         id: model_server
         with:
@@ -401,6 +409,12 @@ jobs:
             "${SERVER_ARGS[@]}" \
             ${{ needs.plan.outputs.faithfulness == 'false' && '--no-faithfulness' || '' }}
 
+      # Stop the service whatever the work step did.
+      - name: Stop the text-analysis service
+        if: always()
+        uses: ./.github/actions/text-analysis-service
+        with:
+          mode: stop
 
       - name: Runtime log on failure
         if: failure()
@@ -522,6 +536,7 @@ jobs:
           name: runtime-log-${{ matrix.shard }}
           path: |
             llama-server.log
+            text-analysis.log
           retention-days: 2
           if-no-files-found: ignore
 

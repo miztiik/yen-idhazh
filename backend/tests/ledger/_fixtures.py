@@ -16,14 +16,6 @@ FIXTURE_NAMES = {
         "ceiling-reached.json",
         "exhausted-dry-run.json",
     ),
-    "content-similarity-judge-merge-line-holdout-score": (
-        "a-holdout-retention-has-eaten-into.json",
-        "a-line-scored-against-the-holdout.json",
-    ),
-    "content-similarity-judge-metrics": (
-        "a-shard-that-read-its-pairs.json",
-        "a-shard-that-was-dealt-nothing.json",
-    ),
     "council-run-record": (
         "a-part-that-ran-the-model.json",
         "a-selection-that-ran-no-model.json",
@@ -39,10 +31,6 @@ FIXTURE_NAMES = {
     ),
     "feed-health-row": ("answered.json", "unreachable.json"),
     "feed-retirement-row": ("answered-and-never-read.json", "gone.json"),
-    "fitted-similarity-threshold": (
-        "the-clamp-held-a-fall-back-to-the-step.json",
-        "the-record-is-too-small-to-fit-on.json",
-    ),
     "host-fingerprint-row": (
         "a-machine-that-reported-nothing.json",
         "every-reading-taken.json",
@@ -50,11 +38,6 @@ FIXTURE_NAMES = {
     ),
     "published-row": ("one-item.json",),
     "seen-row": ("first-sight.json",),
-    "story-similarity-pair": (
-        "a-headline-match-scores-one.json",
-        "judged-the-same-in-both-orders.json",
-        "scored-but-not-yet-judged.json",
-    ),
     "visual-prune-row": ("fuse-tripped.json", "policy-off.json"),
 }
 

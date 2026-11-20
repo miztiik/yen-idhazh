@@ -1,6 +1,6 @@
 # What decides a story's prominence
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-11-19
 
 What puts one story above another on the page, and what would make those weights
 fit themselves instead of being chosen by hand.
@@ -47,5 +47,5 @@ something we do not (`CLAUDE.md` section 0b).
 - [layout.md](layout.md) - where the page order comes from, and the weighted score this page would tune.
 - [../../concepts/placement.md](../../concepts/placement.md) - the reading order inside a frame, and the freshness curve.
 - [llm-council.md](llm-council.md) - the room a fitted line would be judged in.
-- [autotune-content-similarity.md](autotune-content-similarity.md) - the one line that already fits itself, and the shape any other would copy.
+- [how-the-content-similarity-judge-follows-its-thresholds.md](how-the-content-similarity-judge-follows-its-thresholds.md) - the one number that already moves on evidence, and the shape any other would copy.
 - [../../concepts/config.md](../../concepts/config.md) - what belongs in a knob, and why a hand-set number is not a defect on its own.

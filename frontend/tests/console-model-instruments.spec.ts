@@ -1,8 +1,7 @@
 /** Deterministic model instruments rules over bounded fixtures; no browser, build, or layout matrix. */
 import { expect, test } from '@playwright/test';
-import { DRAWN_BY, UNDRAWN, EVAL_PANELS, RECORDED, evalDays, recordedReadings, recordedText, type EvalInput } from '../src/lib/console/eval-instruments';
+import { DRAWN_BY, UNDRAWN, RECORDED, evalDays, type EvalInput } from '../src/lib/console/eval-instruments';
 import { SCORE_COLUMNS } from '../src/lib/server/ledger-rows';
-import { numberFormat } from './support/number-format';
 const FIXTURE: EvalInput[] = [
     { date: '2026-04-02', hhem: '0.90', hhem_delta: '0', compression: '0.20', coherence: '0.10' },
     { date: '2026-04-02', hhem: '0.80', hhem_delta: '0', compression: '0.40', coherence: '-0.30' },
@@ -15,12 +14,6 @@ const FIXTURE: EvalInput[] = [
     { date: '2026-04-04', hhem: 'n/a' },
     { date: '2026-04-04', hhem: '0.85' }
 ];
-test('every measurement receiver is declared once and every declared receiver answers for a measurement', () => {
-    const panels = EVAL_PANELS.map((panel) => panel.id);
-    expect(new Set(panels).size).toBe(panels.length);
-    for (const receiver of Object.values(DRAWN_BY)) expect(panels).toContain(receiver);
-    for (const panel of panels) expect(Object.values(DRAWN_BY)).toContain(panel);
-});
 test('recorded instruments retain their approved receivers without inventing a checker result', () => {
     const receivers: Readonly<Record<string, string>> = {
         compression: 'summary-length', coherence: 'daily-figures'
@@ -49,28 +42,22 @@ test.describe('the arithmetic', () => {
         expect(first.widerDiffers).toBe(2);
         expect(first.widestGap).toBe(20);
         const blank = days[2];
-        expect(blank.scored).toBe(1);
         expect(blank.matched).toBe(0);
         expect(blank.matchMid).toBeNull();
         expect(blank.recorded.compression).toBeNull();
         const bad = days[3];
-        expect(bad.scored).toBe(2);
         expect(bad.matched).toBe(1);
         expect(bad.matchMid).toBe(85);
     });
-    test('a cosine keeps its own scale and its sign, and is never read as a percent', () => {
+    test('a cosine keeps its own scale and is never read as a percent', () => {
         const days = evalDays(FIXTURE);
         expect(days[1].recorded.coherence).toBe(0.1);
-        const reading = recordedReadings(days).find((entry) => entry.id === 'coherence');
-        expect(reading?.days).toBe(1);
-        expect(reading?.low).toBe(0.1);
-        expect(recordedText(reading!, -0.3, numberFormat)).toBe('-0.3');
-        expect(recordedText(reading!, null, numberFormat)).toBe('-');
     });
     test('a row with no day is dropped rather than pooled into an empty one', () => {
         const days = evalDays(FIXTURE);
         expect(days.some((day) => day.date === '')).toBe(false);
-        expect(days.reduce((sum, day) => sum + day.scored, 0)).toBe(FIXTURE.length - 1);
+        // Seven rows carry a reading and a day. The eighth reading, 0.99, sits on the dateless row.
+        expect(days.reduce((sum, day) => sum + day.matched, 0)).toBe(7);
     });
     test('THE ORACLE: what the faithfulness panel draws is reduced from rows written here', () => {
         const days = evalDays([
@@ -83,7 +70,6 @@ test.describe('the arithmetic', () => {
         expect(days.map((day) => day.date)).toEqual(['2026-05-01', '2026-05-02', '2026-05-03']);
         expect(days.map((day) => ({
             date: day.date,
-            scored: day.scored,
             matched: day.matched,
             low: day.matchLow,
             mid: day.matchMid,
@@ -94,7 +80,6 @@ test.describe('the arithmetic', () => {
         }))).toEqual([
             {
                 date: '2026-05-01',
-                scored: 3,
                 matched: 3,
                 low: 40,
                 mid: 70,
@@ -105,7 +90,6 @@ test.describe('the arithmetic', () => {
             },
             {
                 date: '2026-05-02',
-                scored: 1,
                 matched: 1,
                 low: 80,
                 mid: 80,
@@ -116,7 +100,6 @@ test.describe('the arithmetic', () => {
             },
             {
                 date: '2026-05-03',
-                scored: 1,
                 matched: 0,
                 low: null,
                 mid: null,

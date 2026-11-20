@@ -66,11 +66,8 @@ def input_paths(*, date: str, settings: config.Settings) -> tuple[str, ...]:
         f"frontend/public/digest/{date[:7].replace('-', '/')}",
     }
     for which in staging.REGISTRY:
-        grain = paths.entry(which).grain
-        if grain is Grain.RAW_AND_COMPACT:
+        if paths.entry(which).grain is Grain.RAW_AND_COMPACT:
             asked.update(ledger_window(which, through=date, days=_input_window(which, settings)))
-        elif grain is Grain.FLAT:
-            asked.add(paths.relpath(which))
     # Search-index rebuilding opens only this month; same-story reads an earlier
     # configured day window. Days and manifests are concrete inputs, not the archive.
     earlier = max(31, int(settings.app.assemble.same_story_window_hours // 24) + 1)

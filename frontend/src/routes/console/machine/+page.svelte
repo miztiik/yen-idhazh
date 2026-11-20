@@ -10,7 +10,6 @@
 	import type { LedgerReach, Row, SliceResult } from '$lib/data/ledger';
 	import * as queries from '$lib/console/queries/machine';
 	import { tokenDeviationsOnce, type TokenHistory } from '$lib/console/queries/token-deviations';
-	import { compareRuns } from '$lib/console/queries/shared';
 	import { PANEL_QUERIES, countersFrom, processors, shardCounts, textRows } from '$lib/console/machine/records';
 	import { MACHINE_QUERY_GROUPS } from '$lib/console/machine/query-groups';
 	import { retryReach } from '$lib/console/pipelines/record-window';
@@ -29,6 +28,7 @@
 	import ArticleCostPanel from '$lib/console/machine/ArticleCostPanel.svelte';
 	import MemoryHeldPanel from '$lib/console/machine/MemoryHeldPanel.svelte';
 	import PlatformMixPanel from '$lib/console/machine/PlatformMixPanel.svelte';
+	import PromptReusePanel from '$lib/console/machine/PromptReusePanel.svelte';
 	import SlowerOnSameWork from '$lib/console/machine/SlowerOnSameWork.svelte';
 	import ReadWritePanel from '$lib/console/machine/ReadWritePanel.svelte';
 
@@ -36,7 +36,7 @@
 	const shared = consoleKnobs();
 	const groups = routeConsole('machine').panel_groups;
 	const configured = routeKnobs('machine', [
-		'clocks_agree_within_pct', 'slower_machines_min_articles',
+		'slower_machines_min_articles',
 		'closest_to_memory_rows', 'context_min_values', 'read_write_default_metric',
 		'read_write_history_runs', 'read_write_min_prior_runs', 'read_write_stddev_multiplier'
 	]);
@@ -75,8 +75,6 @@
 	function ask(query: PanelQuery, range: Range): Promise<SliceResult> {
 		switch (query.name) {
 			case 'runShardsQuery': return sliceOnce(queries.runShardsQuery, range);
-			case 'twoClocksQuery': return sliceOnce(queries.twoClocksQuery, range);
-			case 'twoClocksHostsQuery': return sliceOnce(queries.twoClocksHostsQuery, range);
 			case 'slowerMachinesQuery': return sliceOnce(queries.slowerMachinesQuery, range);
 			case 'platformMixQuery': return sliceOnce(queries.platformMixQuery, range);
 			case 'slowerOnSameWorkQuery': return sliceOnce(queries.slowerOnSameWorkQuery, range);
@@ -164,17 +162,11 @@
 	const panelAnswers = $derived(groups.flatMap((group) => group.panels.map((id) => {
 		const state = panelState(id); return state === 'loading' ? 'pending' as const : { state } as LedgerReach;
 	})));
+	const routeAnswers = $derived([...panelAnswers, answers.runShardsQuery ?? 'pending']);
 	function complete(names: string[]) { return names.every((name) => ['ok', 'quiet'].includes(answers[name]?.state ?? 'loading')); }
 	const counterReady = $derived(complete(['platformMixQuery', 'articleCostQuery', 'runShardsQuery']));
-	const counters = $derived(countersFrom(counterReady ? rows('platformMixQuery') : [], counterReady ? rows('articleCostQuery') : [], counterReady ? rows('runShardsQuery') : [],
-		{ contextWindow: cfg.contextWindow, jobTimeoutSeconds: cfg.jobTimeoutSeconds }));
+	const counters = $derived(countersFrom(counterReady ? rows('platformMixQuery') : [], counterReady ? rows('articleCostQuery') : [], counterReady ? rows('runShardsQuery') : []));
 	const countedRuns = $derived(counters.runs.filter((run) => run.date >= start && run.date <= end).length);
-	const latestRunId = $derived([...new Set([...rows('platformMixQuery').filter((row) => row.date === end),
-		...rows('twoClocksQuery')].map((row) => String(row.run_id)))].sort(compareRuns).at(-1) ?? null);
-	const newest = $derived(counters.runs.find((run) => run.runId === latestRunId) ?? null);
-	const clockReady = $derived(complete(['platformMixQuery', 'twoClocksQuery', 'runShardsQuery']));
-	const clockCounters = $derived(countersFrom(clockReady ? rows('platformMixQuery').filter((row) => row.date === end) : [],
-		rows('twoClocksQuery'), rows('runShardsQuery'), { contextWindow: cfg.contextWindow, jobTimeoutSeconds: cfg.jobTimeoutSeconds }));
 	const refused = $derived(describeRefusedRuns(counters.refused.filter((run) => run.date >= start && run.date <= end)));
 	const jobs = $derived(fleetJobs(rows('platformMixQuery')));
 	const keys = $derived(machineKeys(jobs.map((job) => ({
@@ -217,17 +209,16 @@
 	const sameWorkCalendar = $derived(sameWorkRange === undefined ? [] : daysInWindow({ start: sameWorkRange.from, end: sameWorkRange.to }));
 	const sameWorkRule = $derived(settingsRules(data, { from: sameWorkRange?.from ?? '', to: sameWorkRange?.to ?? '' }, 'none'));
 	const titles: Readonly<Record<string, string>> = {
-		'two-clocks': 'Clock agreement',
 		'slower-machines': 'Which machines do the same work slower', 'platform-mix': 'Which machines ran our jobs, day by day',
 		'slower-on-same-work': 'Whether a run is getting slower on the same work',
 		'closest-to-memory': 'Which articles left the machine least memory', 'memory-held': "What is holding the machine's memory",
 		'context-headroom': 'How much of the reading limit an article takes', 'article-cost': 'What one article costs the machine',
-		'prompt-reuse': 'How much text the model reads again', 'read-against-written': 'What a run reads against what it writes'
+		'prompt-reuse': 'How much of each prompt was already cached', 'read-against-written': 'What a run reads against what it writes'
 	};
 </script>
 
 <svelte:head><title>Hardware &mdash; Console &mdash; {data.ui.site_title}</title><meta name="robots" content="noindex" /></svelte:head>
-<RouteStatus route="machine" answers={panelAnswers} days={windowDays} {through} shimmerAfterMs={shared.shimmer_after_ms} onRetry={retry}
+<RouteStatus route="machine" answers={routeAnswers} days={windowDays} {through} shimmerAfterMs={shared.shimmer_after_ms} onRetry={retry}
 	settledSuffix={counterReady ? `${formatNumber(countedRuns, cfg.chart.number_format, { exact: true })} ${countedRuns === 1 ? 'run' : 'runs'} counted.` : ''}>
 <div data-machine-start={start} data-machine-end={end} data-machine-run-count={counterReady ? countedRuns : undefined}>
 	<WindowControlSource route="machine" days={windowDays} {presets} {monthsFor} {ready} onChange={show}
@@ -274,6 +265,9 @@
 							initialMetric={readWriteMetricDefault(knobs.read_write_default_metric)}
 							history={tokenHistory} historyRange={tokenHistoryRange} {deviationRules}
 							{start} {end} {windowDays} />
+					{:else if id === 'prompt-reuse'}
+						<PromptReusePanel rows={rows('promptReuseQuery')} title={titles[id]} chart={cfg.chart} shell={data}
+							{start} {end} {windowDays} />
 					{:else if id === 'slower-on-same-work'}
 						<Panel {id} title={titles[id]} heading="h3">
 							<div>
@@ -285,12 +279,9 @@
 							</div>
 						</Panel>
 					{:else}
-						<MachineCharts {id} newestRunId={latestRunId} title={titles[id]} rows={id === 'two-clocks'
-							? rows('twoClocksQuery').filter((row) => row.machine_job === null || row.machine_job === '' || row.machine_job === 'work')
-							: rows(PANEL_QUERIES[id][0].name)}
+						<MachineCharts {id} title={titles[id]} rows={rows(PANEL_QUERIES[id][0].name)}
 							hostRows={id === 'slower-machines' ? rows('platformMixQuery') : []}
-							newest={id === 'two-clocks' ? clockCounters.runs.find((run) => run.runId === latestRunId) ?? null : newest}
-							chart={cfg.chart} shell={data} {start} {end} {knobs} {windowDays} />
+							chart={cfg.chart} {knobs} {windowDays} />
 					{/if}
 				</RecordFrame>
 			{/each}

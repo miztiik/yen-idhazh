@@ -29,40 +29,8 @@
 
 import { BANDS } from '../bands';
 import { grouped } from '../charts/series';
-import { formatNumber, type NumberFormatConfig } from '../number-format';
+import type { NumberFormatConfig } from '../number-format';
 import type { StackRule } from '../charts/stack-types';
-import { dayMonth } from '../format';
-
-/** One surface on the console that answers for at least one ledger column.
- *
- * `id` is the `data-eval-panel` value the page carries, so the map is a claim
- * about the built page and not only about this file.
- */
-export interface EvalPanel {
-	id: string;
-	/** The heading a reader sees, verbatim. */
-	title: string;
-	/** The published route the panel lives on. */
-	route: string;
-}
-
-export const EVAL_PANELS: readonly EvalPanel[] = [
-	{ id: 'daily-figures', title: 'Model figures by recorded day', route: '/console/model/' },
-	{
-		id: 'faithfulness',
-		title: matchTitle(),
-		route: '/console/model/'
-	},
-	{ id: 'summary-length', title: 'How long summaries came out', route: '/console/model/' },
-	{ id: 'score-cost', title: 'What checking one summary cost', route: '/console/model/' }
-];
-
-/** Name the faithfulness panel for the days its window can show. */
-export function matchTitle(windowDays?: number): string {
-	return windowDays === 1
-		? 'Summary faithfulness for this one day'
-		: 'Summary faithfulness, day by day';
-}
 
 /** Which panel answers for which ledger column.
  *
@@ -119,20 +87,18 @@ export type EvalInput = Readonly<Record<string, string | undefined>>;
 export interface RecordedInstrument {
 	/** The ledger column. */
 	id: string;
-	label: string;
 	unit: 'percent' | 'cosine';
-	/** What the number is, and which way is bad, in the reader's words. */
-	note: string;
+	/** What the daily table calls it. Absent where another panel draws the
+	 * instrument in its own words. */
+	label?: string;
+	/** What the number is, and which way is bad, in the reader's words. Printed
+	 * with `label`. */
+	note?: string;
 }
 
-/** The retained recorded instruments, each with its own unit and explanation. */
+/** The retained recorded instruments, each with its own unit. */
 export const RECORDED: readonly RecordedInstrument[] = [
-	{
-		id: 'compression',
-		label: 'How long the summary came out against its article',
-		unit: 'percent',
-		note: 'A length and not a mark. It is here to read the other lines against: a summary that scores badly at a tenth of the article length is a different problem from one that scores badly at half.'
-	},
+	{ id: 'compression', unit: 'percent' },
 	{
 		id: 'coherence',
 		label: 'Summary sentences that follow one another',
@@ -149,8 +115,6 @@ export const RECORDED: readonly RecordedInstrument[] = [
  */
 export interface EvalDay {
 	date: string;
-	/** Summaries the ledger holds for that day. */
-	scored: number;
 	/** Summaries that day carrying a faithfulness score. */
 	matched: number;
 	/** Faithfulness, whole percent: lower quartile (p25), median (p50), upper quartile (p75). */
@@ -168,9 +132,8 @@ export interface EvalDay {
 /** The distinct-published counts a run settled for one day.
  *
  * A re-score or scored-then-dropped item inflates the ledger row count.
- * Publication counts its distinct set once. Keyed by date in the map `evalDays`
- * and `modelWork` take. Defined in the console layer both reducers already reach,
- * so neither has to import a server type to name the shape it is handed.
+ * Publication counts its distinct set once. Keyed by date in the map
+ * `modelWork` takes.
  */
 export interface DayScoredCounts {
 	/** Distinct published items the checker scored - replaces the row count. */
@@ -216,22 +179,10 @@ function toTwoPlaces(value: number): number {
 
 /** Every day the ledger holds, oldest first, reduced.
  *
- * `counts` carries the distinct-published counts a run settled for a day, keyed
- * by date. Where a day is present, the scored count comes from it instead of the
- * ledger rows: the ledger dedupes by measurement, so a re-scored item keeps two
- * rows and a scored-then-dropped item keeps one, and either runs the row count
- * high. Every measurement distribution beside them still reads every row, so a
- * re-score still counts twice in a median where it belongs. Omitted, the counts
- * come off the rows exactly as before, which is what the browser oracle and the
- * shared console layout pass.
- *
  * Rows carrying no date are dropped rather than pooled into an empty day: a
  * ledger row with no day is a broken row, and giving it a column would draw it.
  */
-export function evalDays(
-	rows: readonly EvalInput[],
-	counts?: ReadonlyMap<string, DayScoredCounts>
-): EvalDay[] {
+export function evalDays(rows: readonly EvalInput[]): EvalDay[] {
 	const byDate = new Map<string, EvalInput[]>();
 	for (const row of rows) {
 		const date = (row.date ?? '').trim();
@@ -265,7 +216,6 @@ export function evalDays(
 		}
 
 		match.sort((a, b) => a - b);
-		const settled = counts?.get(date);
 		const recorded: Record<string, number | null> = {};
 		for (const instrument of RECORDED) {
 			const values = (recordedValues.get(instrument.id) ?? []).sort((a, b) => a - b);
@@ -280,11 +230,6 @@ export function evalDays(
 
 		days.push({
 			date,
-			// The distinct-published count where the run settled one, the ledger-row
-			// count otherwise. A re-scored item keeps two rows and a scored-then-
-			// dropped item keeps one, so the row count is not the count of summaries
-			// the day published (backend/idhazh/telemetry/publish/day_metrics.py).
-			scored: settled?.scored ?? group.length,
 			matched: match.length,
 			matchLow: match.length === 0 ? null : pct(at(match, 0.25)),
 			matchMid: match.length === 0 ? null : pct(at(match, 0.5)),
@@ -295,17 +240,6 @@ export function evalDays(
 		});
 	}
 	return days;
-}
-
-export function evalWithin(
-	days: readonly EvalDay[],
-	span: { start: string; end: string }
-): EvalDay[] {
-	return days.filter((day) => day.date >= span.start && day.date <= span.end);
-}
-
-export function evalColumnLabels(days: readonly EvalDay[]): string[] {
-	return days.map((day) => dayMonth(day.date));
 }
 
 /** The two scores the pipeline bands a published summary on, as whole percents.
@@ -398,25 +332,21 @@ export function matchRules(thresholds: MatchThresholds, floor: number): StackRul
 
 /** What the whole window holds, so a sentence never re-walks the days itself. */
 export interface EvalTotals {
-	days: number;
-	scored: number;
 	matched: number;
 	widerDiffers: number;
 	widestGap: number;
 }
 
 export function evalTotals(days: readonly EvalDay[]): EvalTotals {
-	let scored = 0;
 	let matched = 0;
 	let widerDiffers = 0;
 	let widestGap = 0;
 	for (const day of days) {
-		scored += day.scored;
 		matched += day.matched;
 		widerDiffers += day.widerDiffers;
 		widestGap = Math.max(widestGap, day.widestGap);
 	}
-	return { days: days.length, scored, matched, widerDiffers, widestGap };
+	return { matched, widerDiffers, widestGap };
 }
 
 /** What the second faithfulness column says, in words, or null where it says nothing.
@@ -430,59 +360,9 @@ export function evalTotals(days: readonly EvalDay[]): EvalTotals {
  */
 export function widerNote(
 	days: readonly EvalDay[],
-	windowDays: number,
 	numberFormat: NumberFormatConfig
 ): string | null {
 	const totals = evalTotals(days);
 	if (totals.matched === 0 || totals.widerDiffers === 0) return null;
 	return `Scored against the whole article instead of the part the machine read, ${grouped(totals.widerDiffers, numberFormat)} of these ${grouped(totals.matched, numberFormat)} summaries score differently, by up to ${totals.widestGap} points.`;
-}
-
-/** One recorded instrument over the window. */
-export interface RecordedReading extends RecordedInstrument {
-	/** The quietest day, the middle day and the loudest day, each by its own middle summary. */
-	low: number | null;
-	mid: number | null;
-	high: number | null;
-	/** Days in the window that carried a reading at all. */
-	days: number;
-}
-
-/** A day range rather than a window median, because the second cannot be had.
- *
- * A median over the window needs every summary's number, and carrying 6,966 of
- * them into the page to print four figures is not a trade worth making. The
- * middle day's own middle summary, with the quietest and loudest day beside it,
- * is exact, costs one number a day, and says more than a single median would.
- */
-export function recordedReadings(days: readonly EvalDay[]): RecordedReading[] {
-	return RECORDED.map((instrument) => {
-		const known = days
-			.map((day) => day.recorded[instrument.id] ?? null)
-			.filter((value): value is number => value !== null)
-			.sort((a, b) => a - b);
-		return {
-			...instrument,
-			low: known.length === 0 ? null : known[0],
-			mid: known.length === 0 ? null : at(known, 0.5),
-			high: known.length === 0 ? null : known[known.length - 1],
-			days: known.length
-		};
-	});
-}
-
-/** How a recorded reading is written, unit included, or a dash where there is none.
- *
- * A cosine is printed as the number it is, to two places. Multiplying it by a
- * hundred and calling it a percent would read as a share of something, and it
- * is not one - it runs from -1 to 1 and has no denominator.
- */
-export function recordedText(
-	reading: RecordedReading,
-	value: number | null,
-	numberFormat: NumberFormatConfig
-): string {
-	if (value === null) return '-';
-	if (reading.unit === 'percent') return `${formatNumber(value, numberFormat, { si: false })}%`;
-	return formatNumber(value, numberFormat, { si: false });
 }

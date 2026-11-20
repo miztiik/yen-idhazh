@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { existsSync, mkdirSync, rmSync } from 'node:fs';
+import { mkdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { render } from 'svelte/server';
@@ -19,12 +19,11 @@ import { checkedRequest } from '../src/lib/data/slice-shapes';
 import { daysBetween } from '../src/lib/data/slice';
 import { sliceFromDisk } from '../src/lib/server/ledger-disk';
 import { datedFirst, evalRows, itemHealthRows, ITEM_HEALTH_COLUMNS, SCORE_COLUMNS, windowRows } from '../src/lib/server/ledger-rows';
-import { carriesServerCounters } from '../src/lib/console/machine/counters';
 import { countersFrom } from '../src/lib/console/machine/records';
 import { normalizeHostRows } from '../src/lib/data/host-fingerprint';
 import { platformMixQuery } from '../src/lib/console/queries/machine';
 import { listManifestDays } from '../src/lib/server/model-work';
-import { HOLDOUT_SCORE_COLUMNS, markedPairs, markReach, mergeLineHoldoutScore } from '../src/lib/server/content-similarity-holdout';
+import { markedPairs, markReach } from '../src/lib/server/content-similarity-holdout';
 import { windowDay } from '../src/lib/server/window-day';
 import { buildLedger, buildRows, daysBefore, everyDay, quietDays, type BuiltDay } from './support/ledger-lifecycle';
 import { publishedSite } from './support/published-site';
@@ -104,83 +103,13 @@ test.describe('what a read asks the door for', () => {
 		for (const [name, columns] of [
 			['article', ITEM_HEALTH_COLUMNS],
 			['score', SCORE_COLUMNS],
-			['machine', platformMixQuery.columns],
-			['holdout score', HOLDOUT_SCORE_COLUMNS]
+			['machine', platformMixQuery.columns]
 		] as const) {
 			expect(new Set(columns).size, `${name} names a column twice`).toBe(columns.length);
 			expect(() =>
 				checkedRequest({ columns: datedFirst(columns), from: '2026-09-01', to: '2026-09-02' })
 			).not.toThrow();
 		}
-	});
-});
-
-test.describe('a record filed inside its family folder', () => {
-	/** One reading of the merge line against the marks, every cell of it chosen. */
-	const READING = {
-		run_id: '2030-06-14-1',
-		applied_line: 0.94,
-		labeller: 'a-labeller',
-		merged_and_one_story: 79,
-		merged_and_two_stories: 1,
-		apart_and_one_story: 117,
-		apart_and_two_stories: 3,
-		pairs_unresolved: 0,
-		labelled_two_story_pairs: 4
-	};
-
-	test('the holdout score is read from its family folder, and the newest day wins', async () => {
-		// Packed with one reading on 13 and 14 Jun 2030, under compact/content-similarity-judge/.
-		// A reader that took the ledger's own name for its folder would find nothing there.
-		const state = test.info().outputPath('state');
-		await buildLedger(state, {
-			ledger: 'merge-line-holdout-scores',
-			pinned: PINNED,
-			days: [{ ago: 2, rows: 1 }, { ago: 1, rows: 1 }],
-			columns: READING
-		});
-		const folder = path.join(state, 'compact', 'content-similarity-judge', 'merge-line-holdout-scores');
-		expect(existsSync(path.join(folder, 'index', 'daily.json'))).toBe(true);
-
-		const scored = await mergeLineHoldoutScore(days('2030-06-01', PINNED), state);
-
-		expect(scored.read.state).toBe('read');
-		expect(scored.score).toEqual({
-			date: '2030-06-14',
-			runId: '2030-06-14-1',
-			appliedLine: 0.94,
-			labeller: 'a-labeller',
-			mergedAndOneStory: 79,
-			mergedAndTwoStories: 1,
-			apartAndOneStory: 117,
-			apartAndTwoStories: 3,
-			pairsUnresolved: 0,
-			labelledTwoStoryPairs: 4
-		});
-	});
-
-	test('a holdout score with no packed file is no reading, rather than an error', async () => {
-		const root = test.info().outputPath('unscored');
-		try {
-			expect(await mergeLineHoldoutScore(days('2030-06-01', PINNED), root)).toEqual({ score: null, read: { state: 'not-packed' } });
-		} finally {
-			rmSync(root, { recursive: true, force: true });
-		}
-	});
-
-	test('a window that starts after the newest reading reads none, rather than an old one', async () => {
-		// Packed with one reading on 6 May 2030, 40 days before the pinned day, and quiet after.
-		const state = test.info().outputPath('state');
-		await buildLedger(state, {
-			ledger: 'merge-line-holdout-scores',
-			pinned: PINNED,
-			days: [...everyDay(40, 40), ...quietDays(39, 0)],
-			columns: READING
-		});
-
-		const empty = await mergeLineHoldoutScore(days('2030-06-01', PINNED), state);
-		expect(empty.score).toBeNull();
-		expect(empty.read.state).toBe('read');
 	});
 });
 
@@ -232,15 +161,6 @@ test.describe('the hand marks, once a pair over their reach', () => {
 		expect(read((await markedPairs(markReach(PINNED, 30), state)).rows)).toEqual([
 			['https://left.test/another-pair', 'False', daysBefore(PINNED, 30)]
 		]);
-	});
-
-	test('no packed mark reads as none, rather than an error', async () => {
-		const root = test.info().outputPath('unmarked');
-		try {
-			expect(await markedPairs(markReach(PINNED, 730), root)).toEqual({ rows: [], read: { state: 'not-packed' } });
-		} finally {
-			rmSync(root, { recursive: true, force: true });
-		}
 	});
 });
 
@@ -792,14 +712,13 @@ test.describe("THE ORACLE: native server evidence is independent of article rows
 			machine_job: 'work',
 			machine_shard: 0
 		}));
-		const { runs, refused } = countersFrom(answer.rows, articles, [], { contextWindow: null, jobTimeoutSeconds: null });
+		const { runs, refused } = countersFrom(answer.rows, articles, []);
 		expect(refused).toEqual([]);
 		expect(runs).toHaveLength(12);
-		expect(runs.filter(carriesServerCounters).map((run) => [run.date, run.clocks.server.rate])).toEqual([
-			['2030-06-10', 100]
+		expect(answer.rows.map((host) => [host.date, Number(host.server_prompt_tokens), Number(host.server_prompt_seconds)])).toEqual([
+			['2030-06-10', 900, 9],
+			['2030-06-10', 900, 9]
 		]);
-		expect(runs.filter((run) => run.date !== '2030-06-10').every((run) =>
-			run.promptTokens.value === null && run.readSeconds.value === null)).toBe(true);
 	});
 });
 

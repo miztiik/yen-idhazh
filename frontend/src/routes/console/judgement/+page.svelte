@@ -1,23 +1,24 @@
 <script lang="ts">
-	/** Which stories the day merged, and what the judge and hand marks can tell us. */
+	/** Which stories the day merged, and how close the merge line sits to the pairs a person marked apart. */
 	import { onMount } from 'svelte';
+	import { base } from '$app/paths';
 	import { useWindowChoice } from '$lib/console/window-slot';
 	import { windowFromDates, windowOfDays } from '$lib/charts/viewport';
-	import { consoleKnobs, routeConsole } from '$lib/console/route-console';
-	import { markedApart, scoreRange } from '$lib/console/holdout';
+	import { BAND_UNREAD } from '$lib/console/band';
+	import { consoleKnobs, holdoutAxisRules, routeConsole } from '$lib/console/route-console';
 	import { judgementEvidence } from '$lib/console/judgement-evidence';
 	import WindowControlSource from '$lib/components/WindowControlSource.svelte';
 	import PanelGroup from '$lib/components/PanelGroup.svelte';
-	import MergeLinePlot from './MergeLinePlot.svelte';
 	import MergedStoriesPanel from './MergedStoriesPanel.svelte';
 	import HoldoutMargin from './HoldoutMargin.svelte';
-	import JudgeAgreement from './JudgeAgreement.svelte';
-	import RecordGates from './RecordGates.svelte';
-	import VerdictSplit from './VerdictSplit.svelte';
 
 	let { data } = $props();
 	const console = consoleKnobs();
 	const configured = routeConsole('judgement');
+	const axis = holdoutAxisRules(configured.knobs);
+	/** Where the judge's own ledgers are read. The address comes from the fixed
+	 * route table the rail is built from, never from a literal here. */
+	const explorer = BAND_UNREAD.routes.find((route) => route.id === 'data-explorer');
 
 	const presets = console.window_presets;
 	const choice = useWindowChoice();
@@ -42,25 +43,7 @@
 
 	const publishedWindow = $derived(windowFromDates(data.merges.map((day) => day.date), windowDays));
 	const viewport = $derived(publishedWindow ?? windowOfDays(data.windowDay, windowDays, 'right'));
-	const judgeWindow = $derived(windowFromDates(data.fittedRead.state === 'read'
-		? [data.fittedRead.first, data.fittedRead.through] : [], windowDays));
-	const judgeViewport = $derived(judgeWindow ?? viewport);
-	const judgeRecord = $derived(data.fittedRead.state === 'read'
-		? { asked: windowDays, first: data.fittedRead.first, through: judgeWindow?.end ?? null } : null);
-
-	/** Where the pairs a person read as two stories sit, for the one chart on
-	 * this route that has a date axis to draw the line walking into them. */
-	const apartSpan = $derived(markedApart(data.holdout.marks));
-	const apartAt = $derived(scoreRange(apartSpan.map((mark) => mark.score)));
-	const rejectedJudgeRows = $derived(data.rejectedJudgeRows.filter((row) => row.date >= judgeViewport.start && row.date <= judgeViewport.end));
-	const judgeNotes = $derived([
-		...judgementEvidence(data.fittedRead, judgeViewport, data.readSpan, 'judge'),
-		...rejectedJudgeRows.map((row) => row.rates
-			? `The judge's rate readings on ${row.date} are unavailable. They cannot support a complete window verdict.`
-			: `The calculated-line or gate readings on ${row.date} are unavailable. Valid judge-rate readings remain visible.`)
-	]);
-	const markNotes = $derived(judgementEvidence(data.holdout.read, data.holdout.reach, data.holdout.reach, 'marks'));
-	const scoreNotes = $derived(judgementEvidence(data.holdout.scoredRead, data.readSpan, data.readSpan, 'scores'));
+	const markNotes = $derived(judgementEvidence(data.holdout.read, data.holdout.reach, data.holdout.reach));
 </script>
 
 <svelte:head>
@@ -70,7 +53,15 @@
 <div data-console-panels="judgement">
 	<!-- The route owns its evidence window and hands the control to the shared shell. -->
 	<WindowControlSource route="judgement" days={windowDays} {presets} {monthsFor} {ready}
-		{publishedWindow} record={judgeRecord} onChange={show} />
+		{publishedWindow} onChange={show} />
+
+	{#if explorer}
+		<p class="elsewhere" data-judgement-elsewhere>
+			The judge's records are not drawn here: read them in the
+			<a href="{base}{explorer.href}">{explorer.label}</a>, in the pair-verdicts and
+			threshold-history ledgers. They do not change what the site merges.
+		</p>
+	{/if}
 
 	{#each configured.panel_groups as group (group.id)}
 		<PanelGroup id={group.id} title={group.title} panels={group.panels.length}>
@@ -85,76 +76,17 @@
 		readoutMaxShare={data.chart.readout_max_share}
 	/>
 
-	{:else if id === 'merge-line'}
-	<MergeLinePlot
-		days={data.fittedRead.state === 'read' ? data.lines : null}
-		evidence={judgeNotes}
-		knobs={data.similarity}
-		viewport={judgeViewport}
-		height={console.chart_height}
-		width={console.chart_width}
-		tickDensity={data.chart.tick_density}
-		readoutMaxShare={data.chart.readout_max_share}
-		builtWith={data.builtWith}
-		markedApart={apartAt === null
-			? null
-			: { low: apartAt.min, high: apartAt.max, count: apartSpan.length }}
-	/>
-
-	{:else if id === 'judge-agreement'}
-	<JudgeAgreement
-		days={data.fittedRead.state === 'read' ? data.judgeRates : null}
-		complete={!rejectedJudgeRows.some((row) => row.rates)}
-		evidence={judgeNotes}
-		limits={{
-			disagreementMax: data.similarity.disagreement_max,
-			unclearMax: data.similarity.unclear_max
-		}}
-		viewport={judgeViewport}
-		height={console.chart_height}
-		width={console.chart_width}
-		tickDensity={data.chart.tick_density}
-		readoutMaxShare={data.chart.readout_max_share}
-		attemptsFloor={console.min_attempts_for_rate}
-	/>
-
-	{:else if id === 'record-gates'}
-	<RecordGates
-		days={data.fittedRead.state === 'read' ? data.judge : null}
-		evidence={judgeNotes}
-		dates={data.span}
-		gates={{
-			minimumNegatives: data.similarity.minimum_negatives,
-			minimumDays: data.similarity.minimum_days,
-			minimumAboveLine: data.similarity.minimum_above_line
-		}}
-		viewport={judgeViewport}
-		readoutMaxShare={data.chart.readout_max_share}
-	/>
-
-	{:else if id === 'verdict-split'}
-	<VerdictSplit
-		evidence={judgeNotes}
-		record={data.record}
-		applied={data.builtWith}
-		discardShare={data.similarity.discard_share}
-		axisMultiple={console.precision_axis_multiple}
-		width={console.chart_width}
-		figures={data.figures}
-	/>
-
 	{:else if id === 'holdout-margin'}
 	<HoldoutMargin
 		marks={data.holdout.read.state === 'read' ? data.holdout.marks : null}
 		agreedScores={data.holdout.read.state === 'read' ? data.holdout.agreedScores : null}
-		evidence={[...markNotes, ...scoreNotes]}
+		evidence={markNotes}
 		skipped={data.holdout.skipped}
 		marked={data.holdout.marked}
-		applied={data.builtWith}
-		maxDownStep={data.similarity.max_down_bins * data.similarity.bin_width}
-		fitted={data.lines.some((row) => row.heldReason === 'none')}
+		line={data.holdout.line}
+		axisBelow={axis.below}
+		axisAbove={axis.above}
 		weights={data.holdout.weights}
-		scored={data.holdout.scored}
 		height={console.chart_height}
 		width={console.chart_width}
 		readoutMaxShare={data.chart.readout_max_share}
@@ -165,3 +97,16 @@
 	{/each}
 
 </div>
+
+<style>
+	.elsewhere {
+		margin: 0 0 var(--space-3);
+		font-size: var(--text-sm);
+		line-height: var(--leading-sm);
+		color: var(--color-text-secondary);
+	}
+	.elsewhere a {
+		color: var(--color-accent);
+		text-decoration: underline;
+	}
+</style>

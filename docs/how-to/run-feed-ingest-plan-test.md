@@ -150,20 +150,11 @@ They retain report and metadata recovery checks after delivery failure.
 Independent writer and contract tests own native digest, identifier and
 historical ledger coverage. The workflow does not add a synthetic receipt.
 
-## Offline recording in CI
+## Refresh the offline recordings
 
-The existing CI workflow has a default-off `capture_planner_recordings`
-dispatch input. It checks out the selected revision and runs the existing
-real API recorder against recorded RSS and HTML. It does not read live feeds,
-commit data or change parser or test deadlines.
-
-```text
-gh workflow run ci.yml --ref <branch> -f capture_planner_recordings=true
-gh run download <run-id> --name planner-current-recordings --dir <temporary-directory>
-```
-
-The `planner-current-recordings` artifact is uploaded only after the recorder
-succeeds. It contains eight files for
+Use the [local recorder](run-the-gates.md#independent-typescript-packages-and-services)
+when the recorded contract changes. It uses recorded RSS and HTML, not live feeds,
+and does not commit its outputs. It writes the following files under
 `tests/fixtures/feed-ingest-plan/entry-points/`: `response.json`, `health.json`,
 `selected-articles.json` and the `discovered-articles`, `selected-articles`,
 `rejected-articles`, `feed-health-state` and `plan-runs` `.rows.json` files.
@@ -174,9 +165,7 @@ Local capture also refreshes
 `tests/fixtures/contracts/fetched-document/refused.json` from an actual failed
 fetch made by the same offline recorder over recorded transport. It records
 current generic document identities, not copied article fields.
-This additional fixture is not included in the CI recording artifact; capture
-it locally with the same recorder when its contract changes.
-The capture switch is unset when the recorder step exits, including on failure.
+Unset the capture switch before ordinary tests.
 Review and commit only these generated current recordings, then run ordinary
 candidate CI without capture. Existing replay, CLI and full-suite gates remain
 unchanged; a recording run is not their replacement.

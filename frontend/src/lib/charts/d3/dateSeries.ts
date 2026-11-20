@@ -51,7 +51,8 @@ export interface SeriesInput {
 	/** Drawn as the hatch for a known thing with no reading, in place of a fill. */
 	hatched?: boolean;
 	/** Printed after each of this series' readings in the readout, so a share
-	 * reads `92%` and not `92`. */
+	 * reads `92%` and not `92`, and after each tick of the value axis when every
+	 * series on that axis names the same unit. */
 	unit?: string;
 	/** Required wherever a point carries a spread. The readout prints one row
 	 * for each edge, keyed by the band's own paint, so a band is never drawn
@@ -73,6 +74,10 @@ export interface DateSeriesOptions {
 	density: number;
 	/** How many ticks the value axis aims for. */
 	valueTicks: number;
+	/** How the value axis writes a tick, for a caller whose ticks need more than
+	 * the series' unit after them. It wins over that unit. Without it a tick
+	 * carries the unit every series names, or else uses the shared number style. */
+	valueFormat?: (value: number) => string;
 	number_format: NumberFormatConfig;
 	/** The share of each day's column left empty beside its bar, 0 to 1. */
 	padding: number;
@@ -87,8 +92,8 @@ export interface DateSeriesOptions {
 }
 
 /** Old callers keep their drawing; new chart options require a declared rule. */
-export type LegacyDateSeriesOptions = Omit<DateSeriesOptions, 'rule' | 'rules' | 'domain' | 'reconciliation'> & {
-	rule?: never; rules?: never; domain?: never; reconciliation?: never;
+export type LegacyDateSeriesOptions = Omit<DateSeriesOptions, 'rule' | 'rules' | 'domain' | 'reconciliation' | 'valueFormat'> & {
+	rule?: never; rules?: never; domain?: never; reconciliation?: never; valueFormat?: never;
 };
 
 export interface PlacedPoint {
@@ -197,6 +202,21 @@ function byDay(series: readonly SeriesInput[]): Map<string, number | null>[] {
 	});
 }
 
+/** A reading in the shared number style, then its unit. The readout and the
+ * value axis both write a series' figures this way, so they cannot disagree
+ * about the unit. */
+function withUnit(numberFormat: NumberFormatConfig, unit: string | undefined): (value: number) => string {
+	return (value) => `${formatNumber(value, numberFormat)}${unit ?? ''}`;
+}
+
+/** The unit every series on one axis names, or undefined where they differ or
+ * none names one: a suffix on the axis would be wrong for a series that
+ * measures something else. */
+function sharedUnit(series: readonly SeriesInput[]): string | undefined {
+	const [first] = series;
+	return first !== undefined && series.every((entry) => entry.unit === first.unit) ? first.unit : undefined;
+}
+
 /** The readout rows for a series' two spread edges, none where it draws no band. */
 function spreadRows(
 	entry: SeriesInput,
@@ -266,7 +286,7 @@ export function dateSeries(series: readonly SeriesInput[], opts: DateSeriesOptio
 			type: 'dateSeries',
 			columns: dates,
 			series: [...series, ...extra].flatMap((entry, index) => {
-				const format = (value: number) => `${formatNumber(value, opts.number_format)}${entry.unit ?? ''}`;
+				const format = withUnit(opts.number_format, entry.unit);
 				return [{
 					label: entry.label,
 					swatch: entry.fill ?? `var(${entry.token})`,
@@ -278,10 +298,13 @@ export function dateSeries(series: readonly SeriesInput[], opts: DateSeriesOptio
 			resting: 'last'
 		})
 	};
+	const unit = sharedUnit(series);
+	const tickFormat = opts.valueFormat ?? (unit === undefined ? undefined : withUnit(opts.number_format, unit));
 	function axisFor(readings: readonly number[]): ValueAxis {
 		const axis = valueAxis([...readings, ...spreads, ...rules.map((named) => named.at)], box, {
 			along: 'y',
 			ticks: opts.valueTicks,
+			format: tickFormat,
 			number_format: opts.number_format
 		});
 		if (opts.domain === undefined) return axis;
@@ -291,6 +314,7 @@ export function dateSeries(series: readonly SeriesInput[], opts: DateSeriesOptio
 			along: 'y',
 			ticks: opts.valueTicks,
 			zero: false,
+			format: tickFormat,
 			number_format: opts.number_format
 		});
 		const scale = (value: number) => box.bottom - (value - low) / (high - low) * box.innerHeight;

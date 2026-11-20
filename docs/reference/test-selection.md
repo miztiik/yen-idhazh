@@ -9,9 +9,9 @@ this page is the argument behind them.
 
 ## A suite gets expensive in two ways, and only one of them is selection
 
-**Running tests a change cannot break.** One function answers this - `ciAnswer`
-in `frontend/scripts/test-scope.ts` - rather than a rule repeated in each
-workflow, because a second place to decide is a second place to be wrong.
+**Running tests a change cannot break.** `ciAnswer` in
+`frontend/scripts/test-scope.ts` selects the extra native, frontend logic and
+tooling checks. The local selector names the affected browser groups.
 
 **A test whose cost rises because a run appended data.** This is the one that
 compounds. The test re-reads a collection that grows every four hours while its
@@ -53,21 +53,7 @@ boundaries. A shared component does not gain coverage by being checked at every
 caller. Do not multiply cases by width, theme, chart or state, or move incidental
 geometry and wording assertions wholesale into lower-tier tests.
 
-**The second one was the larger cost, and selection would not have touched it.**
-The browser job is the critical path and the backend suite is small beside it
-([benchmarks/what-the-suite-paid-to-re-read-the-archive.md](benchmarks/what-the-suite-paid-to-re-read-the-archive.md)),
-so deleting backend tests buys close to zero wall clock. Selection was worth
-doing for the browser suite and for nothing else.
-
-## What the selection gives up
-
-**A pull request defers the operator console's specs** unless the change is the
-console's own, or the harness that chooses. The console is a page one operator opens rather than anything a reader is
-served. The cost, stated rather than implied: a shared component or a token edit
-that breaks the console is found on the merge push to `main`, not on the pull
-request that caused it. `Panel.svelte` is an exception: every console route
-renders this shared frame, so editing it runs the representative console
-checks on the pull request.
+## What local selection covers
 
 **Panel rules run below the browser.** The panel browser group and bulk
 capture generator are deleted, not parked behind a dispatch flag. Shared layout
@@ -75,16 +61,13 @@ and live chart interaction are covered once by representative journeys.
 
 **Route-owned config selects the console, not every group.** Each named file
 under `config/console/` selects `logic`, `console` and `publishing`.
-This prefix belongs to `CONSOLE_OWNED`, so a pull request
-runs the representative console checks rather than deferring them. The existing
-config-change flags still apply: contract checks and archive revalidation remain
-selected. Mixed edits keep the union of their groups, and unknown paths still
-select full coverage. Both slash conventions produce the same answer.
+Mixed edits keep the union of their groups, and unknown paths still select
+full frontend coverage locally. Both slash conventions produce the same answer.
 
 The extracted `tests/support/console-expect/` files are also console-owned
-inputs. Editing route-owned expectations alone runs console checks on a pull
-request, just as editing the original spec did; other shared test helpers retain
-their existing selection. There is no per-panel driver registry to maintain.
+inputs. Editing route-owned expectations alone selects local console checks,
+just as editing the original spec does. There is no per-panel driver registry
+to maintain.
 
 The bounded `tests/support/console-window/` helpers are also console-owned.
 Both Windows and normalized paths select logic, console and publishing
@@ -97,7 +80,7 @@ not when a module is imported.
 Judgement evidence semantics are integration checks over real packed readers
 and rendered Svelte components. They do not receive special private site builds
 or browser width/theme/state sweeps. The ordinary site build proves packaging;
-the representative browser journey proves shared layout and interaction.
+the on-demand console journey proves shared layout and interaction.
 
 **The explicit inventory registers every retained spec.** There is no test
 requiring each route to acquire a separate browser driver or expectation folder.
@@ -118,21 +101,15 @@ than only a new group label.
 This keeps the ledger query checks and console consumers, without selecting
 the reader, offline, archive and model-search groups for a data-only change.
 A new consumer outside those groups needs a mapping update and a regression
-test. Mixed edits still select the union of their groups. The pull-request
-deferral above and full coverage on a code push to `main` do not change.
+test. Mixed edits still select the union of their groups.
 
-**An unclassified path falls to full coverage on purpose.** A selector that
+**An unclassified path falls to broad local coverage on purpose.** A selector that
 guesses narrow on a path nobody listed fails silently, and it fails in the
 direction that loses coverage.
 
-**A backend module with no mapped tests buys the whole backend suite and no
-browser** on a pull request. This covers every `backend/idhazh/` Python file
-outside `contracts/`. The browser reaches backend code only through the canary
-build, and buying the build and every group for each backend edit made most
-backend pull requests wait on the browser job. The cost: a backend change that
-breaks a published page is found on the merge push to `main`, which still runs
-every group. A contract keeps full coverage, because it is the shape both halves
-read.
+**A backend module with no mapped tests selects the whole backend suite
+locally.** Contracts select both backend and frontend groups since both
+read those shapes.
 
 **A utility that nothing else runs selects only its own test module.** No
 stage, build or workflow imports or runs `backend/utilities/doc_load.py`, so a
@@ -151,14 +128,11 @@ matrix in parallel, below the browser or nightly would retain the waste.
 Pictures are design-review material, not pixel-comparison checks. The later
 representative-coverage decision also removed the bulk capture generator:
 keeping the presentation matrix opt-in would retain its maintenance cost.
-Documentation-only changes stop in the scope job after the whitespace check.
-Starting the application gates for them buys a runner and setup without a code
-check to run.
-The second model-absent build remains on code pushes to `main` and on pull
-requests that can change asset loading. Skipping unrelated PR inputs defers no
-model-asset check that those inputs can change. Unknown inputs still buy it.
-Individual browser durations are retained in the `browser-results` artifact so
-the next reduction can use measured costs rather than test counts.
+Routine CI runs one real build and reader smoke, not the canary build or
+browser suites. The trade-off is no automatic browser verdict for console,
+offline, model-search, or hostile-input rendering. See
+[run the gates](../how-to/run-the-gates.md#one-real-site-build) for the current
+boundary and on-demand checks.
 Build-independent machine arithmetic and token checks are assigned to `logic`
 by the named inventory, not by a `console-` filename prefix. This retains useful
 rules while removing browser preparation from edits confined to those specs.
@@ -184,7 +158,7 @@ configured gzip limits for routes and fetched payloads; no test requires
 
 | Rejected | Why |
 | --- | --- |
-| A nightly job for the deferred console specs | A second copy of the browser job is a second thing to keep correct, and a `main` push carrying code already runs every group. |
+| Moving the full browser suite to a nightly job | It still needs a second build, all fixture preparation, and a separate runner. Run the relevant cases on demand. |
 | A guard listing the paths a test may not read | Written and deleted the same day; the rule is now stated directly in [../../CLAUDE.md](../../CLAUDE.md) Guardrail #12 and section 13. What that costs: a regression can still merge if no check catches it. |
 | Treating the shared gate lock as a result cache | It only caps how many callers run at once across worktrees and knows nothing about what ran. Two workers can still do identical work. |
 | Trusting a cached green step without its executed-test count | Collected output is not executed-test evidence, and a run that collected nothing has the same shape as a suite that passed. |

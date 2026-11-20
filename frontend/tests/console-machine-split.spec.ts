@@ -14,14 +14,7 @@ import {
 	type Placement
 } from '../src/lib/charts/machine-colour';
 import { fleetJobs } from '../src/lib/charts/fleet';
-import {
-	machineCounters,
-	type MachineLimits,
-	type MachineRun
-} from '../src/lib/console/machine/counters';
-import { ledgers, plan, type ShardReading } from './support/machine-rows';
-
-const LIMITS: MachineLimits = { contextWindow: 8192, jobTimeoutSeconds: 21_600 };
+import { ledgers, type ShardReading } from './support/machine-rows';
 
 /** `config/appearance.json` read off disk, so the steps are the page's own. */
 const CONSOLE = (
@@ -36,63 +29,18 @@ const COLOUR = { stops: CONSOLE.machine_colour_stops, floor: CONSOLE.machine_col
 /** The reserved grey, as every machine that has no speed is drawn. */
 const GREY = `var(--chart-${UNRECORDED_STOP})`;
 
-/** A shard that reported all four figures, so it lands in a group. */
-function shard(
-	index: number,
-	cpu: string,
-	figures: { readTokens: number; readSeconds: number; writeTokens: number; writeSeconds: number }
-): ShardReading {
-	return {
-		date: '2026-09-12',
-		runId: '2026-09-12-1',
-		shard: index,
-		cpuModel: cpu,
-		serverPromptTokens: figures.readTokens,
-		serverPromptSeconds: figures.readSeconds,
-		writtenTokens: figures.writeTokens,
-		writeSeconds: figures.writeSeconds,
-		cachedTokens: 0,
-		longestSequence: figures.readTokens + figures.writeTokens
-	};
-}
-
-/** Four shards on three machines and one that recorded none.
+/** One shard on an EPYC host.
  *
- * Read rates by hand: EPYC 12,000/200 = 60, Xeon 2,000/200 = 10 and again
- * 1,000/100 = 10 over its two shards pooled (3,000/300), and the unrecorded
- * shard 600/30 = 20.
+ * Read rate by hand: 12,000 tokens over 200 seconds is 60 a second.
  */
-const FOUR_SHARDS = [
-	shard(0, 'AMD EPYC 7763 64-Core Processor', {
-		readTokens: 12_000,
-		readSeconds: 200,
-		writeTokens: 1000,
-		writeSeconds: 100
-	}),
-	shard(1, 'INTEL(R) XEON(R) PLATINUM 8573C', {
-		readTokens: 2000,
-		readSeconds: 200,
-		writeTokens: 500,
-		writeSeconds: 100
-	}),
-	shard(2, 'Intel(R) Xeon(R) Platinum 8573C', {
-		readTokens: 1000,
-		readSeconds: 100,
-		writeTokens: 500,
-		writeSeconds: 100
-	}),
-	shard(3, '', { readTokens: 600, readSeconds: 30, writeTokens: 300, writeSeconds: 30 })
-];
-
-function onlyRun(readings: ShardReading[]): MachineRun {
-	const { hosts, health } = ledgers(
-		readings.map((reading) => ({ date: '2026-09-12', runId: '2026-09-12-1', ...reading }))
-	);
-	const { runs, refused } = machineCounters(hosts, health, plan(['2026-09-12-1', 4]), LIMITS);
-	expect(refused, 'the fixture was refused').toEqual([]);
-	expect(runs).toHaveLength(1);
-	return runs[0];
-}
+const FIRST_SHARD: ShardReading = {
+	date: '2026-09-12',
+	runId: '2026-09-12-1',
+	shard: 0,
+	cpuModel: 'AMD EPYC 7763 64-Core Processor',
+	serverPromptTokens: 12_000,
+	serverPromptSeconds: 200
+};
 
 test.describe('what a processor is called', () => {
 	test('the six strings the committed ledger holds normalise to six names', () => {
@@ -250,42 +198,10 @@ test.describe('which colour a machine takes', () => {
 });
 
 test.describe('the native callers retain the measured machine and shard', () => {
-	test('read and write rates stay on the measured shards, including the unnamed host', () => {
-		const run = onlyRun(FOUR_SHARDS);
-		expect(run.reported.map((one) => [one.shard, one.readTokensPerSecond, one.writeTokensPerSecond])).toEqual([
-			[0, 60, 10], [1, 10, 5], [2, 10, 5], [3, 20, 10]
-		]);
-		expect(run.reported[3].cpuModel).toBeNull();
-		expect(run.reported[3].promptTokens).toBe(600);
-		expect(run.readSpread.value).toBe(6);
-		const bare = onlyRun([{ shard: 0 }, { shard: 1 }]);
-		expect(bare.reported.every((one) => one.readTokensPerSecond === null && one.writeTokensPerSecond === null)).toBe(true);
-	});
-
-	test('a shard carries the fingerprint its machine record holds, so no map is needed', () => {
-		// The counters kept the processor name and dropped the digest until
-		// 2026-09-30, so a shard of a machine whose name has two digests became a
-		// third machine on the page. The packed row carries the digest; the shard
-		// keeps it.
-		const run = onlyRun([
-			{ ...FOUR_SHARDS[0], fingerprint: '1111111111111111' },
-			{ ...FOUR_SHARDS[0], shard: 1, fingerprint: '2222222222222222' }
-		]);
-		expect(run.reported.map((shard) => shard.fingerprint)).toEqual([
-			'1111111111111111',
-			'2222222222222222'
-		]);
-		const keys = machineKeys(run.reported);
-		expect(run.reported.map(keys).map((one) => one.key).sort()).toEqual([
-			'v2:1111111111111111',
-			'v2:2222222222222222'
-		]);
-	});
-
 	test('native fleet placement rates never borrow another shard or fingerprint algorithm', () => {
 		const { hosts } = ledgers([
-			{ ...FOUR_SHARDS[0], fingerprint: '1111111111111111' },
-			{ ...FOUR_SHARDS[0], shard: 1, fingerprint: '1111111111111111', serverPromptTokens: 2000 }
+			{ ...FIRST_SHARD, fingerprint: '1111111111111111' },
+			{ ...FIRST_SHARD, shard: 1, fingerprint: '1111111111111111', serverPromptTokens: 2000 }
 		]);
 		hosts[0].version = '2026-09-20';
 		hosts[0].fingerprint_version = '1';

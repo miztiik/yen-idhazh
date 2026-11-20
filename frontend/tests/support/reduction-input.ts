@@ -1,6 +1,6 @@
 /** One deterministic ledger the one-pass build reductions are measured over.
  *
- * Five repeated reductions became single passes and must move no number on any
+ * Four repeated reductions became single passes and must move no number on any
  * page. That is two claims and they share one input. The parity half compares
  * what the reductions return against `../fixtures/one-pass-golden.json`,
  * captured from the implementation they replaced. The counted half doubles the
@@ -11,9 +11,6 @@
  * ledger: a test that walks the archive costs more every published day
  * (Guardrail #12), and these shapes are reachable from a fixture.
  */
-
-import type { TelemetryRow } from '../../src/lib/charts/series';
-import { telemetryRow } from './telemetry-row';
 
 /** The sizes one case of the counted-visit oracle is built at.
  *
@@ -154,44 +151,6 @@ export function scoreRows(sizes: Sizes): Record<string, string>[] {
 			source_words: String(words),
 			score_ms: String(1_000 + Math.round(next() * 20_000))
 		});
-	}
-	return rows;
-}
-
-/** The published telemetry projection, one row per item per stage. */
-export function telemetryRows(days: number, perDay: number): TelemetryRow[] {
-	const next = sequence(67);
-	const rows: TelemetryRow[] = [];
-	for (let day = 0; day < days; day += 1) {
-		for (let item = 0; item < perDay; item += 1) {
-			const index = day * perDay + item;
-			// One row in six never leaves `plan`, so the denominator that excludes
-			// them is exercised; one in five fails, at a stage that rotates.
-			const stage = index % 6 === 0 ? 'plan' : ['fetch', 'extract', 'summarize'][index % 3];
-			const failed = index % 5 === 0 && stage !== 'plan';
-			rows.push(
-				telemetryRow({
-					date: dayOf(day),
-					run_id: runIdOf(day * 2),
-					item_id: `item-${index}`,
-					vertical: `desk-${index % 5}`,
-					source_id: `source-${index % 7}`,
-					stage,
-					outcome: failed ? 'failed' : 'ok',
-					code: failed ? ['paywalled', 'http_client_error', ''][index % 3] : '',
-					source_words: 400 + Math.round(next() * 1_200),
-					summary_words: 60 + Math.round(next() * 90),
-					fetch_ms: 400 + Math.round(next() * 900),
-					extract_ms: 200 + Math.round(next() * 500),
-					summarize_ms: 60_000 + Math.round(next() * 200_000),
-					prefill_ms: 30_000 + Math.round(next() * 40_000),
-					decode_ms: 20_000 + Math.round(next() * 30_000),
-					input_tokens: 2_000 + Math.round(next() * 2_000),
-					output_tokens: 150 + Math.round(next() * 100),
-					cached_tokens: Math.round(next() * 300)
-				})
-			);
-		}
 	}
 	return rows;
 }

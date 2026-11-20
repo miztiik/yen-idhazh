@@ -4,68 +4,96 @@ One stage, one module. The router does not name it: the council reaches it
 through the tenant that owns this judge (CLAUDE.md section 1a, "A router is the
 sharpest case").
 
-It calls no model, opens no socket and reads nothing under `state/`. Every
-verdict column it writes is empty: this step says which pairs are worth a
-model's time, and the step that judges them fills the rest in.
+It calls no model and opens no socket. It reads the published days the pairs come
+from, and this judge's own threshold history through the ledger door to learn which
+two thresholds the night follows. Every verdict column it writes is empty: this step
+says which pairs are worth a model's time, and the step that judges them fills the
+rest in.
 """
 
 from __future__ import annotations
 
 import csv
 import io
+from collections import Counter
 from collections.abc import Mapping
 from pathlib import Path
 
 from idhazh import assemble, atomic_write, config
+from idhazh.content_similarity_judge import settings as judge_settings
+from idhazh.content_similarity_judge.ledger_reads import load_threshold_history
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.digest_day import DigestItem
-from idhazh.contracts.story_similarity_pair import StorySimilarityPair
+from idhazh.contracts.story_similarity_pair_verdict import StorySimilarityPairVerdict
 from idhazh.similarity import selection
-from idhazh.similarity.published_line import read_published_line
 from idhazh.similarity.stamps import ScorerStamp, scorer_inputs
+from idhazh.similarity.thresholds_in_force import (
+    ThresholdsInForce,
+    lookback_days,
+    thresholds_in_force,
+)
 from idhazh.stages.assemble import _earlier_days
-from idhazh.stages.common import LOG, _load_day, _load_manifest
+from idhazh.stages.common import LOG, _load_day
+
+
+def _within_the_unit_range(value: float) -> float:
+    """A cosine or a score is from -1 to 1, and a rounding error past either end is folded back.
+
+    The contract snaps only noise of a billionth, and a dot product over two norms is
+    exact to far less, so this is the one place a stray digit is made to fit.
+    """
+    return max(-1.0, min(1.0, value))
 
 
 def _drawn_row(
-    pair: assemble.ScoredPair,
+    drawn: selection.DrawnPair,
     *,
     shard: int,
     date: str,
     run_id: str,
-    by_id: Mapping[str, DigestItem],
+    address_of: Mapping[str, str],
     stamp: ScorerStamp,
-) -> StorySimilarityPair:
+    followed: ThresholdsInForce,
+    versions: str,
+) -> StorySimilarityPairVerdict:
     """One pair as the contract holds it, with nothing judged yet.
 
     The two item ids become address keys here and nowhere deeper. An id is
     minted per day, so a record keyed on one could not recognise the same pair
     tomorrow; the address is what survives, and `source_url` is the canonical
     URL the rest of the pipeline already keys on.
+
+    The thresholds go on the row as the night followed them, unrounded. The slice
+    edges are on a grid, so they say where the pair was filed and not which
+    thresholds the draw was following.
     """
-    left, right = sorted(
-        (
-            derive_url_key(by_id[pair.left].source_url),
-            derive_url_key(by_id[pair.right].source_url),
-        )
-    )
-    return StorySimilarityPair(
-        version=StorySimilarityPair.schema_version(),
+    pair = drawn.pair
+    left, right = sorted((address_of[pair.left], address_of[pair.right]))
+    return StorySimilarityPairVerdict(
+        version=StorySimilarityPairVerdict.schema_version(),
         date=date,
         run_id=run_id,
         work_part_index=shard,
         pair_key=selection.pair_key(left, right),
         left_url_key=left,
         right_url_key=right,
-        composite_score=pair.score,
-        cosine=pair.cosine,
+        similarity_score=_within_the_unit_range(pair.score),
+        cosine=_within_the_unit_range(pair.cosine),
         headline=pair.headline,
         scorer_model=stamp.scorer_model,
         cosine_weight=stamp.cosine_weight,
+        bucket=drawn.slice.bucket,
+        slice_low=drawn.slice.low,
+        slice_high=drawn.slice.high,
+        slice_pairs_available=drawn.slice_pairs_available,
+        slice_pairs_judged=drawn.slice_pairs_judged,
+        lower_threshold_in_force=followed.lower,
+        upper_threshold_in_force=followed.upper,
+        config_versions=versions,
     )
 
 
-def _as_csv(rows: list[StorySimilarityPair]) -> str:
+def _as_csv(rows: list[StorySimilarityPairVerdict]) -> str:
     """The draw as the file holds it: the contract's own columns, header first.
 
     A header goes down even on a day that drew nothing, so a shard that opens the
@@ -73,7 +101,7 @@ def _as_csv(rows: list[StorySimilarityPair]) -> str:
     """
     buffer = io.StringIO()
     writer = csv.DictWriter(
-        buffer, fieldnames=StorySimilarityPair.csv_columns(), lineterminator="\n"
+        buffer, fieldnames=StorySimilarityPairVerdict.csv_columns(), lineterminator="\n"
     )
     writer.writeheader()
     writer.writerows(row.csv_row() for row in rows)
@@ -87,8 +115,9 @@ def stage_pick_item_pairs(
     settings: config.Settings,
     draw_path: Path,
     digest_root: Path,
+    state_dir: Path,
 ) -> selection.Draw:
-    """Score one day's cross-source pairs, keep the borderline ones, deal the shards.
+    """Score one day's cross-source pairs, cut them into slices, deal the shards.
 
     **This is the day's second scoring pass and it is not free.** The same
     arithmetic inside `assemble` measures a median 22.9 s on the largest day
@@ -100,13 +129,23 @@ def stage_pick_item_pairs(
 
     **The read is bounded by the window and never by the archive** (Guardrail
     #12). One day payload and the `ceil(window / 24)` earlier days
-    `_earlier_days` already declares - one at the 36-hour default. Nothing here
-    walks a collection a run appends to.
+    `_earlier_days` already declares - two at the 36-hour default - and the
+    `thresholds_lookback_days` days of threshold history before the night.
+    Nothing here walks a collection a run appends to.
 
-    **The pairs at or above the line the day was built with are never cut.**
-    Those are the merges a reader is already living with, so they are the whole
-    of what a later precision figure can be read off; sampling them away would
-    leave the run unable to say how many of its own merges were wrong.
+    **Only pairs that hold one of the day's own stories are drawn.** The
+    grouping pass never weighs two earlier-day stories against each other, so
+    such a pair cannot change what publishes, and it already had its turn the
+    night the later of the two was new. `assemble.cross_source_pairs` does not
+    yield it, which leaves the budget to pairs that have not had theirs. **A pair
+    of addresses is drawn once**, whatever number of items carry them.
+
+    **Pairs at every score are drawn**, from -1 to 1. Which ones, and how many, is
+    the slice rule in `idhazh.similarity.selection`: the budget goes mostly to
+    the scores around the two thresholds, where the judge's answers decide where the
+    thresholds sit, and lightly to the scores far from both. Each row names the slice
+    that took it and how many pairs the slice held and gave, which is what lets the
+    night's totals be weighed back up to everything the night held.
 
     **`run_id` is the council's own and is handed in.** The run that scored a
     pair is the run that drew it, which is what the pair row's own column says;
@@ -122,16 +161,14 @@ def stage_pick_item_pairs(
     the council's answer rather than this stage's: a path outside the root the
     venue carries between jobs dies with the runner that wrote it.
 
-    **`digest_root` is handed in for the same reason it is on the judging stage.**
-    A default bound here would be read when this module imported, so a caller
-    that moved `common.PUBLIC_ROOT` afterwards would still be served the tree the
-    import saw.
+    **`digest_root` and `state_dir` are handed in for the same reason it is on the
+    judging stage.** A default bound here would be read when this module imported,
+    so a caller that moved `common.PUBLIC_ROOT` afterwards would still be served
+    the tree the import saw.
     """
-    same_story = settings.app.assemble.same_story
-    tuning = same_story.judging_knobs()
-    from idhazh.content_similarity_judge import settings as judge_settings
-
     execution = judge_settings.load(settings.config_dir)
+    draw = execution.draw
+    same_story = settings.app.assemble.same_story
     shards = settings.council.shards
     window_hours = settings.app.assemble.same_story_window_hours
     stamp = scorer_inputs(settings)
@@ -144,7 +181,7 @@ def stage_pick_item_pairs(
             draw_path.name,
         )
         atomic_write.write_atomic(draw_path, _as_csv([]))
-        return selection.Draw(taken=[], pairs_in_band=0)
+        return selection.Draw(taken=[], pairs_available=0)
 
     earlier = _earlier_days(date, window_hours=window_hours)
     by_id: dict[str, DigestItem] = {item.item_id: item for item in day.items}
@@ -152,39 +189,63 @@ def stage_pick_item_pairs(
         # Today's copy of an address that published twice wins, which is the
         # precedence the grouping pass applies to the same two blocks.
         by_id.update({one.item_id: one for one in block.items if one.item_id not in by_id})
+    address_of = {item_id: derive_url_key(one.source_url) for item_id, one in by_id.items()}
 
-    banded = selection.in_band(
-        assemble.cross_source_pairs(
-            day.items,
-            day.embeddings,
-            same_story=same_story,
-            group_identical_titles=settings.app.assemble.group_identical_titles,
-            window_hours=window_hours,
-            earlier=earlier,
+    followed = thresholds_in_force(
+        load_threshold_history(
+            state_dir, lookback_days(date, within_days=draw.thresholds_lookback_days)
         ),
-        band_low=tuning.band_low,
-        band_high=tuning.band_high,
-    )
-    line = read_published_line(
-        date,
-        manifest=_load_manifest(assemble.day_dir(digest_root, date) / "run.json", day=day),
-        floor_min=same_story.floor_min,
+        night=date,
+        within_days=draw.thresholds_lookback_days,
+        lower_start=execution.thresholds.lower_start,
+        upper_start=execution.thresholds.upper_start,
     )
     drawn = selection.select(
-        banded, line=line, budget=execution.pair_budget, date=date, stamp=stamp
+        selection.one_pair_a_key(
+            assemble.cross_source_pairs(
+                day.items,
+                day.embeddings,
+                same_story=same_story,
+                group_identical_titles=settings.app.assemble.group_identical_titles,
+                window_hours=window_hours,
+                earlier=earlier,
+            ),
+            address_of=address_of,
+            own={item.item_id for item in day.items},
+        ),
+        lower=followed.lower,
+        upper=followed.upper,
+        draw=draw,
+        date=date,
+        stamp=stamp,
     )
+    versions = judge_settings.config_versions(settings.config_dir)
     rows = [
-        _drawn_row(pair, shard=shard, date=date, run_id=run_id, by_id=by_id, stamp=stamp)
-        for shard, pair in selection.assign_shards(drawn.taken, shards=shards)
+        _drawn_row(
+            one,
+            shard=shard,
+            date=date,
+            run_id=run_id,
+            address_of=address_of,
+            stamp=stamp,
+            followed=followed,
+            versions=versions,
+        )
+        for shard, one in selection.assign_shards(drawn.taken, shards=shards)
     ]
     atomic_write.write_atomic(draw_path, _as_csv(rows))
     LOG.info(
-        "pick-item-pairs date=%s run=%s in_band=%s drawn=%s budget=%s shards=%s out=%s",
+        "pick-item-pairs date=%s run=%s available=%s drawn=%s budget=%s lower=%s upper=%s "
+        "thresholds_set_on=%s by_bucket=%s shards=%s out=%s",
         date,
         run_id,
-        drawn.pairs_in_band,
+        drawn.pairs_available,
         len(rows),
-        execution.pair_budget,
+        draw.pair_budget,
+        followed.lower,
+        followed.upper,
+        followed.set_on or "the configured starts",
+        dict(sorted(Counter(row.bucket.value for row in rows).items())),
         shards,
         draw_path.name,
     )

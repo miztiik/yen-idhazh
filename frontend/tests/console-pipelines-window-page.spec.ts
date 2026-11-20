@@ -103,11 +103,11 @@ test('a day with no row draws no column, and its strip says so, while a day that
 	const split = nativeTimeSplit(nativeRows, calendar);
 	const splitStrip = timeSplitReadout(split, numberFormat);
 	expect(splitStrip.columns).toEqual(['2030-06-13', '2030-06-14', '2030-06-15']);
-	expect(splitStrip.series.slice(0, 7).map((band) => band.values)).toEqual(
-		['0.1 s', '0.02 s', '0.6 s', '0.03 s', '0.05 s', '0.8 s', '0 s'].map((value) => [null, null, value]));
+	expect(splitStrip.series.slice(0, 8).map((band) => band.values)).toEqual(
+		['0.1 s', '0.02 s', '0 s', '0.6 s', '0.03 s', '0.05 s', '0.8 s', '0 s'].map((value) => [null, null, value]));
 	expect(splitStrip.notMeasured).toBe('Not measured for the complete cohort');
 	expect(split.series.map((stage) => stage.points.map((point) => point.value))).toEqual(
-		[100, 20, 600, 30, 50].map((value) => [null, null, value]));
+		[100, 20, 0, 600, 30, 50].map((value) => [null, null, value]));
 });
 
 test.describe('a strip keeps room only for what each entry prints', () => {

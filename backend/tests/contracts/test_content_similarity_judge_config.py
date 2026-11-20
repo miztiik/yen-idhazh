@@ -1,7 +1,8 @@
-"""Does the judge read its own required execution settings without changing its model?"""
+"""Does the judge read its own required settings and revision date without changing its model?"""
 
 import dataclasses
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -26,7 +27,27 @@ def declaration(root: Path, **changes: object) -> Path:
     return path
 
 
-def test_the_judge_owns_the_three_execution_knobs_and_shared_stages_keep_the_rest() -> None:
+def known_answer_pairs(root: Path, **changes: object) -> Path:
+    """Write the known-answer pairs file beside the judge's, with some keys changed."""
+    path = root / "judges" / "content-similarity-canaries.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    raw = json.loads(
+        (CONFIG_DIR / "judges" / "content-similarity-canaries.json").read_text(encoding="utf-8")
+    )
+    raw.update(changes)
+    path.write_text(json.dumps(raw), encoding="utf-8", newline="\n")
+    return path
+
+
+def committed(block: str) -> dict[str, object]:
+    """One nested block of the committed judge file, for a test to change one key of."""
+    raw = json.loads(
+        (CONFIG_DIR / "judges" / "content-similarity-judge.json").read_text(encoding="utf-8")
+    )
+    return dict(raw[block])
+
+
+def test_the_judge_reads_its_draw_and_thresholds_from_its_own_file() -> None:
     settings = config.load(CONFIG_DIR)
     execution = judge_settings.load(CONFIG_DIR)
     raw = json.loads(
@@ -35,11 +56,6 @@ def test_the_judge_owns_the_three_execution_knobs_and_shared_stages_keep_the_res
     assert execution.model_dump() == {
         name: raw[name] for name in type(execution).model_fields
     }
-    shared = settings.app.assemble.same_story.judging_knobs().model_dump()
-    assert not set(type(execution).model_fields) & set(shared)
-    assert {"enabled", "band_low", "bin_width", "discard_share", "applied_lookback_days"} <= set(
-        shared
-    )
     digest = next(
         digest
         for digest in settings.digests
@@ -49,14 +65,19 @@ def test_the_judge_owns_the_three_execution_knobs_and_shared_stages_keep_the_res
 
 
 def test_a_written_judge_file_changes_the_sampler_and_the_stamp_together(tmp_path: Path) -> None:
-    declaration(tmp_path, pair_budget=7, flush_every_pairs=2, judge_temperature=0.4)
+    declaration(
+        tmp_path,
+        draw=committed("draw") | {"pair_budget": 7},
+        flush_every_pairs=2,
+        judge_temperature=0.4,
+    )
     settings = dataclasses.replace(config.load(CONFIG_DIR), config_dir=tmp_path)
     prompt_file = settings.app.prompt_files.compare_articles
     prompt_path = tmp_path / prompt_file
     prompt_path.parent.mkdir(parents=True)
     prompt_path.write_bytes((CONFIG_DIR / prompt_file).read_bytes())
     execution = judge_settings.load(tmp_path)
-    assert execution.pair_budget == 7 and execution.flush_every_pairs == 2
+    assert execution.draw.pair_budget == 7 and execution.flush_every_pairs == 2
     sampling = judge.decode_settings(settings)
     assert sampling["temperature"] == 0.4
     assert stamps.judge_inputs(settings).judge_temperature == 0.4
@@ -64,7 +85,9 @@ def test_a_written_judge_file_changes_the_sampler_and_the_stamp_together(tmp_pat
     assert sampling["top_p"] == judge.entry_of(settings).sampling["top_p"]
 
 
-@pytest.mark.parametrize("key", ["pair_budget", "flush_every_pairs", "judge_temperature"])
+@pytest.mark.parametrize(
+    "key", ["draw", "thresholds", "flush_every_pairs", "judge_temperature", "version"]
+)
 def test_a_missing_owned_knob_is_refused_at_the_judge_reader(tmp_path: Path, key: str) -> None:
     path = declaration(tmp_path)
     raw = json.loads(path.read_text(encoding="utf-8"))
@@ -72,6 +95,76 @@ def test_a_missing_owned_knob_is_refused_at_the_judge_reader(tmp_path: Path, key
     path.write_text(json.dumps(raw), encoding="utf-8", newline="\n")
     with pytest.raises(ValueError, match=key):
         judge_settings.load(tmp_path)
+
+
+@pytest.mark.parametrize(
+    ("block", "changes", "refused"),
+    [
+        ("draw", {"slice_width": 0.03}, "does not divide 1"),
+        ("draw", {"coarse_slice_width": 0.035}, "whole number of"),
+        ("draw", {"fully_similar": {"weight": 6, "minimum": 7, "maximum": 6}}, "above the maximum"),
+        ("draw", {"pair_budget": 0}, "pair_budget"),
+        ("draw", {"unknown_knob": 1}, "unknown_knob"),
+        ("thresholds", {"upper_start": 0.8}, "need 0.1200"),
+        ("thresholds", {"lower_start": 0.95}, "apart"),
+        ("thresholds", {"upper_start": 1.0}, "fully similar end"),
+        ("thresholds", {"lower_start": -1.0}, "fully dissimilar end"),
+        ("thresholds", {"upper_start": 0.9900000005}, "fully similar end"),
+        ("thresholds", {"lower_start": -0.9900000005}, "fully dissimilar end"),
+        ("thresholds", {"lower_share_level": 0.95}, "lower_share_level 0.95 is not below"),
+        ("thresholds", {"pull_minimum_nights": 29}, "pull_minimum_nights 29 is above"),
+        ("thresholds", {"far_gap": 0.01}, "far_gap 0.01 is not above"),
+        ("thresholds", {"far_gap_step": 0.01}, "far_gap_step 0.01 is under"),
+        ("thresholds", {"lowest_lower_threshold": -1.0}, "lowest_lower_threshold -1.0 leaves"),
+        ("thresholds", {"highest_upper_threshold": 1.0}, "highest_upper_threshold 1.0 leaves"),
+        ("thresholds", {"smallest_gap": 0.1}, "smallest_gap 0.1 is under"),
+        ("thresholds", {"lowest_lower_threshold": 0.75}, "is below lowest_lower_threshold"),
+        ("thresholds", {"highest_upper_threshold": 0.9}, "is above highest_upper_threshold"),
+        ("thresholds", {"smallest_gap": 0.25}, "closer than smallest_gap"),
+    ],
+)
+def test_settings_the_night_could_not_run_on_are_refused_at_the_judge_reader(
+    tmp_path: Path, block: str, changes: dict[str, object], refused: str
+) -> None:
+    declaration(tmp_path, **{block: committed(block) | changes})
+    with pytest.raises(ValueError, match=refused):
+        judge_settings.load(tmp_path)
+
+
+@pytest.mark.parametrize(
+    "version",
+    [
+        20261118,
+        "2026-11-18T00:00",
+        "2026-02-30",
+        "\u0662\u0660\u0662\u0666-\u0661\u0661-\u0661\u0668",
+        "9999-12-31",
+    ],
+    ids=["an integer", "a time", "a day that does not exist", "non-ascii digits", "a day to come"],
+)
+def test_a_version_that_is_not_a_past_date_is_refused_at_the_judge_reader(
+    tmp_path: Path, version: object
+) -> None:
+    declaration(tmp_path, version=version)
+    with pytest.raises(ValueError, match="version"):
+        judge_settings.load(tmp_path)
+
+
+def test_a_version_of_today_is_read(tmp_path: Path) -> None:
+    today = datetime.now(UTC).date().isoformat()
+    declaration(tmp_path, version=today)
+    assert judge_settings.load(tmp_path).version == today
+
+
+def test_the_versions_a_night_read_are_one_line_of_ascii_json_keyed_by_file(
+    tmp_path: Path,
+) -> None:
+    declaration(tmp_path, version="2026-11-17")
+    known_answer_pairs(tmp_path, version="2026-11-18")
+    assert judge_settings.config_versions(tmp_path) == (
+        '{"judges/content-similarity-canaries.json":"2026-11-18",'
+        '"judges/content-similarity-judge.json":"2026-11-17"}'
+    )
 
 
 def test_offline_settings_use_their_own_named_file_and_defaults(tmp_path: Path) -> None:

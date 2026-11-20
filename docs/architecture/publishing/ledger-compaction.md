@@ -1,6 +1,6 @@
 # Ledger compaction
 
-**Last Updated**: 2026-11-01
+**Last Updated**: 2026-11-19
 
 How a ledger's daily, monthly and yearly files are packed and dropped. The
 gardener runs a compaction like any other task; how a wake runs its tasks and
@@ -1125,8 +1125,8 @@ with `expired_through` preserves progress without keeping an entry for every
 deleted year. The manual prune refusal still protects recent history; scheduled
 expiry follows the reviewed yearly policy. A ledger moved onto the door since
 takes the same chain with it, because the maintainer directed on 2026-10-05 that a
-moved ledger takes its retention and upkeep with it; the merge line's holdout
-score is one, and the hand marks a person harvests for it are another.
+moved ledger takes its retention and upkeep with it; the hand marks a person
+harvests for the merge line are one.
 
 `telemetry-aggregate` stays report-only. No item-health summaries have been
 generated yet, because its source months must first age past 14 months.

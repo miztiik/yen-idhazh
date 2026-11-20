@@ -18,6 +18,7 @@ from typing import Final
 
 from idhazh.content_similarity_judge import settings as judge_settings
 from idhazh.contracts.app_config import AppConfig
+from idhazh.contracts.knobs.content_similarity_canaries import ContentSimilarityCanaryConfig
 from idhazh.contracts.knobs.content_similarity_judge import ContentSimilarityJudgeConfig
 from idhazh.contracts.knobs.council import CouncilConfig
 from idhazh.council.deadline import compute_shard_deadline
@@ -40,6 +41,7 @@ def refuse_a_night_this_tenant_cannot_finish(
     *,
     council: CouncilConfig,
     judge_knobs: ContentSimilarityJudgeConfig | None = None,
+    canaries: ContentSimilarityCanaryConfig | None = None,
 ) -> None:
     """A draw a unit cannot finish is a job GitHub kills with nothing uploaded.
 
@@ -54,24 +56,37 @@ def refuse_a_night_this_tenant_cannot_finish(
     council's own clock function rather than from a second copy of the
     subtraction.
 
-    The refusal prints the arithmetic and names the three knobs, because a person
+    **The known-answer pairs are counted too.** A runner judges its share of them before
+    its own pairs, each at the cost of a drawn pair, so the busiest runner's work is its
+    share of the draw plus its share of them, each rounded up. The file is read through
+    the same loader the runners use, so one that does not load stops the night here, in
+    the planning job, before any runner restores its weights.
+
+    The refusal prints the arithmetic and names the knobs, because a person
     raising the budget has to choose between them and a bare comparison says
     which one it is not.
+
+    `app` is handed in because the council hands every tenant's check the same
+    arguments, and nothing in it decides this: the draw budget is this judge's own
+    setting.
     """
-    if app.assemble.same_story.adaptive_dedup_threshold is None:
-        return
     knobs = judge_settings.load(council.config_dir) if judge_knobs is None else judge_knobs
-    a_shard = math.ceil(knobs.pair_budget / council.shards)
+    known = judge_settings.load_canaries(council.config_dir) if canaries is None else canaries
+    drawn = math.ceil(knobs.draw.pair_budget / council.shards)
+    checks = math.ceil(len(known.pairs) / council.shards)
+    a_shard = drawn + checks
     seconds = a_shard * SECONDS_A_JUDGED_PAIR
     window = compute_shard_deadline(council, started=0.0)
     if seconds <= window:
         return
     raise ValueError(
-        f"pair_budget {knobs.pair_budget} over {council.shards} shards is {a_shard} pairs "
-        f"a shard, which at {SECONDS_A_JUDGED_PAIR} s a pair is {seconds:.0f} s against "
-        f"the {window:.0f} s a unit has to work in - council.shard_timeout_minutes of "
-        f"{council.shard_timeout_minutes} less shard_preamble_minutes "
-        f"{council.shard_preamble_minutes} and shard_wrap_up_minutes "
-        f"{council.shard_wrap_up_minutes}. Lower pair_budget, raise council.shards, or "
-        "raise the timeout - which may not go past GitHub's 6 h job ceiling"
+        f"draw.pair_budget {knobs.draw.pair_budget} over {council.shards} shards is {drawn} "
+        f"pairs a shard, and the {len(known.pairs)} known-answer pairs add {checks} more to "
+        f"the busiest, {a_shard} in all, which at {SECONDS_A_JUDGED_PAIR} s a pair is "
+        f"{seconds:.0f} s against the {window:.0f} s a unit has to work in - "
+        f"council.shard_timeout_minutes of {council.shard_timeout_minutes} less "
+        f"shard_preamble_minutes {council.shard_preamble_minutes} and shard_wrap_up_minutes "
+        f"{council.shard_wrap_up_minutes}. Lower draw.pair_budget, raise council.shards, "
+        "drop a pair from config/judges/content-similarity-canaries.json, or raise the "
+        "timeout - which may not go past GitHub's 6 h job ceiling"
     )

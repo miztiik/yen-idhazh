@@ -1,6 +1,6 @@
 # How multilingual text analysis runs
 
-**Last Updated**: 2026-11-11
+**Last Updated**: 2026-11-17
 
 How one independently started local service turns validated English or Chinese
 text into selected linguistic evidence without persisting source text or
@@ -64,7 +64,7 @@ installed package version, model metadata and language must match the committed
 settings. Missing or incompatible model identity returns request-level
 `MODEL_UNAVAILABLE`.
 
-English and Chinese expose `sm`, `md` and `lg`; `md` is the configured default.
+English and Chinese expose `sm`, `md` and `lg`; `lg` is the configured default.
 Chinese does not declare noun-phrase support. Tamil remains a valid request
 language but is disabled, so it returns `LANGUAGE_UNAVAILABLE` before profile
 resolution or executor admission.

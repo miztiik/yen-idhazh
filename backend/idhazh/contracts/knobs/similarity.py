@@ -1,9 +1,8 @@
-"""How many days back do the readers of the hand-marked holdout look?
+"""How many days back does the hand-marked holdout look?
 
-The `similarity` block of `config/idhazh.json`. Its one knob is read by both
-readers of the holdout marks: `idhazh.similarity.holdout.marked_pairs`, which
-the scoring verb calls, and the Judgement route's build-time read in
-`frontend/src/lib/server/content-similarity-holdout.ts`. So a read of the marks opens a
+The `similarity` block of `config/idhazh.json`. Its one knob is read by the Judgement
+route's build-time read in `frontend/src/lib/server/content-similarity-holdout.ts` and by
+the marks' retention, which may not delete a day inside it. So a read of the marks opens a
 fixed number of days however long the ledger grows (Guardrail #12).
 """
 

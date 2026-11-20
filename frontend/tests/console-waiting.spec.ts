@@ -24,13 +24,14 @@ test('each settled ledger state has its own words and only failure takes warning
 	expect(() => emptyState('too-few', '')).toThrow(/sentence/);
 });
 
-test('the route standing waits without giving an answer and counts missing panels separately', () => {
+test('the route standing waits without giving an answer and counts missing and failed parts separately', () => {
 	const reading = { days: 14, through: '2026-10-09', missing: 4, unreachable: 6, shimmer: false };
 	expect(routeStanding({ ...reading, state: 'loading' })).toBe('Loading chart data. Previously loaded windows are reused.');
 	expect(routeStanding({ ...reading, state: 'loading', shimmer: true })).toBe('Loading chart data. Previously loaded windows are reused.');
 	expect(routeStanding({ ...reading, state: 'quiet' })).toBe('Nothing was recorded in these 14 days.');
-	expect(routeStanding({ ...reading, state: 'missing' })).toBe('4 panels read a record this site has not published yet, so they have nothing to draw.');
-	expect(routeStanding({ ...reading, state: 'unreachable' })).toBe('Part of the record did not arrive, so 6 panels have nothing to draw.');
+	expect(routeStanding({ ...reading, state: 'missing' })).toBe('4 parts of the record are not published yet.');
+	expect(routeStanding({ ...reading, missing: 1, state: 'missing' })).toBe('1 part of the record is not published yet.');
+	expect(routeStanding({ ...reading, state: 'unreachable' })).toBe('6 parts of the record did not arrive.');
 	expect(routeStanding({ ...reading, state: 'ok' })).toBe('The panels below reach 9 Oct 2026.');
 	expect(() => routeStanding({ ...reading, state: 'ok', through: null })).toThrow(/day/);
 });

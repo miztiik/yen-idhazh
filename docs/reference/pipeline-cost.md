@@ -1,6 +1,6 @@
 # What the Pipeline Costs to Run
 
-**Last Updated**: 2026-10-25
+**Last Updated**: 2026-11-18
 
 Where current runtime measurements live and how to use them when sizing work. This page does not keep a history of production runs or duplicate model readings.
 
@@ -104,7 +104,8 @@ not measured future growth. No Plan 13 escalation trigger was observed.
 
 ## What to measure next
 
-The user deferred further work on the reported two-call slowdown and adoption
+The user deferred further work on the reported two-call slowdown (the design that
+ran until 2026-11-17) and adoption
 of two simultaneous model requests per worker. Neither deferral is a finding
 that the current cost is acceptable or that concurrency helps. Reopening either
 needs a current measurement using the active model and runtime, matched inputs,

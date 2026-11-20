@@ -3,21 +3,36 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 import pytest
-from test_similarity_counting import a_row
+from support.judged_pairs import a_reading
 
-from idhazh.contracts.story_similarity_pair import SameStoryVerdict, StorySimilarityPair
-from idhazh.similarity.statistics import PairStatistics, reading_statistics
+from idhazh.contracts.story_similarity_pair_verdict import SameStoryVerdict
+from idhazh.contracts.story_similarity_runner_report import StorySimilarityRunnerReport
+from idhazh.similarity.statistics import (
+    PairStatistics,
+    combined_statistics,
+    reading_statistics,
+    shipped_statistics,
+)
 
 
-def pair(forward: str | None, reverse: str | None, index: int = 0) -> StorySimilarityPair:
-    raw = a_row(score=0.55, pair=index).model_dump(mode="json") | {
-        "verdict": forward, "verdict_swapped": reverse,
-        "grammar_applied": forward is not None and reverse is not None,
-        "usable": forward is not None and forward == reverse,
-    }
-    return StorySimilarityPair.model_validate(raw)
+@dataclass(frozen=True)
+class Reading:
+    """The three cells the statistics read, which every judged pair carries."""
+
+    verdict: SameStoryVerdict | None
+    verdict_swapped: SameStoryVerdict | None
+    grammar_applied: bool | None
+
+
+def pair(forward: str | None, reverse: str | None) -> Reading:
+    return Reading(
+        None if forward is None else SameStoryVerdict(forward),
+        None if reverse is None else SameStoryVerdict(reverse),
+        grammar_applied=forward is not None and reverse is not None,
+    )
 
 
 @pytest.mark.parametrize(
@@ -50,21 +65,20 @@ def test_zero_denominators_are_unavailable_not_perfect_agreement() -> None:
 
 def test_swapping_failure_order_and_recombining_shards_keeps_counts_and_rates() -> None:
     rows = [
-        pair(None, "YES", 0), pair("NO", "YES", 1),
-        pair("UNCLEAR", "UNCLEAR", 2), pair("YES", "YES", 3), pair(None, None, 4),
+        pair(None, "YES"), pair("NO", "YES"),
+        pair("UNCLEAR", "UNCLEAR"), pair("YES", "YES"), pair(None, None),
     ]
     swapped = [
         pair(
             None if row.verdict_swapped is None else row.verdict_swapped.value,
             None if row.verdict is None else row.verdict.value,
-            index,
         )
-        for index, row in enumerate(rows)
+        for row in rows
     ]
     stats = reading_statistics(rows)
     assert stats == reading_statistics(swapped) == PairStatistics(5, 3, 2, 1)
     assert (stats.refused, stats.disagreement_rate, stats.unclear_rate) == (2, 1 / 3, 1 / 2)
-    partitions: Sequence[Sequence[StorySimilarityPair]] = (rows[:1], rows[1:4], rows[4:])
+    partitions: Sequence[Sequence[Reading]] = (rows[:1], rows[1:4], rows[4:])
     combined = PairStatistics(
         *(sum(getattr(reading_statistics(part), field) for part in partitions)
           for field in ("attempted", "valid", "agreed", "unclear"))
@@ -75,7 +89,44 @@ def test_swapping_failure_order_and_recombining_shards_keeps_counts_and_rates() 
 
 
 def test_legacy_readings_with_no_grammar_flag_remain_readable_under_their_own_method() -> None:
-    row = a_row(score=0.55, verdict=SameStoryVerdict.UNCLEAR).model_copy(update={
-        "judge_policy_version": None, "grammar_applied": None,
-    })
-    assert reading_statistics([row]) == PairStatistics(1, 1, 1, 1)
+    legacy = Reading(SameStoryVerdict.UNCLEAR, SameStoryVerdict.UNCLEAR, grammar_applied=None)
+    assert reading_statistics([legacy]) == PairStatistics(1, 1, 1, 1)
+
+
+def a_shipped(
+    *, read: int, agreed: int, unclear_rate: float | None, refused: int = 0
+) -> StorySimilarityRunnerReport:
+    """One runner's shipped reading with these counts, the rest of its funnel left as it was."""
+    return a_reading(
+        shard=0, dealt=read + refused, date="2026-11-18", run_id="2026-11-18-9"
+    ).model_copy(
+        update={
+            "pairs_valid": read,
+            "pairs_agreed": agreed,
+            "pairs_refused": refused,
+            "unclear_rate": unclear_rate,
+        }
+    )
+
+
+def test_a_shipped_reading_gives_back_the_counts_its_rates_were_made_from() -> None:
+    """Nine valid pairs and two refused, six agreed and a third of those UNCLEAR: 2 of 6."""
+    stats = shipped_statistics(a_shipped(read=9, agreed=6, unclear_rate=1 / 3, refused=2))
+
+    assert stats == PairStatistics(attempted=11, valid=9, agreed=6, unclear=2)
+    assert shipped_statistics(a_shipped(read=4, agreed=0, unclear_rate=None)).unclear == 0
+
+
+def test_runners_are_counted_as_one_lot_so_a_big_runner_outweighs_a_small_one() -> None:
+    """Ten pairs of which 2 were UNCLEAR and two pairs of which 1 was: 3 of 12, not 35 percent.
+
+    Averaging the two runners' own rates, 0.2 and 0.5, would give 0.35 and weigh the runner
+    that read two pairs as much as the runner that read ten.
+    """
+    big = shipped_statistics(a_shipped(read=10, agreed=10, unclear_rate=0.2))
+    small = shipped_statistics(a_shipped(read=2, agreed=2, unclear_rate=0.5))
+
+    combined = combined_statistics([big, small])
+
+    assert combined == PairStatistics(attempted=12, valid=12, agreed=12, unclear=3)
+    assert combined.unclear_rate == pytest.approx(0.25)
