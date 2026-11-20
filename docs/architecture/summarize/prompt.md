@@ -85,9 +85,10 @@ field in its grammar.
 
 The chart grammar branches on the type the model writes, using the same role
 rules as the validator. A line cannot assign its values to a scatter axis,
-and a categorical comparison keeps each label beside its reading rather than
-relying on parallel lists. Chart prose cannot repeat digits from the reference
-block.
+and a categorical comparison cites a short label span next to each reading.
+Label choices are code-supplied references to literal phrases in the fenced
+data, not assigned names or a pre-paired data set. The model picks labels and
+readings; code checks each reference and cuts the label from source.
 
 ## One call writes the summary and plans the visual, and the article is read once
 

@@ -51,11 +51,10 @@ channel restating the chart's own data, and no validator can read prose to check
 the last unguarded channel in a design whose whole claim is that a stranger's page cannot reach a
 drawn figure.
 
-**Three prose channels remain, and the answer holds them to no digit.** `title`, `caption` and `why` are
-length-capped by the plan contract. The validator's numeral check only proves that a numeral inside one
-appears among the cited figures, not that it belongs to the row the answer names, so a chart answer is
-refused by name when any of the three holds a digit
-([below](#a-chart-answer-becomes-a-plan-in-code)); the validator's check stays as the second line.
+**Three prose channels remain.** `title`, `caption` and `why` are length-capped.
+The reason describes the comparison in words. The title and caption may
+repeat numerals from the cited elements; the validator refuses any other
+numeral. No prose field supplies a value to the chart renderer.
 
 **`confidence` is optional and null.** The model is not asked for one,
 nothing reads it, and it gates nothing. Field order is decode order, so where one is decoded it comes
@@ -81,7 +80,7 @@ has the existing role layout, purpose, optional whole and highlight, and
 vocabulary stamp. No persisted shape changes.
 
 An unsupported form, unknown reference, unanchored label, incomplete
-highlight, or digit in chart prose is refused with `failed_field` and
+highlight, or digit in the reason is refused with `failed_field` and
 `failed_rule`. Invalid role shape, units or other incompatible evidence are
 then caught by the existing validator and compiler. In either case the
 summary survives.

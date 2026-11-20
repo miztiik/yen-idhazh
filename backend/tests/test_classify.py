@@ -146,7 +146,10 @@ def a_reply(**changed: object) -> str:
         "visual": {
             "why": "Four countries, one unit.",
             "type": "bar",
-            "encodings": {"category": WIND_NAMES, "quantity": ["q1", "q2", "q3", "q4"]},
+            "encodings": {"points": [
+                {"quantity": f"q{index}", "category": "l3"}
+                for index in range(1, len(WIND_NAMES) + 1)
+            ]},
             "focus": "q1",
             "whole": None,
             "title": "Offshore wind approved",
@@ -173,8 +176,8 @@ class TestTheSummarizeAndPlanOracle:
             type=form, focus="q2", title="Offer and opening prices",
             why="The opening share price exceeded the offer price.",
             encodings={"points": [
-                {"category": "offer price", "quantity": "q1"},
-                {"category": "shares opened", "quantity": "q2"},
+                {"quantity": "q1", "category": "l1"},
+                {"quantity": "q2", "category": "l1"},
             ]},
         )).visual
         plan, grounded = resolve_visual_choice(choice, data, PRICES, table)
@@ -248,15 +251,21 @@ class TestTheSummarizeAndPlanOracle:
         assert list(answers) == ["none", *(form.value for form in VISUALS.select_types())]
         assert answers["bar"]["focus"]["enum"] == ["q1", "q2", "q3"]
         assert answers["bar"]["encodings"]["required"] == ["points"]
-        assert schema["$defs"]["ComparisonPoint"]["properties"]["quantity"]["enum"] == [
-            "q1", "q2", "q3",
-        ]
+        points = schema["$defs"]["ComparisonPoint"]["anyOf"]
+        allowed = {
+            code: choice["properties"]["category"]["enum"]
+            for choice in points for code in choice["properties"]["quantity"]["enum"]
+        }
+        assert set(allowed) == {"q1", "q2", "q3"}
+        assert {data.labels["q3"][label].span_excerpt for label in allowed["q3"]} >= {
+            "Southeast Asia",
+        }
         line = answers["line"]["encodings"]
         assert line["required"] == ["quantity", "time"]
         assert "quantity_x" not in line["properties"]
         assert line["properties"]["time"]["items"]["enum"] == ["d1"]
-        assert re.fullmatch(answers["line"]["title"]["pattern"], "Global EGDI")
-        assert not re.fullmatch(answers["line"]["title"]["pattern"], "Global EGDI in 2026")
+        assert re.fullmatch(answers["line"]["why"]["pattern"], "Global EGDI rose.")
+        assert not re.fullmatch(answers["line"]["why"]["pattern"], "Global EGDI rose in 2026.")
 
     def test_without_chart_data_the_question_is_left_off_the_request(
         self, dense: Article
@@ -285,7 +294,7 @@ class TestTheSummarizeAndPlanOracle:
             )
         ]
         occurrences = [found.start() for found in re.finditer(re.escape(order), prompt)]
-        assert len(occurrences) == 2, "once in the article and once in the data references"
+        assert len(occurrences) >= 2, "both the full article and derived evidence carry the text"
         assert all(any(start <= at < end for start, end in fenced) for at in occurrences)
 
 
@@ -477,9 +486,9 @@ class TestTheDataReferencesAreOptional:
         ({"title": None}, "visual.title", "visual_choice_title_required"),
         ({"title": "   "}, "visual.title", "visual_choice_title_required"),
         ({"title": ""}, "visual.title", "string_too_short"),
-        ({"title": "Wind approved in 2026"}, "visual.title", "visual_choice_prose_has_digit"),
+        ({"title": "Wind <think>approved"}, "visual.title", "visual_choice_unsafe_prose"),
         ({"why": "Four countries, 4 figures."}, "visual.why", "visual_choice_prose_has_digit"),
-        ({"caption": "A forecast for 2026."}, "visual.caption", "visual_choice_prose_has_digit"),
+        ({"caption": "A forecast <think>."}, "visual.caption", "visual_choice_unsafe_prose"),
         ({"title": "model-only words" * TITLE_MAX_LENGTH}, "visual.title", "string_too_long"),
         ({"model-only words": "model-only words"}, "visual", "extra_forbidden"),
     ),
@@ -504,9 +513,12 @@ def test_shape_diagnostics_keep_native_fields_and_rules_without_reply_text(
     ("changed", "rule"),
     (
         ({"type": "area"}, "visual_choice_unsupported_type"),
-        ({"focus": "q9"}, "visual_choice_unknown_ref"),
         (
-            {"encodings": {"category": ["IPO", "shares opened"], "quantity": ["q1", "q2"]}},
+            {"encodings": {"points": [{"quantity": "q9", "category": "l1"}]}},
+            "visual_choice_unknown_ref",
+        ),
+        (
+            {"encodings": {"points": [{"quantity": "q1", "category": "l9"}]}},
             "visual_choice_unanchored_label",
         ),
     ),
@@ -532,11 +544,13 @@ def test_incompatible_evidence_and_incomplete_type_roles_never_draw(
 ) -> None:
     text = "The installed capacity is 20 MW. The first shipment weighs 35 tonnes."
     table, data = chart_data_over(article_ok, text)
+    encodings = (
+        {"points": [{"quantity": "q1", "category": "l1"}, {"quantity": "q2", "category": "l5"}]}
+        if type_name == "bar" else {"quantity": ["q1", "q2"]}
+    )
     choice = parse_summarize_and_plan(a_reply(
         type=type_name,
-        encodings={
-            "category": ["installed capacity", "first shipment"], "quantity": ["q1", "q2"],
-        },
+        encodings=encodings,
     )).visual
     plan, grounded = resolve_visual_choice(choice, data, text, table)
     assert check in {rejection.check for rejection in validate_plan(plan, grounded, visuals=VISUALS)}

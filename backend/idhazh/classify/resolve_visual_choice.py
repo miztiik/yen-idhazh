@@ -42,8 +42,10 @@ NO_CHART: Final = "none"
 _INDEX: Final = rf"[1-9][0-9]{{0,{ELEMENT_ID_OFFSET_DIGITS - 1}}}"
 QUANTITY_CODE: Final = rf"^q{_INDEX}$"
 DATE_CODE: Final = rf"^d{_INDEX}$"
+LABEL_CODE: Final = rf"^l{_INDEX}$"
 QuantityRef = Annotated[str, StringConstraints(pattern=QUANTITY_CODE)]
 DateRef = Annotated[str, StringConstraints(pattern=DATE_CODE)]
+LabelRef = Annotated[str, StringConstraints(pattern=LABEL_CODE)]
 _Names = Annotated[list[PlanTitle], Field(max_length=MAX_IDS_PER_ROLE)]
 _Quantities = Annotated[list[QuantityRef], Field(max_length=MAX_IDS_PER_ROLE)]
 _Dates = Annotated[list[DateRef], Field(max_length=MAX_IDS_PER_ROLE)]
@@ -51,12 +53,11 @@ COMPARISONS: Final = frozenset({VisualType.BAR, VisualType.DOT, VisualType.PIE})
 
 
 class ComparisonPoint(Model):
-    category: PlanTitle
     quantity: QuantityRef
+    category: LabelRef
 
 
 class ChartReferences(Model):
-    category: _Names = Field(default_factory=list)
     quantity: _Quantities = Field(default_factory=list)
     time: _Dates = Field(default_factory=list)
     quantity_x: _Quantities = Field(default_factory=list)
@@ -89,11 +90,16 @@ class PlanChoice(Model):
             raise _refusal(
                 "visual_choice_focus_required", "a chart highlights one drawn reading", "focus"
             )
+        if any(character.isdigit() for character in self.why):
+            raise _refusal(
+                "visual_choice_prose_has_digit", "the reason must name the comparison in words",
+                "why",
+            )
         for field in ("why", "title", "caption"):
             words = getattr(self, field)
-            if words is not None and any(character.isdigit() for character in words):
+            if words is not None and sanitize(words) != words.strip():
                 raise _refusal(
-                    "visual_choice_prose_has_digit", "the model writes no numbers in prose", field
+                    "visual_choice_unsafe_prose", "chart prose is plain text", field
                 )
         return self
 
@@ -265,17 +271,12 @@ def resolve_visual_choice(
     if whole is not None and form not in {VisualType.PIE, VisualType.STACKED_BAR}:
         raise _refusal("visual_choice_unexpected_whole", "only composition cites a whole", "whole")
     references = choice.encodings
-    if references.points:
-        if form not in COMPARISONS or references.category or references.quantity:
-            raise _refusal(
-                "visual_choice_unexpected_points",
-                "category points belong to comparisons and replace the parallel channels",
-                "encodings.points",
-            )
-        references = references.model_copy(update={
-            "category": [point.category for point in references.points],
-            "quantity": [point.quantity for point in references.points],
-        })
+    if references.points and (form not in COMPARISONS or references.quantity):
+        raise _refusal(
+            "visual_choice_unexpected_points",
+            "category points belong to comparisons and replace the quantity channel",
+            "encodings.points",
+        )
     source = {element.element_id: element for element in table.elements}
     known = source.copy()
     sentences = sentence_starts(text)
@@ -289,7 +290,19 @@ def resolve_visual_choice(
             _source_ref(code, request, field) for code in getattr(references, role.value)
         ]
     quantities = channels[EncodingRole.QUANTITY]
-    for role in (EncodingRole.CATEGORY, EncodingRole.ENTITY, EncodingRole.SERIES):
+    for point in references.points:
+        reading = _source_ref(point.quantity, request, "encodings.points.quantity")
+        label = request.labels.get(point.quantity, {}).get(point.category)
+        if label is None:
+            raise _refusal(
+                "visual_choice_unanchored_label",
+                "the label reference must belong to its own reading",
+                "encodings.points.category",
+            )
+        known.setdefault(label.element_id, label)
+        channels[EncodingRole.CATEGORY].append(label)
+        quantities.append(reading)
+    for role in (EncodingRole.ENTITY, EncodingRole.SERIES):
         field = f"encodings.{role.value}"
         for index, phrase in enumerate(getattr(references, role.value)):
             scope = _label_scope(role, form, index, quantities)

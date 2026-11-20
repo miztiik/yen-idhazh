@@ -5,7 +5,7 @@ Start with the item headline: what numerical comparison would explain the main f
 Write "why" first, in one sentence. Name the things being compared, their shared measure, and what the reader will see. Use words, not values or placeholders. If the source explicitly compares the readings on the same basis as part of the main finding, use them even if the summary already reports the comparison. Exclude unrelated readings. Use "none" only if the main finding has no useful comparable readings; explain what does not match or what is missing.
 
 Choose "type" from the renderer capabilities based on the data, or "none" if no useful chart can be supported. Use these "encodings" (omit unused keys):
-- bar or dot: "points", one object per reading with "category" then "quantity".
+- bar or dot: "points", one object per reading with its q code in "quantity" followed by one of that reading's label codes in "category".
 - line: "quantity" and "time", paired in date order. Use it for measurements over time, not just two named stages.
 - slope: two dates in "time", before and after quantities consecutive for each subject, and one "entity" or "series" per subject.
 - scatter or bubble: one "entity", "quantity_x", and "quantity" per point in matching order. Bubble also needs "size".
@@ -13,13 +13,18 @@ Choose "type" from the renderer capabilities based on the data, or "none" if no 
 - stacked_bar: "series" and "quantity" for exhaustive parts; cite "whole" and copy the common "measure" beside it.
 - histogram: "bins" lists comparable individual readings, not precomputed counts.
 
-Each bracketed code marks the reading at that place in the source: q for quantity, d for date. To label a point, copy consecutive source words next to that code, letter for letter. Category labels can be names or stages of the same subject. If the source says "began trading at", copy "began trading"; do not replace words or add "price". Give a short title naming the measure without a date or number. Use a caption only to identify a forecast or similar context. Use "focus" for one drawn q code. Only composition sets "whole" to a q code; otherwise use null. For "none", use empty encodings and null focus, whole, title and caption.
+Each bracketed code marks the reading at that place in the source: q for quantity, d for date. In "points", pick the shortest label from that q code's labels that identifies the place or stage without ambiguity; copy its l code, not its words. For entity or series labels, copy consecutive source words, letter for letter. Give a short title naming the measure. Use a caption only to identify a forecast or similar context. Use "focus" for one drawn q code. Only composition sets "whole" to a q code; otherwise use null. For "none", use empty encodings and null focus, whole, title and caption.
 
 Example: The offer price was [q1: $$12] per share. The offering generated [q2: $$17 million] in proceeds.
 "visual": {"why":"The offer price is per share, while the proceeds are for the entire offering.","type":"none","encodings":{},"focus":null,"whole":null,"title":null,"caption":null}
 
 Example: Shares began trading at [q1: $$17], above their offer price of [q2: $$12]. The sale raised [q3: $$5 million].
-"visual": {"why":"Shares began trading above the offer price on the same per-share basis.","type":"bar","encodings":{"points":[{"category":"began trading","quantity":"q1"},{"category":"offer price","quantity":"q2"}]},"focus":"q1","whole":null,"title":"Offer and first trade prices","caption":null}
+q1 labels: l1 = Shares began trading; l2 = began trading; l3 = trading
+q2 labels: l1 = above their offer price; l2 = their offer price; l3 = offer price; l4 = price
+"visual": {"why":"Shares began trading above the offer price on the same per-share basis.","type":"bar","encodings":{"points":[{"quantity":"q1","category":"l2"},{"quantity":"q2","category":"l3"}]},"focus":"q1","whole":null,"title":"Offer and first trade prices","caption":null}
 
 Example: The forecast has yearly electricity demand growth strongest in North Bay ([q1: 5%]), followed by East Bay ([q2: 3%]) and West Bay ([q3: 1%]). Total energy demand in North Bay will grow by [q4: 2%].
-"visual": {"why":"North Bay leads East Bay and West Bay in forecast annual electricity demand growth.","type":"dot","encodings":{"points":[{"category":"North Bay","quantity":"q1"},{"category":"East Bay","quantity":"q2"},{"category":"West Bay","quantity":"q3"}]},"focus":"q1","whole":null,"title":"Forecast annual electricity demand growth by region","caption":"These are forecast rates."}
+q1 labels: l1 = in North Bay; l2 = North Bay; l3 = Bay
+q2 labels: l1 = followed by East Bay; l2 = by East Bay; l3 = East Bay; l4 = Bay
+q3 labels: l1 = and West Bay; l2 = West Bay; l3 = Bay
+"visual": {"why":"North Bay leads East Bay and West Bay in forecast annual electricity demand growth.","type":"dot","encodings":{"points":[{"quantity":"q1","category":"l2"},{"quantity":"q2","category":"l3"},{"quantity":"q3","category":"l2"}]},"focus":"q1","whole":null,"title":"Forecast annual electricity demand growth by region","caption":"These are forecast rates."}

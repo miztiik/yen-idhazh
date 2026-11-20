@@ -128,7 +128,7 @@ This is the whole safety design, and it is structural rather than instructed.
 1. Code cuts quantity and date spans, then anchors the mentions the text-analysis
    service returned against the same article text.
 2. The model chooses a form and cites numeric readings, dates and short label
-   phrases as needed. Its chart prose contains no digits.
+   phrases as needed. Numerals in a title or caption must match cited elements.
 3. Code checks the references, re-slices labels, and builds and validates the
    plan before compiling the chart. Any derived value
    is arithmetic over source-backed elements through the closed, provenance-

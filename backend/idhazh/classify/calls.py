@@ -53,7 +53,7 @@ def _words_only(schema: dict[str, Any]) -> dict[str, Any]:
     # The native decoder uses the pattern instead of maxLength. Bound the
     # repeat and keep it within one JSON string, excluding digits and escapes.
     length = schema["maxLength"]
-    return {"type": "string", "pattern": rf'^[^"\\\r\n0-9]{{1,{length}}}$'}
+    return {"type": "string", "pattern": rf'^[^"\\\r\n<>0-9]{{1,{length}}}$'}
 
 
 def _chart_reply_schema(
@@ -85,8 +85,7 @@ def _chart_reply_schema(
             "required": required_roles,
         }
         fields["focus"] = fields["focus"]["anyOf"][0]
-        fields["title"] = _words_only(fields["title"]["anyOf"][0])
-        fields["caption"] = {"anyOf": [_words_only(fields["caption"]["anyOf"][0]), null]}
+        fields["title"] = fields["title"]["anyOf"][0]
     else:
         fields["encodings"] = {"type": "object", "properties": {}, "additionalProperties": False}
         fields["focus"] = fields["title"] = fields["caption"] = null
@@ -121,7 +120,20 @@ def summarize_and_plan_schema(
         quantity = {"type": "string", "enum": quantities}
         for role in VALUE_ROLES:
             roles[role.value]["items"] = quantity
-        definitions[ComparisonPoint.__name__]["properties"]["quantity"] = quantity
+        point = definitions[ComparisonPoint.__name__]
+        groups: dict[tuple[str, ...], list[str]] = {}
+        for code, labels in data.labels.items():
+            groups.setdefault(tuple(labels), []).append(code)
+        if groups:
+            definitions[ComparisonPoint.__name__] = {"anyOf": [
+                point | {"properties": {
+                    "quantity": {"type": "string", "enum": readings},
+                    "category": {"type": "string", "enum": list(labels)},
+                }}
+                for labels, readings in groups.items()
+            ]}
+        else:
+            roles["points"].update(minItems=0, maxItems=0)
         if dates:
             roles["time"]["items"] = {"type": "string", "enum": dates}
         else:
