@@ -1,0 +1,40 @@
+{
+  "caption": "Figures are CNBC and Bloomberg estimates of a single price target.",
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": "m4",
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "energy-q27xqn1ka1n0b3fa",
+  "marks": [
+    {"derived": null,"element_id": "entity-2009-2015","mark_id": "m0","source_text": null,"text": "Claude","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-2079-2083","mark_id": "m1","source_text": null,"text": "CNBC","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-2104-2113","mark_id": "m2","source_text": null,"text": "Bloomberg","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-2073-2076","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "$","value": "80"},
+    {"derived": null,"element_id": "quantity-2093-2096","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "$","value": "83"},
+    {"derived": null,"element_id": "quantity-2135-2138","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "$","value": "85"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Anthropic's expected Nasdaq price target by source",
+  "type": "bar",
+  "version": "2026-10-27T05:00"
+}
