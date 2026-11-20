@@ -89,7 +89,7 @@ test('a range shares the divisor with ends and named rules; short rows rank last
 	expect(html).toContain('on the floor');
 	expect(html).toContain('data-chart-type="rankedList"');
 	expect(html).toContain('data-readout-none=');
-	expect(html).toContain('inline-size: 10.0000%; background: var(--chart-1)');
+	expect(html).toContain('inline-size: 10.0000%; background: var(--chart-measure)');
 });
 
 test('each CPU and L3 group draws one mean-time bar with visible shares, weighted rates and sample counts', async () => {
