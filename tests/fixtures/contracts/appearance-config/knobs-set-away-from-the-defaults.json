@@ -209,7 +209,7 @@
         "text": "#262620", "text_secondary": "#635f56", "text_tertiary": "#757065",
         "rule": "#dbd7cc", "rule_strong": "#b7b0a1", "accent": "#0c756f",
         "accent_hover": "#095e59", "on_accent": "#fffffe", "focus": "#0c756f",
-        "selected": "#ddeceb", "chart_axis": "#b7b0a1", "chart_grid": "#dbd7cc",
+        "selected": "#ddeceb", "chart_axis": "#b7b0a1", "chart_grid": "#dbd7cc", "chart_measure": "#496688",
         "categorical": ["#366b9b", "#7e54a1", "#17809a", "#a4437d", "#5a69b0", "#2a749f", "#9a5bac", "#787369"]
       },
       "dark": {
@@ -217,7 +217,7 @@
         "text": "#f1eee6", "text_secondary": "#c2bdb2", "text_tertiary": "#a49d90",
         "rule": "#3a3a33", "rule_strong": "#575449", "accent": "#6cc8bf",
         "accent_hover": "#95dad1", "on_accent": "#132823", "focus": "#6cc8bf",
-        "selected": "#273e39", "chart_axis": "#575449", "chart_grid": "#3a3a33",
+        "selected": "#273e39", "chart_axis": "#575449", "chart_grid": "#3a3a33", "chart_measure": "#9eb8d4",
         "categorical": ["#8cbde6", "#bfa3e0", "#73c7da", "#e7a2ca", "#a5b2e9", "#84c0dd", "#cfa5e1", "#b1ab9f"]
       }
     },

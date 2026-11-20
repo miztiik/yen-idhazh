@@ -27,7 +27,7 @@
 	const gain = $derived(sizeGain(manifests.filter((day) => day.date >= window.start && day.date <= window.end)));
 	const signed = $derived(cost.days.filter((day) => day.bytesPerItem < 0));
 	const windowDays = $derived(daysInWindow(window).length);
-	const geometry = $derived(dateSeries([{ label: 'Payload bytes per article', token: '--chart-3', points: siteCostPoints(cost, window) }],
+	const geometry = $derived(dateSeries([{ label: 'Payload bytes per article', token: '--chart-measure', points: siteCostPoints(cost, window) }],
 		{ frame: frame(width, knobs.chart_height, MARGIN), density: chart.tick_density, valueTicks: 5, padding: 0.2, stacked: true, rule, number_format: chart.number_format,
 			rules: cost.median === null ? [] : [{ at: cost.median, label: 'window median' }] }));
 </script>

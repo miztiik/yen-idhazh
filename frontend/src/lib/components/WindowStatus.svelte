@@ -1,7 +1,7 @@
 <script lang="ts">
 	/** Say which record the window holds without moving the content on selection. */
 	import { plural } from '$lib/format';
-	import { recordWindowSentence, type RecordWindow } from '$lib/console/waiting';
+	import { recordWindowBounds, recordWindowSentence, type RecordWindow } from '$lib/console/waiting';
 
 	let {
 		days,
@@ -26,6 +26,7 @@
 	} = $props();
 
 	const pending = $derived(monthsFor(days));
+	const span = $derived(ready ? recordWindowBounds(record) : null);
 	let previousRecord = $state.raw<RecordWindow | null>(null);
 	$effect(() => { if (record !== null) previousRecord = record; });
 	const sizingRecord = $derived(record ?? previousRecord);
@@ -60,7 +61,7 @@
 </script>
 
 <div class="window-status">
-	<p id="window-control-status" data-window-status>{status}</p>
+	<p id="window-control-status" data-window-status data-range-from={span?.start} data-range-to={span?.end}>{status}</p>
 	{#each recordSizes as sentence}
 		<span class="window-status-measure" aria-hidden="true">{sentence}</span>
 	{/each}

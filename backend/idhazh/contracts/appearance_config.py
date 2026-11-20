@@ -583,7 +583,8 @@ class AppearanceConfig(Contract):
         json_schema_extra={
             "readCompatibility": (
                 "additive; absent archive controls and console_style blocks/leaves use "
-                "declared defaults; style arrays replace whole; numeric console frame "
+                "declared defaults, including the console measurement color; "
+                "style arrays replace whole; numeric console frame "
                 "maxima retain their caps and null selects the full window; "
                 "chart.palette adds spectral and piyg while prior choices remain accepted; "
                 "retired console.doubt_rows is discarded on read"
@@ -591,6 +592,11 @@ class AppearanceConfig(Contract):
         }
     )
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-11-20",
+            change="Separate ordinary console measurements from category colors.",
+            why="Past configs use the default measurement color and keep explicit categories.",
+        ),
         ChangelogEntry(
             version="2026-11-15",
             change="Remove the console source-doubt ranking limit.",
@@ -605,11 +611,6 @@ class AppearanceConfig(Contract):
             version="2026-11-11",
             change="Allow an uncapped console frame and activate additive chart hover.",
             why="Existing numeric caps still read; non-hover fact access is unchanged.",
-        ),
-        ChangelogEntry(
-            version="2026-11-10",
-            change="Separate archive search controls and add defaulted console-only styling.",
-            why="Missing controls and style leaves use defaults without changing reader styling.",
         ),
         ChangelogEntry(
             version="2026-09-30",

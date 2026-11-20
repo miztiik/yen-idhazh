@@ -148,7 +148,7 @@ test('histogram bars and inspection swatches use the same named quantity', async
 	});
 	await expect(page.locator('[data-hist-bin] rect').first()).toHaveAttribute('fill', `var(${barToken})`);
 	expect(await page.locator('[data-readout-row="Read in this band"] .readout-swatch').evaluate((node) => (node as HTMLElement).style.background)).toBe(`var(${barToken})`);
-	await expect(page.locator('[data-histogram="cumulative"]')).toHaveAttribute('stroke', 'var(--chart-3)');
+	await expect(page.locator('[data-histogram="cumulative"]')).toHaveAttribute('stroke', 'var(--color-text)');
 	await expect(page.locator('svg[data-chart="time-histogram"]')).toHaveAttribute('data-chart-name', 'reading');
 });
 

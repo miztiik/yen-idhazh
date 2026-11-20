@@ -1,6 +1,6 @@
 # Which console surfaces follow the window, and which say why not
 
-**Last Updated**: 2026-11-19
+**Last Updated**: 2026-11-20
 
 One control at the top of the console sets the span for the whole page. This page
 is the control, and the list of every surface that does not simply follow it -
@@ -72,16 +72,19 @@ The removed extraction panel supplies neither a private share nor native
 extraction or flag queries. Settings markers follow the evidence they annotate.
 The private visual-attempt view instead ends on its own newest attempt day and
 prints that span beside its charts. It does not extend an axis to the newest
-published day when no attempt data reaches it.
+published day when no attempt data reaches it. The panel names the attempt span
+only when it differs from the published charts' span.
 
 Summaries dates its private cards and daily figures from their build-time
 article and score record coverage. Bounded publication dates retain the shared
 published-day window without reading retired reason or confidence aggregates,
 so a newer publication cannot hide older measured cards.
 Native panels retain the common record endpoint,
-their own first-day clamp and any declared widest-span comparison. Both routes
-keep the private bounds and native reach in the shared date line; panels
-retain their own independently clamped bounds. Neither
+their own first-day clamp and any declared widest-span comparison. The header
+combines published and packed dates only when both bounds match. Otherwise,
+it names the two sources separately. Panels print a UTC span only when it
+differs from their source's header span; the note says why. Fixed-run panels
+name the run they draw rather than echoing a calendar range. Neither
 an empty private window nor an unavailable native read moves either clock.
 Successful native reads add no standing summary. Quiet, missing and failed
 standings still name their native scope. Lost-day and unread-file notes remain
@@ -91,8 +94,8 @@ Moved timing panels keep their original endpoint groups. Summaries' `item-cost`
 uses item-health alone, independently of its other native panels' common
 item-health/evaluation endpoint. Pipelines' `write-cost` retains that common
 item-health/evaluation endpoint, independently of ordinary Pipelines readings.
-Both clamp their first day to item-health's own first day and print their actual
-UTC bounds beside the panel. A lagging evaluation ledger therefore dates
+Both clamp their first day to item-health's own first day. They name their
+actual UTC bounds beside the panel if the bounds differ. A lagging evaluation ledger therefore dates
 write-cost earlier without backshifting either route or changing item-cost.
 Recording-start notes use the ledger's actual first day, not the selected
 slice's first day; narrowing a preset does not claim that earlier records vanished.
@@ -102,7 +105,7 @@ slowest ranking but using the selected preset rather than a newest-day snapshot.
 Unused host and dispatch-count records cannot backdate article-only readings.
 Hardware's `slower-on-same-work` keeps item-health alone, independently of its
 ordinary three-family native reach. Both queries
-clamp their start to item-health's own first day and print compact UTC bounds.
+clamp their start to item-health's own first day and name any different bounds once.
 The tail's settings markers still cover the full selected preset at its own
 endpoint; the fixed-work trend's rules follow its clamped query range.
 Neither route backshifts its other panels or adopts private published-day dates.

@@ -23,6 +23,7 @@
 		label,
 		width,
 		height,
+		binLabel = 'Rows',
 		readoutMaxShare = 1
 	}: {
 		geometry: BinGeometry | null;
@@ -31,6 +32,7 @@
 		label: string;
 		width: number;
 		height: number;
+		binLabel?: string;
 		readoutMaxShare?: number;
 	} = $props();
 
@@ -46,7 +48,7 @@
 		type: 'distribution',
 		columns: geometry.bins.map((bin) => `${formatNumber(bin.x0, numberFormat)} to ${formatNumber(bin.x1, numberFormat)}`),
 		series: [
-			{ label: 'Rows', swatch: 'var(--chart-1)', values: geometry.bins.map((bin) => bin.count), format: (value) => formatNumber(value, numberFormat, { exact: true }) },
+			{ label: binLabel, swatch: 'var(--chart-measure)', values: geometry.bins.map((bin) => bin.count), format: (value) => formatNumber(value, numberFormat, { exact: true }) },
 			{ label: 'At or below', swatch: null, values: geometry.bins.map((bin) => bin.share), format: formatShare }
 		],
 		notMeasured: 'No readings in this bin.',
@@ -100,7 +102,7 @@
 		{/each}
 
 		{#each geometry.bins as bin (bin.x0)}
-			<rect x={bin.left} y={bin.top} width={bin.width} height={bin.height} fill="var(--chart-1)" aria-label={`${formatNumber(bin.x0, numberFormat)} to ${formatNumber(bin.x1, numberFormat)}: ${formatNumber(bin.count, numberFormat, { exact: true })} rows, ${formatShare(bin.share)} at or below`} />
+			<rect x={bin.left} y={bin.top} width={bin.width} height={bin.height} fill="var(--chart-measure)" aria-label={`${formatNumber(bin.x0, numberFormat)} to ${formatNumber(bin.x1, numberFormat)}: ${formatNumber(bin.count, numberFormat, { exact: true })} ${binLabel.toLowerCase()}, ${formatShare(bin.share)} at or below`} />
 		{/each}
 		<path d={geometry.cumulative} fill="none" stroke="var(--color-text)" stroke-width={CURVE} />
 
@@ -141,7 +143,7 @@
 		{@const at = selected ?? readout.resting}
 		<dl class="record-readout" data-readout={name} data-readout-shape="record" style="max-width: {readoutMaxShare * 100}%">
 			<dt data-readout-subject>{readout.columns[at]}</dt>
-			<div data-readout-row="rows"><dd>Rows</dd><dd>{readout.series[0]?.values[at]}</dd></div>
+			<div data-readout-row="rows"><dd>{binLabel}</dd><dd>{readout.series[0]?.values[at]}</dd></div>
 			<div data-readout-row="share"><dd>At or below</dd><dd>{readout.series[1]?.values[at]}</dd></div>
 		</dl>
 	{/if}

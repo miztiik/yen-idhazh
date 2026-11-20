@@ -21,7 +21,7 @@
 	const duration = (ms: number | null) => ms === null ? 'Not measured' : secs(ms);
 	const utc = (ms: number | null) => ms === null ? null : new Date(ms).toISOString().replace('T', ' ').replace('Z', ' UTC');
 	const VIEWS: { value: TimelineMeasure; text: string }[] = [
-		{ value: 'elapsed', text: 'Elapsed time' }, { value: 'work', text: 'Item work' }
+		{ value: 'elapsed', text: 'Elapsed time' }, { value: 'work', text: 'Summed article work' }
 	];
 	let measure = $state<TimelineMeasure>('elapsed');
 	let measured = $state<number | null>(null);
@@ -50,6 +50,11 @@
 	{#if view.empty}
 		<p class="note" data-run-timeline-empty>No item record is available for this run. Elapsed time needs recorded starts and ends; item work needs recorded costs.</p>
 	{:else}
+		<p class="note" data-timeline-coverage data-comparison="Each recorded shard's time against the other recorded shards in this run.">
+			<strong>Latest recorded run:</strong> {view.runId} (UTC).
+			{count(view.shards.length)} {view.shards.length === 1 ? 'shard' : 'shards'} with article records.
+			The date selector does not change this view. Workers without linked article records are not listed.
+		</p>
 		<dl class="headline">
 			<div class="primary">
 				<dt>Recorded item window</dt>
@@ -72,7 +77,6 @@
 				</dd>
 			</div>
 		</dl>
-		<p class="note">Run <strong>{view.runId}</strong> (UTC): {count(view.itemCount)} items, {count(view.shards.length)} recorded {view.shards.length === 1 ? 'shard' : 'shards'}.</p>
 		<div class="controls">
 			<ShapeSwitch bind:shape={measure} name="timeline-view" label="Which timing to compare" options={VIEWS} />
 			<span class="note">Longest first</span>
@@ -174,8 +178,8 @@
 	.gutter { text-align: start; font-size: var(--text-sm); font-weight: 600; white-space: nowrap; }
 	small { display: block; font-size: var(--text-xs); font-weight: 400; color: var(--color-text-secondary); }
 	.track { position: relative; display: block; block-size: var(--space-5); }
-	.fill { position: absolute; block-size: 100%; background: var(--chart-1); border-radius: var(--radius-sm); }
-	.fill.zero { border-inline-start: 1px solid var(--chart-1); }
+	.fill { position: absolute; block-size: 100%; background: var(--chart-measure); border-radius: var(--radius-sm); }
+	.fill.zero { border-inline-start: 1px solid var(--chart-measure); }
 	.guide { position: absolute; inset-block: calc(0px - var(--space-2)); border-inline-start: 1px solid var(--color-rule); }
 	.total { text-align: end; font-size: var(--text-sm); white-space: nowrap; }
 	summary { font-size: var(--text-sm); cursor: pointer; }

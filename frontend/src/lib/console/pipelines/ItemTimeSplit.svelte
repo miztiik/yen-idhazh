@@ -25,17 +25,31 @@
 	const readout = $derived(timeSplitReadout(split, numberFormat));
 </script>
 <div use:observeWidth={(next) => measured = next}>
-<p data-lede class="lede">{split.meanMs === null ? 'No whole item clock was measured.' : `${formatNumber(split.meanMs / 1000, numberFormat, { si: false })} seconds per timed article.`}</p>
-<p data-comparison="Summarize against fetching, extracting, analyzing and checking.">Summarize against fetching, extracting, analyzing and checking, over the same complete, reconciling clocks. Calls are details, not extra stages.</p>
-<p data-duration-cohort>{split.count} of {split.recorded} recorded item clocks supply these means. Positive unclaimed time and overlap are averaged separately; the solid marker is elapsed time.</p>
+<p data-lede class="lede" data-comparison="Time per stage against the other stages in the same complete article clocks.">{split.meanMs === null ? 'No complete article timings.' : `${formatNumber(split.meanMs / 1000, numberFormat, { si: false })} seconds per timed article.`}
+	<span data-duration-cohort>{split.count} of {split.recorded} recorded item clocks used.</span>
+</p>
 <DateSeries {geometry} empty={emptyState('quiet', 'No complete reconciling item clock was measured.')}
 	name="item-time-split" label="Daily mean stage durations with separate overlap deduction and elapsed marker"
 	{width} height={knobs.chart_height} readout={{ ...readout, columns: readout.columns.map(shortDate) }} readoutMaxShare={chart.readout_max_share} />
-<details data-time-split-readings><summary>The clocks behind the stacks</summary>
-	{#each split.days as day (day.date)}
-		<p>{day.date}: {day.count} of {day.recorded} clocks are complete; excluded: {day.missing} missing, {day.invalid} invalid and {day.inconsistent} inconsistent. {day.overlapping} clocks overlap.</p>
-		<ul>{#each day.details as part (part.cell)}<li>{part.label}: {part.value === null ? 'not measured for the whole cohort' : `${formatNumber(part.value / 1000, numberFormat, { si: false })} s`}, timed {part.timed} of {day.count}; not added to the stack.</li>{/each}</ul>
-	{/each}
-</details>
+{#if split.recorded > 0}
+	<details class="console-disclosure" data-time-split-readings>
+		<summary class="console-summary">Clock exclusions and call timings</summary>
+		<p>Call timings are within stages, not added to the bars.</p>
+		{#each split.days.filter((day) => day.recorded > 0) as day (day.date)}
+			<p><time datetime={day.date}>{shortDate(day.date)} UTC</time>: {day.count} of {day.recorded} used; {day.missing} missing, {day.invalid} invalid, {day.inconsistent} inconsistent. {day.overlapping} with overlapping stages.</p>
+			<dl>
+				{#each day.details as part (part.cell)}
+					<div><dt>{part.label}</dt><dd>{part.value === null ? 'No full-cohort mean' : `${formatNumber(part.value / 1000, numberFormat, { si: false })} s`} ({part.timed} of {day.count} timed)</dd></div>
+				{/each}
+			</dl>
+		{/each}
+	</details>
+{/if}
 </div>
-<style>.lede { font-size: var(--text-2xl); }</style>
+
+<style>
+	.lede { font-size: var(--text-2xl); }
+	[data-duration-cohort], details p, dl { font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--color-text-secondary); }
+	time, dt { font-weight: 600; }
+	dl { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); margin: 0 0 var(--space-3); }
+</style>

@@ -121,10 +121,10 @@
 	}
 
 	.tile.quiet {
-		border: 1px solid var(--chart-1);
+		border: 1px solid var(--chart-measure);
 	}
 
 	.tile.fired {
-		background: var(--chart-1);
+		background: var(--chart-measure);
 	}
 </style>

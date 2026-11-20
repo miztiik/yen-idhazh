@@ -4,7 +4,6 @@
 	import type { ChartConfig } from '../server/config';
 	import TimeHistogram from '../components/TimeHistogram.svelte';
 	import { cost } from './model/cost';
-	import { SERIES_TOKENS } from './series-tokens';
 	import { grouped as formatGrouped } from '../charts/series';
 	import { useNumberFormat } from '../number-format-context';
 	import { formatNumber } from '../number-format';
@@ -25,8 +24,7 @@
 		<TimeHistogram times={times.times} name={id === 'write-cost' ? 'write-times' : 'score-cost'}
 			subject={id === 'write-cost' ? 'seconds to write one summary' : 'seconds to check one summary'}
 			verb={id === 'write-cost' ? 'written' : 'checked'} noRuleReason="One distribution pools the window, so a setting change has no date on this axis."
-			width={chart.width_px} height={chart.height_px} readoutMaxShare={chart.readout_max_share}
-			barToken={id === 'write-cost' ? SERIES_TOKENS['summary-call'] : SERIES_TOKENS.checking} />
+			width={chart.width_px} height={chart.height_px} readoutMaxShare={chart.readout_max_share} />
 	</figure>
 {:else}<p data-model-rule="no" data-model-rule-name={id} data-model-rule-none="One distribution pools the window, so a setting change has no date on this axis." data-readout-none="No measured clock readings were available.">No positive clock reading was recorded in this window.</p>{/if}
 <p data-write-times={id === 'write-cost' ? 'readout' : undefined} data-score-cost={id === 'score-cost' ? 'readout' : undefined}>

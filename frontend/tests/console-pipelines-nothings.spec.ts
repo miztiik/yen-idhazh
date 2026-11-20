@@ -35,6 +35,7 @@ for (const [id, name] of PANELS) {
 		}
 		for (const [file, child] of [
 			['src/lib/components/Panel.svelte', 'Panel'],
+			['src/lib/components/WindowCoverage.svelte', 'WindowCoverage'],
 			['src/lib/components/ChartReadout.svelte', 'ChartReadout'],
 			['src/lib/components/KpiCard.svelte', 'KpiCard'],
 			['src/lib/components/TargetBar.svelte', 'TargetBar'],

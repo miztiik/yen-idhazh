@@ -70,11 +70,12 @@ internal missing days rather than padding to the published-count endpoint.
 Its visible packed-attempt bounds qualify the chart. The source-labelled
 date line does not claim that every panel ends on the main item-health date.
 
-**Article age when processing began** measures the source's feed-stated publication time
+**Article age at processing start** measures the source's feed-stated publication time
 to the successful item's recorded work start, not to publication by this site.
-Inferred, unusable and future source times stay excluded. Measured zero ages
-remain in the counts and median, with a note explaining why the logarithmic
-drawing cannot place them.
+The headline counts how many measured articles were older than one day.
+Inferred, unusable and future source times stay excluded and appear under
+**Age coverage**. Zero ages count in the headline and median but not in the
+logarithmic drawing or its cumulative line.
 
 Before native answers arrive their frames reserve space, without bars, dates or
 numbers posing as readings. Failure-rule states are independent

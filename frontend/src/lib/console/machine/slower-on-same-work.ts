@@ -2,7 +2,6 @@
 import type { Row } from '../../data/ledger';
 import type { SeriesInput } from '../../charts/d3/dateSeries';
 import { nearestRank, referenceWork, typicalSeconds } from '../rates';
-import { SERIES_TOKENS } from '../series-tokens';
 
 export function slowerOnSameWork(rows: readonly Row[], calendar?: readonly string[]) {
 	const reference = referenceWork(rows);
@@ -13,7 +12,7 @@ export function slowerOnSameWork(rows: readonly Row[], calendar?: readonly strin
 	});
 	const measured = days.flatMap((day) => day.seconds === null ? [] : [day.seconds]);
 	const series: SeriesInput[] = [{
-		label: 'Seconds for the typical article', token: SERIES_TOKENS['model-time'],
+		label: 'Seconds for the typical article', token: '--chart-measure',
 		points: days.map((day) => ({ date: day.date, value: day.seconds }))
 	}];
 	return { reference, days, series, median: nearestRank(measured, 0.5), newest: days.at(-1)?.seconds ?? null };

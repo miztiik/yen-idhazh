@@ -68,7 +68,7 @@ export interface SparklineRule {
 }
 
 /** The colour a line is drawn in, and so the swatch its strip prints as its key. */
-export const SPARKLINE_SWATCH = 'var(--chart-2)';
+export const SPARKLINE_SWATCH = 'var(--chart-measure)';
 
 /** What a strip prints for a day with no value. A line drops a missing reading
  * before it draws, so no column it keeps is ever unmeasured; this is the one

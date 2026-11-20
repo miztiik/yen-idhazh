@@ -21,7 +21,8 @@ export interface ConsoleColors {
 	selected: string;
 	chart_axis: string;
 	chart_grid: string;
-	/** Custom category colours; the last slot remains neutral under every palette choice. */
+	chart_measure: string;
+	/** Console category colours; the last slot is reserved for absence. */
 	categorical: string[];
 }
 
@@ -104,7 +105,8 @@ export const CONSOLE_STYLE_DEFAULTS: ConsoleStyleConfig = {
 			rule: '#dad6cb', rule_strong: '#b6afa0', accent: '#276419',
 			accent_hover: '#1b4612', on_accent: '#ffffff', focus: '#8e0152',
 			selected: '#e6f5d0', chart_axis: '#b6afa0', chart_grid: '#dad6cb',
-			categorical: ['#356a9a', '#7d53a0', '#167f99', '#a3427c', '#5968af', '#29739e', '#995aab', '#777268']
+			chart_measure: '#476386',
+			categorical: ['#126e81', '#3158af', '#a03e7e', '#6944a5', '#2773ad', '#8b538e', '#243d72', '#6a7078']
 		},
 		dark: {
 			canvas: '#191917', inset: '#151513', surface: '#22221f', raised: '#2b2b27',
@@ -112,7 +114,8 @@ export const CONSOLE_STYLE_DEFAULTS: ConsoleStyleConfig = {
 			rule: '#393932', rule_strong: '#565348', accent: '#b8e186',
 			accent_hover: '#e6f5d0', on_accent: '#122722', focus: '#de77ae',
 			selected: '#1b4612', chart_axis: '#565348', chart_grid: '#393932',
-			categorical: ['#8bbce5', '#bea2df', '#72c6d9', '#e6a1c9', '#a4b1e8', '#83bfdc', '#cea4e0', '#b0aa9e']
+			chart_measure: '#9cb6d2',
+			categorical: ['#6ac4d3', '#8caaff', '#eba7d2', '#bc9ef0', '#74bce9', '#d397d9', '#aebfe5', '#a3aab4']
 		}
 	},
 	typography: {

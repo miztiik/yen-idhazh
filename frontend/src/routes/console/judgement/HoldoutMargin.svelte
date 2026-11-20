@@ -29,6 +29,8 @@
 	import { factsOf, markReadout, recordsOf, type ReadoutFacts } from '$lib/charts/readout';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import Panel from '$lib/components/Panel.svelte';
+	import WindowCoverage from '$lib/components/WindowCoverage.svelte';
+	import type { TimeWindow } from '$lib/charts/viewport';
 	import { shortDate } from '$lib/format';
 	import { formatNumber } from '$lib/number-format';
 	import { useNumberFormat } from '$lib/number-format-context';
@@ -53,6 +55,8 @@
 	let {
 		marks: inputMarks,
 		evidence = [],
+		coverage = null,
+		commonCoverage = null,
 		agreedScores: inputAgreedScores,
 		skipped,
 		marked,
@@ -71,6 +75,8 @@
 		 * draws. */
 		marks: HoldoutMark[] | null;
 		evidence?: string[];
+		coverage?: TimeWindow | null;
+		commonCoverage?: TimeWindow | null;
 		/** Every score a person read as one story, and nothing else about them.
 		 * 196 numbers is 1.7 KB; the same rows with their addresses and headlines
 		 * are 88 KB, for a strip that draws three of them. */
@@ -295,6 +301,7 @@
 		data-holdout-margin={outcome.margin === null ? '' : marginDistance(outcome.margin, numberFormat)}
 		data-holdout-violations={outcome.violations}
 	>
+		<WindowCoverage span={coverage} common={commonCoverage} source="Hand-marked pairs" />
 		<p class="comparison" data-comparison="Each hand-marked pair's score against the merge line.">
 			Each hand-marked pair's score against the merge line.
 		</p>
@@ -415,7 +422,7 @@
 						cx={at(mark.score)}
 						cy={markY}
 						r="5"
-						fill={mark.score >= line ? 'var(--fill-low)' : 'var(--chart-4)'}
+						fill={mark.score >= line ? 'var(--fill-low)' : 'var(--chart-measure)'}
 						stroke={picked === pointAt.get(point.key) ? 'var(--color-text)' : 'var(--color-surface)'}
 						stroke-width="1.5"
 						role="img"
@@ -453,7 +460,7 @@
 							y={markY - 7}
 							width="4"
 							height="14"
-							fill="var(--chart-4)"
+							fill="var(--chart-measure)"
 							role="img"
 							aria-label={pointName(point)}
 							data-readout-at={pointAt.get(point.key)}
@@ -484,7 +491,7 @@
 						x2={at(agreedAt.max)}
 						y1={stripY}
 						y2={stripY}
-						stroke="var(--chart-1)"
+						stroke="var(--chart-measure)"
 						stroke-width="6"
 						stroke-linecap="butt"
 						role="img"
@@ -511,7 +518,7 @@
 						y={stripY - 3}
 						width="4"
 						height="6"
-						fill="var(--chart-1)"
+						fill="var(--chart-measure)"
 						role="img"
 						aria-label={pointName({ kind: 'agreed', key: 'agreed' })}
 						data-readout-at={pointAt.get('agreed')}

@@ -89,7 +89,7 @@ test('a range shares the divisor with ends and named rules; short rows rank last
 	expect(html).toContain('on the floor');
 	expect(html).toContain('data-chart-type="rankedList"');
 	expect(html).toContain('data-readout-none=');
-	expect(html).toContain('inline-size: 10.0000%; background: var(--chart-1)');
+	expect(html).toContain('inline-size: 10.0000%; background: var(--chart-measure)');
 });
 
 test('each CPU and L3 group draws one mean-time bar with visible shares, weighted rates and sample counts', async () => {
@@ -272,6 +272,10 @@ test('cards require their semantic rule and explicit failure stages keep the nat
 	expect(picked).not.toContain('Fetch rule');
 	expect(picked).not.toContain('old-extract');
 	expect(picked.match(/type="radio"/g)?.length).toBe(2);
+	expect(picked).toContain('>Show rules for stage</legend>');
+	const single = await draw('FailureList', { ...failure, ranking, stages: { options: ['extract'], chosen: 'extract' } });
+	expect(single).not.toContain('type="radio"');
+	expect(single).toContain('Extract rule');
 	expect(picked).not.toMatch(/data-failure-(item|source|rows)=|data-source-losses/);
 	const geometry = rankedGeometry(rank([{ key: 'stable', value: 2, row: { label: 'Stable name', value: '2 articles' } }], 20));
 	expect(geometry.rows[0].row.value).toBe('2 articles');
@@ -295,12 +299,8 @@ test('kept time histograms share an optional positive domain and refuse one that
 	const medianX = (html: string) => html.match(/<line x1="([^"]+)"[^>]*data-hist-rule="median"/)?.[1];
 	expect(medianX(shared)).toBeDefined();
 	expect(medianX(shared)).toBe(medianX(other));
-	const coloured = await draw('TimeHistogram', { ...props, domain: [0.5, 8], barToken: SERIES_TOKENS['writing-reply'] });
-	expect(shared).toContain('fill="var(--chart-1)"');
-	expect(coloured).toContain('fill="var(--chart-7)"');
-	expect(coloured).toContain('stroke="var(--chart-3)"');
-	expect(coloured).toContain('var(--chart-7)');
-	expect(medianX(coloured)).toBe(medianX(shared));
+	expect(shared).toContain('fill="var(--chart-measure)"');
+	expect(shared).toContain('stroke="var(--color-text)"');
 	const bins = [...shared.matchAll(/<rect\b[^>]*>/g)].map((match) => match[0]);
 	expect(bins).toHaveLength(props.times.bins.length);
 	for (const bin of bins) expect(bin).not.toMatch(/chart-bar|\b(?:rx|ry|clip-path)\s*[:=]/);

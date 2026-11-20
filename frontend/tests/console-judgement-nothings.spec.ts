@@ -29,7 +29,7 @@ for (const [id, name] of PANELS) {
 			'charts/series', 'console/merged-stories',
 			'console/span-words', 'console/holdout', 'format'
 		].map((file) => [`$lib/${file}`, lib(`${file}.ts`)] as const);
-		for (const child of ['Panel', 'ChartReadout']) {
+		for (const child of ['Panel', 'ChartReadout', 'WindowCoverage']) {
 			const module = await compiled(`src/lib/components/${child}.svelte`, child, [
 				...rewrite, ['../charts/readout', lib('charts/readout.ts')]
 			]);

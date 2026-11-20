@@ -1,6 +1,6 @@
 # Design System
 
-**Last Updated**: 2026-11-17
+**Last Updated**: 2026-11-20
 
 Shared rules for typography, layout, colour, motion and controls. [Console design](console-design.md) owns panel-specific presentation; [appearance configuration](config/appearance.md) owns tunable values.
 
@@ -27,18 +27,19 @@ Inline styles are for genuinely dynamic values such as coordinates or computed w
 
 The console's `console_style` family is generated over the entire operator page,
 including its canvas and header, before paint. It supplies neutral light/dark
-surfaces, PiYG-aligned actions and category colours, six paired type roles, compact controls and panel
-spacing. Reader tokens remain unchanged. Semantic confidence and movement
-retain their meanings; categorical aliases are rebound inside the console
-scope rather than inheriting resolved reader colors.
-The configured built-in scheme supplies known console categories. Build-time
-colour utilities keep their text/line variants readable, while the reserved
-eighth absence paint and confidence/movement roles retain their own meanings.
+surfaces, actions, six paired type roles, compact controls and panel spacing.
+Reader tokens remain unchanged. Ordinary single-measure charts use slate blue
+for their marks and readings, not the first category colour. A stage has the
+same category colour in a timing stack, failure stack and article inspection.
+Distinct quantities and machine identities use category colours; absence keeps
+its reserved neutral. Green, amber and red express a declared status, not an
+ordinary measured length or count. Confidence and movement retain their own roles.
 
 | Token family | Meaning |
 | --- | --- |
 | `--band-*` | Confidence expressed as readable text |
 | `--fill-*` | The same status meanings expressed as filled marks |
+| `--chart-measure` | Ordinary measured marks, regardless of subject |
 | `--chart-*` | Distinguishable categories, not good/bad verdicts |
 | `--movement-*` | Whether a change improved or worsened a measure |
 | `--source-swatch-*` | Source identity and the read-state ring |

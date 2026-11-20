@@ -2,6 +2,8 @@
 import type { Row } from '../../data/ledger';
 import { nearestRank } from '../rates';
 
+export const HOURS_PER_DAY = 24;
+
 function instant(cell: Row[string] | undefined): number | null {
 	if (typeof cell !== 'string' || !cell.endsWith('Z')) return null;
 	const value = Date.parse(cell);
@@ -25,9 +27,6 @@ export function articleAge(rows: readonly Row[]) {
 	});
 	return {
 		hours, inferred, unknown, future, published: published.length,
-		median: nearestRank(hours, 0.5), overDay: hours.filter((hour) => hour > 24).length,
-		lede: `${hours.length} source-stated publication times are measured. ` +
-			`${inferred} of ${published.length} successful items have inferred times and are not drawn. ` +
-			`${unknown} have no usable source time; ${future} have a publication time after work started.`
+		median: nearestRank(hours, 0.5), overDay: hours.filter((hour) => hour > HOURS_PER_DAY).length
 	};
 }

@@ -275,12 +275,12 @@ retirement does not remove them. Design review follows the
 not a plot-width quota or a panel-picture matrix.
 
 Machine-history colour identifies full machine identities, not speed.
-The existing `chart.palette` selector accepts D3's built-in `piyg` and `spectral`
-schemes. The committed choice is `piyg`; `categorical` retains configured custom
-colours and `sequential` selects D3 Blues. Machine history uses the widest stock
-scheme with a stable full-identity ordinal scale. The console CSS producer also
-aligns category tokens, syntax/type colours and the wordmark with that family.
-Quantity-to-token assignments do not change; reader colours remain untouched.
+The committed `chart.palette` is `categorical`, so ordinary category marks and
+machine identities use the same `console_style.colors` palette in each theme.
+The selector still accepts `piyg`, `spectral`, and `sequential` (D3 Blues).
+`console_style.colors.{light,dark}.chart_measure` independently sets the slate
+blue used by ordinary single-measure charts. Older appearance files use the
+declared default for this role. Reader colours remain untouched.
 
 The CSS producer uses D3 colour/interpolation and build-time Culori contrast
 comparison to select readable shades of the stock colours for the existing
@@ -294,7 +294,7 @@ and typography do not change.
 
 The colour utilities are development/build dependencies. D3 supplies the actual
 schemes; Culori supplies the contrast comparison D3 does not provide. Their
-beneficiary is legible PiYG-based console token production. The producer lives
+beneficiary is legible stock-palette console token production. The producer lives
 under `frontend/scripts/` and is not imported by runtime routes.
 These tools load through native asynchronous ESM only for a stock-palette choice;
 callers await the completed CSS. Default and explicit

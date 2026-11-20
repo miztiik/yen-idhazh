@@ -4,6 +4,7 @@
 	import PanelGroup from '$lib/components/PanelGroup.svelte';
 	import Panel from '$lib/components/Panel.svelte';
 	import WindowControlSource from '$lib/components/WindowControlSource.svelte';
+	import WindowCoverage from '$lib/components/WindowCoverage.svelte';
 	import RouteStatus from '$lib/components/RouteStatus.svelte';
 	import { consoleKnobs, readWriteMetricDefault, routeConsole, routeKnobs, tokenDeviationRules } from '$lib/console/route-console';
 	import { routeReach, rangeFor, sliceOnce, retryAsks, tallyAsks, windowRange, type Range, type PanelQuery, type RouteReach } from '$lib/console/queries/window';
@@ -23,6 +24,8 @@
 	import { articleCost } from '$lib/console/machine/article-cost';
 	import { memoryHeld } from '$lib/console/machine/memory-held';
 	import { daysInWindow } from '$lib/charts/viewport';
+	import { recordWindowBounds } from '$lib/console/waiting';
+	import { rangeBounds, sameBounds } from '$lib/console/window-coverage';
 	import RecordFrame from '$lib/console/machine/RecordFrame.svelte';
 	import MachineCharts from '$lib/console/machine/MachineCharts.svelte';
 	import ArticleCostPanel from '$lib/console/machine/ArticleCostPanel.svelte';
@@ -151,6 +154,12 @@
 		return () => { current = false; };
 	});
 	const through = $derived(reach?.through ?? null);
+	const itemReach = $derived(reach?.ledgers['item-health']);
+	const record = $derived({
+		asked: windowDays, through,
+		first: through !== null && itemReach?.state === 'ok' && itemReach.first <= through ? itemReach.first : null
+	});
+	const packedWindow = $derived(recordWindowBounds(record));
 	const range = $derived(through === null ? null : windowRange(windowDays, through, '0001-01-01'));
 	const start = $derived(range?.from ?? '');
 	const end = $derived(range?.to ?? '');
@@ -208,6 +217,15 @@
 	const sameWorkRange = $derived(ranges[queries.slowerOnSameWorkQuery.name]);
 	const sameWorkCalendar = $derived(sameWorkRange === undefined ? [] : daysInWindow({ start: sameWorkRange.from, end: sameWorkRange.to }));
 	const sameWorkRule = $derived(settingsRules(data, { from: sameWorkRange?.from ?? '', to: sameWorkRange?.to ?? '' }, 'none'));
+	function panelCoverage(id: string) {
+		if (id === 'memory-held') return []; // The panel names the run it actually draws.
+		const windows = PANEL_QUERIES[id].flatMap((query) => {
+			const span = rangeBounds(ranges[query.name]);
+			const state = answers[query.name]?.state;
+			return span !== null && (state === 'ok' || state === 'quiet') ? [{ span, source: query.ledger }] : [];
+		});
+		return windows.filter(({ span }, index) => !windows.slice(0, index).some((other) => sameBounds(span, other.span)));
+	}
 	const titles: Readonly<Record<string, string>> = {
 		'slower-machines': 'Which machines do the same work slower', 'platform-mix': 'Which machines ran our jobs, day by day',
 		'slower-on-same-work': 'Whether a run is getting slower on the same work',
@@ -223,7 +241,7 @@
 <div data-machine-start={start} data-machine-end={end} data-machine-run-count={counterReady ? countedRuns : undefined}>
 	<WindowControlSource route="machine" days={windowDays} {presets} {monthsFor} {ready} onChange={show}
 		busy={panelAnswers.includes('pending')}
-		record={{ asked: windowDays, first: reach?.ledgers['item-health']?.state === 'ok' ? reach.ledgers['item-health'].first : null, through }} />
+		{record} />
 	{#if evidence}
 	<details class="machine-evidence" data-machine-evidence>
 		<summary>
@@ -250,8 +268,13 @@
 		<PanelGroup id={group.id} title={group.title} panels={group.panels.length}>
 			{#each group.panels as id (id)}
 				<RecordFrame {id} title={titles[id]} state={panelState(id)} height={cfg.chart.height_px} width={cfg.chart.width_px} {retry}
-					range={id === 'slower-on-same-work' ? sameWorkRange : undefined}
 					windowed={id === 'slower-on-same-work' ? { name: id, days: windowDays } : undefined}>
+					{#snippet coverage()}
+						{@const spans = panelCoverage(id)}
+						{#each spans as entry (entry.source)}
+							<WindowCoverage span={entry.span} common={packedWindow} source={spans.length > 1 ? entry.source : undefined} />
+						{/each}
+					{/snippet}
 					{#if id === 'platform-mix'}
 						<PlatformMixPanel {ramp} {start} {end} {windowDays} {lost} recordRows={rows('platformMixQuery')} recording={cfg.recording}
 							gradients={cfg.gradients} chart={cfg.chart} knobs={shared} />
@@ -273,9 +296,6 @@
 							<div>
 								<SlowerOnSameWork rows={rows(queries.slowerOnSameWorkQuery.name)} calendar={sameWorkCalendar}
 									knobs={shared} chart={cfg.chart} rule={sameWorkRule} />
-								{#if sameWorkRange !== undefined}
-									<p data-native-window data-range-from={sameWorkRange.from} data-range-to={sameWorkRange.to}>Native record: {sameWorkRange.from} through {sameWorkRange.to} UTC.</p>
-								{/if}
 							</div>
 						</Panel>
 					{:else}

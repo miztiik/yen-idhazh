@@ -384,7 +384,7 @@
 							x2={px(row.marks.x1)}
 							y1={y}
 							y2={y}
-							stroke="var(--chart-1)"
+							stroke="var(--chart-measure)"
 							stroke-width="10"
 							stroke-linecap="round"
 							data-range-cell="past"
@@ -466,6 +466,6 @@
 
 	.swatch-past {
 		block-size: 10px;
-		background: var(--chart-1);
+		background: var(--chart-measure);
 	}
 </style>

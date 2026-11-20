@@ -50,7 +50,7 @@
 							onSelect: (at) => selected[card.name] = at }}>
 						{#each strip.bars as bar (bar.date)}
 							{@const barHeight = bar.published === 0 ? 0 : Math.max(1, bar.height * plotHeight)}
-							<rect x={bar.x * width} width={bar.width * width} y={plotHeight - barHeight} height={barHeight} fill="var(--chart-1)"
+							<rect x={bar.x * width} width={bar.width * width} y={plotHeight - barHeight} height={barHeight} fill="var(--chart-measure)"
 								data-published-bar={bar.date} data-published={bar.published} />
 						{/each}
 						{#each ticks as tick (tick.index)}

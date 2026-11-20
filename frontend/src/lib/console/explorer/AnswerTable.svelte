@@ -80,7 +80,7 @@
 	td[data-kind='number'] { text-align: end; font-variant-numeric: tabular-nums; }
 	td[data-kind='null'] span { color: var(--color-text-tertiary); font-style: italic; }
 	td[data-kind='json'], td[data-kind='blob'] { font-family: var(--font-data); }
-	td i { display: block; block-size: 3px; margin-block-start: var(--space-1); border-radius: var(--radius-full); background: var(--chart-1); }
+	td i { display: block; block-size: 3px; margin-block-start: var(--space-1); border-radius: var(--radius-full); background: var(--chart-measure); }
 	.show-more { min-block-size: var(--workbench-control); display: flex; justify-content: space-between; gap: var(--space-3); align-items: center; padding-inline: var(--space-3); }
 	.show-more p { margin: 0; color: var(--color-text-secondary); font-size: var(--text-xs); line-height: var(--leading-xs); }
 	.show-more button { border: 1px solid var(--color-rule); border-radius: var(--radius-md); background: var(--color-surface); color: var(--color-text); padding: var(--space-2) var(--space-3); }

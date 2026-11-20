@@ -58,7 +58,6 @@
 	}
 </script>
 
-<h2 class="text-[1.0625rem] font-semibold text-text">Which rule refused a reply</h2>
 <p class="mt-1 text-[0.8125rem] text-text-tertiary" data-failed-rule-divisor>
 	{plural(counts.failed, 'recorded failure', 'recorded failures')} at {stage} in this window.
 	These are failure rows, not distinct articles. The query contains no item or source identities.

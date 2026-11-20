@@ -82,8 +82,8 @@
 	.source-rows li { padding-block: var(--space-3); border-block-end: 1px solid var(--color-rule); }
 	.squares { display: grid; inline-size: max-content; max-inline-size: 100%; margin-block-start: var(--space-2); }
 	.square { display: inline-block; min-inline-size: 4px; inline-size: 100%; border-radius: 1px; }
-	.square[data-retiring-state='under'] { background: var(--chart-1); }
-	.square[data-retiring-state='at-or-above'] { background: var(--chart-3); }
+	.square[data-retiring-state='under'] { background: var(--fill-medium); }
+	.square[data-retiring-state='at-or-above'] { background: var(--fill-high); }
 	.square[data-retiring-state='nothing'] { border: 1px dashed var(--chart-axis); }
 	.dwell { border-block-end: 2px solid var(--chart-marker); margin-block-start: 2px; }
 	.axis { display: grid; font-size: var(--text-xs); color: var(--color-text-secondary); }

@@ -53,11 +53,11 @@ export function refusalLines(
 			return { date, value: observed ?? (day !== undefined && status[index] === null ? 0 : null) };
 		});
 		return {
-			reason, label, series: { label, token: '--chart-1', points },
+			reason, label, series: { label, token: '--chart-measure', points },
 			readout: readoutOf({
 				type: 'dateSeries', columns: dates.map((date) => `${shortDate(date)} UTC`),
 				series: [
-					{ label: 'Failed checks', swatch: 'var(--chart-1)', values: points.map((point) => point.value), format: countText },
+					{ label: 'Failed checks', swatch: 'var(--chart-measure)', values: points.map((point) => point.value), format: countText },
 					{ label: 'Recorded attempts', swatch: null, values: dates.map((date) => recorded.get(date)?.attempts ?? null), format: countText }
 				],
 				events: { lines: status.map((note, index) => note === null || !recorded.has(dates[index])

@@ -242,8 +242,7 @@ test('source-stated ages exclude inferred, invalid and future instants without l
 	]);
 	expect(result.hours).toEqual([0]);
 	expect([result.inferred, result.unknown, result.future]).toEqual([1, 1, 1]);
-	expect(result.lede).toContain('1 of 4 successful items have inferred times');
-	expect(result.lede).not.toContain('Every publication time');
+	expect(result.published).toBe(4);
 });
 
 test('stage clocks, signed gaps and independent cost pairs never fill unknown cells with zero', () => {

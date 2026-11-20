@@ -123,19 +123,18 @@
 		display: block;
 		block-size: 100%;
 		border-radius: var(--radius-full);
-		background: var(--chart-1);
+		background: var(--chart-measure);
 	}
 
-	/* Quarantine is a health fact and the row carries the word as well, so this
-	   is the one place the confidence ramp is the honest colour. */
+	/* Only a declared health reading uses status fills. A policy marker does not. */
 	.target[data-target-tone='health'] .target-fill {
-		background: var(--band-high);
+		background: var(--fill-high);
 	}
 	.target[data-target-tone='health'][data-target-band='near'] .target-fill {
-		background: var(--band-medium);
+		background: var(--fill-medium);
 	}
 	.target[data-target-tone='health'][data-target-band='past'] .target-fill {
-		background: var(--band-low);
+		background: var(--fill-low);
 	}
 
 	.target-marker {

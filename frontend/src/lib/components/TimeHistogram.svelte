@@ -52,7 +52,6 @@
 	import ChartReadout from './ChartReadout.svelte';
 	import { plural } from '$lib/format';
 	import type { Distribution } from '../../routes/console/model/+page.server';
-	import type { ChartToken } from '$lib/charts/theme';
 
 	let {
 		times,
@@ -65,8 +64,7 @@
 		width,
 		height,
 		readoutMaxShare = 1,
-		domain,
-		barToken = '--chart-1'
+		domain
 	}: {
 		times: Distribution;
 		/** What this instance is of, so a page with two can tell them apart. */
@@ -89,7 +87,6 @@
 		/** `chart.readout_max_share`. */
 		readoutMaxShare?: number;
 		domain?: [number, number];
-		barToken?: ChartToken;
 	} = $props();
 
 	/** Room for the count axis, the percent axis and the two rule labels. */
@@ -256,13 +253,13 @@
 			series: [
 				{
 					label: `${verb.charAt(0).toUpperCase()}${verb.slice(1)} in this band`,
-					swatch: `var(${barToken})`,
+					swatch: 'var(--chart-measure)',
 					values: bars.map((bar) => bar.bin.n),
 					format: (value: number) => plural(value, noun, nouns)
 				},
 				{
 					label: 'Done by then',
-					swatch: 'var(--chart-3)',
+					swatch: 'var(--color-text)',
 					values: bars.map((bar) => bar.bin.throughPct),
 					format: (value: number) => `${value}% of the ${times.n}`
 				}
@@ -356,7 +353,7 @@
 						y={round(bar.y)}
 						width={round(bar.width)}
 						height={round(bar.height)}
-						fill={`var(${barToken})`}
+						fill="var(--chart-measure)"
 					/>
 				</g>
 			{/each}
@@ -380,7 +377,7 @@
 			<path
 				d={curve}
 				fill="none"
-				stroke="var(--chart-3)"
+				stroke="var(--color-text)"
 				stroke-width="1.5"
 				stroke-linejoin="round"
 				data-histogram="cumulative"

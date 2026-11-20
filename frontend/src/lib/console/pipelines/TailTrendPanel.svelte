@@ -281,7 +281,7 @@
 								<polyline
 									points={tailLines[at]}
 									fill="none"
-									stroke="var(--chart-1)"
+									stroke="var(--chart-measure)"
 									stroke-width="2"
 								/>
 								{#each tailRuns as run, index (run.runId)}
@@ -289,7 +289,7 @@
 										cx={tailX[index]}
 										cy={tailAtY(at, (run.ms[at] ?? 0) / 1000)}
 										r="2.5"
-										fill="var(--chart-1)"
+										fill="var(--chart-measure)"
 									/>
 								{/each}
 							</g>
@@ -415,7 +415,6 @@
 			</ul>
 		{/if}
 		</div>
-		<p data-native-window data-range-from={range.from} data-range-to={range.to}>Native record: {range.from} through {range.to} UTC.</p>
 	</Panel>
 </div>
 

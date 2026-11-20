@@ -205,15 +205,16 @@
 					<div class="shape-drawing" bind:this={drawing}>
 						{#if active.type === 'partsOfOne'}
 							{@const drawn = rows.slice(0, active.rowsDrawn)}
-							{@const parts = partsOfOne(drawn.map((row) => ({ label: text(row, active.labelColumn), parts: active.barColumns.flatMap((column) => { const value = numericValue(row, column); return value === null ? [] : [{ label: column, value }]; }) })), { order: active.barColumns, overlapping: true, tokens: SERIES_TOKENS.slice(0, active.barColumns.length) })}
-							{@const records = drawn.map((row) => factsOf(text(row, active.labelColumn), active.barColumns.map((column, index) => ({ label: column, value: numericValue(row, column), format: (n) => text({ [column]: n }, column), swatch: `var(${SERIES_TOKENS[index]})` })), 'null'))}
+							{@const tokens = active.barColumns.length === 1 ? ['--chart-measure' as const] : SERIES_TOKENS.slice(0, active.barColumns.length)}
+							{@const parts = partsOfOne(drawn.map((row) => ({ label: text(row, active.labelColumn), parts: active.barColumns.flatMap((column) => { const value = numericValue(row, column); return value === null ? [] : [{ label: column, value }]; }) })), { order: active.barColumns, overlapping: true, tokens })}
+							{@const records = drawn.map((row) => factsOf(text(row, active.labelColumn), active.barColumns.map((column, index) => ({ label: column, value: numericValue(row, column), format: (n) => text({ [column]: n }, column), swatch: `var(${tokens[index]})` })), 'null'))}
 							<PartsOfOne geometry={parts} empty={emptyState('quiet', 'No rows to draw.')} name="data-explorer-shape" label={`Side by side: ${[active.labelColumn, ...active.barColumns].join(', ')}`} width={chartWidth} height={chartHeight} readout={records} />
 							{#if active.moreRows > 0}<p data-shape-tail>{active.moreRows} more {active.moreRows === 1 ? 'row is' : 'rows are'} in the table.</p>{/if}
 							<p data-comparison={active.comparison}>{active.comparison}.</p>
 						{:else if active.type === 'tileStrip'}
 							{@const days = chooseDateSeriesDays(active.dateColumn, rows, lostDays)}
 							{@const tiles = tileStrip(days.map(({ day, row }) => { const value = row === null ? null : readTruthValue(row, active.markColumn); return { date: day, state: value === null ? 'absent' : value ? 'fired' : 'quiet' }; }))}
-							{@const tileReadout = readoutOf({ type: 'tileStrip', columns: days.map(({ day }) => `${day} UTC`), series: [{ label: active.markColumn, swatch: 'var(--chart-1)', values: days.map(({ row }) => { const value = row === null ? null : readTruthValue(row, active.markColumn); return value === null ? null : String(value); }), format: String }], notMeasured: 'null', resting: 'last' })}
+							{@const tileReadout = readoutOf({ type: 'tileStrip', columns: days.map(({ day }) => `${day} UTC`), series: [{ label: active.markColumn, swatch: 'var(--chart-measure)', values: days.map(({ row }) => { const value = row === null ? null : readTruthValue(row, active.markColumn); return value === null ? null : String(value); }), format: String }], notMeasured: 'null', resting: 'last' })}
 							<div data-model-rule="no" data-model-rule-none="this page does not know which settings changed inside your span">
 								<TileStrip geometry={tiles} empty={emptyState('quiet', 'No rows to draw.')} name="data-explorer-shape" label={`Which days: ${active.dateColumn}, ${active.markColumn}`} width={chartWidth} height={chartHeight} readout={tileReadout} stateWords={{ fired: 'true', quiet: 'false', absent: 'null' }} />
 							</div>
@@ -226,8 +227,9 @@
 							{@const plotFrame = frame(chartWidth, chartHeight)}
 							{@const seriesColumns = active.seriesColumns}
 							{@const days = chooseDateSeriesDays(active.dateColumn, rows, lostDays)}
-							{@const dateGeometry = dateSeries(seriesColumns.map((column, index) => ({ label: column, token: SERIES_TOKENS[index] ?? SERIES_TOKENS[0], points: days.map(({ day, row }) => ({ date: day, value: row === null ? null : numericValue(row, column) })) })), { frame: plotFrame, density: 6, valueTicks: 4, padding: 0.25, rule: { declined: 'A written question supplies no settings comparison record.' }, number_format: numberFormat })}
-							{@const dateReadout = readoutOf({ type: 'dateSeries', columns: days.map(({ day }) => day), series: seriesColumns.map((column, index) => ({ label: column, swatch: `var(${SERIES_TOKENS[index] ?? SERIES_TOKENS[0]})`, values: days.map(({ row }) => (row === null ? null : numericValue(row, column))), format: (n) => text({ [column]: n }, column) })), notMeasured: 'No number for this day', resting: 'last' })}
+							{@const series = seriesColumns.map((column, index) => ({ label: column, token: seriesColumns.length === 1 ? '--chart-measure' as const : SERIES_TOKENS[index] ?? SERIES_TOKENS[0], points: days.map(({ day, row }) => ({ date: day, value: row === null ? null : numericValue(row, column) })) }))}
+							{@const dateGeometry = dateSeries(series, { frame: plotFrame, density: 6, valueTicks: 4, padding: 0.25, rule: { declined: 'A written question supplies no settings comparison record.' }, number_format: numberFormat })}
+							{@const dateReadout = readoutOf({ type: 'dateSeries', columns: days.map(({ day }) => day), series: series.map(({ label, token, points }) => ({ label, swatch: `var(${token})`, values: points.map(({ value }) => value), format: (n) => text({ [label]: n }, label) })), notMeasured: 'No number for this day', resting: 'last' })}
 							<div data-model-rule="no" data-model-rule-none="this page does not know which settings changed inside your span">
 								<DateSeries geometry={dateGeometry} empty={emptyState('quiet', 'No rows to draw.')} name="data-explorer-shape" label={`Over time: ${[active.dateColumn, ...active.seriesColumns].join(', ')}`} width={chartWidth} height={chartHeight} readout={dateReadout} />
 							</div>

@@ -252,6 +252,9 @@
 		if (result === null || (result.state !== 'ok' && result.state !== 'quiet') || span === null) return '';
 		return result.cut.map((one) => describeCutDays(one, span.to)).join(' ');
 	}
+	function answerDates(from: DateStamp, to: DateStamp): string {
+		return from === fromDay && to === toDay ? '' : describeDaysRead(from, to);
+	}
 	function selectResultTab(tab: 'table' | 'chart') {
 		activeResultTab = tab;
 	}
@@ -813,7 +816,7 @@
 			{:else if result === null}
 				<div class="answer-state" data-explorer-idle>{explorerIdleSentence()}</div>
 			{:else if result.state === 'ok'}
-				<AnswerTable columns={result.columns} rows={result.rows as Row[]} capped={result.capped} maxRows={config.max_rows} pageSize={config.row_page} cellMaxCh={config.cell_max_ch} barSpreadShare={config.bar_spread_share} spanText={localAnswer ? 'Local files or expressions; ledger dates do not filter local rows.' : `${describeDaysRead(result.readFrom, result.readTo)}${mixedAnswer ? ' Local rows are not date-filtered.' : ''}`} siteFromText={siteFromText()} gapLines={explorerGapLines(result.gaps)} onOrderChange={(rows) => (orderedRows = rows)} />
+				<AnswerTable columns={result.columns} rows={result.rows as Row[]} capped={result.capped} maxRows={config.max_rows} pageSize={config.row_page} cellMaxCh={config.cell_max_ch} barSpreadShare={config.bar_spread_share} spanText={localAnswer ? 'Local files or expressions; ledger dates do not filter local rows.' : `${answerDates(result.readFrom, result.readTo)}${mixedAnswer ? ' Local rows are not date-filtered.' : ''}`.trim()} siteFromText={siteFromText()} gapLines={explorerGapLines(result.gaps)} onOrderChange={(rows) => (orderedRows = rows)} />
 			{:else if result.state === 'quiet'}
 				<div class="answer-state" data-state="quiet">{explorerQuietSentence()}{#if runSpan}{@render startNotes(result.cut, runSpan.to)}{/if}{@render gapNotes(result.gaps)}</div>
 			{:else if result.state === 'missing'}

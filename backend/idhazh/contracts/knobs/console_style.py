@@ -25,7 +25,7 @@ ShadowAlpha = Annotated[float, Field(strict=True, ge=0, le=0.2, allow_inf_nan=Fa
 
 
 class ConsoleColors(Model):
-    """Neutral light surfaces, PiYG-aligned actions and a separate custom palette."""
+    """Neutral surfaces, interface colors and a separate chart palette."""
 
     canvas: Color = "#f2f1ed"
     inset: Color = "#e9e7e1"
@@ -43,23 +43,23 @@ class ConsoleColors(Model):
     selected: Color = "#e6f5d0"
     chart_axis: Color = "#b6afa0"
     chart_grid: Color = "#dad6cb"
+    chart_measure: Color = "#476386"
     categorical: list[Color] = Field(
         default_factory=lambda: [
-            "#356a9a",
-            "#7d53a0",
-            "#167f99",
-            "#a3427c",
-            "#5968af",
-            "#29739e",
-            "#995aab",
-            "#777268",
+            "#126e81",
+            "#3158af",
+            "#a03e7e",
+            "#6944a5",
+            "#2773ad",
+            "#8b538e",
+            "#243d72",
+            "#6a7078",
         ],
         min_length=8,
         max_length=8,
         description=(
-            "The custom categorical palette. Built-in chart.palette choices replace "
-            "the first seven emitted category colours; the eighth always remains "
-            "the configured neutral absence paint."
+            "The custom categorical colors. Stock palettes can replace the first "
+            "seven; the eighth is reserved for absence."
         ),
     )
 
@@ -89,16 +89,17 @@ class DarkConsoleColors(ConsoleColors):
     selected: Color = "#1b4612"
     chart_axis: Color = "#565348"
     chart_grid: Color = "#393932"
+    chart_measure: Color = "#9cb6d2"
     categorical: list[Color] = Field(
         default_factory=lambda: [
-            "#8bbce5",
-            "#bea2df",
-            "#72c6d9",
-            "#e6a1c9",
-            "#a4b1e8",
-            "#83bfdc",
-            "#cea4e0",
-            "#b0aa9e",
+            "#6ac4d3",
+            "#8caaff",
+            "#eba7d2",
+            "#bc9ef0",
+            "#74bce9",
+            "#d397d9",
+            "#aebfe5",
+            "#a3aab4",
         ],
         min_length=8,
         max_length=8,

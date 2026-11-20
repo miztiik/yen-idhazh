@@ -111,12 +111,12 @@ test.describe('rendered distribution readings', () => {
 		];
 		const html = drawAge({ rows, knobs });
 		expect(html).toContain('data-chart-type="distribution"');
-		expect(html).toContain('aria-label="Article age when processing began in hours, logarithmic scale; inferred and future times excluded"');
-		expect(html).toContain('Articles over a day old against newer ones');
-		expect(html).toContain(`${knobs.fleet_min_rows + 1} source-stated publication times are measured.`);
-		expect(html).toContain(`1 of ${knobs.fleet_min_rows + 4} successful items have inferred times`);
-		expect(html).toContain('1 have no usable source time; 1 have a publication time after work started.');
-		expect(html).toContain('1 items started at their stated publication time: zero hours has no position on a logarithmic axis');
+		expect(html).toContain('aria-label="Article age at processing start in hours, logarithmic scale; inferred and future times excluded"');
+		expect(html).toContain(`0% (0 of ${knobs.fleet_min_rows + 1} measured) were older than one day.`);
+		expect(html).toContain('Bars: article count; line: share of plotted articles at or below.');
+		expect(html).toContain('1 at 0 h, counted in the headline but not plotted.');
+		expect(html).toContain('>Age coverage</summary>');
+		expect(html).toContain(`Of ${knobs.fleet_min_rows + 4} successful articles, 1 had inferred times, 1 had no usable time and 1 had future publication times.`);
 		expect(html).not.toContain('when we published');
 	});
 });

@@ -101,8 +101,8 @@
 
 	/** The median is the solid colour; the range between the ends is the same
 	 * colour tinted, and the strip's swatches use these same two paints. */
-	const MEDIAN_PAINT = 'var(--chart-1)';
-	const RANGE_PAINT = spreadPaint('--chart-1');
+	const MEDIAN_PAINT = 'var(--chart-measure)';
+	const RANGE_PAINT = spreadPaint('--chart-measure');
 
 	/** Summary words over article words, as the whole percent the page prints. */
 	const percent = (ratio: number) => `${Math.round(ratio * 100)}%`;

@@ -182,7 +182,7 @@
 		   rather than an empty bar that reads as nothing measured. */
 		min-inline-size: 2px;
 		border-radius: var(--radius-full);
-		background: var(--chart-1);
+		background: var(--chart-measure, var(--chart-1));
 	}
 
 	.kpi[data-tone='warn'] .kpi-track-fill {
