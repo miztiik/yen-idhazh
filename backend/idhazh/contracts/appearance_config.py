@@ -595,8 +595,7 @@ class AppearanceConfig(Contract):
         ChangelogEntry(
             version="2026-11-20",
             change="Separate ordinary console measurements from category colors.",
-            why=            "Older appearance files default the measurement color; "
-            "explicit category arrays still read.",
+            why="Past configs use the default measurement color and keep explicit categories.",
         ),
         ChangelogEntry(
             version="2026-11-15",
