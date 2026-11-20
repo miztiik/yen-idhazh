@@ -1,6 +1,6 @@
 # The run timeline
 
-**Last Updated**: 2026-11-17
+**Last Updated**: 2026-11-20
 
 What shape does the newest run's clock have, and where do its facts come from?
 

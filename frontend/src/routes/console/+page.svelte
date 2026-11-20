@@ -69,7 +69,7 @@
 	const attemptWindow = $derived(windowFromDates(data.visualAttempts.days.map((day) => day.date), windowDays));
 	const settings = $derived(settingsRules(data, { from: viewport.start, to: viewport.end }, 'none'));
 	const charts = $derived(data.charts.filter((day) => day.date >= viewport.start && day.date <= viewport.end));
-	const record = $derived(recordReady ? pipelinesRecord(reach, windowDays) : null);
+	const record = $derived(pipelinesRecord(reach, windowDays));
 	const packedWindow = $derived(recordWindowBounds(record));
 
 	async function ask(selected: readonly PanelQuery[], retryWindow = false, days = windowDays) {
@@ -170,7 +170,8 @@
 <svelte:head><title>Pipelines — Console — {data.ui.site_title}</title><meta name="robots" content="noindex" /></svelte:head>
 <noscript><p data-native-script-required>The article record needs JavaScript to load. Private published-day panels remain available below.</p></noscript>
 <WindowControlSource route="pipelines" days={windowDays} presets={knobs.window_presets} monthsFor={() => 0}
-	ready={mounted} {busy} {record} {publishedWindow} statusLine={recordReady ? null : 'Packed chart dates are not ready.'} onChange={show} />
+	ready={mounted} {busy} record={recordReady ? record : null} {publishedWindow}
+	statusLine={recordReady ? null : 'Packed chart dates are not ready.'} onChange={show} />
 <RouteStatus route="pipelines" answers={allAnswers} days={windowDays} through={recordReady ? reach?.through : null}
 	recordScope="Native record"
 	shimmerAfterMs={knobs.shimmer_after_ms} onRetry={retry}>
