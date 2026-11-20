@@ -1,0 +1,30 @@
+{
+  "completed_at": "2026-11-20T22:01:34Z",
+  "date": "2026-11-20",
+  "embeddings": {
+    "dimensions": 384,
+    "dtype": "int8",
+    "model_id": "all-minilm-l6-v2-quantized",
+    "vectors": {
+      "ai-g9yrya8eaf2s5t66": "/gL/BgD5DAj+CPwF9/8CCQT4/f3++gL5BAP9AQEB+wgKAAMF+/0G/g/4+/D6BQkJBgXzAgn4+wIA9AH9/QADBRIC+/7//wr//QH9CgIBC/oD+f8A8ggHCAcBAf3++wEF/P77BAMD+/4C+gH9Bwr2+gkBBQH5CAv5C/f8AwD+/QD9CQzzAAb8APoG9AIEBf/5+wcK/Qf5AAf9Df/0BAIEDPn9+AL9/foH+ggB9PsB/P0F//cKAfcE7wL9BgH9BfsB9A/8/QQHEfv9/v8FA/sIAv4GDAQE/f4L/gMA/fsG9wD3Afj9BPv+Dv8GAQQIAgX6A/gL/wYD+wkJAP4CAPr/BvkACAr7/gACAQD9/AT18gYEAP7/Bfb8BfsF+fv+/wIN9wIKAfDyCP0CAP0HAQkGAPUDAwIECf/8/Ar6+vUD/AD7/AoECQEGAvwDBfj+Cv4B/QT++QQAA/P++P309wP2/wX9BgH1//r0AAYD/Qz/8fQE7P4HAv8K/PgA9wQI8vQD",
+      "business-economy-ca7gbaav5bympbw0": "Cff+AQoI+AUDAvz6+/j7+Qb2/wAE+/37Awr5+Pf4Af4E/wkB+wUC/gL9DgMA/QICAwcA/wcD/ggF+vwCAPj+/gkA+fsC+gkCAPkQEP0ODQEM/gH6Afv/AAcEAQP+/PkI9/sHAgQU9v8A/QT9CAYLAgkE+gEH/wMD+gEC8/7+7wACBQDz9//9BfX//wcDBQj8+wL/BQYDAPgAAPkECP4D9v4DBfkFAwH//AoGCP8JAv0C9vf5//ID9/359wH4CfX+6wMAAwsAAPwCBAz7CgH/8//y/gP5APsCC/j9/QUO+wABBAH+CPz6/Qf4BAMHCv4A/gD59AcF+wP/BQP5/QMFAPYFAAH99/0MDQH1AQYFAAAFA/Tz+wr/AAYDBAMB/gP++f0FBP4M+gQGDAERAgT7CfgF+/sRDgP0AAb//w/+/AABBPcI+AAE9P0BBwH2+/0F+wMA+fz7+wb2AAcFAAX5/wb1BwP+9QoKAfz0+wj6/f8IAwD58wcH/Pf79/gH+/0I"
+    }
+  },
+  "failed_item_ids": [],
+  "items": [
+    {"also_covered_by": null,"also_ran_earlier": [],"band": "high","band_reason": null,"carried_by": 1,"desk": null,"entities": ["anthropic"],"events": [],"introduced_by_run": 1,"item_id": "ai-g9yrya8eaf2s5t66","lenses": ["chips","cyber"],"on_front_page": false,"published_at": "2026-11-20T18:53:50Z","rank_score": 1.63494,"reader_note": null,"same_story_as": null,"secondary_desk": null,"source_form": "article","source_id": "guardian-ai","source_kind": "reporting","source_name": "The Guardian - AI","source_url": "https://theguardian.com/news/video/2026/nov/20/is-claude-creator-anthropic-really-worth-15-trillion-the-latest","summary": "Anthropic, an AI firm founded in 2021 by former OpenAI employees and maker of the Claude chatbot, debuted publicly with a peak valuation of $1.3 trillion on its first trading day. CEO Dario Amodei stated that the record-breaking IPO had strengthened the company's resolve to do the right thing. Guardian business editor John Collingridge noted in an interview that challenges remain ahead for the global AI industry.","time_source": "feed","title": "Anthropic's record IPO peaks at $1.3tn valuation on first trading day","truncated": false,"updated_at": null,"updated_by_run": null,"vertical": "ai","visual": null,"watchlist_hit": true},
+    {"also_covered_by": null,"also_ran_earlier": [],"band": "high","band_reason": null,"carried_by": 1,"desk": null,"entities": ["federal-reserve"],"events": [],"introduced_by_run": 1,"item_id": "business-economy-ca7gbaav5bympbw0","lenses": [],"on_front_page": false,"published_at": "2026-11-20T21:15:00Z","rank_score": 2.06914,"reader_note": null,"same_story_as": null,"secondary_desk": null,"source_form": "article","source_id": "fed-press","source_kind": "government","source_name": "US Federal Reserve","source_url": "https://federalreserve.gov/newsevents/pressreleases/other20261120b.htm","summary": "The Federal Reserve announced on November 20, 2026 that UCLA won the 23rd annual national College Fed Challenge. The team from Los Angeles represented the San Francisco District and included Aarushi Maheshwari, Annika Chan, Atul Prasanth, Caitlyn Cox, Finn Karish, with Eli Brooks, Kennedy Yang, Manasi Vartak, Ronojoy Borpujari, and Sahil Sudani as alternates; advisers were Chris Surro and Ali Haider Ismail. Competitors analyzed economic conditions to formulate a monetary policy recommendation modeled on the Federal Open Market Committee, judged on analysis, responses, teamwork, and presentations. The competition drew 141 schools from 34 states, described as the most in its history, with 21 semi-finalist teams narrowing to seven finalists at the Board's national finals. University of Chicago placed second and University of Maryland, College Park third; honorable mentions went to Cleveland State University, Harvard College, Pennsylvania State University, and St. Lawrence University. Federal Reserve Chairman Kevin Warsh praised the participants' talent, rigor, and engagement with monetary policy questions.","time_source": "feed","title": "UCLA wins 23rd annual College Fed Challenge","truncated": false,"updated_at": null,"updated_by_run": null,"vertical": "business-economy","visual": null,"watchlist_hit": true}
+  ],
+  "items_planned": 2,
+  "run_id": "2026-11-20-44824010379",
+  "version": "2026-11-15",
+  "verticals": [
+    {"below_feed_floor": false,"considered": 6923,"eligible_feeds": 53,"feed_floor": 35,"id": "ai","planned": 1,"too_old": 6863},
+    {"below_feed_floor": false,"considered": 744,"eligible_feeds": 23,"feed_floor": 21,"id": "energy","planned": 0,"too_old": 657},
+    {"below_feed_floor": false,"considered": 733,"eligible_feeds": 27,"feed_floor": 21,"id": "business-economy","planned": 1,"too_old": 566},
+    {"below_feed_floor": false,"considered": 658,"eligible_feeds": 27,"feed_floor": 21,"id": "world","planned": 0,"too_old": 373},
+    {"below_feed_floor": false,"considered": 1383,"eligible_feeds": 22,"feed_floor": 21,"id": "india","planned": 0,"too_old": 545},
+    {"below_feed_floor": false,"considered": 0,"eligible_feeds": 0,"feed_floor": null,"id": "science","planned": 0,"too_old": 0},
+    {"below_feed_floor": false,"considered": 0,"eligible_feeds": 0,"feed_floor": null,"id": "climate","planned": 0,"too_old": 0}
+  ]
+}
