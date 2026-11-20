@@ -44,7 +44,7 @@ jobs:
           node frontend/scripts/state-csv-guard.ts
           node frontend/scripts/test-scope.ts --ci >> "$GITHUB_OUTPUT"
 
-  # Scheduled Pages publication looks for this job by name.
+  # Automatic Pages publication looks for this job by name.
   gates:
     needs: scope
     if: needs.scope.outputs.code == 'true'

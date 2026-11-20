@@ -6,6 +6,12 @@ name: Pages publication
 on:
   schedule:
     - cron: '*/30 * * * *'
+  workflow_run:
+    workflows:
+      - Content refresh
+      - CI
+    branches: [main]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -20,10 +26,27 @@ permissions:
 # that makes cancelling a live deploy right (Guardrail #6).
 
 jobs:
-  # A schedule may reuse already deployed code, or code verified by CI. Generated
-  # data can advance without starting CI. Manual publication remains available
-  # from the default branch. Every publish builds the scheduled commit.
+  # An automatic run may reuse already deployed code, or code verified by CI.
+  # Generated data can advance without starting CI. Manual publication remains
+  # available from the default branch. Every publish builds the triggering run's
+  # default-branch commit.
   decide:
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.head_branch == github.event.repository.default_branch &&
+        (
+          github.event.workflow_run.name == 'Content refresh' ||
+          (
+            github.event.workflow_run.name == 'CI' &&
+            (
+              github.event.workflow_run.event == 'push' ||
+              github.event.workflow_run.event == 'workflow_dispatch'
+            )
+          )
+        )
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -39,7 +62,7 @@ jobs:
           ref: ${{ github.sha }}
 
       - id: verify
-        if: github.event_name == 'schedule'
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_run'
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -53,7 +76,7 @@ jobs:
           CHECKED: ${{ steps.verify.outputs.checked }}
           DEPLOYED: ${{ steps.verify.outputs.deployed }}
           TIP: ${{ github.sha }}
-          DISPATCHED_REF: ${{ github.ref_name }}
+          DISPATCHED_REF: ${{ github.event.workflow_run.head_branch || github.ref_name }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: python3 backend/utilities/publish_decision.py >> "$GITHUB_OUTPUT"
 

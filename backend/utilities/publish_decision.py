@@ -1,4 +1,4 @@
-"""Decide whether a scheduled or manual Pages run publishes."""
+"""Decide whether an automatic or manual Pages run publishes."""
 
 from __future__ import annotations
 
@@ -60,9 +60,9 @@ def decide(
         if dispatched_ref != default_branch:
             return Decision(False, tip, f"a manual publish runs from {default_branch} only")
         return Decision(True, tip, "a person asked for a publish")
-    if event_name == "schedule":
+    if event_name in {"schedule", "workflow_run"}:
         if dispatched_ref != default_branch:
-            return Decision(False, tip, f"a scheduled publish runs from {default_branch} only")
+            return Decision(False, tip, f"an automatic publish runs from {default_branch} only")
         if conclusion not in {"success", "not_verified", "blocked"} or (
             (conclusion == "success") != bool(checked)
         ):

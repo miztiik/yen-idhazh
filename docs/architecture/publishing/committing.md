@@ -1,6 +1,6 @@
 # How completed output reaches the repository
 
-**Last Updated**: 2026-11-08
+**Last Updated**: 2026-11-20
 
 Start here when a workflow delivers generated files. Python jobs use
 [`backend/utilities/publish_to_repo.py`](../../../backend/utilities/publish_to_repo.py)
@@ -16,14 +16,15 @@ the caller's HEAD, index or sparse patterns. Neither API reruns a producer.
 
 ## When committed data reaches the site
 
-The Pages workflow publishes on a 30-minute schedule or by manual dispatch from
-the default branch. The schedule accepts generated data on already deployed or
-fully CI-verified code; a pending or failed push CI blocks it unless a later
-full CI run passes. PR checks, merges and content generation do not start a
-Pages run. New digest content can therefore wait until the next scheduled run;
-the scheduler can start runs late when busy.
+The Pages workflow publishes on a 30-minute schedule, after successful
+`Content refresh` or `CI` completion on the default branch, or by manual
+dispatch from that branch. Automatic runs accept generated data on already
+deployed or fully CI-verified code; a pending or failed push CI still blocks
+them unless a later full CI run passes. PR checks and merges do not start a
+Pages run. A completion requests publication immediately; the schedule remains
+the fallback because the scheduler can delay or drop a run under load.
 
-The scheduled build republishes the site's committed copies on its cadence.
+Each automatic build republishes the site's committed copies.
 The Data explorer also reads consented compact data from the configured
 repository, while existing panels retain their build-time compact copies. New
 raw rows still wait for compaction before the explorer can read them.
