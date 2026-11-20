@@ -544,7 +544,7 @@ def test_incompatible_evidence_and_incomplete_type_roles_never_draw(
 ) -> None:
     text = "The installed capacity is 20 MW. The first shipment weighs 35 tonnes."
     table, data = chart_data_over(article_ok, text)
-    encodings = (
+    encodings: dict[str, object] = (
         {"points": [{"quantity": "q1", "category": "l1"}, {"quantity": "q2", "category": "l5"}]}
         if type_name == "bar" else {"quantity": ["q1", "q2"]}
     )
