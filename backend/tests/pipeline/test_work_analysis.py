@@ -12,6 +12,7 @@ Every run is one fixture item, so the cost does not move when the archive grows
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from collections.abc import Callable
@@ -101,6 +102,18 @@ def health(items: Path, item_id: str) -> ItemHealthRow:
     return ItemHealthRow.from_json(read_text(items / f"{item_id}{HEALTH_SUFFIX}"))
 
 
+def analysis_warning(items: Path, item_id: str, caplog: LogCaptureFixture) -> dict[str, object]:
+    line = read_text(items.parent / "captures" / f"{item_id}.text-analysis.log").rstrip("\n")
+    assert line.startswith("text analysis result ")
+    assert any(
+        record.levelno == logging.WARNING and record.getMessage() == line
+        for record in caplog.records
+    )
+    payload = json.loads(line.removeprefix("text analysis result "))
+    assert isinstance(payload, dict) and payload["item_id"] == item_id
+    return payload
+
+
 def test_the_model_reads_the_item_once_and_is_shown_no_address_and_nothing_of_the_first_call(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
@@ -157,7 +170,7 @@ def test_an_item_the_service_could_not_read_still_publishes_on_the_patterns_alon
     assert Summary.read(items / f"{item_id}.summary.json").status is SummaryStatus.OK
     assert server.served == 1
     assert asked_about_no_chart(server.sent[0]), "figures alone make no table"
-    assert f"text analysis gave no mentions id={item_id} outcome={outcome}" in caplog.text
+    assert analysis_warning(items, item_id, caplog)["outcome"] == outcome
     assert health(items, item_id).analyze_ms is not None
 
 
@@ -180,7 +193,7 @@ def test_a_hung_service_costs_the_item_its_deadline_and_the_wait_is_not_the_mode
 
     assert Summary.read(items / f"{item_id}.summary.json").status is SummaryStatus.OK
     assert asked_about_no_chart(server.sent[0])
-    assert f"text analysis gave no mentions id={item_id} outcome=timed_out" in caplog.text
+    assert analysis_warning(items, item_id, caplog)["outcome"] == "timed_out"
     assert row.analyze_ms is not None and row.analyze_ms >= int(HUNG_DEADLINE_S * 900)
     assert row.queue_wait_ms is not None and row.queue_wait_ms < row.analyze_ms
     assert row.stage_gap_ms is not None and row.stage_gap_ms < row.analyze_ms
@@ -200,5 +213,9 @@ def test_words_the_service_says_it_read_never_reach_the_model_unless_the_article
 
     assert injected not in str(server.sent[0]["prompt"])
     assert asked_about_no_chart(server.sent[0])
-    assert f"text analysis mentions dropped id={item_id} dropped=1 kept=0" in caplog.text
+    result = analysis_warning(items, item_id, caplog)
+    assert result["returned_spans"] == [
+        {"label": "ORG", "start_char": 55, "end_char": 55 + len(injected), "status": "text_mismatch"}
+    ]
+    assert injected not in caplog.text
     assert injected not in (items / f"{item_id}.summary.json").read_text(encoding="utf-8")

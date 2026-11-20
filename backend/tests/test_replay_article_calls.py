@@ -199,6 +199,10 @@ def test_real_item_major_calls_keep_native_assets_captures_and_provenance_privat
         )
         assert captured["prompt"] == requests[index]["prompt"]
         assert captured["reply"] and captured["item_id"] == article.item_id
+        analysis_log = (produced / "captures" / f"{article.item_id}.text-analysis.log").read_text(
+            encoding="utf-8"
+        )
+        assert analysis_log.rstrip("\n") in caplog.messages
         if index == 0:
             assert decision.kind is VisualKind.CHART and decision.data_path
             assert (produced / "assets" / decision.data_path).is_file()

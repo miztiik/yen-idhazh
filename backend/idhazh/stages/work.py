@@ -440,7 +440,9 @@ def stage_work(
             if fetched.article.status is ArticleStatus.OK:
                 with tracer.span(telemetry.SpanName.ANALYZE) as analyze_span:
                     analysis = ask_text_analysis.ask_for_mentions(
-                        fetched.article, settings.app.text_analysis
+                        fetched.article,
+                        settings.app.text_analysis,
+                        capture_root=items_dir.parent / common.CAPTURES_DIRNAME,
                     )
                     analyze_span.set(telemetry.AttrKey.OUTCOME, analysis.outcome.value)
                     analyze_span.set(telemetry.AttrKey.HTTP_STATUS, analysis.http_status)
