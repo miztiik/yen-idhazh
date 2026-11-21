@@ -277,7 +277,7 @@
 					{/snippet}
 					{#if id === 'platform-mix'}
 						<PlatformMixPanel {ramp} {start} {end} {windowDays} {lost} recordRows={rows('platformMixQuery')} recording={cfg.recording}
-							gradients={cfg.gradients} chart={cfg.chart} knobs={shared} />
+							chart={cfg.chart} knobs={shared} />
 					{:else if id === 'article-cost'}
 						<ArticleCostPanel cost={articleCost(textRows(rows('articleCostQuery')), processors(rows('articleCostHostsQuery')))}
 							days={windowDays} {windowDays} chart={cfg.chart} />

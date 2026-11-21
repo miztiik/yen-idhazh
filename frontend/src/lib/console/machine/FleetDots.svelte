@@ -48,9 +48,6 @@
 	const box = $derived(geometry.frame);
 	const marks = $derived(readoutMarks(geometry.columns));
 	const showing = $derived(shown ?? readout.resting);
-	const gradients = $derived([...new Map(geometry.squares.flatMap((square) =>
-		square.gradient === null ? [] : [[square.row, square.gradient] as const])).entries()]);
-	const gradientIds = $derived(new Map(gradients.map(([key], index) => [key, `${name}-square-fill-${index}`])));
 </script>
 
 <div class="fleet-dots-plot" data-readout-columns={readout.columns.length}>
@@ -69,14 +66,6 @@
 		use:pointerReadout={{ marks, width: box.width, hover, onSelect: (index) => (selected = index) }}
 		use:columnPick={{ marks, width: box.width, showing, onPick }}
 	>
-		<defs>
-			{#each gradients as [key, gradient] (key)}
-				<linearGradient id={gradientIds.get(key)} x1="0%" y1="0%" x2="0%" y2="100%">
-					<stop offset="0%" stop-color={gradient.bottom} style:stop-color={gradient.top} />
-					<stop offset="100%" stop-color={gradient.bottom} />
-				</linearGradient>
-			{/each}
-		</defs>
 		<line x1={box.left} x2={box.right} y1={box.bottom} y2={box.bottom} stroke="var(--chart-axis)" />
 		{#each geometry.ticks as tick (tick.index)}
 			<line
@@ -104,7 +93,7 @@
 					y={square.y}
 					width={square.size}
 					height={square.size}
-					style:fill={square.gradient === null ? square.colour : `url(#${gradientIds.get(square.row)}) ${square.colour}`}
+					style:fill={square.colour}
 					data-fleet-square={square.row}
 					data-readout-key={square.row}
 				/>

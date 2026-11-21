@@ -89,6 +89,7 @@ test('recorded native slices drive all eligible model reducers without broadenin
 	expect(ending.calls).toBe(cells.length);
 	expect(ending.length).toBe(cells.filter((v) => v === 'length').length);
 	expect(ending.series[0].token).toBe('--chart-4');
+	expect(ending.series.find((series) => series.label === 'ended on its own')?.token).toBe('--chart-5');
 	expect(ending.series.reduce((total, s) => total + s.points.reduce((n, p) => n + (p.value ?? 0), 0), 0)).toBe(cells.length);
 	const score = faithfulness(recorded('faithfulnessQuery'), { high: 80, low: 50 }, { step: 5, floorMax: 75 });
 	expect(score.days.length).toBeGreaterThan(0);

@@ -108,9 +108,6 @@
 	const marks = $derived(supplied === null ? [] : readoutMarks(geometry?.columns ?? []));
 	const showing = $derived(shown ?? supplied?.resting ?? null);
 	const pattern = $derived(`${name}-hatch`);
-	const gradients = $derived([...new Map((geometry?.bars ?? []).flatMap((bar) =>
-		bar.gradient === undefined ? [] : [[bar.label, bar.gradient] as const])).entries()]);
-	const gradientIds = $derived(new Map(gradients.map(([key], index) => [key, `${name}-fill-${index}`])));
 	const declaration = $derived(geometry === null ? null : ruleDeclaration(geometry.rule));
 	const withEvents = $derived(supplied === null || geometry === null ? supplied : {
 		...supplied,
@@ -144,16 +141,6 @@
 			use:pointerReadout={{ marks, width: box.width, hover: hover ?? { name, readout: withEvents }, onSelect: (index) => (selected = index) }}
 			use:columnPick={{ marks, width: box.width, showing, onPick: (index) => onPick?.(index) }}
 		>
-			{#if gradients.length > 0}
-				<defs>
-					{#each gradients as [key, gradient] (key)}
-						<linearGradient id={gradientIds.get(key)} x1="0%" y1="0%" x2="0%" y2="100%">
-							<stop offset="0%" stop-color={gradient.bottom} style:stop-color={gradient.top} />
-							<stop offset="100%" stop-color={gradient.bottom} />
-						</linearGradient>
-					{/each}
-				</defs>
-			{/if}
 			{#if hatch !== null && geometry.bars.some((bar) => bar.hatched)}
 				<defs>
 					<pattern
@@ -212,8 +199,7 @@
 							y={bar.y}
 							width={bar.width}
 							height={bar.height}
-							style:fill={bar.hatched && hatch !== null ? `url(#${pattern})`
-								: bar.gradient === undefined ? bar.fill : `url(#${gradientIds.get(bar.label)}) ${bar.fill}`}
+							style:fill={bar.hatched && hatch !== null ? `url(#${pattern})` : bar.fill}
 							data-series-bar={bar.label}
 							data-readout-key={bar.label}
 						/>

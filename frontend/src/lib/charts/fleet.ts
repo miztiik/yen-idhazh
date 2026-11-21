@@ -17,9 +17,8 @@ import {
 } from './machine-colour';
 import { readoutOf, type Readout } from './readout';
 import type { HoverReadout } from './readout-hover';
-import type { ChartConfig } from '../server/config';
 import { RESERVED_GREY_INK } from './d3/ordered-colour';
-import type { FillGradient, SeriesInput } from './d3/dateSeries';
+import type { SeriesInput } from './d3/dateSeries';
 import { bandScale } from './d3/scale';
 import { fleetIdentities, type FleetIdentity } from './fleet-identity';
 
@@ -145,7 +144,6 @@ export interface FleetView {
 export interface FleetOptions {
 	/** Whole-record speed groups used only for the established ordering and folds. */
 	ramp: MachineRamp;
-	appearance: { gradients: boolean; floor: number; palette: ChartConfig['palette'] };
 	/** The open span, inclusive UTC days. */
 	start: string;
 	end: string;
@@ -255,7 +253,7 @@ export function fleetView(jobs: readonly FleetJob[], options: FleetOptions): Fle
 	});
 	const days = [...new Set(inSpan.map((job) => job.date))].sort();
 	const column = new Map(days.map((date, index) => [date, index]));
-	const colours = fleetIdentities(options.ramp.rows, options.appearance);
+	const colours = fleetIdentities(options.ramp.rows);
 	function paint(identity: MachineIdentity): FleetIdentity {
 		const colour = colours.get(identity.key);
 		if (colour === undefined) throw new Error(`The widest machine universe names no ${identity.key}.`);
@@ -398,7 +396,7 @@ export function fleetView(jobs: readonly FleetJob[], options: FleetOptions): Fle
 			taskName: job.taskName,
 			shard: job.shard,
 			machine: paint(identity).label,
-			swatch: paint(identity).swatch,
+			swatch: paint(identity).colour,
 			seconds: job.seconds,
 			rate: job.rate,
 			row
@@ -443,7 +441,6 @@ export function fleetSeries(view: FleetView): SeriesInput[] {
 		label: part.key,
 		token: part.token,
 		fill: part.colour,
-		...(part.gradient === null ? {} : { gradient: part.gradient }),
 		points: view.days.map((date, index) => ({ date, value: part.counts[index] ?? 0 }))
 	})));
 }
@@ -455,7 +452,7 @@ export function fleetReadout(view: FleetView): Readout {
 		columns: view.days.map((date) => `${date} UTC`),
 		series: view.rows.flatMap((row) => row.parts.map((part) => ({
 			label: part.label,
-			swatch: part.swatch,
+			swatch: part.colour,
 			values: part.counts,
 			format: (value: number) => formatNumber(value, view.numberFormat, { exact: true, si: false }),
 			...(part.note === null ? {} : { note: part.note })
@@ -487,7 +484,7 @@ export function fleetHover(view: FleetView): HoverReadout {
 		byMark: new Map(view.rows.flatMap((row) => row.parts.map((part) => [part.key, readoutOf({
 			type: 'dateSeries', columns: summary.columns,
 			series: [{
-				label: part.label, swatch: part.swatch, values: part.counts,
+				label: part.label, swatch: part.colour, values: part.counts,
 				format: (count, day) => `${formatNumber(count, view.numberFormat, { exact: true, si: false })} of ${summary.series[0].values[day]} recorded jobs`
 			}],
 			notMeasured: 'No recorded jobs', resting: 'last'
@@ -501,7 +498,6 @@ export interface FleetSquare {
 	y: number;
 	size: number;
 	colour: string;
-	gradient: FillGradient | null;
 	drawing: FleetDrawing;
 	/** The column it stands in. */
 	day: number;
@@ -581,7 +577,6 @@ export function fleetDots(
 					y: box.bottom - (line + 1) * step + opts.gapPx,
 					size,
 					colour: part.colour,
-					gradient: part.gradient,
 					drawing: part.key === UNRECORDED_KEY ? 'unrecorded' : 'step',
 					day,
 					row: part.key

@@ -1,6 +1,6 @@
 # Design System
 
-**Last Updated**: 2026-11-20
+**Last Updated**: 2026-11-21
 
 Shared rules for typography, layout, colour, motion and controls. [Console design](console-design.md) owns panel-specific presentation; [appearance configuration](config/appearance.md) owns tunable values.
 
@@ -29,15 +29,18 @@ The console's `console_style` family is generated over the entire operator page,
 including its canvas and header, before paint. It supplies neutral light/dark
 surfaces, actions, six paired type roles, compact controls and panel spacing.
 Reader tokens remain unchanged. Ordinary single-measure charts use violet for
-their marks and readings, not the first category colour. Fetch is cyan,
-Extract is cobalt, Summarize is berry and Analyze uses charcoal in light mode
+their marks and readings, not the first category colour. All Console
+categorical stacks take flat fills from one shared light and dark palette.
+Fetch is cyan, Extract is cobalt, Summarize is berry and Analyze uses charcoal in light mode
 and silver in dark mode so it does not duplicate the violet measurement role.
-A stage has the same category colour in a timing stack, failure stack and
-article inspection. Use labels beside the fills, surface-coloured separators
+A category keeps its colour wherever the same fact appears: a stage in a
+timing stack, failure stack and article inspection, or a reported capacity
+across Hardware windows. Use labels beside the fills, surface-coloured separators
 at stack joins and focus outlines against the surface rather than the fill.
-Distinct quantities and machine identities use category colours; absence keeps
-its reserved neutral. Green, amber and red express a declared status, not an
-ordinary measured length or count. Confidence and movement retain their own roles.
+Distinct quantities and hardware groups use category colours; the axis paint
+is not a category fill. Absence keeps its reserved neutral. Green, amber and
+red express a declared status, not an ordinary measured length or count.
+Confidence and movement retain their own roles.
 
 | Token family | Meaning |
 | --- | --- |
@@ -261,6 +264,16 @@ Do not introduce an engine that prerenders charts or requires a runtime server. 
 ## Design rationale
 
 One token system and payload-driven states keep meaning consistent across pages and themes. The home page uses the available story width; other reading routes retain a measured prose block. Browser-drawn charts adapt to the actual device. Shared drawing data keeps marks, descriptions and narrow layouts consistent.
+
+The Console keeps its custom category order rather than adopting an external
+[categorical option group](https://www.carbondesignsystem.com/building-blocks/data-visualization/color-palettes#categorical-palettes).
+Measurement borrows Purple 70 and Purple 50 from the
+[same reference](https://www.carbondesignsystem.com/building-blocks/data-visualization/color-palettes#monochromatic);
+those two swatches are not a paired categorical group. Fixed category roles
+let operators recognize the same stage across charts; choosing a group by
+visible category count could change its colour when a series disappears.
+Hardware's job counts and capacities are already expressed by the marks and
+labels. Shading each segment again does not add a reading.
 
 The digest drawing and console use one TypeScript number formatter. Its locale, SI prefix threshold and significant digits come only from `visuals.number_format` in `config/idhazh.json`, never from a reader's browser. Where a shortened figure differs from the article's text, the accessible description keeps the original characters. Maintainer ruling: 2026-10-24.
 

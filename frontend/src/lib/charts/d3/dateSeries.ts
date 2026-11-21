@@ -46,8 +46,6 @@ export interface SeriesInput {
 	/** A paint of the series' own in place of its token: a step of an ordered
 	 * ramp, which is a mix of a token and not a token. */
 	fill?: string;
-	/** Decorative categorical shading, restarted within each stacked segment. */
-	gradient?: FillGradient;
 	/** Drawn as the hatch for a known thing with no reading, in place of a fill. */
 	hatched?: boolean;
 	/** Printed after each of this series' readings in the readout, so a share
@@ -58,11 +56,6 @@ export interface SeriesInput {
 	 * for each edge, keyed by the band's own paint, so a band is never drawn
 	 * without the figures that bound it. */
 	spreadLabels?: SpreadLabels;
-}
-
-export interface FillGradient {
-	top: string;
-	bottom: string;
 }
 
 export interface DateSeriesOptions {
@@ -120,7 +113,6 @@ export interface SeriesBar {
 	token: ChartToken;
 	/** What the bar is filled with: the series' own paint, or its token. */
 	fill: string;
-	gradient?: FillGradient;
 	hatched: boolean;
 	value: number;
 	x: number;
@@ -396,7 +388,6 @@ export function dateSeries(series: readonly SeriesInput[], opts: DateSeriesOptio
 					label: layer.key,
 					token: entry.token,
 					fill: entry.fill ?? `var(${entry.token})`,
-					...(entry.gradient === undefined ? {} : { gradient: entry.gradient }),
 					hatched: entry.hatched ?? false,
 					value,
 					x: band(dates[at]) ?? 0,
