@@ -32,7 +32,12 @@ from idhazh.content_similarity_judge import settings as judge_settings
 from idhazh.content_similarity_judge import tenant
 from idhazh.content_similarity_judge.ledger_reads import load_threshold_history
 from idhazh.contracts.base import derive_text_digest
-from idhazh.contracts.council_invocation import PreparationReceipt, SelectedJudge, Selection
+from idhazh.contracts.council_invocation import (
+    ArtifactFile,
+    PreparationReceipt,
+    SelectedJudge,
+    Selection,
+)
 from idhazh.contracts.council_run_record import ShardOutcome
 from idhazh.contracts.digest_day import DigestDay, DigestItem, DigestRunRef, DigestVerticalRef
 from idhazh.contracts.knobs.council import JudgeLifecycleStatus
@@ -346,6 +351,7 @@ def test_an_unusable_verified_score_pool_does_not_change_settlement(
     draw_file, pool_file = receipt.files
     bundle_root = work_files.invocation_root(bundle, selected, tenant.JUDGE_ID)
     bundled_pool = bundle_root / pool_file.path
+    files: tuple[ArtifactFile, ...]
     if legacy:
         files = (draw_file,)
     else:
@@ -374,7 +380,9 @@ def test_an_unusable_verified_score_pool_does_not_change_settlement(
 
     row, = load_threshold_history(common.STATE_ROOT, [A_NIGHT])
     assert row.score_drift_status is ScoreDriftStatus.NO_HISTOGRAM
-    assert row.score_pool_histogram is row.score_drift_baseline is row.score_psi is None
+    assert row.score_pool_histogram is None
+    assert row.score_drift_baseline is None
+    assert row.score_psi is row.score_ks_distance is row.score_wasserstein_distance is None
 
 
 @pytest.mark.parametrize("remove", [False, True], ids=["changed", "missing"])
