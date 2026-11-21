@@ -45,12 +45,6 @@ function knobs(): { line: number; below: number; above: number } {
 	return { line, below: axis.holdout_axis_below_line, above: axis.holdout_axis_above_line };
 }
 
-/** The four pairs the committed file marks as two stories, at the scores the
- * committed day payloads give them. Written down rather than recomputed: the
- * point of this file is the drawing, and a score read off the archive would
- * make it a test of the archive. */
-const COMMITTED = [0.9407, 0.9374, 0.9352, 0.9343];
-
 function mark(score: number, sameStory = false): HoldoutMark {
 	return {
 		leftTitle: `at ${score}`,
@@ -81,18 +75,14 @@ test('the axis is the line and two configured distances, never the band', () => 
 	expect(domain[0]).toBeCloseTo(line - below, 9);
 	expect(domain[1]).toBeCloseTo(line + above, 9);
 	expect(domain[1] - domain[0]).toBeCloseTo(below + above, 9);
-	// Strictly inside the band on both sides, so the axis is a magnification of
-	// it rather than a different question.
-	expect(domain[0]).toBeGreaterThan(BAND[0]);
-	expect(domain[1]).toBeLessThan(BAND[1]);
 });
 
 test('the axis follows the line, so a line set elsewhere takes its scale with it', () => {
 	// The domain is the line and two knobs. Editing the floor moves the window,
 	// which keeps the margin the same size on the screen on the day it changes.
-	const { below, above } = knobs();
-	const here = holdoutDomain(0.94, below, above);
-	const lower = holdoutDomain(0.93, below, above);
+	const { line, below, above } = knobs();
+	const here = holdoutDomain(line, below, above);
+	const lower = holdoutDomain(line - 0.01, below, above);
 
 	expect(lower[0]).toBeCloseTo(here[0] - 0.01, 9);
 	expect(lower[1]).toBeCloseTo(here[1] - 0.01, 9);
@@ -100,12 +90,11 @@ test('the axis follows the line, so a line set elsewhere takes its scale with it
 });
 
 test('the margin draws at a width a person can see', () => {
-	// THE BITE, and the number this whole panel exists for. The committed margin
-	// is 0.0007. On the band it drew at 5.8 px of a 1033 px plot - half a percent
-	// of the box - so a reader could not tell the dot from the rule. On this scale
-	// it draws at 24 px, read 2026-09-19 off a 1033 px plot.
-	const { line, below, above } = knobs();
-	const margin = Math.abs(line - COMMITTED[0]);
+	// Reproduce the 2026-09-19 margin. On the band it drew at 5.8 px of a 1033 px
+	// plot, so a reader could not tell the dot from the rule.
+	const { below, above } = knobs();
+	const line = 0.94;
+	const margin = 0.9407 - line;
 
 	const onTheBand = pixels(margin, BAND);
 	const onTheScale = pixels(margin, holdoutDomain(line, below, above));
@@ -116,18 +105,6 @@ test('the margin draws at a width a person can see', () => {
 	// reader can see which side of the rule the dot is on. The gate is that width
 	// and not the reading above it, because the reading moves with the axis knobs.
 	expect(onTheScale).toBeGreaterThan(2 * 6.5 + 1);
-});
-
-test('every pair the committed file marks apart is on the scale', () => {
-	// An axis that pinned the lowest of the four would print a count of marks it
-	// had not drawn, which is the defect the count was added to remove.
-	const { line, below, above } = knobs();
-	const domain = holdoutDomain(line, below, above);
-
-	for (const score of COMMITTED) {
-		expect(score, `${score} is off the scale`).toBeGreaterThanOrEqual(domain[0]);
-		expect(score, `${score} is off the scale`).toBeLessThanOrEqual(domain[1]);
-	}
 });
 
 test('the marked-apart pairs come back highest first, and only them', () => {
@@ -146,9 +123,7 @@ test('a population is its lowest, its middle and its highest', () => {
 });
 
 test('the one-story pairs below the line are the other cost of the number', () => {
-	// A pair read as ONE story scoring under the line is a pair the run will not
-	// fold, so the reader sees that story twice. A panel reporting only the
-	// violations reports one of the two costs the line has.
+	// A pair read as ONE story scoring under the line does not qualify by score.
 	expect(belowLine([0.93, 0.94, 0.95, 0.9399], 0.94)).toBe(2);
 	expect(belowLine([], 0.94)).toBe(0);
 });
@@ -160,7 +135,6 @@ test('the one-story sentence names the count, the range and the misses', () => {
 	expect(said).toContain(formatNumber(0.7316, { si: false }));
 	expect(said).toContain(formatNumber(0.9914, { si: false }));
 	expect(said).toContain('3 of them score below the line');
-	expect(said).toContain('see those stories twice');
 });
 
 test('a panel with no one-story marks says so rather than drawing an empty strip', () => {

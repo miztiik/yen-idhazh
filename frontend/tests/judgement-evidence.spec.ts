@@ -77,16 +77,32 @@ test('unscorable hand marks keep their total, skipped reason and the same mark r
 	expect(scored.skipped).toEqual([{ leftTitle: 'Left', rightTitle: 'Right', reason: 'the day it names is no longer published' }]);
 });
 
-test('an unavailable hand-mark read says so, keeps what it could not check, and escapes untrusted notes', async ({}, info) => {
+test('the panel distinguishes unavailable marks from a violation beyond the score axis', async ({}, info) => {
 	const { drawn } = await serverPanels(info.outputPath('panels'), [['src/routes/console/judgement/HoldoutMargin.svelte', 'HoldoutMargin']]);
+	const config = {
+		line: 0.85, axisBelow: 0.02, axisAbove: 0.01,
+		weights: { cosineWeight: 1 }, height: 220, width: 760, readoutMaxShare: 1
+	};
 	const html = drawn.HoldoutMargin({
+		...config,
 		marks: null, agreedScores: null, skipped: [{ leftTitle: 'Left', rightTitle: 'Right', reason: 'the article carries no vector' }],
-		marked: 1, line: 0.94, axisBelow: 0.02, axisAbove: 0.01,
-		weights: { cosineWeight: 1 }, evidence: ['<script>untrusted diagnostic</script>'],
-		height: 220, width: 760, readoutMaxShare: 1
+		marked: 1, evidence: ['<script>untrusted diagnostic</script>']
 	});
 	expect(words(html)).toContain('The hand-marked pairs are unavailable.');
 	expect(html).toContain('data-holdout-skips="1"');
 	expect(html).toContain('&lt;script>untrusted diagnostic&lt;/script>');
 	expect(html).not.toContain('<script>untrusted diagnostic');
+
+	const scored = drawn.HoldoutMargin({
+		...config,
+		marks: [{ leftTitle: 'Left article', rightTitle: 'Right article', sameStory: false,
+			markedOn: '2030-06-14', note: '', score: 0.93 }],
+		agreedScores: [], skipped: [], marked: 1
+	});
+	expect(scored).toContain('data-holdout-state="violation"');
+	expect(scored).toContain('data-holdout-margin="0.08"');
+	expect(scored).toContain('data-holdout-violations="1"');
+	expect(scored).toContain('data-holdout-offscale="high" data-holdout-offscale-count="1"');
+	expect(scored).not.toContain('data-holdout-dot=');
+	expect(words(scored)).toContain('Left article');
 });

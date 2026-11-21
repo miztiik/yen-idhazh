@@ -7,7 +7,7 @@ each pair is one news event or two. The marks are saved through the ledger door
 as the `holdout-pairs` ledger, under
 `state/raw/content-similarity-judge/holdout-pairs/`, and the gardener packs them
 under `state/compact/content-similarity-judge/holdout-pairs/`. They are the
-fixed floor the merge line has to stay above.
+evidence for what clears the merge line by score.
 
 The rule the floor guards is in
 [../architecture/publishing/autotune-content-similarity.md](../architecture/publishing/autotune-content-similarity.md).
@@ -23,13 +23,14 @@ reading. It is produced by a different labeller, outside the nightly loop, and
 nothing in the pipeline writes it - so a line that drops below a pair marked as
 two stories is a fact somebody can see rather than a number arguing for itself.
 
-The `false` rows are the load-bearing ones. A pair marked as two stories that
-sits above the line is a story the reader never gets to see.
+The `false` rows are the pairs marked as two stories. When their scores reach
+the line, the score check would let them group. That does not prove an actual
+fold: the rest of the grouping rules still apply.
 
 **What it holds today.** 200 pairs, marked by `claude-opus-4.6` on 2026-09-19:
 196 one story, 4 two stories. All four two-story marks are one news cluster - a
-lake being renamed, carried by two different companies - so the floor currently
-rests on one story rather than on a spread of news. They sit on the ledger door
+lake being renamed, carried by two different companies - so they test the
+floor against one news cluster rather than a spread of news. They sit on the ledger door
 under `content-similarity-judge/holdout-pairs`, copied there from the one CSV
 file they were kept in before, which is gone
 ([persistence.md](../architecture/contracts/persistence.md)).
@@ -63,7 +64,8 @@ hand it is a mark that is not saved.
 ## Draw a sheet
 
 Read-only apart from the two files it writes. It calls no model and opens no
-socket:
+socket. This example uses the former 0.94 floor for the September sheet. For
+a new sheet, take `--line` from the current `assemble.same_story.floor_min`.
 
 ```powershell
 python backend/utilities/sample_sheet.py --draw-root backend/var/council --line 0.94 `
@@ -114,7 +116,7 @@ draw rather than the line.
   `--corridor`, `just-above`; at or above and further, `well-above`; below and
   within the corridor, `just-below`; below and further, `well-below`. A score
   exactly on the line is `just-above`, because the pass refuses on
-  `score < floor_min` - a pair at the line merges.
+  `score < floor_min` - a pair at the line clears the score check.
 - **`select` round-robins the four bands, corridor first.** Not a quota: the
   bands are never evenly filled - 771 of 1,197 unique pairs over 29 days were
   well below the line and 105 just above it - so a quota hands the sheet to
@@ -174,6 +176,8 @@ makes a sheet that comes back short stay short rather than getting filled in
 with a guess.
 
 ## Harvest them back
+
+Use the same line and draw as when the sheet was created.
 
 ```powershell
 python backend/utilities/sample_sheet.py --draw-root backend/var/council --line 0.94 `

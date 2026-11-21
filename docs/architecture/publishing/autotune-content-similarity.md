@@ -1,6 +1,6 @@
 # When two items are one story, and the line that decides it
 
-**Last Updated**: 2026-11-19
+**Last Updated**: 2026-11-21
 
 Which items on a published day are one story, and what line decides it? This page
 owns the grouping that runs at build time and the merge line it applies - the score
@@ -108,7 +108,7 @@ This does not discover URL aliases, rename sources or remove repeated placements
 | Knob | Ships at | What it scores |
 | --- | ---: | --- |
 | `same_story.cosine_weight` | 1.0 | Cosine between the two stored int8 vectors. The whole score, which is why 1.0 is its only legal value. |
-| `same_story.floor_min` | 0.94 | What the score has to reach, for **every** pair inside a group. |
+| `same_story.floor_min` | 0.85 | What the score has to reach for **every** pair inside a group that does not qualify through the headline rule. |
 
 **The judge's draw scores its pairs with this same arithmetic** (`assemble.cross_source_pairs`), so the score on a `pair-verdicts` row is the score this floor is applied to. The draw, the thresholds it follows and the rows it leaves are on [the judge page](how-the-content-similarity-judge-follows-its-thresholds.md#what-pair-verdicts-stores).
 
@@ -120,7 +120,7 @@ This does not discover URL aliases, rename sources or remove repeated placements
 
 ## What chose 0.94, measured on the cosine alone
 
-`assemble.same_story.floor_min` is set by hand labels, not by taste. Every group the pass forms over the eleven committed days was read from the published titles and summaries and marked same-story or not. The whole score is the cosine, so this is a measurement of the floor as it is applied. Measured 2026-09-01 on a developer machine / Python 3.14.2, 3,978 items:
+Hand labels informed the original 0.94 floor. Every group the pass formed over the eleven committed days was read from the published titles and summaries and marked same-story or not. The whole score is the cosine, so this measured the score branch directly. Measured 2026-09-01 on a developer machine / Python 3.14.2, 3,978 items:
 
 | Threshold | Groups | Items grouped | Largest group | False merges |
 | ---: | ---: | ---: | ---: | ---: |
@@ -131,25 +131,27 @@ This does not discover URL aliases, rename sources or remove repeated placements
 
 The one false merge at 0.93 is on 2026-08-30: Ontario's pushback against the lake renaming, folded into a story about a mapping company carrying the renaming out, at a cosine of **0.9317**. Those are two stories, and merging them means the pushback never ran.
 
-**The rule is the first round hundredth above the highest-scoring pair marked as two stories.** That is how 0.94 was chosen, over the 11 committed days this table covers and the one marked-apart pair they held.
+**The original floor was the first round hundredth above the highest-scoring pair marked as two stories.** That is how 0.94 was chosen, over the 11 committed days this table covers and the one marked-apart pair they held.
 
-**The margin over the current hand marks is negative, and the Judgement page draws it.** The hand marks made on 2026-09-19 hold 200 pairs, 4 of them marked as two different stories; an agent labelled them from each pair's title and summary. Recomputed from the committed day payloads at the shipped weights - the whole score on the cosine - those four score **0.9407, 0.9374, 0.9352 and 0.9343**. The highest sits **0.0007 above** the 0.94 floor, so that pair clears the floor and the line alone does not keep it apart. One pair of the four is on the wrong side of the line; the other three score below it.
+**At the former 0.94 floor, one marked-apart pair cleared the line.** The hand marks made on 2026-09-19 hold 200 pairs, 4 of them marked as two different stories; an agent labelled them from each pair's title and summary. Recomputed from the committed day payloads at the shipped weights - the whole score on the cosine - those four score **0.9407, 0.9374, 0.9352 and 0.9343**. The highest sat **0.0007 above** 0.94; the other three scored below it.
 
 **The way to firm up the margin is more labels, not a higher number.** To clear every two-story mark the line would have to reach 0.941, which leaves 9 more of the 196 one-story marks apart. A line of 0.95 would clear all four marks and fold ten fewer items in the table above (24 grouped at 0.94, 14 at 0.95). A higher line cannot separate the labels because they interleave: a pair at 0.9406 is marked one story, the pair at 0.9407 is marked two, and a pair at 0.9409 is marked one again.
 
-**The line already costs the reader on the other side, and the Judgement page draws that too.** The same marks hold 196 pairs marked as ONE story. Recomputed the same way, **117 of them score below 0.94**, so the vector rule alone leaves those stories on the page twice; the identical-headline joiner catches whichever of them share a headline, and nothing catches the rest. That is not an argument for a lower line - it is the second cost of any line, and a panel reporting only the false merges reports half of what the number does. Measured 2026-09-19 on a developer machine / Node 24.12.0, over the committed day payloads at the shipped weights; deterministic, so no spread.
+**The former line also refused some pairs marked as one story.** The same marks hold 196 pairs marked as ONE story. Recomputed the same way, **117 of them score below 0.94**, so those pairs could not join by score alone; a shared headline was the other way to join. This is the other cost of any line, not a count of duplicate cards. Measured 2026-09-19 on a developer machine / Node 24.12.0, over the committed day payloads at the shipped weights; deterministic, so no spread.
 
 **Two cautions on the reading itself.** All four two-story marks come from one news cluster - a lake being renamed by two different companies - so the floor rests on one story rather than on a spread of news. And the sheet was stratified by distance from the line when it was drawn, by the pass's own score, which counts a matching headline as 1.0 (50 pairs well below the line, 49 just below, 51 just above and 50 well above), so `1 of the 101 pairs at or above the line is two stories` is a rate over the sample and not over a day's pairs.
 
-**The two errors are not equal, which is why the number leans high.** A missed group costs a reader the same story twice, on a page they can see. A false merge costs them a story that never ran, and they cannot see what is not there.
+**The two errors are not equal.** A missed group shows a reader the same story twice. A false merge puts a different story behind another card, where the reader may not know to look.
 
 **`assemble.same_story.floor_min` is not comparable to `assist.similarity_floor`.** That one scores a reader's query against an item and this one scores two items against each other; the two distributions are different shapes, and reading one number against the other is how a threshold gets set from the wrong evidence.
 
-**The line is a configured value, and nothing moves it.** `assemble.same_story.floor_min` is 0.94 in `config/idhazh.json`. A person edits it, and `backend/idhazh/stages/assemble.py` reads `settings.app.assemble.same_story` directly, so the floor on the diagram is that number on every build. Every build writes it onto the run record as `same_story_floor_applied`, so a committed `run.json` says which floor grouped its day after the config has been edited; a run committed before the field existed carries none. No console page reads that field: the Judgement page draws the hand marks against `assemble.same_story.floor_min` in the committed config.
+**The configured line is now 0.85, down from 0.94.** All four recorded marked-apart scores clear 0.85, with the highest **0.0907 above** it. These are score comparisons, not evidence of four folds: outlet and URL eligibility, the headline rules, and the checks against every other member still govern grouping. The 0.94 readings above describe the former line, not the result of running the new line on old days.
+
+`backend/idhazh/stages/assemble.py` reads `settings.app.assemble.same_story` from `config/idhazh.json`. The run records the value in `same_story_floor_applied`, so a committed `run.json` says which floor grouped its day; a run committed before the field existed carries none. Judgement compares the hand marks with the current config, not that historical run value. Changing the setting does not regroup already committed days.
 
 **The judge does not set the line.** Its two thresholds steer which pairs it reads and decide nothing about publication, and the nightly draw follows them rather than the floor a build used ([the thresholds in force](how-the-content-similarity-judge-follows-its-thresholds.md#the-thresholds-in-force)).
 
-**What is not decided.** Whether the hand marks should become a live floor that refuses to apply a line at or below the highest pair marked as two stories, rather than a number copied into config. It would have refused today's 0.94, which sits 0.0007 below the 0.9407 pair. It is the structural fix for the negative margin above, and it changes what publishes, so a person decides it; the four marks it would rest on come from one news cluster, so more labels come first.
+**What is not decided.** Whether the hand marks should become a live floor that refuses to apply a line at or below the highest pair marked as two stories, rather than a number copied into config. That rule would have refused the former 0.94 as well as the current 0.85, but all four marks it would rest on come from one news cluster.
 
 ## What the Judgement page draws from the hand marks
 
@@ -159,7 +161,7 @@ The Judgement page of the console draws the margin above: the line minus the hig
 
 **The marks are a ledger read over a reach.** A person saves each labelling with `backend/utilities/sample_sheet.py --harvest`, as one file under `state/raw/content-similarity-judge/holdout-pairs/` for the day the marks were made, and the gardener packs it under `state/compact/content-similarity-judge/holdout-pairs/` ([label-the-similarity-holdout.md](../../how-to/label-the-similarity-holdout.md)). The page reads packed days only, `similarity.holdout_reach_days` UTC days back from the day it is about - 730 in `config/idhazh.json` - and no further. So the read stays one size however long the ledger grows (Guardrail #12): a new mark reaches the panel once the gardener has packed its day, and a mark older than the reach stops counting until somebody harvests it again. The marks' compaction may not delete a day inside the reach, and the gardener's loader refuses one that would. **A pair marked again is read once, with its newest mark.** Packing a day keeps one row for each pair of addresses, the one with the newer `marked_on`, and the page applies the same rule across the days of the reach, so a corrected mark replaces the one it corrects rather than counting beside it.
 
-**It measures the line, not the judge.** A mark carries no verdict and no model is called. A pair is joined exactly when its score reaches the line, which is the one branch of the diagram above that the line decides. How well the judge agrees with independent annotations is a different measurement, which [the offline evaluation procedure](../../how-to/evaluate-content-similarity-judge.md) owns. The marks are also not the judge's known-answer pairs: the marks check the line, and [the known-answer pairs](how-the-content-similarity-judge-follows-its-thresholds.md#the-known-answer-pairs) check the judge.
+**It measures the line, not the judge.** A mark carries no verdict and no model is called. A score at or above the line clears the score check; the panel does not replay grouping. How well the judge agrees with independent annotations is a different measurement, which [the offline evaluation procedure](../../how-to/evaluate-content-similarity-judge.md) owns. The marks are also not the judge's known-answer pairs: the marks check the line, and [the known-answer pairs](how-the-content-similarity-judge-follows-its-thresholds.md#the-known-answer-pairs) check the judge.
 
 **Counts, and never one rate.** With 196 of the 200 marks on one side, always answering "one story" scores 98 percent and measures nothing. So the panel reports each count beside the population it came from - how many of the pairs marked apart sit at or above the line, and how many of the pairs marked as one story sit below it - and keeps the two directions of a mistake apart: a missed group shows the reader one story twice, and a false merge hides one of them.
 
@@ -175,7 +177,7 @@ The vector pass alone leaves the same story on the page several times. One obitu
 
 **The cause is what the vector is built over, not the number it is compared against.** `embed.text_for` encodes `f"{title}. {summary}"`, and the summary is our own model's prose about one article. Measured 2026-09-14 with the committed tokenizer over 75 items of the 2026-09-13 day: the headline is a median **16 tokens** and the whole string a median **121**, so the summary is **87 percent of what the encoder reads** and the headline is about one part in eight. The encoder mean-pools over every token, so the event contributes roughly an eighth of the vector. Two outlets writing the same story produce two different articles, so our summariser produces two different summaries, so the comparison is dominated by the one part guaranteed to differ. Coverage is not the problem either: 9,351 of the 9,353 committed items carry a vector.
 
-**No threshold fixes it, and that is measured rather than argued.** Over the 53 cross-source pairs on the committed days whose headlines match once case and spacing are set aside, the stored vectors score: min **0.7298**, median **0.9177**, max **1.0000**. The floor of 0.94 catches 19 of the 53. Dropping the floor to 0.88 would catch 39 of them and admit 730 other-story pairs, and the highest pair marked as two stories in the 2026-09-19 hand marks sits at **0.9407** - above both that median and the floor itself. The two populations overlap, so the number is not the lever. Measured 2026-09-14 on a developer machine / Python 3.14.2, 25 committed days, 9,353 items, 2,300,847 cross-source pairs scored; the counts are deterministic and have no spread.
+**No threshold fixes it, and that is measured rather than argued.** Over the 53 cross-source pairs on the committed days whose headlines match once case and spacing are set aside, the stored vectors score: min **0.7298**, median **0.9177**, max **1.0000**. The former floor of 0.94 catches 19 of the 53. In that comparison 0.88 would catch 39 of them and admit 730 other-story pairs, and the highest pair marked as two stories in the 2026-09-19 hand marks sits at **0.9407** - above both that median and the former floor. The two populations overlap, so the number alone does not separate them. Measured 2026-09-14 on a developer machine / Python 3.14.2, 25 committed days, 9,353 items, 2,300,847 cross-source pairs scored; the counts are deterministic and have no spread.
 
 **So a second joiner runs beside the vector one: two items are the same story when their reduced headlines are identical.** It has no threshold, because a string is equal or it is not. It sits under `assemble.group_identical_titles`, default on, and turning it off restores the vector-only rule exactly.
 

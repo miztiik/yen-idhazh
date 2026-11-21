@@ -146,7 +146,8 @@ pairs a person marked apart.` Two panels form one untitled group, in this order:
 - `holdout-margin`, titled `The pairs a person marked apart`, compares each pair
   a person marked apart with the merge line, which is `floor_min` in the
   committed config. It keeps the score-range strip for pairs marked one story and
-  the margin. See the
+  the margin. These are score comparisons, not a replay of the published
+  grouping decisions shown in the first panel. See the
   [holdout drawing rule](../../concepts/console-design/the-rules-every-console-chart-obeys.md#the-holdout-margin-is-drawn-at-the-scale-of-the-margin-not-of-the-score).
 
 Both panels span the full row, so the margin keeps its drawn width. The margin's

@@ -8,10 +8,8 @@
 	 *
 	 * **The margin is the panel.** It is the distance between the rule and the
 	 * closest dot, and it is the whole safety case for the line. A negative
-	 * margin - a dot to the RIGHT of the rule - means the line would merge two
-	 * stories a person read as two, and it is drawn exactly where the arithmetic
-	 * puts it. Clamping it to the rule would draw a panel that never shows the
-	 * state it exists for.
+	 * margin means a pair marked as different stories clears the score check.
+	 * An off-scale score is counted at the edge, not drawn on the rule.
 	 *
 	 * **The axis is the line and a narrow window either side, not the band.** On
 	 * the band the margin drew at 5.8 px of a 1033 px plot and the dot covered the
@@ -236,8 +234,8 @@
 							label: 'Against the line',
 							value:
 								point.mark.score >= line
-									? 'at or above it, so the line merges this pair'
-									: 'below it, so the pair stays two stories'
+									? 'at or above it, so the pair clears the score check'
+									: 'below it, so the pair does not clear the score check'
 						},
 						{
 							label: 'Marked',
@@ -281,7 +279,7 @@
 <Panel
 	id="holdout-margin"
 	title="The pairs a person marked apart"
-	note="Every pair somebody read as two different stories sets a floor the merge line has to stay above. The dots are those pairs and the rule is the merge line, the floor in the committed config."
+	note="Scores at or above the merge line can qualify for grouping. This panel does not show which stories actually folded."
 	{tone}
 	wide
 >
@@ -319,8 +317,8 @@
 				<span class="figure" data-lede data-holdout-figure>{marginDistance(outcome.margin, numberFormat)}</span>
 				<span class="words"
 					>{violated
-						? 'below the closest pair a person marked as two stories'
-						: 'of room above the closest pair a person marked as two stories'}</span
+						? 'below the highest-scoring pair marked as two stories'
+						: 'of room above the highest-scoring pair marked as two stories'}</span
 				>
 			{/if}
 		</p>

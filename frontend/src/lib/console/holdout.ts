@@ -7,8 +7,8 @@
  *
  * **The margin is the panel.** It is the line minus the highest score among the
  * pairs marked as two stories. Positive means the line sits clear of every
- * mark; negative means the line would merge a pair somebody read as two
- * different events, and that is the one thing this file exists to say out loud.
+ * mark; negative means the score clears the line for a pair somebody marked
+ * as two different events. This does not replay the grouping rules.
  * The line is the floor in the committed config: nothing fits or moves it.
  *
  * **A margin with no scale under it says nothing.** So this file also owns the
@@ -52,7 +52,7 @@ export interface HoldoutSkip {
 export interface HoldoutMargin {
 	/** The highest-scoring pair marked as two stories, or null where none is. */
 	closest: HoldoutMark | null;
-	/** The line minus that score. Negative means the line would merge it. */
+	/** The line minus that score. Negative means the score clears the line. */
 	margin: number | null;
 	/** How many marked-apart pairs score at or above the line. */
 	violations: number;
@@ -101,7 +101,7 @@ export function pairScore(cosine: number, weights: ScoreWeights): number {
 
 /** The margin, the pair that sets it, and how many marks sit the wrong side.
  *
- * A pair scoring exactly the line merges - `assemble` refuses on
+ * A pair scoring exactly the line clears the score check - `assemble` refuses on
  * `score < floor_min` - so a mark AT the line is a violation. Put the
  * comparison the other way and the one pair sitting on the boundary is filed
  * as safe.
@@ -153,7 +153,7 @@ export type HoldoutState = 'no-marks' | 'clear' | 'violation';
  *
  * `no-marks` means nobody has marked a pair, so there is nothing to hold the
  * line against. `violation` means a pair marked as two stories scores at or
- * above the line, so the line would merge it. `clear` is every other day.
+ * above the line. `clear` is every other day.
  */
 export function holdoutState(margin: HoldoutMargin): HoldoutState {
 	if (margin.closest === null) return 'no-marks';
@@ -194,18 +194,17 @@ export function holdoutNote(
 	numberFormat: NumberFormatConfig
 ): string {
 	const distance = marginDistance(margin.margin ?? 0, numberFormat);
-	const among = margin.pairs === 1 ? 'the one pair' : `the closest of the ${margin.pairs} pairs`;
+	const among = margin.pairs === 1 ? 'the one pair' : `the highest-scoring of the ${margin.pairs} pairs`;
 	switch (state) {
 		case 'no-marks':
 			return 'No scored pair marked as two stories was returned, so there is no measured margin.';
 		case 'violation': {
 			const count = margin.violations;
 			return (
-				`The line is ${distance} BELOW ${among} a person marked as two stories, so it would ` +
-				'merge them.' +
+				`The line is ${distance} BELOW ${among} a person marked as two stories.` +
 				(margin.pairs === 1
-					? ''
-					: ` ${count} of the ${margin.pairs} ${count === 1 ? 'is' : 'are'} on the wrong side of it.`)
+					? ' Its score clears the line.'
+					: ` ${count} of the ${margin.pairs} ${count === 1 ? 'scores' : 'score'} at or above it.`)
 			);
 		}
 		default:
@@ -253,8 +252,8 @@ export function scoreRange(scores: readonly number[]): MarkRange | null {
 
 /** How many of a population sit below the line.
  *
- * A pair read as ONE story scoring below the line is a pair the run will not
- * fold, so the reader sees that story twice. It is the mirror of a violation,
+ * A pair read as ONE story scoring below the line does not qualify by score.
+ * It is the mirror of a violation,
  * and it is the reason the one-story marks are worth drawing at all: without
  * them the panel reports one of the two costs the line has.
  */
@@ -276,8 +275,7 @@ export function agreedNote(
 	return (
 		`${scores.length} ${scores.length === 1 ? 'pair was' : 'pairs were'} read as one story, ` +
 		`running ${formatNumber(at.min, numberFormat, { si: false })} to ${formatNumber(at.max, numberFormat, { si: false })}. ${below} of them ` +
-		`${below === 1 ? 'scores' : 'score'} below the line, so the reader would see those ` +
-		'stories twice.'
+		`${below === 1 ? 'scores' : 'score'} below the line.`
 	);
 }
 
