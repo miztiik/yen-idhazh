@@ -1,5 +1,5 @@
 <script lang="ts">
-	/** Which stories the day merged, and how close the merge line sits to the pairs a person marked apart. */
+	/** Which stories the day merged, and where the merge line sits against pairs marked as separate stories. */
 	import { onMount } from 'svelte';
 	import { base } from '$app/paths';
 	import { useWindowChoice } from '$lib/console/window-slot';

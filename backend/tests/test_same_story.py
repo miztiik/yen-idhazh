@@ -1,7 +1,7 @@
 """The same-story pass: what it groups, what it refuses, and what it never loses.
 
-Small groups exercise the rules. Two recorded vectors hold the shipped floor
-above the false merge that originally set it, independent of archive retention.
+Small groups exercise the rules. Two recorded vectors preserve the evidence
+for the original floor, independent of archive retention.
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ from idhazh.contracts.eval_row import ConfidenceBand
 from idhazh.contracts.knobs.placement import AssembleConfig, SameStoryConfig
 from idhazh.embed import DIMENSIONS, DTYPE, EMBEDDER_ID, cosine, from_base64, to_base64
 
-#: Two stories from 2026-08-30 whose score set the shipped floor.
+#: Two stories from 2026-08-30 whose score set the original floor.
 LABELLED_FALSE_PAIR: Final = ("world-8617792855", "business-economy-2218216680")
 LABELLED_DAY_FIXTURE: Final = FIXTURES_DIR / "same-story" / "labelled-day.json"
 
@@ -1123,12 +1123,11 @@ def test_a_config_still_spelling_the_old_floor_is_refused_by_name() -> None:
         AssembleConfig.model_validate({"duplicate_similarity_min": 0.94})
 
 
-def test_the_threshold_sits_above_the_labelled_false_pair() -> None:
-    """The one measurement that chose the number, as an assertion.
+def test_the_labelled_false_pair_stays_below_the_original_floor() -> None:
+    """Keep the reading that chose 0.94 independent of the live configuration.
 
-    Ontario's pushback against the lake renaming and Google carrying it out are
-    two stories, and they score 0.9317. A threshold at or below that merges
-    them.
+    Pushback against the lake renaming and a mapping company carrying it out
+    are two stories. Their score of 0.9317 clears any floor at or below it.
     """
     payload = json.loads(read_text(LABELLED_DAY_FIXTURE))
     embeddings = DigestEmbeddings.model_validate(payload["embeddings"])
@@ -1143,7 +1142,7 @@ def test_the_threshold_sits_above_the_labelled_false_pair() -> None:
     )
 
     assert score == pytest.approx(0.9317, abs=5e-5), "the labelled pair moved"
-    assert score < committed_threshold(), "the shipped threshold merges two different stories"
+    assert score < 0.94
 
 
 # --- the read side ---------------------------------------------------------

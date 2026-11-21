@@ -1,10 +1,10 @@
-/** What the packed read of the hand marks lets the Judgement panel establish. */
+/** What the packed holdout labels let the Judgement panel establish. */
 import type { TimeWindow } from '../charts/viewport';
 import { shortDate } from '../format';
 import { coveredDays } from '../data/slice';
 import { noRecordSentence, setAsideSentence, type RecordRead } from './recording';
 
-const subject = 'hand-mark record';
+const subject = 'holdout record';
 const ledger = 'holdout-pairs';
 
 export function judgementEvidence(

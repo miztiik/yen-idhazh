@@ -413,22 +413,20 @@ attribute alone tells a reader nothing.
 
 ## The holdout margin is drawn at the scale of the margin, not of the score
 
-`The pairs a person marked apart` on `/console/judgement/` answers one question:
-would the merge line fold together two articles a labeller read as two
-different stories? **The comparison it draws, written as a sentence: how far the
-closest marked-apart pair sits from the line.** That is a question about a
-distance, and the distance is **0.0007** as of 2026-09-19 while the scores it
-sits between run from 0.73 to 0.99. A panel that draws the population cannot
-draw the distance.
+`Pairs marked as separate stories` on `/console/judgement/` asks which
+marked-apart scores clear the merge line. It does not check what folded.
+**The comparison it draws: how far the highest marked-apart score sits from
+the line.** The September reading was **0.0007** above the former 0.94 line,
+while the full score range ran from 0.73 to 0.99. Drawing the full range would
+hide that small distance.
 
 **So the axis is the line and a narrow window either side of it, never the
 band.** It runs from `holdout_axis_below_line` under the line to
 `holdout_axis_above_line` over it, two numbers in score units in
 `config/console/judgement.json` (0.02 and 0.01). The line is the floor in the
 committed config, `assemble.same_story.floor_min`. Nothing fits or moves it, so
-the panel reads the config and not a run record, which only restates the same
-number. The window is the same width every day, so two days of this panel
-compare.
+the panel reads the current config and not a run record, which describes an
+earlier grouping decision. The axis keeps the same width as the line moves.
 Measured on the built page at 1440: the margin drew at **5.8 px of a 1033 px
 plot** on the 0.88 to 1.00 band, and **24 px** on this one. At 5.8 px a dot 13 px
 across sits on top of the rule it is measured against, so a reader cannot see
@@ -450,28 +448,27 @@ reading, not the setting. The panel around them stays a neutral surface
 
 **Both costs of the line are drawn, not one.** The pairs marked as two stories
 are dots; the pairs marked as one story are a range strip on the same axis.
-117 of the 196 one-story marks score below the line, and each of those is a
-story the reader sees twice. Only their scores reach the document - 1.7 KB
+117 of the 196 one-story marks scored below the former 0.94 line, so those
+pairs did not clear the score check. Only their scores reach the document - 1.7 KB
 against 88 KB for the same rows carrying their addresses and headlines, which
 the strip does not draw. **They are carried at six decimal places and that is
 load-bearing**: the count is a comparison against the line, two of the 196 sit
-between 0.93995 and 0.94, and at four places they round onto the line and the
-panel prints 115.
+between 0.93995 and 0.94. At four places they round onto the former line and
+the panel would print 115 instead of 117.
 
 **This panel is not a time series.** It has the distance and no date: four marks
 spanning 0.0064 on a 0.12-tall axis is 10 px of a 190 px plot, and four rules
 inside 10 px is one grey smear, which is why the window is narrow.
 
-**What the reader loses.** A mark far below the line is off this scale, so it is
-counted at the edge with its score printed in words rather than drawn. That is
-the safe end of the axis and never the breach - a mark above the line always
-falls inside the window - but it means a reader cannot see the spread of the
-misses from the picture. The shut table under the panel carries every marked
-pair at zero attention cost, which is where that spread is.
+**What the reader loses.** A mark beyond either edge is counted there, with
+its score printed in words rather than plotted at a false position. At 0.85
+all four recorded marked-apart scores exceed the upper edge of 0.86; the
+upper chip counts them, and the margin still includes the highest. The
+collapsed table under the panel retains every marked-apart pair and its score.
 
 **This is the fifth case in the thirteen rules above, and the only one that
-narrows a domain.** It is allowed here because the breach side stays inside the
-window; a fixed axis that clipped the breach is what the first case refuses.
+narrows a domain.** The fixed window is allowed here because the edge chips,
+margin and table still report scores outside it; the axis does not erase them.
 
 ## Design rationale
 

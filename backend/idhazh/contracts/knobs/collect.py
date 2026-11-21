@@ -398,15 +398,12 @@ class CollectConfig(Model):
         description=(
             "How alike two of a day's planned stories have to be, by cosine over the "
             "headline-and-lead vectors the plan builds, before they are recorded as one "
-            "story carried at two addresses. The same number and the same reason as "
-            "assemble.same_story.floor_min: set by hand labels at 0.94, the first "
-            "round hundredth above the highest-scoring pair a person marked as two "
-            "stories. The plan pass reuses "
-            "it rather than minting a second threshold for the same question one stage "
-            "earlier. This one stays a bare cosine, because the plan has no summary and "
-            "no key points yet - the terms the assemble composite adds do not exist a "
-            "stage earlier. Raising it misses duplicates; lowering it risks folding two "
-            "stories into one, so it leans high."
+            "story carried at two addresses. Its 0.94 starting point came from the "
+            "original publication floor, the first round hundredth above the "
+            "highest-scoring pair marked as two stories in that reading. This setting "
+            "is independent of assemble.same_story.floor_min: the plan scores a feed's "
+            "headline and lead, not the published headline and summary. Raising it "
+            "misses duplicates; lowering it risks recording two stories as one."
         ),
     )
     dedup_enforce: bool = Field(

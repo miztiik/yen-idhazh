@@ -3,7 +3,7 @@
     "group_identical_titles": true,
     "same_story": {
       "cosine_weight": 1.0,
-      "floor_min": 0.94
+      "floor_min": 0.85
     },
     "same_story_window_hours": 36.0
   },

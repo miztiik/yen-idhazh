@@ -1,5 +1,5 @@
 <script lang="ts">
-	/** The pairs a person marked apart, and the room the merge line has left.
+	/** The pairs marked as separate stories, and the room the merge line has left.
 	 *
 	 * One horizontal score axis, a rule at the merge line, every pair somebody
 	 * read as two different stories on it, and the pairs they read as one story
@@ -8,10 +8,8 @@
 	 *
 	 * **The margin is the panel.** It is the distance between the rule and the
 	 * closest dot, and it is the whole safety case for the line. A negative
-	 * margin - a dot to the RIGHT of the rule - means the line would merge two
-	 * stories a person read as two, and it is drawn exactly where the arithmetic
-	 * puts it. Clamping it to the rule would draw a panel that never shows the
-	 * state it exists for.
+	 * margin means a pair marked as different stories clears the score check.
+	 * An off-scale score is counted at the edge, not drawn on the rule.
 	 *
 	 * **The axis is the line and a narrow window either side, not the band.** On
 	 * the band the margin drew at 5.8 px of a 1033 px plot and the dot covered the
@@ -236,8 +234,8 @@
 							label: 'Against the line',
 							value:
 								point.mark.score >= line
-									? 'at or above it, so the line merges this pair'
-									: 'below it, so the pair stays two stories'
+									? 'at or above it, so the pair clears the score check'
+									: 'below it, so the pair does not clear the score check'
 						},
 						{
 							label: 'Marked',
@@ -271,7 +269,7 @@
 		});
 		return built.length > 0
 			? recordsOf(built)
-			: [factsOf('No scored hand marks were returned, so there is no pair to read', [], 'not recorded')];
+			: [factsOf('No labelled pairs have a score to show', [], 'not recorded')];
 	});
 
 	/** The point a pointer, a tap or a key has picked, or null for the first. */
@@ -280,35 +278,35 @@
 
 <Panel
 	id="holdout-margin"
-	title="The pairs a person marked apart"
-	note="Every pair somebody read as two different stories sets a floor the merge line has to stay above. The dots are those pairs and the rule is the merge line, the floor in the committed config."
+	title="Pairs marked as separate stories"
+	note="The original holdout labels came from a model, not a human review. A score can clear the merge line without the stories folding."
 	{tone}
 	wide
 >
 	<div
 		data-holdout
-		data-panel-question="How much room does the line leave above pairs a person marked apart?"
+		data-panel-question="Where is the merge line relative to pairs marked as separate stories?"
 		data-model-rule="no"
 		data-model-rule-name="holdout-margin"
-		data-model-rule-none="the merge line and the hand marks, not how summaries are written"
+		data-model-rule-none="the merge line and the holdout labels, not how summaries are written"
 		data-holdout-state={absent ? 'missing' : reading}
 		data-holdout-tone={tone}
 		data-readout-records={absent ? undefined : records.length}
 		data-readout-none={absent
-			? 'the hand-marked pairs are unavailable, so there is no pair to read; agreed with Susan'
+			? 'the holdout labels are unavailable, so there is no pair to read; agreed with Susan'
 			: undefined}
 		data-holdout-domain={`${domain[0].toFixed(4)},${domain[1].toFixed(4)}`}
 		data-holdout-margin={outcome.margin === null ? '' : marginDistance(outcome.margin, numberFormat)}
 		data-holdout-violations={outcome.violations}
 	>
-		<WindowCoverage span={coverage} common={commonCoverage} source="Hand-marked pairs" />
-		<p class="comparison" data-comparison="Each hand-marked pair's score against the merge line.">
-			Each hand-marked pair's score against the merge line.
+		<WindowCoverage span={coverage} common={commonCoverage} source="Holdout labels" />
+		<p class="comparison" data-comparison="Each labelled pair's score against the merge line.">
+			Each labelled pair's score against the merge line.
 		</p>
 		{#each evidence as note}<p class="evidence" data-evidence-note>{note}</p>{/each}
 		{#if absent}
 			<p class="headline" data-empty="missing">
-				<span class="figure" data-lede>The hand-marked pairs are unavailable.</span>
+				<span class="figure" data-lede>The holdout labels are unavailable.</span>
 			</p>
 		{:else}
 		<p class="headline" data-holdout-headline>
@@ -319,8 +317,8 @@
 				<span class="figure" data-lede data-holdout-figure>{marginDistance(outcome.margin, numberFormat)}</span>
 				<span class="words"
 					>{violated
-						? 'below the closest pair a person marked as two stories'
-						: 'of room above the closest pair a person marked as two stories'}</span
+						? 'below the highest score among pairs marked as separate stories'
+						: 'of room above the highest score among pairs marked as separate stories'}</span
 				>
 			{/if}
 		</p>
@@ -337,7 +335,7 @@
 				viewBox={`0 0 ${box.width} ${box.height}`}
 				role="group"
 				tabindex="0"
-				aria-label={`Where the merge line sits against the pairs a person marked as two stories. ${holdoutNote(outcome, reading, line, numberFormat)} ${agreedNote(agreedScores, line, numberFormat)}`}
+				aria-label={`Where the merge line sits against the pairs marked as separate stories. ${holdoutNote(outcome, reading, line, numberFormat)} ${agreedNote(agreedScores, line, numberFormat)}`}
 				use:markReadout={{
 					hover: { name: 'holdout', readout: records },
 					count: points.length,
@@ -553,7 +551,7 @@
 		/>
 
 		<p class="reading" data-holdout-note>
-			{marked === 0 ? 'No hand marks were returned. This does not show whether a person has marked a pair.' : holdoutNote(outcome, reading, line, numberFormat)}
+			{marked === 0 ? 'No holdout labels were returned.' : holdoutNote(outcome, reading, line, numberFormat)}
 		</p>
 		<p class="reading" data-holdout-agreed={agreedScores.length}>
 			{agreedNote(agreedScores, line, numberFormat)}
@@ -566,7 +564,7 @@
 		<p class="under" data-holdout-weights>{weightsNote(weights)}</p>
 		{#if apart.length > 0}
 			<details class="detail" data-holdout-table>
-				<summary>Every pair a person marked as two stories</summary>
+				<summary>All pairs marked as separate stories</summary>
 				<table>
 					<thead>
 						<tr>
