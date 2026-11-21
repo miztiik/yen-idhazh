@@ -13,20 +13,28 @@ both, and the stored `usable_pairs_used` is where.
 
 from __future__ import annotations
 
+import logging
 import statistics
 from collections.abc import Sequence
+from math import nextafter
 from typing import Any, Final
 
 import pytest
-from support.judged_pairs import CONFIG_VERSIONS, a_night_of_pairs
+from support.judged_pairs import CONFIG_VERSIONS, a_judged_pair, a_night_of_pairs
 from support.threshold_nights import LOOKBACK, RULES, STEADY, a_day, pairs_beside
 
 from idhazh.contracts.knobs.content_similarity_judge import ThresholdsConfig
+from idhazh.contracts.story_similarity_diagnostics import (
+    JudgeProbabilityEvidence,
+    JudgeProbabilityStatus,
+    read_diagnostic_text,
+)
 from idhazh.contracts.story_similarity_pair_verdict import StorySimilarityPairVerdict
 from idhazh.contracts.story_similarity_threshold_history_row import (
     StorySimilarityThresholdHistoryRow,
     ThresholdHoldReason,
 )
+from idhazh.similarity.probability_diagnostics import _ece, probability_columns
 from idhazh.similarity.threshold_evidence import evidence_days
 from idhazh.similarity.thresholds_in_force import thresholds_in_force
 from idhazh.stages.review_thresholds import build_threshold_row
@@ -103,6 +111,132 @@ def through_a_shift(shift: float, *, shifted_nights: int = 14) -> list[StorySimi
         run.night(step, shift=shift if step >= STEADY else 0.0)
         for step in range(STEADY + shifted_nights)
     ]
+
+
+def _fit_batch(
+    date: str,
+    run_id: str,
+    *,
+    low: float = 0.89,
+    judge_temperature: float = 0.0,
+    **cells: Any,
+) -> list[StorySimilarityPairVerdict]:
+    return a_night_of_pairs(
+        [(low, "NO"), (0.95, "UNCLEAR"), (0.965, "YES")],
+        date=date,
+        run_id=run_id,
+        judge_temperature=judge_temperature,
+        **cells,
+    )
+
+
+def _fit(
+    rows: Sequence[StorySimilarityPairVerdict], *, pair_limit: int | None = 3
+) -> StorySimilarityThresholdHistoryRow:
+    fitted = build_threshold_row(
+        rows[0].date,
+        run_id=rows[0].run_id,
+        window=rows,
+        history=(),
+        draw_rows=(),
+        readings=(),
+        expected_shards=1,
+        rules=RULES,
+        lookback_days_of_the_draw=LOOKBACK,
+        versions=CONFIG_VERSIONS,
+        fit_pair_limit=pair_limit,
+    )
+    assert fitted is not None and fitted.upper_curve_intercept is not None
+    return fitted
+
+
+@pytest.mark.parametrize(
+    ("pair_limit", "temperatures", "missing_reason"),
+    [
+        (3, (0.0, 0.0, 0.0), None),
+        (2, (0.0, 0.0, 0.0), "fit_pair_limit"),
+        (3, (0.0, 0.2, 0.0), "mixed_temperature"),
+        (3, (None, None, None), "missing_reading_identity"),
+    ],
+    ids=["at the cap", "over cap", "mixed temperatures", "legacy temperature missing"],
+)
+def test_retaining_exact_membership_neither_truncates_nor_refuses_the_fit(
+    pair_limit: int,
+    temperatures: tuple[float | None, ...],
+    missing_reason: str | None,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    batch = _fit_batch("2026-11-19", "2026-11-21-2")
+    readings = [
+        StorySimilarityPairVerdict.model_validate(row.model_dump() | {"judge_temperature": temp})
+        for row, temp in zip(batch, temperatures, strict=True)
+    ]
+    before = _fit(readings, pair_limit=None)
+    with caplog.at_level(logging.INFO, logger="idhazh"):
+        after = _fit(readings, pair_limit=pair_limit)
+    assert after.model_dump(exclude={"upper_fit_evidence"}) == before.model_dump(
+        exclude={"upper_fit_evidence"}
+    )
+    assert (after.upper_fit_evidence is None) == (missing_reason is not None)
+    if missing_reason is not None:
+        assert "upper fit evidence absent: " + missing_reason in caplog.text
+
+
+def test_the_newest_comparable_fit_is_kept_even_when_an_older_one_could_score() -> None:
+    date, run_id, prior_day = "2026-11-20", "2026-11-21-20", "2026-11-19"
+    older = _fit(_fit_batch("2026-11-18", "2026-11-21-18"))
+    lower_run = _fit(_fit_batch(prior_day, "2026-11-21-9"))
+    chosen = _fit(_fit_batch(prior_day, "2026-11-21-10", low=0.94))
+    same_run = _fit(_fit_batch(prior_day, run_id))
+    future_run = _fit(_fit_batch(prior_day, "2026-11-21-21"))
+    same_digest = _fit(_fit_batch(date, "2026-11-21-14"))
+    different_prompt = _fit(_fit_batch(prior_day, "2026-11-21-19", prompt_digest="c" * 64))
+    different_temperature = _fit(
+        _fit_batch(prior_day, "2026-11-21-18", judge_temperature=0.2)
+    )
+    legacy = _fit(_fit_batch(prior_day, "2026-11-21-17"), pair_limit=None)
+    match = a_judged_pair(200, score=0.93, date=date, run_id=run_id)
+
+    def score(
+        history: Sequence[StorySimilarityThresholdHistoryRow],
+        attempt: Sequence[StorySimilarityPairVerdict] | None = (match,),
+    ) -> dict[str, str | float]:
+        return probability_columns(
+            attempt, history, date=date, run_id=run_id, within_days=14, bins=10
+        )
+
+    history = [
+        different_prompt, older, same_run, same_digest, future_run, lower_run,
+        chosen, legacy, different_temperature,
+    ]
+    assert score([older])["judge_probability_status"] == JudgeProbabilityStatus.MEASURED
+    status = score(history)
+    assert set(status) == {"judge_probability_status", "judge_probability_evidence"}
+    assert status["judge_probability_status"] == JudgeProbabilityStatus.NO_ELIGIBLE_PAIRS
+    payload = status["judge_probability_evidence"]
+    assert isinstance(payload, str)
+    source = read_diagnostic_text(
+        payload, column="judge_probability_evidence", model=JudgeProbabilityEvidence
+    )
+    assert (source.source_date, source.source_run_id, source.pairs, source.yes) == (
+        prior_day, "2026-11-21-10", 0, 0
+    )
+    assert score([_fit(_fit_batch("2026-11-06", "2026-11-07-1"))])[
+        "judge_probability_status"
+    ] == JudgeProbabilityStatus.MEASURED
+    too_old = _fit(_fit_batch("2026-11-05", "2026-11-06-1"))
+    unknown = {"judge_probability_status": JudgeProbabilityStatus.NO_REFERENCE_FIT}
+    assert score([too_old, legacy, different_prompt, different_temperature]) == unknown
+    assert score(history, None) == unknown
+    mixed = a_judged_pair(201, score=0.95, date=date, run_id=run_id, judge_temperature=0.2)
+    assert score(history, (match, mixed)) == unknown
+    split = a_judged_pair(201, score=0.95, date=date, run_id=run_id, answer=("YES", "NO"))
+    assert score(history, (split,)) == status  # A split still supplies the reading identity.
+
+
+def test_ece_groups_an_exact_edge_above_its_predecessor_and_includes_both_endpoints() -> None:
+    predictions = [(0.0, False), (nextafter(0.5, 0), False), (0.5, False), (0.75, True), (1.0, True)]
+    assert _ece(predictions, bins=2) == pytest.approx((0.5 + 0.25) / 5)
 
 
 def test_nights_that_follow_the_starts_hold_both_thresholds_where_they_are() -> None:

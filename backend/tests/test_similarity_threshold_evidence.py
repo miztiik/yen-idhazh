@@ -91,7 +91,7 @@ def test_the_pairs_near_a_threshold_are_those_within_the_width_either_side_edges
         a_judged_pair(1, score=0.6875, answer="NO"),
         a_judged_pair(2, score=0.75, answer="YES"),
         a_judged_pair(3, score=0.8125, answer="YES"),
-        a_judged_pair(4, score=0.8126, answer="YES"),
+        a_judged_pair(4, score=0.8126, answer="YES", judge_temperature=0.5),
     ]
 
     evidence = evidence_near(rows, threshold=0.75, width=0.0625)
@@ -101,6 +101,7 @@ def test_the_pairs_near_a_threshold_are_those_within_the_width_either_side_edges
         (0.75, 1),
         (0.8125, 1),
     ]
+    assert evidence.judge_temperatures == frozenset({0.0})
     assert evidence.usable_pairs_used == 3
 
 
@@ -136,7 +137,10 @@ def test_the_evidence_says_how_many_nights_it_came_from_and_where_it_starts() ->
 def test_no_pair_near_the_threshold_is_no_nights_and_no_first_day() -> None:
     evidence = evidence_near([a_judged_pair(0, score=0.9)], threshold=0.7, width=0.06)
 
-    assert evidence == Evidence(scores=(), answers=(), nights_used=0, first_date=None)
+    assert evidence == Evidence(
+        scores=(), answers=(), nights_used=0, first_date=None, pair_keys=(),
+        judge_temperatures=frozenset(),
+    )
 
 
 def test_one_set_of_pairs_gives_one_sequence_whatever_order_the_ledger_returned_them_in() -> None:
@@ -149,6 +153,12 @@ def test_one_set_of_pairs_gives_one_sequence_whatever_order_the_ledger_returned_
     backward = evidence_near(rows[::-1], threshold=0.7, width=0.06)
 
     assert forward == backward
+    by_key = {row.pair_key: row for row in rows}
+    ordered = [by_key[key] for key in forward.pair_keys]
+    assert [row.date for row in ordered] == [
+        "2026-11-16", "2026-11-16", "2026-11-17", "2026-11-17", "2026-11-18", "2026-11-18",
+    ]
+    assert forward.scores == tuple(row.similarity_score for row in ordered)
 
 
 def test_the_nights_own_rows_carry_one_stamp_or_the_night_is_refused() -> None:

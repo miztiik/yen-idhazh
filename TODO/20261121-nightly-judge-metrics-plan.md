@@ -35,7 +35,7 @@ Table C - PR order
 | C1 | 1 | Declare compatible judge diagnostic records | - | A | DONE | studious-tribble | - | Judge diagnostics contracts |
 | C2 | 2 | File sampled agreement and canary readings | 1 | B | DONE | super-sniffle | - | Judge sample and canaries |
 | C3 | 3 | File drift across the full score pool | 2 | C | DONE | full-pool-score-drift | - | Full pool score drift |
-| C4 | 4 | File Brier and ECE against a prior fit | 3 | D | PENDING | - | - | - |
+| C4 | 4 | File Brier and ECE against a prior fit | 3 | D | DONE | prior-fit-calibration | - | Prior fit calibration |
 | C5 | 5 | Draw the nightly evidence in Judgement | 4 | E | PENDING | - | - | - |
 
 ## 2. Row #1 - Declare compatible judge diagnostic records

@@ -52,6 +52,7 @@ from idhazh.contracts.story_similarity_threshold_history_row import (
 from idhazh.council import metrics_sink
 from idhazh.similarity.canary_diagnostics import canary_columns
 from idhazh.similarity.night_totals import end_columns, pool_sizes, runner_columns
+from idhazh.similarity.probability_diagnostics import probability_columns, upper_fit_text
 from idhazh.similarity.sample_diagnostics import sample_columns
 from idhazh.similarity.score_pool_drift import drift_columns
 from idhazh.similarity.threshold_curve import (
@@ -210,7 +211,7 @@ def _one_threshold(
     night: str,
     nearest_other: float,
     rules: ThresholdsConfig,
-) -> tuple[dict[str, Any], ThresholdMove]:
+) -> tuple[dict[str, Any], ThresholdMove, Evidence]:
     """Evidence, curve and move for one threshold, and its columns of the night's row."""
     before = followed.lower if side == "lower" else followed.upper
     share = rules.lower_share_level if side == "lower" else rules.upper_share_level
@@ -258,7 +259,7 @@ def _one_threshold(
         spread=rules.pull_spread,
         move=move,
     )
-    return columns, move
+    return columns, move, evidence
 
 
 def _the_thresholds_the_draw_followed(
@@ -318,6 +319,7 @@ def build_threshold_row(
     rules: ThresholdsConfig,
     lookback_days_of_the_draw: int,
     versions: str,
+    fit_pair_limit: int | None = None,
 ) -> StorySimilarityThresholdHistoryRow | None:
     """The night's row, worked out from the rows the night read and from nothing else.
 
@@ -354,7 +356,7 @@ def build_threshold_row(
     )
     _the_thresholds_the_draw_followed(tonight or draw_rows, followed)
     pairs = current_pairs(window, stamp=stamp)
-    lower_columns, lower = _one_threshold(
+    lower_columns, lower, _ = _one_threshold(
         "lower",
         followed=followed,
         pairs=pairs,
@@ -363,7 +365,7 @@ def build_threshold_row(
         nearest_other=followed.upper,
         rules=rules,
     )
-    upper_columns, _ = _one_threshold(
+    upper_columns, _, upper_evidence = _one_threshold(
         "upper",
         followed=followed,
         pairs=pairs,
@@ -372,6 +374,15 @@ def build_threshold_row(
         nearest_other=lower.threshold_after,
         rules=rules,
     )
+    if fit_pair_limit is not None:
+        upper_columns["upper_fit_evidence"] = upper_fit_text(
+            upper_evidence,
+            stamp,
+            fitted=upper_columns["upper_curve_intercept"] is not None,
+            pair_limit=fit_pair_limit,
+            date=date,
+            run_id=run_id,
+        )
     scorer_model, cosine_weight = _what_scored_the_night(stamp, draw_rows)
     return StorySimilarityThresholdHistoryRow.model_validate(
         {
@@ -413,9 +424,9 @@ def stage_review_thresholds(
     such a night. The nights before it are read the ordinary way, and its own rows go last, so
     they are the newest of each pair.
 
-    **The sample diagnostics do not reread those rows.** A retry that filed no verdicts can
-    still see an earlier attempt in the fit window. Only `filed_rows` says what this attempt
-    actually returned. The known-answer readings come from the reports of this attempt.
+    **The sample and probability diagnostics do not reread those rows.** A retry that filed
+    no verdicts can still see an earlier attempt in the fit window. Only `filed_rows` says what
+    this attempt actually returned. The known-answer readings come from its reports.
 
     **The read is bounded by named settings and never by the archive** (Guardrail #12): the days
     `review_days` names, which the collecting job's sparse checkout is told too. The loaders do
@@ -456,6 +467,7 @@ def stage_review_thresholds(
         rules=execution.thresholds,
         lookback_days_of_the_draw=execution.draw.thresholds_lookback_days,
         versions=judge_settings.config_versions(config_dir),
+        fit_pair_limit=execution.diagnostics.fit_pair_limit,
     )
     if row is None:
         LOG.info("review-thresholds date=%s run=%s dealt no pair, so no row is filed", date, run_id)
@@ -480,6 +492,14 @@ def stage_review_thresholds(
             run_id=run_id,
             rules=execution.diagnostics,
         )
+        | probability_columns(
+            filed_rows,
+            history,
+            date=date,
+            run_id=run_id,
+            within_days=execution.draw.thresholds_lookback_days,
+            bins=execution.diagnostics.probability_bins,
+        )
     )
     filed = ledger.persist(
         state_dir,
@@ -490,7 +510,8 @@ def stage_review_thresholds(
     )
     LOG.info(
         "review-thresholds date=%s run=%s filed=%s lower=%s->%s (%s) upper=%s->%s (%s) "
-        "usable_pairs=%s/%s runners=%s/%s dealt=%s valid=%s agreed=%s score_drift_status=%s",
+        "usable_pairs=%s/%s runners=%s/%s dealt=%s valid=%s agreed=%s "
+        "score_drift_status=%s judge_probability_status=%s",
         date,
         run_id,
         bool(filed),
@@ -508,6 +529,7 @@ def stage_review_thresholds(
         row.pairs_valid,
         row.pairs_agreed,
         row.score_drift_status,
+        row.judge_probability_status,
     )
     return ReviewReport(date=date, run_id=run_id, row=row, filed=bool(filed))
 

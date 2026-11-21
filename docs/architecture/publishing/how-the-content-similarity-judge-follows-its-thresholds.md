@@ -606,6 +606,7 @@ a night nothing ran from one that ran and lost everything.
 | Agreement at the upper bound used for the draw | `upper_cutoff_sample_size`, `upper_cutoff_false_match_share`, `upper_cutoff_brier_score` |
 | Ranked agreement | `sample_average_precision`, `sample_precision_at_recall_90`, `sample_recall_90_cutoff`, `sample_recall_at_recall_90_cutoff` |
 | Agreement with the known-answer key | `canary_expectations`, `canary_kappa_pairs`, `canary_kappa` |
+| Prior-fit agreement | `upper_fit_evidence`, `judge_probability_evidence`, `judge_probability_status`, `judge_probability_brier_score`, `judge_probability_baseline_brier_score`, `judge_probability_ece` |
 
 - **The curve columns, `estimate` and `gap` are empty together** when no curve was
   fitted, and `window_first_date` is empty when no usable pair was near.
@@ -665,6 +666,26 @@ a night nothing ran from one that ran and lost everything.
   bin midpoints weighted by those gaps. There is no KS significance test. Missing, empty
   and incomplete comparisons have a status and no distances; matching shares give real
   zeroes. The readings do not affect thresholds, publication or job gates.
+- **Prior-fit agreement tests the fitted YES probabilities on new pairs.** The upper
+  curve keeps the exact training keys, observed score bounds, YES count, and recorded
+  judge and scorer settings. A missed fit, unknown or mixed training settings, or more
+  keys than the cap leaves that proof empty; the curve and threshold are unchanged.
+  The comparison uses the exact attempt's recorded settings and takes the newest
+  compatible fit in the draw lookback, with both an earlier digest and an earlier
+  Council run. It reads the same bounded history as drift, including its packed view.
+  The reference names the source and hashes its canonical proof and coefficients.
+  It does not go farther back if that fit has no eligible new pairs.
+- **The cohort excludes training keys, even if they returned at a different score.**
+  Only two valid agreeing answers within the source's inclusive score bounds count,
+  unweighted. YES counts as one; NO and UNCLEAR count as zero, the same target as
+  the fit. Brier is the mean squared probability error, either for the saved curve or
+  for a constant equal to the source's training YES share, on the same pairs. Expected
+  calibration error (ECE) sums each equal-width probability bin's absolute gap
+  between mean probability and YES share, weighted by its sample share. An interior
+  edge belongs to the higher bin and 1 to the last. `no_reference_fit` has no source;
+  `no_eligible_pairs` keeps the source and zero pairs but no scores. This measures
+  agreement with the judge, not human accuracy or independence from other fitted nights.
+  It never changes a draw, a threshold, a published group or a job gate.
 - **Every figure that follows from another is recomputed when the row is read:** `move` is
   `threshold_after - threshold_before` and `gap` is `estimate - threshold_before`, each
   within one millionth, so a writer rounds none of them below six decimal places.
@@ -709,6 +730,8 @@ below 0.88 had been judged, so they are provisional until the first seven real n
 | `diagnostics.score_bins` | 40 | Equal-width bins over the full pre-draw score pool |
 | `diagnostics.score_baseline_days`, `diagnostics.score_baseline_lookback_days` | 7, 28 | Comparable digest dates required for drift, and the most earlier days considered |
 | `diagnostics.score_psi_share_floor` | 0.000001 | Minimum bin share before renormalizing for PSI only |
+| `diagnostics.probability_bins` | 10 | Equal-width probability bins for ECE |
+| `diagnostics.fit_pair_limit` | 1050 | Most keys kept in an exact upper fit proof; larger fits are still used normally |
 | `thresholds.lower_start`, `thresholds.upper_start` | 0.70, 0.93 | The thresholds when no recent row sets them |
 | `thresholds.lower_share_level`, `thresholds.upper_share_level` | 0.05, 0.90 | The same-story share that defines each threshold |
 | `thresholds.window_nights` | 7 | Nights of `pair-verdicts` the evidence reads, ending on the night |
@@ -751,6 +774,7 @@ rows, and a setting changes by an edit that bumps its file's `version`
 | First council run | The night's draw rows carry the slice columns, `pair-verdicts` holds the night's rows each with a `sampling_chance`, and `threshold-history` holds the night's row | The stage that writes the first missing item did not run: the pick writes the draw rows, the filing `pair-verdicts`, the review `threshold-history` |
 | First ordinary settlement with sample readings | Read the named `threshold-history` partition while the draw and verdict artifacts are available. Match the run and attempt, count the draw and returned rows, close each drawn slice, and compare the four agreement counts at `evaluated_cutoff`. | Inspect which attempt's draw and verdict rows were filed. A mismatch does not warrant rerunning the pipeline as a merge check. |
 | First ordinary settlement with a pool histogram | Match the histogram count to the picker's `available` count, not to the draw. Until the baseline fills there are no distances. Once it fills, check the saved earlier dates, runs and histogram digests against the configured number of comparable pools. | Check the declaration and scoring stamp. Missing comparators do not warrant a production rerun or backfill. |
+| First ordinary settlement with a comparable prior fit | Check that the reference names an earlier digest and earlier Council run. Before a fit with exact keys is retained, no reference is expected. | Check the stored training settings, keys and support against the current attempt. Do not reconstruct an old fit or rerun the judge. |
 | First council run | Every drawn pair names at least one item of the night's published day | Revert the guard in `assemble.cross_source_pairs`. [What the guard gives up](autotune-content-similarity.md#design-rationale) is a story added to the day after the council read it |
 | First council run | `canary_answers` on the night's `threshold-history` row holds all six ids once, and a lost runner's ids are absent. Read each answer against its expected one. The two `unclear` pairs may answer NO: that is a predicted finding about the judge, and not a fault | A wrong answer on a `same` or `different` pair points at the model, runtime, prompt, grammar or label (an agent wrote the labels). Nothing holds or re-runs the night, so a person reads it. A missing id while every runner reported means its call raised, which the log names ([the check](#the-known-answer-pairs)) |
 | First council run | Older nights with no `pair-verdicts` row are named one a night, newest first, until the 7-night window has slid past the rest | A night that has rows and is named again is a fault in the scheduler's read ([which nights](#which-nights-the-judge-is-behind-on)) |
