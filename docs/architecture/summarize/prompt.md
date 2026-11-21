@@ -79,7 +79,7 @@ If extraction read only part of the article, state that limitation on the item. 
 Use grammar-constrained decoding derived from the declared reply model. Refuse unknown keys and validate the result after decoding. A well-shaped object still needs content checks.
 
 The request restricts `type` to `none` or an enabled renderer capability. Measured
-channels and the optional whole use references shown in the request,
+channels and the optional whole and highlight use references shown in the request,
 not literal data, element ids or offsets. A summary-only request has no chart
 field in its grammar.
 
@@ -89,9 +89,8 @@ and a categorical comparison cites a short label span next to each reading.
 Label choices are code-supplied references to literal phrases in the fenced
 data, not assigned names or a pre-paired data set. The model picks labels and
 readings; code checks each reference and cuts the label from source.
-A date reference can ground a date mentioned in the title or caption without
-putting it on the chart's axis. The first reading on the measured channel
-supplies the highlight, so a chart cannot point to an undrawn reading.
+An optional date reference can ground a date mentioned in the title or
+caption without putting it on the chart's axis.
 
 ## One call writes the summary and plans the visual, and the article is read once
 

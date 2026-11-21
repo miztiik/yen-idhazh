@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from bisect import bisect_right
 from collections import Counter
@@ -37,6 +38,7 @@ from idhazh.elements import sentence_starts
 from idhazh.sanitize import sanitize
 from idhazh.visual_vocabulary import PLAN_VOCABULARY_VERSION, TYPE_RULES
 
+LOG = logging.getLogger("idhazh")
 NO_CHART: Final = "none"
 # Each code counts spans in one article; it cannot outgrow the source offset.
 _INDEX: Final = rf"[1-9][0-9]{{0,{ELEMENT_ID_OFFSET_DIGITS - 1}}}"
@@ -74,6 +76,7 @@ class PlanChoice(Model):
     why: PlanReason
     type: str
     encodings: ChartReferences
+    focus: QuantityRef | None
     whole: QuantityRef | None
     measure: PlanTitle | None = None
     context: _Dates = Field(default_factory=list)
@@ -86,6 +89,10 @@ class PlanChoice(Model):
             return self
         if self.title is None or not sanitize(self.title).strip():
             raise _refusal("visual_choice_title_required", "a chart answer has a title", "title")
+        if self.focus is None:
+            raise _refusal(
+                "visual_choice_focus_required", "a chart highlights one drawn reading", "focus"
+            )
         if any(character.isdigit() for character in self.why):
             raise _refusal(
                 "visual_choice_prose_has_digit", "the reason must name the comparison in words",
@@ -335,9 +342,16 @@ def resolve_visual_choice(
     if form is VisualType.STACKED_BAR and whole is not None and choice.measure is not None:
         _bind_whole(whole, quantities, choice.measure, text=text, sentences=sentences, known=known)
     measured = channels[TYPE_RULES[form].marks]
-    # The renderer emphasizes one mark. Use the first reading the model placed
-    # on that channel; there is no second, potentially contradictory reference.
-    annotations = [reading.element_id for reading in measured[:1]]
+    annotations = []
+    if choice.focus is not None:
+        focus = _source_ref(choice.focus, request, "focus")
+        if focus in measured:
+            annotations.append(focus.element_id)
+        elif measured:
+            LOG.warning(
+                "chart highlight ignored id=%s reason=visual_choice_undrawn_focus", table.item_id
+            )
+            annotations.append(measured[0].element_id)
     encodings = PlanEncodings.model_validate({
         role.value: [element.element_id for element in values] for role, values in channels.items()
     })

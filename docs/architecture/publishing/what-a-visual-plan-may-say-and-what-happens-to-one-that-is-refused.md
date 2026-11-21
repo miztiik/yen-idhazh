@@ -62,7 +62,7 @@ after `type`: second in the list it would condition every field after it, and th
 its own hedge back as evidence.
 
 **The answer is short by construction.** Its prose fields keep the plan contract's length bounds and
-type and data references are short, so the visual half of a reply is a few lines. The
+its `type` and `focus` are one short value each, so the visual half of a reply is a few lines. The
 summary beside it carries no length bound, so the call runs under the model file's response limit
 ([the output budget](../summarize/prompt.md#the-output-budget)).
 
@@ -77,10 +77,12 @@ stated. This lets two stages of one subject have different labels without
 requiring two named entities. Relationship and stacked-bar readings must
 additionally support the source subject or stated whole. The resulting plan
 has the existing role layout, purpose, optional whole and highlight, and
-vocabulary stamp. No persisted shape changes.
+vocabulary stamp. A source reading outside the plotted set cannot be a
+highlight: log the rejected hint and emphasize the first plotted reading
+instead. An unknown reference still refuses the plan. No persisted shape changes.
 
-An unsupported form, unknown reference, unanchored label, or digit in the
-reason is refused with `failed_field` and
+An unsupported form, unknown reference, unanchored label, incomplete
+highlight, or digit in the reason is refused with `failed_field` and
 `failed_rule`. Invalid role shape, units or other incompatible evidence are
 then caught by the existing validator and compiler. In either case the
 summary survives.

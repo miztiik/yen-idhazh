@@ -150,8 +150,8 @@ def a_reply(**changed: object) -> str:
                 {"quantity": f"q{index}", "category": "l3"}
                 for index in range(1, len(WIND_NAMES) + 1)
             ]},
+            "focus": "q1",
             "whole": None,
-            "context": [],
             "title": "Offshore wind approved",
             "caption": None,
             **changed,
@@ -173,7 +173,7 @@ class TestTheSummarizeAndPlanOracle:
     ) -> None:
         table, data = chart_data_over(article_ok, PRICES)
         choice = parse_summarize_and_plan(a_reply(
-            type=form, title="Offer and opening prices",
+            type=form, focus="q2", title="Offer and opening prices",
             why="The opening share price exceeded the offer price.",
             encodings={"points": [
                 {"quantity": "q1", "category": "l1"},
@@ -182,7 +182,7 @@ class TestTheSummarizeAndPlanOracle:
         )).visual
         plan, grounded = resolve_visual_choice(choice, data, PRICES, table)
         assert plan.type is VisualType(form)
-        assert plan.annotations == [data.refs["q1"].element_id]
+        assert plan.annotations == [data.refs["q2"].element_id]
         assert grounded.span_drift(PRICES) is None
         assert validate_plan(plan, grounded, visuals=VISUALS) == []
         compiled = compile_chart(plan, grounded, visuals=VISUALS)
@@ -191,16 +191,21 @@ class TestTheSummarizeAndPlanOracle:
             "83", "111",
         }
 
-    def test_time_and_quantity_roles_compile_a_line_without_a_table(self, article_ok: Article) -> None:
-        text = "In 2020, output was 120 MW. Output reached 170 MW in 2024."
+    def test_time_and_quantity_roles_compile_a_line_without_a_table(
+        self, article_ok: Article, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        text = "In 2020, output was 120 MW. Output reached 170 MW in 2024, a rise of 42%."
         table, data = chart_data_over(article_ok, text)
         choice = parse_summarize_and_plan(a_reply(
-            type="line", title="Output over time",
+            type="line", focus="q3", title="Output over time",
             why="Output rose between the two recorded dates.",
             encodings={"quantity": ["q1", "q2"], "time": ["d1", "d2"]},
         )).visual
         plan, grounded = resolve_visual_choice(choice, data, text, table)
         assert plan.encodings.time == [data.refs["d1"].element_id, data.refs["d2"].element_id]
+        assert plan.encodings.quantity == [data.refs["q1"].element_id, data.refs["q2"].element_id]
+        assert plan.annotations == [data.refs["q1"].element_id]
+        assert "visual_choice_undrawn_focus" in caplog.text
         assert validate_plan(plan, grounded, visuals=VISUALS) == []
         assert compile_chart(plan, grounded, visuals=VISUALS).data.type is VisualType.LINE
 
@@ -211,7 +216,7 @@ class TestTheSummarizeAndPlanOracle:
                 {"quantity": "q1", "category": "l1"},
                 {"quantity": "q2", "category": "l1"},
             ]},
-            title="Forecast growth through 2035", context=["d1"],
+            focus="q1", title="Forecast growth through 2035", context=["d1"],
         )).visual
         plan, grounded = resolve_visual_choice(choice, data, OIL_FORECAST, table)
         assert not plan.encodings.time
@@ -235,7 +240,7 @@ class TestTheSummarizeAndPlanOracle:
             VisualType.STACKED_BAR,
             "Total cargo was 90 tonnes: grain made up 60 tonnes and sugar made up 30 tonnes.",
             {"series": ["grain", "sugar"], "quantity": ["q2", "q3"]},
-            {"whole": "q1", "measure": "Total cargo"},
+            {"whole": "q1", "measure": "Total cargo", "focus": "q2"},
         ),
     ])
     def test_chart_specific_citations_keep_required_grounding(
@@ -269,6 +274,7 @@ class TestTheSummarizeAndPlanOracle:
         answers = chart_reply_fields(schema)
         assert list(schema["properties"]) == ["summary", "visual"]
         assert list(answers) == ["none", *(form.value for form in VISUALS.select_types())]
+        assert answers["bar"]["focus"]["enum"] == ["q1", "q2", "q3"]
         assert answers["bar"]["encodings"]["required"] == ["points"]
         points = schema["$defs"]["ComparisonPoint"]["anyOf"]
         allowed = {
@@ -497,6 +503,11 @@ class TestTheDataReferencesAreOptional:
 @pytest.mark.parametrize(
     ("changed", "field", "rule"),
     (
+        (
+            {"focus": None, "caption": "model-only words"},
+            "visual.focus",
+            "visual_choice_focus_required",
+        ),
         ({"title": None}, "visual.title", "visual_choice_title_required"),
         ({"title": "   "}, "visual.title", "visual_choice_title_required"),
         ({"title": ""}, "visual.title", "string_too_short"),

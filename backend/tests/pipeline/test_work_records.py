@@ -282,7 +282,7 @@ def test_a_malformed_chart_answer_keeps_shape_diagnostics_off_the_success_detail
     decision = _decide_the_visual(
         summary,
         Completion(
-            content=a_reply(title=None, caption="model-only words"), finish_reason="stop"
+            content=a_reply(focus=None, caption="model-only words"), finish_reason="stop"
         ),
         table,
         data=data, text=WIND_TEXT,
@@ -297,8 +297,8 @@ def test_a_malformed_chart_answer_keeps_shape_diagnostics_off_the_success_detail
 
     assert summary.status is SummaryStatus.OK and summary.summary
     assert row.outcome.value == "ok" and row.detail is None
-    assert row.failed_field == "visual.title"
-    assert row.failed_rule == "visual_choice_title_required"
+    assert row.failed_field == "visual.focus"
+    assert row.failed_rule == "visual_choice_focus_required"
     assert decision.rationale and row.failed_field in decision.rationale
     assert row.failed_rule in decision.rationale
     assert "model-only words" not in caplog.text
