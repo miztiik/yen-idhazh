@@ -16,7 +16,7 @@ plans into visual data. Who decides a visual at all is
 2026-09-13, under `CLAUDE.md` section 0.
 
 **The chain, end to end.** Code reads the article and finds every quantity it can, with the
-offsets that prove where each one came from, and builds tables of names and figures from them.
+offsets that prove where each one came from, and makes independent data references from them.
 The model says whether a table is worth a chart, chooses the form and the row the item turns on,
 and writes the title. Code builds the plan from that answer and compiles its references
 into validated chart data. The day payload points to a separate per-item JSON file;
@@ -283,16 +283,15 @@ back to several of them. Nothing in the compiler can reach a number from anywher
 
 **Category `i` names quantity `i`.** The resolver returns each channel in the plan's own order, so
 the pairing is the plan's rather than a rule invented in the compiler, and the bars are drawn in
-that order. A plan built from a table of figures lists its names and its figures in row order, so
-the pairing is the one the article's sentence states. Re-ranking them here would be the compiler
-deciding what the comparison says.
+that order. Re-ranking them here would be the compiler deciding what the
+comparison says. The producer validates the model's source citations before the
+plan reaches this compiler.
 
 **Only a supported type is compiled.** This build compiles `bar`, `dot`, `slope`,
 `line`, `scatter`, `bubble`, `stacked_bar`, `pie` and `histogram`; a plan for any
 other declared chart type raises `CompileError` naming it rather than publishing
-a picture nobody planned. The model is offered only `bar` and `dot`
-([the request](../summarize/prompt.md#the-model-is-shown-tables-of-figures-never-the-element-table)),
-so no model answer reaches the other forms today.
+a picture nobody planned. The [request](../summarize/prompt.md#the-model-is-shown-independent-source-readings)
+offers the forms enabled in config that this compiler supports.
 
 ### Declared types are not delivery promises
 

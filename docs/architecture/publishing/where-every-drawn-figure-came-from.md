@@ -30,19 +30,16 @@ written as a shape: exactly one of the two, never both, never neither. A figure 
 nothing does not load, so the walk over a plan proves the resolver never reaches for the exception
 rather than proving nobody happened to write one.
 
-**The route from the model's answer to a figure is a row, and the pairing is code's.** The model
-names a row; code looks up the name element and the figure element that row stands for, both cut
-from the article's own characters, and cites them. Which name sits beside which figure is the table
-builder's rule, which refuses any sentence it cannot pair for sure
-([the rules](../summarize/prompt.md#the-model-is-shown-tables-of-figures-never-the-element-table)),
-because no check here can see a wrong pairing: `no_invented_values` proves a figure reads out of its
-element's characters, not that it belongs beside its name.
+**The model cites readings and roles; code resolves them.** Code looks up
+quantity and date references and re-slices labels from the article's own
+characters. `no_invented_values` proves a figure reads out of its element's
+characters; it does not prove a comparison is meaningful.
 
 **Four functions, and the list is closed.** Its shortness is the guarantee rather than a starting
-point: the model picks a form and a row and words a title with no digit, and it cannot name a
-function, cannot supply an operand, and has no numeric field anywhere in its answer or its plan -
+point: the model picks a form and cites its evidence, but it cannot name a
+function or write a numeric operand, and has no numeric field in its reply -
 `contracts/visual.py` refuses to import if the plan grows one. So the worst a prompt injection can
-do stays "pick the wrong table, form or row". A fifth
+do stays "pick the wrong source readings or form". A fifth
 function is a maintainer decision and `contracts/derived.py` raises at import if one appears, which is
 why the argument for the list being short is written beside the constant rather than only here.
 

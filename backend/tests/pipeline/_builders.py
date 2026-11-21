@@ -16,6 +16,7 @@ from typing import Any, Final
 from pytest import MonkeyPatch
 from support.analysis_service import RecordedAnalysis, Span, first_of, pointed_at
 from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
+from support.prompts import chart_reply_fields
 from support.server import RecordedEndpoint, render_template_response
 
 from idhazh import assemble, config
@@ -135,15 +136,16 @@ def declining_wind_reply() -> bytes:
     return json.dumps(answer).encode("utf-8")
 
 
-def assert_planning_rows(server: RecordedEndpoint, rows: list[str]) -> None:
-    """The actual request must show the rows, admit only their codes and carry no element id."""
+def assert_planning_readings(server: RecordedEndpoint, readings: list[tuple[str, str]]) -> None:
+    """The actual request must show each reading and admit only its code."""
     assert server.served == 1, "one item must run the one production call"
     request = server.sent[0]
     prompt = str(request["prompt"])
-    assert all(row in prompt for row in rows)
+    for code, reading in readings:
+        assert f"[{code}: {reading}]" in prompt
     assert re.search(r"\b[a-z]+-\d+-\d+\b", prompt) is None
-    offered = request["json_schema"]["$defs"]["PlanChoice"]["properties"]["focus"]["anyOf"][0]
-    assert offered["enum"] == [row.split(" | ", 1)[0] for row in rows]
+    offered = chart_reply_fields(request["json_schema"])["bar"]["focus"]
+    assert offered["enum"] == [code for code, _ in readings]
 
 
 def assert_reader_accepts(path: Path, *, item_id: str) -> None:

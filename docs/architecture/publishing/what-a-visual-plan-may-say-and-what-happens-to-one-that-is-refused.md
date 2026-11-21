@@ -51,13 +51,12 @@ channel restating the chart's own data, and no validator can read prose to check
 the last unguarded channel in a design whose whole claim is that a stranger's page cannot reach a
 drawn figure.
 
-**Three prose channels remain, and the answer holds them to no digit.** `title`, `caption` and `why` are
-length-capped by the plan contract. The validator's numeral check only proves that a numeral inside one
-appears among the cited figures, not that it belongs to the row the answer names, so a chart answer is
-refused by name when any of the three holds a digit
-([below](#a-chart-answer-becomes-a-plan-in-code)); the validator's check stays as the second line.
+**Three prose channels remain.** `title`, `caption` and `why` are length-capped.
+The reason describes the comparison in words. The title and caption may
+repeat numerals from the cited elements; the validator refuses any other
+numeral. No prose field supplies a value to the chart renderer.
 
-**`confidence` is optional, and null on a plan built from a table.** The model is not asked for one,
+**`confidence` is optional and null.** The model is not asked for one,
 nothing reads it, and it gates nothing. Field order is decode order, so where one is decoded it comes
 after `type`: second in the list it would condition every field after it, and the model would read
 its own hedge back as evidence.
@@ -69,22 +68,24 @@ summary beside it carries no length bound, so the call runs under the model file
 
 ## A chart answer becomes a plan in code
 
-The model answers `{why, type, focus, title, caption}`
-([what it is shown](../summarize/prompt.md#the-model-is-shown-tables-of-figures-never-the-element-table));
-a `none` builds no plan, and its `why` becomes the recorded rationale. Code builds the plan from a chart answer: decision `visual`, purpose `comparison`,
-the chosen form, the table's name elements as the category channel and its figure elements as the
-quantity channel in row order, every other channel empty, no declared whole and no labels, the
-element ids those cite, the model's title and caption, and the vocabulary stamp. The one annotation
-is the focus row's figure, because the compiler needs exactly one emphasised mark and code never
-guesses it. The validator, the replacement ladder and the compiler then run unchanged.
+The [model's reply](../summarize/prompt.md#the-model-is-shown-independent-source-readings)
+names a form and cites readings and label phrases by role. `none` builds no
+plan; its reason is recorded. For a chart, code resolves the cited references
+and re-slices exact source labels. Labels for comparisons must be in the
+supporting sentences, with same-sentence labels ordered as the readings are
+stated. This lets two stages of one subject have different labels without
+requiring two named entities. Relationship and stacked-bar readings must
+additionally support the source subject or stated whole. The resulting plan
+has the existing role layout, purpose, optional whole and highlight, and
+vocabulary stamp. A source reading outside the plotted set cannot be a
+highlight: log the rejected hint and emphasize the first plotted reading
+instead. An unknown reference still refuses the plan. No persisted shape changes.
 
-**A chart answer is refused by a named rule, so `failed_field` and `failed_rule` say which, and the
-item publishes with its summary and no chart**, when it has no `focus`
-(`visual_choice_focus_required`), when its title is empty after `sanitize`
-(`visual_choice_title_required`), or when `why`, `title` or `caption` holds a digit
-(`visual_choice_prose_has_digit`), for the reason given above. A form or a
-row the request did not offer is refused as well; the grammar makes that unreachable, so the code
-check behind it names no field.
+An unsupported form, unknown reference, unanchored label, incomplete
+highlight, or digit in the reason is refused with `failed_field` and
+`failed_rule`. Invalid role shape, units or other incompatible evidence are
+then caught by the existing validator and compiler. In either case the
+summary survives.
 
 ## Every encoding role is a key, and an unused one is empty
 
@@ -173,9 +174,9 @@ names the abandoned forms. They remain readable in the complete native plan
 schema, not available as new production requests. The schema default remains
 false for older authored configurations; off still offers only the supported
 numeric chart types, never the full historical vocabulary. Defaults, effective
-selection and every request schema use that numeric capability set, and a table is
-then offered only as the forms among them that take a name and a figure a mark. Effective
-selection enters the input fingerprint and the forms line of the request. Neither changes
+selection and every request schema use that numeric capability set without an
+article-specific type shortlist. Effective selection enters the input fingerprint
+and the capabilities line of the request. Neither changes
 the shared system turn.
 
 `visuals.min_chart_points`, `visuals.max_chart_points` and `visuals.histogram_bins` are knobs and

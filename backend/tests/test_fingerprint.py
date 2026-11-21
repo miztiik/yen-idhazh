@@ -210,14 +210,14 @@ def test_the_kinds_a_run_may_plan_move_the_stamp() -> None:
     ) != calls.prompt_inputs(markers=markers, visuals=VisualsConfig(enabled_kinds=[]))
 
 
-def test_the_words_code_writes_around_the_tables_move_the_stamp(
+def test_the_words_code_writes_around_the_data_move_the_stamp(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """No real table is in the stamp's rendering, so a fixed example carries the wording in."""
     markers = a_built_envelope()
     before = calls.prompt_inputs(markers=markers)
 
-    monkeypatch.setattr(plan_visual_request, "TABLES_INTRO", "Other words before the rows:")
+    monkeypatch.setattr(plan_visual_request, "DATA_INTRO", "Other words before the data:")
 
     assert calls.prompt_inputs(markers=markers) != before
 

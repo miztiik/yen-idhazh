@@ -15,8 +15,9 @@ quantities and it finds absolute dates. A third is the local
 article before the model reads it: it labels the organisations, people and places
 the patterns cannot reach, and the figures that are really dates, times or
 ordinals. It types nothing a reader sees, and the model is never asked for any of
-it. The model is not shown this table either: code builds tables of names and figures
-from it ([the request](../summarize/prompt.md#the-model-is-shown-tables-of-figures-never-the-element-table)),
+it. The model is not shown this table either: code gives it
+[independent source readings](../summarize/prompt.md#the-model-is-shown-independent-source-readings)
+from it,
 and the validator checks every element a plan cites against it. Historical quote/claim
 kinds remain readable, but have no current producer or reader-facing visual.
 
@@ -57,11 +58,10 @@ counting a repeated figure here would call an article chartable that nothing
 could ever draw - and the rate built on it would carry that gap for ever while
 claiming to measure the picture. The empty unit is a group like any other.
 
-**This is not the question the table builder asks, and is not meant to be.** The builder
-asks whether sentences pair names with figures of one unit, which is stricter than the
-count here. This asks what the article states. The gap between the two answers is what
-`extractable_but_unused_rate` reports ([evaluation.md](../../concepts/evaluation.md)), so
-closing it here would delete the measurement.
+**This is a diagnostic, not admission to the chart question.** A unit count
+cannot establish a useful comparison. The gap between available readings and
+those used is what `extractable_but_unused_rate` reports
+([evaluation.md](../../concepts/evaluation.md)).
 
 **Three classes, and it will say three until the diagram plan lands.**
 `comparative` and `processual` are claims about how an article is written rather
@@ -366,7 +366,7 @@ than it does.
 
 | Failure | Why no check sees it | What the design does instead |
 | --- | --- | --- |
-| **Mislabelling** - right span, wrong label (a country the service calls an organisation) | The span is real. `text[span_start:span_end] == span_excerpt` passes at write and at read | The label only chooses between `entity` and `place`, and the table builder and the plan's category, series and entity channels accept either. The model reads each name beside its figure and the article, and the validator still checks every element the plan cites |
+| **Mislabelling** - right span, wrong label (a country the service calls an organisation) | The span is real. `text[span_start:span_end] == span_excerpt` passes at write and at read | The plan's naming channels can use either kind. The chart choice can also cite a label directly from its source sentence. |
 
 What re-slicing buys is that a wrong answer is still a fact the item states, at a location a
 reader can check, rather than a sentence a model wrote.
@@ -595,7 +595,7 @@ a language model once pointed at. The field names **who found it**, not what sha
 | Raise on a 200-digit run or a 600-character unit word | Degrade, do not fail (`CLAUDE.md` section 1a). A pattern over fetched bytes will meet both, and one hostile page must not take an article's whole table down | Andre |
 | Ask the model for coreference chains | Exact and prefix matching over spans code already holds does most of it, and the model's version cannot be span-validated | Andre, pseudo-plan 10.6 |
 | Run the settle rule over the labelled kinds | A quote holds every figure inside it, so precedence would delete one of the two. The rule is between the two patterns and the merge happens after it | Fowler |
-| Keep every mention as its own element | An article repeats a name many times and each mention would spend a slot of `elements.max_per_article`. A chart cites a name by id and draws its words, so a repeat adds an element and no chart; the table builder finds the repeats in the text itself, so nothing is lost by keeping one | Andre |
+| Keep every mention as its own element | Repeated names spend slots of `elements.max_per_article`. The chart resolver can anchor a cited label in its supporting sentence, independently of deduplication. | Andre |
 | Keep only the names near a figure | It needs a distance, which is a new knob and so a design question; `elements.max_per_article` already bounds the table | Andre |
 
 ### Why the schema stem is `element-table`

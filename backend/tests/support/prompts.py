@@ -1,4 +1,4 @@
-"""Build the model's request from an article, its real element table and its real tables."""
+"""Build a model request from an article and its real numeric evidence."""
 
 import re
 from collections.abc import Sequence
@@ -8,7 +8,7 @@ from typing import Any, Final
 from idhazh import config
 from idhazh.anchor_mentions import Mention
 from idhazh.classify.calls import build_summary_request
-from idhazh.classify.pair_names_with_figures import FigureTable, tables_of_figures
+from idhazh.classify.plan_visual_request import VisualInput, visual_input
 from idhazh.contracts.article import Article
 from idhazh.contracts.element import ElementTable
 from idhazh.contracts.knobs.extract import ElementsConfig
@@ -29,7 +29,7 @@ THE_FIRST_CALLS_WORDS: Final = (
     "supplied quantity table",
 )
 
-#: Four countries, one figure each, across three sentences: the smallest article a table forms over.
+#: Four countries measuring offshore wind awards in the same unit.
 WIND_NAMES: Final = ("Denmark", "Germany", "Poland", "Ireland")
 WIND_TEXT: Final = (
     "Denmark approved 1200 MW of offshore wind this week, the largest single award the country "
@@ -65,42 +65,50 @@ def mentions_of(
     ]
 
 
-def tables_over(
+def chart_data_over(
     article: Article,
     text: str,
-    names: Sequence[str],
+    names: Sequence[str] = (),
     *,
     others: Sequence[tuple[str, str]] = (),
     visuals: VisualsConfig | None = None,
     config_dir: Path = CONFIG_DIR,
-) -> tuple[ElementTable, list[FigureTable]]:
-    """The real element pass over `text`, with the service labelling every place a name stands,
-    and the tables the builder finds in it."""
+) -> tuple[ElementTable, VisualInput]:
+    """Request evidence through the real element pass; these examples need two readings."""
     app = config.load(config_dir).app
     table = element_table(
         article.model_copy(update={"text": text}),
         config=app.elements,
         mentions=mentions_of(text, names, others),
     )
-    return table, tables_of_figures(text, table, visuals=visuals or app.visuals)
+    data = visual_input(text, table, visuals=visuals or app.visuals)
+    assert data is not None
+    return table, data
 
 
 def summary_payload(
     article: Article,
     *,
-    tables: Sequence[FigureTable] = (),
+    data: VisualInput | None = None,
     config_dir: Path = CONFIG_DIR,
 ) -> dict[str, Any]:
     settings = config.load(config_dir)
     entry = settings.models.summarizer
     return build_summary_request(
         article,
-        tables,
+        data,
         model_id=entry.id,
         server=entry.server,
         sampling=entry.sampling,
         markers=a_markers(),
-        visuals=settings.app.visuals,
         prompt_files=settings.app.prompt_files,
         config_dir=settings.config_dir,
     )
+
+
+def chart_reply_fields(schema: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """The allowed choices and the JSON object each constrains."""
+    return {
+        choice["properties"]["type"]["const"]: choice["properties"]
+        for choice in schema["$defs"]["PlanChoice"]["anyOf"]
+    }

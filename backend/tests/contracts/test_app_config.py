@@ -378,8 +378,8 @@ def _worst_one_call_sequence_tokens(committed: AppConfig) -> tuple[int, int]:
     cap = committed.extract.truncation_cap_tokens
     sampling = committed_models().summarizer.sampling
     return (
-        dag.prompt_tokens(cap, table_bytes=0),
-        dag.call_tokens(cap, table_bytes=0, sampling=sampling),
+        dag.prompt_tokens(cap, evidence_bytes=0),
+        dag.call_tokens(cap, evidence_bytes=0, sampling=sampling),
     )
 
 
@@ -408,7 +408,7 @@ def test_the_gate_holds_room_for_the_whole_response_limit_the_model_file_names()
     """The reply has no length bound, so its reserve is the limit itself."""
 
     def held(sampling: dict[str, int]) -> int:
-        return dag.call_tokens(1000, table_bytes=10, sampling=sampling)
+        return dag.call_tokens(1000, evidence_bytes=10, sampling=sampling)
 
     assert held({"max_tokens": 9000}) - held({"max_tokens": 8000}) == 1000
     assert held({}) == held({"max_tokens": DEFAULT_MAX_TOKENS})
@@ -416,8 +416,8 @@ def test_the_gate_holds_room_for_the_whole_response_limit_the_model_file_names()
 
 def test_the_tables_are_held_at_a_token_a_byte_on_top_of_the_article() -> None:
     """A token spans at least one byte, so the bytes shown are a ceiling."""
-    assert dag.prompt_tokens(1000, table_bytes=300) - dag.prompt_tokens(
-        1000, table_bytes=0
+    assert dag.prompt_tokens(1000, evidence_bytes=300) - dag.prompt_tokens(
+        1000, evidence_bytes=0
     ) == 300
 
 

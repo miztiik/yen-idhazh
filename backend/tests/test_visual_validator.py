@@ -79,8 +79,12 @@ def load_table(stem: str) -> ElementTable:
     return ElementTable.from_json(read_text(VALIDATOR_FIXTURES / "tables" / f"{stem}.json"))
 
 
-def refuse(plan_stem: str, table_stem: str) -> list[Rejection]:
-    return validate_plan(load_plan(plan_stem), load_table(table_stem), visuals=committed_visuals())
+def refuse(
+    plan_stem: str, table_stem: str, *, visuals: VisualsConfig | None = None
+) -> list[Rejection]:
+    return validate_plan(
+        load_plan(plan_stem), load_table(table_stem), visuals=visuals or committed_visuals()
+    )
 
 
 def histogram_over(*quantities: str) -> VisualPlan:
@@ -228,7 +232,8 @@ def test_each_fixture_trips_its_own_check_and_no_other(
     firing on the same fixture, which is exactly the state this test exists to
     refuse.
     """
-    rejections = refuse(plan_stem, table_stem)
+    visuals = tuned_visuals(min_chart_points=3) if check is ValidatorCheck.ENOUGH_DATA else None
+    rejections = refuse(plan_stem, table_stem, visuals=visuals)
     assert [rejection.check for rejection in rejections] == [check]
     assert rejections[0].detail, "a refusal names what it saw, or nobody can act on it"
 
@@ -392,16 +397,13 @@ def test_the_vocabulary_stamp_is_compared_rather_than_matched() -> None:
 def test_enough_data_reads_the_committed_knobs_and_not_a_literal() -> None:
     """Guardrail #6. The floor is `visuals.min_chart_points` and it is read, not chosen."""
     visuals = committed_visuals()
-    assert (visuals.min_chart_points, visuals.max_chart_points) == (3, 8)
     plan, table = load_plan("too-few-marks"), load_table("wind")
-    assert [r.check for r in validate_plan(plan, table, visuals=visuals)] == [
+    assert validate_plan(plan, table, visuals=visuals) == []
+    raised = tuned_visuals(min_chart_points=3)
+    assert [r.check for r in validate_plan(plan, table, visuals=raised)] == [
         ValidatorCheck.ENOUGH_DATA
     ]
-    lowered = visuals.model_copy(update={"min_chart_points": 2})
-    assert lowered.min_chart_points == 2, "model_copy takes a key the model does not have"
-    assert validate_plan(plan, table, visuals=lowered) == []
-    tightened = visuals.model_copy(update={"max_chart_points": 3})
-    assert tightened.max_chart_points == 3
+    tightened = tuned_visuals(max_chart_points=3, max_pie_parts=3)
     assert [r.check for r in validate_plan(load_plan("passes"), table, visuals=tightened)] == [
         ValidatorCheck.ENOUGH_DATA
     ]

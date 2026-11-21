@@ -19,7 +19,7 @@ from idhazh.render.write import asset_relpath
 from ._builders import (
     DRAWS_SUMMARIZE_AND_PLAN,
     _work_stage,
-    assert_planning_rows,
+    assert_planning_readings,
     assert_reader_accepts,
     drawable_article_fetch,
     finding_the_wind_countries,
@@ -56,16 +56,19 @@ def test_assemble_publishes_a_chart_from_its_decision_alone(
     decision = VisualDecision.read(items / f"{item_id}{PAYLOAD_SUFFIX}")
     relpath = asset_relpath(run_plan.date, item_id)
     assert decision.kind is VisualKind.CHART
+    assert decision.rationale == (
+        "The countries' offshore wind capacity awards share a basis, with Denmark awarding the most."
+    )
     assert decision.data_path == relpath
     assert decision.spec is not None
     compiled = VisualData.from_json(decision.spec)
-    assert_planning_rows(
+    assert_planning_readings(
         server,
         [
-            "r1 | Denmark | 1200 MW",
-            "r2 | Germany | 900 MW",
-            "r3 | Poland | 640 MW",
-            "r4 | Ireland | 410 MW",
+            ("q1", "1200 MW"),
+            ("q2", "900 MW"),
+            ("q3", "640 MW"),
+            ("q4", "410 MW"),
         ],
     )
     marks = {mark.mark_id: mark for mark in compiled.marks}
@@ -75,7 +78,7 @@ def test_assemble_publishes_a_chart_from_its_decision_alone(
     assert [Decimal(str(marks[name].value)) for name in compiled.encoding.quantity] == [
         Decimal(1200), Decimal(900), Decimal(640), Decimal(410)
     ]
-    assert compiled.emphasized_mark_id == compiled.encoding.quantity[0], "the row the model named"
+    assert compiled.emphasized_mark_id == compiled.encoding.quantity[0], "the cited reading"
 
     publisher = tmp_path / "publisher"
     publish_worker_items(run_plan, items, publisher, monkeypatch)

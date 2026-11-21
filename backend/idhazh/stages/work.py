@@ -369,7 +369,7 @@ def stage_work(
             prompt_files=settings.app.prompt_files,
             config_dir=settings.config_dir,
         ),
-        output_schema=summarize.output_schema_text(),
+        output_schema=calls.output_schema_text(settings.app.visuals),
         runner_class=runner_class(),
         extractor_version=extract.EXTRACTOR_VERSION,
         sanitizer_version=SANITIZER_VERSION,

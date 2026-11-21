@@ -78,12 +78,19 @@ If extraction read only part of the article, state that limitation on the item. 
 
 Use grammar-constrained decoding derived from the declared reply model. Refuse unknown keys and validate the result after decoding. A well-shaped object still needs content checks.
 
-The request restricts the answer about a chart to what the request offered: `type`
-is `none` or a form on the request's forms line, and `focus` is a row code the
-tables show, or null. The model names a row and writes no element id and no
-position: code finds the elements the row stands for, from offsets it computed.
-With no tables the grammar is the summary alone, so the decoder cannot write an
-answer about a chart, rather than being asked not to.
+The request restricts `type` to `none` or an enabled renderer capability. Measured
+channels and the optional whole and highlight use references shown in the request,
+not literal data, element ids or offsets. A summary-only request has no chart
+field in its grammar.
+
+The chart grammar branches on the type the model writes, using the same role
+rules as the validator. A line cannot assign its values to a scatter axis,
+and a categorical comparison cites a short label span next to each reading.
+Label choices are code-supplied references to literal phrases in the fenced
+data, not assigned names or a pre-paired data set. The model picks labels and
+readings; code checks each reference and cuts the label from source.
+An optional date reference can ground a date mentioned in the title or
+caption without putting it on the chart's axis.
 
 ## One call writes the summary and plans the visual, and the article is read once
 
@@ -95,75 +102,47 @@ sends it:
   the summary rules, then one short block of chart rules. It is the same bytes on
   every item.
 - **The user turn** is the fenced headline, the fenced article as the page wrote it,
-  the tables of figures when code built any, and the closing question from
+  the data references when available, and the closing question from
   `continue-summary.txt`.
 
 The prompt is rendered explicitly rather than by the model's chat template. The shared
 system turn is a prefix the server's cache answers for on every item after the first,
-so only the headline, the article and the tables are read again.
+so only the headline, the article and the data references are read again.
 
-**The names and places are not asked of the model.** The
-[text-analysis service](../text-analysis/text-analysis-api.md) labels them in
-`Article.text` before the model runs, and the work stage turns each labelled span into an
-entity or place element with code-computed ids. A service that cannot answer leaves the
-element table with the figures and dates the patterns found; with no names there is no
-table of figures, so the call asks no question about a chart, and the item publishes. The
-[element contract](../extraction/elements.md) owns how a label becomes an element.
+The [text-analysis service](../text-analysis/text-analysis-api.md) still finds
+mentions and can rule out a matched number that is not a measurement. It does
+not have to find category names for a chart to be considered.
 
-### The model is shown tables of figures, never the element table
+### The model is shown independent source readings
 
-[`pair_names_with_figures.py`](../../../backend/idhazh/classify/pair_names_with_figures.py)
-reads the element table and the article text with no model, and builds rows of
-`code | name | figure`, such as `r1 | Denmark | 1200 MW`. A blank line separates one
-table from the next, and the codes run r1, r2, ... across all of them. A table is a run of
-consecutive sentences that each pair names with exactly one figure of one unit, with
-between `visuals.min_chart_points` and `visuals.max_chart_points` rows; a list over the
-ceiling is refused whole, never trimmed. **A wrong pairing is worse than a missed one**: a
-chart of true numbers beside the wrong name passes every check that follows, so a sentence
-code cannot pair for sure pairs nothing. The module's docstring owns the rules and the
-cases each one refuses.
+[`plan_visual_request.py`](../../../backend/idhazh/classify/plan_visual_request.py)
+assigns a `q` code to each quantity and a `d` code to each date in the bounded
+element table. In short excerpts, the code sits on the reading itself so a
+price cannot be mistaken for a nearby percent change. Overlapping excerpts
+are joined rather than repeating the numbers beside each other. The excerpts
+stay [inside their own untrusted fence](../sources/trust-boundary.md#data-references-are-article-words-inside-the-fence).
+The capabilities line outside it is the same for every article under one
+configuration; Python does not rank or shortlist forms based on the article.
 
-The tables follow the article inside the same untrusted fence
-([trust boundary](../sources/trust-boundary.md#the-tables-of-figures-are-article-words-inside-the-fence)),
-and one line written by code, outside the fence, names the chart forms on offer. Only
-`bar` and `dot` are offered: a name and a figure a mark, with no separately stated whole,
-is all a table holds. The validator, the replacement ladder and the compiler still support
-the other numeric forms; no model answer reaches them, so the ladder has nothing to step
-down from today and stays off by default.
-No table built means the question about a chart is left off the request
-([what that records](../publishing/visuals.md#every-none-says-which-gate-refused-it)).
+**The reply is `summary`, then `visual`.** The chart's `why` comes before
+`type` so the model names the comparison and takeaway, or a specific mismatch,
+before committing to a form. Matching examples in
+[`plan-visual.txt`](../../../config/prompts/plan-visual.txt) distinguish two
+share prices from a share price and an amount raised. Separately stated
+figures can be comparable, and two readings can be enough. The model
+looks for the strongest comparable subset before considering a decline;
+unrelated figures do not disqualify that subset.
 
-**The reply is `summary`, then `visual`.** `summary` is decoded first, so a cut reply
-keeps it. `visual` is `{why, type, focus, title, caption}`, every key present and null when
-unused: `why` is one sentence in words with no digits, `type` is `none` or an offered
-form, `focus` is the row the item turns on, and `title` and `caption` are short prose that
-keep the plan contract's length bounds. `why` comes first because with thinking off it is
-the model's only room to reason; that order is a design choice, and whether it improves
-answers is read off published runs. `none` is final: no plan is built, nothing else in the
-answer is read, and `why` becomes the recorded rationale.
-
-The chart rules in the system turn are the same for every article, so the cached start of
-the prompt never moves. They say when a chart is worth drawing - the item is about how the
-figures in one table compare across names - and when it is not, with one worked chart
-answer and one worked `none` answer;
-[`plan-visual.txt`](../../../config/prompts/plan-visual.txt) owns the wording. The
-[visual rule](../../concepts/digest.md#the-visual-rule) does not
-depend on unfinished article classification or require a fact absent from the
-summary. Numeric density alone does not establish a useful comparison.
-
-**Code builds the plan, and the model never writes one.** A chart answer becomes a complete
-`VisualPlan` from the table of the row it names, and it is refused by a named rule when it
-has no `focus`, no title, or a digit in `why`, `title` or `caption`
-([the plan page](../publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md#a-chart-answer-becomes-a-plan-in-code)).
-The validator, the replacement ladder and the compiler run unchanged.
-
-An input oracle proves that the request shows the rows code built and binds the answer to
-their codes. Replaying a recorded valid answer proves parsing, plan building and
-compilation, not that a real model will choose a useful visual.
+The model chooses which readings and roles to use and cites label phrases
+in the article's own words. Code turns those citations into the
+[existing visual plan](../publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md#a-chart-answer-becomes-a-plan-in-code).
+`none` builds no plan and its `why` is recorded. Replaying a known reply
+checks parsing and compilation; the [retained workflow](../../reference/retained-article-verification.md)
+shows what the real model chose.
 
 ### Every instruction sits in front of the article
 
-Put shared instructions in one stable system turn: summary rules and chart rules. Keep only item-dependent requests, such as the tables and the reply fields, behind the article. Derive requested field names from the reply shape.
+Put shared instructions in one stable system turn: summary rules and chart rules. Keep only item-dependent material, such as the data references and the reply fields, behind the article. Derive requested field names from the reply shape.
 
 Fenced headline and article text remain untrusted data. Do not let either become a system instruction, shell argument, filename or fetch destination. Scope an instruction to the job it governs: a plan rule against inventing numbers must not forbid the summary from reporting a source figure.
 
@@ -171,10 +150,8 @@ Fenced headline and article text remain untrusted data. Do not let either become
 
 The article is printed once, whole and unchanged, because the call is asked for no
 location. No `[sN]` address, element id, character offset or position appears in any
-model-facing text, and the grammar has no field that could carry one. Every row is cut
-by offsets into `Article.text`, so the table builder refuses an element table built over
-a different string than the text it reads (`SpanDriftError`): rows that point into a
-document the model is not reading are the failure it prevents.
+model-facing text. The evidence index refuses a table built over a different string
+from the one the model reads (`SpanDriftError`).
 
 Code derives every location from the labelled spans the service returned, and re-slices
 each excerpt from `Article.text` rather than trusting the words the service sent back.
@@ -202,25 +179,26 @@ the current server and model; neither establishes semantic extraction quality.
 
 Decode the summary before the answer about a chart. If output ends during the answer, `recovered_completion` may recover a complete summary with the JSON decoder, normalize the repaired completion status, and pass it through the same content checks as a normal reply. Publish no picture when its answer is incomplete.
 
-Never recover a partially written summary. A chart is built only from rows of tables code cut from the article, never from a figure invented by the summary it follows.
+Never recover a partially written summary. A chart is built only from readings and
+labels code resolves against the article, never from a figure in the summary.
 
 ### The output budget
 
 The call has nothing to derive a budget from. Its two prose fields carry no length
 bound, so it runs under the model file's `sampling.max_tokens`, or
-`DEFAULT_MAX_TOKENS` where the file names none, with tables or without; see
+`DEFAULT_MAX_TOKENS` where the file names none, with chart data or without; see
 [model-file.md](../../concepts/config/model-file.md#design-rationale). Do not silently clamp a reply
 budget to available context. Report a window failure at the call site.
 
 For capacity diagnostics, tokenize the complete rendered request with the
 configured model's vocabulary, then add the effective response limit from that
 request body. The complete input already contains the system turn, the article and
-the tables of figures. Cached tokens still occupy context; do not omit them.
+the data references. Cached tokens still occupy context; do not omit them.
 
 The pre-call gate remains an estimate, not a certificate for every request: a measured
-scaffold and word rate that bound the prompt from above, the UTF-8 bytes of the tables
+scaffold and word rate that bound the prompt from above, the UTF-8 bytes of the references
 shown, and the call's response limit. It sizes the article alone first and reads an item
-without its tables when they would not fit; [throughput.md](throughput.md#the-window-is-checked-before-the-call-is-sent)
+without its references when they would not fit; [throughput.md](throughput.md#the-window-is-checked-before-the-call-is-sent)
 owns the arithmetic and its figures.
 Conservative byte ceilings are not observed token counts. A bounded check with
 retained production replies and a constructed source-cap input measures those
@@ -282,7 +260,11 @@ The evaluation record identifies the article with its source headline, not a gen
 
 ## The record covers the ask
 
-`RunRecord.inputs.prompt_sha256` covers templates, substituted policy, turn markers and turn order. It must not change merely because the article changes. `classify.calls.prompt_inputs` supplies the digest call's inputs to the recorded run manifest: the system and user turns rendered with the headline and article empty, one fixed example table framed exactly as a real one is, the summarize block, `visuals.enabled_kinds` and the selected chart types. The example table is there because no real table is in a rendering with no article, so without it a change to the table wording, the row layout, the fence or the forms line would leave the stamp unmoved. The kinds are digested beside the bytes because the rendering is always the call without tables, so a run that asks about no chart would otherwise read as unchanged.
+`RunRecord.inputs.prompt_sha256` covers both variants of the rendered digest
+call with fixed inputs: templates, substituted policy, turn markers and order,
+and the data framing and capabilities. `output_schema_sha256` fingerprints the
+reply shapes before their references are bound to an article. The exact
+article-specific request and reply remain in the native capture.
 
 Changing prompt wording or policy changes this identity. The digest makes the change observable; it is not permission to skip work or a quality verdict.
 
@@ -296,32 +278,20 @@ Read the article once. The first of the two calls the pipeline used to make only
 code could already find: on 66 captured articles it took 3.67 of 7.04 hours of model time
 (52 percent) and fed a chart planner that published no chart, while the local text-analysis
 service returns the same names and places with exact offsets in seconds. Dropping the call
-saves its decode, because the remaining call reads the article either way. What the model no
-longer writes - what a figure measures and whom it describes - is not replaced by a model:
-code pairs a name with the figure written beside it, the model reads the pair against the
-article, and the validator still checks every element the plan cites.
-Scatter and bubble charts needed the subject link only that call wrote, so they cannot validate
-until a code rule links a figure to its subject.
+saves its decode because the remaining call reads the article either way.
 
-**Why the model is shown rows and not elements.** Code makes the pairing of a name with a figure,
-under rules that refuse any sentence they cannot pair for sure, and the model keeps the judgement
-only it can make: whether a table is worth a chart, in which form, which row the item turns on, and
-the title. It writes no figure and no id, so its answer is a few short fields and the worst a
-hostile page can do is steer the choice of table, form or row. What this gives up: a story whose
-figures sit in prose the rules refuse draws nothing, and so does a form that needs more than a name
-and a figure for each mark. Those forms stay supported downstream and are offered only when the
-builder can make a table shape that holds them.
+**Why the model cites readings instead of writing values.** Code reads the
+numbers. The model decides what is comparable and useful, and it can do so
+without a list of name-and-figure pairs already arranged by Python. The model
+can select the wrong source readings; it cannot author a new chart value.
 
 The service is a new recipient of article text, so it is a loopback process the run starts
-and its reply is data ([trust boundary](../sources/trust-boundary.md)). What reaches the model
-from it is an excerpt re-sliced from `Article.text` and shown only as a cell of a fenced row,
-like any other word of the article; no word the service returns is ever a prompt, path, URL or
-shell argument.
+and its reply is data ([trust boundary](../sources/trust-boundary.md)).
+No word the service returns becomes a prompt, path, URL or shell argument.
 
-The model sees a row code, a name and a figure's words. Element ids, kinds, parsed values and
-units, character offsets, extractor bookkeeping and sentence addresses stay out of this
-projection. Persisted spans, source hashes and re-slicing checks remain intact: they validate
-the evidence rather than merely help debugging.
+Element ids, parsed values, character offsets and extractor bookkeeping
+stay out of the evidence projection. Source hashes and re-slicing checks
+keep each reading tied to the article.
 
 A stable prefix reduces repeated reading without treating prompt wording as a control. Summary-first decoding protects the reader's primary content when visual planning cannot finish. Model-specific transport declarations keep shared editorial instructions testable across models.
 
@@ -330,7 +300,7 @@ instructions from the original checkout. One directory holds distinct products
 and call flows, not one shared summary instruction or a scanned prompt registry.
 
 The article is printed unchanged and unaddressed, so the bytes the model reads are the bytes
-`Article.text` holds and every row it is shown is cut from them. These invariants prove transport, not
+`Article.text` holds and every evidence excerpt comes from them. These invariants prove transport, not
 improved model coverage or useful generated visuals; those require a fresh production call.
 
 ## See also

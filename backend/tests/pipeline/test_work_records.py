@@ -20,7 +20,7 @@ from typing import Any, Final
 
 from pytest import LogCaptureFixture, MonkeyPatch
 from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR
-from support.prompts import WIND_NAMES, WIND_TEXT, tables_over
+from support.prompts import WIND_TEXT, chart_data_over
 from test_classify import a_reply
 
 from idhazh import config
@@ -273,7 +273,7 @@ def test_a_malformed_chart_answer_keeps_shape_diagnostics_off_the_success_detail
     settings = config.load(CONFIG_DIR)
     article = Article.read(CONTRACT_FIXTURES_DIR / "article" / "ok.json")
     summary = Summary.read(CONTRACT_FIXTURES_DIR / "summary" / "ok.json")
-    table, tables = tables_over(article, WIND_TEXT, WIND_NAMES)
+    table, data = chart_data_over(article, WIND_TEXT)
     recorder = _silent_recorder()
     recorder.note(**ItemHealthRow.read(
         CONTRACT_FIXTURES_DIR / "item-health-row" / "published.json"
@@ -285,7 +285,7 @@ def test_a_malformed_chart_answer_keeps_shape_diagnostics_off_the_success_detail
             content=a_reply(focus=None, caption="model-only words"), finish_reason="stop"
         ),
         table,
-        tables=tables,
+        data=data, text=WIND_TEXT,
         settings=settings, date="2026-08-21",
         stamp={
             "version": VisualDecision.schema_version(), "model_id": "fixture-model",

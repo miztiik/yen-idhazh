@@ -16,17 +16,14 @@ import pytest
 from pydantic import ValidationError
 from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
 from support.prompts import (
-    SUMMARIZE_AND_PLAN_REPLIES,
-    WIND_NAMES,
     WIND_TEXT,
+    chart_data_over,
     summary_payload,
-    tables_over,
 )
 from support.visual_plans import current_plan
 
 from idhazh import config, summarize
 from idhazh.classify.calls import (
-    parse_summarize_and_plan,
     summarize_and_plan_model,
     summarize_and_plan_schema,
 )
@@ -131,7 +128,7 @@ WHOLE = (
 )
 
 
-class TestAnItemWithNoTableIsNotAskedForAPlan:
+class TestAnItemWithNoChartDataIsNotAskedForAPlan:
     def test_the_suppressed_grammar_has_nowhere_to_write_a_plan(self) -> None:
         """The grammar is the control: a suppressed request cannot carry a plan.
 
@@ -157,24 +154,13 @@ class TestAnItemWithNoTableIsNotAskedForAPlan:
         trailing turn differs.
         """
         wind = article_ok.model_copy(update={"text": WIND_TEXT})
-        _, tables = tables_over(article_ok, WIND_TEXT, WIND_NAMES)
-        whole = summary_payload(wind, tables=tables)
+        _, data = chart_data_over(article_ok, WIND_TEXT)
+        whole = summary_payload(wind, data=data)
         suppressed = summary_payload(wind)
         shared = whole["prompt"][: whole["prompt"].index(WIND_TEXT) + len(WIND_TEXT)]
 
         assert suppressed["prompt"].startswith(shared)
         assert whole["prompt"] != suppressed["prompt"]
-
-    def test_a_suppressed_reply_parses_to_a_summary_and_no_plan(self) -> None:
-        """`visual` is `None` because none was asked for, not because one was lost."""
-        body = json.loads(read_text(SUMMARIZE_AND_PLAN_REPLIES / "summary-and-plan.json"))
-        content = json.loads(body["choices"][0]["message"]["content"])
-
-        reply = parse_summarize_and_plan(json.dumps(content["summary"]))
-
-        assert reply.visual is None
-        assert reply.summary.title == content["summary"]["title"]
-
 
 class TestTheNoneReasonOnAStoredDecision:
     """What a stored decision may say about why it carries no picture.

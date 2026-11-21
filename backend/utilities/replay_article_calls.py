@@ -17,7 +17,7 @@ from pydantic import TypeAdapter
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from idhazh import ask_text_analysis, assemble, atomic_write, config, run_context, summarize
+from idhazh import ask_text_analysis, assemble, atomic_write, config, run_context
 from idhazh.classify import calls
 from idhazh.command_logging import configure_command_logging
 from idhazh.contracts.article import Article, ArticleStatus
@@ -215,7 +215,7 @@ def run_calls(
                 prompt_files=settings.app.prompt_files,
                 config_dir=settings.config_dir,
             ),
-            output_schema=summarize.output_schema_text(),
+            output_schema=calls.output_schema_text(settings.app.visuals),
             runner_class=runner_class(),
             extractor_version=article.extractor_version,
             sanitizer_version=article.sanitizer_version,

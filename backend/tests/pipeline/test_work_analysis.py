@@ -35,6 +35,7 @@ from support.prompts import THE_FIRST_CALLS_WORDS
 from support.server import RecordedEndpoint
 
 from idhazh import config
+from idhazh.classify.plan_visual_request import DATA_INTRO
 from idhazh.contracts.article import Article
 from idhazh.contracts.call_cost import CallKind
 from idhazh.contracts.item_health import ItemHealthRow
@@ -80,22 +81,14 @@ def run_one_item(
     return items, run_plan.items[0].item_id, server
 
 
-def shown_rows(request: dict[str, Any]) -> list[list[str]]:
-    """The `code | label | figure` rows of the tables the model was shown, or none."""
+def shown_readings(request: dict[str, Any]) -> list[tuple[str, str]]:
+    """The bracketed source readings marked with a reference, or none."""
     prompt = str(request["prompt"])
-    if "Tables of figures found in the item." not in prompt:
+    if DATA_INTRO not in prompt:
         return []
-    after = prompt.split("Tables of figures found in the item.", maxsplit=1)[1]
+    after = prompt.split(DATA_INTRO, maxsplit=1)[1]
     block = after.split(FENCE_OPEN + "\n", maxsplit=1)[1].split("\n" + FENCE_CLOSE, maxsplit=1)[0]
-    return [line.split(" | ") for line in block.splitlines() if line]
-
-
-def asked_about_no_chart(request: dict[str, Any]) -> bool:
-    """Whether the request left the question about a chart off: no tables, the summary alone."""
-    return not shown_rows(request) and set(request["json_schema"]["properties"]) == {
-        "title",
-        "summary",
-    }
+    return re.findall(r"\[([qd]\d+): ([^\[\]\n]+)\]", block)
 
 
 def health(items: Path, item_id: str) -> ItemHealthRow:
@@ -133,23 +126,21 @@ def test_the_model_reads_the_item_once_and_is_shown_no_address_and_nothing_of_th
     assert row.label_kind is None and row.label_ms is None
 
 
-def test_every_row_the_model_is_shown_is_cut_from_the_article_text(
+def test_each_referenced_reading_is_cut_from_the_article_text(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
-    """A name the service found reaches the model as the article's own words and no others."""
+    """The service may find names, but it doesn't choose which readings are shown."""
     with RecordedAnalysis(the_countries) as service:
         items, item_id, server = run_one_item(
             tmp_path, monkeypatch, pointed_at(config.load(CONFIG_DIR), service.base_url)
         )
 
     text = Article.read(items / f"{item_id}.article.json").text or ""
-    rows = shown_rows(server.sent[0])
-
-    assert [(code, label) for code, label, _ in rows] == [
-        ("r1", "Denmark"), ("r2", "Germany"), ("r3", "Poland"), ("r4", "Ireland")
+    readings = shown_readings(server.sent[0])
+    assert [(code, value) for code, value in readings if code.startswith("q")] == [
+        ("q1", "1200 MW"), ("q2", "900 MW"), ("q3", "640 MW"), ("q4", "410 MW")
     ]
-    for _, label, figure in rows:
-        assert label in text and figure in text, (label, figure)
+    assert all(figure in text for _, figure in readings)
 
 
 @pytest.mark.parametrize("outcome", ["unreachable", "malformed"])
@@ -169,7 +160,7 @@ def test_an_item_the_service_could_not_read_still_publishes_on_the_patterns_alon
 
     assert Summary.read(items / f"{item_id}.summary.json").status is SummaryStatus.OK
     assert server.served == 1
-    assert asked_about_no_chart(server.sent[0]), "figures alone make no table"
+    assert shown_readings(server.sent[0]), "chart data survives without name extraction"
     assert analysis_warning(items, item_id, caplog)["outcome"] == outcome
     assert health(items, item_id).analyze_ms is not None
 
@@ -192,7 +183,7 @@ def test_a_hung_service_costs_the_item_its_deadline_and_the_wait_is_not_the_mode
     row = health(items, item_id)
 
     assert Summary.read(items / f"{item_id}.summary.json").status is SummaryStatus.OK
-    assert asked_about_no_chart(server.sent[0])
+    assert shown_readings(server.sent[0])
     assert analysis_warning(items, item_id, caplog)["outcome"] == "timed_out"
     assert row.analyze_ms is not None and row.analyze_ms >= int(HUNG_DEADLINE_S * 900)
     assert row.queue_wait_ms is not None and row.queue_wait_ms < row.analyze_ms
@@ -212,7 +203,7 @@ def test_words_the_service_says_it_read_never_reach_the_model_unless_the_article
         )
 
     assert injected not in str(server.sent[0]["prompt"])
-    assert asked_about_no_chart(server.sent[0])
+    assert shown_readings(server.sent[0])
     result = analysis_warning(items, item_id, caplog)
     assert result["returned_spans"] == [
         {"label": "ORG", "start_char": 55, "end_char": 55 + len(injected), "status": "text_mismatch"}

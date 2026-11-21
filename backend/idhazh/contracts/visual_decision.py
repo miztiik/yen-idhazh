@@ -75,10 +75,8 @@ class NoneReason(StrEnum):
     sentences in `rationale`, and several are not gates at all.
     """
 
-    #: No table of names and figures was on offer, so no answer about a chart was
-    #: asked for and the call wrote the summary alone. Before 2026-11-18 it meant
-    #: that no choice over this article's elements could have survived the
-    #: validator; rows written before keep that meaning.
+    #: No chart data was sent, so the call wrote the summary alone.
+    #: Historical rows keep the meaning they were written with.
     NOT_REACHABLE = "not_reachable"
     #: The model was asked and answered `none`. The ordinary answer, and the one
     #: the design wants to stay common.

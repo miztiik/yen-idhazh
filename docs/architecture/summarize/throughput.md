@@ -305,7 +305,7 @@ sit in the system turn in front of it, is measured in
 ## Which stage sends the call
 
 `work` sends one call an item: it reads the article and writes the summary and,
-when code builds a table of figures from it, the answer about a chart. Until 2026-11-17 it sent two,
+when source readings are available, the answer about a chart. Until 2026-11-17 it sent two,
 adjacently - a call that labelled names and places, then the summary-and-plan
 call - and the adjacency was a correctness rule: the summarize entry pins
 `n_parallel` to 1, so the server holds one cache slot, and every first call
@@ -325,8 +325,8 @@ hashes the chat template read off `/props`, and the call renders its own
 bytes, so that template no longer reaches what the model reads and
 `models.summarizer.turns` does. `classify.calls.prompt_inputs`
 is what the stamp hashes instead: both turns rendered through the same helpers
-the live request uses, with the headline and the article empty, one fixed example table,
-the summarize block, `visuals.enabled_kinds` and the selected chart types
+the live request uses, with the headline and article empty and fixed example
+data references with the enabled capabilities
 ([why each is there](prompt.md#the-record-covers-the-ask)). Editing a marker moves the stamp,
 which is the state `Observation.DETERMINISM_VIOLATION` exists to make visible -
 and it is the only route the envelope takes into a run record, because
@@ -337,11 +337,11 @@ declared entry.
 
 `backend/idhazh/classify/dag.py` answers one question: does this article's call
 fit the window. The window has to hold the prompt - the instructions, the article
-and the tables of figures - and then the longest reply the model file lets
+and the data references - and then the longest reply the model file lets
 the call write. `dag.call_tokens` is that sum: an estimate of the prompt, built
 from two readings in `idhazh.measured` (the fixed scaffold and the tokens a word)
 that were taken on a longer prompt than the one sent and so sit above it, plus the
-UTF-8 bytes of the tables shown, plus `sampling.max_tokens`. **The tables are counted
+UTF-8 bytes of the references shown, plus `sampling.max_tokens`. **References are counted
 a token a byte**: a token spans at least one byte of the text the tokenizer reads, so the
 bytes shown are a ceiling that needs no reading of the tokenizer. A count in characters
 would not be one, because a rare character can cost several byte-level tokens. The
@@ -357,11 +357,9 @@ picture rather than the item:
 decode has been paid for. Refusing it up front is still the better answer,
 because that whole decode is spent before the reason can be written.
 
-**The tables are optional where the article is not.** When the article fits and the
-article plus its tables does not, the item is read without them: one warning is logged,
-no question about a chart is asked, and the decision records `not_reachable`, the same
-as an item that built no table. The logged warning is the only trace that tables were
-dropped.
+**The data references are optional where the article is not.** When the article
+fits and its references would not, one warning is logged, the chart question is
+left off, and the decision records `not_reachable`.
 
 **How many items the window refuses, and it is none.** Over the trailing 30 days
 ending 2026-09-13, 8,938 items carry a recorded prompt: the median is 1,672
@@ -369,11 +367,11 @@ tokens, the 95th percentile 3,378 and the worst 8,741. Read once from
 `ledger.load_item_health` with a 30-day cover, 2026-09-13; that reader is
 `ledger.load_days` over the same 30 days now. Behind the prompt the call holds a
 fixed 8,192 tokens, the model file's response limit. The longest article the
-extractor passes (26,000 tokens) sums to 52,874 tokens with that limit and no tables,
+extractor passes (26,000 tokens) sums to 52,874 tokens with that limit and no data references,
 against the 65,536-token window (computed 2026-11-18 from the committed window and
-cap), so no committed article is refused. That leaves 12,662 tokens, so tables of up to
+cap), so no committed article is refused. That leaves 12,662 tokens, so data references of up to
 12,662 bytes, for such an article, and a model file that names a larger `max_tokens` narrows
-them one token for one. How often tables are dropped for want of room is not measured here;
+them one token for one. How often references are dropped for want of room is not measured here;
 the logged warning counts it.
 
 ## The write rate still falls through a run, and the cause is the ordering

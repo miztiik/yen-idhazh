@@ -1,8 +1,8 @@
 """What a visual plan is, and the four things it may not carry.
 
 A **visual plan** says whether a story carries a picture and, if so, what shape
-and out of which facts. Code builds it from the row of a table of figures the
-model chose (`idhazh.classify.calls`), and it is the only thing a compiler is
+and out of which facts. Code builds it from the source references in the
+model's chart choice, and it is the only thing a compiler is
 allowed to draw from. Everything a reader will see is reached through it, so
 what it may not hold is as much of the contract as what it holds.
 
@@ -16,23 +16,21 @@ what it may not hold is as much of the contract as what it holds.
    names a pixel is a plan bound to one renderer.
 2. **No literal values.** No field anywhere accepts a free number. A bar height
    is reached by citing an `ElementId`, and the element carries the characters
-   the article itself wrote. So the worst a prompt injection can do is pick the
-   wrong table or row; it cannot draw the wrong number.
+   the article itself wrote. A prompt injection can influence which source
+   readings are drawn; it cannot put a model-written number on an axis.
 3. **No authored text where a reader reads a fact.** `labels` and `annotations`
    are element references, not strings - code cuts every character a reader
    sees. The three prose channels that remain - `title`, `caption` and `why` -
-   are length-bounded here, the model's answer is refused if one holds a digit,
-   and whether a numeral inside one is matched by a cited element is the
-   validator's check, not the shape's. That half is the only part of the four
-   this module hands on.
+   are length-bounded here. The reason is written in words; numerals in a
+   title or caption must match cited elements, which the plan validator checks.
 4. **No `alt_text`.** The compiler writes it, from the elements it already
    holds, so it is satisfied by construction. Written by the model it would be
    the last unguarded prose channel in the system. The field is not declared,
    it is named in `FORBIDDEN_FIELDS`, and this module refuses to import if one
    is ever added back.
 
-`confidence` is optional and null: the plan is built by code from the row a
-model chose, which asks for none. It is recorded and it gates nothing. Code
+`confidence` is optional and null: the model is not asked for it. It is
+recorded and it gates nothing. Code
 stamps `version` and `plan_version` and collects `element_ids` from the
 selected references, and the saved plan retains all three fields, so
 historical plans remain readable.
@@ -110,7 +108,7 @@ _PlanVersion = Annotated[SchemaVersion, StringConstraints(max_length=_VERSION_MA
 MAX_ELEMENT_IDS: Final = 32
 #: One role is one channel and a channel carries one entry per mark, so this is
 #: `visuals.max_chart_points`. A cap rise past 8 is a contract change on purpose,
-#: and the table builder's ceiling reads it.
+#: and the model-facing encoding arrays read it.
 MAX_IDS_PER_ROLE: Final = 8
 _RoleIds = Annotated[list[_PlanElementId], Field(max_length=MAX_IDS_PER_ROLE)]
 #: Eight marks and two axes.

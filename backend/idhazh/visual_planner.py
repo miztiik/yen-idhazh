@@ -131,9 +131,9 @@ def plan_lost_to_the_window(
 def suppressed_by_the_gate(
     summary: Summary, *, model_id: str, decided_at: str, version: str
 ) -> VisualDecision:
-    """The `none` an item gets when no table of names and figures was on offer.
+    """The `none` an item gets when chart references were not sent.
 
-    That is no table built, charts switched off, or tables built and dropped because they
+    Charts were disabled, there were too few readings, or the references
     would not fit the window.
 
     `asked_the_model` stays true: the model WAS asked, for the summary, in the same
@@ -143,7 +143,7 @@ def suppressed_by_the_gate(
         summary,
         model_id=model_id,
         reason=(
-            "no table of names and figures was on offer for this article, "
+            "no chart data references were sent for this article, "
             "so the question about a chart was left off the request"
         ),
         decided_at=decided_at,
