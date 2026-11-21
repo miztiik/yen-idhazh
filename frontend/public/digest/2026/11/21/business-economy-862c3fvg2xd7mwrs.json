@@ -1,0 +1,40 @@
+{
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": "m3",
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "business-economy-862c3fvg2xd7mwrs",
+  "marks": [
+    {"derived": null,"element_id": "entity-1176-1198","mark_id": "m0","source_text": null,"text": "Advanced Micro Devices","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-1144-1161","mark_id": "m1","source_text": null,"text": "Micron Technology","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-1163-1171","mark_id": "m2","source_text": null,"text": "Broadcom","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-2672-2677","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "13.3"},
+    {"derived": null,"element_id": "quantity-2702-2707","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "%","value": "13.9"},
+    {"derived": null,"element_id": "quantity-2726-2731","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "%","value": "12.1"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Chip-stock selloff on Friday",
+  "type": "bar",
+  "version": "2026-10-27T05:00"
+}
