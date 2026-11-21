@@ -65,6 +65,9 @@ class Evidence:
     nights_used: int
     #: The earliest of those nights, empty when there are no pairs.
     first_date: str | None
+    #: In the same order as scores and answers, before the proof sorts the key set.
+    pair_keys: tuple[str, ...]
+    judge_temperatures: frozenset[float | None]
 
     @property
     def usable_pairs_used(self) -> int:
@@ -156,4 +159,6 @@ def evidence_near(
         answers=tuple(int(row.verdict is SameStoryVerdict.YES) for row in near),
         nights_used=len({row.date for row in near}),
         first_date=near[0].date if near else None,
+        pair_keys=tuple(row.pair_key for row in near),
+        judge_temperatures=frozenset(row.judge_temperature for row in near),
     )

@@ -73,6 +73,10 @@ class Curve:
     intercept: float
     steepness: float
 
+    def probability_at(self, score: float) -> float:
+        """The fitted probability of a YES at this score."""
+        return _sigmoid(self.intercept + self.steepness * score)
+
     def score_at(self, share: float) -> float | None:
         """The score where this curve reaches `share`, or none when no finite score does.
 

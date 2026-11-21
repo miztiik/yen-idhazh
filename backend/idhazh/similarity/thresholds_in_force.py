@@ -46,6 +46,12 @@ def lookback_days(night: str, *, within_days: int) -> tuple[str, ...]:
     )
 
 
+def council_run_order(run_id: str) -> tuple[str, int]:
+    """Compare Council runs by UTC prefix, then by numeric run suffix."""
+    day, _, number = run_id.rpartition("-")
+    return day, int(number)
+
+
 def thresholds_in_force(
     history: Sequence[StorySimilarityThresholdHistoryRow],
     *,

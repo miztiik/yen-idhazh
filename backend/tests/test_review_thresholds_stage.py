@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
-from math import log, nextafter
+from math import exp, log, nextafter
 from pathlib import Path
 from typing import Final
 
@@ -23,7 +23,7 @@ from support.judged_pairs import (
     a_saver,
     a_verdict_file,
 )
-from support.ledger import seed_compact_index
+from support.ledger import seed_compact_index, seed_compact_period
 from support.paths import CONFIG_DIR
 from support.threshold_nights import LOOKBACK, RULES, a_day, pairs_beside
 from test_content_similarity_judge_ledger_reads import a_night_with_pool
@@ -37,17 +37,21 @@ from idhazh.content_similarity_judge.ledger_reads import (
 )
 from idhazh.content_similarity_judge.tenant import JUDGE_ID
 from idhazh.contracts.base import derive_text_digest
-from idhazh.contracts.file_envelope import Period
+from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.knobs.content_similarity_judge import ContentSimilarityDiagnosticsConfig
 from idhazh.contracts.ledger_index import CompactEntry, EntryState
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.story_similarity_diagnostics import (
+    JudgeProbabilityEvidence,
+    JudgeProbabilityStatus,
     SampleStatus,
     ScoreDriftBaseline,
     ScoreDriftSource,
     ScoreDriftStatus,
     ScorePoolHistogram,
+    UpperFitEvidence,
     diagnostic_text,
+    read_diagnostic_text,
 )
 from idhazh.contracts.story_similarity_pair_verdict import StorySimilarityPairVerdict
 from idhazh.contracts.story_similarity_threshold_history_row import (
@@ -69,6 +73,19 @@ ENDS: Final = [(0.95, "YES"), (0.96, "YES"), (0.40, "NO")]
 DRIFT_DATE: Final = "2026-11-20"
 DRIFT_RUN: Final = "2026-11-21-10"
 RECIPE: Final = "b" * 64
+FIT_DAY: Final = "2026-11-18"
+FIT_RUN: Final = "2026-11-19-9"
+EVALUATION_DAY: Final = "2026-11-19"
+EVALUATION_RUN: Final = "2026-11-20-10"
+EVALUATION_PAIRS: Final = (
+    (0.94, "NO"),  # The training pair at 0.965, drawn again at a different score.
+    (0.89, "UNCLEAR"),
+    (0.965, "YES"),
+    (0.88999, "YES"),
+    (0.96501, "NO"),
+    (0.92, ("YES", "NO")),
+    (0.89, "YES"),
+)
 
 
 def _pool(counts: tuple[int, ...]) -> ScorePoolHistogram:
@@ -264,20 +281,28 @@ def lay_down_a_night(
         atomic_write.write_atomic(
             night.verdicts / f"{date}-{JUDGE_ID}-{unit:02d}.csv", a_verdict_file(rows)
         )
+    return _file_night(night, state)
+
+
+def _file_night(night: Night, state: Path, *, attempt: int = 1) -> Night:
     filed = file_pair_verdicts.stage_file_pair_verdicts(
-        date,
-        run_id=run_id,
+        night.date,
+        run_id=night.run_id,
         judge_id=JUDGE_ID,
         shipped_root=night.shipped,
         verdicts_dir=night.verdicts,
-        identity=a_saver(run_id),
-        expected_shards=units,
+        identity=_saver(night.run_id, attempt=attempt),
+        expected_shards=night.units,
         state_dir=state,
     )
     return replace(night, filed_rows=filed.filed_rows)
 
 
-def review(night: Night, state: Path) -> review_thresholds.ReviewReport:
+def _saver(run_id: str, *, attempt: int) -> WriterIdentity:
+    return a_saver(run_id).model_copy(update={"attempt": attempt})
+
+
+def review(night: Night, state: Path, *, attempt: int = 1) -> review_thresholds.ReviewReport:
     return review_thresholds.stage_review_thresholds(
         night.date,
         run_id=night.run_id,
@@ -285,7 +310,7 @@ def review(night: Night, state: Path) -> review_thresholds.ReviewReport:
         shipped_root=night.shipped,
         draw_path=night.draw,
         filed_rows=night.filed_rows,
-        identity=a_saver(night.run_id),
+        identity=_saver(night.run_id, attempt=attempt),
         expected_shards=night.units,
         state_dir=state,
         config_dir=CONFIG_DIR,
@@ -486,3 +511,128 @@ def test_a_draw_that_followed_thresholds_the_history_does_not_show_stops_the_rev
 
     assert not ledger.raw_root(state, HISTORY).exists()
     assert len(load_pair_verdicts(state, [a_day(0)])) == 80
+
+
+def _file_calibration_night(
+    root: Path,
+    *,
+    day: str,
+    run_id: str,
+    pairs: Sequence[tuple[float, str | tuple[str, str]]],
+    first_index: int,
+    attempt: int = 1,
+    returned: tuple[int, ...] | None = None,
+) -> Night:
+    work = root / day / str(attempt)
+    night = Night(day, run_id, work / "draw.csv", work / "shipped", work / "verdicts", 1)
+    draw = a_night_of_pairs(
+        pairs, date=day, run_id=run_id, first_index=first_index, answered=False
+    )
+    judged = a_night_of_pairs(pairs, date=day, run_id=run_id, first_index=first_index)
+    atomic_write.write_atomic(night.draw, a_verdict_file(draw))
+    returned_rows = judged if returned is None else [judged[index] for index in returned]
+    if returned_rows:
+        atomic_write.write_atomic(night.verdicts / "unit.csv", a_verdict_file(returned_rows))
+    return _file_night(night, root / "state", attempt=attempt)
+
+
+def prior_fit_replay(root: Path) -> tuple[Night, StorySimilarityThresholdHistoryRow, Night]:
+    """File a real fit, pack its day, and file the pairs that the later run can evaluate."""
+    state = root / "state"
+    source = _file_calibration_night(
+        root,
+        day=FIT_DAY,
+        run_id=FIT_RUN,
+        pairs=((0.80, "YES"), (0.94, ("YES", "NO")), (0.89, "NO"), (0.92, "UNCLEAR"), (0.965, "YES")),
+        first_index=0,
+    )
+    result = review(source, state)
+    assert result.filed and result.row is not None
+    source_row = result.row
+    packed = seed_compact_period(
+        state,
+        HISTORY,
+        StorySimilarityThresholdHistoryRow,
+        Period.DAILY,
+        FIT_DAY,
+        [(FIT_DAY, FIT_RUN, source_row)],
+        producer=review_thresholds.PRODUCER,
+    )
+    seed_compact_index(
+        state,
+        HISTORY,
+        Period.DAILY,
+        [CompactEntry(covers=FIT_DAY, state=EntryState.PACKED, rows=1, bytes=packed.stat().st_size)],
+    )
+    for period in (Period.MONTHLY, Period.YEARLY):
+        seed_compact_index(state, HISTORY, period, [])
+    target = _file_calibration_night(
+        root, day=EVALUATION_DAY, run_id=EVALUATION_RUN, pairs=EVALUATION_PAIRS, first_index=4
+    )
+    return source, source_row, target
+
+
+def test_a_packed_upper_fit_scores_only_fresh_agreed_pairs_in_the_exact_attempt(
+    tmp_path: Path,
+) -> None:
+    state = tmp_path / "state"
+    source, source_row, target = prior_fit_replay(tmp_path)
+    result = review(target, state)
+    assert result.filed and result.row is not None
+    packed_source, evaluated = load_threshold_history(state, [FIT_DAY, EVALUATION_DAY])
+    assert packed_source == source_row
+    assert evaluated == result.row
+
+    evidence = packed_source.upper_fit_evidence
+    assert evidence is not None
+    fit = read_diagnostic_text(evidence, column="upper_fit_evidence", model=UpperFitEvidence)
+    assert source.filed_rows is not None and target.filed_rows is not None
+    trained = source.filed_rows[2:]
+    assert (fit.low, fit.high, fit.yes, fit.judge_temperature) == (0.89, 0.965, 1, 0.0)
+    assert fit.meaning_stamp.prompt_digest == trained[0].prompt_digest
+    assert fit.pair_keys == tuple(sorted(row.pair_key for row in trained))
+    assert len(fit.pair_keys) == packed_source.upper_usable_pairs_used == 3
+    overlap = target.filed_rows[0]
+    assert overlap.pair_key == trained[-1].pair_key
+    assert overlap.similarity_score != trained[-1].similarity_score
+    assert packed_source.judge_probability_status is JudgeProbabilityStatus.NO_REFERENCE_FIT
+
+    reference = evaluated.judge_probability_evidence
+    assert reference is not None
+    cohort = read_diagnostic_text(
+        reference, column="judge_probability_evidence", model=JudgeProbabilityEvidence
+    )
+    assert (cohort.source_date, cohort.source_run_id) == (FIT_DAY, FIT_RUN)
+    assert (cohort.pairs, cohort.yes, cohort.bins) == (3, 2, JUDGE_CONFIG.diagnostics.probability_bins)
+    assert evaluated.judge_probability_status is JudgeProbabilityStatus.MEASURED
+    intercept, slope = packed_source.upper_curve_intercept, packed_source.upper_curve_steepness
+    assert intercept is not None and slope is not None
+    low = 1 / (1 + exp(-(intercept + slope * 0.89)))
+    high = 1 / (1 + exp(-(intercept + slope * 0.965)))
+    assert high - low > 1 / cohort.bins  # Distinct bins; the two at low share a bin.
+    assert evaluated.judge_probability_brier_score == pytest.approx(
+        (low**2 + (1 - low)**2 + (1 - high)**2) / 3
+    )
+    assert evaluated.judge_probability_baseline_brier_score == pytest.approx(1 / 3)
+    assert evaluated.judge_probability_ece == pytest.approx((2 * abs(low - 0.5) + 1 - high) / 3)
+
+    retry = _file_calibration_night(
+        tmp_path,
+        day=EVALUATION_DAY,
+        run_id=EVALUATION_RUN,
+        pairs=EVALUATION_PAIRS,
+        first_index=4,
+        attempt=2,
+        returned=(1,),
+    )
+    shorter = review(retry, state, attempt=2)
+    assert shorter.filed and shorter.row is not None
+    (saved,) = load_threshold_history(state, [EVALUATION_DAY])
+    assert saved == shorter.row and saved.judge_probability_evidence is not None
+    retried = read_diagnostic_text(
+        saved.judge_probability_evidence, column="judge_probability_evidence",
+        model=JudgeProbabilityEvidence,
+    )
+    assert (retried.fit_sha256, retried.pairs, retried.yes) == (cohort.fit_sha256, 1, 0)
+    assert saved.judge_probability_brier_score == pytest.approx(low**2)
+    assert saved.judge_probability_baseline_brier_score == pytest.approx(1 / 9)

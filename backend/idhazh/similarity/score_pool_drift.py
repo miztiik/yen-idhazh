@@ -22,7 +22,7 @@ from idhazh.contracts.story_similarity_threshold_history_row import (
     StorySimilarityThresholdHistoryRow,
 )
 from idhazh.similarity.stamps import ScorerStamp
-from idhazh.similarity.thresholds_in_force import lookback_days
+from idhazh.similarity.thresholds_in_force import council_run_order, lookback_days
 
 # Change when the scoring or eligible canonical-pair membership rule changes, not when the
 # judge, draw cuts, or publication floor moves.
@@ -63,11 +63,6 @@ def score_pool_histogram(
     return ScorePoolHistogram(stamp=stamp, edges=edges, counts=tuple(counts))
 
 
-def _run_order(run_id: str) -> tuple[str, int]:
-    day, _, number = run_id.rpartition("-")
-    return day, int(number)
-
-
 def _baseline(
     target: ScorePoolHistogram,
     history: Sequence[StorySimilarityThresholdHistoryRow],
@@ -77,12 +72,12 @@ def _baseline(
     rules: ContentSimilarityDiagnosticsConfig,
 ) -> tuple[ScoreDriftBaseline, list[int]]:
     first = lookback_days(date, within_days=rules.score_baseline_lookback_days)[0]
-    before = _run_order(run_id)
+    before = council_run_order(run_id)
     newest: dict[str, tuple[tuple[str, int], StorySimilarityThresholdHistoryRow]] = {}
     for row in history:
         if not first <= row.date < date:
             continue
-        order = _run_order(row.run_id)
+        order = council_run_order(row.run_id)
         held = newest.get(row.date)
         if order < before and (held is None or order >= held[0]):
             newest[row.date] = order, row
