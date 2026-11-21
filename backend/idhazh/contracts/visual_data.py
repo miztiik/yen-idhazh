@@ -1,28 +1,7 @@
 """The chart data a reader's browser draws: one published file per visual.
 
-**The reader's browser draws the chart; the pipeline never draws one** (maintainer
-ruling, 2026-09-13,
-[`docs/architecture/publishing/visuals.md`](../../../docs/architecture/publishing/visuals.md)).
-Code finds the quantities, the model labels them and selects elements by id,
-the compiler turns plan plus elements into the data and its shape, and this is
-that data - the last thing the pipeline writes and the first thing the drawing
-code reads.
+**The reader's browser draws the chart; the pipeline never draws one**.
 
-It carries data, safe plan framing and one emphasized measured mark, never
-geometry, colours or markup. Titles and captions remain untrusted text.
-
-**Marks are a flat pool and the encoding names which of them fill which
-channel.** That is what makes a new visual type cost an enum member rather than
-a new document format - `line`, `pie` and `histogram` fill different roles over
-the same two members. It is also what makes a malformed drawing sayable: a
-`bar` whose `category` and `quantity` channels hold different counts is a
-picture that cannot be drawn, and a shape where each mark already carried its
-own name and its own length could not express one.
-
-**One home for `renderer_version`.** The day payload points at this file and
-records no version of its own. Two homes is how `spec_format` failed - a second
-name for a fact already carried, whose only possible contribution was to
-disagree with it (`visual_decision.py`, 2026-09-05T18:00).
 """
 
 from __future__ import annotations
