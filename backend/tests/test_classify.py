@@ -204,6 +204,26 @@ class TestTheSummarizeAndPlanOracle:
         assert validate_plan(plan, grounded, visuals=VISUALS) == []
         assert compile_chart(plan, grounded, visuals=VISUALS).data.type is VisualType.LINE
 
+    def test_a_referenced_forecast_date_is_prose_context_not_an_axis(self, article_ok: Article) -> None:
+        table, data = chart_data_over(article_ok, OIL_FORECAST)
+        choice = parse_summarize_and_plan(a_reply(
+            encodings={"points": [
+                {"quantity": "q1", "category": "l1"},
+                {"quantity": "q2", "category": "l1"},
+            ]},
+            focus="q1", title="Forecast growth through 2035", context=["d1"],
+        )).visual
+        plan, grounded = resolve_visual_choice(choice, data, OIL_FORECAST, table)
+        assert not plan.encodings.time
+        assert validate_plan(plan, grounded, visuals=VISUALS) == []
+        assert compile_chart(plan, grounded, visuals=VISUALS).data.title == choice.title
+        uncited, _ = resolve_visual_choice(
+            choice.model_copy(update={"context": []}), data, OIL_FORECAST, table
+        )
+        assert [r.check for r in validate_plan(uncited, grounded, visuals=VISUALS)] == [
+            ValidatorCheck.NUMERALS_MATCHED
+        ]
+
     @pytest.mark.parametrize(("form", "text", "encoding", "extra"), [
         (
             VisualType.SCATTER,

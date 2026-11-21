@@ -89,6 +89,7 @@ def _chart_reply_schema(
     else:
         fields["encodings"] = {"type": "object", "properties": {}, "additionalProperties": False}
         fields["focus"] = fields["title"] = fields["caption"] = null
+        del fields["context"]
     fields["whole"] = fields["whole"]["anyOf"][0] if composition else null
     if form is VisualType.STACKED_BAR:
         fields["measure"] = fields["measure"]["anyOf"][0]
@@ -136,8 +137,10 @@ def summarize_and_plan_schema(
             roles["points"].update(minItems=0, maxItems=0)
         if dates:
             roles["time"]["items"] = {"type": "string", "enum": dates}
+            answer_fields["context"]["items"] = roles["time"]["items"]
         else:
             roles["time"]["maxItems"] = 0
+            answer_fields["context"]["maxItems"] = 0
         for field in ("focus", "whole"):
             answer_fields[field]["anyOf"] = [quantity, {"type": "null"}]
     definitions[PlanChoice.__name__] = {

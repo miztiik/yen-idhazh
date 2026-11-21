@@ -89,6 +89,8 @@ and a categorical comparison cites a short label span next to each reading.
 Label choices are code-supplied references to literal phrases in the fenced
 data, not assigned names or a pre-paired data set. The model picks labels and
 readings; code checks each reference and cuts the label from source.
+An optional date reference can ground a date mentioned in the title or
+caption without putting it on the chart's axis.
 
 ## One call writes the summary and plans the visual, and the article is read once
 

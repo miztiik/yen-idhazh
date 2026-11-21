@@ -79,6 +79,7 @@ class PlanChoice(Model):
     measure: PlanTitle | None = None
     title: PlanTitle | None
     caption: PlanCaption | None
+    context: _Dates = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _chart_words_are_not_data(self) -> Self:
@@ -352,6 +353,11 @@ def resolve_visual_choice(
     ids = list(dict.fromkeys(cited for ids in encodings.filled().values() for cited in ids))
     if whole is not None and whole.element_id not in ids:
         ids.append(whole.element_id)
+    if choice.context:
+        # Context dates can justify prose, but never participate in an encoding.
+        ids = list(dict.fromkeys([
+            *ids, *(_source_ref(code, request, "context").element_id for code in choice.context),
+        ]))
     plan = VisualPlan(
         version=VisualPlan.schema_version(), decision=PlanDecision.VISUAL,
         type=form, purpose=_PURPOSE[form], encodings=encodings, element_ids=ids,
