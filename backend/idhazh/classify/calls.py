@@ -84,12 +84,11 @@ def _chart_reply_schema(
             "properties": {key: value for key, value in roles.items() if key in allowed},
             "required": required_roles,
         }
-        fields["focus"] = fields["focus"]["anyOf"][0]
         fields["title"] = fields["title"]["anyOf"][0]
         required.append("context")
     else:
         fields["encodings"] = {"type": "object", "properties": {}, "additionalProperties": False}
-        fields["focus"] = fields["title"] = fields["caption"] = null
+        fields["title"] = fields["caption"] = null
         del fields["context"]
     fields["whole"] = fields["whole"]["anyOf"][0] if composition else null
     if form is VisualType.STACKED_BAR:
@@ -142,8 +141,7 @@ def summarize_and_plan_schema(
         else:
             roles["time"]["maxItems"] = 0
             answer_fields["context"]["maxItems"] = 0
-        for field in ("focus", "whole"):
-            answer_fields[field]["anyOf"] = [quantity, {"type": "null"}]
+        answer_fields["whole"]["anyOf"] = [quantity, {"type": "null"}]
     definitions[PlanChoice.__name__] = {
         "anyOf": [_chart_reply_schema(form, answer, roles) for form in (None, *forms)]
     }
