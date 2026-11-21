@@ -73,7 +73,6 @@ async function consoleColors(style, mode, theme, choice) {
 		'chart-axis': colors.chart_axis, 'chart-grid': colors.chart_grid, 'chart-label': colors.text_secondary,
 		'chart-measure': colors.chart_measure,
 		'chart-marker': colors.text_secondary, 'chart-readout-bg': colors.inset, 'chart-readout-text': colors.text,
-		'chart-identity-highlight': mode === 'light' ? colors.surface : colors.text,
 		'item-edge': colors.rule,
 		'shadow-sm': shadow(depth.panel, theme.elevation_enabled),
 		'shadow-panel': shadow(depth.panel, theme.elevation_enabled),

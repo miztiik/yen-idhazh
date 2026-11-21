@@ -1,6 +1,6 @@
 # How the machine's work is drawn, and what may not be pooled
 
-**Last Updated**: 2026-11-18
+**Last Updated**: 2026-11-21
 
 The Hardware route and the run timeline draw one machine's work. One measurement
 shapes all of it: **a run does not get one machine.** Measured 2026-09-17 over
@@ -49,12 +49,9 @@ The chart rules these panels obey are
  A fingerprint groups reported characteristics, not physical hosts. Repeated
  rows remain counted as jobs. The ledger contains no L2 capacity, so no L2
  aggregate is offered and the limitation is printed beside the chart.
-- **Each measured capacity gets the same decorative gradient treatment.**
- The existing gradient switch keeps fills flat when false. When true, an
- opaque lighter-to-base gradient restarts within each capacity subsegment or
- job square, with matching swatches. Existing appearance tokens and the
- uniform tint floor supply the stops in both themes. Neither tint nor gradient
- carries speed, utilization, health or probability.
+- **Each measured capacity gets one flat fill.** The stack, job squares,
+ legend and readouts share the same paint from the Console's categorical
+ slots. Colour does not carry speed, utilization, health or probability.
 - **The name is on the row, always.** Colour here encodes a fact, so it is
  semantic and may never be the only carrier of it. The rankings use named rows,
  not a scatter that cannot carry a name per mark.
@@ -323,9 +320,8 @@ from the committed rows rather than argued with.
  claiming equivalent performance or unique host counts. Closely spaced tints
  obscure the boundaries between capacity groups, especially in narrow stacks.
  Sampling the full configured palette separates those groups; numerical legend
- order carries rank instead of darkness. The tint floor and gradient switch
- still control the decorative fill. Daily count ranking may move segments
- without changing their capacity colour.
+ order carries rank instead of darkness. Daily count ranking may move
+ segments without changing their capacity colour.
 
 L2 aggregation requires a separately declared and collected L2-capacity field;
 historical L2 cannot be inferred from L3 or CPU names. Unique physical-machine

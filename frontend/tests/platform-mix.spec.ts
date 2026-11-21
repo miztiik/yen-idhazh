@@ -47,7 +47,6 @@ import {
 } from '../src/lib/charts/machine-colour';
 import { hoverReading } from '../src/lib/charts/readout-hover';
 import { PALETTE } from '../src/lib/charts/theme';
-import { schemePiYG } from 'd3-scale-chromatic';
 import type { Row, SliceResult } from '../src/lib/data/slice-shapes';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -101,7 +100,6 @@ function options(jobs: readonly FleetJob[], over: Partial<FleetOptions> = {}): F
 	const config = knobs();
 	return {
 		ramp: rampOf(jobs),
-		appearance: { gradients: true, floor: config.machine_colour_floor_share, palette: 'piyg' },
 		start: '2026-09-26',
 		end: '2026-09-28',
 		windowDays: 3,
@@ -161,22 +159,17 @@ test('L3 groups combine vendors, count jobs rather than fingerprints, and preser
 		['0 MiB L3', [0, 1]], ['L3 not measured', [0, 1]]
 	]);
 	expect(view.placements).toBe(6);
-	const colours = view.rows.slice(0, -1).map((row) => row.colour);
-	expect(new Set(colours).size).toBe(3);
-	expect(colours[0]).toBe(schemePiYG[11][0]);
-	expect(colours.at(-1)).toBe(schemePiYG[11].at(-1));
-	expect(view.rows.at(-1)?.parts[0].gradient).toBeNull();
+	const colours = ['var(--chart-1)', 'var(--chart-4)', 'var(--chart-7)', 'var(--chart-8)'];
+	expect(view.rows.map((row) => row.colour)).toEqual(colours);
+	expect(fleetReadout(view).series.map((series) => series.swatch)).toEqual(colours);
+	expect(fleetSeries(view).map((series) => series.fill)).toEqual(colours);
 	expect(fleetSummary(view).series[0].values).toEqual(['3', '3']);
 	expect(view.lines[0].map((line) => line.machine)).toContain('Intel Xeon');
 	expect(view.lines[0].map((line) => line.l3Cache)).toEqual(['32 MiB L3', '32 MiB L3', '32 MiB L3']);
 	expect(fleetSeries(view).map((series) => series.points.map((point) => point.value)))
 		.toEqual([[0, 1], [3, 0], [0, 1], [0, 1]]);
 	const narrow = fleetCacheView(jobs, options(jobs, { end: '2026-09-26', windowDays: 1 }));
-	expect(narrow.rows[0].parts[0].swatch).toBe(view.rows[1].parts[0].swatch);
-	const flat = fleetCacheView(jobs, options(jobs, {
-		appearance: { ...options(jobs).appearance, gradients: false }
-	}));
-	expect(flat.rows.every((row) => row.parts[0].gradient === null)).toBe(true);
+	expect(narrow.rows[0].colour).toBe(view.rows[1].colour);
 	const unnamed = fleetJobs([job({
 		date: '2026-09-26', fingerprint: null, cpu_model: null, l3_cache_bytes: 32 * 2 ** 20
 	})]);
@@ -359,7 +352,7 @@ test.describe('which kinds get a row of their own', () => {
 		expect(untimed.note).toBe('Speed not recorded');
 		expect(untimed.members.sort()).toEqual(['Untimed One', 'Untimed Two']);
 		expect(fleetSeries(view).map((series) => series.label)).toEqual(['v1:t1', 'v1:u1', 'v1:u2']);
-		expect(fleetSeries(view).every((series) => series.gradient !== undefined && !series.hatched)).toBe(true);
+		expect(fleetSeries(view).every((series) => !series.hatched)).toBe(true);
 	});
 });
 
@@ -416,8 +409,8 @@ test('categorical identity and qualified names survive presets, row order, speed
 	const changed = jobs.map((job) => ({ ...job, rate: job.rate === null ? null : 100 - job.rate }));
 	const faster = fleetView(changed, { ...full, ramp: rampOf(changed) });
 	const paints = (view: ReturnType<typeof fleetView>) =>
-		new Map(view.rows.flatMap((row) => row.parts.map(({ key, label, colour, gradient }) =>
-			[key, { label, colour, gradient }] as const)));
+		new Map(view.rows.flatMap((row) => row.parts.map(({ key, label, colour }) =>
+			[key, { label, colour }] as const)));
 	const known = paints(wide);
 	for (const [key, paint] of paints(narrow)) expect(paint, key).toEqual(known.get(key));
 	for (const [key, paint] of paints(faster)) expect(paint, key).toEqual(known.get(key));
@@ -426,11 +419,9 @@ test('categorical identity and qualified names survive presets, row order, speed
 		.toEqual(['Twin (kind 1)', 'Twin (kind 2)', 'Twin (kind 3)']);
 	const parts = wide.rows.flatMap((row) => row.parts);
 	expect(parts.filter((part) => part.key !== UNRECORDED_KEY).every((part) =>
-		schemePiYG[schemePiYG.length - 1].includes(part.colour))).toBe(true);
-	expect(parts.filter((part) => part.key !== UNRECORDED_KEY).every((part) =>
-		part.token !== '--chart-8' && part.gradient !== null)).toBe(true);
+		part.token !== '--chart-8' && PALETTE.includes(part.token) && part.colour === `var(${part.token})`)).toBe(true);
 	expect(parts.find((part) => part.key === UNRECORDED_KEY)).toMatchObject({
-		token: '--chart-8', gradient: null, colour: 'var(--chart-8)'
+		token: '--chart-8', colour: 'var(--chart-8)'
 	});
 	expect(parts.find((part) => part.key === 'v1:untimed')?.note).toBe('Speed not recorded');
 	expect(parts.find((part) => part.key === 'v1:zero')?.note).toBe('0 tokens a second');
@@ -438,10 +429,6 @@ test('categorical identity and qualified names survive presets, row order, speed
 	expect(new Set(parts.map((part) => part.label)).size).toBe(parts.length);
 	expect(new Set(parts.map((part) => part.colour)).size).toBeLessThan(parts.length);
 	expect(fleetSeries(wide)).toHaveLength(parts.length);
-	const flat = fleetView(jobs, { ...full, appearance: { ...full.appearance, gradients: false } });
-	expect(fleetSeries(flat).every((series) => series.gradient === undefined)).toBe(true);
-	expect(flat.rows.flatMap((row) => row.parts.map((part) => [part.key, part.colour])))
-		.toEqual(wide.rows.flatMap((row) => row.parts.map((part) => [part.key, part.colour])));
 });
 
 test('compact mark hover and complete non-hover details quote the same machine-day counts, including zeros', () => {
@@ -460,7 +447,7 @@ test('compact mark hover and complete non-hover details quote the same machine-d
 			expect(pointed.heading).toBe(`${view.days[day]} UTC`);
 			expect(pointed.entries.map(({ label, value }) => [label, value]))
 				.toEqual([[part.label, `${part.counts[day]} of 2 recorded jobs`]]);
-			expect(pointed.entries[0].swatch).toBe(part.swatch);
+			expect(pointed.entries[0].swatch).toBe(part.colour);
 			expect(details.series.find((series) => series.label === part.label)?.values[day])
 				.toBe(String(part.counts[day]));
 		}

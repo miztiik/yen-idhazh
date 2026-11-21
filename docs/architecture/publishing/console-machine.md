@@ -1,6 +1,6 @@
 # What the Hardware route draws
 
-**Last Updated**: 2026-11-18
+**Last Updated**: 2026-11-21
 
 `/console/machine/` asks what machine the work actually got and how much
 resource headroom that work left.
@@ -362,24 +362,12 @@ constraints, processor contention or model paging. Those three diagnostic
 panels are permanently absent, without disclosures or relocations. Historical
 mix is retained but is not a substitute for their lost detail.
 
-Machine identity uses D3's built-in [PiYG scheme](https://d3js.org/d3-scale-chromatic/diverging#schemePiYG) through the existing
-`chart.palette` selector, aligned with the rest of the console. Its widest built-in
-scheme supplies the ordinal slots; reused slots never merge identities. Each known machine has the
-same optional opaque lighter-to-base treatment, restarting inside its segment
-or job square. Missing speed does not remove identity; missing identity stays
-neutral. Top-kind selection and folded totals remain as compact legend groups.
-Every UTC day orders its actual machine segments from largest count at the
-bottom to smallest at the top, independently of other days. Folded identities
-remain separate segments even when daily ranking parts them. Their counts still
-sum exactly to the group total. The small-cohort job squares use the same daily
-count ordering.
-
-`d3-scale-chromatic` supplies the published colour schemes; no palette is
-hand-authored here. Existing D3 scale/color dependencies are reused. Only named
-schemes are imported, rather than another chart engine; its upstream complete
-minified distribution is about 20 KB before tree shaking, not the browser delta.
-Pale machine fills and their swatches retain a configured neutral edge, so a
-stock midpoint remains visible without changing its D3 colour or count.
+Placement history samples the shared Console palette by reported L3 capacity
+over the widest host query. Reused colours never merge capacities; unmeasured
+L3 stays neutral. The same flat colour appears on each capacity's marks and
+swatches. Every UTC day orders its segments by that day's counts, largest at
+the bottom. Below the placement floor, job squares use the same count order.
+CPU names and identity qualifiers stay in the job details.
 
 Framing is one context line and a compact identity key. Below the plot are only
 the selected UTC day, its recorded-job total and a short selection hint. Full

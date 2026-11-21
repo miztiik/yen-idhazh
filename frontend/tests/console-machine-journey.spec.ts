@@ -112,8 +112,14 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 	await page.getByRole('button', { name: 'Switch to the light theme' }).click();
 	await history.screenshot({ path: test.info().outputPath('hardware-cache-wide-light.png') });
 	await page.getByRole('button', { name: 'Switch to the dark theme' }).click();
-	const square = history.locator('[data-fleet-square]:not([data-fleet-square="unrecorded"])').first();
+	const square = history.locator('[data-fleet-square]:not([data-fleet-square="l3:unmeasured"])').first();
 	await square.scrollIntoViewIfNeeded();
+	const key = await square.getAttribute('data-fleet-square');
+	const swatch = cacheLegend.locator(`[data-fleet-kind="${key}"] > .chip`);
+	const fill = await square.evaluate((node) => getComputedStyle(node).fill);
+	expect(fill, 'the job square uses a solid fill').toMatch(/^rgb\(/);
+	await expect(swatch).toHaveCSS('background-image', 'none');
+	await expect(swatch).toHaveCSS('background-color', fill);
 	await square.hover();
 	const machineHover = page.locator('[data-chart-tooltip="machine-fleet"]');
 	await expect(machineHover).toBeVisible();
@@ -122,13 +128,6 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 	await expect(machineHover).toContainText(/\d+ of \d+ recorded jobs/);
 	await expect(machineHover).not.toContainText('tokens a second');
 	await expect(machineHover.locator('p')).toHaveCount(0);
-	expect(await square.evaluate((node) => {
-		if (!(node instanceof SVGElement)) throw new Error('Expected the actual job square.');
-		const id = /^url\(["']?#([^"')]+)["']?\)/.exec(node.style.fill)?.[1];
-		const gradient = id === undefined ? null : document.getElementById(id);
-		return gradient instanceof SVGLinearGradientElement &&
-			new Set([...gradient.querySelectorAll('stop')].map((stop) => getComputedStyle(stop).stopColor)).size > 1;
-	}), 'the actual job square resolves to a gradient with distinct rendered stops').toBe(true);
 	const day = (await machineHover.locator('strong').textContent())!.replace(' UTC', '');
 	const machineCount = (await machineHover.locator('dd').textContent())!.split(' of ')[0];
 	const machineName = (await machineHover.locator('dt').textContent())!.trim();

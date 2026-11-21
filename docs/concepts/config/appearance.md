@@ -1,6 +1,6 @@
 # What the page is drawn from
 
-**Last Updated**: 2026-11-19
+**Last Updated**: 2026-11-21
 
 Every knob a reader's page or an operator's console is drawn from: the file that
 owns them, the rule that decides which file owns a key when two name it, the
@@ -274,12 +274,12 @@ retirement does not remove them. Design review follows the
 [representative-browser policy](../design-system.md#sufficiency-is-a-gate-not-a-taste),
 not a plot-width quota or a panel-picture matrix.
 
-Machine-history colour identifies full machine identities, not speed.
-The committed `chart.palette` is `categorical`, so ordinary category marks and
-machine identities use the same `console_style.colors` palette in each theme.
+The committed `chart.palette` is `categorical`. Console category marks,
+including Hardware's reported L3 groups, use the `console_style.colors`
+palette in each theme.
 The selector still accepts `piyg`, `spectral`, and `sequential` (D3 Blues).
-`console_style.colors.{light,dark}.chart_measure` independently sets the slate
-blue used by ordinary single-measure charts. Older appearance files use the
+`console_style.colors.{light,dark}.chart_measure` independently sets the violet
+used by ordinary single-measure charts. Older appearance files use the
 declared default for this role. Reader colours remain untouched.
 
 The CSS producer uses D3 colour/interpolation and build-time Culori contrast
@@ -300,12 +300,10 @@ These tools load through native asynchronous ESM only for a stock-palette choice
 callers await the completed CSS. Default and explicit
 categorical CSS remain dependency-free for native contract readers; selecting a
 stock scheme without its build tools fails rather than falling back.
-`theme.gradient_enabled` switches the uniform categorical shading on or off;
-false keeps the same machine colour flat. `machine_colour_floor_share` supplies
-the common highlight share, with the remaining share the category hue and the
-bottom the full hue. The generated highlight reuses the configured light
-surface or dark text neutral, so both themes stay opaque without a hand-authored palette.
-These existing settings retain their values, defaults and valid prior inputs.
+`theme.gradient_enabled` still controls the Console wordmark when an alternative
+palette is selected; it does not shade categorical chart marks or their swatches.
+`machine_colour_floor_share` remains a setting of the ordered speed ramp, not
+of the capacity fills.
 
 `machine_colour_stops` still supplies the whole-record median-speed groups used
 by the compact legend groups and folds; it does not select category colours or

@@ -36,7 +36,7 @@ export const SERIES_TOKENS = {
 	carriage: '--chart-7',
 	'length-limit': '--chart-4',
 	'other-ending': '--chart-2',
-	'ended-on-own': '--chart-axis'
+	'ended-on-own': '--chart-5'
 } as const satisfies Record<string, ChartToken | null>;
 
 export type Quantity = keyof typeof SERIES_TOKENS;

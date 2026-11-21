@@ -32,7 +32,6 @@
 		windowDays,
 		lost,
 		recording,
-		gradients,
 		chart,
 		knobs,
 		recordRows
@@ -47,12 +46,11 @@
 		lost: LostDay[];
 		/** False where the machine record is switched off. */
 		recording: boolean;
-		gradients: boolean;
 		chart: ChartConfig;
 		recordRows: readonly Row[];
 		knobs: Pick<
 			ConsoleConfig,
-			'fleet_min_rows' | 'fleet_top_kinds' | 'fleet_dot_max_px' | 'machine_colour_floor_share'
+			'fleet_min_rows' | 'fleet_top_kinds' | 'fleet_dot_max_px'
 		>;
 	} = $props();
 
@@ -75,7 +73,6 @@
 	const view = $derived(
 		fleetCacheView(jobs, {
 			ramp,
-			appearance: { gradients, floor: knobs.machine_colour_floor_share, palette: chart.palette },
 			start: span?.start ?? start,
 			end: span?.end ?? end,
 			windowDays,
@@ -227,7 +224,7 @@
 					style:grid-template-rows={`repeat(${legendRows}, auto)`}>
 					{#each view.rows as row (row.key)}
 						<li class="key-kind" data-fleet-kind={row.key}>
-							<span class="chip" style:background={row.parts[0].swatch}></span>{row.label}
+							<span class="chip" style:background-color={row.colour}></span>{row.label}
 						</li>
 					{/each}
 				</ul>

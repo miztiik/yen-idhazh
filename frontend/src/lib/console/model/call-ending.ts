@@ -23,7 +23,7 @@ export function callEnding(rows: readonly Row[]): { series: SeriesInput[]; calls
 		length: totals.get('length') ?? 0,
 		series: reasons.map((reason) => ({
 			label: reason === 'length' ? 'cut off at the length limit' : reason === 'stop' ? 'ended on its own' : reason,
-			token: reason === 'length' ? SERIES_TOKENS['length-limit'] : reason === 'stop' ? '--chart-axis' : SERIES_TOKENS['other-ending'],
+			token: reason === 'length' ? SERIES_TOKENS['length-limit'] : reason === 'stop' ? SERIES_TOKENS['ended-on-own'] : SERIES_TOKENS['other-ending'],
 			points: [...dates].sort(([a], [b]) => a.localeCompare(b)).map(([date, counts]) =>
 				({ date, value: counts.get(reason) ?? 0 }))
 		}))
