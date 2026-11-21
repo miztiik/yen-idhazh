@@ -10,14 +10,23 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
+from math import log, nextafter
 from pathlib import Path
 from typing import Final
 
 import pytest
-from support.judged_pairs import DATE, a_night_of_pairs, a_reading, a_saver, a_verdict_file
+from support.judged_pairs import (
+    CONFIG_VERSIONS,
+    DATE,
+    a_night_of_pairs,
+    a_reading,
+    a_saver,
+    a_verdict_file,
+)
 from support.ledger import seed_compact_index
 from support.paths import CONFIG_DIR
 from support.threshold_nights import LOOKBACK, RULES, a_day, pairs_beside
+from test_content_similarity_judge_ledger_reads import a_night_with_pool
 
 from idhazh import atomic_write, ledger
 from idhazh.content_similarity_judge import settings as judge_settings
@@ -27,16 +36,26 @@ from idhazh.content_similarity_judge.ledger_reads import (
     review_days,
 )
 from idhazh.content_similarity_judge.tenant import JUDGE_ID
+from idhazh.contracts.base import derive_text_digest
 from idhazh.contracts.file_envelope import Period
+from idhazh.contracts.knobs.content_similarity_judge import ContentSimilarityDiagnosticsConfig
 from idhazh.contracts.ledger_index import CompactEntry, EntryState
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.story_similarity_diagnostics import SampleStatus
+from idhazh.contracts.story_similarity_diagnostics import (
+    SampleStatus,
+    ScoreDriftBaseline,
+    ScoreDriftSource,
+    ScoreDriftStatus,
+    ScorePoolHistogram,
+    diagnostic_text,
+)
 from idhazh.contracts.story_similarity_pair_verdict import StorySimilarityPairVerdict
 from idhazh.contracts.story_similarity_threshold_history_row import (
     StorySimilarityThresholdHistoryRow,
     ThresholdHoldReason,
 )
 from idhazh.council import metrics_sink
+from idhazh.similarity.score_pool_drift import drift_columns, score_pool_histogram
 from idhazh.similarity.thresholds_in_force import thresholds_in_force
 from idhazh.stages import file_pair_verdicts, review_thresholds
 
@@ -47,6 +66,114 @@ JUDGE_CONFIG: Final = judge_settings.load(CONFIG_DIR)
 #: Two pairs in the fully similar end and one in the fully dissimilar end, so each lightly
 #: sampled end has a pool and a handful of answers. Every slice held three times what was drawn.
 ENDS: Final = [(0.95, "YES"), (0.96, "YES"), (0.40, "NO")]
+DRIFT_DATE: Final = "2026-11-20"
+DRIFT_RUN: Final = "2026-11-21-10"
+RECIPE: Final = "b" * 64
+
+
+def _pool(counts: tuple[int, ...]) -> ScorePoolHistogram:
+    return ScorePoolHistogram(stamp=RECIPE, edges=(-1.0, -0.5, 0.0, 0.5, 1.0), counts=counts)
+
+
+def _history(
+    date: str, run_id: str, pool: ScorePoolHistogram | None
+) -> StorySimilarityThresholdHistoryRow:
+    row = review_thresholds.build_threshold_row(
+        date,
+        run_id=run_id,
+        window=(),
+        history=(),
+        draw_rows=a_night_of_pairs([(0.97, "YES")], answered=False, date=date, run_id=run_id),
+        readings=(),
+        expected_shards=1,
+        rules=RULES,
+        lookback_days_of_the_draw=LOOKBACK,
+        versions=CONFIG_VERSIONS,
+    )
+    assert row is not None
+    return row if pool is None else a_night_with_pool(row, pool)
+
+
+def test_the_fixed_score_bins_include_the_endpoints_and_put_an_edge_in_the_higher_bin() -> None:
+    pool = score_pool_histogram(
+        (-1.0, nextafter(0.1, 0.0), 0.1, 1.0), bins=20, stamp=RECIPE
+    )
+    assert {index: n for index, n in enumerate(pool.counts) if n} == {0: 1, 10: 1, 11: 1, 19: 1}
+
+
+def test_drift_uses_smoothed_psi_and_unsmoothed_binned_distances() -> None:
+    target = _pool((8, 0, 0, 0))
+    history = [_history("2026-11-19", "2026-11-20-8", _pool((0, 0, 0, 2)))]
+    rules = ContentSimilarityDiagnosticsConfig(
+        score_bins=4, score_baseline_days=1, score_psi_share_floor=0.125
+    )
+    cells = drift_columns(target, history, date=DRIFT_DATE, run_id=DRIFT_RUN, rules=rules)
+
+    # Flooring makes the two occupied-bin shares 8/11 versus 1/11 for PSI.
+    # The unsmoothed CDFs differ by 1 across the 1.5 between the outer midpoints.
+    assert cells["score_psi"] == pytest.approx((14 / 11) * log(8))
+    assert cells["score_wasserstein_distance"] == 1.5
+    assert cells["score_ks_distance"] == 1.0
+
+    empty = _pool((0, 0, 0, 0))
+    assert drift_columns(empty, history, date=DRIFT_DATE, run_id=DRIFT_RUN, rules=rules) == {
+        "score_pool_histogram": diagnostic_text(empty),
+        "score_drift_status": ScoreDriftStatus.EMPTY_POOL,
+    }
+
+
+def test_drift_names_only_the_latest_earlier_run_per_compatible_day_and_pools_counts() -> None:
+    low = _pool((8, 0, 0, 0))
+    high = _pool((0, 0, 0, 4))
+    target = _pool((16, 0, 0, 8))
+    other_scorer = ScorePoolHistogram(stamp="c" * 64, edges=low.edges, counts=low.counts)
+    other_edges = ScorePoolHistogram(
+        stamp=RECIPE, edges=(-1.0, -0.25, 0.0, 0.25, 1.0), counts=high.counts
+    )
+    history = [
+        _history("2026-11-19", "2026-11-21-9", low),
+        _history("2026-11-19", "2026-11-21-2", high),
+        _history("2026-11-19", "2026-11-20-99", high),
+        _history("2026-11-19", DRIFT_RUN, high),  # a repair from this run
+        _history("2026-11-19", "2026-11-21-11", high),
+        _history("2026-11-18", "2026-11-20-2", low),
+        _history("2026-11-18", "2026-11-20-3", other_scorer),
+        _history("2026-11-17", "2026-11-19-1", other_edges),
+        _history("2026-11-16", "2026-11-19-1", high),
+        _history("2026-11-15", "2026-11-19-1", None),
+        _history("2026-11-14", "2026-11-19-1", _pool((0, 0, 0, 0))),
+        _history("2026-11-13", "2026-11-19-1", low),  # outside the lookback
+    ]
+    rules = ContentSimilarityDiagnosticsConfig(
+        score_bins=4, score_baseline_days=2, score_baseline_lookback_days=6
+    )
+    cells = drift_columns(target, history, date=DRIFT_DATE, run_id=DRIFT_RUN, rules=rules)
+    sources = (
+        ScoreDriftSource(
+            date="2026-11-19",
+            run_id="2026-11-21-9",
+            histogram_sha256=derive_text_digest(diagnostic_text(low)),
+        ),
+        ScoreDriftSource(
+            date="2026-11-16",
+            run_id="2026-11-19-1",
+            histogram_sha256=derive_text_digest(diagnostic_text(high)),
+        ),
+    )
+    assert cells["score_drift_status"] == ScoreDriftStatus.MEASURED
+    assert cells["score_drift_baseline"] == diagnostic_text(
+        ScoreDriftBaseline(sources=sources, required_days=2, share_floor=rules.score_psi_share_floor)
+    )
+    assert cells["score_psi"] == cells["score_wasserstein_distance"] == cells["score_ks_distance"] == 0
+
+    rules.score_baseline_days = 3
+    assert drift_columns(target, history, date=DRIFT_DATE, run_id=DRIFT_RUN, rules=rules) == {
+        "score_drift_status": ScoreDriftStatus.INSUFFICIENT_BASELINE,
+        "score_pool_histogram": diagnostic_text(target),
+        "score_drift_baseline": diagnostic_text(
+            ScoreDriftBaseline(sources=sources, required_days=3, share_floor=rules.score_psi_share_floor)
+        ),
+    }
 
 
 @dataclass(frozen=True, slots=True)

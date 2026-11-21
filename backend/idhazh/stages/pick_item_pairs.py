@@ -17,15 +17,20 @@ import csv
 import io
 from collections import Counter
 from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
 
-from idhazh import assemble, atomic_write, config
+from idhazh import assemble, atomic_write, config, run_context
 from idhazh.content_similarity_judge import settings as judge_settings
 from idhazh.content_similarity_judge.ledger_reads import load_threshold_history
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.digest_day import DigestItem
+from idhazh.contracts.story_similarity_diagnostics import ScorePoolHistogram
 from idhazh.contracts.story_similarity_pair_verdict import StorySimilarityPairVerdict
+from idhazh.contracts.story_similarity_score_pool import ContentSimilarityScorePool
+from idhazh.embed import ENCODER_DIRECTORY
 from idhazh.similarity import selection
+from idhazh.similarity.score_pool_drift import pool_recipe_stamp, score_pool_histogram
 from idhazh.similarity.stamps import ScorerStamp, scorer_inputs
 from idhazh.similarity.thresholds_in_force import (
     ThresholdsInForce,
@@ -34,6 +39,12 @@ from idhazh.similarity.thresholds_in_force import (
 )
 from idhazh.stages.assemble import _earlier_days
 from idhazh.stages.common import LOG, _load_day
+
+
+@dataclass(frozen=True, slots=True)
+class PickReport:
+    draw: selection.Draw
+    score_pool_written: bool
 
 
 def _within_the_unit_range(value: float) -> float:
@@ -108,6 +119,29 @@ def _as_csv(rows: list[StorySimilarityPairVerdict]) -> str:
     return buffer.getvalue()
 
 
+def _write_score_pool(
+    path: Path, *, date: str, run_id: str, histogram: ScorePoolHistogram
+) -> bool:
+    payload = ContentSimilarityScorePool(
+        version=ContentSimilarityScorePool.schema_version(),
+        date=date,
+        run_id=run_id,
+        attempt=run_context.run_attempt(),
+        histogram=histogram,
+    )
+    try:
+        atomic_write.write_atomic(path, payload.to_json())
+    except OSError as error:
+        LOG.warning(
+            "pick-item-pairs could not write the score pool date=%s run=%s reason=%s",
+            date,
+            run_id,
+            type(error).__name__,
+        )
+        return False
+    return True
+
+
 def stage_pick_item_pairs(
     date: str,
     *,
@@ -116,7 +150,8 @@ def stage_pick_item_pairs(
     draw_path: Path,
     digest_root: Path,
     state_dir: Path,
-) -> selection.Draw:
+    score_pool_path: Path | None = None,
+) -> PickReport:
     """Score one day's cross-source pairs, cut them into slices, deal the shards.
 
     **This is the day's second scoring pass and it is not free.** The same
@@ -138,7 +173,8 @@ def stage_pick_item_pairs(
     such a pair cannot change what publishes, and it already had its turn the
     night the later of the two was new. `assemble.cross_source_pairs` does not
     yield it, which leaves the budget to pairs that have not had theirs. **A pair
-    of addresses is drawn once**, whatever number of items carry them.
+    of addresses is drawn once**, whatever number of items carry them. When asked
+    for a histogram, tally this same distinct pool before cutting any slices.
 
     **Pairs at every score are drawn**, from -1 to 1. Which ones, and how many, is
     the slice rule in `idhazh.similarity.selection`: the budget goes mostly to
@@ -181,7 +217,9 @@ def stage_pick_item_pairs(
             draw_path.name,
         )
         atomic_write.write_atomic(draw_path, _as_csv([]))
-        return selection.Draw(taken=[], pairs_available=0)
+        return PickReport(
+            draw=selection.Draw(taken=[], pairs_available=0), score_pool_written=False
+        )
 
     earlier = _earlier_days(date, window_hours=window_hours)
     by_id: dict[str, DigestItem] = {item.item_id: item for item in day.items}
@@ -200,19 +238,36 @@ def stage_pick_item_pairs(
         lower_start=execution.thresholds.lower_start,
         upper_start=execution.thresholds.upper_start,
     )
-    drawn = selection.select(
-        selection.one_pair_a_key(
-            assemble.cross_source_pairs(
-                day.items,
-                day.embeddings,
-                same_story=same_story,
-                group_identical_titles=settings.app.assemble.group_identical_titles,
-                window_hours=window_hours,
-                earlier=earlier,
-            ),
-            address_of=address_of,
-            own={item.item_id for item in day.items},
+    group_identical_titles = settings.app.assemble.group_identical_titles
+    pool = selection.one_pair_a_key(
+        assemble.cross_source_pairs(
+            day.items,
+            day.embeddings,
+            same_story=same_story,
+            group_identical_titles=group_identical_titles,
+            window_hours=window_hours,
+            earlier=earlier,
         ),
+        address_of=address_of,
+        own={item.item_id for item in day.items},
+    )
+    score_pool_written = False
+    if score_pool_path is not None:
+        histogram = score_pool_histogram(
+            (_within_the_unit_range(pair.score) for pair in pool),
+            bins=execution.diagnostics.score_bins,
+            stamp=pool_recipe_stamp(
+                stamp,
+                encoder_revision=ENCODER_DIRECTORY,
+                group_identical_titles=group_identical_titles,
+                window_hours=window_hours,
+            ),
+        )
+        score_pool_written = _write_score_pool(
+            score_pool_path, date=date, run_id=run_id, histogram=histogram
+        )
+    drawn = selection.select(
+        pool,
         lower=followed.lower,
         upper=followed.upper,
         draw=draw,
@@ -249,4 +304,4 @@ def stage_pick_item_pairs(
         shards,
         draw_path.name,
     )
-    return drawn
+    return PickReport(draw=drawn, score_pool_written=score_pool_written)

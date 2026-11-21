@@ -108,7 +108,9 @@ by the judging stage and is described under [the known-answer pairs](#the-known-
   runs in the collecting job right after the filing. It calls no model. It reads the
   last seven nights of `pair-verdicts` for the fit. It uses the draw and this attempt's
   exact filed batch for the sample readings, and the reports for runner and known-answer
-  readings. It files both the threshold decisions and those readings in `threshold-history`.
+  readings. It uses the [full-pool histogram](#which-pairs-the-draw-can-take) carried by
+  preparation for drift. It files the threshold decisions and the readings in
+  `threshold-history`.
 
 If the review fails, the night keeps its pair rows and has no threshold row. The
 scheduler reads `pair-verdicts` only, so it does not name the night again; the runners'
@@ -130,6 +132,16 @@ night the later of the two was new. A pair of addresses is kept once: a story
 republished on a later day keeps its address and takes a new item id, so one pair of
 addresses can arrive as two pairs of items, and the copy made of the night's own items
 is the one kept, because the judge reads the night's own copy of an address.
+
+The picker counts this distinct pool in equal-width bins from -1 to 1 before drawing.
+An interior edge goes in the higher bin; 1 goes in the last bin. The histogram's stamp
+names the scoring and pool rules, including the scorer model, vendored encoder revision,
+cosine weight, headline-match setting and earlier-day time window. Moving cuts, judge
+settings and the publication floor are not part of that stamp. The histogram travels
+beside the draw in the preparation receipt; settlement reads only that declared
+file, for the same digest, Council run and attempt. A missing declaration or an unreadable
+payload after verified transfer leaves drift unmeasured. A declared file missing or changed
+in transit is still an integrity failure.
 
 On 2026-11-09 to 2026-11-16 a night held 209,602 to 244,963 pairs. Of those, 97.2 to 99.8
 percent scored below the lower start of 0.70, the ambiguous range held 330 to 6,208 and
@@ -642,6 +654,17 @@ a night nothing ran from one that ran and lost everything.
   observed agreement and scales by the possible agreement beyond chance. It is empty
   if any key is missing, refused or split, or if chance agreement is already one. The
   original answers stay as reported, and the controls do not measure live accuracy.
+- **Score drift compares full pools without judge answers.** For each earlier digest date
+  inside the lookback, take its newest earlier Council run, excluding repairs by the current
+  run. Keep the newest configured number of dates with the same stamp and bin edges and a
+  nonempty pool. Packed dates use the ledger's packed record until the gardener repacks
+  them. Pool the selected counts so each pair on a digest date has equal weight; save the
+  dates, run IDs and canonical histogram digests in `score_drift_baseline`.
+  PSI floors and renormalizes each pool's shares before comparing them. Binned KS uses the
+  largest cumulative share gap at a bin edge; binned Wasserstein uses the distance between
+  bin midpoints weighted by those gaps. There is no KS significance test. Missing, empty
+  and incomplete comparisons have a status and no distances; matching shares give real
+  zeroes. The readings do not affect thresholds, publication or job gates.
 - **Every figure that follows from another is recomputed when the row is read:** `move` is
   `threshold_after - threshold_before` and `gap` is `estimate - threshold_before`, each
   within one millionth, so a writer rounds none of them below six decimal places.
@@ -683,6 +706,9 @@ below 0.88 had been judged, so they are provisional until the first seven real n
 | `draw.fully_similar`, `draw.fully_dissimilar` | weight 6, 4; minimum 2, 1; maximum 6, 4 | The two lightly sampled ends |
 | `draw.thresholds_lookback_days` | 14 | How old the newest threshold-history row may be |
 | `diagnostics.cutoff` | 0.87 | Score compared with the sampled judge answers; does not change the draw or publication |
+| `diagnostics.score_bins` | 40 | Equal-width bins over the full pre-draw score pool |
+| `diagnostics.score_baseline_days`, `diagnostics.score_baseline_lookback_days` | 7, 28 | Comparable digest dates required for drift, and the most earlier days considered |
+| `diagnostics.score_psi_share_floor` | 0.000001 | Minimum bin share before renormalizing for PSI only |
 | `thresholds.lower_start`, `thresholds.upper_start` | 0.70, 0.93 | The thresholds when no recent row sets them |
 | `thresholds.lower_share_level`, `thresholds.upper_share_level` | 0.05, 0.90 | The same-story share that defines each threshold |
 | `thresholds.window_nights` | 7 | Nights of `pair-verdicts` the evidence reads, ending on the night |
@@ -724,6 +750,7 @@ rows, and a setting changes by an edit that bumps its file's `version`
 | --- | --- | --- |
 | First council run | The night's draw rows carry the slice columns, `pair-verdicts` holds the night's rows each with a `sampling_chance`, and `threshold-history` holds the night's row | The stage that writes the first missing item did not run: the pick writes the draw rows, the filing `pair-verdicts`, the review `threshold-history` |
 | First ordinary settlement with sample readings | Read the named `threshold-history` partition while the draw and verdict artifacts are available. Match the run and attempt, count the draw and returned rows, close each drawn slice, and compare the four agreement counts at `evaluated_cutoff`. | Inspect which attempt's draw and verdict rows were filed. A mismatch does not warrant rerunning the pipeline as a merge check. |
+| First ordinary settlement with a pool histogram | Match the histogram count to the picker's `available` count, not to the draw. Until the baseline fills there are no distances. Once it fills, check the saved earlier dates, runs and histogram digests against the configured number of comparable pools. | Check the declaration and scoring stamp. Missing comparators do not warrant a production rerun or backfill. |
 | First council run | Every drawn pair names at least one item of the night's published day | Revert the guard in `assemble.cross_source_pairs`. [What the guard gives up](autotune-content-similarity.md#design-rationale) is a story added to the day after the council read it |
 | First council run | `canary_answers` on the night's `threshold-history` row holds all six ids once, and a lost runner's ids are absent. Read each answer against its expected one. The two `unclear` pairs may answer NO: that is a predicted finding about the judge, and not a fault | A wrong answer on a `same` or `different` pair points at the model, runtime, prompt, grammar or label (an agent wrote the labels). Nothing holds or re-runs the night, so a person reads it. A missing id while every runner reported means its call raised, which the log names ([the check](#the-known-answer-pairs)) |
 | First council run | Older nights with no `pair-verdicts` row are named one a night, newest first, until the 7-night window has slid past the rest | A night that has rows and is named again is a fault in the scheduler's read ([which nights](#which-nights-the-judge-is-behind-on)) |

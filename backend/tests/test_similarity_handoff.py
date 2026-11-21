@@ -5,30 +5,53 @@ path outside that directory is not slow and not wasteful - it is gone, thrown
 away with the runner that wrote it, and every later job fails on a file nobody
 uploaded.
 
-Driven against two empty directories standing in for two runners. No published
-day and no committed ledger is opened: what is asked is where a path lands, and a
-day with pairs in it would answer that at the cost of a fixture (CLAUDE.md
-section 13).
+Driven against isolated directories standing in for runners. Day payloads and
+ledger files that a test needs are written to those directories.
 """
 
 from __future__ import annotations
 
 import shutil
 from collections import Counter
+from collections.abc import Sequence
+from math import log
 from pathlib import Path
 from typing import Final
 
 import pytest
+from test_content_similarity_judge_ledger_reads import (
+    THRESHOLD_HISTORY,
+    a_night,
+    a_night_with_pool,
+    file_through_the_door,
+)
 from test_same_story import block, item, unit
 
-from idhazh import assemble, atomic_write
+from idhazh import assemble, atomic_write, config
+from idhazh.content_similarity_judge import settings as judge_settings
 from idhazh.content_similarity_judge import tenant
-from idhazh.contracts.council_invocation import SelectedJudge, Selection
+from idhazh.content_similarity_judge.ledger_reads import load_threshold_history
+from idhazh.contracts.base import derive_text_digest
+from idhazh.contracts.council_invocation import (
+    ArtifactFile,
+    PreparationReceipt,
+    SelectedJudge,
+    Selection,
+)
 from idhazh.contracts.council_run_record import ShardOutcome
-from idhazh.contracts.digest_day import DigestDay, DigestRunRef, DigestVerticalRef
+from idhazh.contracts.digest_day import DigestDay, DigestItem, DigestRunRef, DigestVerticalRef
 from idhazh.contracts.knobs.council import JudgeLifecycleStatus
-from idhazh.council import session
-from idhazh.stages import common, judge_item_pairs
+from idhazh.contracts.story_similarity_diagnostics import (
+    ScoreDriftBaseline,
+    ScoreDriftSource,
+    ScoreDriftStatus,
+    ScorePoolHistogram,
+    diagnostic_text,
+)
+from idhazh.contracts.story_similarity_score_pool import ContentSimilarityScorePool
+from idhazh.council import session, work_files
+from idhazh.similarity.thresholds_in_force import lookback_days
+from idhazh.stages import common, judge_item_pairs, pick_item_pairs
 
 #: A night these tests ask the tenant about. Any date would do - none of them
 #: reads a published day.
@@ -37,13 +60,17 @@ A_NIGHT: Final = "2026-09-20"
 A_RUN: Final = "2026-09-21-35534060762"
 
 
-def a_published_day(root: Path, *, date: str) -> None:
-    """One day on disk: three stories from three mastheads, at angles that score as pairs."""
-    items = [
-        item("world-01", source="wire", outlet="The Wire"),
-        item("world-02", source="paper", outlet="The Paper"),
-        item("world-03", source="herald", outlet="The Herald"),
-    ]
+def a_published_day(
+    root: Path, *, date: str, stories: Sequence[tuple[DigestItem, float]] | None = None
+) -> None:
+    """One day on disk, with real quantized vectors at the specified angles."""
+    if stories is None:
+        stories = [
+            (item("world-01", source="wire", outlet="The Wire"), 0.0),
+            (item("world-02", source="paper", outlet="The Paper"), 12.0),
+            (item("world-03", source="herald", outlet="The Herald"), 24.0),
+        ]
+    items = [story for story, _ in stories]
     day = DigestDay(
         version=DigestDay.schema_version(),
         date=date,
@@ -57,16 +84,16 @@ def a_published_day(root: Path, *, date: str) -> None:
             for name, count in sorted(Counter(one.vertical for one in items).items())
         ],
         items=items,
-        embeddings=block({one.item_id: unit(index * 12.0) for index, one in enumerate(items)}),
+        embeddings=block({story.item_id: unit(angle) for story, angle in stories}),
     )
     atomic_write.write_atomic(assemble.day_dir(root, date) / "digest.json", day.to_json())
 
 
-def _selection(*, shards: int = 8) -> Selection:
+def _selection(*, shards: int | None = None, attempt: int = 1) -> Selection:
     return Selection(
         version=Selection.schema_version(),
         run_id=A_RUN,
-        attempt=1,
+        attempt=attempt,
         git_sha="a" * 40,
         mode="manual",
         anchor_date=A_NIGHT,
@@ -76,7 +103,7 @@ def _selection(*, shards: int = 8) -> Selection:
                 tenant=tenant.JUDGE_ID,
                 status=JudgeLifecycleStatus.ACTIVE,
                 dates=(A_NIGHT,),
-                shards=shards,
+                shards=config.load_council().shards if shards is None else shards,
             ),
         ),
     )
@@ -94,6 +121,25 @@ def _one_runner(tmp_path: Path, name: str, monkeypatch: pytest.MonkeyPatch) -> P
     monkeypatch.setattr(session, "COUNCIL_ROOT", checkout / session.COUNCIL_ROOT_RELPATH)
     monkeypatch.setattr(common, "STATE_ROOT", checkout / "state")
     return checkout
+
+
+def _prepared_bundle(selected: Selection) -> tuple[Path, PreparationReceipt]:
+    session.prepare(config.load_council(), run_id=A_RUN, selection=selected)
+    bundle = session.COUNCIL_ROOT / "outgoing" / "planner"
+    receipt = work_files.read_preparation(bundle, selected, tenant.JUDGE_ID, A_NIGHT)
+    assert receipt is not None and receipt.state == "ready"
+    return bundle, receipt
+
+
+def _settle(selected: Selection) -> None:
+    session.settle(
+        config.load_council(),
+        date=A_NIGHT,
+        run_id=A_RUN,
+        state_dir=common.STATE_ROOT,
+        commit_sha=selected.git_sha,
+        selection=selected,
+    )
 
 
 def test_every_path_this_tenant_writes_for_a_later_job_is_inside_the_carried_root(
@@ -136,7 +182,10 @@ def test_preparation_deals_real_pairs_at_the_admitted_width(
         assert result.outcome is ShardOutcome.COMPLETED
         assert rows
         assert {row.work_part_index for row in rows} <= {0, 1}
-        assert result.files == (session.artifact_path(draw),)
+        assert result.files == (
+            session.artifact_path(draw),
+            session.artifact_path(tenant._score_pool_path(A_NIGHT)),
+        )
 
 
 def test_a_unit_on_a_second_runner_finds_the_work_the_first_one_picked(
@@ -204,3 +253,156 @@ def test_the_place_a_unit_writes_its_verdicts_is_the_place_the_settle_reads(
     assert {path.parent for path in written} == {read}
     assert len({path.name for path in written}) == 8, "eight units, eight names"
     assert read.is_relative_to(runner / session.COUNCIL_ROOT_RELPATH)
+
+
+def test_the_real_distinct_pool_leaves_the_draw_alone_and_files_its_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Count unused pairs too, then import the real receipt and read the settled Parquet row."""
+    _one_runner(tmp_path, "planner", monkeypatch)
+    monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "digest")
+    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "2")
+    yesterday, = lookback_days(A_NIGHT, within_days=1)
+    today = [
+        item(f"world-0{index}", source=f"source-{index}", when=f"{A_NIGHT}T06:00:00Z")
+        for index in range(1, 6)
+    ]
+    repeated = item("world-00", source="source-1", when=f"{yesterday}T18:00:00Z").model_copy(
+        update={"source_url": today[0].source_url}
+    )
+    older = item("world-09", source="source-9", when=f"{yesterday}T18:00:00Z")
+    a_published_day(common.PUBLIC_ROOT, date=A_NIGHT, stories=[(story, 0.0) for story in today])
+    a_published_day(common.PUBLIC_ROOT, date=yesterday, stories=[(repeated, 180.0), (older, 180.0)])
+
+    selected = _selection(attempt=2)
+    bundle, receipt = _prepared_bundle(selected)
+    with session._route(selected, tenant.JUDGE_ID):
+        draw_path = tenant._draw_path(A_NIGHT)
+        pool_path = tenant._score_pool_path(A_NIGHT)
+        assert tuple(file.path for file in receipt.files) == (
+            session.artifact_path(draw_path),
+            session.artifact_path(pool_path),
+        )
+    payload = ContentSimilarityScorePool.read(pool_path)
+    assert (payload.date, payload.run_id, payload.attempt) == (A_NIGHT, A_RUN, 2)
+    before = tmp_path / "unobserved.csv"
+    unobserved = pick_item_pairs.stage_pick_item_pairs(
+        A_NIGHT,
+        run_id=A_RUN,
+        settings=config.load(),
+        draw_path=before,
+        digest_root=common.PUBLIC_ROOT,
+        state_dir=common.STATE_ROOT,
+    )
+    assert draw_path.read_bytes() == before.read_bytes()
+    pool = payload.histogram
+    # The ten same-day pairs score 1. The five against the unique earlier story score -1.
+    # The republished URL contributes no new key even though its earlier scores differ.
+    assert pool.counts == (5, *([0] * 38), 10)
+    assert len(unobserved.draw.taken) < sum(pool.counts) == unobserved.draw.pairs_available
+
+    _one_runner(tmp_path, "collector", monkeypatch)
+    assert work_files.import_preparation(
+        session.COUNCIL_ROOT, bundle, selected, tenant.JUDGE_ID, A_NIGHT
+    ) == receipt
+    rules = judge_settings.load().diagnostics
+    earlier_pool = ScorePoolHistogram(stamp=pool.stamp, edges=pool.edges, counts=(2, *([0] * 38), 1))
+    earlier_run = f"{A_NIGHT}-9"
+    days = lookback_days(A_NIGHT, within_days=rules.score_baseline_days)
+    for day in days:
+        prior = a_night_with_pool(a_night(day, earlier_run), earlier_pool)
+        file_through_the_door(common.STATE_ROOT, THRESHOLD_HISTORY, prior)
+
+    _settle(selected)
+
+    row, = load_threshold_history(common.STATE_ROOT, [A_NIGHT])
+    assert row.score_pool_histogram == diagnostic_text(pool)
+    assert row.score_drift_status is ScoreDriftStatus.MEASURED
+    assert row.score_drift_baseline == diagnostic_text(
+        ScoreDriftBaseline(
+            sources=tuple(
+                ScoreDriftSource(
+                    date=day, run_id=earlier_run,
+                    histogram_sha256=derive_text_digest(diagnostic_text(earlier_pool)),
+                )
+                for day in reversed(days)
+            ),
+            required_days=rules.score_baseline_days,
+            share_floor=rules.score_psi_share_floor,
+        )
+    )
+    # The two occupied bins swap shares 1/3 and 2/3. The 38 other bins contribute
+    # only to PSI's normalization. The occupied midpoints are 1.95 apart.
+    assert row.score_psi == pytest.approx((2 / 3) * log(2) / (1 + 38 * rules.score_psi_share_floor))
+    assert row.score_ks_distance == pytest.approx(1 / 3)
+    assert row.score_wasserstein_distance == pytest.approx(1.95 / 3)
+
+
+@pytest.mark.parametrize("case", ["undeclared", "not-json", "date", "run_id", "attempt"])
+def test_an_unusable_verified_score_pool_does_not_change_settlement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, case: str
+) -> None:
+    _one_runner(tmp_path, "planner", monkeypatch)
+    monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "digest")
+    a_published_day(common.PUBLIC_ROOT, date=A_NIGHT)
+    selected = _selection()
+    bundle, receipt = _prepared_bundle(selected)
+    legacy = case == "undeclared"
+    draw_file, pool_file = receipt.files
+    bundle_root = work_files.invocation_root(bundle, selected, tenant.JUDGE_ID)
+    bundled_pool = bundle_root / pool_file.path
+    files: tuple[ArtifactFile, ...]
+    if legacy:
+        files = (draw_file,)
+    else:
+        pool = ContentSimilarityScorePool.read(bundled_pool)
+        other = {"date": "2026-09-19", "run_id": "2026-09-21-8", "attempt": 2}
+        body = (
+            "not a typed payload" if case == "not-json"
+            else pool.model_copy(update={case: other[case]}).to_json()
+        )
+        atomic_write.write_atomic(bundled_pool, body)
+        files = work_files.evidence(
+            bundle_root, (draw_file.path, pool_file.path), day=A_NIGHT, judge_id=tenant.JUDGE_ID
+        )
+    atomic_write.write_atomic(
+        work_files.preparation_path(bundle, selected, tenant.JUDGE_ID, A_NIGHT),
+        receipt.model_copy(update={"files": files}).to_json(),
+    )
+
+    _one_runner(tmp_path, "collector", monkeypatch)
+    work_files.import_preparation(session.COUNCIL_ROOT, bundle, selected, tenant.JUDGE_ID, A_NIGHT)
+    if legacy:
+        # Even a valid same-attempt file at the expected address is not receipt evidence.
+        with session._route(selected, tenant.JUDGE_ID):
+            shutil.copyfile(bundled_pool, tenant._score_pool_path(A_NIGHT))
+    _settle(selected)
+
+    row, = load_threshold_history(common.STATE_ROOT, [A_NIGHT])
+    assert row.score_drift_status is ScoreDriftStatus.NO_HISTOGRAM
+    assert row.score_pool_histogram is None
+    assert row.score_drift_baseline is None
+    assert row.score_psi is row.score_ks_distance is row.score_wasserstein_distance is None
+
+
+@pytest.mark.parametrize("remove", [False, True], ids=["changed", "missing"])
+def test_a_declared_score_pool_must_survive_transfer_intact(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, remove: bool
+) -> None:
+    _one_runner(tmp_path, "planner", monkeypatch)
+    monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "digest")
+    a_published_day(common.PUBLIC_ROOT, date=A_NIGHT)
+    selected = _selection()
+    bundle, receipt = _prepared_bundle(selected)
+
+    _one_runner(tmp_path, "collector", monkeypatch)
+    work_files.import_preparation(session.COUNCIL_ROOT, bundle, selected, tenant.JUDGE_ID, A_NIGHT)
+    pool_file = session.invocation_root(selected, tenant.JUDGE_ID) / receipt.files[1].path
+    if remove:
+        pool_file.unlink()
+    else:
+        # The payload still parses and names the right attempt, but the bytes are not the receipt's.
+        atomic_write.write_atomic(pool_file, pool_file.read_text(encoding="utf-8") + "\n")
+    with pytest.raises(work_files.FileIntegrityError, match="invalid preparation receipt"):
+        _settle(selected)
+    assert load_threshold_history(common.STATE_ROOT, [A_NIGHT]) == []

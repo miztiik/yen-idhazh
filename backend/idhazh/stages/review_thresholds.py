@@ -35,14 +35,17 @@ from idhazh.content_similarity_judge.ledger_reads import (
     load_threshold_history,
     review_days,
 )
+from idhazh.contracts.base import StalePayloadError
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.knobs.content_similarity_judge import ThresholdsConfig
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.story_similarity_diagnostics import ScorePoolHistogram
 from idhazh.contracts.story_similarity_pair_verdict import (
     RECOMPUTED_TOLERANCE,
     StorySimilarityPairVerdict,
 )
 from idhazh.contracts.story_similarity_runner_report import StorySimilarityRunnerReport
+from idhazh.contracts.story_similarity_score_pool import ContentSimilarityScorePool
 from idhazh.contracts.story_similarity_threshold_history_row import (
     StorySimilarityThresholdHistoryRow,
 )
@@ -50,6 +53,7 @@ from idhazh.council import metrics_sink
 from idhazh.similarity.canary_diagnostics import canary_columns
 from idhazh.similarity.night_totals import end_columns, pool_sizes, runner_columns
 from idhazh.similarity.sample_diagnostics import sample_columns
+from idhazh.similarity.score_pool_drift import drift_columns
 from idhazh.similarity.threshold_curve import (
     Curve,
     fit_pulled_curve,
@@ -98,6 +102,29 @@ def _draw_rows(draw_path: Path) -> list[StorySimilarityPairVerdict]:
         )
     with draw_path.open("r", encoding="utf-8", newline="") as handle:
         return [StorySimilarityPairVerdict.from_csv_row(cells) for cells in csv.DictReader(handle)]
+
+
+def _prepared_histogram(
+    path: Path | None, *, date: str, run_id: str, attempt: int
+) -> ScorePoolHistogram | None:
+    """Read only the sidecar the Council already checked against its receipt."""
+    if path is None:
+        return None
+    try:
+        pool = ContentSimilarityScorePool.read(path)
+        if (pool.date, pool.run_id, pool.attempt) == (date, run_id, attempt):
+            return pool.histogram
+        reason = "digest, run or attempt did not match"
+    except (OSError, ValueError, StalePayloadError) as error:
+        reason = type(error).__name__
+    LOG.warning(
+        "review-thresholds found no usable score pool date=%s run=%s attempt=%s reason=%s",
+        date,
+        run_id,
+        attempt,
+        reason,
+    )
+    return None
 
 
 def _readings_of_this_night(
@@ -376,6 +403,7 @@ def stage_review_thresholds(
     expected_shards: int,
     state_dir: Path,
     config_dir: Path,
+    score_pool_path: Path | None = None,
 ) -> ReviewReport:
     """Read the last nights of pair-verdicts, move or hold both thresholds, and file the night.
 
@@ -392,7 +420,8 @@ def stage_review_thresholds(
     **The read is bounded by named settings and never by the archive** (Guardrail #12): the days
     `review_days` names, which the collecting job's sparse checkout is told too. The loaders do
     not fail on a day that checkout lacks, and `build_threshold_row` checks the history it
-    read against the thresholds the draw followed instead.
+    read against the thresholds the draw followed instead. Only the drift reading sees any
+    history outside the original fit window.
 
     **`shipped_root`, `draw_path` and `judge_id` are handed in rather than resolved here**, for
     the reason the filing stage gives. The draw file is read for how many pairs each lightly
@@ -412,12 +441,13 @@ def stage_review_thresholds(
         *load_pair_verdicts_filed_on(state_dir, date),
     ]
     history = load_threshold_history(state_dir, days.threshold_history)
+    fit_dates = set(days.fit_history)
     draw_rows = _draw_rows(draw_path)
     row = build_threshold_row(
         date,
         run_id=run_id,
         window=window,
-        history=history,
+        history=[prior for prior in history if prior.date in fit_dates],
         draw_rows=draw_rows,
         readings=_readings_of_this_night(
             shipped_root, judge_id=judge_id, date=date, run_id=run_id
@@ -441,6 +471,15 @@ def stage_review_thresholds(
             upper_cutoff=row.upper_threshold_before,
         )
         | canary_columns(judge_settings.load_canaries(config_dir).pairs, row.canary_answers)
+        | drift_columns(
+            _prepared_histogram(
+                score_pool_path, date=date, run_id=run_id, attempt=identity.attempt
+            ),
+            history,
+            date=date,
+            run_id=run_id,
+            rules=execution.diagnostics,
+        )
     )
     filed = ledger.persist(
         state_dir,
@@ -451,7 +490,7 @@ def stage_review_thresholds(
     )
     LOG.info(
         "review-thresholds date=%s run=%s filed=%s lower=%s->%s (%s) upper=%s->%s (%s) "
-        "usable_pairs=%s/%s runners=%s/%s dealt=%s valid=%s agreed=%s",
+        "usable_pairs=%s/%s runners=%s/%s dealt=%s valid=%s agreed=%s score_drift_status=%s",
         date,
         run_id,
         bool(filed),
@@ -468,6 +507,7 @@ def stage_review_thresholds(
         row.pairs_dealt,
         row.pairs_valid,
         row.pairs_agreed,
+        row.score_drift_status,
     )
     return ReviewReport(date=date, run_id=run_id, row=row, filed=bool(filed))
 

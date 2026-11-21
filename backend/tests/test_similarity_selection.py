@@ -525,7 +525,7 @@ def draw_the_night(
     digest_root = tmp_path / "digest"
     monkeypatch.setattr(common, "PUBLIC_ROOT", digest_root)
     path = tmp_path / out / "draw.csv"
-    drawn = stage_pick_item_pairs(
+    picked = stage_pick_item_pairs(
         DATE,
         run_id=COUNCIL_RUN,
         settings=settings or config.load(CONFIG_DIR),
@@ -533,7 +533,7 @@ def draw_the_night(
         draw_path=path,
         state_dir=state or tmp_path / "state",
     )
-    return drawn, drawn_rows(path)
+    return picked.draw, drawn_rows(path)
 
 
 @pytest.mark.parametrize("earlier_count", [0, 1, 2], ids=["same-day", "cross-day", "earlier-day"])
@@ -735,7 +735,7 @@ def test_a_day_that_is_not_on_disk_writes_an_empty_draw(tmp_path: Path) -> None:
     """
     out_dir = tmp_path / "judge"
 
-    drawn = stage_pick_item_pairs(
+    picked = stage_pick_item_pairs(
         DATE,
         run_id=COUNCIL_RUN,
         settings=config.load(CONFIG_DIR),
@@ -745,7 +745,7 @@ def test_a_day_that_is_not_on_disk_writes_an_empty_draw(tmp_path: Path) -> None:
     )
 
     written = (out_dir / "draw.csv").read_text(encoding="utf-8")
-    assert drawn == Draw(taken=[], pairs_available=0)
+    assert picked.draw == Draw(taken=[], pairs_available=0)
     assert written.splitlines() == [",".join(StorySimilarityPairVerdict.csv_columns())]
 
 
