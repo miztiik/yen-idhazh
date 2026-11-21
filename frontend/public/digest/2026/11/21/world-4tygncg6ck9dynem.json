@@ -1,0 +1,36 @@
+{
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": "m1",
+  "encoding": {
+    "bins": [],
+    "category": [],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m0",
+      "m1"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": [
+      "m2",
+      "m3"
+    ]
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "world-4tygncg6ck9dynem",
+  "marks": [
+    {"derived": null,"element_id": "quantity-1350-1354","mark_id": "m0","source_text": null,"text": null,"time": null,"unit": "%","value": "7.4"},
+    {"derived": null,"element_id": "quantity-1438-1442","mark_id": "m1","source_text": null,"text": null,"time": null,"unit": "%","value": "8.1"},
+    {"derived": null,"element_id": "date-1303-1307","mark_id": "m2","source_text": null,"text": "2015","time": "2015","unit": null,"value": null},
+    {"derived": null,"element_id": "date-1420-1424","mark_id": "m3","source_text": null,"text": "2025","time": "2025","unit": null,"value": null}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Severe material and social deprivation in Spain vs. EU, 2015-2025",
+  "type": "line",
+  "version": "2026-10-27T05:00"
+}

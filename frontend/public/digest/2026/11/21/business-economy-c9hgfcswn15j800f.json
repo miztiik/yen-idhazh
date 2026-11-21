@@ -1,0 +1,36 @@
+{
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": "m2",
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "business-economy-c9hgfcswn15j800f",
+  "marks": [
+    {"derived": null,"element_id": "entity-127-156","mark_id": "m0","source_text": null,"text": "intelligence software company","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-451-457","mark_id": "m1","source_text": null,"text": "raised","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-166-178","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "$","value": "225000000000"},
+    {"derived": null,"element_id": "quantity-458-468","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "$","value": "5000000000"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Implied new-raise valuation vs. August raise",
+  "type": "bar",
+  "version": "2026-10-27T05:00"
+}

@@ -1,0 +1,40 @@
+{
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": "m3",
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "world-bhegg7ak79ecsptx",
+  "marks": [
+    {"derived": null,"element_id": "entity-7581-7588","mark_id": "m0","source_text": null,"text": "Donovan","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-5438-5442","mark_id": "m1","source_text": null,"text": "took","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-9638-9664","mark_id": "m2","source_text": null,"text": "Libre Immigration Services","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-7599-7603","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "$","value": "811"},
+    {"derived": null,"element_id": "quantity-5456-5460","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "$","value": "230"},
+    {"derived": null,"element_id": "quantity-9665-9672","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "$","value": "10000"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Fine, revenue and asset-sale price for Nexus operations",
+  "type": "bar",
+  "version": "2026-10-27T05:00"
+}

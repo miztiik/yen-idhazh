@@ -1,0 +1,36 @@
+{
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": "m3",
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "energy-kn0he0sqv1r5sakz",
+  "marks": [
+    {"derived": null,"element_id": "entity-920-926","mark_id": "m0","source_text": null,"text": "netted","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-1020-1026","mark_id": "m1","source_text": null,"text": "around","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-937-948","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "$","value": "11000000000"},
+    {"derived": null,"element_id": "quantity-1027-1037","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "$","value": "9000000000"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Projected Argentine energy bond sales this year versus next",
+  "type": "bar",
+  "version": "2026-10-27T05:00"
+}

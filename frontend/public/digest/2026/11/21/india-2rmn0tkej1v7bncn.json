@@ -1,0 +1,36 @@
+{
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": "m2",
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-2rmn0tkej1v7bncn",
+  "marks": [
+    {"derived": null,"element_id": "entity-79-86","mark_id": "m0","source_text": null,"text": "plunged","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-138-141","mark_id": "m1","source_text": null,"text": "Dow","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-87-102","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "point","value": "1225.05"},
+    {"derived": null,"element_id": "quantity-172-185","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "point","value": "908.88"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Percentage declines of major US indexes at close",
+  "type": "bar",
+  "version": "2026-10-27T05:00"
+}

@@ -1,0 +1,36 @@
+{
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": "m2",
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "world-caetjygvmbq1fbb3",
+  "marks": [
+    {"derived": null,"element_id": "entity-2403-2409","mark_id": "m0","source_text": null,"text": "around","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-2520-2529","mark_id": "m1","source_text": null,"text": "estimated","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-2410-2412","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "%","value": "5"},
+    {"derived": null,"element_id": "quantity-2530-2533","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "35"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Formal rights share: Congo Basin vs. Amazon Indigenous title",
+  "type": "bar",
+  "version": "2026-10-27T05:00"
+}

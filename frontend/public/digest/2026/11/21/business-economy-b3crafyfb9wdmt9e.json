@@ -1,0 +1,36 @@
+{
+  "caption": "Both figures are Google's reported daily capacity for one security engineer.",
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": "m2",
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "business-economy-b3crafyfb9wdmt9e",
+  "marks": [
+    {"derived": null,"element_id": "entity-620-621","mark_id": "m0","source_text": null,"text": "\u0928","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-2991-2992","mark_id": "m1","source_text": null,"text": "\u0928","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-623-628","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": null,"value": "1000"},
+    {"derived": null,"element_id": "quantity-2994-2999","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": null,"value": "1000"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Daily attack tests Mirror Dimension enables",
+  "type": "dot",
+  "version": "2026-10-27T05:00"
+}

@@ -1,0 +1,36 @@
+{
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": "m2",
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "world-a5zejaca0r3y2g2m",
+  "marks": [
+    {"derived": null,"element_id": "entity-1037-1052","mark_id": "m0","source_text": null,"text": "any other party","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-1059-1063","mark_id": "m1","source_text": null,"text": "down","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-1054-1057","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "%","value": "31"},
+    {"derived": null,"element_id": "quantity-1073-1076","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "46"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "ANC national vote share versus last election",
+  "type": "bar",
+  "version": "2026-10-27T05:00"
+}
