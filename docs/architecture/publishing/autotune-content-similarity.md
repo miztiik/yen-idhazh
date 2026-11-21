@@ -133,7 +133,7 @@ The one false merge at 0.93 is on 2026-08-30: Ontario's pushback against the lak
 
 **The original floor was the first round hundredth above the highest-scoring pair marked as two stories.** That is how 0.94 was chosen, over the 11 committed days this table covers and the one marked-apart pair they held.
 
-**At the former 0.94 floor, one marked-apart pair cleared the line.** The hand marks made on 2026-09-19 hold 200 pairs, 4 of them marked as two different stories; an agent labelled them from each pair's title and summary. Recomputed from the committed day payloads at the shipped weights - the whole score on the cosine - those four score **0.9407, 0.9374, 0.9352 and 0.9343**. The highest sat **0.0007 above** 0.94; the other three scored below it.
+**At the former 0.94 floor, one marked-apart pair cleared the line.** On 2026-09-19 a model labelled 200 holdout pairs from their titles and summaries, including 4 as separate stories. The labels did not come from human review. Recomputed from the committed day payloads at the shipped weights - the whole score on the cosine - those four score **0.9407, 0.9374, 0.9352 and 0.9343**. The highest sat **0.0007 above** 0.94; the other three scored below it.
 
 **The way to firm up the margin is more labels, not a higher number.** To clear every two-story mark the line would have to reach 0.941, which leaves 9 more of the 196 one-story marks apart. A line of 0.95 would clear all four marks and fold ten fewer items in the table above (24 grouped at 0.94, 14 at 0.95). A higher line cannot separate the labels because they interleave: a pair at 0.9406 is marked one story, the pair at 0.9407 is marked two, and a pair at 0.9409 is marked one again.
 
@@ -147,15 +147,15 @@ The one false merge at 0.93 is on 2026-08-30: Ontario's pushback against the lak
 
 **The configured line is now 0.85, down from 0.94.** All four recorded marked-apart scores clear 0.85, with the highest **0.0907 above** it. These are score comparisons, not evidence of four folds: outlet and URL eligibility, the headline rules, and the checks against every other member still govern grouping. The 0.94 readings above describe the former line, not the result of running the new line on old days.
 
-`backend/idhazh/stages/assemble.py` reads `settings.app.assemble.same_story` from `config/idhazh.json`. The run records the value in `same_story_floor_applied`, so a committed `run.json` says which floor grouped its day; a run committed before the field existed carries none. Judgement compares the hand marks with the current config, not that historical run value. Changing the setting does not regroup already committed days.
+`backend/idhazh/stages/assemble.py` reads `settings.app.assemble.same_story` from `config/idhazh.json`. The run records the value in `same_story_floor_applied`, so a committed `run.json` says which floor grouped its day; a run committed before the field existed carries none. Judgement compares the labelled pairs with the current config, not that historical run value. Changing the setting does not regroup already committed days.
 
 **The judge does not set the line.** Its two thresholds steer which pairs it reads and decide nothing about publication, and the nightly draw follows them rather than the floor a build used ([the thresholds in force](how-the-content-similarity-judge-follows-its-thresholds.md#the-thresholds-in-force)).
 
 **What is not decided.** Whether the hand marks should become a live floor that refuses to apply a line at or below the highest pair marked as two stories, rather than a number copied into config. That rule would have refused the former 0.94 as well as the current 0.85, but all four marks it would rest on come from one news cluster.
 
-## What the Judgement page draws from the hand marks
+## What the Judgement page draws from the holdout labels
 
-The Judgement page of the console draws the margin above: the line minus the highest score among the pairs marked as two stories, and how many pairs marked as one story sit below the line. The line is `assemble.same_story.floor_min` from the committed config, and the route's build-time `load` scores every hand-marked pair itself (`frontend/src/routes/console/judgement/`, `frontend/src/lib/console/holdout.ts` and `frontend/src/lib/server/content-similarity-holdout.ts`).
+The Judgement page of the console draws the margin above: the line minus the highest score among the pairs marked as separate stories, and how many pairs marked as one story sit below the line. The line is `assemble.same_story.floor_min` from the committed config, and the route's build-time `load` scores every labelled pair itself (`frontend/src/routes/console/judgement/`, `frontend/src/lib/console/holdout.ts` and `frontend/src/lib/server/content-similarity-holdout.ts`).
 
 **The page scores the marks because nothing else has.** No run scores these pairs. They are marks rather than judged pairs, and nothing writes a score for them anywhere, so this is the first derivation and not a second opinion about one. A judged pair is the opposite case - its score is already on its row, and recomputing that in a page would be two verdicts about one number.
 

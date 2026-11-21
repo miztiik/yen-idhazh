@@ -1,9 +1,9 @@
-/** The pairs a person marked apart, and how much room the merge line has left.
+/** The pairs marked as separate stories, and how much room the merge line has left.
  *
  * The holdout marks are the floor the merge line has to stay above. Nothing in
- * the pipeline has ever scored those marks - they are a person's reading, not a
- * judged pair - so the score is derived here and this is the first derivation
- * rather than a second opinion about one the run already wrote.
+ * the pipeline has ever scored those marks - they are independent labels, not
+ * nightly judge verdicts - so this is the first score, not a second opinion
+ * about one the run already wrote.
  *
  * **The margin is the panel.** It is the line minus the highest score among the
  * pairs marked as two stories. Positive means the line sits clear of every
@@ -28,7 +28,7 @@ export interface ScoreWeights {
 	cosineWeight: number;
 }
 
-/** One hand-marked pair, scored. */
+/** One labelled pair, scored. */
 export interface HoldoutMark {
 	leftTitle: string;
 	rightTitle: string;
@@ -183,8 +183,8 @@ export function marginDistance(margin: number, numberFormat: NumberFormatConfig)
 
 /** The sentence under the panel, one per state.
  *
- * It counts the pairs a person marked as two stories because the margin is the
- * closest of them: a distance with no population beside it says how little room
+ * It counts the pairs marked as separate stories because the margin uses their
+ * highest score: a distance with no population beside it says how little room
  * there is and not how many marks that room is measured against.
  */
 export function holdoutNote(
@@ -194,14 +194,16 @@ export function holdoutNote(
 	numberFormat: NumberFormatConfig
 ): string {
 	const distance = marginDistance(margin.margin ?? 0, numberFormat);
-	const among = margin.pairs === 1 ? 'the one pair' : `the highest-scoring of the ${margin.pairs} pairs`;
+	const compared = margin.pairs === 1
+		? 'the score of the only pair marked as separate stories'
+		: `the highest score among the ${margin.pairs} pairs marked as separate stories`;
 	switch (state) {
 		case 'no-marks':
 			return 'No scored pair marked as two stories was returned, so there is no measured margin.';
 		case 'violation': {
 			const count = margin.violations;
 			return (
-				`The line is ${distance} BELOW ${among} a person marked as two stories.` +
+				`The line is ${distance} BELOW ${compared}.` +
 				(margin.pairs === 1
 					? ' Its score clears the line.'
 					: ` ${count} of the ${margin.pairs} ${count === 1 ? 'scores' : 'score'} at or above it.`)
@@ -209,8 +211,8 @@ export function holdoutNote(
 		}
 		default:
 			return (
-				`The line sits ${distance} above ${among} a person marked as two stories` +
-				(margin.pairs === 1 ? '.' : `, so none of the ${margin.pairs} is on the wrong side of it.`) +
+				`The line sits ${distance} above ${compared}.` +
+				(margin.pairs === 1 ? '' : ` None of the ${margin.pairs} scores reach it.`) +
 				// The line is in the sentence because the margin alone says how much
 				// room there is and not where the room starts.
 				` The line is at ${formatNumber(line, numberFormat, { si: false })}.`

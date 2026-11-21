@@ -413,7 +413,7 @@ attribute alone tells a reader nothing.
 
 ## The holdout margin is drawn at the scale of the margin, not of the score
 
-`The pairs a person marked apart` on `/console/judgement/` asks which
+`Pairs marked as separate stories` on `/console/judgement/` asks which
 marked-apart scores clear the merge line. It does not check what folded.
 **The comparison it draws: how far the highest marked-apart score sits from
 the line.** The September reading was **0.0007** above the former 0.94 line,

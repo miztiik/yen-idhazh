@@ -1,4 +1,4 @@
-/** The margin between the merge line and the pairs a person marked apart.
+/** The margin between the merge line and the pairs marked as separate stories.
  *
  * No build and no browser: this file is in the `logic` group. Every value here
  * is written down, so the two states that matter most - a mark sitting exactly
@@ -79,8 +79,7 @@ test('a negative margin prints as a distance and never as a minus sign', () => {
 	expect(figure).toBe('0.0007');
 	expect(figure).not.toContain('-');
 	expect(note).toContain('BELOW');
-	// The sentence carries no signed figure either. `hand-marked` is a hyphen in
-	// a word, so the check is on what sits next to a digit.
+	// The sentence carries no signed figure either.
 	expect(note).not.toMatch(/-\d/);
 });
 
@@ -98,22 +97,22 @@ test('the three states say three different things, each over the pairs the margi
 	expect(new Set(said).size).toBe(3);
 	expect(said[0]).toBe('No scored pair marked as two stories was returned, so there is no measured margin.');
 	expect(said[1]).toBe(
-		'The line sits 0.0083 above the highest-scoring of the 2 pairs a person marked as two stories, so none of the 2 is on the wrong side of it. The line is at 0.94.'
+		'The line sits 0.0083 above the highest score among the 2 pairs marked as separate stories. None of the 2 scores reach it. The line is at 0.94.'
 	);
 	expect(said[2]).toBe(
-		'The line is 0.0007 BELOW the highest-scoring of the 4 pairs a person marked as two stories. 1 of the 4 scores at or above it.'
+		'The line is 0.0007 BELOW the highest score among the 4 pairs marked as separate stories. 1 of the 4 scores at or above it.'
 	);
 });
 
-test('one marked pair is named as the one pair, not as the highest-scoring of one', () => {
+test('one marked pair is named as the only pair, not as the highest-scoring of one', () => {
 	const only = holdoutMargin(0.94, [mark(0.9317)]);
 	const over = holdoutMargin(0.94, [mark(0.9407)]);
 
 	expect(holdoutNote(only, holdoutState(only), 0.94, numberFormat)).toBe(
-		'The line sits 0.0083 above the one pair a person marked as two stories. The line is at 0.94.'
+		'The line sits 0.0083 above the score of the only pair marked as separate stories. The line is at 0.94.'
 	);
 	expect(holdoutNote(over, holdoutState(over), 0.94, numberFormat)).toBe(
-		'The line is 0.0007 BELOW the one pair a person marked as two stories. Its score clears the line.'
+		'The line is 0.0007 BELOW the score of the only pair marked as separate stories. Its score clears the line.'
 	);
 });
 

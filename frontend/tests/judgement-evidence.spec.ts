@@ -1,4 +1,4 @@
-/** Do the Judgement hand-mark read and its rendered panel keep unknown, empty and partial evidence distinct? */
+/** Do the Judgement holdout read and its rendered panel keep unknown, empty and partial evidence distinct? */
 import { expect, test } from '@playwright/test';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -19,10 +19,10 @@ function words(html: string): string {
 
 test('read notes name unavailable, lost and set-aside input without inventing a last run', () => {
 	expect(judgementEvidence({ state: 'not-packed' }, WINDOW, LOADED)).toEqual([
-		'The hand-mark record has not been packed yet. Its readings are unavailable.'
+		'The holdout record has not been packed yet. Its readings are unavailable.'
 	]);
 	expect(judgementEvidence({ state: 'unreadable', at: '<script>raw-fault</script>', fault: null }, WINDOW, LOADED)).toEqual([
-		'The hand-mark record could not be read. Its readings are unavailable.'
+		'The holdout record could not be read. Its readings are unavailable.'
 	]);
 	const read: RecordRead = {
 		state: 'read', first: '2030-06-10', through: '2030-06-14',
@@ -31,13 +31,13 @@ test('read notes name unavailable, lost and set-aside input without inventing a 
 	};
 	const notes = judgementEvidence(read, WINDOW, LOADED);
 	expect(notes.slice(0, 4)).toEqual([
-		'The hand-mark record starts on 10 Jun 2030.',
-		'The hand-mark record is packed through 14 Jun 2030. Later days have no packed reading here.',
-		'The last packed period with rows in the hand-mark record is 1 May 2030 to 31 May 2030. This is a period, not the date of the last run.',
-		'There is no hand-mark record for 12 Jun 2030, so its readings for that day are unavailable. The record for that day was lost and could not be recovered; it was not a quiet day.'
+		'The holdout record starts on 10 Jun 2030.',
+		'The holdout record is packed through 14 Jun 2030. Later days have no packed reading here.',
+		'The last packed period with rows in the holdout record is 1 May 2030 to 31 May 2030. This is a period, not the date of the last run.',
+		'There is no holdout record for 12 Jun 2030, so its readings for that day are unavailable. The record for that day was lost and could not be recovered; it was not a quiet day.'
 	]);
 	expect(notes.at(-1)).toBe('The set-aside count covers the loaded input from 18 Mar 2030 to 15 Jun 2030, not only the selected window.');
-	expect(notes[4]).toBe('2 hand-mark record files were set aside unread when this data was packed, so the loaded readings may be missing their rows. They wait in state/raw/content-similarity-judge/holdout-pairs/set-aside/ for a person to read.');
+	expect(notes[4]).toBe('2 holdout record files were set aside unread when this data was packed, so the loaded readings may be missing their rows. They wait in state/raw/content-similarity-judge/holdout-pairs/set-aside/ for a person to read.');
 	expect(notes.join(' ')).not.toContain('20 May');
 	expect(notes.join(' ')).not.toContain('raw-fault');
 	expect(notes.join(' ')).toContain('2');
@@ -88,7 +88,7 @@ test('the panel distinguishes unavailable marks from a violation beyond the scor
 		marks: null, agreedScores: null, skipped: [{ leftTitle: 'Left', rightTitle: 'Right', reason: 'the article carries no vector' }],
 		marked: 1, evidence: ['<script>untrusted diagnostic</script>']
 	});
-	expect(words(html)).toContain('The hand-marked pairs are unavailable.');
+	expect(words(html)).toContain('The holdout labels are unavailable.');
 	expect(html).toContain('data-holdout-skips="1"');
 	expect(html).toContain('&lt;script>untrusted diagnostic&lt;/script>');
 	expect(html).not.toContain('<script>untrusted diagnostic');
@@ -104,5 +104,9 @@ test('the panel distinguishes unavailable marks from a violation beyond the scor
 	expect(scored).toContain('data-holdout-violations="1"');
 	expect(scored).toContain('data-holdout-offscale="high" data-holdout-offscale-count="1"');
 	expect(scored).not.toContain('data-holdout-dot=');
-	expect(words(scored)).toContain('Left article');
+	const copy = words(scored);
+	expect(copy).toContain('Pairs marked as separate stories The original holdout labels came from a model, not a human review.');
+	expect(copy).toContain('A score can clear the merge line without the stories folding.');
+	expect(copy).not.toContain('a person marked');
+	expect(copy).toContain('Left article');
 });

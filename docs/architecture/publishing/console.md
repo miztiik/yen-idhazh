@@ -76,7 +76,7 @@ legible, tables must fit their container, and titles must use plain words.
 | `/console/` | **Pipelines** | Did the runs work, and what did each stage cost? |
 | `/console/model/` | **Summaries** | What was written, how long did it take, and what went wrong? |
 | `/console/machine/` | **Hardware** | Which hardware ran the work, and how much did it vary? |
-| `/console/judgement/` | **Judgement** | Which stories did the day merge, and how close does the merge line sit to pairs a person marked apart? |
+| `/console/judgement/` | **Judgement** | Which stories did the day merge, and where is the merge line relative to pairs marked as separate stories? |
 | `/console/voices/` | **Voices** | Who supplied the day, and how are feeds discounted? |
 | `/console/data-explorer/` | **Data explorer** | What do the ledgers hold, and what does a question of my own return? |
 
@@ -135,19 +135,21 @@ what the operator learns; mechanism names alone are not enough.
 Copy changes keep stable addresses. Summaries' retained section is
 `Model figures by recorded day`, not a claim about live work today.
 
-## Judgement draws the published merges and the hand marks
+## Judgement draws the published merges and the holdout labels
 
-The tab says: `Which stories the day merged, and how close the merge line sits to
-pairs a person marked apart.` Two panels form one untitled group, in this order:
+The tab says: `Which stories the day merged, and where the merge line sits
+against pairs marked as separate stories.` Two panels form one untitled group,
+in this order:
 
 - `merged-stories` counts the published `same_story_as` decisions. Daily columns
   count stories merged behind another; dots count the largest group, including
   its retained story. The merge share stays in words with its denominator.
-- `holdout-margin`, titled `The pairs a person marked apart`, compares each pair
-  a person marked apart with the merge line, which is `floor_min` in the
-  committed config. It keeps the score-range strip for pairs marked one story and
-  the margin. These are score comparisons, not a replay of the published
-  grouping decisions shown in the first panel. See the
+- `holdout-margin`, titled `Pairs marked as separate stories`, compares the
+  labelled scores with the merge line, which is `floor_min` in the committed
+  config. The original labels came from a model, not a human review. The panel
+  keeps the score-range strip for pairs marked one story and the margin. These
+  are score comparisons, not a replay of the published grouping decisions shown
+  in the first panel. See the
   [holdout drawing rule](../../concepts/console-design/the-rules-every-console-chart-obeys.md#the-holdout-margin-is-drawn-at-the-scale-of-the-margin-not-of-the-score).
 
 Both panels span the full row, so the margin keeps its drawn width. The margin's
@@ -161,7 +163,7 @@ route using the address in the shared route table. It also says they do not
 change what the site merges.
 
 Both panels keep their build-time reads. The digest days are not published
-ledgers. The hand marks are one, because the Data explorer offers `holdout-pairs`,
+ledgers. The holdout labels are in a ledger, `holdout-pairs` in the Data explorer,
 but this page still reads their packed files at build time and does not fetch
 them in the browser. `content-similarity-holdout.ts` stays under
 `frontend/src/lib/server/`; the browser must not import it. Reads keep their
@@ -172,7 +174,7 @@ the marks are read over their own reach.
 Each panel has a stable id, one leading figure or sentence, a visible comparison,
 a named question, a chart type, and a readout declaration. Each declines the
 summary-settings rule because it draws published merges or the merge line against
-hand marks, not how summaries are written. Both are in the route's `judged` list.
+holdout labels, not how summaries are written. Both are in the route's `judged` list.
 
 The component boundary keeps absent evidence as `null` and supplied empty
 evidence as an empty array or a zero-count record. Missing evidence prints an
