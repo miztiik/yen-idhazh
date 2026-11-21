@@ -12,8 +12,8 @@
 	 * published day, so it costs the site nothing that grows. It is the address a
 	 * stranger meets first, so its seed and its leading block are in the first
 	 * bytes rather than a request away. And when the fetch fails the reader is not
-	 * left with a headline and a button: the seed is on screen, `MoreDays` is
-	 * under it, and every one of those days opens.
+	 * left with a headline and a button: the seed is on screen and the footer
+	 * still links to the previous published edition and archive.
 	 *
 	 * **The seed holds the day's leads**, so the two-column layout is decided in
 	 * the prerendered document. Without that the aside arrives with the fetch, the
@@ -22,7 +22,6 @@
 	import { restoreAnchor, watchDay, type DayStatus } from '$lib/assist/day';
 	import DigestList from '$lib/components/DigestList.svelte';
 	import EmptyDay from '$lib/components/EmptyDay.svelte';
-	import MoreDays from '$lib/components/MoreDays.svelte';
 	import PayloadState from '$lib/components/PayloadState.svelte';
 	import { deskCount } from '$lib/day-shape';
 	import { longDate } from '$lib/format';
@@ -51,7 +50,7 @@
 	);
 	const shortfall = $derived(
 		published > 0 && (day?.items.length ?? 0) < published
-			? `${day?.items.length ?? 0} of ${published} stories arrived. The days below are all here.`
+			? `${day?.items.length ?? 0} of ${published} stories arrived.`
 			: undefined
 	);
 
@@ -105,9 +104,7 @@
 			day={longDate(day.date)}
 			onRetry={() => fetchDay(day.date, true)}
 		/>
-		<MoreDays days={data.recent} current={day.date} />
 	{:else}
 		<EmptyDay date={data.today} />
-		<MoreDays days={data.recent} current={data.today} />
 	{/if}
 </div>

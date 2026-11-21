@@ -40,7 +40,6 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'DigestItem.svelte', 'DigestList.svelte', 'EmptyDay.svelte', 'FailureList.svelte', 'FailureRuleRanking.svelte',
 		'FilterBar.svelte', 'FoundStories.svelte', 'ItemMeta.svelte',
 		'ItemVisual.svelte', 'KpiCard.svelte', 'LeadingStories.svelte', 'LensChips.svelte',
-		'MoreDays.svelte',
 		'NotHere.svelte', 'Notice.svelte', 'Panel.svelte', 'PanelGroup.svelte', 'PayloadState.svelte',
 		'RankedList.svelte', 'ReadAloud.svelte', 'Reserved.svelte', 'RouteStatus.svelte',
 		'RunLengths.svelte', 'RunSquares.svelte', 'RunYield.svelte', 'SearchState.svelte',

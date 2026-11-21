@@ -25,6 +25,7 @@
 	import FoundStories from '$lib/components/FoundStories.svelte';
 	import LeadingStories from '$lib/components/LeadingStories.svelte';
 	import SearchState from '$lib/components/SearchState.svelte';
+	import Icon from '$lib/icons/Icon.svelte';
 	import { base } from '$app/paths';
 	import { loadDay, restoreAnchor, type DayStatus } from '$lib/assist/day';
 	import { loadIndex, loadVectors } from '$lib/assist/index';
@@ -165,6 +166,7 @@
 	// in; `onMount` would leave the previous day's marks on the new day's page.
 	$effect(() => {
 		read = loadRead(day.date, ui.read_mark_days);
+		cleared = false;
 	});
 
 	// Every story this page is about, before anything is folded. It is what a
@@ -467,6 +469,7 @@
 	}
 
 	function clearRead() {
+		if (read.size === 0) return;
 		read = forgetAll(day.date);
 		hideRead = false;
 		setHideRead(false);
@@ -568,57 +571,49 @@
 				{/each}
 
 				<div class="continuation" data-continuation aria-busy={loading}>
-					<p class="reading-progress" role="status">
-						{#if added > 0}{plural(added, 'more story', 'more stories')} loaded. {/if}
-						Showing {paged.length} of {reachable} stories
-					</p>
 					{#if remaining > 0}
-					<!-- Hidden with no script, and replaced by a line that says so.
-					     The control needs a click handler to do anything, so leaving it
-					     drawn hands a script-free reader a button that promises 55
-					     stories and does nothing when pressed - which is what `/` did
-					     until 2026-09-10. The attribute is what the `<noscript>` rule
-					     below hides, for the reason `FilterBar` records: a `<noscript>`
-					     block cannot reach a scoped class, and it can reach an
-					     attribute. -->
-					<button
-						type="button"
-						data-pager-scripted
-						onclick={() => void loadMore()}
-						disabled={status !== 'ready'}
-						class="load-more"
-					>
-						{loading ? 'Loading more stories...' : status === 'ready' ? 'Load more stories' : 'More stories unavailable'}
-					</button>
-					<noscript>
-						<style>
-							[data-pager-scripted][data-pager-scripted] {
-								display: none;
-							}
-						</style>
-						<p class="pager-noscript w-full py-6 text-sm text-text-tertiary">
-							{remaining} more stories need JavaScript. Every topic above is a link and still
-							works.
-						</p>
-					</noscript>
+						<!-- The noscript rule uses an attribute because it cannot reach scoped classes. -->
+						<button
+							type="button"
+							data-pager-scripted
+							onclick={() => void loadMore()}
+							disabled={status !== 'ready'}
+							class="load-more"
+						>
+							{#if status === 'ready'}<Icon id="load-more" />{/if}
+							<span>{loading ? 'Loading more...' : status === 'ready' ? 'Load more' : 'More stories unavailable'}</span>
+						</button>
+						<noscript>
+							<style>
+								[data-pager-scripted][data-pager-scripted] {
+									display: none;
+								}
+							</style>
+							<p class="pager-noscript w-full py-6 text-sm text-text-tertiary">
+								{remaining} more stories need JavaScript. Every topic above is a link and still works.
+							</p>
+						</noscript>
 					{/if}
+					<p class="reading-progress" role="status">
+						{#if added > 0}<span class="sr-only">{plural(added, 'more story', 'more stories')} loaded. </span>{/if}
+						{paged.length} of {plural(reachable, 'story', 'stories')}
+					</p>
 				</div>
 			{/if}
 
 			{#if read.size > 0 || cleared}
-				<section class="reading-controls" aria-labelledby="reading-controls-heading">
-					<h2 id="reading-controls-heading">Reading controls</h2>
-					<p class="reading-progress" role="status">
-						{cleared && read.size === 0 ? 'Read marks cleared for this day.' : `${plural(read.size, 'story marked read', 'stories marked read')} on this device.`}
-					</p>
+				<section class="reading-controls" aria-label="Reading controls">
 					<div class="reading-actions">
-						<button type="button" onclick={toggleHide} aria-pressed={hideRead} disabled={read.size === 0}>
-							{hideRead ? 'Show everything' : 'Hide what I have read'}
-						</button>
-						<button type="button" onclick={clearRead}>
-							Forget what I have read
+						<label>
+							<input type="checkbox" checked={hideRead} onchange={toggleHide} disabled={read.size === 0} />
+							<span>Unread only</span>
+						</label>
+						<button type="button" onclick={clearRead} aria-disabled={read.size === 0}>
+							<Icon id="clear-read" />
+							<span>Clear read marks</span>
 						</button>
 					</div>
+					<p class="reading-progress" role="status">{cleared && read.size === 0 ? 'Read marks cleared for this day.' : ''}</p>
 				</section>
 			{/if}
 		{/if}
@@ -646,16 +641,19 @@
 	<BackToTop reading />
 
 	<style>
-		.continuation, .reading-controls {
-			margin-block-start: var(--space-6);
-			padding-block: var(--space-5);
-			border-block-start: 1px solid var(--color-rule);
-		}
 		.continuation {
 			display: flex;
 			flex-direction: column;
 			align-items: center;
-			gap: var(--space-3);
+			gap: var(--space-2);
+			margin-block-start: var(--space-5);
+			text-align: center;
+		}
+		.reading-controls {
+			margin-block-start: var(--space-3);
+			/* Keep the wrapped controls clear of the floating Back to top button. */
+			padding-inline: var(--space-7);
+			text-align: center;
 		}
 		.reading-progress {
 			margin: 0;
@@ -663,38 +661,52 @@
 			font-size: var(--text-sm);
 			line-height: var(--leading-sm);
 		}
-		.load-more, .reading-actions button {
+		.load-more, .reading-actions > * {
+			display: inline-flex;
+			align-items: center;
+			gap: var(--space-2);
 			min-block-size: calc(var(--space-6) + var(--space-3));
+			border-radius: var(--radius-md);
+			cursor: pointer;
+		}
+		.load-more {
 			padding: var(--space-2) var(--space-4);
 			border: 1px solid var(--color-rule-strong);
-			border-radius: var(--radius-md);
 			background: var(--color-surface);
 			color: var(--color-accent);
 			font-size: var(--text-base);
-			cursor: pointer;
+			line-height: var(--leading-base);
 		}
-		.load-more:hover:not(:disabled), .reading-actions button:hover:not(:disabled) {
+		.load-more:hover:not(:disabled) {
 			border-color: var(--color-accent);
 			background: var(--tint-accent);
-		}
-		button:disabled {
-			color: var(--color-text-tertiary);
-			cursor: default;
-		}
-		.reading-controls h2 {
-			margin: 0 0 var(--space-2);
-			font-size: var(--text-base);
-			line-height: var(--leading-base);
-			color: var(--color-text);
 		}
 		.reading-actions {
 			display: flex;
 			flex-wrap: wrap;
-			gap: var(--space-3);
-			margin-block-start: var(--space-3);
+			justify-content: center;
+			column-gap: var(--space-2);
 		}
-		.reading-actions button {
+		.reading-actions > * {
+			padding-inline: var(--space-2);
+			color: var(--color-text-secondary);
 			font-size: var(--text-sm);
+			line-height: var(--leading-sm);
+		}
+		.reading-actions input {
+			flex: none;
+			inline-size: var(--space-4);
+			block-size: var(--space-4);
+			accent-color: var(--color-accent);
+			cursor: inherit;
+		}
+		.reading-actions :is(label:not(:has(:disabled)), button[aria-disabled='false']):hover {
+			background: var(--tint-accent);
+			color: var(--color-accent);
+		}
+		.load-more:disabled, .reading-actions :is(label:has(:disabled), button[aria-disabled='true']) {
+			color: var(--color-text-tertiary);
+			cursor: default;
 		}
 	</style>
 

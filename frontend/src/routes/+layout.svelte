@@ -13,6 +13,8 @@
 
 	let { data, children } = $props();
 	const operator = $derived(page.route.id?.startsWith('/console') === true);
+	const home = $derived(page.route.id === '/');
+	const previousEdition = $derived(home && typeof page.data.previousEdition === 'string' ? page.data.previousEdition : null);
 
 	// The one place this site names `serviceWorker`. It starts the offline
 	// reader, which is what lets a day already opened be read again with no
@@ -60,6 +62,6 @@
 		{@render children()}
 	</main>
 	{#if data?.ui && page.route.id !== '/archive'}
-		<SiteFooter repoUrl={data.ui.repo_url} showTheme={operator} />
+		<SiteFooter repoUrl={data.ui.repo_url} showTheme={operator} {home} {previousEdition} />
 	{/if}
 </div>

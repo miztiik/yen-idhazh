@@ -1,5 +1,5 @@
 import { shellSeedItems } from '$lib/server/config';
-import { homeShell, latestDate, loadDay, publishedDates } from '$lib/server/payload';
+import { homeShell, publishedDates } from '$lib/server/payload';
 
 /** The flag is here rather than on the root layout, and it has to be.
  *
@@ -35,18 +35,7 @@ export const prerender = true;
  * this route's behaviour at all.
  */
 export function load() {
-	const latest = latestDate();
+	const [latest = null, previousEdition = null] = publishedDates();
 	const shell = latest ? homeShell(latest, shellSeedItems()) : null;
-	// A handful of recent days, so "what did I miss on Tuesday" is answered in
-	// place. Dates and counts only: the stories stay where they are, and this
-	// list grows per day rather than per story.
-	//
-	// Seven is a count and the read's cover is a span, so this takes the default
-	// cover and slices seven from the front of it. The two only disagree where
-	// the pipeline published fewer than seven days in the last ninety, and then
-	// there are fewer than seven recent days to show.
-	const recent = publishedDates()
-		.slice(0, 7)
-		.map((date) => ({ date, items: loadDay(date)?.items.length ?? 0 }));
-	return { day: shell ? { ...shell.facts, items: shell.seed } : null, today: latest, recent };
+	return { day: shell ? { ...shell.facts, items: shell.seed } : null, today: latest, previousEdition };
 }

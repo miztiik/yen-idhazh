@@ -19,9 +19,9 @@
 	 * document per build rather than one per published day, so it costs the site
 	 * nothing that grows. It is the address a stranger meets first, so its seed
 	 * and its leading block ship in the first bytes rather than a request away.
-	 * And when its fetch fails the reader still has the seed and `MoreDays` under
-	 * it, which a dated URL cannot offer. It carries a seed and fetches the rest,
-	 * exactly as this route does, since 2026-09-10.
+	 * And when its fetch fails the reader still has the seed and the direct
+	 * previous-edition link, which a dated URL cannot offer. The rest of the
+	 * home edition uses the same browser fetch as a dated URL.
 	 *
 	 * This paragraph used to claim `/` "stays readable with no script at all",
 	 * and that claim was the whole case for exempting it from ruling D2. It was
