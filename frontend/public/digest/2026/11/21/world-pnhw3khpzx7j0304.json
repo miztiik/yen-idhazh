@@ -1,0 +1,40 @@
+{
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": "m3",
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "world-pnhw3khpzx7j0304",
+  "marks": [
+    {"derived": null,"element_id": "entity-270-275","mark_id": "m0","source_text": null,"text": "least","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-992-997","mark_id": "m1","source_text": null,"text": "least","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-1137-1146","mark_id": "m2","source_text": null,"text": "In August","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-276-285","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "people","value": "11"},
+    {"derived": null,"element_id": "quantity-998-1007","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "people","value": "15"},
+    {"derived": null,"element_id": "quantity-1148-1157","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "people","value": "13"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Deaths from illicit alcohol incidents in India",
+  "type": "bar",
+  "version": "2026-10-27T05:00"
+}

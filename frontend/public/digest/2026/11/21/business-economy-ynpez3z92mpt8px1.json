@@ -1,0 +1,36 @@
+{
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": "m3",
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "business-economy-ynpez3z92mpt8px1",
+  "marks": [
+    {"derived": null,"element_id": "entity-106-136","mark_id": "m0","source_text": null,"text": "initial price with a valuation","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-205-221","mark_id": "m1","source_text": null,"text": "Anthropic shares","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-93-96","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "%","value": "17"},
+    {"derived": null,"element_id": "quantity-231-234","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "11"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Anthropic debut gain versus midday decline",
+  "type": "bar",
+  "version": "2026-10-27T05:00"
+}
