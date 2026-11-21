@@ -71,21 +71,25 @@ An absent leading block creates no reserved blank space.
 ### Continuation and reading controls
 
 The initial stream contains the head of the reading order and every visible
-lead. "Load more stories" appends the next unread portion of that order beneath
+lead. "Load more" appends the next portion of that order beneath
 the cards already drawn, without replacing their mounted elements or inserting
-labels between articles. Explicit activation focuses and scrolls to the first
-appended article. The pager's polite status reports the added count and the
-displayed count against the reachable story count.
+labels between articles. The button and the displayed-versus-reachable story
+count are centered. Activation focuses and scrolls to the first appended
+article, and the pager's polite status also announces how many were added.
 
-While the day's payload is pending, the pager says "Loading more stories..."
+While the day's payload is pending, the pager says "Loading more..."
 and cannot accept duplicate requests. A failed payload leaves the current
 stories readable and uses the route's existing explanation and retry action.
 Already-loaded stories appear immediately, without an artificial wait.
 
-Read-state actions share a separate "Reading controls" group below continuation
-and above the homepage's "Earlier days" navigation. The group remains reachable
-when all stories are hidden. Clearing marks affects this day on this device,
-acknowledges completion and retains the control's focus.
+Below continuation, "Unread only" and "Clear read marks" sit together without a
+visible heading or read count. They remain reachable when all stories are
+hidden. Clearing marks affects this edition on this device, acknowledges
+completion and retains the control's focus.
+
+The homepage footer links directly to the previous published edition when one
+exists. "Archive & search" is the single entry for finding any other day.
+Console and source code links are grouped below those reader destinations.
 
 A floating circular up-caret appears after the site header leaves view. It
 returns to the edition heading, moves keyboard focus there and respects reduced

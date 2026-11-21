@@ -5,7 +5,7 @@ import type { BuildRecord } from '../scripts/build-state';
 import { isVisualData } from '../src/lib/payload/drawing';
 import type { DigestDay, VisualData } from '../src/lib/payload/types';
 import { dayReady } from './support/day-ready';
-import { CANARY, newestDate } from './support/published';
+import { CANARY, newestDate, publishedDates } from './support/published';
 import { uiConfig } from '../src/lib/server/config';
 
 /** One reading journey covers the shared shell; never expand it into route or presentation matrices. */
@@ -40,12 +40,22 @@ test(journey, async ({ page }) => {
 	await page.goto('/');
 	await dayReady(page);
 	const stories = page.locator('article.item');
+	const archive = page.getByRole('link', { name: 'Archive & search', exact: true });
 	await expect(stories.first()).toBeVisible();
 	await expect(stories.first().locator('[data-item-summary]').first()).not.toBeEmpty();
 	if (build.mode === 'real') {
+		const continuation = page.locator('[data-continuation]');
+		const progress = (await continuation.getByRole('status').innerText()).match(/^(\d+) of (\d+) stor(?:y|ies)$/);
+		if (!progress) throw new Error('continuation must show the displayed and reachable story counts');
+		const [, displayed, reachable] = progress;
+		if (Number(displayed) < Number(reachable)) {
+			await continuation.getByRole('button', { name: 'Load more', exact: true }).click();
+			await expect(stories.nth(Number(displayed))).toBeFocused();
+		}
 		// Check the dated route fetches and renders without depending on the day's
 		// topic counts, edition status or charts.
-		await page.goto('/archive/');
+		await archive.click();
+		await expect(page).toHaveURL(new URL('/archive/', page.url()).href);
 		const link = page.locator('[data-story-list="rows"]').getByRole('link').first();
 		await link.click();
 		await dayReady(page);
@@ -110,6 +120,7 @@ test(journey, async ({ page }) => {
 	await page.setViewportSize({ width: 1920, height: 1080 });
 	const edition = page.getByRole('region', { name: 'About today' });
 	await expect(edition.getByRole('heading', { level: 1 })).toBeVisible();
+	await expect(edition.getByRole('heading', { level: 1 }).locator('time')).toHaveAttribute('datetime', newestDate());
 	await expect(edition).toContainText(/\d+ stories/);
 	await expect(edition).toContainText(/Updated \d{2}:\d{2} UTC/);
 	await expect(edition).not.toContainText('did not finish');
@@ -186,22 +197,21 @@ test(journey, async ({ page }) => {
 	await page.goto('/');
 	await dayReady(page);
 	const originalLink = stories.first().getByRole('link', { name: 'Read the original' });
+	const marked = page.locator(`article.item[id=${JSON.stringify(await stories.first().getAttribute('id'))}]`);
 	// Exercise the real read handler without leaving the local published fixture.
 	await originalLink.evaluate((link) => link.addEventListener('click', (event) => event.preventDefault(), { once: true }));
 	await originalLink.click();
 	const readingControls = page.getByRole('region', { name: 'Reading controls' });
-	await expect(readingControls).toContainText('1 story marked read');
-	await readingControls.getByRole('button', { name: 'Hide what I have read' }).click();
-	await expect(readingControls.getByRole('button', { name: 'Show everything' })).toBeVisible();
-	const forget = readingControls.getByRole('button', { name: 'Forget what I have read' });
-	await forget.click();
-	await expect(forget).toBeFocused();
+	const unreadOnly = readingControls.getByRole('checkbox', { name: 'Unread only' });
+	await unreadOnly.check();
+	await expect(marked).toHaveCount(0);
+	const clear = readingControls.getByRole('button', { name: 'Clear read marks' });
+	await clear.press('Enter');
+	await expect(clear).toBeFocused();
+	await expect(clear).toBeDisabled();
+	await expect(unreadOnly).not.toBeChecked();
+	await expect(marked).toBeVisible();
 	await expect(readingControls).toContainText('Read marks cleared for this day.');
-	const bottomOrder = await readingControls.evaluate((controls) => {
-		const days = document.querySelector('[data-more-days]');
-		return days !== null && Boolean(controls.compareDocumentPosition(days) & Node.DOCUMENT_POSITION_FOLLOWING);
-	});
-	expect(bottomOrder).toBe(true);
 	await page.emulateMedia({ reducedMotion: 'reduce' });
 	await page.locator('[data-reader-top]').focus();
 	await page.keyboard.press('Enter');
@@ -265,6 +275,12 @@ test(journey, async ({ page }) => {
 	await expect.poll(() => page.evaluate(
 		() => document.documentElement.scrollWidth <= document.documentElement.clientWidth
 	)).toBe(true);
+	const previous = page.getByRole('link', { name: 'Previous edition' });
+	const previousDate = publishedDates().at(-2);
+	if (!previousDate) throw new Error('the reader canary must publish a previous edition');
+	await previous.click();
+	await expect(page).toHaveURL(new URL(`/${previousDate}/`, page.url()).href);
+	await dayReady(page);
 
 	await page.setViewportSize({ width: 1920, height: 1080 });
 	await page.goto('/archive/');

@@ -22,13 +22,7 @@ test('the root empty state offers a way out that no later run can move', () => {
 test('the root load does not read the build clock', () => {
     const source = readFileSync(resolve(ROOT, 'frontend', 'src', 'routes', '+page.server.ts'), 'utf8');
     expect(source).not.toContain('new Date');
-    // The date the page shows comes off the newest committed day and nothing
-    // else. This used to assert `day?.date ?? latest`, which was the same rule
-    // written as a fallback; since 2026-09-10 the load carries a seed rather than
-    // a whole day, so there is no day object to read a date off and `latest` is
-    // the only source there is.
-    expect(source).toContain('latestDate()');
-    expect(source).toContain('today: latest');
+    expect(source).not.toContain('Date.now');
 });
 test('reader source limits are sentences in the page text', () => {
     const item = readFileSync(resolve(ROOT, 'frontend', 'src', 'lib', 'components', 'DigestItem.svelte'), 'utf8');
