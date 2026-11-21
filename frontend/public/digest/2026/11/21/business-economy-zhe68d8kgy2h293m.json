@@ -1,0 +1,40 @@
+{
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": "m3",
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "business-economy-zhe68d8kgy2h293m",
+  "marks": [
+    {"derived": null,"element_id": "entity-752-766","mark_id": "m0","source_text": null,"text": "Nasdaq dropped","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-891-897","mark_id": "m1","source_text": null,"text": "gained","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-925-933","mark_id": "m2","source_text": null,"text": "slumping","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-767-770","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "10"},
+    {"derived": null,"element_id": "quantity-898-901","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "%","value": "17"},
+    {"derived": null,"element_id": "quantity-944-946","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "%","value": "8"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Nasdaq weekly drop vs. Anthropic debut gain and slump",
+  "type": "bar",
+  "version": "2026-10-27T05:00"
+}

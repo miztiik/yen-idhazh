@@ -1,0 +1,44 @@
+{
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": "m5",
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m4",
+      "m5",
+      "m6",
+      "m7"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-vvjwedrb8znjy56z",
+  "marks": [
+    {"derived": null,"element_id": "entity-427-437","mark_id": "m0","source_text": null,"text": "university","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-773-797","mark_id": "m1","source_text": null,"text": "city limits will require","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-821-828","mark_id": "m2","source_text": null,"text": "minimum","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-927-944","mark_id": "m3","source_text": null,"text": "rest of the state","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-443-452","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "acre","value": "100"},
+    {"derived": null,"element_id": "quantity-807-815","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "acre","value": "12"},
+    {"derived": null,"element_id": "quantity-837-845","mark_id": "m6","source_text": null,"text": null,"time": null,"unit": "acre","value": "18"},
+    {"derived": null,"element_id": "quantity-911-919","mark_id": "m7","source_text": null,"text": null,"time": null,"unit": "acre","value": "25"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Minimum land for private universities by location",
+  "type": "bar",
+  "version": "2026-10-27T05:00"
+}

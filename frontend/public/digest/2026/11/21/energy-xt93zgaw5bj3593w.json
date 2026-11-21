@@ -1,0 +1,36 @@
+{
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": "m2",
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "energy-xt93zgaw5bj3593w",
+  "marks": [
+    {"derived": null,"element_id": "entity-2519-2522","mark_id": "m0","source_text": null,"text": "saw","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-2734-2743","mark_id": "m1","source_text": null,"text": "Similarly","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-2528-2538","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "%","value": "87"},
+    {"derived": null,"element_id": "quantity-2745-2755","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "86"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Voter concern about gas/diesel and utility costs in midterms",
+  "type": "bar",
+  "version": "2026-10-27T05:00"
+}
