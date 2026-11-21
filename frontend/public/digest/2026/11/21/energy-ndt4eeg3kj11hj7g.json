@@ -1,0 +1,40 @@
+{
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": "m3",
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "energy-ndt4eeg3kj11hj7g",
+  "marks": [
+    {"derived": null,"element_id": "entity-1377-1400","mark_id": "m0","source_text": null,"text": "turning circle at about","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-1446-1455","mark_id": "m1","source_text": null,"text": "Lightning","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-1492-1493","mark_id": "m2","source_text": null,"text": "T","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-1401-1408","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "ft","value": "43.5"},
+    {"derived": null,"element_id": "quantity-1467-1474","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "ft","value": "47.8"},
+    {"derived": null,"element_id": "quantity-1497-1504","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "ft","value": "44.9"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Curb-to-curb turning circles compared",
+  "type": "dot",
+  "version": "2026-10-27T05:00"
+}

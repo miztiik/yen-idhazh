@@ -1,0 +1,40 @@
+{
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": "m3",
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "energy-zhd9npmyqm7yawjd",
+  "marks": [
+    {"derived": null,"element_id": "entity-6636-6669","mark_id": "m0","source_text": null,"text": "multiplier without the underlying","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-4406-4423","mark_id": "m1","source_text": null,"text": "intervention rate","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-4279-4296","mark_id": "m2","source_text": null,"text": "intervention rate","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-6632-6635","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "x","value": "25"},
+    {"derived": null,"element_id": "quantity-4427-4430","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "x","value": "25"},
+    {"derived": null,"element_id": "quantity-4258-4261","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "x","value": "25"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "FSD safety claims versus measured disengagement distances",
+  "type": "bar",
+  "version": "2026-10-27T05:00"
+}
