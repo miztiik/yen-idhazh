@@ -36,7 +36,7 @@ PRODUCER: Final = __name__.partition(".")[2]
 
 @dataclass(frozen=True, slots=True)
 class FileReport:
-    """What the collecting job did, for the caller to log."""
+    """What the collecting job filed and how much work it saw."""
 
     date: str
     run_id: str
@@ -46,6 +46,8 @@ class FileReport:
     rows_filed: int
     #: How many units shipped a reading of their own instrument.
     runners_reported: int
+    #: This attempt's final rows, or None when the ledger declined a nonempty batch.
+    filed_rows: tuple[StorySimilarityPairVerdict, ...] | None
 
 
 def _verdict_rows(path: Path) -> list[StorySimilarityPairVerdict]:
@@ -145,9 +147,10 @@ def stage_file_pair_verdicts(
     )
     _refuse_what_is_not_this_nights_own(rows, readings, date=date, run_id=run_id)
 
+    batch = tuple(with_sampling_chance(rows))
     filed = ledger.persist(
         state_dir,
-        with_sampling_chance(rows),
+        batch,
         ledger=LedgerName.CONTENT_SIMILARITY_JUDGE_PAIR_VERDICTS,
         covers=date,
         identity=writer,
@@ -157,8 +160,9 @@ def stage_file_pair_verdicts(
         run_id=run_id,
         shards_expected=expected_shards,
         shards_present=len(present),
-        rows_filed=len(rows) if filed else 0,
+        rows_filed=len(batch) if filed else 0,
         runners_reported=len(readings),
+        filed_rows=batch if filed or not batch else None,
     )
     LOG.info(
         "file-pair-verdicts date=%s run=%s shards=%s/%s filed=%s runners_reported=%s",

@@ -9,7 +9,7 @@ Threshold arithmetic is tested in memory in `test_review_thresholds.py`.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Final
 
@@ -30,6 +30,8 @@ from idhazh.content_similarity_judge.tenant import JUDGE_ID
 from idhazh.contracts.file_envelope import Period
 from idhazh.contracts.ledger_index import CompactEntry, EntryState
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.story_similarity_diagnostics import SampleStatus
+from idhazh.contracts.story_similarity_pair_verdict import StorySimilarityPairVerdict
 from idhazh.contracts.story_similarity_threshold_history_row import (
     StorySimilarityThresholdHistoryRow,
     ThresholdHoldReason,
@@ -57,6 +59,7 @@ class Night:
     shipped: Path
     verdicts: Path
     units: int
+    filed_rows: tuple[StorySimilarityPairVerdict, ...] | None = ()
 
 
 def lay_down_a_night(
@@ -113,7 +116,12 @@ def lay_down_a_night(
         verdicts=root / date / f"verdicts-{attempt}",
         units=units,
     )
-    atomic_write.write_atomic(night.draw, a_verdict_file(drawn))
+    atomic_write.write_atomic(
+        night.draw,
+        a_verdict_file(
+            [row.model_copy(update={"work_part_index": i % units}) for i, row in enumerate(drawn)]
+        ),
+    )
     for unit in range(units):
         if unit in lost:
             continue
@@ -129,7 +137,7 @@ def lay_down_a_night(
         atomic_write.write_atomic(
             night.verdicts / f"{date}-{JUDGE_ID}-{unit:02d}.csv", a_verdict_file(rows)
         )
-    file_pair_verdicts.stage_file_pair_verdicts(
+    filed = file_pair_verdicts.stage_file_pair_verdicts(
         date,
         run_id=run_id,
         judge_id=JUDGE_ID,
@@ -139,7 +147,7 @@ def lay_down_a_night(
         expected_shards=units,
         state_dir=state,
     )
-    return night
+    return replace(night, filed_rows=filed.filed_rows)
 
 
 def review(night: Night, state: Path) -> review_thresholds.ReviewReport:
@@ -149,6 +157,7 @@ def review(night: Night, state: Path) -> review_thresholds.ReviewReport:
         judge_id=JUDGE_ID,
         shipped_root=night.shipped,
         draw_path=night.draw,
+        filed_rows=night.filed_rows,
         identity=a_saver(night.run_id),
         expected_shards=night.units,
         state_dir=state,
@@ -199,6 +208,8 @@ def test_a_night_whose_every_pair_was_lost_files_a_row_that_says_so(tmp_path: Pa
     row = settle_a_night(tmp_path, state, 0, lost=(0, 1), extra=ENDS)
 
     assert (row.runners_expected, row.runners_reported, row.pairs_dealt) == (2, 0, 0)
+    assert row.sample_status is SampleStatus.MEASURED
+    assert (row.pairs_drawn, row.pairs_returned) == (83, 0)
     assert row.lower_held_because is ThresholdHoldReason.NOT_ENOUGH_EVIDENCE
     assert row.upper_held_because is ThresholdHoldReason.NOT_ENOUGH_EVIDENCE
     assert (row.lower_threshold_before, row.lower_threshold_after) == (0.70, 0.70)
@@ -233,6 +244,27 @@ def test_a_night_whose_units_reported_files_the_totals_of_the_units_that_did(tmp
     assert (one.runners_expected, one.runners_reported, one.pairs_dealt) == (2, 1, 42)
     assert one.decode_seconds_total == pytest.approx(3.5)
     assert one.pairs_agreed == one.pairs_dealt
+
+
+def test_a_sample_shard_mismatch_does_not_change_the_fit_or_runner_readings(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    state = tmp_path / "state"
+    night = lay_down_a_night(tmp_path, state, 0)
+    draw = review_thresholds._draw_rows(night.draw)
+    draw[0] = draw[0].model_copy(update={"work_part_index": 1})
+    atomic_write.write_atomic(night.draw, a_verdict_file(draw))
+
+    report = review(night, state)
+
+    (row,) = load_threshold_history(state, [night.date])
+    assert report.filed and report.row == row
+    assert row.sample_status is SampleStatus.DRAW_MISMATCH
+    assert row.pairs_drawn == 80 and row.pairs_returned is None
+    assert row.slice_outcomes is row.evaluated_cutoff is row.cutoff_brier_score is None
+    assert (row.lower_usable_pairs_used, row.upper_usable_pairs_used) == (40, 40)
+    assert (row.runners_reported, row.pairs_dealt) == (2, 80)
+    assert f"run={night.run_id} status=draw_mismatch reason=filed_shard_mismatch" in caplog.text
 
 
 def test_tonights_pairs_are_read_even_when_the_day_was_recorded_as_quiet(tmp_path: Path) -> None:

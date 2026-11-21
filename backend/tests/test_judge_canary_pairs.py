@@ -24,13 +24,21 @@ from typing import Any, Final
 import pytest
 from pydantic import TypeAdapter
 from support.judge_reader import ProtocolReplies, native_reply
-from support.judged_pairs import CONFIG_VERSIONS, DATE, a_night_of_pairs, a_reading
+from support.judged_pairs import (
+    CONFIG_VERSIONS,
+    DATE,
+    a_night_of_pairs,
+    a_reading,
+    a_saver,
+    a_verdict_file,
+)
 from support.models import a_markers
 from support.paths import CONFIG_DIR
 from support.threshold_nights import LOOKBACK, RULES
 
-from idhazh import config
+from idhazh import atomic_write, config
 from idhazh.content_similarity_judge import settings as judge_settings
+from idhazh.content_similarity_judge.ledger_reads import load_threshold_history
 from idhazh.content_similarity_judge.model_reader import ModelReader
 from idhazh.content_similarity_judge.tenant import JUDGE_ID
 from idhazh.contracts.knobs.content_similarity_canaries import CanaryPair
@@ -44,9 +52,10 @@ from idhazh.contracts.story_similarity_threshold_history_row import (
 from idhazh.council import metrics_sink
 from idhazh.llm.server import Completion, parse_completion
 from idhazh.similarity import judge
+from idhazh.similarity.canary_diagnostics import canary_columns
 from idhazh.similarity.night_totals import merged_canary_answers, runner_columns
 from idhazh.stages import judge_canary_pairs
-from idhazh.stages.review_thresholds import build_threshold_row
+from idhazh.stages.review_thresholds import build_threshold_row, stage_review_thresholds
 
 #: The committed pairs in file order: same-1, same-2, different-1, different-2, unclear-1, unclear-2.
 PAIRS: Final = judge_settings.load_canaries(CONFIG_DIR).pairs
@@ -382,34 +391,89 @@ def test_the_nights_row_carries_the_answers_as_the_runners_gave_them_and_no_coun
 def test_four_runners_ship_their_share_and_the_night_names_all_six_exactly_once(
     tmp_path: Path,
 ) -> None:
-    """Stage, the file a unit ships between jobs, and the collecting job's merge, end to end.
-
-    Each runner judges the pairs the dealing gave it, puts the answers on its own reading and
-    ships that reading as the CSV row the venue carries. The collecting job reads the four rows
-    back and gathers them, so the text the night files is the text the runners produced.
-    """
+    """The shipped runner readings file the actual answers, the key and agreement in history."""
     date = "2026-11-19"
+    run_id = f"{date}-9"
+    draw_path, state = tmp_path / "draw.csv", tmp_path / "state"
+    draw = a_night_of_pairs([(0.80, "YES")] * 4, date=date, answered=False)
+    atomic_write.write_atomic(
+        draw_path,
+        a_verdict_file(
+            [row.model_copy(update={"work_part_index": shard}) for shard, row in enumerate(draw)]
+        ),
+    )
     for runner in range(4):
-        report, _ = judge_them(a_reply("YES"), date=date, shard=runner, shards=4)
-        reading = a_reading(shard=runner, dealt=2, date=date, run_id=f"{date}-9")
+        replies = [
+            a_reply("NO" if pair.id == "unclear-1" else pair.expected.value)
+            for pair in PAIRS
+            if pair.id in DEALT[date][runner]
+            for _ in range(2)
+        ]
+        report, _ = judge_them(*replies, date=date, shard=runner, shards=4)
+        reading = StorySimilarityRunnerReport(
+            date=date,
+            run_id=run_id,
+            work_part_index=runner,
+            pairs_dealt=1,
+            pairs_valid=0,
+            pairs_agreed=0,
+            pairs_unreadable=0,
+            pairs_refused=0,
+            pairs_abandoned=1,
+            canary_answers=report.answers,
+        )
         metrics_sink.ship_judge_metrics(
-            StorySimilarityRunnerReport.model_validate(
-                reading.model_dump(mode="json") | {"canary_answers": report.answers}
-            ),
-            judge_id=JUDGE_ID,
-            name=str(runner),
-            out_dir=tmp_path,
+            reading, judge_id=JUDGE_ID, name=str(runner), out_dir=tmp_path
         )
 
-    shipped = metrics_sink.shipped_rows(
-        tmp_path, judge_id=JUDGE_ID, contract=StorySimilarityRunnerReport
+    reviewed = stage_review_thresholds(
+        date,
+        run_id=run_id,
+        judge_id=JUDGE_ID,
+        shipped_root=tmp_path,
+        draw_path=draw_path,
+        filed_rows=(),
+        identity=a_saver(run_id),
+        expected_shards=4,
+        state_dir=state,
+        config_dir=CONFIG_DIR,
     )
-    text = merged_canary_answers(shipped)
 
-    assert len(shipped) == 4
-    assert text is not None
-    answers = json.loads(text)
+    (filed,) = load_threshold_history(state, [date])
+    assert reviewed.filed and filed == reviewed.row
+    assert (filed.runners_reported, filed.pairs_abandoned, filed.pairs_returned) == (4, 4, 0)
+    assert filed.canary_expectations is not None
+    assert json.loads(filed.canary_expectations) == {pair.id: pair.expected.value for pair in PAIRS}
+    assert filed.canary_answers is not None
+    answers = json.loads(filed.canary_answers)
     assert sorted(answers) == sorted(pair.id for pair in PAIRS), "every id, once"
     assert {canary_id: cells[5] for canary_id, cells in answers.items()} == {
         canary_id: runner for runner, ids in DEALT[date].items() for canary_id in ids
     }
+    assert answers["unclear-1"][:2] == ["NO", "NO"], "keep the answer, not what the key wanted"
+    assert filed.canary_kappa_pairs == 6
+    assert filed.canary_kappa == 0.75, "five of six matches against one-third chance agreement"
+
+
+@pytest.mark.parametrize(
+    "orders", [None, (None, "YES"), ("YES", "NO")], ids=["lost", "refused", "split"]
+)
+def test_incomplete_canary_answers_keep_support_but_do_not_score_kappa(
+    orders: tuple[str | None, str] | None,
+) -> None:
+    answers = {pair.id: an_answer(0, pair.expected.value) for pair in PAIRS if pair.id != "same-1"}
+    if orders is not None:
+        answers["same-1"] = [*orders, None, None, 812, 0]
+
+    columns = canary_columns(PAIRS, canary_answers_text(answers))
+
+    assert columns["canary_kappa_pairs"] == 5
+    assert columns["canary_kappa"] is None
+
+
+def test_kappa_has_no_value_when_chance_agreement_is_one() -> None:
+    only = PAIRS[:1]
+    columns = canary_columns(only, canary_answers_text({only[0].id: an_answer(0)}))
+
+    assert columns["canary_kappa_pairs"] == 1
+    assert columns["canary_kappa"] is None

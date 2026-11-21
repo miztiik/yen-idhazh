@@ -268,8 +268,8 @@ class ContentSimilarityJudge:
         A night files whatever its units returned, so the reports say nothing the
         files do not: a unit that died left no file, or a file of the pairs it had
         finished, and either way the rows that exist are the rows that are filed.
-        The thresholds are reviewed from the ledger afterwards, so the night's own
-        pairs are read back the way the earlier nights' are.
+        The thresholds are reviewed from the ledger afterwards. The sample readings
+        instead use only the exact batch this attempt filed.
 
         The stages write under the state root the council handed over, and file
         their rows through the ledger door under the council's writer identity,
@@ -293,6 +293,7 @@ class ContentSimilarityJudge:
             judge_id=JUDGE_ID,
             shipped_root=_shipping_dir(date),
             draw_path=_draw_path(date),
+            filed_rows=filed.filed_rows,
             identity=identity,
             expected_shards=prepared.shards,
             state_dir=state_dir,
