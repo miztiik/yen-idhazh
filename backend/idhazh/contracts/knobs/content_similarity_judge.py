@@ -6,6 +6,13 @@ from typing import Final, Self
 from pydantic import Field, model_validator
 
 from idhazh.contracts.base import DateStamp, Model
+from idhazh.contracts.story_similarity_diagnostics import (
+    MAX_FIT_PAIRS,
+    MAX_SCORE_BASELINE_DAYS,
+    MAX_SCORE_BINS,
+    ProbabilityBins,
+    ScoreCutoff,
+)
 
 #: How far a quotient may sit from a whole number and still be one. A width such as 0.04 over
 #: 0.01 is 4.000000000000001 in floating point, and the grid is counted in whole slices.
@@ -363,11 +370,36 @@ class ThresholdsConfig(Model):
         return self
 
 
+class ContentSimilarityDiagnosticsConfig(Model):
+    """Settings for observation only, independent of sampling and publication."""
+
+    cutoff: ScoreCutoff = 0.87
+    score_bins: int = Field(default=40, strict=True, ge=2, le=MAX_SCORE_BINS)
+    score_baseline_days: int = Field(default=7, strict=True, ge=1, le=MAX_SCORE_BASELINE_DAYS)
+    score_baseline_lookback_days: int = Field(
+        default=28, strict=True, ge=1, le=MAX_SCORE_BASELINE_DAYS
+    )
+    score_psi_share_floor: float = Field(default=1e-6, strict=True, gt=0.0, allow_inf_nan=False)
+    probability_bins: ProbabilityBins = 10
+    fit_pair_limit: int = Field(default=MAX_FIT_PAIRS, strict=True, ge=1, le=MAX_FIT_PAIRS)
+
+    @model_validator(mode="after")
+    def _the_baseline_and_floor_fit_the_window_and_bins(self) -> Self:
+        if self.score_baseline_days > self.score_baseline_lookback_days:
+            raise ValueError("score_baseline_days cannot exceed score_baseline_lookback_days")
+        if self.score_psi_share_floor >= 1 / self.score_bins:
+            raise ValueError("score_psi_share_floor must be below one bin's uniform share")
+        return self
+
+
 class ContentSimilarityJudgeConfig(Model):
-    """The draw, the thresholds and how they move, flush cadence, temperature and version."""
+    """How the judge runs and which diagnostics its configuration describes."""
 
     draw: DrawConfig
     thresholds: ThresholdsConfig
+    diagnostics: ContentSimilarityDiagnosticsConfig = Field(
+        default_factory=ContentSimilarityDiagnosticsConfig
+    )
     flush_every_pairs: int = Field(
         ge=1,
         description=(

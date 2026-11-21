@@ -49,6 +49,21 @@ from idhazh.contracts.base import (
     DateStamp,
     RunId,
 )
+from idhazh.contracts.story_similarity_diagnostics import (
+    CanaryExpectations,
+    DiagnosticCount,
+    DiagnosticShare,
+    JudgeProbabilityEvidence,
+    JudgeProbabilityStatus,
+    SampleStatus,
+    ScoreCutoff,
+    ScoreDriftBaseline,
+    ScoreDriftStatus,
+    ScorePoolHistogram,
+    SliceOutcomes,
+    UpperFitEvidence,
+    read_diagnostic_text,
+)
 from idhazh.contracts.story_similarity_pair_verdict import (
     RECOMPUTED_TOLERANCE,
     ConfigVersionsText,
@@ -350,12 +365,17 @@ def _the_end_totals_follow_its_counts(
 
 
 class StorySimilarityThresholdHistoryRow(Contract):
-    """One run's reading of both thresholds: the evidence, the curves, the moves and the night."""
+    """One run's evidence, fitted thresholds, moves and optional judge diagnostics."""
 
     model_config = ConfigDict(allow_inf_nan=False)
 
     __schema_stem__: ClassVar[str] = "story-similarity-threshold-history-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-11-21",
+            change="Add nullable sample, drift, calibration and known-answer diagnostics.",
+            why="Readers can distinguish a measured night from one with no retained evidence.",
+        ),
         ChangelogEntry(
             version="2026-11-18",
             change="Initial shape: both thresholds, the numbers behind each move, and the night.",
@@ -587,6 +607,60 @@ class StorySimilarityThresholdHistoryRow(Contract):
             "that is absent was never judged. Empty when no known-answer pair was judged."
         ),
     )
+    pairs_drawn: DiagnosticCount | None = None
+    pairs_returned: DiagnosticCount | None = None
+    sample_status: SampleStatus | None = None
+    slice_outcomes: str | None = Field(default=None, description="Compact JSON of drawn slices.")
+    evaluated_cutoff: ScoreCutoff | None = Field(
+        default=None, description="The score cutoff evaluated against the judge, not publication."
+    )
+    sample_tp: DiagnosticCount | None = None
+    sample_fp: DiagnosticCount | None = None
+    sample_fn: DiagnosticCount | None = None
+    sample_tn: DiagnosticCount | None = None
+    sample_precision: DiagnosticShare | None = None
+    sample_recall: DiagnosticShare | None = None
+    upper_cutoff_false_match_share: DiagnosticShare | None = None
+    upper_cutoff_sample_size: DiagnosticCount | None = None
+    upper_cutoff_brier_score: DiagnosticShare | None = Field(
+        default=None, description="Hard-decision disagreement at upper_threshold_before."
+    )
+    cutoff_brier_score: DiagnosticShare | None = Field(
+        default=None, description="Hard-decision disagreement at evaluated_cutoff."
+    )
+    sample_f0_5: DiagnosticShare | None = None
+    sample_average_precision: DiagnosticShare | None = None
+    sample_precision_at_recall_90: DiagnosticShare | None = None
+    sample_recall_90_cutoff: ScoreCutoff | None = None
+    sample_recall_at_recall_90_cutoff: DiagnosticShare | None = None
+
+    score_pool_histogram: str | None = Field(
+        default=None, description="Compact JSON of the full eligible score pool under one recipe."
+    )
+    score_drift_baseline: str | None = Field(
+        default=None, description="Compact JSON of the earlier histograms and baseline settings."
+    )
+    score_drift_status: ScoreDriftStatus | None = None
+    score_psi: float | None = Field(default=None, strict=True, ge=0.0)
+    score_wasserstein_distance: float | None = Field(default=None, strict=True, ge=0.0, le=2.0)
+    score_ks_distance: DiagnosticShare | None = None
+
+    upper_fit_evidence: str | None = Field(
+        default=None, description="Compact JSON of the retained upper fit's training membership."
+    )
+    judge_probability_evidence: str | None = Field(
+        default=None, description="Compact JSON of the earlier fit and the evaluation cohort."
+    )
+    judge_probability_status: JudgeProbabilityStatus | None = None
+    judge_probability_brier_score: DiagnosticShare | None = None
+    judge_probability_baseline_brier_score: DiagnosticShare | None = None
+    judge_probability_ece: DiagnosticShare | None = None
+
+    canary_expectations: str | None = Field(
+        default=None, description="Compact JSON of the expected answer by stable canary ID."
+    )
+    canary_kappa: ScoreCutoff | None = None
+    canary_kappa_pairs: DiagnosticCount | None = None
 
     @model_validator(mode="after")
     def _each_bound_reads_coherently(self) -> Self:
@@ -698,4 +772,170 @@ class StorySimilarityThresholdHistoryRow(Contract):
                     f"canary_answers puts {canary_id} on runner {answer[5]}, and the night "
                     f"expected {self.runners_expected} runners"
                 )
+        return self
+
+    @model_validator(mode="after")
+    def _sample_readings_match_the_draw_and_returns(self) -> Self:
+        at_recall_90 = (
+            self.sample_precision_at_recall_90,
+            self.sample_recall_90_cutoff,
+            self.sample_recall_at_recall_90_cutoff,
+        )
+        tp, fp, fn, tn = self.sample_tp, self.sample_fp, self.sample_fn, self.sample_tn
+        if self.sample_status is not SampleStatus.MEASURED:
+            dependent = (
+                self.pairs_returned,
+                self.slice_outcomes,
+                self.evaluated_cutoff,
+                tp,
+                fp,
+                fn,
+                tn,
+                self.sample_precision,
+                self.sample_recall,
+                self.upper_cutoff_false_match_share,
+                self.upper_cutoff_sample_size,
+                self.upper_cutoff_brier_score,
+                self.cutoff_brier_score,
+                self.sample_f0_5,
+                self.sample_average_precision,
+                *at_recall_90,
+            )
+            if any(value is not None for value in dependent) or (
+                self.pairs_drawn is not None and self.sample_status is None
+            ):
+                raise ValueError(
+                    "sample_status must match the evidence; only measured joins "
+                    "carry returned counts, outcomes or scores"
+                )
+            return self
+        if self.pairs_drawn is None or self.pairs_returned is None or self.slice_outcomes is None:
+            raise ValueError("measured sample_status requires drawn and returned counts and slices")
+        if self.evaluated_cutoff is None or tp is None or fp is None or fn is None or tn is None:
+            raise ValueError("a measured sample needs the cutoff and all four confusion counts")
+        slices = read_diagnostic_text(
+            self.slice_outcomes, column="slice_outcomes", model=SliceOutcomes
+        ).slices
+        if (
+            self.pairs_returned > self.pairs_drawn
+            or self.pairs_drawn != sum(section.drawn for section in slices)
+            or self.pairs_returned != sum(section.returned for section in slices)
+        ):
+            raise ValueError("slice_outcomes must account for the drawn and returned totals")
+        if tp + fn != sum(section.yes for section in slices) or (
+            fp + tn != sum(section.no for section in slices)
+        ):
+            raise ValueError("sample confusion counts must exhaust the slices' YES and NO totals")
+        if sum(value is not None for value in at_recall_90) not in (0, len(at_recall_90)):
+            raise ValueError("precision at 90% recall needs its cutoff and achieved recall")
+        upper_size = self.upper_cutoff_sample_size
+        if upper_size is not None and upper_size > tp + fp + fn + tn:
+            raise ValueError("upper_cutoff_sample_size cannot exceed the binary sample")
+        for support, readings in (
+            (tp + fp, (self.sample_precision,)),
+            (tp + fn, (self.sample_recall, self.sample_average_precision, *at_recall_90)),
+            (tp + fp + fn, (self.sample_f0_5,)),
+            (tp + fp + fn + tn, (self.cutoff_brier_score, self.upper_cutoff_brier_score)),
+            (upper_size, (self.upper_cutoff_false_match_share,)),
+        ):
+            if not support and any(value is not None for value in readings):
+                raise ValueError("sample scores without supporting pairs must be null")
+        return self
+
+    @model_validator(mode="after")
+    def _drift_readings_match_the_pool_and_baseline(self) -> Self:
+        status = self.score_drift_status
+        distances = (self.score_psi, self.score_wasserstein_distance, self.score_ks_distance)
+        if status is None or status is ScoreDriftStatus.NO_HISTOGRAM:
+            if self.score_pool_histogram is not None or self.score_drift_baseline is not None:
+                raise ValueError("score_drift_status needs a pool status when evidence is present")
+        elif self.score_pool_histogram is None:
+            raise ValueError("this score_drift_status requires a score_pool_histogram")
+        else:
+            pool = read_diagnostic_text(
+                self.score_pool_histogram, column="score_pool_histogram", model=ScorePoolHistogram
+            )
+            if (status is ScoreDriftStatus.EMPTY_POOL) != (not any(pool.counts)):
+                raise ValueError("empty_pool must match the histogram's total")
+            if self.score_drift_baseline is not None:
+                baseline = read_diagnostic_text(
+                    self.score_drift_baseline,
+                    column="score_drift_baseline",
+                    model=ScoreDriftBaseline,
+                )
+                if any(source.date >= self.date for source in baseline.sources):
+                    raise ValueError("score drift baseline sources must precede the digest date")
+                if baseline.share_floor >= 1 / len(pool.counts):
+                    raise ValueError("baseline share_floor must be below one bin's uniform share")
+                ready = len(baseline.sources) == baseline.required_days
+                if (status is ScoreDriftStatus.MEASURED and not ready) or (
+                    status is ScoreDriftStatus.INSUFFICIENT_BASELINE and ready
+                ):
+                    raise ValueError("score_drift_status must match baseline source coverage")
+            elif status is not ScoreDriftStatus.EMPTY_POOL:
+                raise ValueError("score_drift_status needs baseline evidence for a nonempty pool")
+        measured = status is ScoreDriftStatus.MEASURED
+        if any((value is not None) != measured for value in distances):
+            raise ValueError("all three drift distances are present exactly for measured drift")
+        return self
+
+    @model_validator(mode="after")
+    def _calibration_readings_name_their_fit_and_cohort(self) -> Self:
+        if self.upper_fit_evidence is not None:
+            fit = read_diagnostic_text(
+                self.upper_fit_evidence, column="upper_fit_evidence", model=UpperFitEvidence
+            )
+            if self.upper_curve_intercept is None or (
+                len(fit.pair_keys) != self.upper_usable_pairs_used
+            ):
+                raise ValueError("upper_fit_evidence must match the curve and its usable pairs")
+
+        status = self.judge_probability_status
+        has_source = status in {
+            JudgeProbabilityStatus.MEASURED,
+            JudgeProbabilityStatus.NO_ELIGIBLE_PAIRS,
+        }
+        if (self.judge_probability_evidence is not None) != has_source:
+            raise ValueError("judge_probability_evidence needs a status with a reference fit")
+        measured = status is JudgeProbabilityStatus.MEASURED
+        if self.judge_probability_evidence is not None:
+            reference = read_diagnostic_text(
+                self.judge_probability_evidence,
+                column="judge_probability_evidence",
+                model=JudgeProbabilityEvidence,
+            )
+            if reference.source_date >= self.date or reference.source_run_id == self.run_id:
+                raise ValueError("the reference fit needs an earlier digest and another run")
+            if (reference.pairs > 0) != measured:
+                raise ValueError("judge_probability_status must match the evaluation pair count")
+        scores = (
+            self.judge_probability_brier_score,
+            self.judge_probability_baseline_brier_score,
+            self.judge_probability_ece,
+        )
+        if any((score is not None) != measured for score in scores):
+            raise ValueError("both Brier scores and ECE are present only for measured probability")
+        return self
+
+    @model_validator(mode="after")
+    def _canary_readings_match_the_expected_pairs(self) -> Self:
+        if self.canary_expectations is None:
+            if self.canary_kappa_pairs is not None or self.canary_kappa is not None:
+                raise ValueError("canary kappa readings need canary_expectations")
+            return self
+        expected = read_diagnostic_text(
+            self.canary_expectations, column="canary_expectations", model=CanaryExpectations
+        ).root
+        answers = json.loads(self.canary_answers) if self.canary_answers is not None else {}
+        agreed = [
+            answers[key][0]
+            for key in expected
+            if key in answers and answers[key][0] is not None and answers[key][0] == answers[key][1]
+        ]
+        if self.canary_kappa_pairs != len(agreed):
+            raise ValueError("canary_kappa_pairs must count expected pairs with agreeing answers")
+        if self.canary_kappa is not None and (
+            len(agreed) != len(expected) or len(set(agreed).union(expected.values())) == 1
+        ):
+            raise ValueError("canary_kappa needs complete agreeing answers and nonzero denominator")
         return self

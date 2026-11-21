@@ -99,6 +99,7 @@ from idhazh.contracts.story_encoder_candidate import (
 )
 from idhazh.contracts.story_similarity_pair_verdict import StorySimilarityPairVerdict
 from idhazh.contracts.story_similarity_runner_report import StorySimilarityRunnerReport
+from idhazh.contracts.story_similarity_score_pool import ContentSimilarityScorePool
 from idhazh.contracts.story_similarity_threshold_history_row import (
     StorySimilarityThresholdHistoryRow,
 )
@@ -139,6 +140,7 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     CollectionPruneRow,
     CompactIndex,
     ConsoleBand,
+    ContentSimilarityScorePool,
     CorpusMeta,
     CorpusRow,
     CouncilRunRecord,
@@ -213,6 +215,7 @@ __all__ = [
     "CompactIndex",
     "ConfidenceBand",
     "ConfigDigest",
+    "ContentSimilarityScorePool",
     "Contract",
     "DigestCoverage",
     "DigestDay",

@@ -1,0 +1,18 @@
+{
+  "attempt": 1,
+  "date": "2026-11-21",
+  "histogram": {
+    "counts": [
+      3,
+      5
+    ],
+    "edges": [
+      -1.0,
+      0.0,
+      1.0
+    ],
+    "stamp": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "run_id": "2026-11-21-1",
+  "version": "2026-11-21"
+}
