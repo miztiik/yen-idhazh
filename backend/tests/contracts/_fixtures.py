@@ -134,6 +134,7 @@ FIXTURE_FILES: Final = (
     "story-similarity-pair-verdict/a-judged-pair-with-its-slice-and-chance.json",
     "story-similarity-runner-report/a-runner-that-read-its-pairs.json",
     "story-similarity-runner-report/a-runner-that-was-dealt-nothing.json",
+    "story-similarity-score-pool/small-pool.json",
     "story-similarity-threshold-history-row/a-night-that-held-both-thresholds.json",
     "summary/failed.json",
     "summary/ok.json",

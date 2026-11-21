@@ -45,7 +45,16 @@
     "pull_window_nights": 28,
     "pull_minimum_nights": 7
   },
+  "diagnostics": {
+    "cutoff": 0.87,
+    "score_bins": 40,
+    "score_baseline_days": 7,
+    "score_baseline_lookback_days": 28,
+    "score_psi_share_floor": 0.000001,
+    "probability_bins": 10,
+    "fit_pair_limit": 1050
+  },
   "flush_every_pairs": 1,
   "judge_temperature": 0.0,
-  "version": "2026-11-19"
+  "version": "2026-11-21"
 }

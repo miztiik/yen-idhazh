@@ -85,6 +85,22 @@ def test_a_written_judge_file_changes_the_sampler_and_the_stamp_together(tmp_pat
     assert sampling["top_p"] == judge.entry_of(settings).sampling["top_p"]
 
 
+def test_the_legacy_judge_file_acquires_diagnostic_defaults_without_a_new_stamp(
+    tmp_path: Path,
+) -> None:
+    path = declaration(tmp_path, version="2026-11-19")
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    del raw["diagnostics"]
+    path.write_text(json.dumps(raw), encoding="utf-8", newline="\n")
+
+    legacy = judge_settings.load(tmp_path)
+
+    assert legacy.version == "2026-11-19"
+    assert legacy.diagnostics.model_dump() == committed("diagnostics")
+    assert legacy.draw.model_dump() == raw["draw"]
+    assert legacy.thresholds.model_dump() == raw["thresholds"]
+
+
 @pytest.mark.parametrize(
     "key", ["draw", "thresholds", "flush_every_pairs", "judge_temperature", "version"]
 )
@@ -121,6 +137,14 @@ def test_a_missing_owned_knob_is_refused_at_the_judge_reader(tmp_path: Path, key
         ("thresholds", {"lowest_lower_threshold": 0.75}, "is below lowest_lower_threshold"),
         ("thresholds", {"highest_upper_threshold": 0.9}, "is above highest_upper_threshold"),
         ("thresholds", {"smallest_gap": 0.25}, "closer than smallest_gap"),
+        ("diagnostics", {"cutoff": 1.01}, "cutoff"),
+        ("diagnostics", {"score_bins": 2.0}, "score_bins"),
+        ("diagnostics", {"score_baseline_days": 29}, "cannot exceed"),
+        ("diagnostics", {"score_baseline_lookback_days": 91}, "score_baseline_lookback_days"),
+        ("diagnostics", {"score_psi_share_floor": 0.025}, "uniform share"),
+        ("diagnostics", {"probability_bins": True}, "probability_bins"),
+        ("diagnostics", {"fit_pair_limit": 1051}, "fit_pair_limit"),
+        ("diagnostics", {"publication_floor": 0.85}, "publication_floor"),
     ],
 )
 def test_settings_the_night_could_not_run_on_are_refused_at_the_judge_reader(

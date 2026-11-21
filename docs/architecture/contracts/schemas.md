@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-11-19
+**Last Updated**: 2026-11-21
 
 The persisted-shape subsystem: where the models live, how a schema is obtained from one, the small hand copy the frontend carries, and the tests that stop the two drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 10.
 
@@ -153,9 +153,7 @@ readings are valid, and its agreement is checked against its two readings rather
 trusted. A runner report that names the current policy must have rates that follow from its
 counts, and a rate is empty when its denominator is.
 
-`StorySimilarityPairVerdict`, `StorySimilarityThresholdHistoryRow` and
-`StorySimilarityRunnerReport` have no earlier row, so none carries a retired-heading shim
-or a read-side migration. Both scores of a pair run from -1 to 1 because the draw meets
+Both scores of a pair run from -1 to 1 because the draw meets
 pairs below 0. A cosine or score within a billionth past 1 or -1 is folded back to the
 bound, because two identical vectors can divide to one bit past 1.0; a value further out
 is refused. No contract accepts NaN or infinity. A mapping cannot be a parquet column, so
@@ -165,6 +163,29 @@ sorted keys, no spaces and ASCII only; the contract refuses any other spelling o
 object, so equal content is equal text. `canary_answers` is a positional list of six cells
 per canary id, so a seventh cell would need a new version that reads six or seven. Native and
 frontend readers accept those values before new writers emit them.
+
+Threshold history has nullable columns for sampled agreement, score drift, prior-fit
+calibration and known-answer agreement. Its key is still `(date, run_id)`; the ledger
+keeps the original writer attempt in the envelope. A legacy Parquet file has no
+diagnostic columns. A bounded read or ordinary compaction preserves the row's original
+version and treats those columns as null, never zero. A current row also accepts a
+wholly absent group so readers can ship before writers.
+
+Populated diagnostics must agree with their evidence. Slice totals close over drawn
+and returned pairs; an unavailable join can keep a known draw size but no joined
+readings. An empty pool or an incomplete baseline has no drift distances. A selected
+prior fit with no eligible evaluation pairs keeps the reference and zero count, not
+scores. A known-answer kappa score needs the saved expectations and both observed answers
+for every expected pair, with a nonzero chance denominator.
+
+`slice_outcomes`, `score_pool_histogram`, `score_drift_baseline`, `upper_fit_evidence`,
+`judge_probability_evidence` and `canary_expectations` are typed objects encoded as
+canonical compact JSON text, rather than nested Parquet columns. They carry no article
+text. `ContentSimilarityScorePool` uses the same native histogram in a separate,
+versioned document for one digest date, run and attempt. It is for a named opaque file
+in the existing preparation receipt, not a ledger or a change to receipt authorization.
+The judge's `diagnostics` settings have validated defaults for older configurations;
+they do not change sampling, threshold movement or publication.
 
 `StorySimilarityRunnerReport` lives for one run: each runner ships one in its upload and
 the collecting job reads them to build the night's threshold-history row, so it is in no
@@ -398,6 +419,7 @@ The shapes, and where each one lives once written:
 | `CouncilRunRecord` | `council-run-record` | one row of `state/raw/council-run-records/<YYYY>/<MM>/<DD>/`, later packed under `state/compact/council-run-records/` - which council step ran for one tenant, how it ended, how long it took, and what it cost. A missing part row against `work_part_count` shows a part that did not report |
 | `StorySimilarityRunnerReport` | `story-similarity-runner-report` | one CSV file a judging runner ships in its upload to the collecting job - what that part of the night, `work_part_index`, dealt, validly read, agreed and lost, its two rates and its clocks, and the answers it got on the known-answer pairs it judged (`canary_answers`), which are in none of the counts or clocks. The collecting job reads the runners' reports to build the night's threshold-history row, and nothing files one |
 | `StorySimilarityPairVerdict` | `story-similarity-pair-verdict` | one row of `state/raw/content-similarity-judge/pair-verdicts/<YYYY>/<MM>/<DD>/`, in the raw file the ledger door files under the judged date, packed later under `state/compact/content-similarity-judge/pair-verdicts/` - one pair put to the judge, what it scored, the draw slice that held it, the sampling chance that follows, the two thresholds in force, and what the judge said in both orders; its part is `work_part_index`. The same shape holds the night's draw before a judging unit reads it. `stages.file_pair_verdicts` files it |
+| `ContentSimilarityScorePool` | `story-similarity-score-pool` | declared for same-attempt preparation transport; no writer yet |
 | `StorySimilarityThresholdHistoryRow` | `story-similarity-threshold-history-row` | one row of `state/raw/content-similarity-judge/threshold-history/<YYYY>/<MM>/<DD>/`, in the raw file the ledger door files under the judged date, packed later under `state/compact/content-similarity-judge/threshold-history/` - one run's reading of both thresholds: for each, the evidence read, the fitted curve, the estimate, the gap, the move and the reason it held, and then the night's counts, rates and clocks. It describes a whole run and names no part. `stages.review_thresholds` files it |
 | `RunManifest` | `run-manifest` | `.../<DD>/run.json`, append-only per date |
 | `DigestDay` | `digest-day` | `.../<DD>/digest.json` and each `run-<N>.json` |
