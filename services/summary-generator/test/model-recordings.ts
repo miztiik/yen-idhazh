@@ -46,7 +46,7 @@ export async function withConfig<T>(
       path.join(root, "summary-generator", name));
   }
   mkdirSync(path.join(root, "prompts"));
-  for (const name of ["generate-summary.txt", "request-json.txt", "analyze-article.txt"]) {
+  for (const name of ["generate-summary.txt", "analyze-article.txt"]) {
     cpSync(path.join(repositoryRoot, "config", "prompts", name), path.join(root, "prompts", name));
   }
   const council = readJson<{ judge_names: string[] }>("config/llm_council.json");

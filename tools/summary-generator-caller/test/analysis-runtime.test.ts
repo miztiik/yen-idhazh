@@ -65,14 +65,18 @@ test("environment values and legacy request overrides cannot replace the selecte
     assert.equal(calls.length, 1);
   })));
 
-test("configured base and suffix files preserve the two-newline composition and the legacy base override", { timeout: 120000 }, () =>
+test("full analysis uses the shared default and preserves configured files and the base override", { timeout: 120000 }, () =>
   withConfig(root => withRecordedModel(root, async ({ runtime, send, calls }) => {
     const original = loadAnalysisConfig(root);
-    const base = readFileSync(path.join(root, original.base_prompt_file), "utf8");
+    const base = "Updated shared summary instructions.\n";
+    writeFileSync(path.join(root, "prompts/generate-summary.txt"), base);
     const suffix = readFileSync(path.join(root, original.analysis_prompt_file), "utf8");
     const environment = loadEnvConfig({ CONFIG_ROOT: root });
     assert.equal(environment.PROMPT, base);
-    assert.equal(buildInferencePrompt(base, "Title", "Text", suffix).fullSystemPrompt, `${base}\n\n${suffix}`);
+    assert.equal(
+      buildInferencePrompt(environment.PROMPT, "Title", "Text", environment.analysisPrompt).fullSystemPrompt,
+      `${base}\n\n${suffix}`,
+    );
     writeFileSync(path.join(root, "prompts/changed-base.txt"), "Changed base.");
     writeFileSync(path.join(root, "prompts/changed-analysis.txt"), "Changed full-analysis suffix.");
     writeFileSync(path.join(root, "summary-generator/workflow.json"), JSON.stringify({
