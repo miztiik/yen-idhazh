@@ -1,0 +1,44 @@
+{
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": "m4",
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m4",
+      "m5",
+      "m6",
+      "m7"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "ai-nmxnr6mv8szt92xc",
+  "marks": [
+    {"derived": null,"element_id": "entity-244-256","mark_id": "m0","source_text": null,"text": "model scores","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-843-849","mark_id": "m1","source_text": null,"text": "scores","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-2772-2778","mark_id": "m2","source_text": null,"text": "scores","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-2830-2836","mark_id": "m3","source_text": null,"text": "scores","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-257-259","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": null,"value": "76"},
+    {"derived": null,"element_id": "quantity-850-852","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": null,"value": "76"},
+    {"derived": null,"element_id": "quantity-2779-2781","mark_id": "m6","source_text": null,"text": null,"time": null,"unit": null,"value": "76"},
+    {"derived": null,"element_id": "quantity-2837-2839","mark_id": "m7","source_text": null,"text": null,"time": null,"unit": null,"value": "71"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "AA Decision Index v. scores of four decision models",
+  "type": "bar",
+  "version": "2026-10-27T05:00"
+}

@@ -1,0 +1,40 @@
+{
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": "m3",
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "energy-z1t7cpv3sfsbre52",
+  "marks": [
+    {"derived": null,"element_id": "entity-2551-2555","mark_id": "m0","source_text": null,"text": "lakh","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-2605-2633","mark_id": "m1","source_text": null,"text": "Performance Security Deposit","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-2697-2726","mark_id": "m2","source_text": null,"text": "non-refundable processing fee","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-2547-2550","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "\u20b9","value": "12"},
+    {"derived": null,"element_id": "quantity-2637-2640","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "\u20b9","value": "60"},
+    {"derived": null,"element_id": "quantity-2730-2737","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "\u20b9","value": "25000"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Tender deposits and fees for SECI renewable energy trading bids",
+  "type": "bar",
+  "version": "2026-10-27T05:00"
+}

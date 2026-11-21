@@ -1,0 +1,40 @@
+{
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": "m3",
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "business-economy-88ygays7j2h5vjmk",
+  "marks": [
+    {"derived": null,"element_id": "entity-929-933","mark_id": "m0","source_text": null,"text": "rate","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-1214-1218","mark_id": "m1","source_text": null,"text": "earn","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-1233-1253","mark_id": "m2","source_text": null,"text": "higher-rate taxpayer","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-939-943","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "3.6"},
+    {"derived": null,"element_id": "quantity-1219-1223","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "%","value": "4.5"},
+    {"derived": null,"element_id": "quantity-1273-1275","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "%","value": "6"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Gross interest rate needed to beat 3.6% inflation by tax status",
+  "type": "bar",
+  "version": "2026-10-27T05:00"
+}

@@ -1,0 +1,36 @@
+{
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": "m2",
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-2md1yrj8pq0ec536",
+  "marks": [
+    {"derived": null,"element_id": "entity-537-547","mark_id": "m0","source_text": null,"text": "down about","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-650-654","mark_id": "m1","source_text": null,"text": "down","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-548-551","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "%","value": "13"},
+    {"derived": null,"element_id": "quantity-665-667","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "6"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Nvidia share decline before and after Reuters report",
+  "type": "bar",
+  "version": "2026-10-27T05:00"
+}

@@ -1,0 +1,40 @@
+{
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": "m3",
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "ai-9vz3n1199badt8xk",
+  "marks": [
+    {"derived": null,"element_id": "entity-9584-9588","mark_id": "m0","source_text": null,"text": "hand","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-12783-12794","mark_id": "m1","source_text": null,"text": "model costs","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-13901-13929","mark_id": "m2","source_text": null,"text": "some hands in China are less","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-9572-9579","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "\u00a3","value": "20000"},
+    {"derived": null,"element_id": "quantity-12795-12802","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "\u00a3","value": "60000"},
+    {"derived": null,"element_id": "quantity-13935-13941","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "\u00a3","value": "2000"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Robot-hand prices across models and competitors",
+  "type": "bar",
+  "version": "2026-10-27T05:00"
+}

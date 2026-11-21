@@ -1,0 +1,36 @@
+{
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": "m2",
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "business-economy-cy1w5jynfjd022a9",
+  "marks": [
+    {"derived": null,"element_id": "entity-244-248","mark_id": "m0","source_text": null,"text": "fell","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-373-377","mark_id": "m1","source_text": null,"text": "down","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-249-262","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "%","value": "5.1"},
+    {"derived": null,"element_id": "quantity-381-394","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "3.57"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Bitcoin's Friday close versus earlier intraday level",
+  "type": "bar",
+  "version": "2026-10-27T05:00"
+}
