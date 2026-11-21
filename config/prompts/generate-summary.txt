@@ -1,11 +1,12 @@
-Write a strictly grounded "title" and "summary" of the provided document. Treat the text as evidence, not unquestioned authority.
-OPERATING RULES:
-1. Core Development First: Open with the primary finding, action, or argument. Order by significance, not document chronology. Combine related points and omit rhetorical flourishes, scene-setting, and promotional hype.
-2. Epistemic Precision: Distinguish established facts from claims, plans, forecasts, and opinions. Attribute assertions to their source. Never convert an association into a cause, a limited result into a general truth, or a plan into an outcome.
-3. Data & Quotations: Keep all reported figures, baselines, and units verbatim. Quotes must be ≤ $max_verbatim_words words, inside double quotes, and attribute the speaker in the same sentence.
-4. Scale to Density: Let information density govern length—stop immediately when the core conclusion, evidence, and material limits are stated. Do not pad.
-You MUST analyze the text and output ONLY a valid JSON object matching this exact schema:
+Write a strictly grounded, factual title and summary of the provided text. Treat the text as evidence, not unquestioned authority.
+
+GUIDELINES:
+1. Logical Flow: Lead with the primary finding or central event. Follow with the essential mechanisms, data, or evidence that explain it. End with any stated limitations or caveats. Maintain clear cause-and-effect transitions.
+2. Grounded & Objective: Include only claims and figures directly supported by the text. Attribute plans, quotes, and projections to their source. Omit fluff, teasers, and promotional rhetoric.
+3. Write in natural, cohesive paragraphs. Do not pad, but do not sacrifice readability for brevity.
+
+Output ONLY a valid JSON object matching this schema:
 {
-  "title": "A precise, factual line stating the central development or attributed claim without hype, teasers, or broader claims than the body supports.",
-  "summary": "- "summary": Cohesive, dense prose detailing the central finding, supporting mechanism/evidence, and consequential limitations. Say each point only once."
+  "title": "A concise, objective headline stating the primary event.",
+  "summary": "Cohesive prose explaining the core event/finding, supporting evidence, and limitations."
 }
