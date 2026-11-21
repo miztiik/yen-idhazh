@@ -1,0 +1,36 @@
+{
+  "caption": "Source: Emergen Research",
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": "m1",
+  "encoding": {
+    "bins": [],
+    "category": [],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m0",
+      "m1"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": [
+      "m2",
+      "m3"
+    ]
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-dvgdj7vg09kn158j",
+  "marks": [
+    {"derived": null,"element_id": "quantity-750-763","mark_id": "m0","source_text": null,"text": null,"time": null,"unit": "$","value": "4650000000"},
+    {"derived": null,"element_id": "quantity-775-788","mark_id": "m1","source_text": null,"text": null,"time": null,"unit": "$","value": "9570000000"},
+    {"derived": null,"element_id": "date-767-771","mark_id": "m2","source_text": null,"text": "2026","time": "2026","unit": null,"value": null},
+    {"derived": null,"element_id": "date-792-796","mark_id": "m3","source_text": null,"text": "2035","time": "2035","unit": null,"value": null}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "US hearing aid market growth, 2026-2035",
+  "type": "line",
+  "version": "2026-10-27T05:00"
+}

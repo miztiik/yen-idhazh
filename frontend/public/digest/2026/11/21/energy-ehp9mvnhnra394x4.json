@@ -1,0 +1,52 @@
+{
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": "m6",
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m6",
+      "m7",
+      "m8",
+      "m9",
+      "m10",
+      "m11"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "energy-ehp9mvnhnra394x4",
+  "marks": [
+    {"derived": null,"element_id": "entity-1036-1039","mark_id": "m0","source_text": null,"text": "can","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-1143-1151","mark_id": "m1","source_text": null,"text": "offering","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-1788-1796","mark_id": "m2","source_text": null,"text": "offering","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-2393-2412","mark_id": "m3","source_text": null,"text": "Kia Niro EV is also","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-3518-3528","mark_id": "m4","source_text": null,"text": "Volkswagen","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-3770-3780","mark_id": "m5","source_text": null,"text": "Volkswagen","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-1048-1055","mark_id": "m6","source_text": null,"text": null,"time": null,"unit": "$","value": "15000"},
+    {"derived": null,"element_id": "quantity-1154-1161","mark_id": "m7","source_text": null,"text": null,"time": null,"unit": "$","value": "10000"},
+    {"derived": null,"element_id": "quantity-1797-1804","mark_id": "m8","source_text": null,"text": null,"time": null,"unit": "$","value": "10000"},
+    {"derived": null,"element_id": "quantity-2430-2437","mark_id": "m9","source_text": null,"text": null,"time": null,"unit": "$","value": "10000"},
+    {"derived": null,"element_id": "quantity-3542-3549","mark_id": "m10","source_text": null,"text": null,"time": null,"unit": "$","value": "10000"},
+    {"derived": null,"element_id": "quantity-3796-3803","mark_id": "m11","source_text": null,"text": null,"time": null,"unit": "$","value": "10000"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Black Friday EV discounts from Kia, Lucid, and Volkswagen",
+  "type": "bar",
+  "version": "2026-10-27T05:00"
+}
