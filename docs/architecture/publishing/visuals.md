@@ -1,6 +1,6 @@
 # Visual planning and rendering
 
-**Last Updated**: 2026-11-18
+**Last Updated**: 2026-11-21
 
 How an item gets a numeric chart or - most of the time - nothing at
 all: which pass decides, which gate refuses, and what every refusal is called.
@@ -430,7 +430,8 @@ diagram validation or rendering exists today.
 | Leave the question about a chart in the trailing ask when the grammar cannot hold it | Constrained decoding renormalises onto the allowed tokens, so a title, a caption and a reason with nowhere to go end up in the summary a reader reads. |
 | A `none_reason` member for each of the six gates the design record names | Four of the six have no code behind them, so four members would be words nobody can produce, nobody can retire and nobody can tell from a bug. Each arrives with the row that builds its gate. |
 | Put `none_reason` on `VisualPlan` as a third code-stamped field | Two of its four routes fire when no plan object exists at all, so the field would be unwritable on exactly the cases it is for. |
-| A `skip_unreachable` config flag | A knob whose `false` setting means "ask about a chart on a request that has no table to ask it about". Nobody would set it. Whether a table is built is derived from `visuals.enabled_kinds`, `visuals.enabled_types`, `min_chart_points` and `max_chart_points`, which are already config. |
+| A `skip_unreachable` config flag | A knob whose `false` setting means "ask about a chart on a request that carries no source readings to chart". Nobody would set it. Whether the question is asked is derived from `visuals.enabled_kinds`, `visuals.enabled_types` and whether the article holds at least two quantity readings, which are already config and data. |
+| Code builds name-and-figure tables and offers the model only bar and dot | Measured on the five scheduled runs after it shipped (2026-11-19, 334 model calls): 2 articles (0.6%) got a table, and the model answered `none` to both, though each listed one measure for three names. By the pipeline's own quantity finder, at most 85 of 331 distinct articles (25.7%) held three or more figures of one unit within two sentences (names not checked). So the builder offered a table for 2 of at most 85 candidates, and could offer only 2 of the 9 forms the compiler draws. |
 | A second, smaller model to triage items first | Two calls where the point was zero. |
 | Discard the whole chart when one bar disagrees on units | Observed live: the model picked three correct year-on-year megawatt bars and appended the sector headcount. Three good bars thrown away to reject one bad one. |
 | Plan on the 8B | Classification is the easy task. The big model belongs on summarization, and a second set of weights would not fit the pass anyway. |
