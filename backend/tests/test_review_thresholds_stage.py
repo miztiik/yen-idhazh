@@ -261,7 +261,8 @@ def test_a_sample_shard_mismatch_does_not_change_the_fit_or_runner_readings(
     assert report.filed and report.row == row
     assert row.sample_status is SampleStatus.DRAW_MISMATCH
     assert row.pairs_drawn == 80 and row.pairs_returned is None
-    assert row.slice_outcomes is row.evaluated_cutoff is row.cutoff_brier_score is None
+    assert row.slice_outcomes is None
+    assert row.evaluated_cutoff is row.cutoff_brier_score is None
     assert (row.lower_usable_pairs_used, row.upper_usable_pairs_used) == (40, 40)
     assert (row.runners_reported, row.pairs_dealt) == (2, 80)
     assert f"run={night.run_id} status=draw_mismatch reason=filed_shard_mismatch" in caplog.text

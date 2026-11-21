@@ -411,6 +411,7 @@ def test_four_runners_ship_their_share_and_the_night_names_all_six_exactly_once(
         ]
         report, _ = judge_them(*replies, date=date, shard=runner, shards=4)
         reading = StorySimilarityRunnerReport(
+            version=StorySimilarityRunnerReport.schema_version(),
             date=date,
             run_id=run_id,
             work_part_index=runner,
