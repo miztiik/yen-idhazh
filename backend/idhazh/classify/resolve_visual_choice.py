@@ -77,9 +77,9 @@ class PlanChoice(Model):
     focus: QuantityRef | None
     whole: QuantityRef | None
     measure: PlanTitle | None = None
+    context: _Dates = Field(default_factory=list)
     title: PlanTitle | None
     caption: PlanCaption | None
-    context: _Dates = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _chart_words_are_not_data(self) -> Self:

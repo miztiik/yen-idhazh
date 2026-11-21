@@ -86,6 +86,7 @@ def _chart_reply_schema(
         }
         fields["focus"] = fields["focus"]["anyOf"][0]
         fields["title"] = fields["title"]["anyOf"][0]
+        required.append("context")
     else:
         fields["encodings"] = {"type": "object", "properties": {}, "additionalProperties": False}
         fields["focus"] = fields["title"] = fields["caption"] = null

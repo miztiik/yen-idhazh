@@ -277,7 +277,7 @@ class TestTheSummarizeAndPlanOracle:
             for choice in points for code in choice["properties"]["quantity"]["enum"]
         }
         assert set(allowed) == {"q1", "q2", "q3"}
-        assert {data.labels["q3"][label].span_excerpt for label in allowed["q3"]} >= {
+        assert {data.labels["q3"][label].span_excerpt for label in allowed["q3"]} == {
             "Southeast Asia",
         }
         line = answers["line"]["encodings"]

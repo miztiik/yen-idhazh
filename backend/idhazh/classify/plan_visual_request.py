@@ -89,6 +89,18 @@ def _label_spans(text: str, start: int, end: int, *, before: bool) -> list[tuple
     if not anchors:
         return []
     offset = fragment.start()
+    # Keep a neighboring name intact, e.g. Southeast Asia rather than Asia.
+    # This is local to one span; it neither pairs measurements nor admits a chart.
+    edge = anchors[-1 if before else 0]
+    if edge.group()[0].isupper():
+        position = words.index(edge)
+        lo = hi = position
+        while lo > 0 and words[lo - 1].group()[0].isupper():
+            lo -= 1
+        while hi + 1 < len(words) and words[hi + 1].group()[0].isupper():
+            hi += 1
+        if lo != hi:
+            return [(offset + words[lo].start(), offset + words[hi].end())]
     suffixes = [(offset + word.start(), offset + anchors[-1].end()) for word in anchors]
     prefixes = [(offset + anchors[0].start(), offset + word.end()) for word in anchors]
     ordered = (*suffixes, *prefixes) if before else (*prefixes, *suffixes)
