@@ -1,6 +1,6 @@
 # Summary generator API
 
-**Last Updated**: 2026-11-09
+**Last Updated**: 2026-11-21
 
 Which prepared inputs, summary results and listener controls does the independent
 TypeScript generation API expose?
@@ -120,12 +120,11 @@ Paths name one file under `prompts/` in the selected config root; absolute
 paths, URLs, backslashes and parent traversal are refused. Prompt files must
 be valid UTF-8 and nonblank; their exact text is retained.
 
-This API's `generate-summary.txt` remains separate from the full-analysis
-caller's `request-json.txt` plus `analyze-article.txt`, the
-[digest continuation](../architecture/summarize/prompt.md), and the
-[comparison workflow's](summary-evaluation-workflow.md) title/summary
-instruction. Sharing `config/prompts/` does not merge their products or
-change either override's meaning.
+The [full-analysis caller](summary-generator-caller.md#preparation-and-prompts)
+shares this default base file but appends its own analysis instructions. Its
+base-only override remains separate from this API's complete prompt override.
+The [production digest](../architecture/summarize/prompt.md) and
+[comparison workflow](summary-evaluation-workflow.md) keep their own instructions.
 
 Table D - API defaults
 

@@ -1,6 +1,6 @@
 # Summary generator callers
 
-**Last Updated**: 2026-11-09
+**Last Updated**: 2026-11-21
 
 Which analysis and summary-only outputs does the independent private caller
 retain outside the generation API?
@@ -51,10 +51,10 @@ cap to extracted, direct or fallback text before generation, not to raw HTML.
 Byte and model-context limits remain independent. The summary API itself has
 no hidden word cap.
 
-Full analysis reads `prompts/request-json.txt` as its default base and
-`prompts/analyze-article.txt` as its instruction suffix. The existing `PROMPT`
-environment override replaces only the base; composition keeps the exact
-two-newline separator and existing classifications.
+Full analysis starts with the [summary API's default prompt](summary-generator-api.md#committed-settings)
+and appends its analysis instructions (Table B, B2). The `PROMPT` environment
+override replaces only the base; composition keeps the exact two-newline
+separator and existing classifications.
 Its raw result extends the API's pure summary fields once, without duplicating
 those declarations.
 
@@ -75,7 +75,7 @@ Table B - Caller controls
 | Id | Setting | Default and meaning |
 | --- | --- | --- |
 | B1 | `max_input_words` | `20000` source words, increased from `6000`; retains the original source audit and existing truncation marker. |
-| B2 | `base_prompt_file`, `analysis_prompt_file` | `prompts/request-json.txt`, `prompts/analyze-article.txt`; full-analysis composition only. |
+| B2 | `base_prompt_file`, `analysis_prompt_file` | `prompts/generate-summary.txt`, `prompts/analyze-article.txt`; full-analysis composition only. |
 | B3 | `max_native_request_bytes`, `max_native_response_bytes` | One MiB each; full analysis uses the shared native transport, and the summary-only caller bounds its API request/result. |
 | B4 | `body_read_timeout_ms` | Five seconds for summary API response/health-body consumption. |
 | B5 | `heartbeat_ms` | Ten seconds between the full-analysis caller's existing waiting diagnostics. |
