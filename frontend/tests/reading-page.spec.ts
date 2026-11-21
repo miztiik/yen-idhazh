@@ -120,6 +120,7 @@ test(journey, async ({ page }) => {
 	await page.setViewportSize({ width: 1920, height: 1080 });
 	const edition = page.getByRole('region', { name: 'About today' });
 	await expect(edition.getByRole('heading', { level: 1 })).toBeVisible();
+	await expect(edition.getByRole('heading', { level: 1 }).locator('time')).toHaveAttribute('datetime', newestDate());
 	await expect(edition).toContainText(/\d+ stories/);
 	await expect(edition).toContainText(/Updated \d{2}:\d{2} UTC/);
 	await expect(edition).not.toContainText('did not finish');
