@@ -10,7 +10,8 @@
 	import { sourceHealth } from '$lib/console/voices/source-health';
 	import { rankingDiscount } from '$lib/console/voices/ranking-discount';
 	import { retirementDrawing } from '$lib/console/voices/retiring';
-	import { feedsFailed, fallbackFeeds, feedReadNotes } from '$lib/console/voices/feeds-failed';
+	import { feedsFailed, feedReadNotes } from '$lib/console/voices/feeds-failed';
+	import { feedFailurePreview } from '$lib/console/voices/feed-failure-preview';
 	import { fetchTime } from '$lib/console/voices/fetch-time';
 	import { sourceCuts } from '$lib/console/voices/source-cuts';
 	import { whyChosen } from '$lib/console/voices/why-chosen';
@@ -28,7 +29,7 @@
 	let { data } = $props();
 	const console = consoleKnobs();
 	const config = routeConsole('voices');
-	const knobs = routeKnobs('voices', ['article_fails_marked', 'article_fails_named', 'why_chosen_rows']);
+	const knobs = routeKnobs('voices', ['article_fails_marked', 'article_fails_named', 'feed_preview_rows', 'why_chosen_rows']);
 	const choice = useWindowChoice();
 	const windowDays = $derived(choice.days);
 	let ready = $state(false);
@@ -48,15 +49,15 @@
 	const census = $derived(sourceHealth(data.sourceView, console.source_rows));
 	const discount = $derived(rankingDiscount(data.sourceView, console.source_rows));
 	const retirement = $derived(retirementDrawing(data.retiring, data.chart.tick_density));
-	const fallback = $derived(fallbackFeeds(data.feedInput, windowDays, console.feed_rows, knobs.article_fails_marked, knobs.article_fails_named));
-	const failed = $derived(feedsAnswer !== 'pending' && feedsAnswer.state !== 'ok' ? fallback : span === null ? null : feedsFailed(data.feedInput,
+	const fallback = $derived(feedFailurePreview(data.feedInput, data.publishedOn, windowDays, knobs.feed_preview_rows));
+	const failed = $derived(feedsAnswer === 'pending' || feedsAnswer.state !== 'ok' || span === null ? null : feedsFailed(data.feedInput,
 		rowsOf(feedsAnswer), span, console.feed_rows, knobs.article_fails_marked, knobs.article_fails_named));
 	const times = $derived(fetchTime(rowsOf(fetchAnswer), console.source_rows, data.number_format));
 	const cuts = $derived(cutsSpan === null ? null : sourceCuts(rowsOf(cutsAnswer), cutsSpan, console.source_rows));
 	const chosen = $derived(whyChosen(rowsOf(chosenAnswer), knobs.why_chosen_rows));
 	const feedPanelState = $derived(feedsAnswer === 'pending' ? 'loading' : data.feedInput.read.state === 'not-packed' ? 'missing' :
 		data.feedInput.read.state === 'unreadable' ? 'unreachable' :
-		(failed && (failed.feedThrough !== null || failed.articleThrough !== null)) || fallback ? 'ready' : stateOf(feedsAnswer));
+		stateOf(feedsAnswer));
 
 	onMount(() => {
 		ready = true;
@@ -112,7 +113,7 @@
 		record={{ asked: windowDays, first: reach?.ledgers['item-health']?.state === 'ok' ? reach.ledgers['item-health'].first : null, through: reach?.through ?? null }} onChange={show}/>
 	<PanelGroup id={config.panel_groups[0].id} title={config.panel_groups[0].title} panels={config.panel_groups[0].panels.length}>
 		<SourceHealthPanel {census} width={console.chart_width} height={console.chart_height}/>
-		<FeedsFailedPanel days={windowDays} view={failed ?? (feedsAnswer !== 'pending' ? fallback : null)} {fallback} panelState={feedPanelState} articleState={stateOf(feedsAnswer)}
+		<FeedsFailedPanel days={windowDays} view={failed} {fallback} panelState={feedPanelState} articleState={stateOf(feedsAnswer)}
 			width={console.chart_width} height={console.chart_height} tileMinPx={console.tile_min_px} readoutMaxShare={data.chart.readout_max_share} minAttempts={console.min_attempts_for_rate} notes={evidenceOf(feedsAnswer, span)} feedNotes={feedReadNotes(data.feedInput, span)}/>
 		<FetchTimePanel days={windowDays} view={times} panelState={stateOf(fetchAnswer)} width={console.chart_width} height={console.chart_height} readoutMaxShare={data.chart.readout_max_share} notes={evidenceOf(fetchAnswer, fetchSpan)}/>
 		<RetiringPanel strip={data.retiring} drawing={retirement} cap={console.source_rows} readoutMaxShare={data.chart.readout_max_share} width={console.chart_width} height={console.chart_height}/>

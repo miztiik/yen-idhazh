@@ -1,6 +1,6 @@
 # Who supplied the day, and which feeds failed
 
-**Last Updated**: 2026-11-12
+**Last Updated**: 2026-11-20
 
 `/console/voices/` answers two questions in seven panels. The order, stable ids,
 judged inventory and route thresholds live in `config/console/voices.json`.
@@ -28,10 +28,19 @@ does not serialize another console configuration or an article ledger.
    axis stops at the older **observed row end**, not the build clock
    or a synthetic job day. A newer article tail awaiting feed evidence is named.
    Sources failing in either row rank by failed days, with failed and observed
-   clean sources counted in the tail. An unavailable or empty article answer
-   retains useful feed evidence, explicitly as feed-only evidence. An unobserved
-   day never proves that every fetch answered. A scriptless document has a
-   separately named feed-only reading outside the native panel's reserved body.
+   clean sources counted in the tail. When the article answer is unavailable or
+   empty, or the document runs without scripts, **Feed failures** uses the
+   packed feed record alone. It ends on the newest packed feed day, no later
+   than the newest published day. Each feed has one settled result per run; each
+   UTC day with at least one failure counts once. The ranking shows failed days
+   out of days with a recorded read, failed reads out of recorded reads, and the
+   last failing day with its observed reasons. Equal failed-day counts sort by
+   feed ID. The first three failing feeds are visible (`feed_preview_rows` in
+   `config/console/voices.json`); the disclosure shows the full remainder, its
+   failed-read count and any ties at the cutoff. Non-failing feeds are never
+   named in this view. The window and coverage note distinguish a record with
+   no failures from no recorded reads, an unpacked or unreadable record, and
+   partial evidence.
 3. **`fetch-time` - Where a fetch spent its time.** Native `fetchTimeQuery`
    ranks sources by mean whole `fetch_ms`. Rows without a whole or robots clock
    cannot support this comparison. Robots, previous attempts/retries, connecting,
@@ -128,12 +137,14 @@ panel still includes the watchlist bonus, which answers a different question
 and does not replace those counts. Watchlist configuration, producer fields,
 historical rows and private-reader column compatibility remain unchanged.
 
-The eight feed cases, their constants and `feedHeadline` moved unchanged into
-the route's feed spec. They run against the actual scriptless feed-only drawing, retaining
-the feed partition, cap equation, last-result and independent fixture assertions.
-A clean feed with a failed article belongs in the combined list, and its common
-axis can end before the feed record. The combined list is checked separately;
-it is not relabelled as a feed-only population.
+The feed-only preview shows the most persistent failures without making an
+operator scan healthy or unasked feeds. Counting days rather than reads keeps
+several runs on one UTC day from outranking repeated failures on more days.
+The shorter preview no longer shows one tile per feed day or a latest result.
+The full failure list remains one disclosure away. The route journey checks the
+actual scriptless preview, and the logic spec checks its denominators, cutoff
+ties and recording states. A clean feed with a failed article still belongs in
+the combined chart, whose common axis can end before the feed record.
 
 The shared ownership sweep and readout helper wait for the actual native route
 state to settle before scanning. All selectors and positive arrival assertions

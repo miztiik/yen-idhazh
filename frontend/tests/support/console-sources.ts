@@ -73,9 +73,9 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'Cards.svelte', 'cards.ts', 'Panels.svelte', 'panels.ts', 'slice.ts', 'work.ts'
 	],
 	'src/lib/console/voices': [
-		'record.ts', 'source-health.ts', 'feeds-failed.ts', 'fetch-time.ts',
+		'record.ts', 'source-health.ts', 'feeds-failed.ts', 'feed-failure-preview.ts', 'fetch-time.ts',
 		'retiring.ts', 'source-cuts.ts', 'ranking-discount.ts', 'why-chosen.ts',
-		'VoicesPanel.svelte', 'RecordFrame.svelte', 'SourceHealthPanel.svelte', 'FeedsFailedPanel.svelte', 'FeedTiles.svelte',
+		'VoicesPanel.svelte', 'RecordFrame.svelte', 'SourceHealthPanel.svelte', 'FeedsFailedPanel.svelte', 'FeedTiles.svelte', 'FeedFailurePreview.svelte',
 		'FetchTimePanel.svelte', 'RetiringPanel.svelte', 'SourceCutsPanel.svelte',
 		'RankingDiscountPanel.svelte', 'WhyChosenPanel.svelte'
 	],
