@@ -97,16 +97,19 @@ COMPACT_CURRENCY_MAGNITUDE: Final[dict[str, Decimal]] = {
 }
 
 PERCENT: Final[frozenset[str]] = frozenset({"percent", "per cent", "%"})
-_MAGNITUDE_WORDS: Final = "|".join((*MAGNITUDE, *sorted(PERCENT - {"%"})))
+_CURRENCY_SYMBOLS: Final = "$\u00a3\u20ac\u20b9"
+_MAGNITUDE_WORDS: Final = "|".join(MAGNITUDE)
+_PERCENT_WORDS: Final = "|".join(sorted(PERCENT - {"%"}))
+_FOLLOWING_MAGNITUDE: Final = re.compile(rf"[\s-]+(?:{_MAGNITUDE_WORDS})\b", re.IGNORECASE)
 
 # The leading lookbehind keeps identifiers such as `COVID-19` out. Capture
 # the whole attached currency suffix so an unknown one cannot pass as a bare price.
 NUMBER: Final = re.compile(
     r"(?<![\w.-])"
-    r"(?P<currency>[$\u00a3\u20ac\u20b9]\s?)?"
+    rf"(?P<currency>[{_CURRENCY_SYMBOLS}]\s?)?"
     r"(?P<sign>-)?"
     r"(?P<value>\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)"
-    rf"(?:\s*(?P<magnitude>%|(?:{_MAGNITUDE_WORDS})\b)"
+    rf"(?:\s*(?P<magnitude>%|(?:{_MAGNITUDE_WORDS}|{_PERCENT_WORDS})\b)"
     r"|(?(currency)(?P<currency_suffix>\w+)))?"
     r"\s*"
     r"(?P<unit>[a-zA-Z][a-zA-Z-]*)?",
@@ -161,8 +164,8 @@ _MONTH_ALTERNATION: Final = "|".join(sorted(MONTHS, key=len, reverse=True))
 # The bare-year branch matches any four digits and `_read_date` holds it to
 # YEAR_MIN..YEAR_MAX, because that bound is a number and not a spelling.
 DATE: Final = re.compile(
-    r"(?<![\w.,$\u00a3\u20ac\u20b9-])"
-    r"(?<![$\u00a3\u20ac\u20b9]\s)"
+    rf"(?<![\w.,{_CURRENCY_SYMBOLS}-])"
+    rf"(?<![{_CURRENCY_SYMBOLS}]\s)"
     r"(?:"
     r"(?P<iso_year>\d{4})-(?P<iso_month>\d{2})-(?P<iso_day>\d{2})"
     rf"|(?P<dmy_day>\d{{1,2}})(?:st|nd|rd|th)?\s+(?P<dmy_month>{_MONTH_ALTERNATION})\.?,?"
@@ -243,23 +246,28 @@ def read_quantity(match: re.Match[str]) -> Reading | None:
     only when it was read as the unit, so `40 percent of` never becomes an
     excerpt and `1,200 MW` always does.
     """
+    currency = (match.group("currency") or "").strip()
+    if not currency:
+        # A rejected currency prefix must not turn `US$811m` into `811m`.
+        start = match.start()
+        while start and match.string[start - 1].isspace():
+            start -= 1
+        if start and match.string[start - 1] in _CURRENCY_SYMBOLS:
+            return None
+
     digits = match.group("value")
     try:
         magnitude = Decimal(digits.replace(",", ""))
     except InvalidOperation:
         return None
 
-    currency = (match.group("currency") or "").strip()
     suffix = (match.group("magnitude") or "").lower()
     compact = (match.group("currency_suffix") or "").lower()
     if compact and compact not in COMPACT_CURRENCY_MAGNITUDE:
         return None
 
     word = normalise_unit(match.group("unit") or "")
-    # A detached abbreviation or a second scale does not prove a single amount.
-    if currency and (
-        word in COMPACT_CURRENCY_MAGNITUDE or ((suffix or compact) and word in MAGNITUDE)
-    ):
+    if currency and word in COMPACT_CURRENCY_MAGNITUDE:
         return None
     if word in NOT_A_UNIT or len(word) > UNIT_MAX_LENGTH:
         word = ""
@@ -270,8 +278,10 @@ def read_quantity(match: re.Match[str]) -> Reading | None:
         span_end = match.end("magnitude")
     else:
         if compact or suffix:
-            magnitude *= COMPACT_CURRENCY_MAGNITUDE[compact] if compact else MAGNITUDE[suffix]
             span_end = match.end("currency_suffix" if compact else "magnitude")
+            if _FOLLOWING_MAGNITUDE.match(match.string, span_end):
+                return None
+            magnitude *= COMPACT_CURRENCY_MAGNITUDE[compact] if compact else MAGNITUDE[suffix]
         unit = currency or word
         if word and not currency:
             span_end = match.end("unit")

@@ -233,10 +233,12 @@ The written scales `lakh` and `crore` (including `lakhs` and `crores`) mean
 100,000 and 10,000,000. The one-letter suffixes `k`, `m` and `b` mean thousand,
 million and billion only when attached to a number with an explicit currency
 symbol. `$811m` reads as 811,000,000 with unit `$` and excerpt `$811m`;
-`15 m` still reads as 15 with unit `m`. An unknown attached currency suffix,
-a separated one-letter suffix, or a second space-separated scale word leaves
-the price unread rather than shortening it. Extraction and chart validation
-use the same reader.
+`15 m` still reads as 15 with unit `m`. An unknown attached currency suffix or
+a separated one-letter suffix leaves the price unread. The reader does not
+recover a bare number from an unsupported prefix such as `US$811m` or `-$811m`.
+It also refuses a second magnitude word, as in `12 lakh crore rupees`, rather
+than keeping only the first scale. Extraction and chart validation use the
+same reader.
 
 ### What the date pass will read, and what it refuses
 
