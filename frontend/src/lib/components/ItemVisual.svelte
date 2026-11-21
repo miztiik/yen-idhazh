@@ -56,6 +56,7 @@
 	import { numberFormatter, type NumberFormatConfig } from '$lib/number-format';
 	import { whenNear } from '$lib/reveal';
 	import type { StoryChartGeometryConfig } from '$lib/server/config';
+	import ComparisonChart from '$lib/visual/ComparisonChart.svelte';
 	import HistogramChart from '$lib/visual/HistogramChart.svelte';
 	import PartsOfOne from '$lib/charts/d3/PartsOfOne.svelte';
 	import PieChart from '$lib/visual/PieChart.svelte';
@@ -97,13 +98,18 @@
 	const currentLoad = $derived(loaded?.file === wanted ? loaded.data : null);
 	const fittedGeometry = $derived(currentLoad && chartRoom
 		? fitChartGeometry(currentLoad, storyChartGeometry, chartRoom) : storyChartGeometry);
+	const comparison = $derived(currentLoad?.type === 'bar' || currentLoad?.type === 'dot');
 	const fittedTicks = $derived(currentLoad && chartRoom
 		? fitChartTicks(currentLoad, fittedGeometry, chartRoom.textHeight, chartTickDensity) : chartTickDensity);
 	const drawing = $derived<Drawing | null>(
 		currentLoad && room > 0
 			? drawVisual(
 					currentLoad, room, formatNumber, numberFormat, fittedTicks, fittedGeometry,
-					chartRoom?.height ?? fittedGeometry.line_min_height_px
+					chartRoom?.height ?? fittedGeometry.line_min_height_px,
+					comparison ? {
+						narrowBelow: __FRAME_CONFIG__.breakpoints_px[0],
+						labels: chartRoom?.comparisonLabels
+					} : undefined
 				)
 			: null
 	);
@@ -208,7 +214,8 @@
 		const forget = whenChartFits(node, (next) => {
 			room = next.width;
 			if (!chartRoom || chartRoom.width !== next.width ||
-				chartRoom.height !== next.height || chartRoom.textHeight !== next.textHeight) {
+				chartRoom.height !== next.height || chartRoom.textHeight !== next.textHeight ||
+				next.comparisonLabels) {
 				chartRoom = next;
 			}
 		});
@@ -224,6 +231,7 @@
 	<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 	<figure
 		class="visual my-4 overflow-hidden rounded-md border border-rule bg-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+		class:comparison
 		tabindex="0"
 		role="img"
 		aria-label={stated}
@@ -256,58 +264,10 @@
 				height={drawing.height}
 				role="presentation"
 			>
-				{#if drawing.type === 'bar'}
-					{#each drawing.bars as bar (bar.y)}
-						<text class="name" class:emphasized={bar.emphasized} x="0" y={bar.label}>{bar.name}</text>
-						<rect
-							class="bar"
-							class:emphasized={bar.emphasized}
-							stroke-width={storyChartGeometry.mark_outline_width_px}
-							x="0"
-							y={bar.y}
-							width={bar.width}
-							height={bar.height}
-							rx={storyChartGeometry.bar_corner_radius_px}
-						/>
-						<text class="figure" x={bar.figure} y={bar.y + bar.height / 2}>{bar.displayed}</text>
-					{/each}
-					<line
-						class="axis"
-						stroke-width={storyChartGeometry.axis_line_width_px}
-						x1="0"
-						y1={drawing.baseline}
-						x2={drawing.width}
-						y2={drawing.baseline}
-					/>
-					{#if drawing.unit}
-						<text class="unit" x="0" y={drawing.baseline + storyChartGeometry.axis_label_offset_px}>{drawing.unit}</text>
-					{/if}
+				{#if drawing.type === 'bar' || drawing.type === 'dot'}
+					<ComparisonChart {drawing} geometry={storyChartGeometry} />
 				{:else if drawing.type === 'histogram'}
 					<HistogramChart drawing={drawing} geometry={storyChartGeometry} />
-				{:else if drawing.type === 'dot'}
-					{#each drawing.dots as dot (dot.y)}
-						<text class="name" class:emphasized={dot.emphasized} x="0" y={dot.labelY}>{dot.name}</text>
-						<circle
-							class="dot"
-							class:emphasized={dot.emphasized}
-							stroke-width={storyChartGeometry.mark_outline_width_px}
-							cx={dot.x}
-							cy={dot.y}
-							r={dot.radius}
-						/>
-						<text class="figure" x={dot.valueX} y={dot.y}>{dot.displayed}</text>
-					{/each}
-					<line
-						class="axis"
-						stroke-width={storyChartGeometry.axis_line_width_px}
-						x1={storyChartGeometry.dot_radius_px}
-						y1={drawing.baseline}
-						x2={drawing.axisEnd}
-						y2={drawing.baseline}
-					/>
-					{#if drawing.unit}
-						<text class="unit" x="0" y={drawing.baseline + storyChartGeometry.axis_label_offset_px}>{drawing.unit}</text>
-					{/if}
 				{:else if drawing.type === 'line'}
 					{#each drawing.axis.ticks as tick (tick.value)}
 						<line
@@ -569,7 +529,6 @@
 	   larger. The drawing is placed at the card's own width, so the token keeps
 	   its computed size rather than being scaled with a fixed viewBox. The
 	   browser gate measures the rendered text against that same token. */
-	.name,
 	.figure,
 	.unit {
 		dominant-baseline: middle;
@@ -602,23 +561,9 @@
 		font-size: var(--text-xs);
 	}
 
-	.bar {
-		fill: var(--chart-1);
-	}
-
-	.bar.emphasized {
-		fill: var(--chart-2);
-		stroke: var(--color-text);
-		stroke-dasharray: var(--space-1);
-	}
-
-	.name.emphasized {
-		font-weight: var(--font-weight-semibold);
-		fill: var(--color-text);
-	}
-
-	.dot {
-		fill: var(--chart-1);
+	.comparison {
+		font-size: var(--text-xs);
+		line-height: var(--leading-xs);
 	}
 
 	.scatter-point {
@@ -684,7 +629,6 @@
 		color: var(--color-text);
 	}
 
-	.dot.emphasized,
 	.slope-point.emphasized {
 		fill: var(--chart-2);
 		stroke: var(--color-text);

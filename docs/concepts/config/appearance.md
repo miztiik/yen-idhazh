@@ -1,6 +1,6 @@
 # What the page is drawn from
 
-**Last Updated**: 2026-11-21
+**Last Updated**: 2026-11-22
 
 Every knob a reader's page or an operator's console is drawn from: the file that
 owns them, the rule that decides which file owns a key when two name it, the
@@ -88,9 +88,12 @@ Two knobs in that block decide what a chart's axis and its readout look like, an
 
 `chart.story_geometry` is separate from the console's `chart.width_px` and
 `chart.height_px`: each story chart measures the space its card gives it.
-`row_height_px`, padding, label gaps, mark sizes, the bar's figure gutter, the
-slope's labelled-column bands, and the line's axis margins and stroke width tune
-that shared browser drawing. `line_series_dash_arrays` gives each ordered line
+`row_height_px`, padding, label gaps, mark sizes, the histogram's figure gutter,
+the slope's labelled-column bands, and the line's axis margins and stroke width
+tune that shared browser drawing. Horizontal comparisons measure their value
+column and align category labels to their own marks;
+`dot_category_label_share` no longer controls that placement.
+`line_series_dash_arrays` gives each ordered line
 series a distinct stroke pattern; the same pattern appears in its legend, so
 series remain distinguishable without relying on colour.
 `mark_outline_width_px` sets the outline used to distinguish chart marks without
