@@ -99,7 +99,7 @@ class ContentSimilarityJudge:
 
         The collecting job reads from a sparse checkout, and the review reads the last
         nights of `pair-verdicts` and the history of `threshold-history`. `review_days` names
-        those days for the stage and for this declaration alike, and
+        the fit and drift windows for the stage and for this declaration alike, and
         `idhazh.ledger.window_inputs` turns them into the raw folders, compact files and
         indexes that reading them could open. The loaders do not fail on a file that is not
         there; they read a shorter window, which is why the review also checks the history it
@@ -183,17 +183,21 @@ class ContentSimilarityJudge:
 
         settings = config.load()
         settings = replace(settings, council=settings.council.model_copy(update={"shards": shards}))
-        drawn = pick_item_pairs.stage_pick_item_pairs(
+        draw_path = _draw_path(date)
+        score_pool_path = _score_pool_path(date)
+        picked = pick_item_pairs.stage_pick_item_pairs(
             date,
             run_id=run_id,
             settings=settings,
-            draw_path=_draw_path(date),
+            draw_path=draw_path,
             digest_root=common.PUBLIC_ROOT,
             state_dir=common.STATE_ROOT,
+            score_pool_path=score_pool_path,
         )
+        paths = (draw_path, score_pool_path) if picked.score_pool_written else (draw_path,)
         return ShardResult(
-            outcome=ShardOutcome.COMPLETED if drawn.taken else ShardOutcome.NOTHING_TO_DO,
-            files=(session.artifact_path(_draw_path(date)),),
+            outcome=ShardOutcome.COMPLETED if picked.draw.taken else ShardOutcome.NOTHING_TO_DO,
+            files=tuple(session.artifact_path(path) for path in paths),
         )
 
     def run_shard(
@@ -287,6 +291,9 @@ class ContentSimilarityJudge:
             expected_shards=prepared.shards,
             state_dir=state_dir,
         )
+        score_pool_path = _score_pool_path(date)
+        score_pool_artifact = session.artifact_path(score_pool_path)
+        score_pool_declared = any(file.path == score_pool_artifact for file in prepared.files)
         reviewed = review_thresholds.stage_review_thresholds(
             date,
             run_id=run_id,
@@ -298,6 +305,7 @@ class ContentSimilarityJudge:
             expected_shards=prepared.shards,
             state_dir=state_dir,
             config_dir=config.DEFAULT_CONFIG_DIR,
+            score_pool_path=score_pool_path if score_pool_declared else None,
         )
         return ShardResult(
             outcome=(
@@ -317,6 +325,13 @@ def _draw_path(date: DateStamp) -> Path:
     makes that trip.
     """
     return session.unit_file(date, slot=session.SELECTION_DIRNAME, judge_id=JUDGE_ID)
+
+
+def _score_pool_path(date: DateStamp) -> Path:
+    """The optional histogram travels with the draw, under its own declaration."""
+    return session.unit_file(
+        date, slot=session.SELECTION_DIRNAME, judge_id=JUDGE_ID, suffix=".score-pool.json"
+    )
 
 
 def _verdict_path(date: DateStamp, *, shard: int) -> Path:

@@ -42,25 +42,23 @@ class ReviewDays:
 
     pair_verdicts: tuple[str, ...]
     threshold_history: tuple[str, ...]
+    fit_history: tuple[str, ...]
 
 
 def review_days(night: str, *, config: ContentSimilarityJudgeConfig) -> ReviewDays:
-    """The days a night's review reads: the nights of evidence and the history behind the pull.
+    """Name the sparse checkout and review windows for the fit and for drift.
 
-    **Guardrail #12 declaration.** The fixed-size input is three named settings: the
-    `window_nights` days of pair verdicts that end on the night, and for threshold history the
-    larger of `draw.thresholds_lookback_days`, which is how far back the draw looks for the
-    thresholds in force, and `thresholds.pull_window_nights`, the nights of steepness the pull
-    is the median of. History is the days before the night, never the night itself.
+    **Guardrail #12 declaration.** Pair verdicts still use `thresholds.window_nights` ending on
+    the night. History covers the maximum of the draw lookback, the pull window, and the drift
+    lookback, all ending before the night. The fit keeps only its original draw and pull days.
     """
+    fit_window = max(config.draw.thresholds_lookback_days, config.thresholds.pull_window_nights)
     return ReviewDays(
         pair_verdicts=evidence_days(night, window_nights=config.thresholds.window_nights),
         threshold_history=lookback_days(
-            night,
-            within_days=max(
-                config.draw.thresholds_lookback_days, config.thresholds.pull_window_nights
-            ),
+            night, within_days=max(fit_window, config.diagnostics.score_baseline_lookback_days)
         ),
+        fit_history=lookback_days(night, within_days=fit_window),
     )
 
 
