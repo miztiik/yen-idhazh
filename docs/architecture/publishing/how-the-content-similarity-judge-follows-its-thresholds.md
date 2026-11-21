@@ -1,6 +1,6 @@
 # How the content-similarity judge follows its thresholds
 
-**Last Updated**: 2026-11-19
+**Last Updated**: 2026-11-21
 
 Which pairs of stories does the nightly judge read, what does it keep about each, and
 where do its two thresholds sit and move? This page owns the nightly draw, the rows it
@@ -76,6 +76,7 @@ flowchart TD
   JUDGE --> READING["Each runner's reading of its own instrument,<br/>with its known-answer answers beside it"]
   READING --> FILE
   LEDGER --> REVIEW["review-thresholds, once a night, after the filing<br/>Read the last 7 nights, fit each curve, move or hold"]
+  FILE -->|"this attempt's filed batch"| REVIEW
   DRAW --> REVIEW
   READING --> REVIEW
   REVIEW -->|"tomorrow's thresholds"| HIST
@@ -105,8 +106,9 @@ by the judging stage and is described under [the known-answer pairs](#the-known-
   rows the others returned.
 - **Review** ([review_thresholds.py](../../../backend/idhazh/stages/review_thresholds.py))
   runs in the collecting job right after the filing. It calls no model. It reads the
-  last seven nights of `pair-verdicts`, the draw file and the runners' readings, decides
-  what each threshold does, and files one row in `threshold-history`.
+  last seven nights of `pair-verdicts` for the fit. It uses the draw and this attempt's
+  exact filed batch for the sample readings, and the reports for runner and known-answer
+  readings. It files both the threshold decisions and those readings in `threshold-history`.
 
 If the review fails, the night keeps its pair rows and has no threshold row. The
 scheduler reads `pair-verdicts` only, so it does not name the night again; the runners'
@@ -575,11 +577,11 @@ ignore range, so it stays exactly where it was and its estimate is still stored.
 
 One row for each run, filed under the judged date and declared in
 [story_similarity_threshold_history_row.py](../../../backend/idhazh/contracts/story_similarity_threshold_history_row.py).
-A night that dealt pairs files a row even when none came back judged: the evidence is
-empty, both thresholds are held for want of it, and the row says how many runners
-reported. A night that dealt no pair, with no draw rows and no judged rows, files none, so
-a missing row is how a reader tells a night nothing ran from one that ran and lost
-everything.
+A night that dealt pairs files a row even when none came back judged: the row says how
+many runners reported and the thresholds hold if the fit found no evidence. A retry
+can still see earlier verdicts in the fit even when it returned none itself. A night
+with no draw rows and no judged rows files none, so a missing row is how a reader tells
+a night nothing ran from one that ran and lost everything.
 
 | Part | Columns |
 | --- | --- |
@@ -587,6 +589,11 @@ everything.
 | Each threshold, once for `lower_` and once for `upper_` | `threshold_before`, `share_level`, `nights_used`, `usable_pairs_used`, `window_first_date`, `curve_intercept`, `curve_steepness`, `pull_centre`, `pull_spread`, `estimate`, `gap`, `nights_beyond_ignore_range`, `move`, `move_limited_by`, `held_because`, `threshold_after` |
 | The lightly sampled ends | `above_upper_pairs_available`, `above_upper_pairs_usable`, `above_upper_same_story_estimated`, `below_lower_pairs_available`, `below_lower_pairs_usable`, `below_lower_different_story_estimated` |
 | The runners | `runners_expected`, `runners_reported`, `pairs_dealt`, `pairs_valid`, `pairs_agreed`, `pairs_unreadable`, `pairs_refused`, `pairs_abandoned`, `disagreement_rate`, `unclear_rate`, `decode_seconds_total`, `decode_seconds_slowest_runner`, `canary_answers` |
+| Attempt coverage | `sample_status`, `pairs_drawn`, `pairs_returned`, `slice_outcomes` |
+| Agreement at the reporting cutoff | `evaluated_cutoff`, `sample_tp`, `sample_fp`, `sample_fn`, `sample_tn`, `sample_precision`, `sample_recall`, `cutoff_brier_score`, `sample_f0_5` |
+| Agreement at the upper bound used for the draw | `upper_cutoff_sample_size`, `upper_cutoff_false_match_share`, `upper_cutoff_brier_score` |
+| Ranked agreement | `sample_average_precision`, `sample_precision_at_recall_90`, `sample_recall_90_cutoff`, `sample_recall_at_recall_90_cutoff` |
+| Agreement with the known-answer key | `canary_expectations`, `canary_kappa_pairs`, `canary_kappa` |
 
 - **The curve columns, `estimate` and `gap` are empty together** when no curve was
   fitted, and `window_first_date` is empty when no usable pair was near.
@@ -613,6 +620,28 @@ everything.
   and is never an empty object. The margins are the judge's own figures and are not rounded.
   For one pair the file-order prompt token count is the same on every runner and every night
   until the prompt, the chat template or the tokenizer moves, so a change in it is the sign.
+- **Sample coverage follows the attempt, not the fit window or runner reports.** Each
+  drawn slice keeps its pool, draw count and returned outcomes: agreed YES, NO or UNCLEAR,
+  split readings, and refused readings. Drawn minus returned includes missing rows and
+  can be the whole slice. Unreadable and abandoned are runner totals, not additional
+  slice outcomes. A nonempty batch declined by the ledger is `not_filed`, not zero
+  returns. If the draw and this attempt's filed rows cannot be joined, the row says
+  `draw_mismatch` and the log names why; the return counts and scores stay empty.
+- **The cutoff and ranking readings measure agreement, not accuracy.** Only pairs with
+  two YES answers or two NO answers count, once each and with both tails included. A
+  score equal to the cutoff predicts YES. Hard-decision Brier is the share of these
+  binary decisions that differ from the judge. The upper bound's wrong-match share
+  divides its disagreeing YES predictions by all its YES predictions. F0.5 gives
+  precision more weight than recall. Average precision and precision at 90% recall
+  take whole groups of equal scores, without interpolation.
+  A reading without a denominator stays empty. None of these readings moves a threshold
+  or changes the [publication rule](autotune-content-similarity.md).
+- **Known-answer agreement uses the frozen key.** `canary_expectations` records the
+  committed expected answers by id. `canary_kappa_pairs` counts keys with two valid,
+  agreeing readings. The three-class Cohen's kappa subtracts chance agreement from
+  observed agreement and scales by the possible agreement beyond chance. It is empty
+  if any key is missing, refused or split, or if chance agreement is already one. The
+  original answers stay as reported, and the controls do not measure live accuracy.
 - **Every figure that follows from another is recomputed when the row is read:** `move` is
   `threshold_after - threshold_before` and `gap` is `estimate - threshold_before`, each
   within one millionth, so a writer rounds none of them below six decimal places.
@@ -653,6 +682,7 @@ below 0.88 had been judged, so they are provisional until the first seven real n
 | `draw.bucket_weights` | 40, 30, 20 | Lower thin, upper thin and coarse shares of what the ends leave |
 | `draw.fully_similar`, `draw.fully_dissimilar` | weight 6, 4; minimum 2, 1; maximum 6, 4 | The two lightly sampled ends |
 | `draw.thresholds_lookback_days` | 14 | How old the newest threshold-history row may be |
+| `diagnostics.cutoff` | 0.87 | Score compared with the sampled judge answers; does not change the draw or publication |
 | `thresholds.lower_start`, `thresholds.upper_start` | 0.70, 0.93 | The thresholds when no recent row sets them |
 | `thresholds.lower_share_level`, `thresholds.upper_share_level` | 0.05, 0.90 | The same-story share that defines each threshold |
 | `thresholds.window_nights` | 7 | Nights of `pair-verdicts` the evidence reads, ending on the night |
@@ -693,6 +723,7 @@ rows, and a setting changes by an edit that bumps its file's `version`
 | When | What to read | If it is wrong |
 | --- | --- | --- |
 | First council run | The night's draw rows carry the slice columns, `pair-verdicts` holds the night's rows each with a `sampling_chance`, and `threshold-history` holds the night's row | The stage that writes the first missing item did not run: the pick writes the draw rows, the filing `pair-verdicts`, the review `threshold-history` |
+| First ordinary settlement with sample readings | Read the named `threshold-history` partition while the draw and verdict artifacts are available. Match the run and attempt, count the draw and returned rows, close each drawn slice, and compare the four agreement counts at `evaluated_cutoff`. | Inspect which attempt's draw and verdict rows were filed. A mismatch does not warrant rerunning the pipeline as a merge check. |
 | First council run | Every drawn pair names at least one item of the night's published day | Revert the guard in `assemble.cross_source_pairs`. [What the guard gives up](autotune-content-similarity.md#design-rationale) is a story added to the day after the council read it |
 | First council run | `canary_answers` on the night's `threshold-history` row holds all six ids once, and a lost runner's ids are absent. Read each answer against its expected one. The two `unclear` pairs may answer NO: that is a predicted finding about the judge, and not a fault | A wrong answer on a `same` or `different` pair points at the model, runtime, prompt, grammar or label (an agent wrote the labels). Nothing holds or re-runs the night, so a person reads it. A missing id while every runner reported means its call raised, which the log names ([the check](#the-known-answer-pairs)) |
 | First council run | Older nights with no `pair-verdicts` row are named one a night, newest first, until the 7-night window has slid past the rest | A night that has rows and is named again is a fault in the scheduler's read ([which nights](#which-nights-the-judge-is-behind-on)) |

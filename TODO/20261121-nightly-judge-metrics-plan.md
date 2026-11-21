@@ -33,7 +33,7 @@ Table C - PR order
 | Id | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | 1 | Declare compatible judge diagnostic records | - | A | DONE | studious-tribble | - | Judge diagnostics contracts |
-| C2 | 2 | File sampled agreement and canary readings | 1 | B | PENDING | - | - | - |
+| C2 | 2 | File sampled agreement and canary readings | 1 | B | DONE | super-sniffle | - | Judge sample and canaries |
 | C3 | 3 | File drift across the full score pool | 2 | C | PENDING | - | - | - |
 | C4 | 4 | File Brier and ECE against a prior fit | 3 | D | PENDING | - | - | - |
 | C5 | 5 | Draw the nightly evidence in Judgement | 4 | E | PENDING | - | - | - |

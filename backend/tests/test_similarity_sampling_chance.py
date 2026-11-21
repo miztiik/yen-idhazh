@@ -10,13 +10,12 @@ ledger (CLAUDE.md section 13).
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterator
 from hashlib import sha256
 from pathlib import Path
 from typing import Final
 
 import pytest
-from support.judged_pairs import a_reading, a_saver, a_verdict_file
+from support.judged_pairs import a_night_of_pairs, a_reading, a_saver, a_verdict_file
 from support.ledger import SEED_COMMIT
 
 from idhazh import atomic_write, ledger
@@ -33,12 +32,22 @@ from idhazh.contracts.council_invocation import (
 from idhazh.contracts.council_run_record import ShardOutcome
 from idhazh.contracts.knobs.council import JudgeLifecycleStatus
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.ledgers import LedgersConfig
+from idhazh.contracts.story_similarity_diagnostics import (
+    SampleStatus,
+    SliceOutcomes,
+    read_diagnostic_text,
+)
 from idhazh.contracts.story_similarity_pair_verdict import (
     JUDGE_POLICY_VERSION,
     PairBucket,
     StorySimilarityPairVerdict,
 )
+from idhazh.contracts.story_similarity_threshold_history_row import (
+    StorySimilarityThresholdHistoryRow,
+)
 from idhazh.council import metrics_sink, session
+from idhazh.similarity.sample_diagnostics import sample_columns
 from idhazh.similarity.sampling_chance import with_sampling_chance
 from idhazh.stages import file_pair_verdicts
 
@@ -209,6 +218,8 @@ def test_every_row_the_night_files_carries_the_chance_of_its_slice(tmp_path: Pat
         state, LedgerName.CONTENT_SIMILARITY_JUDGE_PAIR_VERDICTS, days=[DATE]
     )
     assert (report.rows_filed, report.shards_present, report.runners_reported) == (6, 2, 2)
+    assert isinstance(report.filed_rows, tuple)
+    assert {row.pair_key: row for row in report.filed_rows} == {row.pair_key: row for row in filed}
     assert sorted((row.work_part_index, row.pair_key) for row in filed) == sorted(
         (row.work_part_index, row.pair_key) for unit in a_hand_worked_night() for row in unit
     )
@@ -297,7 +308,33 @@ def test_a_night_whose_units_shipped_nothing_files_nothing(tmp_path: Path) -> No
     )
 
     assert (report.rows_filed, report.shards_present, report.runners_reported) == (0, 0, 0)
+    assert report.filed_rows == ()
     assert not ledger.raw_root(state, LedgerName.CONTENT_SIMILARITY_JUDGE_PAIR_VERDICTS).exists()
+
+
+def test_a_nonempty_batch_declined_by_the_ledger_is_not_an_empty_attempt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    which = LedgerName.CONTENT_SIMILARITY_JUDGE_PAIR_VERDICTS
+    registry = ledger.paths._CONFIG.model_dump(mode="json")
+    family = next(
+        family
+        for family in registry["families"]
+        if any(held["name"] == which for held in family["ledgers"])
+    )
+    family["lifecycle_status"] = "paused"
+    monkeypatch.setattr(ledger.paths, "_CONFIG", LedgersConfig.model_validate(registry))
+    state = tmp_path / "state"
+
+    report = file_the_night(tmp_path, state, a_hand_worked_night())
+
+    assert report.rows_filed == 0 and report.filed_rows is None
+    assert not ledger.raw_root(state, which).exists()
+    draw = a_night_of_pairs([(0.95, "YES")], date=DATE, answered=False)
+    columns = sample_columns(
+        draw, report.filed_rows, date=DATE, run_id=RUN, cutoff=0.87, upper_cutoff=0.93
+    )
+    assert columns == {"sample_status": SampleStatus.NOT_FILED, "pairs_drawn": 1}
 
 
 def test_the_log_line_counts_the_units_that_reported_and_files_no_totals_of_its_own(
@@ -314,78 +351,215 @@ def test_the_log_line_counts_the_units_that_reported_and_files_no_totals_of_its_
     assert "dealt=" not in said
 
 
-@pytest.fixture
-def admitted_invocation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    monkeypatch.setattr(session, "COUNCIL_ROOT", tmp_path / "var" / "council")
-    selection = Selection(
-        version=Selection.schema_version(),
+def test_sample_ranking_admits_the_whole_tie_that_reaches_90_percent_recall() -> None:
+    pairs = [(0.96, "YES")] * 8 + [(0.87, "YES"), (0.87, "NO"), (0.40, "YES")]
+    draw = a_night_of_pairs(pairs, date=DATE, answered=False)
+    filed = a_night_of_pairs(pairs, date=DATE)
+
+    def measurements(rows: list[StorySimilarityPairVerdict]) -> dict[str, str | int | float | None]:
+        return sample_columns(draw, rows, date=DATE, run_id=RUN, cutoff=0.87, upper_cutoff=0.93)
+
+    columns = measurements(filed)
+    assert columns == measurements(list(reversed(filed)))
+    assert columns["sample_average_precision"] == pytest.approx(4 / 5 + 9 / 100 + 1 / 11)
+    assert columns["sample_precision_at_recall_90"] == 0.9
+    assert columns["sample_recall_90_cutoff"] == 0.87
+    assert columns["sample_recall_at_recall_90_cutoff"] == 0.9
+
+
+def test_a_binary_sample_without_yes_has_no_ranking_but_can_have_zero_error() -> None:
+    pairs = [(0.40, "NO")]
+    columns = sample_columns(
+        a_night_of_pairs(pairs, date=DATE, answered=False),
+        a_night_of_pairs(pairs, date=DATE),
+        date=DATE,
         run_id=RUN,
-        attempt=1,
-        git_sha=SEED_COMMIT,
-        mode="scheduled",
-        anchor_date=DATE,
-        window=(DATE,),
-        judges=(
-            SelectedJudge(
-                tenant=JUDGE_ID, status=JudgeLifecycleStatus.ACTIVE, dates=(DATE,), shards=2
-            ),
-        ),
+        cutoff=0.87,
+        upper_cutoff=0.93,
     )
-    with session._route(selection, JUDGE_ID):
-        yield
+    assert columns["sample_tn"] == 1
+    assert columns["cutoff_brier_score"] == columns["upper_cutoff_brier_score"] == 0.0
+    assert columns["sample_precision"] is columns["sample_recall"] is None
+    assert columns["sample_f0_5"] is columns["upper_cutoff_false_match_share"] is None
+    assert columns.get("sample_average_precision") is None
+    assert columns.get("sample_precision_at_recall_90") is None
 
 
-@pytest.mark.usefixtures("admitted_invocation")
-def test_the_tenant_files_a_night_that_lost_a_runner_whatever_the_reports_say(
-    tmp_path: Path,
+def test_settlement_files_only_this_attempts_exact_sample(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The venue's reports say nothing the files do not: the rows that exist are filed.
-
-    One of the two units left a file and a shipped reading and the other left nothing, and
-    no report arrived for either. The surviving unit's pairs are filed and the night
-    reports itself settled.
-    """
+    """Read the real history partition after a full, shorter and empty attempt of one run."""
+    monkeypatch.setattr(session, "COUNCIL_ROOT", tmp_path / "var" / "council")
     state = tmp_path / "state"
-    draw = tenant._draw_path(DATE)
-    document = a_verdict_file([]).encode("utf-8")
-    atomic_write.write_atomic(draw, document.decode("utf-8"))
-    prepared = PreparationReceipt(
-        version=PreparationReceipt.schema_version(),
-        run_id=RUN,
-        attempt=1,
-        git_sha=SEED_COMMIT,
-        judge_id=JUDGE_ID,
-        date=DATE,
-        state="ready",
-        shards=2,
-        files=(
-            ArtifactFile(
-                path=session.artifact_path(draw),
-                size_bytes=len(document),
-                sha256=sha256(document).hexdigest(),
+    sample: list[tuple[float, str | tuple[str, str]]] = [
+        (0.96, "NO"),
+        (0.93, "YES"),
+        (0.87, "YES"),
+        (0.86, "NO"),
+        (0.40, "YES"),
+        (0.50, "NO"),
+        (0.89, "UNCLEAR"),
+        (0.89, ("YES", "NO")),
+        (0.89, "NO"),
+        (0.78, "YES"),
+        (0.89, "YES"),
+    ]
+    draw_rows = [
+        row.model_copy(update={"work_part_index": i % 2})
+        for i, row in enumerate(a_night_of_pairs(sample, answered=False, date=DATE))
+    ]
+    returned = [
+        row.model_copy(
+            update={
+                "work_part_index": i % 2,
+                "sampling_chance": None,
+                "slice_pairs_usable": None,
+            }
+        )
+        for i, row in enumerate(a_night_of_pairs(sample, date=DATE)[:9])
+    ]
+    returned[8] = returned[8].model_copy(
+        update={
+            "verdict": None,
+            "verdict_swapped": None,
+            "readings_agree": False,
+            "grammar_applied": False,
+        }
+    )
+
+    def settle(attempt: int, count: int) -> StorySimilarityThresholdHistoryRow:
+        monkeypatch.setenv("GITHUB_RUN_ATTEMPT", str(attempt))
+        selection = Selection(
+            version=Selection.schema_version(),
+            run_id=RUN,
+            attempt=attempt,
+            git_sha=SEED_COMMIT,
+            mode="scheduled",
+            anchor_date=DATE,
+            window=(DATE,),
+            judges=(
+                SelectedJudge(
+                    tenant=JUDGE_ID, status=JudgeLifecycleStatus.ACTIVE, dates=(DATE,), shards=2
+                ),
             ),
-        ),
-    )
-    atomic_write.write_atomic(
-        tenant._verdict_path(DATE, shard=0), a_verdict_file(a_hand_worked_night()[0])
-    )
-    metrics_sink.ship_judge_metrics(
-        a_reading(shard=0, dealt=2, date=DATE, run_id=RUN),
-        judge_id=JUDGE_ID,
-        name="0",
-        out_dir=tenant._shipping_dir(DATE),
-    )
+        )
+        with session._route(selection, JUDGE_ID):
+            draw = tenant._draw_path(DATE)
+            document = a_verdict_file(draw_rows).encode("utf-8")
+            atomic_write.write_atomic_bytes(draw, document)
+            prepared = PreparationReceipt(
+                version=PreparationReceipt.schema_version(),
+                run_id=RUN,
+                attempt=attempt,
+                git_sha=SEED_COMMIT,
+                judge_id=JUDGE_ID,
+                date=DATE,
+                state="ready",
+                shards=2,
+                files=(
+                    ArtifactFile(
+                        path=session.artifact_path(draw),
+                        size_bytes=len(document),
+                        sha256=sha256(document).hexdigest(),
+                    ),
+                ),
+            )
+            for shard in range(2):
+                atomic_write.write_atomic(
+                    tenant._verdict_path(DATE, shard=shard),
+                    a_verdict_file(returned[:count][shard::2]),
+                )
+            if attempt == 1:
+                # Runner 1 left rows despite not shipping a reading. Runner 0 says one
+                # pair was unreadable; that pair is already unreturned in the draw.
+                report = a_reading(shard=0, dealt=6, date=DATE, run_id=RUN).model_copy(
+                    update={
+                        "pairs_valid": 4,
+                        "pairs_agreed": 4,
+                        "pairs_refused": 1,
+                        "pairs_unreadable": 1,
+                        "unclear_rate": 0.25,
+                    }
+                )
+                metrics_sink.ship_judge_metrics(
+                    report, judge_id=JUDGE_ID, name="0", out_dir=tenant._shipping_dir(DATE)
+                )
+            settled = tenant.TENANT.settle(
+                date=DATE,
+                run_id=RUN,
+                state_dir=state,
+                identity=a_saver(RUN).model_copy(update={"attempt": attempt}),
+                prepared=prepared,
+                reports=(),
+            )
+        assert settled.outcome is ShardOutcome.COMPLETED
+        (filed_row,) = load_threshold_history(state, [DATE])
+        assert (filed_row.date, filed_row.run_id) == (DATE, RUN)
+        return filed_row
 
-    settled = tenant.TENANT.settle(
-        date=DATE,
-        run_id=RUN,
-        state_dir=state,
-        identity=a_saver(RUN),
-        prepared=prepared,
-        reports=(),
+    first = settle(1, count=9)
+    assert first.sample_status is SampleStatus.MEASURED
+    assert (first.runners_expected, first.runners_reported, first.pairs_dealt) == (2, 1, 6)
+    assert (first.pairs_unreadable, first.pairs_refused, first.unclear_rate) == (1, 1, 0.25)
+    assert (first.pairs_drawn, first.pairs_returned) == (11, 9)
+    assert first.slice_outcomes is not None
+    slices = read_diagnostic_text(first.slice_outcomes, column="slice_outcomes", model=SliceOutcomes)
+    assert {
+        (one.low, one.high): (
+            one.available,
+            one.drawn,
+            one.yes,
+            one.no,
+            one.unclear,
+            one.split,
+            one.refused,
+            one.drawn - one.returned,
+        )
+        for one in slices.slices
+    } == {
+        (-1.0, 0.70): (6, 2, 1, 1, 0, 0, 0, 0),
+        (0.76, 0.80): (3, 1, 0, 0, 0, 0, 0, 1),
+        (0.84, 0.87): (3, 1, 0, 1, 0, 0, 0, 0),
+        (0.87, 0.88): (3, 1, 1, 0, 0, 0, 0, 0),
+        (0.89, 0.90): (12, 4, 0, 0, 1, 1, 1, 1),
+        (0.93, 1.0): (6, 2, 1, 1, 0, 0, 0, 0),
+    }
+    assert first.evaluated_cutoff == 0.87
+    assert (first.sample_tp, first.sample_fp, first.sample_fn, first.sample_tn) == (2, 1, 1, 2)
+    assert (first.sample_precision, first.sample_recall, first.sample_f0_5) == pytest.approx(
+        (2 / 3, 2 / 3, 2 / 3)
     )
+    assert first.cutoff_brier_score == pytest.approx(2 / 6)
+    assert first.upper_cutoff_sample_size == 2
+    assert first.upper_cutoff_false_match_share == 0.5
+    assert first.upper_cutoff_brier_score == 0.5
+    assert first.sample_average_precision == pytest.approx(5 / 9)
+    assert (
+        first.sample_precision_at_recall_90,
+        first.sample_recall_90_cutoff,
+        first.sample_recall_at_recall_90_cutoff,
+    ) == (0.5, 0.40, 1.0)
 
-    assert settled.outcome is ShardOutcome.COMPLETED
-    assert len(load_pair_verdicts(state, [DATE])) == 3
-    (filed_row,) = load_threshold_history(state, [DATE])
-    assert (filed_row.date, filed_row.run_id, filed_row.runners_reported) == (DATE, RUN, 1)
+    short = settle(2, count=2)
+    assert short.sample_status is SampleStatus.MEASURED
+    assert (short.pairs_drawn, short.pairs_returned, short.runners_reported) == (11, 2, 0)
+    assert (short.sample_tp, short.sample_fp, short.sample_fn, short.sample_tn) == (1, 1, 0, 0)
+    assert short.cutoff_brier_score == 0.5
+
+    empty = settle(3, count=0)
+    assert empty.sample_status is SampleStatus.MEASURED
+    assert (empty.pairs_drawn, empty.pairs_returned, empty.runners_reported) == (11, 0, 0)
+    assert (empty.sample_tp, empty.sample_fp, empty.sample_fn, empty.sample_tn) == (0, 0, 0, 0)
+    assert empty.sample_precision is empty.sample_recall is empty.cutoff_brier_score is None
+    assert empty.upper_cutoff_sample_size == 0
+    assert empty.upper_cutoff_false_match_share is empty.upper_cutoff_brier_score is None
+    assert empty.slice_outcomes is not None
+    empty_slices = read_diagnostic_text(
+        empty.slice_outcomes, column="slice_outcomes", model=SliceOutcomes
+    )
+    assert [(one.low, one.drawn, one.returned) for one in empty_slices.slices] == [
+        (one.low, one.drawn, 0) for one in slices.slices
+    ]
+    # An empty attempt did not write pair rows: the fit still reads the existing ledger window.
+    assert len(load_pair_verdicts(state, [DATE])) == 2
+    assert empty.upper_usable_pairs_used == short.upper_usable_pairs_used == 2

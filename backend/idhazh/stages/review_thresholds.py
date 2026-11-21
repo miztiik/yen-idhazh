@@ -47,7 +47,9 @@ from idhazh.contracts.story_similarity_threshold_history_row import (
     StorySimilarityThresholdHistoryRow,
 )
 from idhazh.council import metrics_sink
+from idhazh.similarity.canary_diagnostics import canary_columns
 from idhazh.similarity.night_totals import end_columns, pool_sizes, runner_columns
+from idhazh.similarity.sample_diagnostics import sample_columns
 from idhazh.similarity.threshold_curve import (
     Curve,
     fit_pulled_curve,
@@ -369,6 +371,7 @@ def stage_review_thresholds(
     judge_id: str,
     shipped_root: Path,
     draw_path: Path,
+    filed_rows: tuple[StorySimilarityPairVerdict, ...] | None,
     identity: WriterIdentity,
     expected_shards: int,
     state_dir: Path,
@@ -381,6 +384,10 @@ def stage_review_thresholds(
     already recorded as quiet from that record and never open them. A night the judge repairs is
     such a night. The nights before it are read the ordinary way, and its own rows go last, so
     they are the newest of each pair.
+
+    **The sample diagnostics do not reread those rows.** A retry that filed no verdicts can
+    still see an earlier attempt in the fit window. Only `filed_rows` says what this attempt
+    actually returned. The known-answer readings come from the reports of this attempt.
 
     **The read is bounded by named settings and never by the archive** (Guardrail #12): the days
     `review_days` names, which the collecting job's sparse checkout is told too. The loaders do
@@ -400,15 +407,18 @@ def stage_review_thresholds(
     """
     execution = judge_settings.load(config_dir)
     days = review_days(date, config=execution)
+    window = [
+        *load_pair_verdicts(state_dir, days.pair_verdicts),
+        *load_pair_verdicts_filed_on(state_dir, date),
+    ]
+    history = load_threshold_history(state_dir, days.threshold_history)
+    draw_rows = _draw_rows(draw_path)
     row = build_threshold_row(
         date,
         run_id=run_id,
-        window=[
-            *load_pair_verdicts(state_dir, days.pair_verdicts),
-            *load_pair_verdicts_filed_on(state_dir, date),
-        ],
-        history=load_threshold_history(state_dir, days.threshold_history),
-        draw_rows=_draw_rows(draw_path),
+        window=window,
+        history=history,
+        draw_rows=draw_rows,
         readings=_readings_of_this_night(
             shipped_root, judge_id=judge_id, date=date, run_id=run_id
         ),
@@ -420,6 +430,18 @@ def stage_review_thresholds(
     if row is None:
         LOG.info("review-thresholds date=%s run=%s dealt no pair, so no row is filed", date, run_id)
         return ReviewReport(date=date, run_id=run_id, row=None, filed=False)
+    row = StorySimilarityThresholdHistoryRow.model_validate(
+        row.model_dump()
+        | sample_columns(
+            draw_rows,
+            filed_rows,
+            date=date,
+            run_id=run_id,
+            cutoff=execution.diagnostics.cutoff,
+            upper_cutoff=row.upper_threshold_before,
+        )
+        | canary_columns(judge_settings.load_canaries(config_dir).pairs, row.canary_answers)
+    )
     filed = ledger.persist(
         state_dir,
         [row],
