@@ -1,4 +1,4 @@
-/** Do the two build-time Judgement panels distinguish empty evidence from absent evidence? */
+/** Does Judgement distinguish an absent read, a null reading and a real zero? */
 import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -6,6 +6,13 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { renderConfigured as render } from './support/server-render';
 import { serverCompiler, type Rewrite } from './support/server-render';
 import { judgeNothings, type Nothing, type PanelReading } from './support/panel-gates';
+import {
+	DRIFT_STATUS, PROBABILITY_STATUS, SAMPLE_STATUS, judgeCanaries, judgeCoverage, judgeDayAbsence, judgeStatus,
+	psiInterpretation, psiNumber
+} from '../src/lib/console/judge-observations';
+import { dateSeries } from '../src/lib/charts/d3/dateSeries';
+import { frame, MARGIN } from '../src/lib/charts/frame';
+import { numberFormat } from './support/number-format';
 
 const FRONTEND = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const PANELS = [
@@ -19,6 +26,60 @@ function words(html: string): string {
 		.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
 		.replace(/\s+/g, ' ').trim();
 }
+
+test('a missing ledger, an unpublished day, a legacy row and no measurement are different', () => {
+	const day = '2026-08-20';
+	const reach = { state: 'ok', first: '2026-08-01', through: '2026-08-19', lastRows: null, fault: null } as const;
+	expect(judgeDayAbsence(day, 'pending', null)).toContain('Loading');
+	expect(judgeDayAbsence(day, { state: 'missing', fault: 'not-packed' }, null)).toBe('Not published yet.');
+	expect(judgeDayAbsence(day, { state: 'quiet' }, reach)).toBe('Not published yet.');
+	expect(judgeDayAbsence('2026-08-18', { state: 'quiet' }, reach)).toBe('Not recorded.');
+	expect(judgeStatus(null, DRIFT_STATUS)).toBe('Not recorded.');
+	expect(judgeStatus('empty_pool', DRIFT_STATUS)).toContain('eligible score pool was empty');
+	expect(judgeStatus('no_reference_fit', PROBABILITY_STATUS)).toContain('No comparable prior fit');
+	expect(judgeStatus('no_eligible_pairs', PROBABILITY_STATUS)).toContain('No new agreed pairs');
+	expect(judgeStatus('not_filed', SAMPLE_STATUS)).toContain('no verdict batch was filed');
+	expect(judgeCoverage({ pairs_drawn: 12, pairs_returned: null }).stack).toBeNull();
+	expect(judgeCoverage({ pairs_drawn: 12, pairs_returned: 0, sample_tp: 0, sample_fp: 0, sample_fn: 0, sample_tn: 0 }).stack).toEqual([0, 0, 12]);
+});
+
+test('both configured PSI guides are Moderate, near-boundary labels preserve the side, and calendar gaps break the line', () => {
+	const low = 0.1, high = 0.25;
+	expect([0, 0.09999, low, high, 0.25001].map((value) => psiInterpretation(value, low, high))).toEqual([
+		'No significant drift', 'No significant drift',
+		'Moderate drift (investigation needed)', 'Moderate drift (investigation needed)',
+		'Significant drift (retrain or re-calibrate)'
+	]);
+	for (const value of [0.099999, 0.100001, 0.249999, 0.250001]) {
+		expect(psiNumber(value, low, high, numberFormat)).toBe(String(value));
+	}
+	const plot = dateSeries([{ label: 'PSI', token: '--chart-measure', points: [
+		{ date: '2026-08-17', value: null }, { date: '2026-08-18', value: 0 },
+		{ date: '2026-08-19', value: null }, { date: '2026-08-20', value: 0.7 }
+	] }], {
+		frame: frame(360, 210, MARGIN), density: 4, valueTicks: 4, padding: 0.25, number_format: numberFormat,
+		rule: { declined: 'Incoming scores do not compare summary settings.' },
+		rules: [{ at: low, label: 'lower guide' }, { at: high, label: 'upper guide' }]
+	})!;
+	expect(plot.axis.domain[0]).toBe(0);
+	expect(plot.lines[0].points.map(({ date, alone }) => [date, alone])).toEqual([
+		['2026-08-18', true], ['2026-08-20', true]
+	]);
+	expect(plot.lines[0].points[1].y).toBeLessThan(plot.rules[1].y);
+});
+
+test('known-answer states grade only against the recorded key', () => {
+	const cells = {
+		canary_expectations: '{"a":"YES","b":"YES","c":"NO","d":"UNCLEAR","e":"NO"}',
+		canary_answers: '{"a":["YES","YES"],"b":["NO","NO"],"c":["YES","NO"],"d":[null,"YES"]}',
+		canary_kappa_pairs: 2
+	};
+	expect(judgeCanaries(cells).items.map(({ outcome }) => outcome)).toEqual(['Matched', 'Differed', 'Split', 'Refused', 'Missing']);
+	expect(judgeCanaries(cells)).toMatchObject({ matches: 1, eligible: 2, kappa: null });
+	const legacy = judgeCanaries({ canary_answers: cells.canary_answers });
+	expect(legacy.graded).toBe(false);
+	expect(legacy.items[0]).toMatchObject({ expected: null, forward: 'YES', swapped: 'YES', outcome: 'Not graded' });
+});
 
 for (const [id, name] of PANELS) {
 	test(`${id}: empty and absent real inputs say different things`, async ({}, testInfo) => {

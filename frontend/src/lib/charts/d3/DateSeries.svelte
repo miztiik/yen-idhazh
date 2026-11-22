@@ -109,6 +109,20 @@
 	const showing = $derived(shown ?? supplied?.resting ?? null);
 	const pattern = $derived(`${name}-hatch`);
 	const declaration = $derived(geometry === null ? null : ruleDeclaration(geometry.rule));
+	const guides = $derived.by(() => {
+		if (geometry === null) return [];
+		const { rules, frame } = geometry;
+		const ordered = [...rules].sort((a, b) => a.y - b.y);
+		// Clamp the text, not the measured guide. Two guides near the same edge
+		// still need separate lines of type inside the plot.
+		const spacing = frame.labels.leading;
+		let next = frame.top + spacing;
+		return ordered.map((rule, index) => {
+			const labelAt = Math.min(Math.max(rule.y, next), frame.bottom - (ordered.length - index - 1) * spacing);
+			next = labelAt + spacing;
+			return { ...rule, labelAt };
+		});
+	});
 	const withEvents = $derived(supplied === null || geometry === null ? supplied : {
 		...supplied,
 		events: supplied.events.map((lines, index) => [
@@ -138,7 +152,8 @@
 			tabindex={supplied === null ? undefined : 0}
 			data-chart-type="dateSeries"
 			data-chart-name={name}
-			use:pointerReadout={{ marks, width: box.width, hover: hover ?? { name, readout: withEvents }, onSelect: (index) => (selected = index) }}
+			use:pointerReadout={{ marks, width: box.width, selected: picked === null ? undefined : shown,
+				hover: hover ?? { name, readout: withEvents }, onSelect: (index) => (selected = index) }}
 			use:columnPick={{ marks, width: box.width, showing, onPick: (index) => onPick?.(index) }}
 		>
 			{#if hatch !== null && geometry.bars.some((bar) => bar.hatched)}
@@ -201,6 +216,7 @@
 							height={bar.height}
 							style:fill={bar.hatched && hatch !== null ? `url(#${pattern})` : bar.fill}
 							data-series-bar={bar.label}
+							data-series-day={bar.date}
 							data-readout-key={bar.label}
 						/>
 					{/each}
@@ -219,7 +235,7 @@
 					{#each geometry.lines as series (series.label)}
 						<path d={series.path} fill="none" stroke="var({series.token})" stroke-width={LINE} />
 						{#each series.points.filter((point) => point.alone) as point (point.date)}
-							<circle cx={point.x} cy={point.y} r={DOT} fill="var({series.token})" />
+							<circle cx={point.x} cy={point.y} r={DOT} fill="var({series.token})" data-series-day={point.date} />
 						{/each}
 					{/each}
 				{/if}
@@ -242,9 +258,9 @@
 				{/each}
 			{/if}
 
-			{#each geometry.rules as rule (rule.label)}
-				<line x1={box.left} x2={box.right} y1={rule.y} y2={rule.y} stroke="var(--chart-marker)" stroke-dasharray="3 3" />
-				<text x={box.right} y={rule.y} dy="-0.3em" text-anchor="end" fill="var(--color-text-secondary)" font-size={box.labels.fontSize}>{rule.label}</text>
+			{#each guides as rule (rule.label)}
+				<line x1={box.left} x2={box.right} y1={rule.y} y2={rule.y} stroke="var(--chart-marker)" stroke-dasharray="3 3" data-series-guide={rule.at} />
+				<text class="guide-label" x={box.right} y={rule.labelAt} dy="-0.3em" text-anchor="end" fill="var(--color-text-secondary)" font-size={box.labels.fontSize}>{rule.label}</text>
 			{/each}
 			{#each geometry.boundaries as boundary (boundary.date)}
 				<line x1={boundary.x} x2={boundary.x} y1={box.top} y2={box.bottom}
@@ -279,6 +295,12 @@
 				/>
 			{/if}
 		</svg>
+		{#if geometry.rules.length > 0}
+			<p class="guide-caption">
+				Dashed guides:
+				{#each geometry.rules as rule, index (rule.label)}{index === 0 ? ' ' : '; '}{rule.label}{/each}.
+			</p>
+		{/if}
 		{#if geometry.reconciliation !== undefined}
 			<p class="model-rule-note" data-stack-reconciliation-key>
 				Solid crossbar: {geometry.reconciliation.elapsed.label}.
@@ -324,5 +346,18 @@
 	.date-series:focus-visible {
 		outline: 2px solid var(--color-focus);
 		outline-offset: 2px;
+	}
+
+	.guide-caption {
+		display: none;
+		margin: var(--space-2) 0 0;
+		color: var(--color-text-secondary);
+		font-size: var(--console-small-size);
+		line-height: var(--console-small-leading);
+	}
+
+	@media (max-width: 1023px) {
+		.guide-label { display: none; }
+		.guide-caption { display: block; }
 	}
 </style>

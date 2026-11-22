@@ -137,9 +137,8 @@ Copy changes keep stable addresses. Summaries' retained section is
 
 ## Judgement draws the published merges and the holdout labels
 
-The tab says: `Which stories the day merged, and where the merge line sits
-against pairs marked as separate stories.` Two panels form one untitled group,
-in this order:
+The tab separates **Published grouping** from **Judge observations**. Published
+grouping has two full-width panels, in this order:
 
 - `merged-stories` counts the published `same_story_as` decisions. Daily columns
   count stories merged behind another; dots count the largest group, including
@@ -156,11 +155,8 @@ Both panels span the full row, so the margin keeps its drawn width. The margin's
 axis reaches `holdout_axis_below_line` score points below the merge line and
 `holdout_axis_above_line` above it, both route knobs in
 `config/console/judgement.json` that must be above zero; a pair beyond either
-edge is drawn as a chip at that edge. A note under
-the window control says where the judge's own records are read: `pair-verdicts`
-and `threshold-history` are Data explorer ledgers, and the note links to that
-route using the address in the shared route table. It also says they do not
-change what the site merges.
+edge is drawn as a chip at that edge. The line is the current configuration,
+not a record of the floor that grouped an older digest.
 
 Both panels keep their build-time reads. The digest days are not published
 ledgers. The holdout labels are in a ledger, `holdout-pairs` in the Data explorer,
@@ -171,33 +167,39 @@ existing window and holdout-reach bounds. The browser changes the window over
 those inlined results, without a fetch; only `merged-stories` follows it, because
 the marks are read over their own reach.
 
-Each panel has a stable id, one leading figure or sentence, a visible comparison,
-a named question, a chart type, and a readout declaration. Each declines the
-summary-settings rule because it draws published merges or the merge line against
-holdout labels, not how summaries are written. Both are in the route's `judged` list.
+The grouping panels distinguish absent records from successful empty reads.
+The holdout carries its own coverage and shows available partial records
+without claiming there were no marks on an unread day.
 
-The component boundary keeps absent evidence as `null` and supplied empty
-evidence as an empty array or a zero-count record. Missing evidence prints an
-unavailable sentence without measured zeros. Hand-mark rows retain their
-existing `RecordRead` alongside the rows, and the derived holdout marks keep the
-same mark read. The page carries each read once with its mark reach. Successful
-empty results say no rows were returned, not that nobody marked a pair. Required
-blank measurements are not converted to zero.
+Under **Judge observations**, three full-width panels read the nightly Council
+record without changing what is merged:
 
-Unavailable windowed panels still name the selected span. Geometry checks use
-the existing private route builder's real populated or successful-empty records;
-missing-source checks remain separate. A missing plot fails a geometry assertion,
-not a reason to skip it. The shared canary is not filled with invented judge data.
+- `judge-coverage` draws pairs drawn and returned. Agreed YES or NO, other
+  returns and pairs that did not return are separate parts of the draw. The
+  selected digest also names usable answers and what the reporting runners saw.
+- `judge-score-ranges` compares answer counts across the intervals actually
+  drawn on that digest. The diagnostic cutoff and the upper draw bound are
+  separate comparisons against the judge's agreed answers, not merge lines.
+- `pair-score-drift` compares the full score mix with its saved baseline.
+  The route config supplies the two PSI guides, inclusive at both ends of the
+  Moderate band. A gap breaks the line. The selected digest keeps the prior-fit
+  and known-answer readings even when there is no PSI point. The rules of thumb
+  do not send alerts or change a job.
 
-Useful partial rows remain visible. Lost-day notes are narrowed to the displayed
-span. Set-aside counts describe the loaded input, not a newly inferred count for
-the preset. `lastRows` is a packed period, never an exact last execution date.
-Unreadable diagnostics are not rendered as paths, links or markup. Real generated
-ledger and route tests cover these distinctions without a fabricated fetch,
-another archive read or another state vocabulary.
+Both trends share one selected UTC digest with the score ranges. Arrow keys
+inspect; Enter, click, tap or the date control changes the selection. The
+browser asks the query door for named columns over the displayed window
+intersected with packed `threshold-history` reach. For each date it keeps the
+newest Council run and then the highest attempt. One selected-date query opens
+only that exact reading. A packed period's end is not a run date. Legacy nulls,
+unavailable measurements and dates not yet published are distinct from a
+measured zero. Useful partial evidence stays visible.
 
-The old per-article desk and lens heading and its named absence are removed.
-These panels do not promise classification evidence they cannot show.
+All five panels use the shared frame and explicitly decline a comparison with
+summary settings. The Data explorer link leads to the raw `pair-verdicts` and
+`threshold-history` rows and metrics not drawn here. See the [nightly judge
+flow](how-the-content-similarity-judge-follows-its-thresholds.md#what-threshold-history-stores)
+for how those readings are produced.
 
 ## Design rationale
 
@@ -217,14 +219,12 @@ No current item query selects the last four. A column list, normalization or
 unused counter field is not an answer that reads a cell. Schema versions,
 writers and historical normalizers do not change for an ownership-only edit.
 
-Judgement draws no panel from the judge's own ledgers. `pair-verdicts` and
-`threshold-history` are Data explorer ledgers, so the page names where to read
-them instead of drawing them, and it carries no hand-copied column list for
-contracts no ordinary panel reads. The hand-marks panel stays because it needs
-neither ledger: it reads the marks and the merge line the site applies. That
-line is the committed `floor_min`, read from config rather than from the newest
-run record, because the run record only restates the same number and a second
-reader of one value is a second answer. Authority: Jony, Fowler, 2026-11-19.
+Judgement's nightly panels read the filed aggregate instead of loading
+individual pair verdicts or reconstructing readings in the browser. This
+keeps the read bounded and preserves the meaning of the exact attempt.
+Published grouping is independent: it reads committed outcomes and compares
+holdout labels with the current `floor_min`, not with a nightly draw bound
+or the recorded floor of an older run.
 
 | Alternative | Why not |
 | --- | --- |

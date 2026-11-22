@@ -46,10 +46,12 @@ test.describe('route-owned console configuration', () => {
 		expect(routes.pipelines.judged).toContain('slowest-articles');
 		expect(routes['data-explorer'].judged).toEqual(['data-explorer-rows', 'data-explorer-shape']);
 		const judgementPanels = ['merged-stories', 'holdout-margin'];
+		const observations = ['judge-coverage', 'judge-score-ranges', 'pair-score-drift'];
 		expect(routes.judgement.panel_groups).toEqual([
-			{ id: 'judgement', title: '', panels: judgementPanels }
+			{ id: 'judgement', title: 'Published grouping', panels: judgementPanels },
+			{ id: 'judge-observations', title: 'Judge observations', panels: observations }
 		]);
-		expect(routes.judgement.judged).toEqual(judgementPanels);
+		expect(routes.judgement.judged).toEqual([...judgementPanels, ...observations]);
 		const modelPanels = [
 			'model-cards', 'model-throughput', 'item-cost', 'call-ending',
 			'faithfulness',
@@ -105,6 +107,20 @@ test.describe('route-owned console configuration', () => {
 			files.judgement.knobs = knobs;
 			expect(() => routeConsolesFrom(files)).toThrow(/judgement\.json knobs\.holdout_axis_below_line and knobs\.holdout_axis_above_line must both be set above zero/);
 		}
+	});
+
+	test('requires increasing PSI guides and a whole thin-sample limit for observations', () => {
+		const files = routeFiles();
+		files.judgement.panel_groups[0].panels.push('pair-score-drift');
+		files.judgement.knobs = { psi_significant_above: 0.4, judge_thin_sample_pairs: 12 };
+		expect(() => routeConsolesFrom(files)).toThrow(/0 < psi_moderate_min < psi_significant_above/);
+		files.judgement.knobs.psi_moderate_min = 0.4;
+		expect(() => routeConsolesFrom(files)).toThrow(/0 < psi_moderate_min < psi_significant_above/);
+		files.judgement.knobs.psi_moderate_min = 0.15;
+		files.judgement.knobs.judge_thin_sample_pairs = 0.5;
+		expect(() => routeConsolesFrom(files)).toThrow(/judge_thin_sample_pairs must be a positive whole number/);
+		files.judgement.knobs.judge_thin_sample_pairs = 12;
+		expect(routeConsolesFrom(files).judgement.knobs).toEqual(files.judgement.knobs);
 	});
 
 	test('refuses a missing route file', () => {

@@ -52,11 +52,11 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	'src/lib/console': [
 		'band.ts', 'chrome.ts', 'completeness.ts', 'console-style.ts', 'daily-figures.ts',
 		'duration-cohort.ts', 'eval-instruments.ts', 'failure-rules.ts',
-		'holdout.ts', 'judgement-evidence.ts', 'merged-stories.ts', 'model-cards.ts',
+		'holdout.ts', 'judge-observations.ts', 'judgement-evidence.ts', 'merged-stories.ts', 'model-cards.ts',
 		'query-state.ts', 'rates.ts', 'recording.ts', 'RecordNotes.svelte', 'route-console.ts', 'run-square.ts', 'series-tokens.ts',
 		'settings-moved.ts', 'span-words.ts', 'TimeCost.svelte', 'waiting.ts', 'window-coverage.ts', 'window-preference.ts', 'window-slot.ts'
 	],
-	'src/lib/console/queries': ['machine.ts', 'model.ts', 'pipelines.ts', 'shared.ts', 'voices.ts', 'window.ts'],
+	'src/lib/console/queries': ['judgement.ts', 'machine.ts', 'model.ts', 'pipelines.ts', 'shared.ts', 'voices.ts', 'window.ts'],
 	'src/lib/console/pipelines': [
 		'ArticleAge.svelte', 'AtAGlance.svelte', 'ChartDrawing.svelte',
 		'FailureMix.svelte', 'ItemTimeSplit.svelte', 'RunHealth.svelte',
@@ -112,7 +112,8 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	],
 	'src/routes/console/data-explorer': ['+page.svelte', '+page.ts'],
 	'src/routes/console/judgement': [
-		'+page.server.ts', '+page.svelte', 'HoldoutMargin.svelte', 'MergedStoriesPanel.svelte'
+		'+page.server.ts', '+page.svelte', 'HoldoutMargin.svelte', 'MergedStoriesPanel.svelte',
+		'JudgeObservations.svelte', 'JudgeCoverage.svelte', 'JudgeScoreRanges.svelte', 'PairScoreDrift.svelte'
 	],
 	'src/routes/console/machine': ['+page.server.ts', '+page.svelte'],
 	'src/routes/console/model': ['+page.server.ts', '+page.svelte'],

@@ -54,6 +54,20 @@ export function holdoutAxisRules(knobs: Readonly<Record<string, number>>): { bel
 	return { below, above };
 }
 
+export function judgeObservationRules(knobs: Readonly<Record<string, number>>) {
+	const low = knobs.psi_moderate_min;
+	const high = knobs.psi_significant_above;
+	const thin = knobs.judge_thin_sample_pairs;
+	const at = 'config/console/judgement.json knobs';
+	if (!Number.isFinite(low) || !Number.isFinite(high) || !(0 < low && low < high)) {
+		throw new Error(`${at} require 0 < psi_moderate_min < psi_significant_above`);
+	}
+	if (!Number.isSafeInteger(thin) || thin < 1) {
+		throw new Error(`${at}.judge_thin_sample_pairs must be a positive whole number`);
+	}
+	return { low, high, thin };
+}
+
 function object(value: unknown, path: string): Record<string, unknown> {
 	if (value === null || typeof value !== 'object' || Array.isArray(value)) {
 		throw new Error(`${path} must be an object`);
@@ -136,6 +150,8 @@ export function routeConsolesFrom(files: Readonly<Record<string, unknown>>): Rou
 			.some((key) => Object.hasOwn(finite, key))) tokenDeviationRules(finite);
 		if (route === 'judgement' && ['holdout_axis_below_line', 'holdout_axis_above_line']
 			.some((key) => Object.hasOwn(finite, key))) holdoutAxisRules(finite);
+		if (route === 'judgement' && ['judge-coverage', 'judge-score-ranges', 'pair-score-drift']
+			.some((id) => panels.has(id))) judgeObservationRules(finite);
 		if (route === 'voices' && Object.hasOwn(finite, 'feed_preview_rows') &&
 			(!Number.isSafeInteger(finite.feed_preview_rows) || finite.feed_preview_rows < 1)) {
 			throw new Error(`${path} knobs.feed_preview_rows must be a positive whole number`);

@@ -2,19 +2,34 @@
   "panel_groups": [
     {
       "id": "judgement",
-      "title": "",
+      "title": "Published grouping",
       "panels": [
         "merged-stories",
         "holdout-margin"
+      ]
+    },
+    {
+      "id": "judge-observations",
+      "title": "Judge observations",
+      "panels": [
+        "judge-coverage",
+        "judge-score-ranges",
+        "pair-score-drift"
       ]
     }
   ],
   "judged": [
     "merged-stories",
-    "holdout-margin"
+    "holdout-margin",
+    "judge-coverage",
+    "judge-score-ranges",
+    "pair-score-drift"
   ],
   "knobs": {
     "holdout_axis_below_line": 0.02,
-    "holdout_axis_above_line": 0.01
+    "holdout_axis_above_line": 0.01,
+    "psi_moderate_min": 0.10,
+    "psi_significant_above": 0.25,
+    "judge_thin_sample_pairs": 20
   }
 }

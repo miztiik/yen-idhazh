@@ -690,6 +690,14 @@ a night nothing ran from one that ran and lost everything.
   `threshold_after - threshold_before` and `gap` is `estimate - threshold_before`, each
   within one millionth, so a writer rounds none of them below six decimal places.
 
+The [Judgement Console](console.md#judgement-draws-the-published-merges-and-the-holdout-labels)
+draws the packed sample coverage, answers by drawn range, and full-pool PSI.
+Select a digest to see the cutoff comparisons, drift baseline, prior-fit
+calibration and known-answer results from its newest recorded Council run and
+attempt. A digest can have calibration or known-answer results without a PSI
+measurement. The diagnostics describe agreement with the judge and changes in
+the input mix; they neither measure human accuracy nor change published groups.
+
 ## Which nights the judge is behind on
 
 The judge names a night when `pair-verdicts` holds no row for it. The council hands it a
