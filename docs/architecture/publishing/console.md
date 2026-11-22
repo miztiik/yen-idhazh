@@ -137,7 +137,7 @@ Copy changes keep stable addresses. Summaries' retained section is
 
 ## Judgement draws the published merges and the holdout labels
 
-The tab separates **Published grouping** from **Judge observations**. Published
+The tab separates **Published grouping** from **Judge: Content Similarity**. Published
 grouping has two full-width panels, in this order:
 
 - `merged-stories` counts the published `same_story_as` decisions. Daily columns
@@ -171,23 +171,26 @@ The grouping panels distinguish absent records from successful empty reads.
 The holdout carries its own coverage and shows available partial records
 without claiming there were no marks on an unread day.
 
-Under **Judge observations**, three full-width panels read the nightly Council
-record without changing what is merged:
+Under **Judge: Content Similarity**, one UTC digest control serves three
+full-width panels. The nightly Council record does not change what is merged:
 
 - `judge-coverage` draws pairs drawn and returned. Agreed YES or NO, other
   returns and pairs that did not return are separate parts of the draw. The
   selected digest also names usable answers and what the reporting runners saw.
-- `judge-score-ranges` compares answer counts across the intervals actually
-  drawn on that digest. The diagnostic cutoff and the upper draw bound are
-  separate comparisons against the judge's agreed answers, not merge lines.
+- `judge-score-ranges` puts agreement at the reporting cutoff and upper draw
+  bound before the detailed counts in each drawn range. Both cutoffs are
+  comparisons against the judge's agreed answers, not merge lines.
 - `pair-score-drift` compares the full score mix with its saved baseline.
   The route config supplies the two PSI guides, inclusive at both ends of the
-  Moderate band. A gap breaks the line. The selected digest keeps the prior-fit
-  and known-answer readings even when there is no PSI point. The rules of thumb
-  do not send alerts or change a job.
+  Moderate band. A gap breaks the line. The rules of thumb do not send alerts
+  or change a job.
 
-Both trends share one selected UTC digest with the score ranges. Arrow keys
-inspect; Enter, click, tap or the date control changes the selection. The
+Below the charts, **Selected digest details** identifies the Council run and
+attempt when recorded. It shows the known-answer check and prior-fit
+calibration apart from drift, so neither implies a PSI reading.
+
+Both trends share the selected UTC digest with the score ranges and details.
+Arrow keys inspect; Enter, click, tap or the date control changes the selection. The
 browser asks the query door for named columns over the displayed window
 intersected with packed `threshold-history` reach. For each date it keeps the
 newest Council run and then the highest attempt. One selected-date query opens

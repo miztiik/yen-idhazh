@@ -10,7 +10,7 @@
     },
     {
       "id": "judge-observations",
-      "title": "Judge observations",
+      "title": "Judge: Content Similarity",
       "panels": [
         "judge-coverage",
         "judge-score-ranges",
