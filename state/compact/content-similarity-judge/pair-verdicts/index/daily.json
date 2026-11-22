@@ -1,9 +1,11 @@
 {
   "entries": [
+    {"bytes": 62330,"covers": "2026-11-15","lost_days": [],"rows": 150,"set_aside": 0,"state": "packed"},
     {"bytes": 61839,"covers": "2026-11-16","lost_days": [],"rows": 150,"set_aside": 0,"state": "packed"},
     {"bytes": 61153,"covers": "2026-11-17","lost_days": [],"rows": 150,"set_aside": 0,"state": "packed"},
     {"bytes": 61747,"covers": "2026-11-18","lost_days": [],"rows": 150,"set_aside": 0,"state": "packed"},
-    {"bytes": 61421,"covers": "2026-11-19","lost_days": [],"rows": 150,"set_aside": 0,"state": "packed"}
+    {"bytes": 61421,"covers": "2026-11-19","lost_days": [],"rows": 150,"set_aside": 0,"state": "packed"},
+    {"bytes": 61153,"covers": "2026-11-20","lost_days": [],"rows": 150,"set_aside": 0,"state": "packed"}
   ],
   "ledger": "pair-verdicts",
   "period": "daily",
