@@ -70,7 +70,6 @@ def test_real_css_producer_substitutes_nondefault_style_without_changing_reader_
         ROOT / "tests/fixtures/contracts/appearance-config/knobs-set-away-from-the-defaults.json"
     )
     style = AppearanceConfig.model_validate_json(fixture.read_text(encoding="utf-8")).console_style
-    style.colors.light.chart_memory_high = "#286c48"
     rendered = frontend(style.model_dump(mode="json"))
     assert rendered["style"] == style.model_dump(mode="json")
     css = rendered["css"]
