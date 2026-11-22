@@ -136,7 +136,7 @@ def named(label: str, value: str, unit: str | None) -> dict[str, Any]:
     return {"label": label, "reading": {"value": value, "unit": unit}}
 
 
-def a_reply(*, decline: bool = False, **changed: object) -> str:
+def a_reply(decline: bool = False, /, **changed: object) -> str:
     """A chart reply with the wind approvals as its default proposal."""
     return json.dumps({
         "summary": {

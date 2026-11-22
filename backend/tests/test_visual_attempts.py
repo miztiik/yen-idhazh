@@ -123,7 +123,7 @@ def test_production_decider_covers_exactly_the_five_implemented_none_gates(tmp_p
         )
         for reply, shown in cases
     ]
-    declined = a_reply(decline=True)
+    declined = a_reply(True)
     decisions.append(_decide_the_visual(
         summary, Completion(content=declined, finish_reason="stop"), table,
         forms=data, text=WIND_TEXT,
