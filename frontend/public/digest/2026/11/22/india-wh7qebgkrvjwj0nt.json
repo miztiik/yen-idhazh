@@ -1,0 +1,36 @@
+{
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": "m1",
+  "encoding": {
+    "bins": [],
+    "category": [],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m0",
+      "m1"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": [
+      "m2",
+      "m3"
+    ]
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-wh7qebgkrvjwj0nt",
+  "marks": [
+    {"derived": null,"element_id": "quantity-248-260","mark_id": "m0","source_text": null,"text": null,"time": null,"unit": "\u20b9","value": "65140000000"},
+    {"derived": null,"element_id": "quantity-292-304","mark_id": "m1","source_text": null,"text": null,"time": null,"unit": "\u20b9","value": "99570000000"},
+    {"derived": null,"element_id": "date-264-268","mark_id": "m2","source_text": null,"text": "2026","time": "2026","unit": null,"value": null},
+    {"derived": null,"element_id": "date-308-312","mark_id": "m3","source_text": null,"text": "2035","time": "2035","unit": null,"value": null}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "India's men's skincare market size over time",
+  "type": "line",
+  "version": "2026-10-27T05:00"
+}

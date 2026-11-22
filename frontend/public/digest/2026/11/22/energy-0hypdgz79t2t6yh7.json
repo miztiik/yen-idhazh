@@ -1,0 +1,36 @@
+{
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": "m3",
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "energy-0hypdgz79t2t6yh7",
+  "marks": [
+    {"derived": null,"element_id": "entity-810-815","mark_id": "m0","source_text": null,"text": "finds","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-1062-1070","mark_id": "m1","source_text": null,"text": "megawatt","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-821-831","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "%","value": "90"},
+    {"derived": null,"element_id": "quantity-1095-1105","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "18"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Median cost per megawatt hour with and without wind complementing solar and batt",
+  "type": "bar",
+  "version": "2026-10-27T05:00"
+}

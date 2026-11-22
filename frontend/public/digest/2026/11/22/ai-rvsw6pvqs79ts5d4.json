@@ -1,0 +1,36 @@
+{
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": "m2",
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "ai-rvsw6pvqs79ts5d4",
+  "marks": [
+    {"derived": null,"element_id": "entity-2159-2169","mark_id": "m0","source_text": null,"text": "IP address","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "entity-2187-2195","mark_id": "m1","source_text": null,"text": "IP range","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-2171-2177","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": null,"value": "23.224"},
+    {"derived": null,"element_id": "quantity-2197-2203","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": null,"value": "23.224"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Indicators of compromise from the Rackspace Spot breach",
+  "type": "bar",
+  "version": "2026-10-27T05:00"
+}

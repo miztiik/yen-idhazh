@@ -1,0 +1,36 @@
+{
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": "m1",
+  "encoding": {
+    "bins": [],
+    "category": [],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m0",
+      "m1"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": [
+      "m2",
+      "m3"
+    ]
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-m9f4246yr0xcmazz",
+  "marks": [
+    {"derived": null,"element_id": "quantity-4222-4225","mark_id": "m0","source_text": null,"text": null,"time": null,"unit": null,"value": "100"},
+    {"derived": null,"element_id": "quantity-4257-4259","mark_id": "m1","source_text": null,"text": null,"time": null,"unit": null,"value": "64"},
+    {"derived": null,"element_id": "date-2923-2927","mark_id": "m2","source_text": null,"text": "1967","time": "1967","unit": null,"value": null},
+    {"derived": null,"element_id": "date-3167-3171","mark_id": "m3","source_text": null,"text": "1973","time": "1973","unit": null,"value": null}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Navi Pillay's early career milestones, 1967\u20131973",
+  "type": "line",
+  "version": "2026-10-27T05:00"
+}
