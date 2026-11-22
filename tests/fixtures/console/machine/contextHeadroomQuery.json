@@ -2,532 +2,532 @@
   "state": "ok",
   "rows": [
     {
-      "label_input_tokens": 437,
+      "date": "2026-08-10",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-17",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-18",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-18",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-18",
+      "summary_input_tokens": null,
+      "n_ctx_configured": null,
+      "n_parallel": null,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-19",
       "summary_input_tokens": 900,
       "n_ctx_configured": 65536,
-      "n_parallel": null,
+      "n_parallel": 1,
       "truncation_cap_tokens": null
     },
     {
-      "label_input_tokens": 708,
+      "date": "2026-08-19",
+      "summary_input_tokens": null,
+      "n_ctx_configured": 65536,
+      "n_parallel": 1,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-19",
+      "summary_input_tokens": null,
+      "n_ctx_configured": 65536,
+      "n_parallel": 1,
+      "truncation_cap_tokens": null
+    },
+    {
+      "date": "2026-08-20",
       "summary_input_tokens": 900,
       "n_ctx_configured": 65536,
-      "n_parallel": null,
+      "n_parallel": 1,
       "truncation_cap_tokens": null
     },
     {
-      "label_input_tokens": null,
+      "date": "2026-08-20",
       "summary_input_tokens": null,
       "n_ctx_configured": 65536,
-      "n_parallel": null,
+      "n_parallel": 1,
       "truncation_cap_tokens": null
     },
     {
-      "label_input_tokens": null,
+      "date": "2026-08-20",
       "summary_input_tokens": null,
       "n_ctx_configured": 65536,
-      "n_parallel": null,
+      "n_parallel": 1,
       "truncation_cap_tokens": null
     },
     {
-      "label_input_tokens": null,
+      "date": "2026-08-20",
       "summary_input_tokens": null,
       "n_ctx_configured": 65536,
-      "n_parallel": null,
+      "n_parallel": 1,
       "truncation_cap_tokens": null
     },
     {
-      "label_input_tokens": null,
+      "date": "2026-08-20",
       "summary_input_tokens": null,
       "n_ctx_configured": 65536,
-      "n_parallel": null,
+      "n_parallel": 1,
       "truncation_cap_tokens": null
     },
     {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": 65536,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": 65536,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
-      "summary_input_tokens": null,
-      "n_ctx_configured": null,
-      "n_parallel": null,
-      "truncation_cap_tokens": null
-    },
-    {
-      "label_input_tokens": null,
+      "date": "2026-08-20",
       "summary_input_tokens": null,
       "n_ctx_configured": null,
       "n_parallel": null,
