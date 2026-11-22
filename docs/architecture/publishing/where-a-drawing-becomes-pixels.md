@@ -187,7 +187,7 @@ The data and framing travel together.
 | `marks` | **A flat pool, not a list of rows.** Each mark carries what it says (`text`), what it measures (`value` with its `unit`), and where that came from - `element_id` for a slice of the article, or `derived` for a chain through the four-function allow-list. Histogram counts carry their recorded edges and every source quantity they counted. Exactly one provenance form is checked. |
 | `encoding` | Which marks fill which channel, by id, mirroring `PlanEncodings` role for role. Every role is a key and an unused one is empty. |
 | `title`, `caption` | Nullable, sanitized plan prose. The browser writes text nodes, never markup. |
-| `emphasized_mark_id` | One measured mark for an explicit selection, or null. Older data keeps its selection, and the story drawing rules determine whether the family paints it. Unselected charts get no default highlight. |
+| `emphasized_mark_id` | One measured mark for an explicit selection, or null in the optional-emphasis document version. Older data keeps its selection. The renderer version is unchanged. |
 
 **The pool is flat because a row is a geometry decision.** A bar is a name and a length, a scatter
 point is two measured axes, a histogram bar is a bin - shape them into rows here and this contract

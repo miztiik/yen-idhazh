@@ -41,6 +41,7 @@ from idhazh.contracts.visual import (
 #: spec plus drawing code can be redrawn differently by a later change with
 #: nothing in the payload to show it moved. This field is what shows it.
 RENDERER_VERSION: Final = "2026-10-27T05:00"
+# The first version allowing null emphasis, even after the current version moves.
 OPTIONAL_EMPHASIS_VERSION: Final = "2026-11-21"
 
 #: How a mark is addressed inside its own file. Local to one visual and never an
@@ -225,7 +226,7 @@ class VisualData(Contract):
 
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version=OPTIONAL_EMPHASIS_VERSION,
+            version="2026-11-21",
             change="Allow a chart without emphasis.",
             why="Do not invent a highlight.",
         ),
