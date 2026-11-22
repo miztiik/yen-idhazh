@@ -12,7 +12,7 @@
  * **The dates on the axis come from `dayTicks`**, the one rule this console has
  * for a date axis, and never from an axis generator.
  */
-import { area, line, stack, stackOrderDescending } from 'd3-shape';
+import { area, curveLinear, curveStepAfter, line, stack, stackOrderDescending } from 'd3-shape';
 
 import { dayTicks, type DayTick, type Frame } from '../frame';
 import type { ChartToken } from '../theme';
@@ -39,10 +39,14 @@ export interface SpreadLabels {
 	high: string;
 }
 
+type SeriesLineStyle = 'step' | 'step-guide' | 'points';
+
 export interface SeriesInput {
 	label: string;
 	token: ChartToken;
 	points: readonly SeriesPoint[];
+	/** Held readings step at the next observation; simultaneous readings may use points only. */
+	lineStyle?: SeriesLineStyle;
 	/** A paint of the series' own in place of its token: a step of an ordered
 	 * ramp, which is a mix of a token and not a token. */
 	fill?: string;
@@ -105,6 +109,7 @@ export interface SeriesLine {
 	path: string;
 	points: PlacedPoint[];
 	spread: string;
+	dashed?: boolean;
 }
 
 export interface SeriesBar {
@@ -317,7 +322,10 @@ export function dateSeries(series: readonly SeriesInput[], opts: DateSeriesOptio
 		const axis = axisFor(values);
 		const lines = series.map((entry, index) => {
 			const row = dates.map((date) => readings[index].get(date) ?? null);
-			const draw = line<number | null>()
+			const pointsOnly = entry.lineStyle === 'points';
+			const stepped = entry.lineStyle === 'step' || entry.lineStyle === 'step-guide';
+			const curve = stepped ? curveStepAfter : curveLinear;
+			const draw = line<number | null>().curve(curve)
 				.defined((value) => value !== null)
 				.x((_, at) => columns[at])
 				.y((value) => axis.scale(value as number));
@@ -330,16 +338,17 @@ export function dateSeries(series: readonly SeriesInput[], opts: DateSeriesOptio
 								value,
 								x: columns[at],
 								y: axis.scale(value),
-								alone: (row[at - 1] ?? null) === null && (row[at + 1] ?? null) === null
+								alone: pointsOnly || ((row[at - 1] ?? null) === null && (row[at + 1] ?? null) === null)
 							}
 						]
 			);
 			const byDate = new Map(entry.points.map((point) => [point.date, point.spread]));
-			const spread = area<string>().defined((date) => byDate.get(date) !== undefined)
+			const spread = area<string>().curve(curve).defined((date) => byDate.get(date) !== undefined)
 				.x((_, at) => columns[at])
 				.y0((date) => axis.scale(byDate.get(date)?.low ?? 0))
 				.y1((date) => axis.scale(byDate.get(date)?.high ?? 0))(dates) ?? '';
-			return { label: entry.label, token: entry.token, path: draw(row) ?? '', points, spread };
+			return { label: entry.label, token: entry.token, path: pointsOnly ? '' : draw(row) ?? '', points,
+				spread, ...(entry.lineStyle === 'step-guide' ? { dashed: true } : {}) };
 		});
 		return { frame: box, dates, columns, bandwidth: band.bandwidth(), ticks, axis, stacked, lines, bars: [], joins: [], ...metadata, rules: rules.map((named) => ({ ...named, y: axis.scale(named.at) })) };
 	}

@@ -15,7 +15,7 @@
 import { expect, test } from './support/browser';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { contextReadings, countersFrom, processors, textRows, shardCounts, slowerMachines } from '../src/lib/console/machine/records';
+import { countersFrom, processors, textRows, shardCounts, slowerMachines } from '../src/lib/console/machine/records';
 import { reuseDays } from '../src/lib/console/machine/prompt-reuse';
 import { slowestArticles } from '../src/lib/console/pipelines/slowest-articles';
 import { rankedList } from '../src/lib/charts/d3/rankedList';
@@ -698,15 +698,6 @@ test.describe('the Hardware browser redraws, from stated readings', () => {
 			expect(result.refused[0].why).toContain('two machine records that disagree');
 			}
 		}
-	});
-
-	test('context rules use the smallest per-slot limit and the middle label reading among cut rows', () => {
-		const actual = contextReadings([
-			{ n_ctx_configured: 8192, n_parallel: 2, label_input_tokens: 100, summary_input_tokens: 200, truncation_cap_tokens: 500 },
-			{ n_ctx_configured: 4096, n_parallel: 2, label_input_tokens: 300, summary_input_tokens: 400, truncation_cap_tokens: 500 }
-		]);
-		expect(actual.limits).toEqual([2048, 4096]);
-		expect(actual.rules.map((rule) => rule.at)).toEqual([2048, 300]);
 	});
 
 	test('count corrections must already be settled, while a null remains unknown', () => {

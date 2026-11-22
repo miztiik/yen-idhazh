@@ -233,7 +233,10 @@
 					{/each}
 				{:else}
 					{#each geometry.lines as series (series.label)}
-						<path d={series.path} fill="none" stroke="var({series.token})" stroke-width={LINE} />
+						{#if series.path}
+							<path d={series.path} fill="none" stroke="var({series.token})" stroke-width={LINE}
+								stroke-dasharray={series.dashed ? '3 3' : undefined} data-series-line={series.label} />
+						{/if}
 						{#each series.points.filter((point) => point.alone) as point (point.date)}
 							<circle cx={point.x} cy={point.y} r={DOT} fill="var({series.token})" data-series-day={point.date} />
 						{/each}

@@ -94,7 +94,7 @@ EXPECTED_COLUMNS: Final[Mapping[str, tuple[str, ...]]] = {
     "tailTrendQuery": ("date", "run_id", "summarize_ms"),
     "closestToMemoryQuery": ("date", "item_id", "source_id", "os_mem_total_bytes", "os_mem_available_min_bytes"),
     "memoryHeldQuery": ("date", "item_id", "os_mem_total_bytes", "os_mem_available_bytes", "llama_rss_bytes", "python_rss_bytes", "llama_rss_anon_bytes", "python_rss_anon_bytes", "os_swap_total_bytes", "os_swap_free_bytes"),
-    "contextHeadroomQuery": ("label_input_tokens", "summary_input_tokens", "n_ctx_configured", "n_parallel", "truncation_cap_tokens"),
+    "contextHeadroomQuery": ("date", "summary_input_tokens", "n_ctx_configured", "n_parallel", "truncation_cap_tokens"),
     "articleCostQuery": ("date", "run_id", "machine_job", "machine_pipeline_name", "machine_task_name", "machine_shard", "item_index", "item_total_ms", "cpu_busy_pct", "prefill_ms", "decode_ms", "llama_rss_bytes"),
     "articleCostHostsQuery": (
         "version", "date", "run_id", "job", "pipeline_name", "task_name", "shard", "cpu_logical_processors",

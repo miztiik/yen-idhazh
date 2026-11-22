@@ -222,12 +222,19 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 	await page.emulateMedia({ reducedMotion: 'no-preference' });
 
 	const context = page.locator('[data-console-panel-id="context-headroom"]');
-	await expect(context.locator('svg[data-chart-type="distribution"]')).toHaveCount(2);
-	for (const name of ['context-label', 'context-summary']) {
-		expect(Number(await context.locator(`[data-chart-name="${name}"]`).locator('..').getAttribute('data-readout-records')),
-			`${name} has a populated distribution`).toBeGreaterThan(0);
-	}
-	const contextFits = () => context.locator('svg[data-chart-type="distribution"]').evaluateAll((plots) =>
+	const contextPlot = context.locator('svg[data-chart-name="summary-context"]');
+	const contextReadout = context.locator('[data-readout="summary-context"]');
+	await expect(contextPlot.locator('[data-series-line="Slot capacity"]')).toHaveAttribute('stroke-dasharray', '3 3');
+	await expect(contextPlot.locator('[data-series-spread="Prompt used (p90)"]')).toBeVisible();
+	await expect(contextReadout).toContainText('Room before reply');
+	await expect(contextReadout).toContainText('Matched prompts');
+	const contextDetails = context.getByText('Token counts and extraction cuts', { exact: true });
+	await expect(context.locator('svg[data-chart-name="context-summary"]')).toHaveCount(0);
+	await contextDetails.click();
+	await expect(context.locator('svg[data-chart-name="context-summary"]')).toBeVisible();
+	await contextDetails.click();
+	await context.screenshot({ path: test.info().outputPath('summary-context-wide.png') });
+	const contextFits = () => contextPlot.evaluateAll((plots) =>
 		plots.every((plot) => {
 			const bounds = plot.getBoundingClientRect();
 			const cell = plot.parentElement!.parentElement!.getBoundingClientRect();
@@ -273,6 +280,7 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 	await history.screenshot({ path: test.info().outputPath('hardware-cache-narrow-light.png') });
 	await tokens.screenshot({ path: test.info().outputPath('run-token-lines-narrow.png') });
 	await expect.poll(contextFits).toBe(true);
+	await context.screenshot({ path: test.info().outputPath('summary-context-narrow.png') });
 	await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 
 	await page.locator('[data-window-select]').selectOption('7');

@@ -114,7 +114,7 @@ Membership and order live in `config/console/machine.json`.
 | Where the time went | `slower-on-same-work` | One dated seconds reading for a fixed typical article on one reference machine |
 | How close we are to the limits | `closest-to-memory` | Dated articles ranked by minimum available memory, least GiB first |
 | | `memory-held` | Existing memory split and overlapping process brackets, for the newest day |
-| | `context-headroom` | Label and summary request distributions on one logarithmic domain, with recorded context and cut-request rules |
+| | `context-headroom` | Daily summary-prompt p90 and stepped configured slot capacity, with the space before the reply between them |
 | What the model spends | `article-cost` | Existing processor-time, model-time and incremental-memory tracks over the chosen window |
 | | `prompt-reuse` | Summary and label calls on the same UTC calendar, with cached and fresh prompt tokens as shares and dashed settings changes on their actual dates |
 | | `read-against-written` | Two run-sequence token lines; Run total or actual Median per article over one paired cohort, with measured/recorded coverage |
@@ -171,13 +171,20 @@ memory held or process resident memory. Only valid available/total pairs rank.
 Repeated readings of one dated article contribute its lowest available reading,
 with the larger total breaking ties. Capacity is printed beside each article.
 
-Context distributions use positive readings only and share a logarithmic
-domain. The reading rule is the smallest recorded `n_ctx_configured/n_parallel`;
-other limits are named. A recorded truncation cap contributes the upper-middle
-label-request rule. No cut rows means `No article was cut in this window.`
-Too few readings keep an honest empty distribution instead of invented marks.
-Each distribution measures its own shrinking grid cell. The share axis keeps
-space for its percentage labels, including on a narrow screen.
+The summary prompt chart compares positive `summary_input_tokens` with
+`n_ctx_configured / n_parallel` from the same item-health row. Its headline
+is the highest paired share across the selected window. For each UTC day and
+slot size, the prompt trace uses the observed p90 (rank `ceil(0.9 * count)`).
+The dashed capacity trace steps at the first observed day with a new slot
+size. A mixed day breaks the traces and shows separate dots and paired
+readings, not an average capacity or an implied order. Missing settings
+leave gaps, with matched and recorded counts in the chart readout.
+
+The shaded gap is the slot size minus prompt use, before reply tokens. It is
+not evidence of extraction cuts or completed replies. The disclosure retains
+the logarithmic distribution of positive summary prompt counts (even when
+capacity is unavailable) and the count of explicitly recorded extraction cuts.
+Too few readings leave the distribution empty instead of inventing marks.
 Each CPU comparison labels the dashed reference once, with its workload and
 unit, rather than repeating a processor name on every track.
 
