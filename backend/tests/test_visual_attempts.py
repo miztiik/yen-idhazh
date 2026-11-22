@@ -110,24 +110,23 @@ def test_production_decider_covers_exactly_the_five_implemented_none_gates(tmp_p
         knobs.models.summarizer.sampling
     )
     cases = (
-        (Completion(content="", finish_reason="stop"), None),
+        (Completion(content="", finish_reason="stop"), ()),
         (Completion(content=cut, finish_reason="length", prompt_tokens=room), data),
         (Completion(content=cut, finish_reason="length", prompt_tokens=room + 1), data),
         (Completion(content='{"visual":{"type":"bar"}', finish_reason="stop"), data),
     )
     decisions = [
         _decide_the_visual(
-            summary, reply, table, data=shown, text=WIND_TEXT,
+            summary, reply, table, forms=shown, text=WIND_TEXT,
             settings=knobs, date=DATE, stamp=stamp,
             run_id=RUN,
         )
         for reply, shown in cases
     ]
-    # A model decline remains final even with stray chart fields in a well-shaped reply.
-    declined = a_reply(type="none", title="Stray 2026 title")
+    declined = a_reply(True)
     decisions.append(_decide_the_visual(
         summary, Completion(content=declined, finish_reason="stop"), table,
-        data=data, text=WIND_TEXT,
+        forms=data, text=WIND_TEXT,
         settings=knobs, date=DATE, stamp=stamp, run_id=RUN,
     ))
     assert all(
@@ -153,8 +152,8 @@ def test_shape_evidence_and_missing_compiler_refusals_persist_without_invented_r
     }
     malformed = _decide_the_visual(
         summary,
-        Completion(content=a_reply(focus=None, caption="model-only words"), finish_reason="stop"),
-        wind, data=data, text=WIND_TEXT, settings=knobs, date=DATE, stamp=stamp, run_id=RUN,
+        Completion(content=a_reply(rows="model-only words"), finish_reason="stop"),
+        wind, forms=data, text=WIND_TEXT, settings=knobs, date=DATE, stamp=stamp, run_id=RUN,
     )
     empty = ElementTable.model_validate(table.model_dump() | {"elements": []})
     evidence = _drawn(
@@ -189,7 +188,7 @@ def test_shape_evidence_and_missing_compiler_refusals_persist_without_invented_r
     )
 
     cases = (
-        (malformed, None, None, "visual_choice_focus_required"),
+        (malformed, None, None, "list_type"),
         (evidence, VisualType.BAR, ValidatorCheck.ELEMENT_EXISTS, "element_exists"),
         (unsupported, VisualType.AREA, None, "area has no compiler"),
     )
@@ -202,7 +201,7 @@ def test_shape_evidence_and_missing_compiler_refusals_persist_without_invented_r
         assert row.rendered_type is None and row.marks is None
         assert persisted.rationale and cause in persisted.rationale
         assert "model-only words" not in persisted.rationale
-    assert malformed.rationale and "focus" in malformed.rationale
+    assert malformed.rationale and "rows" in malformed.rationale
 
 
 def test_distinct_actual_attempts_survive_reader_settlement_and_lossless_packing(

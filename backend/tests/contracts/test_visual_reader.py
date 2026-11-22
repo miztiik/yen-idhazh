@@ -10,6 +10,7 @@ from support.paths import CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 from idhazh.contracts.appearance_config import StoryChartGeometryConfig
 from idhazh.contracts.visual import EncodingRole, VisualType
 from idhazh.contracts.visual_data import (
+    OPTIONAL_EMPHASIS_VERSION,
     RENDERER_VERSION,
     VisualData,
     VisualEncoding,
@@ -43,6 +44,7 @@ def test_frontend_story_chart_geometry_matches_its_native_contract() -> None:
 def test_frontend_chart_vocabularies_match_the_native_contract() -> None:
     source = read_text(REPO_ROOT / "frontend/src/lib/payload/drawing.ts")
     assert f"export const RENDERER_VERSION = '{RENDERER_VERSION}';" in source
+    assert f"const OPTIONAL_EMPHASIS_VERSION = '{OPTIONAL_EMPHASIS_VERSION}';" in source
     for name, expected in (
         ("ENCODING_ROLES", [role.value for role in EncodingRole]),
         ("DRAWABLE", [visual_type.value for visual_type in VisualType if can_compile(visual_type)]),

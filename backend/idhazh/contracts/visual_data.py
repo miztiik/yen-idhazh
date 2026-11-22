@@ -41,6 +41,8 @@ from idhazh.contracts.visual import (
 #: spec plus drawing code can be redrawn differently by a later change with
 #: nothing in the payload to show it moved. This field is what shows it.
 RENDERER_VERSION: Final = "2026-10-27T05:00"
+# The first version allowing null emphasis, even after the current version moves.
+OPTIONAL_EMPHASIS_VERSION: Final = "2026-11-21"
 
 #: How a mark is addressed inside its own file. Local to one visual and never an
 #: identity anything outside it holds, so it is short and positional rather than
@@ -224,6 +226,11 @@ class VisualData(Contract):
 
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-11-21",
+            change="Allow a chart without emphasis.",
+            why="Do not invent a highlight.",
+        ),
+        ChangelogEntry(
             version="2026-10-27T05:00",
             change="Record the unit used for histogram edges.",
             why="A reader can redraw normalized bins from their recorded provenance.",
@@ -240,11 +247,6 @@ class VisualData(Contract):
         ),
         ChangelogEntry(
             version="2026-10-27T02:00",
-            change="Add bubble as a source-backed relationship chart type.",
-            why="Circle area shows a third measure at the measured viewport width.",
-        ),
-        ChangelogEntry(
-            version="2026-10-24",
             change="Earlier changes are in git.",
             why="Git history is the archive for older contract changes.",
         ),
@@ -283,8 +285,8 @@ class VisualData(Contract):
     )
     title: PlanTitle | None = Field(description="Sanitized plan heading, as untrusted text.")
     caption: PlanCaption | None = Field(description="Sanitized plan framing, as untrusted text.")
-    emphasized_mark_id: MarkId = Field(
-        description="The single measured mark the reader should notice first."
+    emphasized_mark_id: MarkId | None = Field(
+        description="One measured mark to emphasize, or null when none is selected."
     )
     marks: list[VisualMark] = Field(
         min_length=1,
@@ -321,7 +323,10 @@ class VisualData(Contract):
         idle = sorted(held - set(drawn))
         if idle:
             raise ValueError(f"a mark no channel draws: {idle}")
-        if self.emphasized_mark_id not in self.encoding.quantity:
+        if self.emphasized_mark_id is None:
+            if self.version < OPTIONAL_EMPHASIS_VERSION:
+                raise ValueError("the historical data version requires an emphasized mark")
+        elif self.emphasized_mark_id not in self.encoding.quantity:
             if self.type is not VisualType.HISTOGRAM or (
                 self.emphasized_mark_id not in self.encoding.bins
             ):

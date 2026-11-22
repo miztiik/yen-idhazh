@@ -8,11 +8,12 @@ from typing import Any, Final
 from idhazh import config
 from idhazh.anchor_mentions import Mention
 from idhazh.classify.calls import build_summary_request
-from idhazh.classify.plan_visual_request import VisualInput, visual_input
+from idhazh.classify.plan_visual_request import chart_forms
 from idhazh.contracts.article import Article
 from idhazh.contracts.element import ElementTable
 from idhazh.contracts.knobs.extract import ElementsConfig
 from idhazh.contracts.knobs.visuals import VisualsConfig
+from idhazh.contracts.visual import VisualType
 from idhazh.elements import element_table
 
 from .models import a_markers
@@ -73,7 +74,7 @@ def chart_data_over(
     others: Sequence[tuple[str, str]] = (),
     visuals: VisualsConfig | None = None,
     config_dir: Path = CONFIG_DIR,
-) -> tuple[ElementTable, VisualInput]:
+) -> tuple[ElementTable, tuple[VisualType, ...]]:
     """Request evidence through the real element pass; these examples need two readings."""
     app = config.load(config_dir).app
     table = element_table(
@@ -81,15 +82,15 @@ def chart_data_over(
         config=app.elements,
         mentions=mentions_of(text, names, others),
     )
-    data = visual_input(text, table, visuals=visuals or app.visuals)
-    assert data is not None
-    return table, data
+    forms = chart_forms(table, visuals=visuals or app.visuals)
+    assert forms
+    return table, forms
 
 
 def summary_payload(
     article: Article,
     *,
-    data: VisualInput | None = None,
+    data: tuple[VisualType, ...] = (),
     config_dir: Path = CONFIG_DIR,
 ) -> dict[str, Any]:
     settings = config.load(config_dir)
@@ -110,5 +111,6 @@ def chart_reply_fields(schema: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """The allowed choices and the JSON object each constrains."""
     return {
         choice["properties"]["type"]["const"]: choice["properties"]
-        for choice in schema["$defs"]["PlanChoice"]["anyOf"]
+        for choice in schema["properties"]["visual"]["anyOf"]
+        if choice.get("type") != "null"
     }

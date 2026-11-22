@@ -83,7 +83,7 @@ export interface VisualData {
 	declared_whole: VisualWhole | null;
 	title: string | null;
 	caption: string | null;
-	emphasized_mark_id: string;
+	emphasized_mark_id: string | null;
 	marks: VisualMark[];
 	encoding: VisualEncoding;
 }

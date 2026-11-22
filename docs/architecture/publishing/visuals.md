@@ -39,15 +39,10 @@ The same model writes the summary and decides whether a chart would help, which
 form to use, and which readings fill its roles. `work` resolves the answer
 against the article and compiles chart data while it still holds the text.
 
-The shared system turn joins the separately configured
-`write_digest_summary` and `plan_visual` files; the later `continue_summary`
-turn reads its own file from the same selected config root. Their paths and
-rendering rules belong to [the prompt page](../summarize/prompt.md).
-
-The request shows [independent source readings](../summarize/prompt.md#the-model-is-shown-independent-source-readings)
-after the article. Its grammar admits `none` and the operator-enabled numeric
-forms the renderer supports. The capability list does not recommend a form for
-an article. The
+Only a chart-capable call adds `plan_visual` to the summary instructions.
+The source stays in one sanitized block, and the reply schema allows null or
+a proposal for an enabled numeric form. The [prompt](../summarize/prompt.md)
+does not send source annotations. The
 [compiler capability table](where-a-drawing-becomes-pixels.md#declared-types-are-not-delivery-promises)
 names the abandoned forms retained only for historical reading.
 
@@ -146,10 +141,10 @@ that may reach a number the article did not write, are in
 ## The gate suppresses the question and never skips the call
 
 The chart question is left off only when no numeric form is enabled and
-supported, fewer than two quantities were found, or the data references do not
-fit beside the article. The request keeps the same model, response budget and
-cached prefix; only the trailing data and the grammar's `visual` field go
-away. Compatibility and the configured mark count are checked after the model
+supported, fewer than two quantities were found, or the chart addendum does
+not fit beside the article. The request keeps the same model, response budget
+and source block. Only the addendum and the grammar's `visual` field go away.
+Compatibility and the configured mark count are checked after the model
 chooses a chart, not used to screen articles for comparability.
 
 ## Every `none` says which gate refused it
@@ -161,8 +156,8 @@ because a console counts members and cannot count prose.
 
 | Member | The route it names |
 | --- | --- |
-| `not_reachable` | No chart data references were sent. The call still wrote the summary. Between 2026-11-18 and this change, the gate checked for a table of names and figures. Earlier rows meant no choice over the elements could have validated. |
-| `model_declined` | The model was asked and answered `none`. The ordinary answer, and the one the design wants to stay common. |
+| `not_reachable` | The call asked for a summary only. |
+| `model_declined` | The model was asked and answered `visual: null`. |
 | `validation_failed` | A plan was drafted, the validator refused it, and the ladder reached no depth that validates. |
 | `output_budget_cut` | The reply ran out of output budget after the summary closed, so the plan was never written. The item publishes; the picture is what was lost. |
 | `window_exhausted` | The prompt filled the context window, so the plan was cut before it was written. |
@@ -329,7 +324,7 @@ flowchart TD
 |---|---|
 | `CP` | Code extracts quantities and dates, with the characters and offsets recording their source. |
 | `TA` | A local process the run starts, asked once per article before the model reads it. The pipeline reads a label and two offsets of each mention and nothing else; the words it returns are compared with the characters those offsets cut from `Article.text`, and a mention whose words differ is dropped. No word it returns reaches a prompt, path, URL or command |
-| `TB` | [Independent quantity and date references](../summarize/prompt.md#the-model-is-shown-independent-source-readings), with brief source excerpts. |
+| `TB` | A single fenced source block; the [source evidence](../summarize/prompt.md#the-model-proposes-rows-source-verification-stays-in-code) is checked in code. |
 | `C2` | Decides from the article and cites the readings and label text for the chosen form; cannot author a measured value. |
 | `VP` | Resolves source references into the existing typed plan; no geometry, literal value, authored labels or alt text. |
 | `VV` | Ten checks: elements exist; semantically compatible; units convertible; roles valid for the type; enough data; no duplicate in a role; no invented values; numerals matched; plan version current; stacked parts equal a separate declared whole |

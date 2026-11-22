@@ -34,9 +34,10 @@ def test_scatter_compiles_every_entity_with_both_source_measures() -> None:
     visuals = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).visuals
     assert validate_plan(plan, table, visuals=visuals) == []
     chart = compile_chart(plan, table, visuals=visuals)
-    assert chart.data == VisualData.read(
+    expected = VisualData.read(
         FIXTURES_DIR / "contracts/visual-data/scatter-relationship.json"
-    )
+    ).model_copy(update={"version": VisualData.schema_version()})
+    assert chart.data == expected
     source_text = read_text(FIXTURES_DIR / "visual-validator/articles/scatter-relationship.txt")
     assert table.span_drift(source_text) is None
     source = {element.element_id: element for element in table.elements}

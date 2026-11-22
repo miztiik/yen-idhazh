@@ -2,7 +2,7 @@
 
 **One call reads the article and writes the summary and, when source readings are
 available, the answer about a chart.** The window has to hold that request whole: the
-instructions, the article and the data references, and then the longest reply
+instructions and the article, and then the longest reply
 the model file lets it write. The check runs before the call is sent, because
 `--no-context-shift` means a decode that runs into the wall stops on an ordinary HTTP 200,
 `recovered_completion` salvages the summary, and the item publishes with no picture and
@@ -19,11 +19,9 @@ is paid by an article that would have fitted: it is refused when it needs the ma
 estimate adds. Use `request_tokens` with the configured tokenizer's complete prompt count
 to diagnose the actual request.
 
-**Data references are counted a token a byte.** A token spans at least one byte of the UTF-8 text
-the tokenizer reads, so the bytes of the text the model is shown are a ceiling that needs no
-reading of the tokenizer - a count in characters would not be one, because a rare character
-can cost several byte-level tokens. The references are optional: the stage reads the item without
-them when they would not fit, and refuses it only when the article alone does not.
+**The optional chart addendum is counted a token a byte.** Its UTF-8 size gives
+a conservative allowance without reading the tokenizer. An item that only fits
+without the addendum still gets its summary.
 """
 
 from __future__ import annotations
@@ -61,7 +59,7 @@ def request_tokens(request: Mapping[str, object], *, prompt_tokens: int) -> int:
     return prompt_tokens + response_tokens(request)
 
 
-def prompt_tokens(article_tokens: int, *, evidence_bytes: int) -> int:
+def prompt_tokens(article_tokens: int, *, addendum_bytes: int = 0) -> int:
     """What the call's prompt costs for an article of this size, in tokens.
 
     Three terms rather than one, and each reads something.
@@ -69,7 +67,7 @@ def prompt_tokens(article_tokens: int, *, evidence_bytes: int) -> int:
     - the scaffold is fixed, and moves when a prompt file is edited;
     - the per-word rate covers the article, and moves when prose tokenizes
       harder than any build so far;
-    - the data references are counted in UTF-8 bytes.
+    - the optional chart instructions are counted in UTF-8 bytes.
 
     `article_tokens` is spent back to words at `extract.TOKENS_PER_WORD`,
     because that is the unit the cap is enforced in and the rate above is a rate
@@ -77,13 +75,13 @@ def prompt_tokens(article_tokens: int, *, evidence_bytes: int) -> int:
     hardware, its date and its spread (Guardrail #10).
     """
     words = int(article_tokens / TOKENS_PER_WORD)
-    return _SCAFFOLD_TOKENS + int(words * _BODY_TOKENS_A_WORD) + evidence_bytes
+    return _SCAFFOLD_TOKENS + int(words * _BODY_TOKENS_A_WORD) + addendum_bytes
 
 
 def call_tokens(
     article_tokens: int,
     *,
-    evidence_bytes: int,
+    addendum_bytes: int = 0,
     sampling: Mapping[str, Any],
 ) -> int:
     """The prompt estimate plus the longest reply the model file lets the call write.
@@ -97,14 +95,14 @@ def call_tokens(
     term is: `DIGEST_PROMPT_BODY_TOKENS_A_WORD` is the top of an eight-build spread
     rather than a bound. The seatbelt behind it is `recovered_completion`.
     """
-    return prompt_tokens(article_tokens, evidence_bytes=evidence_bytes) + response_limit(sampling)
+    return prompt_tokens(article_tokens, addendum_bytes=addendum_bytes) + response_limit(sampling)
 
 
 def fits_the_window(
     article: Article,
     server: Mapping[str, Any],
     *,
-    evidence_bytes: int,
+    addendum_bytes: int = 0,
     sampling: Mapping[str, Any],
 ) -> bool:
     """Whether the early estimate admits this article before the call is sent.
@@ -118,10 +116,9 @@ def fits_the_window(
     ordinary HTTP 200, and the item publishes looking finished with its visual
     quietly missing.
 
-    `evidence_bytes` is the UTF-8 length of the data block and capabilities line,
-    or `0` for the article alone.
+    `addendum_bytes` is the UTF-8 length of the optional chart instructions.
     """
     return (
-        call_tokens(article.token_count, evidence_bytes=evidence_bytes, sampling=sampling)
+        call_tokens(article.token_count, addendum_bytes=addendum_bytes, sampling=sampling)
         <= window(server)
     )

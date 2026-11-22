@@ -15,11 +15,10 @@ plans into visual data. Who decides a visual at all is
 **The reader's browser draws the chart. The pipeline never draws one.** Maintainer ruling,
 2026-09-13, under `CLAUDE.md` section 0.
 
-**The chain, end to end.** Code reads the article and finds every quantity it can, with the
-offsets that prove where each one came from, and makes independent data references from them.
-The model says whether a table is worth a chart, chooses the form and the row the item turns on,
-and writes the title. Code builds the plan from that answer and compiles its references
-into validated chart data. The day payload points to a separate per-item JSON file;
+**The chain, end to end.** The model proposes a chart from the article. Code
+checks the readings, names and measures against exact source spans before
+building a plan and compiling its references into chart data. The day
+payload points to a separate per-item JSON file;
 the reader's browser draws its SVG with d3 scale arithmetic and Svelte elements.
 Nothing draws a chart at build time and no SVG is committed.
 
@@ -188,7 +187,7 @@ The data and framing travel together.
 | `marks` | **A flat pool, not a list of rows.** Each mark carries what it says (`text`), what it measures (`value` with its `unit`), and where that came from - `element_id` for a slice of the article, or `derived` for a chain through the four-function allow-list. Histogram counts carry their recorded edges and every source quantity they counted. Exactly one provenance form is checked. |
 | `encoding` | Which marks fill which channel, by id, mirroring `PlanEncodings` role for role. Every role is a key and an unused one is empty. |
 | `title`, `caption` | Nullable, sanitized plan prose. The browser writes text nodes, never markup. |
-| `emphasized_mark_id` | Exactly one measured mark, resolved from the plan's selected elements. The story drawing rules determine whether the family paints emphasis. |
+| `emphasized_mark_id` | One measured mark for an explicit selection, or null in the optional-emphasis document version. Older data keeps its selection. The renderer version is unchanged. |
 
 **The pool is flat because a row is a geometry decision.** A bar is a name and a length, a scatter
 point is two measured axes, a histogram bar is a bin - shape them into rows here and this contract
@@ -283,7 +282,7 @@ plan reaches this compiler.
 **Only a supported type is compiled.** This build compiles `bar`, `dot`, `slope`,
 `line`, `scatter`, `bubble`, `stacked_bar`, `pie` and `histogram`; a plan for any
 other declared chart type raises `CompileError` naming it rather than publishing
-a picture nobody planned. The [request](../summarize/prompt.md#the-model-is-shown-independent-source-readings)
+a picture nobody planned. The [request](../summarize/prompt.md#the-model-proposes-rows-source-verification-stays-in-code)
 offers the forms enabled in config that this compiler supports.
 
 ### Declared types are not delivery promises

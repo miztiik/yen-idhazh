@@ -177,6 +177,11 @@ class VisualPlan(Contract):
     __schema_stem__: ClassVar[str] = "visual-plan"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-11-21",
+            change="Separate display labels from evidence spans.",
+            why="Preserve the exact source slice.",
+        ),
+        ChangelogEntry(
             version="2026-11-18",
             change="confidence became optional.",
             why="Code builds the plan from a table now: nothing reads it and none is asked.",
@@ -193,13 +198,8 @@ class VisualPlan(Contract):
         ),
         ChangelogEntry(
             version="2026-09-09T03:11",
-            change="encodings became one flat object with a field per role.",
-            why="Optional role keys produced a confident chart with no bars in it, twice.",
-        ),
-        ChangelogEntry(
-            version="2026-09-09",
-            change="Earlier changes are in this file's git history.",
-            why="A changelog says what moved lately; git is the archive.",
+            change="Earlier changes are in git.",
+            why="Git history is the archive for older contract changes.",
         ),
     )
 
@@ -244,23 +244,25 @@ class VisualPlan(Contract):
         default_factory=list,
         max_length=MAX_LABELS,
         description=(
-            "The elements whose own characters name the marks and the axes. A reference "
-            "and never a string: code cuts every character a reader sees, and the model "
-            "points at which characters."
+            "Historical element references for naming marks and axes."
         ),
+    )
+    display_labels: dict[_PlanElementId, PlanTitle] = Field(
+        default_factory=dict,
+        max_length=MAX_ELEMENT_IDS,
+        exclude_if=lambda labels: not labels,
+        description="Verified display wording keyed by its original label element.",
     )
     annotations: list[_PlanElementId] = Field(
         default_factory=list,
         max_length=MAX_ANNOTATIONS,
         description=(
-            "The elements to mark first, so one mark lands before its siblings. A "
-            "reference for the same reason a label is."
+            "Optional source references selecting one measured mark to emphasize."
         ),
     )
     why: PlanReason = Field(
         description=(
-            "Why this form, or why nothing. Model prose, shown to no reader and to no "
-            "reviewer - it is read when a decision is being audited and nowhere else."
+            "The recorded reason for this plan, for audit rather than display."
         )
     )
     title: PlanTitle | None = Field(
@@ -314,6 +316,7 @@ class VisualPlan(Contract):
                 ),
                 ("element_ids", self.element_ids),
                 ("labels", self.labels),
+                ("display_labels", self.display_labels),
                 ("annotations", self.annotations),
             ):
                 if cited:
@@ -363,6 +366,17 @@ class VisualPlan(Contract):
                     "{field} cites an element the plan did not declare",
                     {"field": where},
                 )
+        label_ids = {
+            element_id
+            for role in (EncodingRole.CATEGORY, EncodingRole.ENTITY, EncodingRole.SERIES)
+            for element_id in getattr(self.encodings, role.value)
+        }
+        if self.display_labels.keys() - label_ids:
+            raise PydanticCustomError(
+                "visual_plan_reference_declared",
+                "{field} must name a drawn label element",
+                {"field": "display_labels"},
+            )
         return self
 
 

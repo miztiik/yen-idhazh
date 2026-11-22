@@ -249,9 +249,7 @@ def test_a_passing_item_carries_no_failure_detail(
     assert server.served == 1
     assert decision.kind is VisualKind.NONE
     assert decision.none_reason is NoneReason.MODEL_DECLINED
-    assert decision.rationale == (
-        "The summary already gives the approvals; another display would repeat it."
-    )
+    assert decision.rationale == "the model proposed no chart"
     assert decision.asked_the_model is True
     assert decision.data_path is None
     assert recorded is not None
@@ -282,10 +280,10 @@ def test_a_malformed_chart_answer_keeps_shape_diagnostics_off_the_success_detail
     decision = _decide_the_visual(
         summary,
         Completion(
-            content=a_reply(focus=None, caption="model-only words"), finish_reason="stop"
+            content=a_reply(rows="model-only words"), finish_reason="stop"
         ),
         table,
-        data=data, text=WIND_TEXT,
+        forms=data, text=WIND_TEXT,
         settings=settings, date="2026-08-21",
         stamp={
             "version": VisualDecision.schema_version(), "model_id": "fixture-model",
@@ -297,8 +295,8 @@ def test_a_malformed_chart_answer_keeps_shape_diagnostics_off_the_success_detail
 
     assert summary.status is SummaryStatus.OK and summary.summary
     assert row.outcome.value == "ok" and row.detail is None
-    assert row.failed_field == "visual.focus"
-    assert row.failed_rule == "visual_choice_focus_required"
+    assert row.failed_field == "visual.rows"
+    assert row.failed_rule == "list_type"
     assert decision.rationale and row.failed_field in decision.rationale
     assert row.failed_rule in decision.rationale
     assert "model-only words" not in caplog.text

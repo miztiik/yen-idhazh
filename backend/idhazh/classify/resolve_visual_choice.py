@@ -1,21 +1,44 @@
-"""Resolve the model's chart references against the one article it read."""
+"""Bind each chart proposal row to explicit observations, then build a plan."""
 
 from __future__ import annotations
 
-import logging
 import re
 from bisect import bisect_right
 from collections import Counter
-from collections.abc import Mapping, Sequence
-from typing import Annotated, Final, Self
+from collections.abc import Sequence
+from dataclasses import dataclass, field
+from decimal import Decimal
+from typing import Final
 
-from pydantic import Field, StringConstraints, model_validator
 from pydantic_core import PydanticCustomError
 
-from idhazh.classify.plan_visual_request import VisualInput
-from idhazh.contracts.base import Model
+from idhazh.classify.chart_reply import (
+    Bubble,
+    ChartProposal,
+    Comparison,
+    Histogram,
+    Line,
+    Pie,
+    Reading,
+    Scatter,
+    SizedPoint,
+    Slope,
+    StackedBar,
+)
+from idhazh.classify.source_observations import (
+    FactIdentity,
+    Observation,
+    Observations,
+    read_observations,
+)
+from idhazh.classify.source_readings import (
+    date_key,
+    plain_words,
+    reading_key,
+    source_key,
+    words_key,
+)
 from idhazh.contracts.element import (
-    ELEMENT_ID_OFFSET_DIGITS,
     Element,
     ElementKind,
     ElementTable,
@@ -23,91 +46,19 @@ from idhazh.contracts.element import (
     derive_element_id,
 )
 from idhazh.contracts.visual import (
-    MAX_IDS_PER_ROLE,
+    CAPTION_MAX_LENGTH,
     EncodingRole,
-    PlanCaption,
     PlanDecision,
     PlanEncodings,
-    PlanReason,
-    PlanTitle,
     VisualPlan,
     VisualPurpose,
     VisualType,
 )
-from idhazh.elements import sentence_starts
-from idhazh.sanitize import sanitize
-from idhazh.visual_vocabulary import PLAN_VOCABULARY_VERSION, TYPE_RULES
+from idhazh.elements import SpanDriftError, normalise_unit, sentence_starts
+from idhazh.visual_vocabulary import PLAN_VOCABULARY_VERSION, commensurable
 
-LOG = logging.getLogger("idhazh")
-NO_CHART: Final = "none"
-# Each code counts spans in one article; it cannot outgrow the source offset.
-_INDEX: Final = rf"[1-9][0-9]{{0,{ELEMENT_ID_OFFSET_DIGITS - 1}}}"
-QUANTITY_CODE: Final = rf"^q{_INDEX}$"
-DATE_CODE: Final = rf"^d{_INDEX}$"
-LABEL_CODE: Final = rf"^l{_INDEX}$"
-QuantityRef = Annotated[str, StringConstraints(pattern=QUANTITY_CODE)]
-DateRef = Annotated[str, StringConstraints(pattern=DATE_CODE)]
-LabelRef = Annotated[str, StringConstraints(pattern=LABEL_CODE)]
-_Names = Annotated[list[PlanTitle], Field(max_length=MAX_IDS_PER_ROLE)]
-_Quantities = Annotated[list[QuantityRef], Field(max_length=MAX_IDS_PER_ROLE)]
-_Dates = Annotated[list[DateRef], Field(max_length=MAX_IDS_PER_ROLE)]
-COMPARISONS: Final = frozenset({VisualType.BAR, VisualType.DOT, VisualType.PIE})
-
-
-class ComparisonPoint(Model):
-    quantity: QuantityRef
-    category: LabelRef
-
-
-class ChartReferences(Model):
-    quantity: _Quantities = Field(default_factory=list)
-    time: _Dates = Field(default_factory=list)
-    quantity_x: _Quantities = Field(default_factory=list)
-    entity: _Names = Field(default_factory=list)
-    series: _Names = Field(default_factory=list)
-    size: _Quantities = Field(default_factory=list)
-    bins: _Quantities = Field(default_factory=list)
-    points: Annotated[list[ComparisonPoint], Field(max_length=MAX_IDS_PER_ROLE)] = Field(
-        default_factory=list
-    )
-
-
-class PlanChoice(Model):
-    why: PlanReason
-    type: str
-    encodings: ChartReferences
-    focus: QuantityRef | None
-    whole: QuantityRef | None
-    measure: PlanTitle | None = None
-    context: _Dates = Field(default_factory=list)
-    title: PlanTitle | None
-    caption: PlanCaption | None
-
-    @model_validator(mode="after")
-    def _chart_words_are_not_data(self) -> Self:
-        if self.type == NO_CHART:
-            return self
-        if self.title is None or not sanitize(self.title).strip():
-            raise _refusal("visual_choice_title_required", "a chart answer has a title", "title")
-        if self.focus is None:
-            raise _refusal(
-                "visual_choice_focus_required", "a chart highlights one drawn reading", "focus"
-            )
-        if any(character.isdigit() for character in self.why):
-            raise _refusal(
-                "visual_choice_prose_has_digit", "the reason must name the comparison in words",
-                "why",
-            )
-        for field in ("why", "title", "caption"):
-            words = getattr(self, field)
-            if words is not None and sanitize(words) != words.strip():
-                raise _refusal(
-                    "visual_choice_unsafe_prose", "chart prose is plain text", field
-                )
-        return self
-
-
-_PURPOSE: Final[Mapping[VisualType, VisualPurpose]] = {
+_R = EncodingRole
+_PURPOSE: Final = {
     VisualType.BAR: VisualPurpose.COMPARISON,
     VisualType.DOT: VisualPurpose.COMPARISON,
     VisualType.LINE: VisualPurpose.TREND,
@@ -118,263 +69,482 @@ _PURPOSE: Final[Mapping[VisualType, VisualPurpose]] = {
     VisualType.STACKED_BAR: VisualPurpose.COMPOSITION,
     VisualType.HISTOGRAM: VisualPurpose.DISTRIBUTION,
 }
+_TITLE_WORD = re.compile(r"[^\W_]+|[%$\u00a3\u20ac\u20b9]")
+_TITLE_JOINERS = frozenset({"and", "by", "in", "through", "versus", "vs"})
+_TITLE_PUNCTUATION = re.compile(r"[\s,:()\-\u2013\u2014]+")
 
 
-def _refusal(rule: str, reason: str, field: str) -> PydanticCustomError:
-    return PydanticCustomError(rule, reason, {"field": field})
+def _refuse(field: str, rule: str, reason: str) -> PydanticCustomError:
+    return PydanticCustomError(f"visual_choice_{rule}", reason, {"field": field})
 
 
-def _source_ref(code: str, request: VisualInput, field: str) -> Element:
-    if (element := request.refs.get(code)) is None:
-        raise _refusal("visual_choice_unknown_ref", "no source reading has that reference", field)
-    return element
+def _matches_name(proposed: str, source: str) -> bool:
+    """Accept case, whitespace and a leading article, not an unchecked paraphrase."""
+    return plain_words(proposed) and words_key(proposed) == words_key(source)
 
 
-def _source_phrase(
-    phrase: str, text: str, sentences: Sequence[int], *,
-    field: str, in_sentences: set[int] | None = None,
-) -> Element:
-    """Re-slice a whole phrase; do not take a partial word or guess an occurrence."""
-    hits = [
-        (match, bisect_right(sentences, match.start()))
-        for match in re.finditer(rf"(?<!\w){re.escape(phrase)}(?!\w)", text, re.IGNORECASE)
-    ]
-    matches = [
-        (match, sentence) for match, sentence in hits
-        if (in_sentences is None or sentence in in_sentences)
-        and bisect_right(sentences, match.end() - 1) == sentence
-    ]
-    if (
-        len(matches) != 1
-        or not any(character.isalpha() for character in phrase)
-        or phrase != phrase.strip()
-        or "\n" in phrase
-        or sanitize(phrase) != phrase
-        or sanitize(matches[0][0].group()) != matches[0][0].group()
-    ):
-        raise _refusal(
-            "visual_choice_unanchored_label",
-            "a label must identify one literal phrase in its source evidence",
-            field,
-        )
-    match, sentence = matches[0]
-    return Element(
-        kind=ElementKind.ENTITY,
-        element_id=derive_element_id(ElementKind.ENTITY, match.start(), match.end()),
-        span_start=match.start(),
-        span_end=match.end(),
-        span_excerpt=text[match.start():match.end()],
-        sentence_index=sentence,
-        value=None,
-        unit=None,
-        extractor=Extractor.MODEL,
-    )
+def _matches_reading(proposed: Reading, source: Element) -> bool:
+    return (key := reading_key(proposed)) is not None and key == source_key(source)
 
 
-def _label_scope(
-    role: EncodingRole, form: VisualType, index: int, quantities: Sequence[Element]
-) -> set[int] | None:
-    if form is VisualType.SLOPE:
-        return {value.sentence_index for value in quantities[index * 2 : index * 2 + 2]}
-    if form in {VisualType.BAR, VisualType.DOT} and role is EncodingRole.SERIES:
-        # A series may be named once for multiple marks; the compiler checks pairing.
-        return None
-    return {quantities[index].sentence_index} if index < len(quantities) else set()
-
-
-def _with_grounding(element: Element, **labels: str) -> Element:
-    return Element.model_validate(element.model_dump() | labels | {
-        "label_source": "visual-evidence",
-        "ledger_version": VisualPlan.schema_version(),
-    })
-
-
-def _bind_relationship(
-    channels: Mapping[EncodingRole, list[Element]], known: dict[str, Element]
-) -> None:
-    """A same-sentence source subject must unambiguously cover each point's measures."""
-    entities = channels[EncodingRole.ENTITY]
-    if len({element.sentence_index for element in entities}) != len(entities):
-        raise _refusal(
-            "visual_choice_ambiguous_relationship",
-            "each relationship point needs a separate source sentence",
-            "encodings.entity",
-        )
-    for role in (EncodingRole.QUANTITY, EncodingRole.QUANTITY_X, EncodingRole.SIZE):
-        values = channels[role]
-        if not values:
+def _match(
+    facts: Sequence[Observation],
+    proposed: Reading,
+    *,
+    field: str,
+    name: str | None = None,
+    measure: str | None = None,
+    when: str | None = None,
+) -> Observation:
+    # Multiple mentions of exactly the same fact supply one observation, not more
+    # rows. Different subjects, measures, dates or scopes make an unqualified tie.
+    matches: dict[FactIdentity, Observation] = {}
+    values: dict[FactIdentity, set[tuple[str | None, str | None]]] = {}
+    held_date = date_key(when) if when is not None else None
+    for fact in facts:
+        if not fact.measure:
             continue
-        if len(values) != len(entities):
-            continue  # The existing type validator reports the incomplete channel.
-        for entity, value in zip(entities, values, strict=True):
-            if (
-                entity.sentence_index == value.sentence_index
-                and entity.span_end <= value.span_start
-            ):
-                identity = f"span-{entity.span_start}-{entity.span_end}"
-                known[entity.element_id] = _with_grounding(entity, entity=identity)
-                known[value.element_id] = _with_grounding(value, entity=identity)
-
-
-def _bind_whole(
-    whole: Element, parts: Sequence[Element], phrase: str, *,
-    text: str, sentences: Sequence[int], known: dict[str, Element],
-) -> None:
-    """Use one explicitly written measure only within the slice supporting the whole."""
-    scope = {whole.sentence_index}
-    field = "measure"
-    anchor = _source_phrase(phrase, text, sentences, field=field, in_sentences=scope)
-    if (
-        whole.unit is None
-        or anchor.span_end > whole.span_start
-        or any(part.sentence_index not in scope or part.unit != whole.unit for part in parts)
-    ):
-        raise _refusal(
-            "visual_choice_ambiguous_whole",
-            "the whole and its parts need one explicitly named measure and unit",
+        if name is not None and (fact.label is None or not _matches_name(name, fact.label.text)):
+            continue
+        if measure is not None and not _matches_name(measure, fact.measure):
+            continue
+        if when is not None and (
+            held_date is None or fact.date is None or held_date != fact.date.value
+        ):
+            continue
+        identity = fact.identity()
+        values.setdefault(identity, set()).add((fact.reading.value, fact.reading.unit))
+        if _matches_reading(proposed, fact.reading):
+            matches.setdefault(identity, fact)
+    if len(matches) != 1 or any(len(values[key]) != 1 for key in matches):
+        raise _refuse(
             field,
+            "unverified_observation",
+            "the reading and its roles need one explicit source fact",
         )
-    for value in (whole, *parts):
-        known[value.element_id] = _with_grounding(
-            value, measure=anchor.span_excerpt,
-            measure_canonical=f"span-{anchor.span_start}-{anchor.span_end}",
+    return next(iter(matches.values()))
+
+
+def _terms(text: str) -> tuple[str, ...]:
+    return tuple(normalise_unit(word) for word in _TITLE_WORD.findall(words_key(text)))
+
+
+def _title(title: str, facts: Sequence[Observation], *, group: str = "") -> None:
+    if not plain_words(title) or _TITLE_PUNCTUATION.sub("", _TITLE_WORD.sub("", title)):
+        raise _refuse("title", "unsafe_prose", "chart wording must be plain text")
+    named = _terms(title)
+    measured = {_terms(group)} if group else {_terms(fact.measure) for fact in facts}
+    phrases = {terms: {terms} for terms in measured if terms}
+    for fact in facts:
+        if fact.label is not None:
+            phrases.setdefault(_terms(fact.label.text), set())
+        if fact.reading.unit:
+            phrases.setdefault(_terms(fact.reading.unit), set())
+        if fact.date is not None:
+            phrases.setdefault(_terms(fact.date.span_excerpt), set())
+            phrases.setdefault(_terms(fact.date.value or ""), set())
+        if fact.action in {"approved", "produced", "generated"}:
+            measure = _terms(fact.measure)
+            for phrase in ((*measure, fact.action), (fact.action, *measure)):
+                phrases[phrase] = {measure}
+    if facts and all(fact.action == "monetary" for fact in facts):
+        for unit in {fact.reading.unit for fact in facts if fact.reading.unit}:
+            phrases[_terms(f"{unit} amounts")] = measured
+            phrases[_terms(f"amounts in {unit}")] = measured
+    phrases.pop((), None)
+    # Match whole verified phrases, never isolated words lifted out of context.
+    found: set[tuple[str, ...]] = set()
+    while named:
+        longest = max(
+            (phrase for phrase in phrases if named[: len(phrase)] == phrase),
+            key=len,
+            default=(),
+        )
+        if longest:
+            found.update(phrases[longest])
+            named = named[len(longest) :]
+        elif len(named) > 1 and named[0] in _TITLE_JOINERS:
+            named = named[1:]
+        else:
+            break
+    if named or not measured <= found:
+        raise _refuse("title", "unverified_measure", "the title must name the verified measure")
+
+
+def _comparable(facts: Sequence[Observation], *, dates_are_axis: bool = False) -> None:
+    measures = {words_key(fact.measure) for fact in facts}
+    units = [fact.reading.unit for fact in facts]
+    monetary_contexts = {(fact.actor, fact.context) for fact in facts}
+    linked_amounts = all(fact.action == "monetary" for fact in facts) and (
+        len(monetary_contexts) == 1
+    )
+    if (
+        (len(measures) != 1 and not linked_amounts)
+        or (any(fact.action == "monetary" for fact in facts) and not linked_amounts)
+        or any(not commensurable(unit, units[0]) for unit in units[1:])
+        or len({fact.action for fact in facts}) > 1
+    ):
+        raise _refuse("rows", "incompatible_measure", "the rows do not state a comparable measure")
+    if not dates_are_axis and len({fact.date.value if fact.date else None for fact in facts}) > 1:
+        raise _refuse("rows", "incompatible_scope", "the rows do not cover the same stated date")
+    scopes = {fact.scope for fact in facts}
+    if len(scopes) > 1 and not (
+        linked_amounts
+        or (scopes <= {"", "this week", "on the same day"}
+        and all(fact.action == "approved" for fact in facts))
+    ):
+        raise _refuse("rows", "incompatible_scope", "the rows do not have comparable scope")
+
+
+@dataclass
+class _Plan:
+    text: str
+    table: ElementTable
+    channels: dict[EncodingRole, list[str]] = field(default_factory=dict)
+    display: dict[str, str] = field(default_factory=dict)
+    context: list[str] = field(default_factory=list)
+    facts: list[Observation] = field(default_factory=list)
+    whole: Element | None = None
+    captions: list[str] = field(default_factory=list)
+    elements: dict[str, Element] = field(init=False)
+    starts: list[int] = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.elements = {item.element_id: item for item in self.table.elements}
+        self.starts = sentence_starts(self.text)
+
+    def draw(self, role: EncodingRole, item: Element) -> None:
+        self.channels.setdefault(role, []).append(item.element_id)
+
+    def label(
+        self,
+        role: EncodingRole,
+        observed: Observation,
+        display: str,
+        *,
+        entity: bool = False,
+    ) -> Element:
+        anchor = observed.label
+        if anchor is None or not _matches_name(display, anchor.text):
+            raise _refuse(
+                "rows.label",
+                "unverified_label",
+                "the label must name the attached source observation",
+            )
+        element = next(
+            (
+                item
+                for item in self.elements.values()
+                if item.kind in {ElementKind.ENTITY, ElementKind.PLACE}
+                and (item.span_start, item.span_end) == (anchor.start, anchor.end)
+            ),
+            None,
+        )
+        if element is None:
+            element = Element(
+                kind=ElementKind.ENTITY,
+                element_id=derive_element_id(ElementKind.ENTITY, anchor.start, anchor.end),
+                span_start=anchor.start,
+                span_end=anchor.end,
+                span_excerpt=anchor.text,
+                sentence_index=bisect_right(self.starts, anchor.start),
+                value=None,
+                unit=None,
+                extractor=Extractor.REGEX,
+            )
+        self.elements[element.element_id] = element
+        if entity:
+            self.ground(element, entity=element.element_id)
+        self.draw(role, element)
+        self.show(element, display)
+        return element
+
+    def show(self, element: Element, display: str) -> None:
+        if self.display.get(element.element_id, display) != display:
+            raise _refuse(
+                "rows.label", "unverified_label", "one source label has two display readings"
+            )
+        self.display[element.element_id] = display
+
+    def observe(self, role: EncodingRole, fact: Observation) -> None:
+        if any(
+            held.identity() == fact.identity() or held.reading == fact.reading
+            for held in self.facts
+        ):
+            raise _refuse(
+                "rows", "repeated_fact", "a repeated mention is not a separate observation"
+            )
+        self.facts.append(fact)
+        self.draw(role, fact.reading)
+        if fact.date is not None:
+            self.context.append(fact.date.element_id)
+        if fact.caption:
+            self.captions.append(fact.caption)
+
+    def ground(self, element: Element, **labels: str) -> None:
+        self.elements[element.element_id] = Element.model_validate(
+            element.model_dump()
+            | labels
+            | {
+                "label_source": "visual-evidence",
+                "ledger_version": VisualPlan.schema_version(),
+            }
+        )
+
+    def finish(self, form: VisualType, title: str) -> tuple[VisualPlan, ElementTable]:
+        encodings = PlanEncodings.model_validate(
+            {role.value: self.channels.get(role, []) for role in EncodingRole}
+        )
+        tail = [self.whole.element_id] if self.whole else []
+        ids = list(
+            dict.fromkeys(
+                [cited for ids in self.channels.values() for cited in ids] + self.context + tail
+            )
+        )
+        captions = list(dict.fromkeys(self.captions))
+        caption = ". ".join(captions)
+        if len(caption) > CAPTION_MAX_LENGTH or (caption and not plain_words(caption)):
+            raise _refuse(
+                "rows", "unverified_scope", "the chart cannot preserve its source context"
+            )
+        plan = VisualPlan(
+            version=VisualPlan.schema_version(),
+            decision=PlanDecision.VISUAL,
+            type=form,
+            purpose=_PURPOSE[form],
+            encodings=encodings,
+            element_ids=ids,
+            declared_whole_element_id=tail[0] if tail else None,
+            display_labels={
+                cited: name
+                for cited, name in self.display.items()
+                if name != self.elements[cited].span_excerpt
+            },
+            why="Chart proposal verified against explicit source observations",
+            title=title,
+            caption=caption or None,
+            plan_version=PLAN_VOCABULARY_VERSION,
+        )
+        original = {item.element_id for item in self.table.elements}
+        counts = Counter(self.table.candidates_found)
+        counts.update(self.elements[cited].kind for cited in self.elements.keys() - original)
+        return plan, ElementTable.model_validate(
+            self.table.model_dump()
+            | {
+                "elements": sorted(self.elements.values(), key=lambda item: item.span_start),
+                "candidates_found": counts,
+            }
         )
 
 
-def _check_category_order(categories: Sequence[Element], quantities: Sequence[Element]) -> None:
-    """Do not swap labels around when the source lists several readings together."""
-    if len(categories) != len(quantities):
-        return  # The compiler reports that there is no label for each quantity.
-    by_sentence: dict[int, list[tuple[int, int]]] = {}
-    for label, value in zip(categories, quantities, strict=True):
-        if label.sentence_index == value.sentence_index:
-            by_sentence.setdefault(value.sentence_index, []).append(
-                (value.span_start, label.span_start)
+def _dated(
+    choice: Line | Slope,
+    facts: Sequence[Observation],
+    builder: _Plan,
+) -> None:
+    if isinstance(choice, Line):
+        if any(row.series is None for row in choice.rows) != all(
+            row.series is None for row in choice.rows
+        ):
+            raise _refuse(
+                "rows.series", "unverified_series", "each line row needs the same series layout"
             )
-    for pairs in by_sentence.values():
-        labels = [label for _, label in sorted(pairs)]
-        if labels != sorted(labels):
-            raise _refusal(
-                "visual_choice_swapped_categories",
-                "labels in one sentence must follow the source order of their readings",
-                "encodings.category",
+        chosen = []
+        for row in choice.rows:
+            item = _match(facts, row.reading, name=row.series, when=row.date, field="rows.reading")
+            assert item.date is not None
+            if row.series is not None:
+                builder.label(_R.SERIES, item, row.series)
+            builder.draw(_R.TIME, item.date)
+            builder.observe(_R.QUANTITY, item)
+            chosen.append(item)
+        if (
+            choice.rows[0].series is None
+            and len({words_key(item.label.text) if item.label else None for item in chosen}) > 1
+        ):
+            raise _refuse(
+                "rows.series", "unverified_series", "a line without series must follow one subject"
             )
+    else:
+        dates = []
+        for change in choice.rows:
+            first = _match(
+                facts, change.start, name=change.label, when=choice.start_date, field="rows.start"
+            )
+            last = _match(
+                facts, change.end, name=change.label, when=choice.end_date, field="rows.end"
+            )
+            assert first.date is not None and last.date is not None
+            if (
+                first.date.value is None
+                or last.date.value is None
+                or first.date.value >= last.date.value
+            ):
+                raise _refuse(
+                    "end_date",
+                    "unverified_date",
+                    "slope endpoints must be distinct and chronological",
+                )
+            if len(first.date.value) != len(last.date.value):
+                raise _refuse(
+                    "end_date",
+                    "unverified_date",
+                    "slope endpoints must have the same date precision",
+                )
+            dates.append((first.date, last.date))
+            builder.label(_R.ENTITY, first, change.label)
+            builder.observe(_R.QUANTITY, first)
+            builder.observe(_R.QUANTITY, last)
+        for date in dates[0]:
+            builder.draw(_R.TIME, date)
+    _comparable(builder.facts, dates_are_axis=True)
+    _title(choice.title, builder.facts)
+
+
+def _relationships(choice: Scatter | Bubble, facts: Sequence[Observation], builder: _Plan) -> None:
+    measures = [choice.x_measure, choice.y_measure]
+    if isinstance(choice, Bubble):
+        measures.append(choice.size_measure)
+    if len({words_key(value) for value in measures}) != len(measures):
+        raise _refuse(
+            "x_measure", "ambiguous_axes", "each axis must name a distinct source measure"
+        )
+    for row in choice.rows:
+        readings = [
+            _match(facts, reading, name=row.label, measure=measure, field=f"rows.{axis}")
+            for reading, measure, axis in zip((row.x, row.y), measures[:2], ("x", "y"), strict=True)
+        ]
+        if isinstance(choice, Bubble) and isinstance(row, SizedPoint):
+            size = _match(
+                facts, row.size, name=row.label, measure=choice.size_measure, field="rows.size"
+            )
+            if size.reading.value is None or Decimal(size.reading.value) <= 0:
+                raise _refuse("rows.size", "unverified_observation", "bubble size must be positive")
+            readings.append(size)
+        if len({item.label for item in readings}) != 1:
+            raise _refuse(
+                "rows.label",
+                "unverified_relationship",
+                "all axes must be attached to one source subject and scope",
+            )
+        entity = builder.label(_R.ENTITY, readings[0], row.label, entity=True)
+        roles = (_R.QUANTITY_X, _R.QUANTITY, _R.SIZE) if len(readings) == 3 else (
+            _R.QUANTITY_X, _R.QUANTITY,
+        )
+        for role, observed in zip(roles, readings, strict=True):
+            builder.ground(observed.reading, entity=entity.element_id)
+            builder.observe(role, observed)
+    _title(choice.title, builder.facts)
+    builder.captions += [
+        f"{axis}: {measure}"
+        for axis, measure in zip(("X", "Y", "Size")[:len(measures)], measures, strict=True)
+    ]
+
+
+def _composition(choice: Pie | StackedBar, source: Observations, builder: _Plan) -> None:
+    partitions = [
+        entry
+        for entry in source.partitions
+        if entry.whole.label is not None
+        and (
+            _matches_name(choice.whole.label, entry.whole.label.text)
+            or _matches_name(choice.whole.label, entry.whole.measure)
+        )
+        and _matches_reading(choice.whole.reading, entry.whole.reading)
+    ]
+    if len(partitions) != 1 or len(partitions[0].parts) != len(choice.rows):
+        raise _refuse(
+            "whole", "unverified_partition", "the whole and all named parts must be stated together"
+        )
+    partition = partitions[0]
+    whole = partition.whole
+    builder.whole = whole.reading
+    if isinstance(choice, StackedBar):
+        if not _matches_name(choice.measure, whole.measure):
+            raise _refuse(
+                "measure", "unverified_measure", "the stack needs one stated common measure"
+            )
+        builder.draw(_R.CATEGORY, whole.reading)
+        builder.show(whole.reading, choice.whole.label)
+        builder.captions.append(f"Declared total: {whole.reading.span_excerpt}")
+    labels = [words_key(row.label) for row in choice.rows]
+    if any(
+        left == right or f" {left} " in f" {right} "
+        for i, left in enumerate(labels)
+        for j, right in enumerate(labels)
+        if i != j
+    ):
+        raise _refuse(
+            "rows.label", "unverified_partition", "part names cannot repeat or contain another part"
+        )
+    for row in choice.rows:
+        fact = _match(partition.parts, row.reading, name=row.label, field="rows.reading")
+        builder.label(_R.SERIES if isinstance(choice, StackedBar) else _R.CATEGORY, fact, row.label)
+        builder.observe(_R.QUANTITY, fact)
+    if isinstance(choice, Pie):
+        for fact in (whole, *builder.facts):
+            builder.ground(
+                fact.reading, measure=whole.measure, measure_canonical=whole.reading.element_id
+            )
+    _title(choice.title, (whole, *builder.facts))
+
+
+def _distribution(choice: Histogram, source: Observations, builder: _Plan) -> None:
+    matching = [
+        sample for sample in source.samples if _matches_name(choice.group, sample.group.text)
+    ]
+    if len(matching) != 1:
+        raise _refuse(
+            "group",
+            "unverified_sample",
+            "the group must be a stated set of individual observations",
+        )
+    sample = matching[0]
+    proposed = Counter(reading_key(reading) for reading in choice.rows)
+    if None in proposed or proposed != Counter(source_key(item) for item in sample.observations):
+        raise _refuse(
+            "rows",
+            "unverified_sample",
+            "the readings must equal the stated observations, including repeats",
+        )
+    for item in sample.observations:
+        builder.draw(_R.BINS, item)
+    _title(choice.title, (), group=sample.group.text)
 
 
 def resolve_visual_choice(
-    choice: PlanChoice, request: VisualInput, text: str, table: ElementTable,
+    choice: ChartProposal,
+    forms: tuple[VisualType, ...],
+    text: str,
+    table: ElementTable,
 ) -> tuple[VisualPlan, ElementTable]:
-    """Map the transient reply to the existing plan and article-backed elements."""
-    form = next((form for form in request.forms if form.value == choice.type), None)
-    if form is None:
-        raise _refusal(
-            "visual_choice_unsupported_type", "the renderer did not offer that form", "type"
-        )
-    whole = _source_ref(choice.whole, request, "whole") if choice.whole is not None else None
-    if whole is not None and form not in {VisualType.PIE, VisualType.STACKED_BAR}:
-        raise _refusal("visual_choice_unexpected_whole", "only composition cites a whole", "whole")
-    references = choice.encodings
-    if references.points and (form not in COMPARISONS or references.quantity):
-        raise _refusal(
-            "visual_choice_unexpected_points",
-            "category points belong to comparisons and replace the quantity channel",
-            "encodings.points",
-        )
-    source = {element.element_id: element for element in table.elements}
-    known = source.copy()
-    sentences = sentence_starts(text)
-    channels: dict[EncodingRole, list[Element]] = {role: [] for role in EncodingRole}
-    for role in (
-        EncodingRole.QUANTITY, EncodingRole.QUANTITY_X, EncodingRole.TIME,
-        EncodingRole.SIZE, EncodingRole.BINS,
-    ):
-        field = f"encodings.{role.value}"
-        channels[role] = [
-            _source_ref(code, request, field) for code in getattr(references, role.value)
-        ]
-    quantities = channels[EncodingRole.QUANTITY]
-    for point in references.points:
-        reading = _source_ref(point.quantity, request, "encodings.points.quantity")
-        label = request.labels.get(point.quantity, {}).get(point.category)
-        if label is None:
-            raise _refusal(
-                "visual_choice_unanchored_label",
-                "the label reference must belong to its own reading",
-                "encodings.points.category",
-            )
-        known.setdefault(label.element_id, label)
-        channels[EncodingRole.CATEGORY].append(label)
-        quantities.append(reading)
-    for role in (EncodingRole.ENTITY, EncodingRole.SERIES):
-        field = f"encodings.{role.value}"
-        for index, phrase in enumerate(getattr(references, role.value)):
-            scope = _label_scope(role, form, index, quantities)
-            if re.fullmatch(DATE_CODE, phrase):
-                element = _source_ref(phrase, request, field)
-                if scope is not None and element.sentence_index not in scope:
-                    raise _refusal(
-                        "visual_choice_unanchored_label",
-                        "a date label must be in the source sentence of its reading",
-                        field,
-                    )
-            else:
-                element = _source_phrase(phrase, text, sentences, field=field, in_sentences=scope)
-                if any(
-                    reading.kind is ElementKind.QUANTITY
-                    and element.span_start < reading.span_end
-                    and reading.span_start < element.span_end
-                    for reading in request.refs.values()
-                ):
-                    raise _refusal(
-                        "visual_choice_unanchored_label",
-                        "a label must name the reading, not quote the quantity itself",
-                        field,
-                    )
-                known.setdefault(element.element_id, element)
-            channels[role].append(element)
-    if form is VisualType.STACKED_BAR and whole is not None and not channels[EncodingRole.CATEGORY]:
-        # A stacked chart's sole row label is its independently stated whole.
-        channels[EncodingRole.CATEGORY].append(whole)
-    if form in COMPARISONS:
-        _check_category_order(channels[EncodingRole.CATEGORY], quantities)
-    if form in {VisualType.SCATTER, VisualType.BUBBLE}:
-        _bind_relationship(channels, known)
-    if form is VisualType.STACKED_BAR and whole is not None and choice.measure is not None:
-        _bind_whole(whole, quantities, choice.measure, text=text, sentences=sentences, known=known)
-    measured = channels[TYPE_RULES[form].marks]
-    annotations = []
-    if choice.focus is not None:
-        focus = _source_ref(choice.focus, request, "focus")
-        if focus in measured:
-            annotations.append(focus.element_id)
-        elif measured:
-            LOG.warning(
-                "chart highlight ignored id=%s reason=visual_choice_undrawn_focus", table.item_id
-            )
-            annotations.append(measured[0].element_id)
-    encodings = PlanEncodings.model_validate({
-        role.value: [element.element_id for element in values] for role, values in channels.items()
-    })
-    ids = list(dict.fromkeys(cited for ids in encodings.filled().values() for cited in ids))
-    if whole is not None and whole.element_id not in ids:
-        ids.append(whole.element_id)
-    if choice.context:
-        # Context dates can justify prose, but never participate in an encoding.
-        ids = list(dict.fromkeys([
-            *ids, *(_source_ref(code, request, "context").element_id for code in choice.context),
-        ]))
-    plan = VisualPlan(
-        version=VisualPlan.schema_version(), decision=PlanDecision.VISUAL,
-        type=form, purpose=_PURPOSE[form], encodings=encodings, element_ids=ids,
-        declared_whole_element_id=whole.element_id if whole is not None else None,
-        annotations=annotations, why=choice.why, title=choice.title, caption=choice.caption,
-        plan_version=PLAN_VOCABULARY_VERSION,
-    )
-    if known == source:
-        return plan, table
-    counts = Counter(table.candidates_found)
-    counts.update(known[cited].kind for cited in known.keys() - source.keys())
-    return plan, ElementTable.model_validate(table.model_dump() | {
-        "elements": sorted(known.values(), key=lambda element: element.span_start),
-        "candidates_found": counts,
-    })
+    """Retain source ids and exact excerpts; publish only independently verified wording."""
+    form = VisualType(choice.type)
+    if form not in forms:
+        raise _refuse("type", "unsupported_type", "the renderer did not offer that form")
+    if drift := table.span_drift(text):
+        raise SpanDriftError(drift)
+    if not plain_words(choice.title) or not _terms(choice.title):
+        raise _refuse("title", "unsafe_prose", "chart wording must be plain text")
+    source = read_observations(text, table)
+    builder = _Plan(text, table)
+    if isinstance(choice, Line | Slope):
+        _dated(choice, source.facts, builder)
+    elif isinstance(choice, Scatter | Bubble):
+        _relationships(choice, source.facts, builder)
+    elif isinstance(choice, Pie | StackedBar):
+        _composition(choice, source, builder)
+    elif isinstance(choice, Histogram):
+        _distribution(choice, source, builder)
+    else:
+        assert isinstance(choice, Comparison)
+        for row in choice.rows:
+            fact = _match(source.facts, row.reading, name=row.label, field="rows.reading")
+            builder.label(_R.CATEGORY, fact, row.label)
+            builder.observe(_R.QUANTITY, fact)
+        _comparable(builder.facts)
+        _title(choice.title, builder.facts)
+        for fact in builder.facts:
+            if fact.date is not None and not fact.caption:
+                builder.captions.append(f"Stated period: {fact.date.span_excerpt}")
+    return builder.finish(form, choice.title)

@@ -1,6 +1,6 @@
 # What a visual plan may say, and what happens to one that is refused
 
-**Last Updated**: 2026-11-18
+**Last Updated**: 2026-11-21
 
 How a chart answer becomes a plan, the four things a plan may not carry, the
 deterministic checks it has to clear, and the ladder a refused plan may step
@@ -16,9 +16,9 @@ who decides a picture at all is [visuals.md](visuals.md).
 is the only thing a compiler is allowed to read, and code builds it: the model never writes
 one ([how](#a-chart-answer-becomes-a-plan-in-code)). It carries
 element references and closed vocabularies: a decision, a purpose, a type, one channel per encoding
-role, the separately declared whole for a stacked bar, the elements it draws from, which of them name the marks and which one lands first, one
-sentence of reasoning, a title, a caption, an optional confidence and the vocabulary date-stamp it
-was planned against.
+role, a separately declared whole where needed, and the elements it draws from.
+It records a reason, title, optional caption and vocabulary stamp. A historical
+plan can still carry an explicit emphasis or confidence.
 
 What it may not carry is as much of the contract as what it holds.
 
@@ -36,8 +36,8 @@ safe diagnosis without copying the rejected payload.
 | Prohibition | What refuses it |
 | --- | --- |
 | **No geometry** | Geometry is a number, and the plan's schema admits exactly one number, `confidence`, which is bounded and never drawn. The model's answer has none, and a payload that names a pixel names a key nothing declares; an undeclared key does not load. |
-| **No literal values** | Same guard. Every drawn figure is reached through an element, and code cites the elements: a figure is the characters of the figure element a row stands for, and the model's words carry no digit. |
-| **No authored text where a reader reads a fact** | `labels` and `annotations` are element ids, not strings, and code fills them. Code cuts every character a reader sees off a chart; the model points at a row. |
+| **No literal values** | Every drawn figure is reached through a verified element. The proposal's literal value never supplies the drawing. |
+| **No unchecked display words** | Labels cite source elements. A verified display spelling can differ from the exact evidence slice; the plan keeps it in `display_labels`, keyed by the original element id. |
 | **No `alt_text`** | The field is not declared, it is named in `FORBIDDEN_FIELDS`, and the module refuses to import if one is added back. |
 
 **The geometry ban is what keeps the compiler swappable.** A plan that names a pixel is a plan bound
@@ -51,41 +51,33 @@ channel restating the chart's own data, and no validator can read prose to check
 the last unguarded channel in a design whose whole claim is that a stranger's page cannot reach a
 drawn figure.
 
-**Three prose channels remain.** `title`, `caption` and `why` are length-capped.
-The reason describes the comparison in words. The title and caption may
-repeat numerals from the cited elements; the validator refuses any other
-numeral. No prose field supplies a value to the chart renderer.
-
-**`confidence` is optional and null.** The model is not asked for one,
-nothing reads it, and it gates nothing. Field order is decode order, so where one is decoded it comes
-after `type`: second in the list it would condition every field after it, and the model would read
-its own hedge back as evidence.
-
-**The answer is short by construction.** Its prose fields keep the plan contract's length bounds and
-its `type` and `focus` are one short value each, so the visual half of a reply is a few lines. The
-summary beside it carries no length bound, so the call runs under the model file's response limit
-([the output budget](../summarize/prompt.md#the-output-budget)).
+Code records the reason and supplies a caption when needed to preserve
+context or name relationship axes. Neither is a free-prose channel in the
+chart proposal. No text field supplies a value to the renderer.
 
 ## A chart answer becomes a plan in code
 
-The [model's reply](../summarize/prompt.md#the-model-is-shown-independent-source-readings)
-names a form and cites readings and label phrases by role. `none` builds no
-plan; its reason is recorded. For a chart, code resolves the cited references
-and re-slices exact source labels. Labels for comparisons must be in the
-supporting sentences, with same-sentence labels ordered as the readings are
-stated. This lets two stages of one subject have different labels without
-requiring two named entities. Relationship and stacked-bar readings must
-additionally support the source subject or stated whole. The resulting plan
-has the existing role layout, purpose, optional whole and highlight, and
-vocabulary stamp. A source reading outside the plotted set cannot be a
-highlight: log the rejected hint and emphasize the first plotted reading
-instead. An unknown reference still refuses the plan. No persisted shape changes.
+The [model proposes rows](../summarize/prompt.md#the-model-proposes-rows-source-verification-stays-in-code)
+and can decline with null. Code re-reads checked quantity and date spans
+and accepts rows only where a source statement attaches them to the proposed
+measure, name, date or group. Equal values and nearby words do not establish
+that attachment. Repeated mentions of one fact cannot become multiple rows;
+equal values for independent named observations or distinct members of an
+explicit sample can. A title uses verified measure phrases, not unresolved
+facts or words borrowed from caveats.
 
-An unsupported form, unknown reference, unanchored label, incomplete
-highlight, or digit in the reason is refused with `failed_field` and
-`failed_rule`. Invalid role shape, units or other incompatible evidence are
-then caught by the existing validator and compiler. In either case the
-summary survives.
+The reader recognizes explicit statements, grouped observations and declared
+parts, not arbitrary paraphrase or omitted context. It can preserve a
+stated period or an explicit forecast in a caption; it refuses limits and
+other scope it cannot faithfully display. Different enforcement amounts can
+be compared only when the source links the same actor and context, not merely
+because their currencies match. An unresolved row, title or scope drops the
+visual and keeps the summary. Evidence refusals name the rule and field.
+
+The existing role, units, exhaustiveness and compiler checks still apply.
+Verified display spelling is separate from the exact source span. The current
+plan is not assigned a highlight. Older plans with a deliberate highlight
+continue to resolve it to the same measured mark.
 
 ## Every encoding role is a key, and an unused one is empty
 
@@ -138,7 +130,7 @@ is the module being replaced.
 | `units_convertible` | Within one measured channel, every unit is convertible or identical. | Three megawatt bars and a headcount on one axis. |
 | `roles_valid_for_type` | The filled roles are the ones the type declares. | A `bar` carrying `bins`; a `bar` with an empty `quantity`. |
 | `enough_data` | The marks sit between `visuals.min_chart_points` and `visuals.max_chart_points` - and a histogram, whose marks are its bins, cites a value for every bin. | Two bars, which is a sentence rather than a comparison; three values asked to fill five bars. |
-| `no_duplicate_in_role` | No element fills one channel twice. | One number drawn three times under three names. |
+| `no_duplicate_in_role` | A channel does not repeat an element. A line may reuse its series label; the compiler checks each series and date pair. | One number drawn three times under three names. |
 | `no_invented_values` | Every figure reads out of the characters its element names. | A table cell that disagrees with its own excerpt. |
 | `numerals_matched` | Every numeral in `title`, `caption` and `why` is one a cited element states. | A caption that converted a figure, or reached one from nowhere. |
 | `plan_version_current` | The plan met the vocabulary this build holds. | Contract drift, found rather than drawn. |

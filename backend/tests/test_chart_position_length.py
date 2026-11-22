@@ -51,7 +51,10 @@ def test_dot_compilation_keeps_the_source_order_and_each_stated_measure() -> Non
     visuals = _visuals()
     compiled = compile_chart(plan, table, visuals=visuals)
 
-    assert compiled.data == VisualData.model_validate_json(read_text(DOT_OUTPUT))
+    expected = VisualData.read(DOT_OUTPUT).model_copy(
+        update={"version": VisualData.schema_version()}
+    )
+    assert compiled.data == expected
     by_id = {mark.mark_id: mark for mark in compiled.data.marks}
     source = {element.element_id: element for element in table.elements}
     categories = compiled.data.encoding.category
@@ -105,7 +108,10 @@ def test_slope_compilation_pairs_two_source_values_for_each_named_entity() -> No
     visuals = _visuals()
     compiled = compile_chart(plan, table, visuals=visuals)
 
-    assert compiled.data == VisualData.model_validate_json(read_text(SLOPE_OUTPUT))
+    expected = VisualData.read(SLOPE_OUTPUT).model_copy(
+        update={"version": VisualData.schema_version()}
+    )
+    assert compiled.data == expected
     by_id = {mark.mark_id: mark for mark in compiled.data.marks}
     assert compiled.data.type is VisualType.SLOPE
     assert visuals.min_chart_points <= len(compiled.data.encoding.quantity) <= visuals.max_chart_points
@@ -130,7 +136,10 @@ def test_line_compilation_keeps_source_measures_paired_with_their_dates() -> Non
     compiled = compile_chart(plan, table, visuals=_visuals())
     held = {mark.mark_id: mark for mark in compiled.data.marks}
 
-    assert compiled.data == VisualData.model_validate_json(read_text(LINE_OUTPUT))
+    expected = VisualData.read(LINE_OUTPUT).model_copy(
+        update={"version": VisualData.schema_version()}
+    )
+    assert compiled.data == expected
     assert compiled.data.type is VisualType.LINE
     assert [held[mark_id].time for mark_id in compiled.data.encoding.time] == [
         "2025", "2024", "2023"

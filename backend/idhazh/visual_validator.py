@@ -468,7 +468,9 @@ def _enough_data(
     return None
 
 
-def _no_duplicate_in_role(filled: Mapping[EncodingRole, Sequence[str]]) -> Rejection | None:
+def _no_duplicate_in_role(
+    filled: Mapping[EncodingRole, Sequence[str]], *, visual_type: VisualType | None,
+) -> Rejection | None:
     """Does any element fill one channel twice?
 
     Without this a model can name one quantity three times, the units all agree
@@ -476,6 +478,10 @@ def _no_duplicate_in_role(filled: Mapping[EncodingRole, Sequence[str]]) -> Rejec
     under three names publishes - every value true and the comparison invented.
     """
     for role, ids in sorted(filled.items(), key=lambda pair: pair[0].value):
+        if visual_type is VisualType.LINE and role is EncodingRole.SERIES:
+            # A series can name several readings; the compiler checks that it
+            # holds at most one reading for a date.
+            continue
         seen: set[str] = set()
         for cited in ids:
             if cited in seen:
@@ -620,7 +626,7 @@ def validate_plan(
                 _enough_data(plan.type, filled, visuals=visuals)
             )
         found += [
-            _no_duplicate_in_role(filled),
+            _no_duplicate_in_role(filled, visual_type=plan.type),
             _no_invented_values(cited),
             _numerals_matched(plan, cited),
         ]

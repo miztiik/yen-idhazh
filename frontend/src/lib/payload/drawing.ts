@@ -11,6 +11,7 @@ const VISUAL_DATA_PATH =
 
 /** Protocol stamp, held to the Python authority by the visual binding test. */
 export const RENDERER_VERSION = '2026-10-27T05:00';
+const OPTIONAL_EMPHASIS_VERSION = '2026-11-21';
 export const DRAWABLE = ['bar', 'dot', 'line', 'scatter', 'bubble', 'slope', 'stacked_bar', 'pie', 'histogram'] as const;
 export const MAX_PIE_PARTS = 5;
 export const MAX_MARKS_PER_CHANNEL = 8;
@@ -389,7 +390,10 @@ export function refusedVisualData(data: unknown): string | null {
 		}
 	}
 	const emphasizedChannel = data.type === 'histogram' ? channels.bins : figures;
-	if (typeof data.emphasized_mark_id !== 'string' || !emphasizedChannel.includes(data.emphasized_mark_id)) {
+	if (data.emphasized_mark_id === null
+		? !schemaVersion(data.version) || data.version < OPTIONAL_EMPHASIS_VERSION
+		: typeof data.emphasized_mark_id !== 'string' || !emphasizedChannel.includes(data.emphasized_mark_id)
+	) {
 		return 'emphasizes no displayed quantity';
 	}
 	return null;

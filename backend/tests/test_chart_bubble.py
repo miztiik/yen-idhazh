@@ -31,9 +31,10 @@ def test_bubble_compiles_three_source_measures_for_each_entity() -> None:
     assert can_compile(VisualType.BUBBLE)
     assert validate_plan(plan, table, visuals=visuals) == []
     chart = compile_chart(plan, table, visuals=visuals)
-    assert chart.data == VisualData.read(
+    expected = VisualData.read(
         FIXTURES_DIR / "contracts/visual-data/bubble-relationship.json"
-    )
+    ).model_copy(update={"version": VisualData.schema_version()})
+    assert chart.data == expected
 
     source_text = read_text(FIXTURES_DIR / "visual-validator/articles/scatter-relationship.txt")
     assert table.span_drift(source_text) is None

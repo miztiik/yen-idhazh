@@ -1,8 +1,10 @@
 # The Summarizer Prompt
 
-**Last Updated**: 2026-11-18
+**Last Updated**: 2026-11-21
 
-What the model is asked to produce, what it reads beside the article, and what the pipeline validates. Prompt wording is not a security control: sanitization and validated output shapes enforce the boundary.
+What the model reads and writes, and what the pipeline validates. Prompt
+wording is not a security control: sanitization and validated output shapes
+enforce the boundary.
 
 ## The prompt is a template, not a text
 
@@ -24,25 +26,23 @@ Table A - Production instruction files
 | --- | --- | --- |
 | A1 | `write_digest_summary` | `prompts/write-digest-summary.txt` |
 | A2 | `plan_visual` | `prompts/plan-visual.txt` |
-| A3 | `continue_summary` | `prompts/continue-summary.txt` |
-| A4 | `summarize_article` | `prompts/generate-summary.txt` |
-| A5 | `compare_articles` | `prompts/compare-articles.txt` |
+| A3 | `summarize_article` | `prompts/generate-summary.txt` |
+| A4 | `compare_articles` | `prompts/compare-articles.txt` |
 
 Production rendering retains universal-newline reading and performs no
 whitespace trimming. The app config's additive reader uses the declared task paths if an older
 authored input omits `prompt_files`; new authored configuration names them all. A config that
 still names `generate_labels`, the retired first call's file, is refused by name: no task reads
 such a file, so a path left in `prompt_files` would be one somebody believes.
-The standalone summary, corpus and reference-set readers use A4, shared with the
+The standalone summary, corpus and reference-set readers use A3, shared with the
 [summary generator's default](../../reference/summary-generator-api.md).
 It emits `title` and `summary`, and its instructions are identical for every
 article. Configured templates may still use the validated substitution values.
 Reference sampling spreads articles by source length, as the
 [reference-set procedure](../../how-to/fine-tune-a-model.md#the-reference-set)
 describes.
-The digest retains its separate A1, A2 and A3 instructions, and its one call reads
-those three.
-The comparison judge and its stamp use A5's full rendered instructions.
+The digest reads A1 and adds A2 only when asking for a chart.
+The comparison judge and its stamp use A4's full rendered instructions.
 Offline judge capture and saved-evidence validation use that same selected file,
 so their recorded identity cannot describe instructions from another root.
 
@@ -78,19 +78,11 @@ If extraction read only part of the article, state that limitation on the item. 
 
 Use grammar-constrained decoding derived from the declared reply model. Refuse unknown keys and validate the result after decoding. A well-shaped object still needs content checks.
 
-The request restricts `type` to `none` or an enabled renderer capability. Measured
-channels and the optional whole and highlight use references shown in the request,
-not literal data, element ids or offsets. A summary-only request has no chart
-field in its grammar.
-
-The chart grammar branches on the type the model writes, using the same role
-rules as the validator. A line cannot assign its values to a scatter axis,
-and a categorical comparison cites a short label span next to each reading.
-Label choices are code-supplied references to literal phrases in the fenced
-data, not assigned names or a pre-paired data set. The model picks labels and
-readings; code checks each reference and cuts the label from source.
-An optional date reference can ground a date mentioned in the title or
-caption without putting it on the chart's axis.
+The chart grammar allows `visual: null` or a proposal for an enabled form
+the compiler supports. Each type has its own row shape. A reading is a decimal
+string and the stated unit and scale, or a null unit for a bare number. Names
+and dates are not chosen from lists. A summary-only request has neither chart
+instructions nor a chart field in its grammar.
 
 ## One call writes the summary and plans the visual, and the article is read once
 
@@ -98,63 +90,53 @@ caption without putting it on the chart's axis.
 each item makes, and [stages/summarize_one_item.py](../../../backend/idhazh/stages/summarize_one_item.py)
 sends it:
 
-- **The system turn** is `write-digest-summary.txt` and `plan-visual.txt`, joined:
-  the summary rules, then one short block of chart rules. It is the same bytes on
-  every item.
-- **The user turn** is the fenced headline, the fenced article as the page wrote it,
-  the data references when available, and the closing question from
-  `continue-summary.txt`.
+- **The system turn** is `write-digest-summary.txt`, unchanged, with a short
+  `plan-visual.txt` addendum for a chart-capable request. The addendum and the
+  separate reply schema name exactly the same forms.
+- **The user turn** is one sanitized, fenced block containing the headline and
+  the article body. No instruction follows it.
 
 The prompt is rendered explicitly rather than by the model's chat template. The shared
-system turn is a prefix the server's cache answers for on every item after the first,
-so only the headline, the article and the data references are read again.
+system text is a reusable prefix for items with the same request shape.
 
 The [text-analysis service](../text-analysis/text-analysis-api.md) still finds
 mentions and can rule out a matched number that is not a measurement. It does
 not have to find category names for a chart to be considered.
 
-### The model is shown independent source readings
+### The model proposes rows; source verification stays in code
 
-[`plan_visual_request.py`](../../../backend/idhazh/classify/plan_visual_request.py)
-assigns a `q` code to each quantity and a `d` code to each date in the bounded
-element table. In short excerpts, the code sits on the reading itself so a
-price cannot be mistaken for a nearby percent change. Overlapping excerpts
-are joined rather than repeating the numbers beside each other. The excerpts
-stay [inside their own untrusted fence](../sources/trust-boundary.md#data-references-are-article-words-inside-the-fence).
-The capabilities line outside it is the same for every article under one
-configuration; Python does not rank or shortlist forms based on the article.
+The reply is `summary`, then `visual`. Choose figures that explain the main
+finding and compare the same measure on the same basis within each axis.
+A bar or dot names each reading; a
+line dates each reading and may name a series; a slope pairs two dates for
+each named row. Scatter and bubble name their measured axes; a bubble also
+names a positive size measure. Composition needs an independently stated
+whole and named non-overlapping parts, and a stack names their common
+measure. A histogram names a group of individual readings; code still
+computes the ranges and counts.
 
-**The reply is `summary`, then `visual`.** The chart's `why` comes before
-`type` so the model names the comparison and takeaway, or a specific mismatch,
-before committing to a form. Matching examples in
-[`plan-visual.txt`](../../../config/prompts/plan-visual.txt) distinguish two
-share prices from a share price and an amount raised. Separately stated
-figures can be comparable, and two readings can be enough. The model
-looks for the strongest comparable subset before considering a decline;
-unrelated figures do not disqualify that subset.
-
-The model chooses which readings and roles to use and cites label phrases
-in the article's own words. Code turns those citations into the
-[existing visual plan](../publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md#a-chart-answer-becomes-a-plan-in-code).
-`none` builds no plan and its `why` is recorded. Replaying a known reply
-checks parsing and compilation; the [retained workflow](../../reference/retained-article-verification.md)
-shows what the real model chose.
+Code binds a proposal to [explicit source observations](../publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md#a-chart-answer-becomes-a-plan-in-code)
+before making a plan. A null proposal records a decline without asking for a
+reason. Replaying a known reply checks parsing and compilation; the
+[retained workflow](../../reference/retained-article-verification.md) shows
+what a live model selected.
 
 ### Every instruction sits in front of the article
 
-Put shared instructions in one stable system turn: summary rules and chart rules. Keep only item-dependent material, such as the data references and the reply fields, behind the article. Derive requested field names from the reply shape.
+Put shared instructions in the system turn. The user turn is source data,
+not a second instruction or a copy of the reply schema.
 
 Fenced headline and article text remain untrusted data. Do not let either become a system instruction, shell argument, filename or fetch destination. Scope an instruction to the job it governs: a plan rule against inventing numbers must not forbid the summary from reporting a source figure.
 
 ### The model is shown no sentence address
 
-The article is printed once, whole and unchanged, because the call is asked for no
-location. No `[sN]` address, element id, character offset or position appears in any
-model-facing text. The evidence index refuses a table built over a different string
-from the one the model reads (`SpanDriftError`).
+Only the sanitized source block enters the prompt. Its sanitization does not
+change stored `Article.text`. No sentence address, element id, offset, text
+analysis annotation or tagged copy goes to the model.
 
-Code derives every location from the labelled spans the service returned, and re-slices
-each excerpt from `Article.text` rather than trusting the words the service sent back.
+Source verification uses the original element table over `Article.text`. Code
+re-slices each excerpt rather than trusting a proposed label or words returned
+by the service.
 A mention whose offsets do not cut those words is dropped. The
 [element contract](../extraction/elements.md#the-two-kinds-only-a-labeller-can-find)
 owns those meanings and the anchoring rules.
@@ -192,13 +174,13 @@ budget to available context. Report a window failure at the call site.
 
 For capacity diagnostics, tokenize the complete rendered request with the
 configured model's vocabulary, then add the effective response limit from that
-request body. The complete input already contains the system turn, the article and
-the data references. Cached tokens still occupy context; do not omit them.
+request body. The complete input already contains the system turn and the
+source block. Cached tokens still occupy context; do not omit them.
 
 The pre-call gate remains an estimate, not a certificate for every request: a measured
-scaffold and word rate that bound the prompt from above, the UTF-8 bytes of the references
-shown, and the call's response limit. It sizes the article alone first and reads an item
-without its references when they would not fit; [throughput.md](throughput.md#the-window-is-checked-before-the-call-is-sent)
+scaffold and word rate, the UTF-8 bytes of the chart addendum, and the call's
+response limit. It sizes the summary-only call first; when only that shape
+fits, it leaves the chart question off. [Throughput](throughput.md#the-window-is-checked-before-the-call-is-sent)
 owns the arithmetic and its figures.
 Conservative byte ceilings are not observed token counts. A bounded check with
 retained production replies and a constructed source-cap input measures those
@@ -263,7 +245,7 @@ The evaluation record identifies the article with its source headline, not a gen
 `RunRecord.inputs.prompt_sha256` covers both variants of the rendered digest
 call with fixed inputs: templates, substituted policy, turn markers and order,
 and the data framing and capabilities. `output_schema_sha256` fingerprints the
-reply shapes before their references are bound to an article. The exact
+reply shapes, which are independent of any article. The exact
 article-specific request and reply remain in the native capture.
 
 Changing prompt wording or policy changes this identity. The digest makes the change observable; it is not permission to skip work or a quality verdict.
@@ -280,10 +262,10 @@ code could already find: on 66 captured articles it took 3.67 of 7.04 hours of m
 service returns the same names and places with exact offsets in seconds. Dropping the call
 saves its decode because the remaining call reads the article either way.
 
-**Why the model cites readings instead of writing values.** Code reads the
-numbers. The model decides what is comparable and useful, and it can do so
-without a list of name-and-figure pairs already arranged by Python. The model
-can select the wrong source readings; it cannot author a new chart value.
+**Why the model proposes rather than cites.** A duplicated list of readings
+did not prove which measure, subject or date belonged to a number. The model
+proposes useful groups from one reading of the article. Code verifies their
+roles together and compiles only the original source elements.
 
 The service is a new recipient of article text, so it is a loopback process the run starts
 and its reply is data ([trust boundary](../sources/trust-boundary.md)).
@@ -299,9 +281,8 @@ Task paths belong to the selected configuration so a candidate never reads
 instructions from the original checkout. One directory holds distinct products
 and call flows, not one shared summary instruction or a scanned prompt registry.
 
-The article is printed unchanged and unaddressed, so the bytes the model reads are the bytes
-`Article.text` holds and every evidence excerpt comes from them. These invariants prove transport, not
-improved model coverage or useful generated visuals; those require a fresh production call.
+The exact evidence spans stay in the backend. These invariants prove the
+transport and refusal rules, not the model's live chart selection rate.
 
 ## See also
 

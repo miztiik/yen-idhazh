@@ -32,8 +32,8 @@ import pytest
 from support.models import a_sampling, a_server
 from support.paths import CONFIG_DIR
 
-from idhazh import config
-from idhazh.classify import calls, plan_visual_request
+from idhazh import config, sanitize
+from idhazh.classify import calls
 from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.knobs.model_server import ModelServerConfig
 from idhazh.contracts.knobs.models import ModelRef, ModelsConfig
@@ -197,12 +197,7 @@ def test_the_turn_envelope_reaches_the_stamp_by_both_routes_it_claims() -> None:
 
 
 def test_the_kinds_a_run_may_plan_move_the_stamp() -> None:
-    """`visuals.enabled_kinds` decides whether a table is built, and no prompt file names it.
-
-    The stamp renders the call with no tables whatever the list holds, so the bytes
-    cannot show the list moving. Only the list itself can carry it in, and a run that
-    asks about no chart must not read as unchanged from one that does.
-    """
+    """A run that asks about no chart has no chart-capable prompt in the fingerprint."""
     markers = a_built_envelope()
 
     assert calls.prompt_inputs(
@@ -213,11 +208,11 @@ def test_the_kinds_a_run_may_plan_move_the_stamp() -> None:
 def test_the_words_code_writes_around_the_data_move_the_stamp(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """No real table is in the stamp's rendering, so a fixed example carries the wording in."""
+    """The fixed framing is part of both rendered variants."""
     markers = a_built_envelope()
     before = calls.prompt_inputs(markers=markers)
 
-    monkeypatch.setattr(plan_visual_request, "DATA_INTRO", "Other words before the data:")
+    monkeypatch.setattr(sanitize, "FENCE_OPEN", "Other source boundary:")
 
     assert calls.prompt_inputs(markers=markers) != before
 

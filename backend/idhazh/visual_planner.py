@@ -131,10 +131,10 @@ def plan_lost_to_the_window(
 def suppressed_by_the_gate(
     summary: Summary, *, model_id: str, decided_at: str, version: str
 ) -> VisualDecision:
-    """The `none` an item gets when chart references were not sent.
+    """The `none` an item gets when the request did not ask for a chart.
 
-    Charts were disabled, there were too few readings, or the references
-    would not fit the window.
+    Charts were disabled, there were too few readings, or the chart
+    instructions would not fit the window.
 
     `asked_the_model` stays true: the model WAS asked, for the summary, in the same
     request. Only the answer about a chart was taken off the grammar.
@@ -142,10 +142,7 @@ def suppressed_by_the_gate(
     return _nothing(
         summary,
         model_id=model_id,
-        reason=(
-            "no chart data references were sent for this article, "
-            "so the question about a chart was left off the request"
-        ),
+        reason="the question about a chart was left off the request",
         decided_at=decided_at,
         version=version,
         none_reason=NoneReason.NOT_REACHABLE,
@@ -153,18 +150,13 @@ def suppressed_by_the_gate(
 
 
 def declined_by_the_model(
-    summary: Summary, *, why: str, model_id: str, decided_at: str, version: str
+    summary: Summary, *, model_id: str, decided_at: str, version: str
 ) -> VisualDecision:
-    """The `none` an item gets when the model was asked and answered `none`.
-
-    The ordinary answer. `why` is the model's own sentence and is sanitized on the
-    way into the rationale, because it is a string a model wrote about a page we
-    did not write (Guardrail #11).
-    """
+    """The `none` an item gets when the model was asked and answered null."""
     return _nothing(
         summary,
         model_id=model_id,
-        reason=why,
+        reason="the model proposed no chart",
         decided_at=decided_at,
         version=version,
         drafted_chart=False,
