@@ -105,7 +105,9 @@ not have to find category names for a chart to be considered.
 
 ### The model proposes rows; source verification stays in code
 
-The reply is `summary`, then `visual`. A bar or dot names each reading; a
+The reply is `summary`, then `visual`. Choose figures that explain the main
+finding and compare the same measure on the same basis within each axis.
+A bar or dot names each reading; a
 line dates each reading and may name a series; a slope pairs two dates for
 each named row. Scatter and bubble name their measured axes; a bubble also
 names a positive size measure. Composition needs an independently stated
