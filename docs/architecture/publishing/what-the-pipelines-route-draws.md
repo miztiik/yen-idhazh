@@ -256,8 +256,8 @@ did each day's runs deliver.
    bottom. A day's squares stand directly under that day's bars, 8 px
    (`--space-2`) below the chart's date row, with nothing between.
 
-One readout and one hint sit under both, and the panel's reading rule closes it.
-The panel has no note under its title.
+One readout sits under both. The keyboard instructions and square scoring
+rules are accessible descriptions on the figures, not visible paragraphs.
 
 - **Both figures take their x from one function.** `daySlots` in
   [../../../frontend/src/lib/charts/day-slots.ts](../../../frontend/src/lib/charts/day-slots.ts)
@@ -370,18 +370,23 @@ over the declared item-health cells.
 [ItemTimeSplit.svelte](../../../frontend/src/lib/console/pipelines/ItemTimeSplit.svelte)
 draws one mean per returned UTC day from
 [nativeTimeSplit](../../../frontend/src/lib/console/pipelines/item-time-split.ts).
-Only complete, reconciling clocks enter the cohort: fetch, extract, summarize,
-faithfulness, elapsed time and the signed stage gap must all be recorded.
-The four stage durations plus that gap must equal elapsed time.
+Only complete, reconciling clocks enter the cohort. The fetch, extract,
+analyze, summarize and checking durations plus the signed stage gap must
+equal the recorded elapsed time. Older records from before Analyze use zero
+for that stage.
 
 Summarize is counted once. Label, summary and visual-plan clocks are
-non-additive details; each keeps its recorded count and remains unknown unless
-every clock in the cohort records that detail. Missing, invalid and inconsistent
-rows have separate exclusion counts.
+already part of Summarize, and the visual plan is part of the summary call.
+`Clock exclusions and calls` keeps the daily used, missing, invalid,
+inconsistent and overlapping counts. Each call keeps its timed count and has
+no mean unless every clock in the cohort records it.
 
 Positive gaps supply unattributed duration; negative gaps supply an adjacent
 overlap deduction. Their means are taken separately so cancellation cannot hide
 overlap. The positive stack minus the deduction equals the elapsed-time marker.
+The readout uses the same theme colors as the plotted stages, elapsed marker
+and overlap bracket. Unplotted calls and the complete-clock count are text
+only; missing durations are named rather than shown as zero.
 There is no negative stage band. A day with no qualifying clock keeps its place
 as null, even if some individual stages were timed. With no complete cohort the
 panel says so; it makes no claim about planned work. Before the query settles it

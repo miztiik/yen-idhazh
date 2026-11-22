@@ -59,6 +59,9 @@
 		selected?: number | null;
 	} = $props();
 	const numberFormat = useNumberFormat();
+	const id = $props.id();
+	const pickHelp = `${id}-pick-day`;
+	const squareHelp = `${id}-run-rules`;
 
 	const load = $derived(runYield(yieldDays, window));
 	const windowDays = $derived(load.columns.length);
@@ -128,6 +131,20 @@
 
 <div data-readout-columns={readout.columns.length} data-run-health-figures
 	data-chart={!load.empty || runs > 0 ? 'run-health' : undefined}>
+	{#if !load.empty && windowDays > 1}
+		<p id={pickHelp} class="sr-only">
+			Point at or tap a day to read it. Left and Right step through the days; Escape returns to the newest.
+		</p>
+	{/if}
+	{#if runs > 0}
+		<p id={squareHelp} class="sr-only">
+			Each square is one run, with run 1 at the bottom. A run is judged only on the articles it tried.
+			Red: fewer than {floorPct}% of them succeeded, or the run failed. Amber: at least one of them
+			failed, the run had nothing new to try, it reused yesterday's list of sources, or another run's
+			failed article was still missing. Green: none of these. A skipped article, already published or
+			repeated by a feed, never counts.
+		</p>
+	{/if}
 	<RunYield
 		{load}
 		{height}
@@ -135,6 +152,7 @@
 		{tickDensity}
 		{readout}
 		bind:selected
+		descriptionId={windowDays > 1 ? pickHelp : undefined}
 		onPick={(index) => squares?.reveal(index)}
 	>
 		{#snippet below(slots, narrow)}
@@ -149,7 +167,7 @@
 					No run is on record in {nameSpan(windowDays)}. Widen the window to look further back.
 				</p>
 			{:else}
-				<RunSquares bind:this={squares} {days} {slots} {narrow} {tickDensity} {readout} bind:selected />
+				<RunSquares bind:this={squares} {days} {slots} {narrow} {tickDensity} {readout} bind:selected descriptionId={squareHelp} />
 			{/if}
 		{/snippet}
 	</RunYield>
@@ -164,18 +182,10 @@
 			name="run-health"
 			maxShare={readoutMaxShare}
 			restingNote=", the newest day"
-			hint="Point at a day to read its counts and every run on it. Left and Right step through the days, Escape returns to the newest."
+			hint=""
 		/>
 	{/if}
 </div>
-
-<p class="run-health-caption run-health-rule">
-	Each square is one run, with run 1 at the bottom. A run is judged only on the articles it tried.
-	Red: fewer than {floorPct}% of them succeeded, or the run failed. Amber: at least one of them
-	failed, the run had nothing new to try, it reused yesterday's list of sources, or another run's
-	failed article was still missing. Green: none of these. A skipped article, already published or
-	repeated by a feed, never counts.
-</p>
 
 <style>
 	.run-health-heading {
@@ -191,11 +201,6 @@
 		font-size: var(--text-sm);
 		line-height: var(--leading-sm);
 		color: var(--color-text-tertiary);
-	}
-
-	/* The reading rule closes the panel, after the readout it explains. */
-	.run-health-rule {
-		margin-block-start: var(--space-4);
 	}
 
 	.run-health-empty {

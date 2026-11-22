@@ -1,6 +1,6 @@
 /** The arithmetic behind the console's drawing rule, site cost and headline counts. */
 import type { RunSummary } from '$lib/server/payload';
-import { countDays, nameSpan, openWithSpan } from '../console/span-words';
+import { nameSpan, openWithSpan } from '../console/span-words';
 import { sparklineMarks, type SparklineMarks } from './sparkline';
 import { targetMarks, type TargetMarks } from './targetbar';
 import { daysInWindow, type TimeWindow } from './viewport';
@@ -194,19 +194,13 @@ export function publishingHorizon(
 	return { articles, articlesPerDay: perDay, years: articles / perDay / DAYS_A_YEAR };
 }
 
-export function siteCostMeasure(windowDays: number): string {
-	return windowDays === 1
-		? `Bytes the committed payload tree gained in ${nameSpan(windowDays)}, over the articles the day published.`
-		: `Bytes the committed payload tree gained on each published day, over the articles that day published. Over ${countDays(windowDays)}.`;
-}
-
 export function horizonRate(
 	articlesPerDay: number,
 	windowDays: number,
 	numberFormat: NumberFormatConfig
 ): string {
-	const rate = `${grouped(Math.round(articlesPerDay), numberFormat)} articles a published day`;
-	return windowDays === 1 ? `${rate}, ${nameSpan(windowDays)}'s count` : `a median of ${rate}`;
+	const rate = `${grouped(Math.round(articlesPerDay), numberFormat)} articles per publishing day`;
+	return windowDays === 1 ? rate : `a median of ${rate}`;
 }
 
 export interface SkylineBar {

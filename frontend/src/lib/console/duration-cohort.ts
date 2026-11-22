@@ -15,8 +15,8 @@ export const DURATION_STAGES = [
 ] as const;
 export const DURATION_DETAILS = [
 	['label_ms', 'Label call'],
-	['summary_ms', 'Summary call, including visual plan'],
-	['visual_plan_ms', 'Visual plan, inside the summary call']
+	['summary_ms', 'Summary call'],
+	['visual_plan_ms', 'Visual plan']
 ] as const;
 
 /** Stages an older row has no clock for because the step did not exist yet. The

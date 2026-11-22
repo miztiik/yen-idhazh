@@ -104,6 +104,21 @@ for (const [id, name] of PANELS) {
 		} else {
 			expect(absent).toContain('data-comparison=');
 		}
+		if (name === 'SiteCostPerItem') {
+			expect(quiet).toContain('data-empty-state="quiet"');
+			expect(absent).toContain('data-empty-state="missing"');
+			expect(quiet).not.toContain('data-cost-summary');
+			expect(absent).not.toContain('data-cost-summary');
+			const shrank = render(component, { props: {
+				...common,
+				manifests: [{ date: '2030-05-31', siteBytes: 4_500 }, { date: DAY.date, siteBytes: 1_750 }],
+				publishedItems: { [DAY.date]: 2 }
+			} }).body;
+			expect(words(shrank)).toContain('Only decreases were measured');
+			expect(shrank).toContain('data-cost-bytes="-1375"');
+			expect(words(shrank)).toMatch(/2030-06-01\s*:\s*-1,375 B per article/);
+			expect(shrank).not.toContain('data-series-bar=');
+		}
 		expect(quiet).not.toContain('NaN');
 		expect(absent).not.toContain('NaN');
 	});

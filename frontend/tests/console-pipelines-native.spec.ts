@@ -268,8 +268,8 @@ test('stage clocks, signed gaps and independent cost pairs never fill unknown ce
 	expect(split.days[0].stages.map((part) => part.value)).toEqual([100, 20, 0, 600, 30]);
 	expect(split.days[0].stages.reduce((sum, part) => sum + part.value!, 0) + split.days[0].unattributed! - split.days[0].overlap!)
 		.toBe(split.days[0].elapsed);
-	expect(split.days[0].details.find((part) => part.cell === 'summary_ms')).toEqual({
-		cell: 'summary_ms', label: 'Summary call, including visual plan', value: null, timed: 1
+	expect(split.days[0].details.find((part) => part.cell === 'summary_ms')).toMatchObject({
+		value: null, timed: 1
 	});
 	expect(timeSplitReadout(split, numberFormat).series.find((part) => part.label === 'Elapsed time')?.values).toEqual(['0.8 s']);
 });

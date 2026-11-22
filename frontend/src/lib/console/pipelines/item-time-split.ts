@@ -1,8 +1,7 @@
 /** Which complete item clocks reconcile, with calls shown only as non-additive detail? */
 import type { Row } from '../../data/ledger';
 import { readoutOf } from '../../charts/readout';
-import { durationCohort } from '../duration-cohort';
-import { SERIES_TOKENS } from '../series-tokens';
+import { durationCohort, DURATION_DETAILS } from '../duration-cohort';
 import { formatNumber, type NumberFormatConfig } from '../../number-format';
 
 export function nativeTimeSplit(rows: readonly Row[], calendar?: readonly string[]) {
@@ -10,19 +9,15 @@ export function nativeTimeSplit(rows: readonly Row[], calendar?: readonly string
 }
 
 export function timeSplitReadout(split: ReturnType<typeof nativeTimeSplit>, numberFormat: NumberFormatConfig) {
-	const detailTokens = [SERIES_TOKENS['label-call'], SERIES_TOKENS['summary-call'], SERIES_TOKENS['visual-plan']];
 	const seconds = (value: number) => `${formatNumber(value / 1000, numberFormat, { si: false })} s`;
 	return readoutOf({
 		type: 'dateSeries', columns: split.days.map((day) => day.date),
 		series: [
-			...split.series.map((series) => ({
-				label: series.label, swatch: series.token, values: series.points.map((point) => point.value), format: seconds
+			...[...split.series, split.reconciliation.elapsed, split.reconciliation.overlap].map((series) => ({
+				label: series.label, swatch: `var(${series.token})`, values: series.points.map((point) => point.value), format: seconds
 			})),
-			...[split.reconciliation.elapsed, split.reconciliation.overlap].map((series) => ({
-				label: series.label, swatch: series.token, values: series.points.map((point) => point.value), format: seconds
-			})),
-			...[0, 1, 2].map((index) => ({
-				label: ['Label call', 'Summary call', 'Visual plan'][index], swatch: detailTokens[index],
+			...DURATION_DETAILS.map(([, label], index) => ({
+				label, swatch: null,
 				values: split.days.map((day) => day.details[index].value), format: seconds,
 				note: 'detail, not added'
 			})),
