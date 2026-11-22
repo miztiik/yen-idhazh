@@ -24,7 +24,6 @@ export function textRows(rows: readonly Row[]): Record<string, string>[] {
 	return rows.map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) =>
 		[key, value === null ? '' : typeof value === 'boolean' ? (value ? 'True' : 'False') : String(value)])));
 }
-
 export function shardCounts(rows: readonly Row[]): Map<string, number> {
 	const result = new Map<string, number>();
 	for (const row of rows) {
@@ -110,26 +109,4 @@ export function closestToMemory(rows: readonly Row[]) {
 		if (!old || measured.value < old.value || (measured.value === old.value && measured.capacity > old.capacity)) articles.set(label, measured);
 	}
 	return [...articles.values()];
-}
-
-export function contextReadings(rows: readonly Row[]) {
-	const values = (key: string) => rows.flatMap((row) => {
-		const value = finiteCell(row[key]);
-		return value === null || value <= 0 ? [] : [value];
-	});
-	const slots = rows.flatMap((row) => {
-		const context = finiteCell(row.n_ctx_configured), parallel = finiteCell(row.n_parallel);
-		return context === null || parallel === null || context <= 0 || parallel <= 0 ? [] : [context / parallel];
-	}).sort((a, b) => a - b);
-	const cut = rows.filter((row) => finiteCell(row.truncation_cap_tokens) !== null);
-	const cap = nearestRank(cut.flatMap((row) => {
-		const tokens = finiteCell(row.label_input_tokens);
-		return tokens === null ? [] : [tokens];
-	}), 0.5);
-	const rules = [
-		...(slots.length ? [{ at: slots[0], label: `Reading limit: ${slots[0]} tokens per slot` }] : []),
-		...(cap !== null && cap > 0 ? [{ at: cap, label: `Cut articles' median (p50) label request: ${cap} tokens` }] : [])
-	];
-	return { label: values('label_input_tokens'), summary: values('summary_input_tokens'), rules,
-		limits: [...new Set(slots)], cut: cut.length };
 }
