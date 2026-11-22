@@ -18,6 +18,7 @@ from support.prompts import (
     THE_FIRST_CALLS_WORDS,
     WIND_NAMES,
     WIND_TEXT,
+    a_table,
     chart_data_over,
     chart_reply_fields,
     mentions_of,
@@ -33,8 +34,9 @@ from idhazh.classify.calls import (
     summary_system_prompt,
     summary_user_turn,
 )
+from idhazh.classify.chart_candidates import candidate_block, chart_candidates
 from idhazh.classify.dag import response_tokens
-from idhazh.classify.resolve_visual_choice import resolve_visual_choice
+from idhazh.classify.prepare_chart_plan import prepare_chart_plan
 from idhazh.contracts.article import Article
 from idhazh.contracts.element import ElementKind
 from idhazh.contracts.item_health import FailureCode
@@ -121,6 +123,7 @@ def a_request(
 ) -> dict[str, Any]:
     """The one call's request for `article`, over the committed model entry."""
     entry = configured()
+    candidates = chart_candidates(a_table(article)) if data else ()
     return build_summary_request(
         article,
         data,
@@ -128,6 +131,7 @@ def a_request(
         server=entry.server,
         sampling=entry.sampling,
         markers=a_markers(),
+        candidates=candidates,
         **changed,
     )
 
@@ -167,22 +171,27 @@ def a_reply(decline: bool = False, /, **changed: object) -> str:
 
 class TestTheSummarizeAndPlanOracle:
     @pytest.mark.parametrize("form", ["bar", "dot"])
-    def test_two_prices_for_one_subject_compile_with_distinct_source_labels(
+    def test_two_prices_for_one_subject_compile_with_model_labels(
         self, article_ok: Article, form: str
     ) -> None:
         table, data = chart_data_over(article_ok, PRICES)
         choice = parse_summarize_and_plan(a_reply(
             type=form, title="Share price",
-            rows=[named("offer price", "83", "$"), named("shares opened", "111", "$")],
+            rows=[named("Before trading", "83", "$"), named("After trading began", "111", "$")],
+            axis_titles={"x": "Price per share", "y": "Trading stage"},
         )).visual
         assert choice is not None
-        plan, grounded = resolve_visual_choice(choice, data, PRICES, table)
+        plan = prepare_chart_plan(choice, data, PRICES, table, chart_candidates(table))
         assert plan.type is VisualType(form)
         assert not plan.annotations
-        assert grounded.span_drift(PRICES) is None
-        assert validate_plan(plan, grounded, visuals=VISUALS) == []
-        compiled = compile_chart(plan, grounded, visuals=VISUALS)
-        assert "offer price" in compiled.alt_text and "shares opened" in compiled.alt_text
+        assert validate_plan(plan, table, visuals=VISUALS) == []
+        compiled = compile_chart(plan, table, visuals=VISUALS)
+        assert "Before trading" in compiled.alt_text and "After trading began" in compiled.alt_text
+        assert compiled.data.axis_titles and compiled.data.axis_titles.x == "Price per share"
+        assert all(
+            mark.label_source == "model" and mark.element_id is None
+            for mark in compiled.data.marks if mark.text is not None
+        )
         assert {mark.value for mark in compiled.data.marks if mark.value is not None} == {
             "83", "111",
         }
@@ -190,7 +199,7 @@ class TestTheSummarizeAndPlanOracle:
     def test_time_and_quantity_roles_compile_a_line_without_a_table(
         self, article_ok: Article
     ) -> None:
-        text = "In 2020, output was 120 MW. Output reached 170 MW in 2024, a rise of 42%."
+        text = "Output reached 170 MW in 2024, up from 120 MW in 2020."
         table, data = chart_data_over(article_ok, text)
         choice = parse_summarize_and_plan(a_reply(
             type="line", title="Output",
@@ -200,30 +209,32 @@ class TestTheSummarizeAndPlanOracle:
             ],
         )).visual
         assert choice is not None
-        plan, grounded = resolve_visual_choice(choice, data, text, table)
+        plan = prepare_chart_plan(choice, data, text, table, chart_candidates(table))
         by_id = {item.element_id: item.value for item in table.elements}
         assert [by_id[item] for item in plan.encodings.time] == ["2020", "2024"]
         assert [by_id[item] for item in plan.encodings.quantity] == ["120", "170"]
         assert not plan.annotations
-        assert validate_plan(plan, grounded, visuals=VISUALS) == []
-        assert compile_chart(plan, grounded, visuals=VISUALS).data.type is VisualType.LINE
+        assert validate_plan(plan, table, visuals=VISUALS) == []
+        assert compile_chart(plan, table, visuals=VISUALS).data.type is VisualType.LINE
 
-    def test_a_referenced_forecast_date_is_prose_context_not_an_axis(self, article_ok: Article) -> None:
-        table, data = chart_data_over(article_ok, OIL_FORECAST)
+    def test_equal_values_consume_separate_occurrences(self, article_ok: Article) -> None:
+        text = "Alder is forecast to add 110 MW; Birch, likewise, expects to add 110 MW."
+        table, data = chart_data_over(article_ok, text)
+        catalog = chart_candidates(table)
+        rows = [named("Alder", "110", "MW"), named("Birch", "110", "MW")]
         choice = parse_summarize_and_plan(a_reply(
-            rows=[named("India", "3", "%"), named("Africa", "2.8", "%")],
-            title="Demand growth through 2035",
+            rows=rows, title="Expected additions",
         )).visual
         assert choice is not None
-        plan, grounded = resolve_visual_choice(choice, data, OIL_FORECAST, table)
-        assert not plan.encodings.time and "expected" in (plan.caption or "")
-        assert validate_plan(plan, grounded, visuals=VISUALS) == []
-        assert compile_chart(plan, grounded, visuals=VISUALS).data.title == choice.title
-        with pytest.raises(ValueError, match="verified measure"):
-            resolve_visual_choice(
-                choice.model_copy(update={"title": "Demand growth through 2036"}),
-                data, OIL_FORECAST, table,
-            )
+        plan = prepare_chart_plan(choice, data, text, table, catalog)
+        assert plan.encodings.quantity == [candidate.element.element_id for candidate in catalog]
+        assert len(set(plan.encodings.quantity)) == 2
+        extra = parse_summarize_and_plan(a_reply(
+            rows=[*rows, named("Cedar", "110", "MW")], title="Expected additions",
+        )).visual
+        assert extra is not None
+        with pytest.raises(ValueError, match="unused supplied reading"):
+            prepare_chart_plan(extra, data, text, table, catalog)
 
     @pytest.mark.parametrize(("form", "text", "encoding", "extra"), [
         (
@@ -242,8 +253,42 @@ class TestTheSummarizeAndPlanOracle:
             [named("Grain", "60", "tonnes"), named("Sugar", "30", "tonnes")],
             {"whole": named("Total cargo", "90", "tonnes"), "measure": "Cargo", "title": "Cargo"},
         ),
+        (
+            VisualType.PIE,
+            "Cargo totals 90 tonnes: 60 tonnes of grain and 30 tonnes of sugar.",
+            [named("Grain", "60", "tonnes"), named("Sugar", "30", "tonnes")],
+            {"whole": named("Total cargo", "90", "tonnes"), "title": "Cargo"},
+        ),
+        (
+            VisualType.BUBBLE,
+            "Alder recorded 10 MW and 20 MWh on 5 hectares. Birch recorded 15 MW and 25 MWh on 8 hectares.",
+            [
+                {"label": label, "x": {"value": x, "unit": "MW"}, "y": {"value": y, "unit": "MWh"},
+                 "size": {"value": size, "unit": "hectares"}, "series": series}
+                for label, x, y, size, series in (
+                    ("Alder", "10", "20", "5", "North"), ("Birch", "15", "25", "8", "South"),
+                )
+            ],
+            {"x_measure": "Power", "y_measure": "Energy", "size_measure": "Site area"},
+        ),
+        (
+            VisualType.SLOPE,
+            "Alder moved from 12 MW in 2020 to 20 MW in 2024. Birch went from 9 MW to 15 MW.",
+            [
+                {"label": label, "start": {"value": start, "unit": "MW"},
+                 "end": {"value": end, "unit": "MW"}}
+                for label, start, end in (("Alder", "12", "20"), ("Birch", "9", "15"))
+            ],
+            {"start_date": "2020", "end_date": "2024"},
+        ),
+        (
+            VisualType.HISTOGRAM,
+            "The four readings (10 MW; 20 MW; 30 MW; 50 MW) describe separate sites.",
+            [{"value": value, "unit": "MW"} for value in ("10", "20", "30", "50")],
+            {"group": "Site power"},
+        ),
     ])
-    def test_chart_specific_citations_keep_required_grounding(
+    def test_chart_specific_channels_compile(
         self, article_ok: Article, form: VisualType, text: str,
         encoding: list[dict[str, Any]], extra: dict[str, Any],
     ) -> None:
@@ -252,9 +297,9 @@ class TestTheSummarizeAndPlanOracle:
             type=form, rows=encoding, **extra,
         )).visual
         assert choice is not None
-        plan, grounded = resolve_visual_choice(choice, data, text, table)
-        assert validate_plan(plan, grounded, visuals=VISUALS) == []
-        assert compile_chart(plan, grounded, visuals=VISUALS).data.type is form
+        plan = prepare_chart_plan(choice, data, text, table, chart_candidates(table))
+        assert validate_plan(plan, table, visuals=VISUALS) == []
+        assert compile_chart(plan, table, visuals=VISUALS).data.type is form
 
     def test_the_request_shows_the_article_once_and_constrains_each_chart_shape(
         self, article_ok: Article
@@ -262,7 +307,8 @@ class TestTheSummarizeAndPlanOracle:
         _, data = chart_data_over(article_ok, OIL_FORECAST)
         payload = a_request(article_ok.model_copy(update={"text": OIL_FORECAST}), data)
         assert payload["prompt"].count(OIL_FORECAST) == 1
-        assert payload["prompt"].count(FENCE_OPEN) == payload["prompt"].count(FENCE_CLOSE) == 1
+        assert payload["prompt"].count(FENCE_OPEN) == payload["prompt"].count(FENCE_CLOSE) == 2
+        assert f"{FENCE_OPEN}\nCandidate readings:\n3%; 2.8%; 1.4%\n{FENCE_CLOSE}" in payload["prompt"]
         assert re.search(r"\b(?:quantity|date)-\d+-\d+\b", payload["prompt"]) is None
         schema = payload["json_schema"]
         answers = chart_reply_fields(schema)
@@ -270,6 +316,14 @@ class TestTheSummarizeAndPlanOracle:
         assert list(answers) == [form.value for form in VISUALS.select_types()]
         assert {"type": "null"} in schema["properties"]["visual"]["anyOf"]
         assert answers["bar"]["rows"]["items"]["required"] == ["label", "reading"]
+        assert answers["bar"]["rows"]["items"]["properties"]["reading"] == {
+            "$ref": "#/$defs/Reading"
+        }
+        pairs = schema["$defs"]["Reading"]["anyOf"]
+        assert [
+            (pair["properties"]["value"]["const"], pair["properties"]["unit"]["const"])
+            for pair in pairs
+        ] == [("3", "%"), ("2.8", "%"), ("1.4", "%")]
         line = answers["line"]["rows"]["items"]
         assert line["required"] == ["date", "reading"]
         assert set(line["properties"]) == {"date", "reading", "series"}
@@ -310,16 +364,17 @@ class TestTheOneCallRequest:
     """The call that replaced the first: what it is built from, and what it never says."""
 
     def test_each_system_variant_is_the_same_bytes_on_every_item(
-        self, dense: Article, article_ok: Article
+        self, article_ok: Article
     ) -> None:
         """The prefix cache's whole basis, held for the one call as it was for the first."""
         ask = config.load(CONFIG_DIR).app.summarize
         wind = article_ok.model_copy(update={"text": WIND_TEXT})
+        oil = article_ok.model_copy(update={"text": OIL_FORECAST})
         _, data = chart_data_over(article_ok, WIND_TEXT)
 
         for shown in ((), data):
             opening = a_markers().turn("system", summary_system_prompt(ask, forms=shown))
-            for article in (dense, article_ok, wind):
+            for article in (wind, oil):
                 payload = a_request(article, shown, prompt_config=ask)
                 assert payload["prompt"].startswith(opening)
 
@@ -399,7 +454,7 @@ class TestTheOneCallRequest:
         self, article_ok: Article, sampling: dict[str, Any], with_tables: bool
     ) -> None:
         """One limit, the one the window gate reserves, whether or not a chart is asked about."""
-        _, data = chart_data_over(article_ok, WIND_TEXT)
+        table, data = chart_data_over(article_ok, WIND_TEXT)
         request = build_summary_request(
             article_ok.model_copy(update={"text": WIND_TEXT}),
             data if with_tables else (),
@@ -407,6 +462,7 @@ class TestTheOneCallRequest:
             server=a_server(),
             sampling=sampling,
             markers=a_markers(),
+            candidates=chart_candidates(table),
         )
 
         assert response_tokens(request) == response_limit(sampling)
@@ -467,7 +523,7 @@ class TestTheChartInstructionsAreOptional:
             assert result.decision.none_reason is NoneReason.NOT_REACHABLE
             assert result.decision.rationale and "left off" in result.decision.rationale
 
-    def test_the_window_counts_the_chart_addendum_in_bytes_and_not_in_characters(
+    def test_the_window_counts_candidate_readings_in_bytes_and_not_in_characters(
         self, article_ok: Article, tmp_path: Path
     ) -> None:
         """A rare character can cost several byte-level tokens, so characters are no ceiling."""
@@ -481,17 +537,21 @@ class TestTheChartInstructionsAreOptional:
         (root / files.write_digest_summary).write_bytes(
             (CONFIG_DIR / files.write_digest_summary).read_bytes()
         )
-        (root / files.plan_visual).write_text("Available chart types: $chart_types. \u00e9", encoding="utf-8")
-        _, forms = chart_data_over(article_ok, WIND_TEXT)
-        rendered = chart_addendum(forms, prompt_files=files, config_dir=root)
+        (root / files.plan_visual).write_text("Available chart types: $chart_types.", encoding="utf-8")
+        text = WIND_TEXT + " The auction cost \u20b9100 crore."
+        table, forms = chart_data_over(article_ok, text)
+        rendered = chart_addendum(forms, prompt_files=files, config_dir=root) + candidate_block(
+            chart_candidates(table)
+        )
         assert len(rendered.encode("utf-8")) > len(rendered)
         result, server = self.read_with_room(
-            article_ok, tmp_path, WIND_TEXT, WIND_NAMES, len(rendered),
+            article_ok, tmp_path, text, WIND_NAMES, len(rendered),
             settings=dataclasses.replace(settings, config_dir=root),
         )
 
         assert result.summary.status is SummaryStatus.OK
         assert "Available chart types:" not in server.sent[0]["prompt"]
+        assert "Candidate readings:" not in server.sent[0]["prompt"]
 
 
 @pytest.mark.parametrize(
@@ -526,32 +586,32 @@ def test_shape_diagnostics_keep_native_fields_and_rules_without_reply_text(
 
 
 @pytest.mark.parametrize(
-    ("forms", "changed", "rule"),
+    ("forms", "changed", "field"),
     (
-        ((VisualType.DOT,), {}, "visual_choice_unsupported_type"),
+        ((VisualType.DOT,), {}, "visual.type"),
         (
             (VisualType.BAR,),
             {"rows": [named("offer price", "900", "$"), named("shares opened", "111", "$")]},
-            "visual_choice_unverified_observation",
+            "visual.rows",
         ),
         (
             (VisualType.BAR,),
-            {"rows": [named("shares closed", "83", "$"), named("shares opened", "111", "$")]},
-            "visual_choice_unverified_observation",
+            {"rows": [named("offer price", ",", "$"), named("shares opened", "111", "$")]},
+            "visual.rows",
         ),
     ),
 )
-def test_unavailable_forms_readings_and_labels_are_refused(
-    article_ok: Article, forms: tuple[VisualType, ...], changed: dict[str, object], rule: str,
+def test_unavailable_forms_and_readings_are_refused(
+    article_ok: Article, forms: tuple[VisualType, ...], changed: dict[str, object], field: str,
 ) -> None:
     table, _ = chart_data_over(article_ok, PRICES)
     choice = parse_summarize_and_plan(a_reply(**changed)).visual
     assert choice is not None
 
     with pytest.raises(ValueError) as caught:
-        resolve_visual_choice(choice, forms, PRICES, table)
+        prepare_chart_plan(choice, forms, PRICES, table, chart_candidates(table))
 
-    assert _shape_cells(caught.value)["failed_rule"] == rule
+    assert _shape_cells(caught.value)["failed_field"] == field
 
 
 @pytest.mark.parametrize(
@@ -573,8 +633,10 @@ def test_incompatible_evidence_and_incomplete_type_roles_never_draw(
     else:
         choice = parse_summarize_and_plan(response).visual
         assert choice is not None
-        with pytest.raises(ValueError, match="comparable measure"):
-            resolve_visual_choice(choice, data, text, table)
+        plan = prepare_chart_plan(choice, data, text, table, chart_candidates(table))
+        assert "units_convertible" in [
+            rejection.check.value for rejection in validate_plan(plan, table, visuals=VISUALS)
+        ]
 
 
 def test_an_unstructured_shape_failure_does_not_copy_its_input() -> None:
@@ -673,7 +735,7 @@ def test_a_recorded_summarize_and_plan_reply_parses_over_a_loopback_socket(
 
     reply = parse_summarize_and_plan(completion.content)
     assert reply.visual is not None
-    plan, grounded = resolve_visual_choice(reply.visual, data, WIND_TEXT, table)
+    plan = prepare_chart_plan(reply.visual, data, WIND_TEXT, table, chart_candidates(table))
 
     assert reply.summary.title.startswith("Four countries")
     assert plan.decision == "visual"
@@ -681,4 +743,4 @@ def test_a_recorded_summarize_and_plan_reply_parses_over_a_loopback_socket(
     assert len(plan.encodings.quantity) == sum(
         item.kind is ElementKind.QUANTITY for item in table.elements
     )
-    assert set(plan.element_ids) <= {one.element_id for one in grounded.elements}
+    assert set(plan.element_ids) <= {one.element_id for one in table.elements}

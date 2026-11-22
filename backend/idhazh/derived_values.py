@@ -305,14 +305,16 @@ def sum_of(inputs: Sequence[Element]) -> DerivedValue:
     )
 
 
-def share_of_declared_whole(part: Element, whole: Element) -> DerivedValue:
+def share_of_declared_whole(
+    part: Element, whole: Element, *, require_same_measure: bool = True,
+) -> DerivedValue:
     """This part as a percentage of its independently stated whole."""
     if part.element_id == whole.element_id:
         raise DerivedValueError(
             ResolverCheck.TWO_INPUTS_AT_LEAST,
             "a declared whole is separate from each part",
         )
-    if (
+    if require_same_measure and (
         whole.measure_canonical is None
         or part.measure_canonical != whole.measure_canonical
     ):
@@ -509,13 +511,17 @@ def _channel(role: EncodingRole, elements: Sequence[Element]) -> list[DisplayedV
     return drawn
 
 
-def _slices(elements: Sequence[Element], whole: Element) -> list[DisplayedValue]:
+def _slices(
+    elements: Sequence[Element], whole: Element, *, require_same_measure: bool,
+) -> list[DisplayedValue]:
     """A pie's marks: each slice as a share of its separately stated whole."""
     return [
         DisplayedValue(
             role=EncodingRole.QUANTITY,
             element_id=None,
-            derived=share_of_declared_whole(element, whole),
+            derived=share_of_declared_whole(
+                element, whole, require_same_measure=require_same_measure,
+            ),
         )
         for element in elements
     ]
@@ -652,7 +658,7 @@ def _resolved(
                     ResolverCheck.ELEMENT_EXISTS,
                     "a pie needs its declared whole in the article's element table",
                 )
-            drawn += _slices(elements, whole)
+            drawn += _slices(elements, whole, require_same_measure=plan.presentation is None)
         elif plan.type is VisualType.HISTOGRAM and role is EncodingRole.BINS:
             drawn += _bars(elements, bins=visuals.histogram_bins)
         elif role in VALUE_ROLES:

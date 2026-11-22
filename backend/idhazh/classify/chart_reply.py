@@ -8,7 +8,7 @@ from pydantic import Field, StringConstraints
 
 from idhazh.contracts.base import Model
 from idhazh.contracts.element import UNIT_MAX_LENGTH, VALUE_MAX_LENGTH
-from idhazh.contracts.visual import MAX_IDS_PER_ROLE, TITLE_MAX_LENGTH
+from idhazh.contracts.visual import MAX_IDS_PER_ROLE, TITLE_MAX_LENGTH, AxisTitles
 
 # These are decoder bounds, not editorial targets. The pattern itself must
 # bound the decode: the native grammar ignores maxLength when a pattern exists.
@@ -27,6 +27,10 @@ class NamedReading(Model):
     reading: Reading
 
 
+class CategoryReading(NamedReading):
+    series: ChartWords | None = None
+
+
 class DatedReading(Model):
     date: ChartWords
     reading: Reading
@@ -43,6 +47,7 @@ class Point(Model):
     label: ChartWords
     x: Reading
     y: Reading
+    series: ChartWords | None = None
 
 
 class SizedPoint(Point):
@@ -53,17 +58,22 @@ class _Proposal(Model):
     title: ChartWords
 
 
-class Comparison(_Proposal):
+class _AxisProposal(_Proposal):
+    # New requests require it; recorded replies without titles can still be read.
+    axis_titles: AxisTitles | None = None
+
+
+class Comparison(_AxisProposal):
     type: Literal["bar", "dot"]
-    rows: Annotated[list[NamedReading], Field(min_length=2, max_length=MAX_IDS_PER_ROLE)]
+    rows: Annotated[list[CategoryReading], Field(min_length=2, max_length=MAX_IDS_PER_ROLE)]
 
 
-class Line(_Proposal):
+class Line(_AxisProposal):
     type: Literal["line"]
     rows: Annotated[list[DatedReading], Field(min_length=2, max_length=MAX_IDS_PER_ROLE)]
 
 
-class Slope(_Proposal):
+class Slope(_AxisProposal):
     type: Literal["slope"]
     start_date: ChartWords
     end_date: ChartWords
@@ -91,14 +101,14 @@ class Pie(_Proposal):
     rows: Annotated[list[NamedReading], Field(min_length=2, max_length=MAX_IDS_PER_ROLE)]
 
 
-class StackedBar(_Proposal):
+class StackedBar(_AxisProposal):
     type: Literal["stacked_bar"]
     measure: ChartWords
     whole: NamedReading
     rows: Annotated[list[NamedReading], Field(min_length=2, max_length=MAX_IDS_PER_ROLE)]
 
 
-class Histogram(_Proposal):
+class Histogram(_AxisProposal):
     type: Literal["histogram"]
     group: ChartWords
     rows: Annotated[list[Reading], Field(min_length=2, max_length=MAX_IDS_PER_ROLE)]

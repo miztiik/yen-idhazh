@@ -94,7 +94,8 @@ sends it:
   `plan-visual.txt` addendum for a chart-capable request. The addendum and the
   separate reply schema name exactly the same forms.
 - **The user turn** is one sanitized, fenced block containing the headline and
-  the article body. No instruction follows it.
+  article body. A chart-capable request adds a separate fenced list of source
+  readings. The article is not annotated or repeated. No instruction follows it.
 
 The prompt is rendered explicitly rather than by the model's chat template. The shared
 system text is a reusable prefix for items with the same request shape.
@@ -103,21 +104,17 @@ The [text-analysis service](../text-analysis/text-analysis-api.md) still finds
 mentions and can rule out a matched number that is not a measurement. It does
 not have to find category names for a chart to be considered.
 
-### The model proposes rows; source verification stays in code
+### The model proposes rows; code binds the supplied readings
 
-The reply is `summary`, then `visual`. Choose figures that explain the main
-finding and compare the same measure on the same basis within each axis.
-A bar or dot names each reading; a
-line dates each reading and may name a series; a slope pairs two dates for
-each named row. Scatter and bubble name their measured axes; a bubble also
-names a positive size measure. Composition needs an independently stated
-whole and named non-overlapping parts, and a stack names their common
-measure. A histogram names a group of individual readings; code still
-computes the ranges and counts.
+The reply is `summary`, then `visual`. The model chooses the chart type
+and the title, axis titles, category labels and series names. The native
+schema describes the rows and offers only complete value-and-unit pairs
+from the article's candidate list, not independent choices for each field.
 
-Code binds a proposal to [explicit source observations](../publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md#a-chart-answer-becomes-a-plan-in-code)
-before making a plan. A null proposal records a decline without asking for a
-reason. Replaying a known reply checks parsing and compilation; the
+[Chart preparation](../publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md#a-chart-answer-becomes-a-plan-in-code)
+binds a value to a source reading and keeps display wording separate. It
+does not decide what a sentence means. A null proposal records a decline.
+Replaying a known reply checks parsing and compilation; the
 [retained workflow](../../reference/retained-article-verification.md) shows
 what a live model selected.
 
@@ -130,13 +127,14 @@ Fenced headline and article text remain untrusted data. Do not let either become
 
 ### The model is shown no sentence address
 
-Only the sanitized source block enters the prompt. Its sanitization does not
-change stored `Article.text`. No sentence address, element id, offset, text
-analysis annotation or tagged copy goes to the model.
+The prompt contains the sanitized article and, where applicable, the
+readings block. It does not change stored `Article.text`. No sentence
+address, element id, offset, text-analysis annotation or tagged copy goes
+to the model. Both blocks count toward the context window; if the chart
+request exceeds it, send the plain summary request.
 
-Source verification uses the original element table over `Article.text`. Code
-re-slices each excerpt rather than trusting a proposed label or words returned
-by the service.
+Preparation re-slices the selected readings from the original element
+table over `Article.text`.
 A mention whose offsets do not cut those words is dropped. The
 [element contract](../extraction/elements.md#the-two-kinds-only-a-labeller-can-find)
 owns those meanings and the anchoring rules.
@@ -262,12 +260,11 @@ code could already find: on 66 captured articles it took 3.67 of 7.04 hours of m
 service returns the same names and places with exact offsets in seconds. Dropping the call
 saves its decode because the remaining call reads the article either way.
 
-**Why the model proposes rather than cites.** A duplicated list of readings
-did not prove which measure, subject or date belonged to a number. The model
-proposes useful groups from one reading of the article. Code verifies their
-roles together and compiles only the original source elements.
-Keep that copy plain: adding chart-specific marks around figures lets the
-model copy those marks into the summary on the same call.
+**Why give readings without annotating the article.** Chart-specific marks
+can leak into the summary. The separate list restricts which readings can
+be drawn without inserting marks into the article. Matching a source amount
+does not prove it belongs to the model's label or comparison. The model
+chooses the meaning; code checks the readings and the drawing rules.
 
 The service is a new recipient of article text, so it is a loopback process the run starts
 and its reply is data ([trust boundary](../sources/trust-boundary.md)).

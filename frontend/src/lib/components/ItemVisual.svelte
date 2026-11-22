@@ -115,7 +115,15 @@
 	);
 	/** Every figure the bars are drawn at, in one sentence, for a reader who is
 	 * not looking at them. It is the whole of what the tab stop below announces. */
-	const stated = $derived(drawing ? statedDrawing(drawing) : '');
+	const axes = $derived(currentLoad?.axis_titles);
+	const axisLabels = $derived(axes ? [
+		{ name: 'Horizontal', text: axes.x },
+		{ name: 'Vertical', text: axes.y }
+	] : []);
+	const stated = $derived(drawing ? [
+		statedDrawing(drawing), ...axisLabels.map(({ name, text }) => `${name}: ${text}.`),
+		...(axes?.size ? [`Circle area represents ${axes.size}.`] : [])
+	].join(' ') : '');
 
 	/** Read one published path, refusing any document that is not current and valid.
 	 *
@@ -238,8 +246,22 @@
 		use:measured
 	>
 		{#if drawing}
-			{#if drawing.title}
-				<div class="chart-title px-3 pt-3 text-sm font-semibold leading-snug text-text">{drawing.title}</div>
+			{#if drawing.title || axisLabels.length}
+				<div class="chart-title px-3 pt-3">
+					{#if drawing.title}
+						<div class="text-sm font-semibold leading-snug text-text">{drawing.title}</div>
+					{/if}
+					{#if axisLabels.length}
+						<dl class="mt-1 flex flex-wrap gap-x-3 gap-y-1 break-words text-xs text-text-secondary">
+							{#each axisLabels as axis (axis.name)}
+								<div class="min-w-0 max-w-full">
+									<dt class="inline font-semibold">{axis.name}:</dt>{' '}
+									<dd class="inline">{axis.text}</dd>
+								</div>
+							{/each}
+						</dl>
+					{/if}
+				</div>
 			{/if}
 			{#if drawing.type === 'pie'}
 				<PieChart drawing={drawing} />
@@ -432,7 +454,7 @@
 			</svg>
 			{#if drawing.type === 'bubble'}
 				<div class="bubble-size-key px-3" aria-hidden="true">
-					<span>Circle area represents {drawing.sizeUnit ?? 'size'}.</span>
+					<span>Circle area represents {axes?.size ?? drawing.sizeUnit ?? 'size'}.</span>
 					<span class="bubble-key-entry">
 						<span class="bubble-key-mark"
 							style={`width: ${drawing.sizeRange.minRadius * 2}px; height: ${drawing.sizeRange.minRadius * 2}px`}></span>

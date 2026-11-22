@@ -66,9 +66,9 @@ over source-backed elements with a traceable chain. See
 
 **What a number means is a different question.** A pattern can find
 `4,200 tonnes`; it cannot say whether it measures exports or production.
-The model reads the article and [proposes readings and roles](../architecture/summarize/prompt.md#the-model-proposes-rows-source-verification-stays-in-code).
-Dates, figures and labels must resolve to the source, and the plan's roles
-and units have to pass code checks. Unit compatibility alone cannot prove
+The model reads the article and [proposes readings and roles](../architecture/summarize/prompt.md#the-model-proposes-rows-code-binds-the-supplied-readings).
+Dates and figures must resolve to the source; the plan's roles and units
+have to pass code checks. The model writes the labels. Unit compatibility alone cannot prove
 two figures share a basis. For example, a per-share price and total proceeds
 may use the same currency but cannot be compared as prices. That judgement,
 and whether the comparison is useful, remain the model's.

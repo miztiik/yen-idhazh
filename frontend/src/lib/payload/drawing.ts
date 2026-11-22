@@ -55,6 +55,14 @@ export function refusedVisualData(data: unknown): string | null {
 		return 'carries no document identity';
 	}
 	if (!nullableText(data.title) || !nullableText(data.caption)) return 'carries invalid framing';
+	const axes = data.axis_titles;
+	if (axes !== undefined && axes !== null && (
+		!isObject(axes) || data.type === 'pie' ||
+		typeof axes.x !== 'string' || !axes.x.trim() ||
+		typeof axes.y !== 'string' || !axes.y.trim() ||
+		(axes.size !== undefined && axes.size !== null &&
+			(data.type !== 'bubble' || typeof axes.size !== 'string' || !axes.size.trim()))
+	)) return 'carries invalid axis titles';
 	if (!nullableText(data.histogram_unit) || !nullableText(data.histogram_unit_table_version)) {
 		return 'carries invalid histogram unit provenance';
 	}
@@ -85,6 +93,12 @@ export function refusedVisualData(data: unknown): string | null {
 		if (mark.time !== undefined && mark.time !== null && !dateOrYear(mark.time)) {
 			return 'carries an invalid canonical date or year';
 		}
+		if (mark.label_source !== undefined && mark.label_source !== null && (
+			mark.label_source !== 'model' || typeof mark.text !== 'string' || !mark.text.trim() ||
+			mark.value !== null || mark.unit !== null || mark.element_id !== null ||
+			mark.derived !== null || mark.source_text !== null ||
+			(mark.time !== undefined && mark.time !== null)
+		)) return 'carries invalid model wording';
 		held.set(mark.mark_id, mark);
 	}
 	const encoding = data.encoding;
@@ -100,6 +114,9 @@ export function refusedVisualData(data: unknown): string | null {
 		channels[role] = ids;
 		for (const id of ids) {
 			if (!held.has(id)) return 'draws a mark it does not carry';
+			if (held.get(id)?.label_source === 'model' && !['category', 'entity', 'series'].includes(role)) {
+				return 'uses model wording outside a naming channel';
+			}
 			if (drawn.has(id)) return 'draws a mark twice';
 			drawn.add(id);
 		}
@@ -141,18 +158,22 @@ export function refusedVisualData(data: unknown): string | null {
 			return 'does not pair one declared whole with every stacked part';
 		}
 		const whole = held.get(names[0])!;
-		if (typeof whole.element_id !== 'string' || !/^quantity-/.test(whole.element_id)) {
-			return 'does not cite a source quantity for its declared whole';
-		}
-		if (data.declared_whole_element_id !== whole.element_id || data.declared_whole !== null) {
+		const wholeId = data.declared_whole_element_id;
+		if (typeof wholeId !== 'string' || !/^quantity-/.test(wholeId) ||
+			(whole.label_source !== 'model' &&
+				(typeof whole.element_id !== 'string' || !/^quantity-/.test(whole.element_id)))
+		) return 'does not cite a source quantity for its declared whole';
+		if (
+			(whole.label_source !== 'model' && whole.element_id !== wholeId) ||
+			data.declared_whole !== null) {
 			return 'does not identify its declared whole consistently';
 		}
 		if (figures.some((id) => {
 			const part = held.get(id)!;
-			if (part.element_id === whole.element_id) return true;
+			if (part.element_id === wholeId) return true;
 			return isObject(part.derived) &&
 				Array.isArray(part.derived.inputs) &&
-				part.derived.inputs.includes(whole.element_id);
+				part.derived.inputs.includes(wholeId);
 		})) return 'uses its declared whole as one of its own parts';
 		if (figures.some((id) => Number(held.get(id)?.value) < 0)) {
 			return 'carries a negative stacked part';
@@ -183,9 +204,9 @@ export function refusedVisualData(data: unknown): string | null {
 			channels.event_label.length !== 0
 		) return 'carries a channel this pie does not draw';
 		const categories = names.map((id) => held.get(id)!);
-		if (categories.some((mark) =>
-			typeof mark.element_id !== 'string' || !/^(entity|place|date)-/.test(mark.element_id)
-		)) return 'pie categories need source labels';
+		if (categories.some((mark) => mark.label_source !== 'model' &&
+			(typeof mark.element_id !== 'string' || !/^(entity|place|date)-/.test(mark.element_id))
+		)) return 'pie categories need source or model labels';
 		if (new Set(categories.map((mark) => mark.text)).size !== names.length) {
 			return 'pie category names are not distinct';
 		}
@@ -303,13 +324,14 @@ export function refusedVisualData(data: unknown): string | null {
 			channels.event_label.length !== 0
 		) return 'carries a channel this scatter does not draw';
 		const entities = channels.entity.map((id) => held.get(id)!);
-		if (entities.some((mark) =>
-			typeof mark.element_id !== 'string' || !/^(entity|place)-/.test(mark.element_id)
+		if (entities.some((mark) => mark.label_source !== 'model' &&
+			(typeof mark.element_id !== 'string' || !/^(entity|place)-/.test(mark.element_id))
 		)) {
-			return 'scatter entities need source element references';
+			return 'scatter entities need source references or model labels';
 		}
+		const sourceIds = entities.map((mark) => mark.element_id).filter((id) => id !== null);
 		if (
-			new Set(entities.map((mark) => mark.element_id)).size !== figures.length ||
+			new Set(sourceIds).size !== sourceIds.length ||
 			new Set(entities.map((mark) => mark.text)).size !== figures.length
 		) return 'scatter entity labels must be distinct';
 		textChannels.push(...channels.entity, ...channels.series);
@@ -329,13 +351,14 @@ export function refusedVisualData(data: unknown): string | null {
 			return 'bubble size measures must be positive';
 		}
 		const entities = channels.entity.map((id) => held.get(id)!);
-		if (entities.some((mark) =>
-			typeof mark.element_id !== 'string' || !/^(entity|place)-/.test(mark.element_id)
+		if (entities.some((mark) => mark.label_source !== 'model' &&
+			(typeof mark.element_id !== 'string' || !/^(entity|place)-/.test(mark.element_id))
 		)) {
-			return 'bubble entities need source element references';
+			return 'bubble entities need source references or model labels';
 		}
+		const sourceIds = entities.map((mark) => mark.element_id).filter((id) => id !== null);
 		if (
-			new Set(entities.map((mark) => mark.element_id)).size !== figures.length ||
+			new Set(sourceIds).size !== sourceIds.length ||
 			new Set(entities.map((mark) => mark.text)).size !== figures.length
 		) return 'bubble entity labels must be distinct';
 		textChannels.push(...channels.entity, ...channels.series);

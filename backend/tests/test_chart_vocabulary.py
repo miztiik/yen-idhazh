@@ -28,6 +28,7 @@ from support.visual_plans import current_plan
 
 from idhazh import config, ledger
 from idhazh.classify import calls
+from idhazh.classify.chart_candidates import chart_candidates
 from idhazh.classify.plan_visual_request import chart_capabilities
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.article import Article
@@ -109,7 +110,7 @@ def test_selection_controls_the_actual_request_grammar_and_the_stamp() -> None:
         type_selection_enabled=True, enabled_types=["dot", "whowhat", "quotecard"]
     ).app.visuals
     markers = a_markers()
-    _, data = chart_data_over(article, WIND_TEXT, visuals=selected)
+    table, data = chart_data_over(article, WIND_TEXT, visuals=selected)
     request = calls.build_summary_request(
         article.model_copy(update={"text": WIND_TEXT}),
         data,
@@ -117,6 +118,7 @@ def test_selection_controls_the_actual_request_grammar_and_the_stamp() -> None:
         server=entry.server,
         sampling=entry.sampling,
         markers=markers,
+        candidates=chart_candidates(table),
     )
     answer = chart_reply_fields(request["json_schema"])
     assert chart_capabilities(selected) == (VisualType.DOT,)

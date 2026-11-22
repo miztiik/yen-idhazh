@@ -69,7 +69,7 @@ from idhazh.elements import normalise_unit
 #: and it is not `UNIT_TABLE_VERSION`, which stamps the other table. A plan
 #: carries the vocabulary it was planned against, and `plan_version_current`
 #: compares the two.
-PLAN_VOCABULARY_VERSION: Final = "2026-11-11"
+PLAN_VOCABULARY_VERSION: Final = "2026-11-22"
 
 
 class TypeRules(NamedTuple):

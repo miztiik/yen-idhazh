@@ -8,6 +8,7 @@ from typing import Any, Final
 from idhazh import config
 from idhazh.anchor_mentions import Mention
 from idhazh.classify.calls import build_summary_request
+from idhazh.classify.chart_candidates import chart_candidates
 from idhazh.classify.plan_visual_request import chart_forms
 from idhazh.contracts.article import Article
 from idhazh.contracts.element import ElementTable
@@ -95,6 +96,7 @@ def summary_payload(
 ) -> dict[str, Any]:
     settings = config.load(config_dir)
     entry = settings.models.summarizer
+    table = element_table(article, config=settings.app.elements)
     return build_summary_request(
         article,
         data,
@@ -102,6 +104,7 @@ def summary_payload(
         server=entry.server,
         sampling=entry.sampling,
         markers=a_markers(),
+        candidates=chart_candidates(table),
         prompt_files=settings.app.prompt_files,
         config_dir=settings.config_dir,
     )

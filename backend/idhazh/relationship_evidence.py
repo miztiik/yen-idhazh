@@ -20,12 +20,25 @@ def refuse_relationship(
     vertical = channels.get(EncodingRole.QUANTITY, ())
     sizes = channels.get(EncodingRole.SIZE, ())
     series = channels.get(EncodingRole.SERIES, ())
-    if not entities or len(entities) != len(horizontal) or len(entities) != len(vertical):
+    presentation = plan.presentation
+    count = len(presentation.entity) if presentation is not None else len(entities)
+    series_count = len(presentation.series) if presentation is not None else len(series)
+    if not count or count != len(horizontal) or count != len(vertical):
         return f"a {name} needs one entity and both positions for every point"
-    if visual_type is VisualType.BUBBLE and len(sizes) != len(entities):
+    if visual_type is VisualType.BUBBLE and len(sizes) != count:
         return "a bubble needs one size measure for every point"
-    if series and len(series) != len(entities):
+    if series_count and series_count != count:
         return f"a {name} needs one series label for every point"
+    if any(size.value is None or Decimal(size.value) <= 0 for size in sizes):
+        return "a bubble size measure must be positive"
+    if presentation is not None:
+        if len(set(presentation.entity)) != count:
+            return f"a {name} needs distinct point labels"
+        if len({e.element_id for e in (*horizontal, *vertical, *sizes)}) != (
+            len(horizontal) + len(vertical) + len(sizes)
+        ):
+            return f"a {name} needs separate source readings across channels"
+        return None
     names = [element.entity for element in entities]
     if any(element.kind not in (ElementKind.ENTITY, ElementKind.PLACE) for element in entities):
         return f"a {name} point needs a source entity or place element"
@@ -34,10 +47,7 @@ def refuse_relationship(
     for index, (entity, x, y) in enumerate(zip(entities, horizontal, vertical, strict=True)):
         measures = [x, y]
         if visual_type is VisualType.BUBBLE:
-            size = sizes[index]
-            if size.value is None or Decimal(size.value) <= 0:
-                return "a bubble size measure must be positive"
-            measures.append(size)
+            measures.append(sizes[index])
         if any(measure.entity != entity.entity for measure in measures):
             return f"{name} measures cover different entities or lack source entity links"
         if len({measure.element_id for measure in measures}) != len(measures):

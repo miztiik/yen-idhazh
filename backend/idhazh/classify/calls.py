@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from pathlib import Path
 from string import Template
@@ -13,7 +13,8 @@ from typing import Annotated, Any, NamedTuple
 from pydantic import BaseModel, Field
 
 from idhazh import summarize
-from idhazh.classify.chart_reply import ChartProposal
+from idhazh.classify.chart_candidates import ChartCandidate, candidate_block
+from idhazh.classify.chart_reply import ChartProposal, Reading
 from idhazh.classify.plan_visual_request import chart_capabilities
 from idhazh.config import DEFAULT_CONFIG_DIR
 from idhazh.contracts.article import Article
@@ -41,14 +42,20 @@ def summarize_and_plan_model(*, plan: bool = True) -> type[BaseModel]:
     return SummarizeAndPlanDraft if plan else summarize.SummaryDraft
 
 
-def _inline_refs(node: Any, definitions: Mapping[str, Any]) -> Any:
-    """The chart grammar has no recursive references; expand just the selected branches."""
+def _inline_refs(node: Any, definitions: Mapping[str, Any], *, share_reading: bool) -> Any:
+    """Keep the bounded reading choices shared across the selected form branches."""
     if isinstance(node, dict):
         if "$ref" in node:
-            return _inline_refs(definitions[node["$ref"].rsplit("/", 1)[-1]], definitions)
-        return {key: _inline_refs(value, definitions) for key, value in node.items()}
+            name = node["$ref"].rsplit("/", 1)[-1]
+            if share_reading and name == "Reading":
+                return node
+            return _inline_refs(definitions[name], definitions, share_reading=share_reading)
+        return {
+            key: _inline_refs(value, definitions, share_reading=share_reading)
+            for key, value in node.items()
+        }
     if isinstance(node, list):
-        return [_inline_refs(value, definitions) for value in node]
+        return [_inline_refs(value, definitions, share_reading=share_reading) for value in node]
     return node
 
 
@@ -57,8 +64,9 @@ def summarize_and_plan_schema(
     plan: bool = True,
     visuals: VisualsConfig | None = None,
     forms: tuple[VisualType, ...] | None = None,
+    readings: Sequence[Reading] = (),
 ) -> dict[str, Any]:
-    """Constrain row shapes by the enabled form, never by an article's vocabulary."""
+    """Constrain form, shape and complete value/unit pairs independently of the prose."""
     if not plan:
         return summarize_and_plan_model(plan=False).model_json_schema()
     offered = chart_capabilities(visuals or VisualsConfig()) if forms is None else forms
@@ -70,14 +78,37 @@ def summarize_and_plan_schema(
     names = tagged["discriminator"]["mapping"]
     branches: list[dict[str, Any]] = [{"type": "null"}]
     for form in offered:
-        shape = _inline_refs({"$ref": names[form.value]}, definitions)
+        shape = _inline_refs({"$ref": names[form.value]}, definitions, share_reading=bool(readings))
         fields = shape["properties"]
         fields.pop("type")
+        if "axis_titles" in fields:
+            axes = fields["axis_titles"]["anyOf"][0]
+            axes["properties"].pop("size")
+            fields["axis_titles"] = axes
+            shape["required"].append("axis_titles")
         shape["properties"] = {"type": {"const": form.value}, **fields}
         shape["required"] = ["type", *(name for name in shape["required"] if name != "type")]
         branches.append(shape)
     schema["properties"]["visual"] = {"anyOf": branches}
-    schema["properties"]["summary"] = _inline_refs(schema["properties"]["summary"], definitions)
+    schema["properties"]["summary"] = _inline_refs(
+        schema["properties"]["summary"], definitions, share_reading=False,
+    )
+    if readings:
+        pairs = dict.fromkeys((reading.value, reading.unit) for reading in readings)
+        schema["$defs"] = {
+            "Reading": {"anyOf": [
+                {
+                    "type": "object",
+                    "properties": {
+                        "value": {"const": value},
+                        "unit": {"const": unit} if unit is not None else {"type": "null"},
+                    },
+                    "required": ["value", "unit"],
+                    "additionalProperties": False,
+                }
+                for value, unit in pairs
+            ]}
+        }
     return schema
 
 
@@ -125,18 +156,25 @@ def build_summary_request(
     server: Mapping[str, Any],
     sampling: Mapping[str, Any],
     markers: TurnMarkers,
+    candidates: Sequence[ChartCandidate] = (),
     prompt_config: SummarizeConfig | None = None,
     prompt_files: PromptFilesConfig | None = None,
     config_dir: Path = DEFAULT_CONFIG_DIR,
 ) -> dict[str, Any]:
     """Use the declared model budget and the reply shape for this specific item."""
+    if forms and len(candidates) < 2:
+        raise ValueError("a chart request needs at least two supplied readings")
     return completion_payload(
         model_id=model_id,
         system=summary_system_prompt(
             prompt_config, forms=forms, prompt_files=prompt_files, config_dir=config_dir
         ),
-        user=summary_user_turn(article.title or "(untitled)", article.text or ""),
-        output_schema=summarize_and_plan_schema(forms=forms),
+        user=summary_user_turn(article.title or "(untitled)", article.text or "") + (
+            candidate_block(candidates) if forms else ""
+        ),
+        output_schema=summarize_and_plan_schema(
+            forms=forms, readings=[candidate.reading for candidate in candidates],
+        ),
         server=server,
         sampling=sampling,
         markers=markers,
@@ -159,7 +197,7 @@ def prompt_inputs(
                 system=summary_system_prompt(
                     prompt_config, forms=variant, prompt_files=prompt_files, config_dir=config_dir
                 ),
-                user=summary_user_turn("", ""),
+                user=summary_user_turn("", "") + (candidate_block(()) if variant else ""),
                 markers=markers,
             )
             for variant in (((), forms) if forms else ((),))
@@ -168,10 +206,12 @@ def prompt_inputs(
 
 
 def output_schema_text(visuals: VisualsConfig) -> str:
-    """Fingerprint the two declared reply variants."""
+    """Fingerprint both reply variants, including the per-item reading shape."""
     schemas = [summarize_and_plan_schema(plan=False)]
     if chart_capabilities(visuals):
-        schemas.append(summarize_and_plan_schema(visuals=visuals))
+        schemas.append(summarize_and_plan_schema(
+            visuals=visuals, readings=(Reading(value="0", unit=None), Reading(value="1", unit="%")),
+        ))
     return canonical_json(schemas)
 
 

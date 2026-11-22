@@ -72,7 +72,7 @@ from idhazh.contracts.element import (
     VALUE_MAX_LENGTH,
     ElementId,
 )
-from idhazh.contracts.visual import MAX_IDS_PER_ROLE, EncodingRole
+from idhazh.contracts.visual import MAX_IDS_PER_ROLE, MODEL_LABEL_ROLES, EncodingRole
 
 #: The closed allow-list, written down as strings as well as declared as an enum.
 #: The enum is what a payload is held to; this is what the enum is held to, and
@@ -207,14 +207,7 @@ class DerivedValue(Model):
 
 
 class DisplayedValue(Model):
-    """One figure a reader will read, and the one of two ways it resolves.
-
-    Exactly one of `element_id` and `derived` is set. Written as two optional
-    fields with no rule, "neither" is a payload somebody can write and the oracle
-    becomes a test of whether anybody wrote one; written as a rule, a value that
-    resolves to nothing does not load and the walk over a plan proves the
-    resolver never reaches for the exception.
-    """
+    """A source value, a derived value, or model wording in a naming channel."""
 
     role: EncodingRole | None = Field(
         description=(
@@ -232,9 +225,16 @@ class DisplayedValue(Model):
     derived: DerivedValue | None = Field(
         description="The arithmetic and its chain, where no element states the figure drawn."
     )
+    model_text: str | None = None
 
     @model_validator(mode="after")
-    def _one_of_the_two_ways_and_only_one(self) -> Self:
+    def _exactly_one_origin(self) -> Self:
+        if self.model_text is not None:
+            if self.role not in MODEL_LABEL_ROLES or self.element_id is not None or (
+                self.derived is not None or not self.model_text.strip()
+            ):
+                raise ValueError("model wording is nonempty label text without source provenance")
+            return self
         if (self.element_id is None) == (self.derived is None):
             raise ValueError(
                 "a displayed value is an element the article wrote or a derived value with "
