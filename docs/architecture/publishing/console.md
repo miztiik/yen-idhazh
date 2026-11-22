@@ -180,7 +180,11 @@ The nightly Council record does not change what is merged:
   selected digest also names usable answers and what the reporting runners saw.
 - `judge-score-ranges` puts agreement at the reporting cutoff and upper draw
   bound before the detailed counts in each drawn range. Both cutoffs are
-  comparisons against the judge's agreed answers, not merge lines.
+  comparisons against the judge's agreed answers, not merge lines. One stacked
+  column per score range shows agreed YES, agreed NO, other returns and pairs
+  that did not return, with the drawn total printed above it. Gaps between
+  ranges say **Not drawn**, not zero. When the labels or stacks cannot fit,
+  compact rows keep the same counts and YES share among agreed YES/NO answers.
 - `pair-score-drift` compares the full score mix with its saved baseline.
   The route config supplies the two PSI guides, inclusive at both ends of the
   Moderate band. A gap breaks the line. The rules of thumb do not send alerts
@@ -229,6 +233,11 @@ keeps the read bounded and preserves the meaning of the exact attempt.
 Published grouping is independent: it reads committed outcomes and compares
 holdout labels with the current `floor_min`, not with a nightly draw bound
 or the recorded floor of an older run.
+
+Judgement's score ranges are ordered categories, not a continuous score axis.
+A line would imply readings between differently sized slices; a percentage
+stack would hide how many pairs were drawn. A zero-based count scale preserves
+that comparison without making a claim about the full score pool.
 
 | Alternative | Why not |
 | --- | --- |

@@ -135,7 +135,7 @@ function compact(cell: Row[string] | undefined): Record<string, unknown> | null 
 	}
 }
 
-interface SliceOutcome {
+export interface SliceOutcome {
 	low: number;
 	high: number;
 	drawn: number;
