@@ -49,7 +49,8 @@
     {"bytes": 55984,"covers": "2026-11-16","lost_days": [],"rows": 1132,"set_aside": 0,"state": "packed"},
     {"bytes": 64683,"covers": "2026-11-17","lost_days": [],"rows": 1377,"set_aside": 0,"state": "packed"},
     {"bytes": 64703,"covers": "2026-11-18","lost_days": [],"rows": 1394,"set_aside": 0,"state": "packed"},
-    {"bytes": 65816,"covers": "2026-11-19","lost_days": [],"rows": 1338,"set_aside": 0,"state": "packed"}
+    {"bytes": 65816,"covers": "2026-11-19","lost_days": [],"rows": 1338,"set_aside": 0,"state": "packed"},
+    {"bytes": 62689,"covers": "2026-11-20","lost_days": [],"rows": 1282,"set_aside": 0,"state": "packed"}
   ],
   "ledger": "counterfactual-scores",
   "period": "daily",
