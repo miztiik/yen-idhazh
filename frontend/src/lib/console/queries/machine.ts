@@ -33,7 +33,7 @@ export const slowerOnSameWorkQuery = {
 
 export const closestToMemoryQuery = {
 	name: 'closestToMemoryQuery', ledger: 'item-health',
-	columns: ['date', 'item_id', 'source_id', 'os_mem_total_bytes', 'os_mem_available_min_bytes', 'source_words'],
+	columns: ['date', 'item_id', 'source_id', 'os_mem_total_bytes', 'os_mem_available_min_bytes'],
 	span: 'window'
 } as const satisfies PanelQuery;
 

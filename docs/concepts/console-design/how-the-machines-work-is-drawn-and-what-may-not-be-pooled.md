@@ -1,6 +1,6 @@
 # How the machine's work is drawn, and what may not be pooled
 
-**Last Updated**: 2026-11-21
+**Last Updated**: 2026-11-22
 
 The Hardware route and the run timeline draw one machine's work. One measurement
 shapes all of it: **a run does not get one machine.** Measured 2026-09-17 over
@@ -112,9 +112,15 @@ it.
 
 ## Design rationale: show hardware phase means without mistaking them for CPU speed
 
-The slower-machine panel retains its run-normalized median (p50) comparisons
-and p90 duration notches. Below them, one stacked bar per full CPU model and
-reported L3 cache size combines all qualifying shards in the selected window.
+**Time for the same work by CPU** leads with run-adjusted medians and 90th
+percentiles. The per-phase reference line names the reference CPU's median,
+its fixed token workload and the estimated time in seconds. The ranking
+requires comparable rows with the reference CPU in the same run and groups by
+CPU, not L3.
+
+**Measured time by CPU and L3 cache** is a disclosure in that panel. One stacked
+bar per full CPU model and reported L3 cache size combines shards with
+measurable paired phases, even without a reference CPU in the same run.
 Each phase is its total measured seconds divided by the group's qualifying
 article count. The two means add to the mean model-processing seconds per
 article on one shared scale, not elapsed job time. Neither shard means nor
@@ -127,7 +133,7 @@ so both phases remain distinguishable in the Hardware and Summaries views.
 Each phase shows its mean seconds per article, share of the group's paired phase time,
 and summed tokens divided by summed phase seconds in matching phase-coloured
 text. Each group's article and distinct shard counts, full CPU model and
-reported L3 size in MiB remain visible; none requires a disclosure.
+reported L3 size in MiB are printed beside the bars once opened.
 The host join uses the same dated
 run, generic pipeline/task (or legacy job) and shard identity as article cost,
 never a CPU-name lookup. Group only after that join: the same CPU with a
@@ -135,9 +141,11 @@ different L3 size stays separate. Missing L3 is labelled unrecorded and never
 merged into a known-cache group; conflicting readings form explicitly labelled
 disagreement groups, not a selected value. A recorded zero remains zero.
 Missing host metadata does not hide measured phases.
-Per-article means remove article-count differences, but article lengths and
-token workloads still make these means unsuitable as CPU speed rankings; the
-adjacent normalized comparisons answer that question.
+An overlay would make a run-adjusted median and an observed mean look like
+readings from the same population. Even within one CPU, an article can qualify
+for one view and not the other. Per-article means remove article-count
+differences, but differing token workloads make them unsuitable as CPU speed
+rankings. The disclosure keeps that separate question one action away.
 Missing shard identities and incomplete or non-positive paired timings are
 excluded and counted, never converted to zero. The item query includes machine
 identity cells and the existing host query includes L3 bytes. No persisted

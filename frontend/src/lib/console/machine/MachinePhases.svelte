@@ -32,19 +32,18 @@
 			{ label: 'Prefill', value: machine.prefill, token: reading },
 			{ label: 'Decode', value: machine.decode, token: writing }
 		]
-	})), {}));
+	})), { formatValue: (value) => `${print(value)} s/article` }));
 	const geometry = $derived(comparison === null ? null : {
 		...comparison,
 		rows: comparison.rows.map((row) => ({
-			...row, row: { ...row.row, label: label(byKey.get(row.key)!), value: `${print(row.value)} s/article` }
+			...row, row: { ...row.row, label: label(byKey.get(row.key)!) }
 		}))
 	});
 </script>
 
-<section class="machine-phases" data-machine-phases aria-label="Mean prefill and decode by CPU and L3">
-	<h4>Prefill and decode by CPU and L3</h4>
-	<p>One bar per CPU and reported L3: mean measured seconds per article, split into prefill and decode. Phase shares use total measured time; rates divide total phase tokens by total phase seconds.</p>
-	<p>Article lengths still differ; the normalized comparisons above answer which CPU is faster. L3 comes from each shard's host, never its CPU name. This is model-processing time, not elapsed job time.</p>
+<details class="console-disclosure machine-phases" data-machine-phases>
+	<summary class="console-summary">Measured time by CPU and L3 cache</summary>
+	<p>Mean model-processing seconds per article, split into prefill and decode. Article lengths differ, so these bars show time spent, not which CPU is faster at the same work.</p>
 	<RankedList {geometry} caption="Mean prefill and decode by CPU and L3" hover={false}
 		maxText={`${print(comparison?.max ?? 0)} seconds per article`}
 		emptyNote="No article has a recorded shard identity and complete positive phase timings."
@@ -64,10 +63,9 @@
 	{#if work.excluded > 0}
 		<p>{count(work.excluded)} rows lack a shard identity or complete positive phase timings; excluded, not counted as zero.</p>
 	{/if}
-</section>
+</details>
 
 <style>
 	.machine-phases { margin-block-start: var(--console-group-gap); }
-	h4 { font-size: var(--console-panel-title-size); line-height: var(--console-panel-title-leading); margin-block: 0 var(--console-control-gap); }
 	.phase-reading { display: block; overflow-wrap: anywhere; }
 </style>

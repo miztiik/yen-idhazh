@@ -21,10 +21,12 @@ export const SERIES_TOKENS = {
 	'queue-wait': '--chart-axis',
 	'reading-prompt': '--chart-1',
 	'writing-reply': '--chart-7',
+	'cached-prompt': '--chart-6',
 	'done-by-then': '--chart-3',
 	'model-server-memory': '--chart-1',
 	'worker-memory': '--chart-3',
-	'free-memory': null,
+	'free-memory': '--chart-measure',
+	'held-memory': '--chart-4',
 	'robots-check': '--chart-3',
 	'waiting-headers': '--chart-2',
 	retries: '--chart-4',
@@ -33,10 +35,7 @@ export const SERIES_TOKENS = {
 	recency: '--chart-2',
 	lens: '--chart-4',
 	watchlist: '--chart-5',
-	carriage: '--chart-7',
-	'length-limit': '--chart-4',
-	'other-ending': '--chart-2',
-	'ended-on-own': '--chart-5'
+	carriage: '--chart-7'
 } as const satisfies Record<string, ChartToken | null>;
 
 export type Quantity = keyof typeof SERIES_TOKENS;

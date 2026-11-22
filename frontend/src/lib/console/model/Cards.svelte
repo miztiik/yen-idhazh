@@ -80,10 +80,10 @@
 		{/if}
 	{/if}
 	<details class="console-disclosure" data-model-table-control data-daily-figures="model" data-window-days={windowDays}>
-		<summary class="console-summary">{windowDays === 1 ? 'Show these figures for this one day' : `Show these figures day by day, over these ${windowDays} days`}</summary>
+		<summary class="console-summary">Daily figures</summary>
 		<div class="console-table" data-eval-panel="daily-figures" data-windowed="daily-figures" data-window-days={windowDays} data-model="table">
 			<table data-model-table>
-				<caption>One row per recorded day in {nameSpan(windowDays)}. Missing readings are not measured.</caption>
+				<caption>One row per recorded UTC day.</caption>
 				<thead><tr><th scope="col">Day</th>{#each cardColumns as column}<th scope="col">{column.label}</th>{/each}
 					{#each extra as instrument}<th scope="col">{instrument.label}</th>{/each}</tr></thead>
 				<tbody>{#each ordered.toReversed() as day (day.date)}

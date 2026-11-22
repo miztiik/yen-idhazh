@@ -10,6 +10,7 @@
 	import { readAgainstWritten } from '$lib/charts/machine';
 	import { formatNumber, MAX_SIGNIFICANT_DIGITS } from '$lib/number-format';
 	import { settingsRules } from '$lib/console/settings-moved';
+	import { SERIES_TOKENS } from '$lib/console/series-tokens';
 	import { nameSpan } from '$lib/console/span-words';
 	import { textRows } from '$lib/console/machine/records';
 	import { tokenAssessmentKey, tokenDeviationReading } from '$lib/console/machine/token-deviations';
@@ -63,9 +64,9 @@
 			swatch: null
 		}, assessments[index].read.line, assessments[index].written.line] })),
 		[
-			{ label: 'Read', token: '--chart-1', dashed: false, values: runs.map((run) => run[metric].read),
+			{ label: 'Read', token: SERIES_TOKENS['reading-prompt'], dashed: false, values: runs.map((run) => run[metric].read),
 				warnings: assessments.map((run) => run.read.warning), format: tokens },
-			{ label: 'Written', token: '--chart-2', dashed: true, values: runs.map((run) => run[metric].written),
+			{ label: 'Written', token: SERIES_TOKENS['writing-reply'], dashed: true, values: runs.map((run) => run[metric].written),
 				warnings: assessments.map((run) => run.written.warning), format: tokens }
 		],
 		{ frame: box, density: chart.tick_density, valueTicks: chart.tick_density, rule,

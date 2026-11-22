@@ -89,27 +89,25 @@ export function slowerMachines(rows: readonly Row[]) {
 	}
 	const list = (kind: 'read' | 'write'): RankedInput[] => [...readings].filter(([, values]) => values[kind].length > 0).map(([label, values]) => ({
 		label, value: nearestRank(values[kind], 0.5)!,
-		range: { high: [...values[kind]].sort((a, b) => a - b)[Math.ceil(0.9 * values[kind].length) - 1], count: values[kind].length },
-		context: `${values[kind].length} articles; median (p50); notch: p90`
+		range: { high: [...values[kind]].sort((a, b) => a - b)[Math.ceil(0.9 * values[kind].length) - 1], count: values[kind].length }
 	}));
 	return { reference, typical, reading: list('read'), writing: list('write'), withoutReference };
 }
 
-export function closestToMemory(rows: readonly Row[]): RankedInput[] {
-	const articles = new Map<string, RankedInput>();
+/** GiB is a binary unit. Sorting uses the unrounded measurement. */
+const BYTES_PER_GIB = 2 ** 30;
+
+export function closestToMemory(rows: readonly Row[]) {
+	const articles = new Map<string, { label: string; value: number; capacity: number }>();
 	for (const row of rows) {
 		const total = finiteCell(row.os_mem_total_bytes), available = finiteCell(row.os_mem_available_min_bytes);
 		if (total === null || available === null || total <= 0 || available < 0 || available > total) continue;
 		const label = `${row.item_id ?? 'unnamed article'} · ${row.source_id ?? 'source not recorded'} · ${row.date ?? 'date not recorded'}`;
-		const measured: RankedInput = {
-			label,
-			value: (total - available) / 2 ** 30, ends: { end: total / 2 ** 30 },
-			context: `${row.source_words ?? 'unrecorded'} words; ${row.date ?? ''}`
-		};
+		const measured = { label, value: available / BYTES_PER_GIB, capacity: total / BYTES_PER_GIB };
 		const old = articles.get(label);
 		// Multiple attempts of one dated article contribute its tightest reading,
-		// not extra ranked rows. The endpoint breaks equal-held ties deterministically.
-		if (!old || measured.value > old.value || (measured.value === old.value && total / 2 ** 30 > (old.ends?.end ?? 0))) articles.set(label, measured);
+		// not extra ranked rows. The capacity breaks equal-available ties.
+		if (!old || measured.value < old.value || (measured.value === old.value && measured.capacity > old.capacity)) articles.set(label, measured);
 	}
 	return [...articles.values()];
 }

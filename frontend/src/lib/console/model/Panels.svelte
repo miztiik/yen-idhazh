@@ -7,9 +7,9 @@
 	import ThroughputTrend from '../../components/ThroughputTrend.svelte';
 	import TimeCost from '../TimeCost.svelte';
 	import ItemCost from './ItemCost.svelte';
+	import CallCutoffs from './CallCutoffs.svelte';
 	import RunLengths from '../../components/RunLengths.svelte';
 	import { modelThroughput } from './model-throughput';
-	import { callEnding } from './call-ending';
 	import { faithfulness } from './faithfulness';
 	import { summaryLength } from './summary-length';
 	import { median } from './rows';
@@ -25,7 +25,6 @@
 	const numberFormat = useNumberFormat();
 	const window = $derived({ start: range.from, end: range.to, days: range.days });
 	const throughputs = $derived(id === 'model-throughput' ? modelThroughput(rows[0], window) : []);
-	const endings = $derived(id === 'call-ending' ? callEnding(rows[0]) : null);
 	const scores = $derived(id === 'faithfulness' ? faithfulness(rows[0], thresholds, { step: knobs.faithfulness_axis_step, floorMax: knobs.faithfulness_axis_floor_max }, numberFormat) : null);
 	const lengths = $derived(id === 'summary-length' ? summaryLength(rows[0]) : []);
 	const lengthRule = $derived(completeModelRule(rule, lengths.map((run) => run.date)));
@@ -39,11 +38,8 @@
 		tickDensity={chart.tick_density} readoutMaxShare={chart.readout_max_share} windowDays={range.days} rule={speedRule} />
 {:else if id === 'item-cost'}
 	<ItemCost rows={rows[0]} {knobs} {chart} />
-{:else if endings !== null}
-	<p data-lede>{endings.calls === 0 ? 'Call endings were not measured.' : `${endings.length} calls cut off at the length limit, out of ${endings.calls} recorded endings`}</p>
-	<p data-comparison="calls cut off against calls that ended on their own">Calls cut off at the length limit against calls that ended on their own. Each call has one ending.</p>
-	<Series series={endings.series} {rule} {chart} name="call-ending" stacked />
-	{#if endings.calls > 0 && endings.length === 0}<p>No call was cut off at the length limit in these {range.days} days.</p>{/if}
+{:else if id === 'call-ending'}
+	<CallCutoffs rows={rows[0]} {range} {rule} {chart} />
 {:else if scores !== null}
 	<div data-eval-panel="faithfulness" data-match-floor={scores.floor}>
 	<p data-lede>{scores.days.at(-1)?.matchMid == null ? 'Faithfulness was not measured.' : `${scores.days.at(-1)?.matchMid}% median faithfulness`}</p>

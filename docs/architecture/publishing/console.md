@@ -93,7 +93,7 @@ item-cost uses item-health alone, while write-cost keeps the common item-health
 and summary-quality-evals endpoint. Both retain item-health's own first-day
 clamp and print their selected UTC bounds.
 
-Summaries retains model-work cards, throughput, item cost, call endings,
+Summaries retains model-work cards, throughput, item cost, daily length cutoffs,
 HHEM faithfulness with a note where its full-article reading differs, checking
 cost and summary length. Its daily table retains coherence. Mixed reason
 breakdowns and source doubt rankings have no panel, query or private aggregate.

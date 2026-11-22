@@ -116,7 +116,8 @@ test('each CPU and L3 group draws one mean-time bar with visible shares, weighte
 	expect(rows[1]).toContain('inline-size: 20.0000%');
 	expect(rows[1]).toContain('--chart-filled-width: 40.0000%');
 	expect(html.match(/data-ranked-max="5"/g)).toHaveLength(1);
-	expect(html).not.toContain('<details');
+	expect(html).toContain('<details');
+	expect(html).toContain('Measured time by CPU and L3 cache');
 	expect(await draw('MachinePhases', { ...props, rows: [] })).toContain('No article has a recorded shard identity and complete positive phase timings.');
 });
 
@@ -248,7 +249,7 @@ test('quantity colours are explicit, keyed by name, while omitted part colours a
 	expect(geometry?.key.map((part) => part.token)).toEqual(['--chart-7', '--chart-1']);
 	expect(partsOfOne(rows, { order: ['reply', 'prompt'] })?.key.map((part) => part.token)).toEqual(['--chart-1', '--chart-2']);
 	expect(() => partsOfOne(rows, { order: ['reply', 'prompt'], tokens: ['--chart-1', '--chart-2'], quantityByLabel: { prompt: 'reading-prompt', reply: 'writing-reply' } })).toThrow(/both/);
-	expect(SERIES_TOKENS).toMatchObject({ fetch: '--chart-1', extract: '--chart-2', summarize: '--chart-3', 'label-call': '--chart-4', 'summary-call': '--chart-5', 'visual-plan': '--chart-6', checking: '--chart-7', other: '--chart-8', 'queue-wait': '--chart-axis', 'free-memory': null });
+	expect(SERIES_TOKENS).toMatchObject({ fetch: '--chart-1', extract: '--chart-2', summarize: '--chart-3', 'label-call': '--chart-4', 'summary-call': '--chart-5', 'visual-plan': '--chart-6', checking: '--chart-7', other: '--chart-8', 'queue-wait': '--chart-axis' });
 	expect(await draw('PartsOfOne', { ...common, geometry })).toContain('data-readout-none=');
 	const stages = [{ label: 'fetch', arrived: 10, left: 8, drops: [{ label: 'failed', count: 2 }] }, { label: 'extract', arrived: 8, left: 7, drops: [{ label: 'failed', count: 1 }] }];
 	const flowed = flow(stages, { frame: box, narrow: true, nodeWidth: 12, nodeGap: 16 });
