@@ -22,6 +22,7 @@ from idhazh.contracts.base import derive_text_digest, derive_url_key
 from idhazh.contracts.digest_day import DigestItem
 from idhazh.contracts.eval_row import ConfidenceBand
 from idhazh.contracts.knobs.prompts import PromptFilesConfig
+from idhazh.contracts.visual import VisualType
 from idhazh.load_prompt_text import load_prompt_text
 from idhazh.similarity import judge, prompt, stamps
 from utilities import model_runtime, reference_set
@@ -162,10 +163,10 @@ def test_undeclared_placeholders_never_reach_a_request(tmp_path: Path, task: str
             summarize.system_prompt(prompt_files=files, config_dir=tmp_path)
         elif task == "compare_articles":
             prompt.system_turn(prompt_files=files, config_dir=tmp_path)
-        elif task == "continue_summary":
-            calls.summary_user_turn("", "", prompt_files=files, config_dir=tmp_path)
         else:
-            calls.summary_system_prompt(prompt_files=files, config_dir=tmp_path)
+            calls.summary_system_prompt(
+                forms=(VisualType.BAR,), prompt_files=files, config_dir=tmp_path
+            )
 
 
 def test_model_description_needs_no_unrelated_prompt_text(
@@ -185,7 +186,6 @@ def test_real_consumers_and_stamps_follow_two_selected_roots(tmp_path: Path) -> 
         texts = {
             "write_digest_summary": f"{label} quote at most $max_verbatim_words words.\n",
             "plan_visual": f"{label} visual.\n",
-            "continue_summary": f"{label} $write\n",
             "summarize_article": f"{label} standalone.\n",
             "compare_articles": f"{label} comparison.\n",
         }
@@ -196,7 +196,7 @@ def test_real_consumers_and_stamps_follow_two_selected_roots(tmp_path: Path) -> 
         options: PromptLocation = {"prompt_files": settings.app.prompt_files, "config_dir": root}
         source = Article.model_validate(article().model_dump() | {"text": WIND_TEXT})
         _, data = chart_data_over(source, WIND_TEXT, config_dir=root)
-        for shown in (data, None):
+        for shown in (data, ()):
             request = calls.build_summary_request(
                 source,
                 shown,
@@ -208,7 +208,8 @@ def test_real_consumers_and_stamps_follow_two_selected_roots(tmp_path: Path) -> 
             )
             rendered = str(request["prompt"])
             assert label in rendered
-            assert ("Denmark approved [q1: 1200 MW]" in rendered) is bool(shown)
+            assert (f"{label} visual." in rendered) is bool(shown)
+            assert rendered.count(WIND_TEXT) == 1
         assert label in summarize.system_prompt(settings.app.summarize, **options)
         built, fault = reference_set.target_is_shaped_right(
             reference_set.Task(

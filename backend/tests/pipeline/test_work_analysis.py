@@ -18,7 +18,7 @@ import re
 from collections.abc import Callable
 from contextlib import ExitStack
 from pathlib import Path
-from typing import Any, Final
+from typing import Final
 
 import pytest
 from pytest import LogCaptureFixture, MonkeyPatch
@@ -35,19 +35,20 @@ from support.prompts import THE_FIRST_CALLS_WORDS
 from support.server import RecordedEndpoint
 
 from idhazh import config
-from idhazh.classify.plan_visual_request import DATA_INTRO
 from idhazh.contracts.article import Article
 from idhazh.contracts.call_cost import CallKind
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.summary import Summary, SummaryStatus
+from idhazh.contracts.visual_data import VisualData
+from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX, VisualDecision
 from idhazh.fetch import FetchResult
-from idhazh.sanitize import FENCE_CLOSE, FENCE_OPEN
 from idhazh.telemetry.record import HEALTH_SUFFIX
 
 from ._builders import (
     DRAWS_SUMMARIZE_AND_PLAN,
     WIND_COUNTRIES,
     _work_stage,
+    assert_planning_readings,
     drawable_article_fetch,
     plan,
 )
@@ -79,16 +80,6 @@ def run_one_item(
         settings=settings,
     )
     return items, run_plan.items[0].item_id, server
-
-
-def shown_readings(request: dict[str, Any]) -> list[tuple[str, str]]:
-    """The bracketed source readings marked with a reference, or none."""
-    prompt = str(request["prompt"])
-    if DATA_INTRO not in prompt:
-        return []
-    after = prompt.split(DATA_INTRO, maxsplit=1)[1]
-    block = after.split(FENCE_OPEN + "\n", maxsplit=1)[1].split("\n" + FENCE_CLOSE, maxsplit=1)[0]
-    return re.findall(r"\[([qd]\d+): ([^\[\]\n]+)\]", block)
 
 
 def health(items: Path, item_id: str) -> ItemHealthRow:
@@ -129,18 +120,26 @@ def test_the_model_reads_the_item_once_and_is_shown_no_address_and_nothing_of_th
 def test_each_referenced_reading_is_cut_from_the_article_text(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
-    """The service may find names, but it doesn't choose which readings are shown."""
+    """The chart's verified readings point to exact article spans, not service wording."""
     with RecordedAnalysis(the_countries) as service:
         items, item_id, server = run_one_item(
             tmp_path, monkeypatch, pointed_at(config.load(CONFIG_DIR), service.base_url)
         )
 
     text = Article.read(items / f"{item_id}.article.json").text or ""
-    readings = shown_readings(server.sent[0])
-    assert [(code, value) for code, value in readings if code.startswith("q")] == [
-        ("q1", "1200 MW"), ("q2", "900 MW"), ("q3", "640 MW"), ("q4", "410 MW")
-    ]
-    assert all(figure in text for _, figure in readings)
+    readings = ["1200 MW", "900 MW", "640 MW", "410 MW"]
+    assert_planning_readings(server, readings)
+    decision = VisualDecision.read(items / f"{item_id}{PAYLOAD_SUFFIX}")
+    assert decision.spec is not None
+    data = VisualData.from_json(decision.spec)
+    marks = {mark.mark_id: mark for mark in data.marks}
+    excerpts = []
+    for mark in data.encoding.quantity:
+        cited = marks[mark].element_id
+        assert cited is not None
+        _, start, end = cited.split("-")
+        excerpts.append(text[int(start):int(end)])
+    assert excerpts == readings
 
 
 @pytest.mark.parametrize("outcome", ["unreachable", "malformed"])
@@ -160,7 +159,7 @@ def test_an_item_the_service_could_not_read_still_publishes_on_the_patterns_alon
 
     assert Summary.read(items / f"{item_id}.summary.json").status is SummaryStatus.OK
     assert server.served == 1
-    assert shown_readings(server.sent[0]), "chart data survives without name extraction"
+    assert "visual" in server.sent[0]["json_schema"]["properties"]
     assert analysis_warning(items, item_id, caplog)["outcome"] == outcome
     assert health(items, item_id).analyze_ms is not None
 
@@ -183,7 +182,7 @@ def test_a_hung_service_costs_the_item_its_deadline_and_the_wait_is_not_the_mode
     row = health(items, item_id)
 
     assert Summary.read(items / f"{item_id}.summary.json").status is SummaryStatus.OK
-    assert shown_readings(server.sent[0])
+    assert "visual" in server.sent[0]["json_schema"]["properties"]
     assert analysis_warning(items, item_id, caplog)["outcome"] == "timed_out"
     assert row.analyze_ms is not None and row.analyze_ms >= int(HUNG_DEADLINE_S * 900)
     assert row.queue_wait_ms is not None and row.queue_wait_ms < row.analyze_ms
@@ -203,7 +202,7 @@ def test_words_the_service_says_it_read_never_reach_the_model_unless_the_article
         )
 
     assert injected not in str(server.sent[0]["prompt"])
-    assert shown_readings(server.sent[0])
+    assert "visual" in server.sent[0]["json_schema"]["properties"]
     result = analysis_warning(items, item_id, caplog)
     assert result["returned_spans"] == [
         {"label": "ORG", "start_char": 55, "end_char": 55 + len(injected), "status": "text_mismatch"}

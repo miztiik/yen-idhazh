@@ -324,7 +324,6 @@
   },
   "prompt_files": {
     "compare_articles": "prompts/compare-articles.txt",
-    "continue_summary": "prompts/continue-summary.txt",
     "plan_visual": "prompts/plan-visual.txt",
     "summarize_article": "prompts/generate-summary.txt",
     "write_digest_summary": "prompts/write-digest-summary.txt"

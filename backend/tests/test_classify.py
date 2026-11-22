@@ -34,15 +34,14 @@ from idhazh.classify.calls import (
     summary_user_turn,
 )
 from idhazh.classify.dag import response_tokens
-from idhazh.classify.plan_visual_request import DATA_INTRO, VisualInput
-from idhazh.classify.resolve_visual_choice import PlanChoice, resolve_visual_choice
+from idhazh.classify.resolve_visual_choice import resolve_visual_choice
 from idhazh.contracts.article import Article
+from idhazh.contracts.element import ElementKind
 from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.knobs.models import ModelEntry
 from idhazh.contracts.summary import SummaryStatus
 from idhazh.contracts.visual import TITLE_MAX_LENGTH, VisualType
 from idhazh.contracts.visual_decision import NoneReason
-from idhazh.contracts.visual_telemetry import ValidatorCheck
 from idhazh.extract import approx_tokens
 from idhazh.llm.server import (
     Completion,
@@ -118,7 +117,7 @@ def dense(article_ok: Article) -> Article:
 
 
 def a_request(
-    article: Article, data: VisualInput | None = None, **changed: Any
+    article: Article, data: tuple[VisualType, ...] = (), **changed: Any
 ) -> dict[str, Any]:
     """The one call's request for `article`, over the committed model entry."""
     entry = configured()
@@ -133,8 +132,12 @@ def a_request(
     )
 
 
-def a_reply(**changed: object) -> str:
-    """A chart reply with the wind approvals as its default references."""
+def named(label: str, value: str, unit: str | None) -> dict[str, Any]:
+    return {"label": label, "reading": {"value": value, "unit": unit}}
+
+
+def a_reply(*, decline: bool = False, **changed: object) -> str:
+    """A chart reply with the wind approvals as its default proposal."""
     return json.dumps({
         "summary": {
             "title": "Four countries approve offshore wind",
@@ -143,17 +146,13 @@ def a_reply(**changed: object) -> str:
                 "the largest, and the other three followed with smaller ones."
             ),
         },
-        "visual": {
-            "why": "Four countries, one unit.",
+        "visual": None if decline else {
             "type": "bar",
-            "encodings": {"points": [
-                {"quantity": f"q{index}", "category": "l3"}
-                for index in range(1, len(WIND_NAMES) + 1)
-            ]},
-            "focus": "q1",
-            "whole": None,
+            "rows": [
+                named(label, value, "MW") for label, value in
+                zip(WIND_NAMES, ("1200", "900", "640", "410"), strict=True)
+            ],
             "title": "Offshore wind approved",
-            "caption": None,
             **changed,
         },
     })
@@ -161,7 +160,7 @@ def a_reply(**changed: object) -> str:
 
 # --- The summarize-and-plan call: the summary and the answer about a chart ------------
 #
-# The floor is that the request shows anchored data, that the model never sees an
+# The floor is that the model receives the source once, never sees an
 # address or the first call's words, and that the plan a chart answer becomes is one the
 # validator and the compiler accept. The target is whether a real model picks sensibly, and
 # that is a reading off the published runs rather than an assertion.
@@ -173,16 +172,13 @@ class TestTheSummarizeAndPlanOracle:
     ) -> None:
         table, data = chart_data_over(article_ok, PRICES)
         choice = parse_summarize_and_plan(a_reply(
-            type=form, focus="q2", title="Offer and opening prices",
-            why="The opening share price exceeded the offer price.",
-            encodings={"points": [
-                {"quantity": "q1", "category": "l1"},
-                {"quantity": "q2", "category": "l1"},
-            ]},
+            type=form, title="Share price",
+            rows=[named("offer price", "83", "$"), named("shares opened", "111", "$")],
         )).visual
+        assert choice is not None
         plan, grounded = resolve_visual_choice(choice, data, PRICES, table)
         assert plan.type is VisualType(form)
-        assert plan.annotations == [data.refs["q2"].element_id]
+        assert not plan.annotations
         assert grounded.span_drift(PRICES) is None
         assert validate_plan(plan, grounded, visuals=VISUALS) == []
         compiled = compile_chart(plan, grounded, visuals=VISUALS)
@@ -192,105 +188,92 @@ class TestTheSummarizeAndPlanOracle:
         }
 
     def test_time_and_quantity_roles_compile_a_line_without_a_table(
-        self, article_ok: Article, caplog: pytest.LogCaptureFixture
+        self, article_ok: Article
     ) -> None:
         text = "In 2020, output was 120 MW. Output reached 170 MW in 2024, a rise of 42%."
         table, data = chart_data_over(article_ok, text)
         choice = parse_summarize_and_plan(a_reply(
-            type="line", focus="q3", title="Output over time",
-            why="Output rose between the two recorded dates.",
-            encodings={"quantity": ["q1", "q2"], "time": ["d1", "d2"]},
+            type="line", title="Output",
+            rows=[
+                {"date": "2020", "reading": {"value": "120", "unit": "MW"}},
+                {"date": "2024", "reading": {"value": "170", "unit": "MW"}},
+            ],
         )).visual
+        assert choice is not None
         plan, grounded = resolve_visual_choice(choice, data, text, table)
-        assert plan.encodings.time == [data.refs["d1"].element_id, data.refs["d2"].element_id]
-        assert plan.encodings.quantity == [data.refs["q1"].element_id, data.refs["q2"].element_id]
-        assert plan.annotations == [data.refs["q1"].element_id]
-        assert "visual_choice_undrawn_focus" in caplog.text
+        by_id = {item.element_id: item.value for item in table.elements}
+        assert [by_id[item] for item in plan.encodings.time] == ["2020", "2024"]
+        assert [by_id[item] for item in plan.encodings.quantity] == ["120", "170"]
+        assert not plan.annotations
         assert validate_plan(plan, grounded, visuals=VISUALS) == []
         assert compile_chart(plan, grounded, visuals=VISUALS).data.type is VisualType.LINE
 
     def test_a_referenced_forecast_date_is_prose_context_not_an_axis(self, article_ok: Article) -> None:
         table, data = chart_data_over(article_ok, OIL_FORECAST)
         choice = parse_summarize_and_plan(a_reply(
-            encodings={"points": [
-                {"quantity": "q1", "category": "l1"},
-                {"quantity": "q2", "category": "l1"},
-            ]},
-            focus="q1", title="Forecast growth through 2035", context=["d1"],
+            rows=[named("India", "3", "%"), named("Africa", "2.8", "%")],
+            title="Demand growth through 2035",
         )).visual
+        assert choice is not None
         plan, grounded = resolve_visual_choice(choice, data, OIL_FORECAST, table)
-        assert not plan.encodings.time
+        assert not plan.encodings.time and "expected" in (plan.caption or "")
         assert validate_plan(plan, grounded, visuals=VISUALS) == []
         assert compile_chart(plan, grounded, visuals=VISUALS).data.title == choice.title
-        uncited, _ = resolve_visual_choice(
-            choice.model_copy(update={"context": []}), data, OIL_FORECAST, table
-        )
-        assert [r.check for r in validate_plan(uncited, grounded, visuals=VISUALS)] == [
-            ValidatorCheck.NUMERALS_MATCHED
-        ]
+        with pytest.raises(ValueError, match="verified measure"):
+            resolve_visual_choice(
+                choice.model_copy(update={"title": "Demand growth through 2036"}),
+                data, OIL_FORECAST, table,
+            )
 
     @pytest.mark.parametrize(("form", "text", "encoding", "extra"), [
         (
             VisualType.SCATTER,
             "Alder reported 120 MW from 10 turbines. Birch reported 170 MW from 20 turbines.",
-            {"entity": ["Alder", "Birch"], "quantity": ["q1", "q3"], "quantity_x": ["q2", "q4"]},
-            {},
+            [
+                {"label": label, "x": {"value": x, "unit": "turbines"},
+                 "y": {"value": y, "unit": "MW"}}
+                for label, x, y in (("Alder", "10", "120"), ("Birch", "20", "170"))
+            ],
+            {"x_measure": "Turbines", "y_measure": "MW", "title": "MW and turbines"},
         ),
         (
             VisualType.STACKED_BAR,
-            "Total cargo was 90 tonnes: grain made up 60 tonnes and sugar made up 30 tonnes.",
-            {"series": ["grain", "sugar"], "quantity": ["q2", "q3"]},
-            {"whole": "q1", "measure": "Total cargo", "focus": "q2"},
+            "Total cargo was 90 tonnes, split into grain at 60 tonnes and sugar at 30 tonnes.",
+            [named("Grain", "60", "tonnes"), named("Sugar", "30", "tonnes")],
+            {"whole": named("Total cargo", "90", "tonnes"), "measure": "Cargo", "title": "Cargo"},
         ),
     ])
     def test_chart_specific_citations_keep_required_grounding(
         self, article_ok: Article, form: VisualType, text: str,
-        encoding: dict[str, list[str]], extra: dict[str, str],
+        encoding: list[dict[str, Any]], extra: dict[str, Any],
     ) -> None:
         table, data = chart_data_over(article_ok, text)
         choice = parse_summarize_and_plan(a_reply(
-            type=form, encodings=encoding, **extra,
+            type=form, rows=encoding, **extra,
         )).visual
+        assert choice is not None
         plan, grounded = resolve_visual_choice(choice, data, text, table)
         assert validate_plan(plan, grounded, visuals=VISUALS) == []
         assert compile_chart(plan, grounded, visuals=VISUALS).data.type is form
 
-    def test_the_reason_is_decoded_before_the_decision(self) -> None:
-        """With thinking off the reason is the model's only room to reason in."""
-        assert list(PlanChoice.model_fields)[:2] == ["why", "type"]
-
-    def test_the_request_cites_independent_readings_and_binds_the_answer_to_them(
+    def test_the_request_shows_the_article_once_and_constrains_each_chart_shape(
         self, article_ok: Article
     ) -> None:
         _, data = chart_data_over(article_ok, OIL_FORECAST)
         payload = a_request(article_ok.model_copy(update={"text": OIL_FORECAST}), data)
-        assert "annually through [d1: 2035]" in data.prompt
-        assert "India at [q1: 3%], Africa at [q2: 2.8%] and Southeast Asia at [q3: 1.4%]" in (
-            data.prompt
-        )
-        assert data.prompt.count("2.8%") == 1
+        assert payload["prompt"].count(OIL_FORECAST) == 1
+        assert payload["prompt"].count(FENCE_OPEN) == payload["prompt"].count(FENCE_CLOSE) == 1
         assert re.search(r"\b(?:quantity|date)-\d+-\d+\b", payload["prompt"]) is None
         schema = payload["json_schema"]
         answers = chart_reply_fields(schema)
         assert list(schema["properties"]) == ["summary", "visual"]
-        assert list(answers) == ["none", *(form.value for form in VISUALS.select_types())]
-        assert answers["bar"]["focus"]["enum"] == ["q1", "q2", "q3"]
-        assert answers["bar"]["encodings"]["required"] == ["points"]
-        points = schema["$defs"]["ComparisonPoint"]["anyOf"]
-        allowed = {
-            code: choice["properties"]["category"]["enum"]
-            for choice in points for code in choice["properties"]["quantity"]["enum"]
-        }
-        assert set(allowed) == {"q1", "q2", "q3"}
-        assert {data.labels["q3"][label].span_excerpt for label in allowed["q3"]} == {
-            "Southeast Asia",
-        }
-        line = answers["line"]["encodings"]
-        assert line["required"] == ["quantity", "time"]
-        assert "quantity_x" not in line["properties"]
-        assert line["properties"]["time"]["items"]["enum"] == ["d1"]
-        assert re.fullmatch(answers["line"]["why"]["pattern"], "Global EGDI rose.")
-        assert not re.fullmatch(answers["line"]["why"]["pattern"], "Global EGDI rose in 2026.")
+        assert list(answers) == [form.value for form in VISUALS.select_types()]
+        assert {"type": "null"} in schema["properties"]["visual"]["anyOf"]
+        assert answers["bar"]["rows"]["items"]["required"] == ["label", "reading"]
+        line = answers["line"]["rows"]["items"]
+        assert line["required"] == ["date", "reading"]
+        assert set(line["properties"]) == {"date", "reading", "series"}
+        assert "enum" not in line["properties"]["date"]
 
     def test_without_chart_data_the_question_is_left_off_the_request(
         self, dense: Article
@@ -298,8 +281,8 @@ class TestTheSummarizeAndPlanOracle:
         payload = a_request(dense)
 
         assert set(payload["json_schema"]["properties"]) == {"title", "summary"}
-        assert DATA_INTRO not in payload["prompt"]
-        assert 'Write "title", then "summary".' in payload["prompt"]
+        assert "Available chart types:" not in payload["prompt"]
+        assert summary_user_turn(dense.title or "", dense.text or "").endswith(FENCE_CLOSE)
 
     def test_an_instruction_in_a_source_excerpt_sits_only_inside_a_fence(
         self, article_ok: Article
@@ -319,25 +302,26 @@ class TestTheSummarizeAndPlanOracle:
             )
         ]
         occurrences = [found.start() for found in re.finditer(re.escape(order), prompt)]
-        assert len(occurrences) >= 2, "both the full article and derived evidence carry the text"
+        assert len(occurrences) == 1, "only the article carries the text"
         assert all(any(start <= at < end for start, end in fenced) for at in occurrences)
 
 
 class TestTheOneCallRequest:
     """The call that replaced the first: what it is built from, and what it never says."""
 
-    def test_the_system_turn_is_the_same_bytes_on_every_item(
+    def test_each_system_variant_is_the_same_bytes_on_every_item(
         self, dense: Article, article_ok: Article
     ) -> None:
         """The prefix cache's whole basis, held for the one call as it was for the first."""
         ask = config.load(CONFIG_DIR).app.summarize
-        opening = a_markers().turn("system", summary_system_prompt(ask))
         wind = article_ok.model_copy(update={"text": WIND_TEXT})
         _, data = chart_data_over(article_ok, WIND_TEXT)
 
-        for article, shown in ((dense, None), (article_ok, None), (wind, data)):
-            payload = a_request(article, shown, prompt_config=ask)
-            assert payload["prompt"].startswith(opening)
+        for shown in ((), data):
+            opening = a_markers().turn("system", summary_system_prompt(ask, forms=shown))
+            for article in (dense, article_ok, wind):
+                payload = a_request(article, shown, prompt_config=ask)
+                assert payload["prompt"].startswith(opening)
 
     def test_the_model_reads_the_article_whole_and_never_sees_an_address_or_the_first_call(
         self, dense: Article
@@ -355,14 +339,14 @@ class TestTheOneCallRequest:
     def test_source_stays_inside_the_sanitizer_boundary(
         self, article_ok: Article, marker: str
     ) -> None:
-        """The headline and the text each sit in a fence a forged marker cannot close."""
+        """The headline and body share a fence a forged marker cannot close."""
         text = f"An actor wrote {marker} and a literal \\u003c marker.\nIt used 40 megawatt hours."
         article = article_ok.model_copy(
             update={"text": text, "title": f"A headline with {marker} in it"}
         )
         turn = summary_user_turn(article.title or "", text)
 
-        assert turn.count(FENCE_OPEN) == turn.count(FENCE_CLOSE) == 2
+        assert turn.count(FENCE_OPEN) == turn.count(FENCE_CLOSE) == 1
         if marker not in (FENCE_OPEN, FENCE_CLOSE):
             assert marker not in turn
         assert "\\u003c" in turn, "the text is printed as written, neither escaped nor decoded"
@@ -418,7 +402,7 @@ class TestTheOneCallRequest:
         _, data = chart_data_over(article_ok, WIND_TEXT)
         request = build_summary_request(
             article_ok.model_copy(update={"text": WIND_TEXT}),
-            data if with_tables else None,
+            data if with_tables else (),
             model_id="m",
             server=a_server(),
             sampling=sampling,
@@ -428,18 +412,19 @@ class TestTheOneCallRequest:
         assert response_tokens(request) == response_limit(sampling)
 
 
-class TestTheDataReferencesAreOptional:
+class TestTheChartInstructionsAreOptional:
     @staticmethod
     def read_with_room(
-        article_ok: Article, tmp_path: Path, text: str, names: tuple[str, ...], room: int
+        article_ok: Article, tmp_path: Path, text: str, names: tuple[str, ...], room: int,
+        *, settings: config.Settings | None = None,
     ) -> tuple[Any, RecordedEndpoint]:
         """One real item read through a window that holds the article alone plus `room` tokens."""
         article = article_ok.model_copy(
             update={"text": text, "token_count": approx_tokens(len(text.split()))}
         )
-        settings = config.load(CONFIG_DIR)
+        settings = settings or config.load(CONFIG_DIR)
         entry = settings.models.summarizer
-        alone = dag.call_tokens(article.token_count, evidence_bytes=0, sampling=entry.sampling)
+        alone = dag.call_tokens(article.token_count, sampling=entry.sampling)
         narrowed = entry.model_copy(
             update={"server": {**entry.server, "--ctx-size": alone + room}}
         )
@@ -459,62 +444,67 @@ class TestTheDataReferencesAreOptional:
             )
         return result, server
 
-    @pytest.mark.parametrize(("room", "tables_shown"), [(1, False), (10_000, True)])
-    def test_an_item_whose_tables_would_not_fit_the_window_is_read_without_them(
+    @pytest.mark.parametrize(("room", "chart_asked"), [(1, False), (10_000, True)])
+    def test_an_item_whose_chart_instructions_would_not_fit_is_summarized_without_them(
         self,
         article_ok: Article,
         tmp_path: Path,
         caplog: pytest.LogCaptureFixture,
         room: int,
-        tables_shown: bool,
+        chart_asked: bool,
     ) -> None:
-        """The article alone fits by `room`; the tables are the part that may not."""
+        """The article alone fits by `room`; the chart instructions may not."""
         caplog.set_level(logging.WARNING, logger="idhazh")
 
         result, server = self.read_with_room(article_ok, tmp_path, WIND_TEXT, WIND_NAMES, room)
 
         assert result.summary.status is SummaryStatus.OK
-        assert (DATA_INTRO in server.sent[0]["prompt"]) is tables_shown
-        assert ("the data references would not fit the window" in caplog.text) is not tables_shown
-        if not tables_shown:
+        assert ("Available chart types:" in server.sent[0]["prompt"]) is chart_asked
+        assert ("the chart instructions would not fit the window" in caplog.text) is not chart_asked
+        if not chart_asked:
             assert result.decision is not None
             assert result.decision.none_reason is NoneReason.NOT_REACHABLE
             assert result.decision.rationale and "left off" in result.decision.rationale
 
-    def test_the_window_counts_the_tables_in_bytes_and_not_in_characters(
+    def test_the_window_counts_the_chart_addendum_in_bytes_and_not_in_characters(
         self, article_ok: Article, tmp_path: Path
     ) -> None:
         """A rare character can cost several byte-level tokens, so characters are no ceiling."""
-        text = (
-            "Z\u00fcrich approved 1200 MW of wind this week. Gen\u00e8ve approved 900 MW the "
-            "same day, and B\u00e4rn approved 640 MW."
-        )
-        names = ("Z\u00fcrich", "Gen\u00e8ve", "B\u00e4rn")
-        _, data = chart_data_over(article_ok, text, names)
-        rendered = data.prompt
-        assert len(rendered.encode("utf-8")) > len(rendered), "the names must be non-ASCII"
+        from idhazh.classify.calls import chart_addendum
 
-        result, server = self.read_with_room(article_ok, tmp_path, text, names, len(rendered))
+        settings = config.load(CONFIG_DIR)
+        root = tmp_path / "config"
+        prompts = root / "prompts"
+        prompts.mkdir(parents=True)
+        files = settings.app.prompt_files
+        (root / files.write_digest_summary).write_bytes(
+            (CONFIG_DIR / files.write_digest_summary).read_bytes()
+        )
+        (root / files.plan_visual).write_text("Available chart types: $chart_types. \u00e9", encoding="utf-8")
+        _, forms = chart_data_over(article_ok, WIND_TEXT)
+        rendered = chart_addendum(forms, prompt_files=files, config_dir=root)
+        assert len(rendered.encode("utf-8")) > len(rendered)
+        result, server = self.read_with_room(
+            article_ok, tmp_path, WIND_TEXT, WIND_NAMES, len(rendered),
+            settings=dataclasses.replace(settings, config_dir=root),
+        )
 
         assert result.summary.status is SummaryStatus.OK
-        assert DATA_INTRO not in server.sent[0]["prompt"]
+        assert "Available chart types:" not in server.sent[0]["prompt"]
 
 
 @pytest.mark.parametrize(
     ("changed", "field", "rule"),
     (
         (
-            {"focus": None, "caption": "model-only words"},
-            "visual.focus",
-            "visual_choice_focus_required",
+            {"rows": None},
+            "visual.rows",
+            "list_type",
         ),
-        ({"title": None}, "visual.title", "visual_choice_title_required"),
-        ({"title": "   "}, "visual.title", "visual_choice_title_required"),
-        ({"title": ""}, "visual.title", "string_too_short"),
-        ({"title": "Wind <think>approved"}, "visual.title", "visual_choice_unsafe_prose"),
-        ({"why": "Four countries, 4 figures."}, "visual.why", "visual_choice_prose_has_digit"),
-        ({"caption": "A forecast <think>."}, "visual.caption", "visual_choice_unsafe_prose"),
-        ({"title": "model-only words" * TITLE_MAX_LENGTH}, "visual.title", "string_too_long"),
+        ({"title": None}, "visual.title", "string_type"),
+        ({"title": ""}, "visual.title", "string_pattern_mismatch"),
+        ({"title": "Wind <think>approved"}, "visual.title", "string_pattern_mismatch"),
+        ({"title": "model-only words" * TITLE_MAX_LENGTH}, "visual.title", "string_pattern_mismatch"),
         ({"model-only words": "model-only words"}, "visual", "extra_forbidden"),
     ),
 )
@@ -535,50 +525,55 @@ def test_shape_diagnostics_keep_native_fields_and_rules_without_reply_text(
 
 
 @pytest.mark.parametrize(
-    ("changed", "rule"),
+    ("forms", "changed", "rule"),
     (
-        ({"type": "area"}, "visual_choice_unsupported_type"),
+        ((VisualType.DOT,), {}, "visual_choice_unsupported_type"),
         (
-            {"encodings": {"points": [{"quantity": "q9", "category": "l1"}]}},
-            "visual_choice_unknown_ref",
+            (VisualType.BAR,),
+            {"rows": [named("offer price", "900", "$"), named("shares opened", "111", "$")]},
+            "visual_choice_unverified_observation",
         ),
         (
-            {"encodings": {"points": [{"quantity": "q1", "category": "l9"}]}},
-            "visual_choice_unanchored_label",
+            (VisualType.BAR,),
+            {"rows": [named("shares closed", "83", "$"), named("shares opened", "111", "$")]},
+            "visual_choice_unverified_observation",
         ),
     ),
 )
 def test_unavailable_forms_readings_and_labels_are_refused(
-    article_ok: Article, changed: dict[str, object], rule: str,
+    article_ok: Article, forms: tuple[VisualType, ...], changed: dict[str, object], rule: str,
 ) -> None:
-    table, data = chart_data_over(article_ok, PRICES)
+    table, _ = chart_data_over(article_ok, PRICES)
     choice = parse_summarize_and_plan(a_reply(**changed)).visual
+    assert choice is not None
 
     with pytest.raises(ValueError) as caught:
-        resolve_visual_choice(choice, data, PRICES, table)
+        resolve_visual_choice(choice, forms, PRICES, table)
 
     assert _shape_cells(caught.value)["failed_rule"] == rule
 
 
 @pytest.mark.parametrize(
-    ("type_name", "check"),
-    (("bar", ValidatorCheck.UNITS_CONVERTIBLE), ("line", ValidatorCheck.ROLES_VALID_FOR_TYPE)),
+    "type_name",
+    ("bar", "line"),
 )
 def test_incompatible_evidence_and_incomplete_type_roles_never_draw(
-    article_ok: Article, type_name: str, check: ValidatorCheck,
+    article_ok: Article, type_name: str,
 ) -> None:
-    text = "The installed capacity is 20 MW. The first shipment weighs 35 tonnes."
+    text = "Alder capacity was 20 MW. Birch shipment weighed 35 tonnes."
     table, data = chart_data_over(article_ok, text)
-    encodings: dict[str, object] = (
-        {"points": [{"quantity": "q1", "category": "l1"}, {"quantity": "q2", "category": "l5"}]}
-        if type_name == "bar" else {"quantity": ["q1", "q2"]}
+    response = a_reply(
+        type=type_name, title="Capacity",
+        rows=[named("Alder", "20", "MW"), named("Birch", "35", "tonnes")],
     )
-    choice = parse_summarize_and_plan(a_reply(
-        type=type_name,
-        encodings=encodings,
-    )).visual
-    plan, grounded = resolve_visual_choice(choice, data, text, table)
-    assert check in {rejection.check for rejection in validate_plan(plan, grounded, visuals=VISUALS)}
+    if type_name == "line":
+        with pytest.raises(ValidationError):
+            parse_summarize_and_plan(response)
+    else:
+        choice = parse_summarize_and_plan(response).visual
+        assert choice is not None
+        with pytest.raises(ValueError, match="comparable measure"):
+            resolve_visual_choice(choice, data, text, table)
 
 
 def test_an_unstructured_shape_failure_does_not_copy_its_input() -> None:
@@ -666,7 +661,7 @@ def test_a_recorded_summarize_and_plan_reply_parses_over_a_loopback_socket(
     for the same reason: a token count nobody measured is not a token count
     (Guardrail #10).
 
-    The highlighted figure is the article's source reading, not a model value.
+    The compiled figures are source readings, and no mark is emphasized by default.
     """
     table, data = chart_data_over(article_ok, WIND_TEXT)
     payload = a_request(article_ok.model_copy(update={"text": WIND_TEXT}), data)
@@ -676,9 +671,13 @@ def test_a_recorded_summarize_and_plan_reply_parses_over_a_loopback_socket(
         completion = post(payload, endpoint=server.endpoint, timeout=10.0)
 
     reply = parse_summarize_and_plan(completion.content)
+    assert reply.visual is not None
     plan, grounded = resolve_visual_choice(reply.visual, data, WIND_TEXT, table)
 
     assert reply.summary.title.startswith("Four countries")
     assert plan.decision == "visual"
-    assert plan.annotations == [data.refs["q1"].element_id]
+    assert not plan.annotations
+    assert len(plan.encodings.quantity) == sum(
+        item.kind is ElementKind.QUANTITY for item in table.elements
+    )
     assert set(plan.element_ids) <= {one.element_id for one in grounded.elements}

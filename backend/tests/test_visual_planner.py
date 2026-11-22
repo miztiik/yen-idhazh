@@ -144,23 +144,18 @@ class TestAnItemWithNoChartDataIsNotAskedForAPlan:
         assert plan_field not in suppressed["properties"]
         assert set(suppressed["properties"]) == set(summarize.SummaryDraft.model_fields)
 
-    def test_suppressing_the_plan_moves_nothing_in_front_of_the_article(
+    def test_suppressing_the_plan_leaves_the_article_unchanged(
         self, article_ok: Article
     ) -> None:
-        """The cached prefix a gated item reuses is the one an ungated item reuses.
-
-        Every difference sits after the system turn, the headline and the article, so
-        both prompts share everything up to and including the article and only the
-        trailing turn differs.
-        """
+        """Only the chart-capable variant has the system addendum."""
         wind = article_ok.model_copy(update={"text": WIND_TEXT})
         _, data = chart_data_over(article_ok, WIND_TEXT)
         whole = summary_payload(wind, data=data)
         suppressed = summary_payload(wind)
-        shared = whole["prompt"][: whole["prompt"].index(WIND_TEXT) + len(WIND_TEXT)]
-
-        assert suppressed["prompt"].startswith(shared)
-        assert whole["prompt"] != suppressed["prompt"]
+        assert "Available chart types:" in whole["prompt"]
+        assert "Available chart types:" not in suppressed["prompt"]
+        suffix = whole["prompt"].split(WIND_TEXT, 1)[1]
+        assert suppressed["prompt"].split(WIND_TEXT, 1)[1] == suffix
 
 class TestTheNoneReasonOnAStoredDecision:
     """What a stored decision may say about why it carries no picture.

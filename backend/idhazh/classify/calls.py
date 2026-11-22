@@ -8,32 +8,24 @@ from collections.abc import Mapping
 from dataclasses import replace
 from pathlib import Path
 from string import Template
-from typing import Any, NamedTuple
+from typing import Annotated, Any, NamedTuple
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from idhazh import summarize
-from idhazh.classify.plan_visual_request import VisualInput, chart_capabilities, example_data
-from idhazh.classify.resolve_visual_choice import (
-    COMPARISONS,
-    NO_CHART,
-    ChartReferences,
-    ComparisonPoint,
-    PlanChoice,
-)
+from idhazh.classify.chart_reply import ChartProposal
+from idhazh.classify.plan_visual_request import chart_capabilities
 from idhazh.config import DEFAULT_CONFIG_DIR
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import Model as ContractModel
 from idhazh.contracts.base import canonical_json
-from idhazh.contracts.element import ElementKind
 from idhazh.contracts.knobs.prompts import PromptFilesConfig
 from idhazh.contracts.knobs.summarize import SummarizeConfig
 from idhazh.contracts.knobs.visuals import VisualsConfig
-from idhazh.contracts.visual import EncodingRole, VisualType
+from idhazh.contracts.visual import VisualType
 from idhazh.llm.server import Completion, TurnMarkers, completion_payload, render_prompt
 from idhazh.load_prompt_text import load_prompt_text
 from idhazh.sanitize import untrusted_block
-from idhazh.visual_vocabulary import TYPE_RULES, VALUE_ROLES
 
 _FENCED_JSON = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL)
 
@@ -41,159 +33,93 @@ _FENCED_JSON = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL)
 # Decode the summary first so it is complete even if the visual reply gets cut.
 class SummarizeAndPlanDraft(ContractModel):
     summary: summarize.SummaryDraft
-    visual: PlanChoice
+    visual: Annotated[ChartProposal, Field(discriminator="type")] | None
 
 
 def summarize_and_plan_model(*, plan: bool = True) -> type[BaseModel]:
-    """Without data references, the grammar leaves no place for a chart answer."""
+    """A summary-only reply has no chart field."""
     return SummarizeAndPlanDraft if plan else summarize.SummaryDraft
 
 
-def _words_only(schema: dict[str, Any]) -> dict[str, Any]:
-    # The native decoder uses the pattern instead of maxLength. Bound the
-    # repeat and keep it within one JSON string, excluding digits and escapes.
-    length = schema["maxLength"]
-    return {"type": "string", "pattern": rf'^[^"\\\r\n<>0-9]{{1,{length}}}$'}
-
-
-def _chart_reply_schema(
-    form: VisualType | None,
-    answer: dict[str, Any],
-    roles: dict[str, Any],
-) -> dict[str, Any]:
-    null = {"type": "null"}
-    fields = answer["properties"] | {"why": _words_only(answer["properties"]["why"])}
-    fields["type"] = {"const": form.value if form is not None else NO_CHART}
-    required: list[str] = answer["required"].copy()
-    composition = form in {VisualType.PIE, VisualType.STACKED_BAR}
-    if form is not None:
-        rules = TYPE_RULES[form]
-        # A stacked row is labelled by its whole, which the resolver puts in
-        # the category role; the model cites it only once.
-        needed = rules.required - ({EncodingRole.CATEGORY} if form is VisualType.STACKED_BAR
-                                   else set())
-        allowed = {role.value for role in needed | rules.optional}
-        required_roles = [key for key in roles if key in {role.value for role in needed}]
-        if form in COMPARISONS:
-            allowed.difference_update({"category", "quantity"})
-            allowed.add("points")
-            required_roles = ["points"]
-        fields["encodings"] = {
-            "type": "object",
-            "additionalProperties": False,
-            "properties": {key: value for key, value in roles.items() if key in allowed},
-            "required": required_roles,
-        }
-        fields["focus"] = fields["focus"]["anyOf"][0]
-        fields["title"] = fields["title"]["anyOf"][0]
-        required.append("context")
-    else:
-        fields["encodings"] = {"type": "object", "properties": {}, "additionalProperties": False}
-        fields["focus"] = fields["title"] = fields["caption"] = null
-        del fields["context"]
-    fields["whole"] = fields["whole"]["anyOf"][0] if composition else null
-    if form is VisualType.STACKED_BAR:
-        fields["measure"] = fields["measure"]["anyOf"][0]
-        required.append("measure")
-    else:
-        del fields["measure"]
-    return answer | {"properties": fields, "required": required}
+def _inline_refs(node: Any, definitions: Mapping[str, Any]) -> Any:
+    """The chart grammar has no recursive references; expand just the selected branches."""
+    if isinstance(node, dict):
+        if "$ref" in node:
+            return _inline_refs(definitions[node["$ref"].rsplit("/", 1)[-1]], definitions)
+        return {key: _inline_refs(value, definitions) for key, value in node.items()}
+    if isinstance(node, list):
+        return [_inline_refs(value, definitions) for value in node]
+    return node
 
 
 def summarize_and_plan_schema(
     *,
     plan: bool = True,
     visuals: VisualsConfig | None = None,
-    data: VisualInput | None = None,
+    forms: tuple[VisualType, ...] | None = None,
 ) -> dict[str, Any]:
-    """Keep all capabilities selectable and constrain the roles after type is chosen."""
-    schema = summarize_and_plan_model(plan=plan).model_json_schema()
+    """Constrain row shapes by the enabled form, never by an article's vocabulary."""
     if not plan:
-        return schema
-    definitions = schema["$defs"]
-    answer = definitions[PlanChoice.__name__]
-    answer_fields = answer["properties"]
-    roles = definitions.pop(ChartReferences.__name__)["properties"]
-    roles["points"]["minItems"] = 2
-    forms = data.forms if data is not None else chart_capabilities(visuals or VisualsConfig())
-    if data is not None:
-        quantities = [code for code, e in data.refs.items() if e.kind is ElementKind.QUANTITY]
-        dates = [code for code, e in data.refs.items() if e.kind is ElementKind.DATE]
-        quantity = {"type": "string", "enum": quantities}
-        for role in VALUE_ROLES:
-            roles[role.value]["items"] = quantity
-        point = definitions[ComparisonPoint.__name__]
-        groups: dict[tuple[str, ...], list[str]] = {}
-        for code, labels in data.labels.items():
-            groups.setdefault(tuple(labels), []).append(code)
-        if groups:
-            definitions[ComparisonPoint.__name__] = {"anyOf": [
-                point | {"properties": {
-                    "quantity": {"type": "string", "enum": readings},
-                    "category": {"type": "string", "enum": list(labels)},
-                }}
-                for labels, readings in groups.items()
-            ]}
-        else:
-            roles["points"].update(minItems=0, maxItems=0)
-        if dates:
-            roles["time"]["items"] = {"type": "string", "enum": dates}
-            answer_fields["context"]["items"] = roles["time"]["items"]
-        else:
-            roles["time"]["maxItems"] = 0
-            answer_fields["context"]["maxItems"] = 0
-        for field in ("focus", "whole"):
-            answer_fields[field]["anyOf"] = [quantity, {"type": "null"}]
-    definitions[PlanChoice.__name__] = {
-        "anyOf": [_chart_reply_schema(form, answer, roles) for form in (None, *forms)]
-    }
+        return summarize_and_plan_model(plan=False).model_json_schema()
+    offered = chart_capabilities(visuals or VisualsConfig()) if forms is None else forms
+    if not offered:
+        return summarize_and_plan_model(plan=False).model_json_schema()
+    schema = summarize_and_plan_model().model_json_schema()
+    definitions = schema.pop("$defs")
+    tagged = schema["properties"]["visual"]["anyOf"][0]
+    names = tagged["discriminator"]["mapping"]
+    branches: list[dict[str, Any]] = [{"type": "null"}]
+    for form in offered:
+        shape = _inline_refs({"$ref": names[form.value]}, definitions)
+        fields = shape["properties"]
+        fields.pop("type")
+        shape["properties"] = {"type": {"const": form.value}, **fields}
+        shape["required"] = ["type", *(name for name in shape["required"] if name != "type")]
+        branches.append(shape)
+    schema["properties"]["visual"] = {"anyOf": branches}
+    schema["properties"]["summary"] = _inline_refs(schema["properties"]["summary"], definitions)
     return schema
+
+
+def chart_addendum(
+    forms: tuple[VisualType, ...],
+    *,
+    prompt_files: PromptFilesConfig,
+    config_dir: Path,
+) -> str:
+    """No chart instructions are read for a summary-only request."""
+    if not forms:
+        return ""
+    return "\n" + Template(load_prompt_text(config_dir, prompt_files.plan_visual)).substitute(
+        chart_types=", ".join(form.value for form in forms),
+    )
 
 
 def summary_system_prompt(
     prompt_config: SummarizeConfig | None = None,
     *,
+    forms: tuple[VisualType, ...] = (),
     prompt_files: PromptFilesConfig | None = None,
     config_dir: Path = DEFAULT_CONFIG_DIR,
 ) -> str:
     """Keep summary and chart instructions fixed so items share a cached prefix."""
     ask = prompt_config or SummarizeConfig()
     files = prompt_files or PromptFilesConfig()
-    return "\n".join(
-        (
-            Template(load_prompt_text(config_dir, files.write_digest_summary)).substitute(
-                max_verbatim_words=ask.max_verbatim_words,
-            ),
-            Template(load_prompt_text(config_dir, files.plan_visual)).substitute(),
-        )
+    return Template(load_prompt_text(config_dir, files.write_digest_summary)).substitute(
+        max_verbatim_words=ask.max_verbatim_words,
+    ) + chart_addendum(
+        forms, prompt_files=files, config_dir=config_dir,
     )
 
 
-def summary_user_turn(
-    title: str,
-    text: str,
-    *,
-    data: VisualInput | None = None,
-    prompt_files: PromptFilesConfig | None = None,
-    config_dir: Path = DEFAULT_CONFIG_DIR,
-) -> str:
-    """Fence both source fields and keep the data behind, not inside, instructions."""
-    shape = summarize_and_plan_model(plan=data is not None)
-    files = prompt_files or PromptFilesConfig()
-    question = Template(load_prompt_text(config_dir, files.continue_summary)).substitute(
-        write="Write " + ", then ".join(f'"{name}"' for name in shape.model_fields) + ".",
-    )
-    return (
-        "Title:\n" + untrusted_block(title)
-        + "\n\nThe item:\n" + untrusted_block(text) + "\n\n"
-        + (data.prompt + "\n\n" if data is not None else "")
-        + question
-    )
+def summary_user_turn(title: str, text: str) -> str:
+    """Send just the sanitized title and article body in a single untrusted block."""
+    return untrusted_block(f"Title:\n{title}\n\nThe item:\n{text}")
 
 
 def build_summary_request(
     article: Article,
-    data: VisualInput | None,
+    forms: tuple[VisualType, ...],
     *,
     model_id: str,
     server: Mapping[str, Any],
@@ -207,13 +133,10 @@ def build_summary_request(
     return completion_payload(
         model_id=model_id,
         system=summary_system_prompt(
-            prompt_config, prompt_files=prompt_files, config_dir=config_dir
+            prompt_config, forms=forms, prompt_files=prompt_files, config_dir=config_dir
         ),
-        user=summary_user_turn(
-            article.title or "(untitled)", article.text or "",
-            data=data, prompt_files=prompt_files, config_dir=config_dir,
-        ),
-        output_schema=summarize_and_plan_schema(plan=data is not None, data=data),
+        user=summary_user_turn(article.title or "(untitled)", article.text or ""),
+        output_schema=summarize_and_plan_schema(forms=forms),
         server=server,
         sampling=sampling,
         markers=markers,
@@ -229,25 +152,23 @@ def prompt_inputs(
     config_dir: Path = DEFAULT_CONFIG_DIR,
 ) -> str:
     """Fingerprint both prompt variants and their envelope without an article."""
-    shown = visuals or VisualsConfig()
-    data = VisualInput(chart_capabilities(shown), {}, example_data(shown))
-    system = summary_system_prompt(prompt_config, prompt_files=prompt_files, config_dir=config_dir)
+    forms = chart_capabilities(visuals or VisualsConfig())
     return canonical_json(
         [
             render_prompt(
-                system=system,
-                user=summary_user_turn(
-                    "", "", data=variant, prompt_files=prompt_files, config_dir=config_dir
+                system=summary_system_prompt(
+                    prompt_config, forms=variant, prompt_files=prompt_files, config_dir=config_dir
                 ),
+                user=summary_user_turn("", ""),
                 markers=markers,
             )
-            for variant in (None, data) if variant is None or variant.forms
+            for variant in (((), forms) if forms else ((),))
         ]
     )
 
 
 def output_schema_text(visuals: VisualsConfig) -> str:
-    """Fingerprint the reply variants before article-specific code binding."""
+    """Fingerprint the two declared reply variants."""
     schemas = [summarize_and_plan_schema(plan=False)]
     if chart_capabilities(visuals):
         schemas.append(summarize_and_plan_schema(visuals=visuals))

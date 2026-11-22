@@ -289,7 +289,10 @@ class TestCompiledBar:
         assert compiled.data.declared_whole_element_id == "quantity-21-26"
         assert compiled.data.declared_whole is not None
         assert compiled.data.declared_whole.text == "76 MW"
-        assert compiled.data.to_json() == VisualData.read(PIE_DATA).to_json()
+        expected = VisualData.read(PIE_DATA).model_copy(
+            update={"version": VisualData.schema_version()}
+        )
+        assert compiled.data.to_json() == expected.to_json()
         assert len(compiled.data.encoding.category) == len(compiled.data.encoding.quantity) == 4
         assert "Pie chart. Declared total: 76 MW." in compiled.alt_text
         assert all(
@@ -306,7 +309,9 @@ class TestCompiledBar:
             visuals=committed_visuals(),
         )
         data = compiled.data
-        expected = VisualData.read(HISTOGRAM_DATA)
+        expected = VisualData.read(HISTOGRAM_DATA).model_copy(
+            update={"version": VisualData.schema_version()}
+        )
         assert data.type is VisualType.HISTOGRAM
         assert data.histogram_unit == "kw"
         assert data.histogram_unit_table_version == UNIT_TABLE_VERSION
@@ -371,7 +376,9 @@ class TestPublishedData:
         plan = current_plan(STACKED_PLAN)
         table = ElementTable.read(STACKED_TABLE)
         compiled = compile_chart(plan, table, visuals=committed_visuals())
-        expected = VisualData.read(STACKED_DATA)
+        expected = VisualData.read(STACKED_DATA).model_copy(
+            update={"version": VisualData.schema_version()}
+        )
 
         assert compiled.data.to_json() == expected.to_json()
         assert compiled.alt_text == (
@@ -444,13 +451,17 @@ class TestPublishedData:
         assert data.emphasized_mark_id == data.encoding.quantity[1]
 
     @pytest.mark.parametrize("count", [0, 2])
-    def test_no_or_multiple_selected_bars_are_explicitly_refused(self, count: int) -> None:
+    def test_bar_emphasis_can_be_absent_but_cannot_select_multiple(self, count: int) -> None:
         plan = VisualPlan.read(BAR_PLAN)
         plan = VisualPlan.model_validate(
             plan.model_dump(mode="json") | {"annotations": plan.encodings.quantity[:count]}
         )
-        with pytest.raises(CompileError, match=f"select {count} distinct bars"):
-            compile_bar(plan, ElementTable.read(BAR_TABLE), visuals=committed_visuals())
+        table = ElementTable.read(BAR_TABLE)
+        if count:
+            with pytest.raises(CompileError, match=f"select {count} distinct bars"):
+                compile_bar(plan, table, visuals=committed_visuals())
+        else:
+            assert compile_bar(plan, table, visuals=committed_visuals()).data.emphasized_mark_id is None
 
     def test_a_converted_input_selects_its_bar_and_preserves_the_source_figure(self) -> None:
         plan = VisualPlan.read(PLAN_FIXTURES / "units-convert.json")
@@ -563,7 +574,7 @@ class TestRenderPlannedVisual:
         assert published.caption == VisualPlan.read(BAR_PLAN).caption
         assert published.emphasized_mark_id in published.encoding.quantity
 
-    def test_missing_priority_keeps_the_item_without_a_chart(self, tmp_path: Path) -> None:
+    def test_no_priority_writes_a_chart_without_emphasis(self, tmp_path: Path) -> None:
         plan = VisualPlan.model_validate(
             VisualPlan.read(BAR_PLAN).model_dump(mode="json") | {"annotations": []}
         )
@@ -571,12 +582,12 @@ class TestRenderPlannedVisual:
             self._nothing_yet(), plan, ElementTable.read(BAR_TABLE),
             public_root=tmp_path, relpath=MARKS, visuals=committed_visuals(),
         )
-        assert result.kind is VisualKind.NONE
-        assert result.spec is None
-        assert result.rationale == "annotations select 0 distinct bars; exactly one is required"
+        assert result.kind is VisualKind.CHART
+        assert result.spec is not None
+        assert VisualData.from_json(result.spec).emphasized_mark_id is None
         assert result.planned_type is VisualType.BAR
-        assert result.rendered_type is None and result.marks is None
-        assert not (tmp_path / MARKS).exists()
+        assert result.rendered_type is VisualType.BAR and result.marks == len(plan.encodings.quantity)
+        assert (tmp_path / MARKS).is_file()
 
     def test_the_decision_s_spec_is_the_document_that_was_published(self, tmp_path: Path) -> None:
         """One resolution, one document. Two would be two things that can disagree."""

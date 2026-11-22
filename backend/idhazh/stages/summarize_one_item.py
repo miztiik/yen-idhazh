@@ -28,8 +28,8 @@ from idhazh import (
 )
 from idhazh.anchor_mentions import Mention
 from idhazh.classify import calls, dag
-from idhazh.classify.plan_visual_request import VisualInput, visual_input
-from idhazh.classify.resolve_visual_choice import NO_CHART, resolve_visual_choice
+from idhazh.classify.plan_visual_request import chart_forms
+from idhazh.classify.resolve_visual_choice import resolve_visual_choice
 from idhazh.contracts.article import Article
 from idhazh.contracts.call_cost import COST_FIELDS, CallCost, CallKind
 from idhazh.contracts.element import ElementTable
@@ -343,6 +343,11 @@ def _shape_cells(error: Exception) -> dict[str, Any]:
         return {"detail": detail, "failed_field": None, "failed_rule": None}
     rule = first["type"]
     location = first["loc"]
+    if (
+        len(location) > 1 and location[0] == "visual"
+        and location[1] in VisualType._value2member_map_
+    ):
+        location = (location[0], *location[2:])
     field = first.get("ctx", {}).get("field")
     if isinstance(field, str):
         location = (*location, field)
@@ -457,9 +462,8 @@ def summarize_one_item(
     `recovered_completion` salvages the summary, and the item publishes with
     `window_exhausted` recorded where the picture would have been. Refusing it up
     front is still the better answer, because the whole decode is paid for before
-    that reason can be written. The data references are optional where the article
-    is not: an item whose references would not fit is asked no question
-    about a chart.
+    that reason can be written. An item that only fits without the chart
+    instructions is asked for the summary alone.
 
     **The reply is read whole, and the summary survives the plan.** The summary
     is decoded first and closed before the plan starts, so a decode the output
@@ -518,31 +522,31 @@ def summarize_one_item(
                 article, config=settings.app.elements, mentions=mentions
             )
             visuals = settings.app.visuals
-            if not dag.fits_the_window(
-                article, model.server, evidence_bytes=0, sampling=model.sampling
-            ):
+            if not dag.fits_the_window(article, model.server, sampling=model.sampling):
                 LOG.warning(
                     "the call would not fit the window id=%s tokens=%s",
                     article.item_id,
                     article.token_count,
                 )
                 return failed(FailureCode.CONTEXT_EXCEEDED)
-            data = visual_input(article.text or "", table, visuals=visuals)
-            shown = len(data.prompt.encode("utf-8")) if data is not None else 0
-            if data is not None and not dag.fits_the_window(
-                article, model.server, evidence_bytes=shown, sampling=model.sampling
+            forms = chart_forms(table, visuals=visuals)
+            chart_bytes = len(calls.chart_addendum(
+                forms, prompt_files=settings.app.prompt_files, config_dir=settings.config_dir,
+            ).encode("utf-8"))
+            if forms and not dag.fits_the_window(
+                article, model.server, addendum_bytes=chart_bytes, sampling=model.sampling
             ):
                 LOG.warning(
-                    "the data references would not fit the window and the item is read without "
-                    "them id=%s tokens=%s evidence_bytes=%s",
+                    "the chart instructions would not fit the window "
+                    "id=%s tokens=%s chart_bytes=%s",
                     article.item_id,
                     article.token_count,
-                    shown,
+                    chart_bytes,
                 )
-                data = None
+                forms = ()
             request = calls.build_summary_request(
                 article,
-                data,
+                forms,
                 model_id=model_id,
                 server=model.server,
                 sampling=model.sampling,
@@ -586,7 +590,7 @@ def summarize_one_item(
             return failed(no_reply)
         split = calls.split_the_decode(reply)
         kept.note(
-            run_visual_decision=data is not None,
+            run_visual_decision=bool(forms),
             **_call_cells(CALL_SLOT, CallKind.SUMMARIZE_AND_PLAN, reply, wall_ms=summary_ms),
             **_item_cells(reply),
             **_split_cells(split),
@@ -645,7 +649,7 @@ def summarize_one_item(
             summary,
             reply,
             table,
-            data=data,
+            forms=forms,
             text=article.text or "",
             settings=settings,
             date=date,
@@ -670,7 +674,7 @@ def _decide_the_visual(
     completion: Completion,
     table: ElementTable,
     *,
-    data: VisualInput | None,
+    forms: tuple[VisualType, ...],
     text: str,
     settings: config.Settings,
     date: str,
@@ -695,7 +699,7 @@ def _decide_the_visual(
     the prompt, and the call's response limit is the model file's. Less room
     left than that limit means the window was the wall.
     """
-    if data is None:
+    if not forms:
         return visual_planner.suppressed_by_the_gate(summary, **stamp)
     if completion.hit_the_budget:
         n_ctx = window(settings.models.summarizer.server)
@@ -712,9 +716,9 @@ def _decide_the_visual(
         return visual_planner.plan_lost_to_the_budget(summary, **stamp)
     try:
         choice = calls.parse_summarize_and_plan(completion.content).visual
-        if choice.type == NO_CHART:
-            return visual_planner.declined_by_the_model(summary, why=choice.why, **stamp)
-        plan, grounded = resolve_visual_choice(choice, data, text, table)
+        if choice is None:
+            return visual_planner.declined_by_the_model(summary, **stamp)
+        plan, grounded = resolve_visual_choice(choice, forms, text, table)
     except (ValidationError, ValueError, json.JSONDecodeError) as error:
         shape = _shape_cells(error)
         LOG.warning(

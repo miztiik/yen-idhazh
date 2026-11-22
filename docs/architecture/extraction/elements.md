@@ -15,10 +15,9 @@ quantities and it finds absolute dates. A third is the local
 article before the model reads it: it labels the organisations, people and places
 the patterns cannot reach, and the figures that are really dates, times or
 ordinals. It types nothing a reader sees, and the model is never asked for any of
-it. The model is not shown this table either: code gives it
-[independent source readings](../summarize/prompt.md#the-model-is-shown-independent-source-readings)
-from it,
-and the validator checks every element a plan cites against it. Historical quote/claim
+it. The model is not shown this table. Code uses it to verify
+[source observations](../summarize/prompt.md#the-model-proposes-rows-source-verification-stays-in-code)
+and to check every element a plan cites. Historical quote/claim
 kinds remain readable, but have no current producer or reader-facing visual.
 
 ## What an element is

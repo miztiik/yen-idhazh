@@ -1,33 +1,4 @@
-When source data references follow the item, write "visual" after "summary".
-
-Start with the item headline: what numerical comparison would explain the main finding? If the story leads with a single change from one level to another, use the two actual readings that establish that change. Omit the percentage change and old targets; do not plot a range as one of its endpoints. If the story tracks a trend over several dates, use the comparable readings across those dates. For a comparison across places or groups, check that the unit, denominator and scope match. The readings may be far apart in the item.
-
-Write "why" first, in one sentence. Name the things being compared, their shared measure, and what the reader will see. Use words, not values or placeholders. If the source explicitly compares the readings on the same basis as part of the main finding, use them even if the summary already reports the comparison. Exclude unrelated readings. Use "none" only if the main finding has no useful comparable readings; explain what does not match or what is missing.
-
-Choose "type" from the renderer capabilities based on the data, or "none" if no useful chart can be supported. Use these "encodings" (omit unused keys):
-- bar or dot: "points", one object per reading with its q code in "quantity" followed by one of that reading's label codes in "category".
-- line: "quantity" and "time", paired in date order. Use it for measurements over time, not just two named stages.
-- slope: two dates in "time", before and after quantities consecutive for each subject, and one "entity" or "series" per subject.
-- scatter or bubble: one "entity", "quantity_x", and "quantity" per point in matching order. Bubble also needs "size".
-- pie: "points" for exhaustive, non-overlapping parts, with an independently stated "whole".
-- stacked_bar: "series" and "quantity" for exhaustive parts; cite "whole" and copy the common "measure" beside it.
-- histogram: "bins" lists comparable individual readings, not precomputed counts.
-
-Each bracketed code marks the reading at that place in the source: q for quantity, d for date. In "points", choose the label that names the full place or stage, not a generic word nearby. If a number is repeated, cite the one next to the named place or stage. For entity or series labels, copy source words verbatim. Use "focus" for one drawn q code. Only composition sets "whole" to a q code; otherwise use null. List d codes for any dates you plan to put in the title or caption but not on the chart axis in "context", or use an empty list. Then write a short title naming the measure and use a caption only if it adds context. For "none", use empty encodings and null focus, whole, title and caption.
-
-Example: The offer price was [q1: $$12] per share. The offering generated [q2: $$17 million] in proceeds.
-"visual": {"why":"The offer price is per share, while the proceeds are for the entire offering.","type":"none","encodings":{},"focus":null,"whole":null,"title":null,"caption":null}
-
-Example: Shares began trading at [q1: $$17], above their offer price of [q2: $$12]. The sale raised [q3: $$5 million] after initially targeting [q4: $$9] to [q5: $$11] a share.
-q1 labels: l1 = Shares began trading; l2 = began trading; l3 = trading
-q2 labels: l1 = above their offer price; l2 = their offer price; l3 = offer price; l4 = price
-"visual": {"why":"Shares began trading above the offer price on the same per-share basis.","type":"bar","encodings":{"points":[{"quantity":"q1","category":"l2"},{"quantity":"q2","category":"l3"}]},"focus":"q1","whole":null,"context":[],"title":"Offer and first trade prices","caption":null}
-
-Example: The report forecasts annual electricity demand growth through [d1: 2040]. It projects the strongest growth in North Bay ([q1: 5%]), followed by East Bay ([q2: 3%]) and West Bay ([q3: 1%]). Total energy demand in North Bay will grow by [q4: 2%].
-q1 labels: l1 = North Bay
-q2 labels: l1 = East Bay
-q3 labels: l1 = West Bay
-"visual": {"why":"North Bay leads East Bay and West Bay in forecast annual electricity demand growth.","type":"dot","encodings":{"points":[{"quantity":"q1","category":"l1"},{"quantity":"q2","category":"l1"},{"quantity":"q3","category":"l1"}]},"focus":"q1","whole":null,"context":["d1"],"title":"Forecast annual electricity demand growth through 2040","caption":null}
-
-Example: The island's average reservoir level rose from [q1: 62 m] in [d1: 2020] to [q2: 66 m] in [d2: 2024].
-"visual": {"why":"The same reservoir's average level rose between the two recorded dates.","type":"line","encodings":{"quantity":["q1","q2"],"time":["d1","d2"]},"focus":"q2","whole":null,"context":[],"title":"Average reservoir level over time","caption":null}
+Put the title and summary in the nested "summary" object first. Then write "visual": null unless the article states a useful, unambiguous chart.
+Available chart types: $chart_types.
+Name what is measured in the chart title. Use short source-grounded labels and dates. Write each reading as its stated decimal value and unit, including any scale word, or null for a unitless reading. Do not convert values or treat repeated mentions as separate observations.
+Preserve scope, limits and forecasts, or return null. Use a positive bubble size. Use a stated whole and named, non-overlapping parts for composition, with a common measure for a stack. For a distribution use individual readings from one stated group, not ranges or counts.

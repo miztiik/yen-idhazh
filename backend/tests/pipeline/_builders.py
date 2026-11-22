@@ -121,31 +121,24 @@ def finding_the_wind_countries(
 
 
 def declining_wind_reply() -> bytes:
-    """Keep the source-backed summary while the boundary answer declines a chart.
-
-    The row, title and caption the recorded chart answer carried are left in place on purpose:
-    `none` is final, so a decline that still names a row must be read as a decline.
-    """
+    """Keep the recorded summary and let the boundary answer decline a chart."""
     answer = json.loads(DRAWS_SUMMARIZE_AND_PLAN.read_bytes())
     content = json.loads(answer["choices"][0]["message"]["content"])
-    content["visual"].update(
-        type="none",
-        why="The summary already gives the approvals; another display would repeat it.",
-    )
+    content["visual"] = None
     answer["choices"][0]["message"]["content"] = json.dumps(content)
     return json.dumps(answer).encode("utf-8")
 
 
-def assert_planning_readings(server: RecordedEndpoint, readings: list[tuple[str, str]]) -> None:
-    """The actual request must show each reading and admit only its code."""
+def assert_planning_readings(server: RecordedEndpoint, readings: list[str]) -> None:
+    """The actual request must show each reading once and offer a fixed row shape."""
     assert server.served == 1, "one item must run the one production call"
     request = server.sent[0]
     prompt = str(request["prompt"])
-    for code, reading in readings:
-        assert f"[{code}: {reading}]" in prompt
+    for reading in readings:
+        assert prompt.count(reading) == 1
     assert re.search(r"\b[a-z]+-\d+-\d+\b", prompt) is None
-    offered = chart_reply_fields(request["json_schema"])["bar"]["focus"]
-    assert offered["enum"] == [code for code, _ in readings]
+    offered = chart_reply_fields(request["json_schema"])["bar"]["rows"]["items"]
+    assert offered["required"] == ["label", "reading"]
 
 
 def assert_reader_accepts(path: Path, *, item_id: str) -> None:

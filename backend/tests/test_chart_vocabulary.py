@@ -120,11 +120,11 @@ def test_selection_controls_the_actual_request_grammar_and_the_stamp() -> None:
     )
     answer = chart_reply_fields(request["json_schema"])
     assert chart_capabilities(selected) == (VisualType.DOT,)
-    assert list(answer) == ["none", "dot"]
-    assert "Renderer capabilities (not recommendations): dot." in request["prompt"]
+    assert list(answer) == ["dot"]
+    assert "Available chart types: dot." in request["prompt"]
     full = chart_reply_fields(calls.summarize_and_plan_schema(visuals=off))
     assert list(full) == [
-        "none", *(kind.value for kind in VisualType if can_compile(kind))
+        kind.value for kind in VisualType if can_compile(kind)
     ]
     assert chart_reply_fields(calls.summarize_and_plan_schema()) == full
     assert VisualPlan.json_schema()["$defs"]["VisualType"]["enum"] == [
@@ -134,9 +134,9 @@ def test_selection_controls_the_actual_request_grammar_and_the_stamp() -> None:
     assert calls.prompt_inputs(markers=markers, visuals=selected) != calls.prompt_inputs(
         markers=markers, visuals=off
     )
-    assert "PlanChoice" not in calls.summarize_and_plan_schema(plan=False, visuals=selected).get(
-        "$defs", {}
-    )
+    assert "visual" not in calls.summarize_and_plan_schema(
+        plan=False, visuals=selected
+    )["properties"]
 
 
 def test_active_requests_offer_compiler_capabilities_and_keep_historical_names() -> None:
@@ -149,7 +149,7 @@ def test_active_requests_offer_compiler_capabilities_and_keep_historical_names()
     assert not active.downgrade_enabled
     assert [kind.value for kind in active.enabled_types] == selected
     answer = chart_reply_fields(calls.summarize_and_plan_schema(visuals=active))
-    assert list(answer) == ["none", *selected]
+    assert list(answer) == selected
     assert set(active.select_types()) == {
         kind for kind in VisualType if can_compile(kind)
     }
@@ -310,9 +310,10 @@ def test_real_shard_projects_outcomes_before_sealing(
             run_plan, settings=read, scorer=None, fetcher=drawable_article_fetch,
             model_endpoint=server.endpoint,
         )
-        offered = chart_reply_fields(server.sent[-1]["json_schema"])
-        assert list(offered) == [
-            "none", *(kind.value for kind in VisualType if can_compile(kind))
+        schema = server.sent[-1]["json_schema"]
+        assert {"type": "null"} in schema["properties"]["visual"]["anyOf"]
+        assert list(chart_reply_fields(schema)) == [
+            kind.value for kind in VisualType if can_compile(kind)
         ]
     assert stage_record(run_plan, settings=knobs, commit_sha="a" * 40)[0] == len(run_plan.items)
     rows = ledger.load_days(

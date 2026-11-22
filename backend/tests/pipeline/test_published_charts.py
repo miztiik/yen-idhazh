@@ -56,20 +56,13 @@ def test_assemble_publishes_a_chart_from_its_decision_alone(
     decision = VisualDecision.read(items / f"{item_id}{PAYLOAD_SUFFIX}")
     relpath = asset_relpath(run_plan.date, item_id)
     assert decision.kind is VisualKind.CHART
-    assert decision.rationale == (
-        "The countries' offshore wind capacity awards share a basis, with Denmark awarding the most."
-    )
+    assert decision.rationale == "Chart proposal verified against explicit source observations"
     assert decision.data_path == relpath
     assert decision.spec is not None
     compiled = VisualData.from_json(decision.spec)
     assert_planning_readings(
         server,
-        [
-            ("q1", "1200 MW"),
-            ("q2", "900 MW"),
-            ("q3", "640 MW"),
-            ("q4", "410 MW"),
-        ],
+        ["1200 MW", "900 MW", "640 MW", "410 MW"],
     )
     marks = {mark.mark_id: mark for mark in compiled.marks}
     assert [marks[name].text for name in compiled.encoding.category] == [
@@ -78,7 +71,7 @@ def test_assemble_publishes_a_chart_from_its_decision_alone(
     assert [Decimal(str(marks[name].value)) for name in compiled.encoding.quantity] == [
         Decimal(1200), Decimal(900), Decimal(640), Decimal(410)
     ]
-    assert compiled.emphasized_mark_id == compiled.encoding.quantity[0], "the cited reading"
+    assert compiled.emphasized_mark_id is None
 
     publisher = tmp_path / "publisher"
     publish_worker_items(run_plan, items, publisher, monkeypatch)
