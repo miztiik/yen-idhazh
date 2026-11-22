@@ -288,13 +288,18 @@ once. **A mark whose two ends are two different measurements is a different
 mark**, and giving it the range mark's field names would have taught a reader to
 read a floor as a median. So it carries its own names.
 
-**Articles with the least memory left** needs only one fill. Its bar is the
+**Articles with the least memory left** uses one measured bar. It shows the
 lowest recorded available memory, not memory held or an end-of-item reading.
 The shared GiB scale ends at the largest recorded capacity among eligible
 articles. Each row names its own machine capacity and displays at most two
 decimal places. A measured zero stays visible as a labelled, empty bar; a
-missing or invalid memory pair does not rank. Short bars show proximity to
-zero without a green/red gradient that would imply unmeasured danger thresholds.
+missing or invalid memory pair does not rank.
+
+The colour scale runs smoothly from dark red at zero to green at the end of
+the shared GiB scale. A bar reveals only the portion up to its recorded
+available memory, so a short bar never turns green just because it is the
+longest among the articles shown. The labelled gradient and printed amounts
+show how much is left, not a safe or critical threshold.
 
 The panel no longer ranks memory held. It cannot show how long the machine
 stayed at the low point or how it recovered; that would require memory samples

@@ -235,6 +235,22 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 		}));
 	await expect.poll(contextFits).toBe(true);
 	await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+	const memory = page.locator('[data-console-panel-id="closest-to-memory"]');
+	const ramp = memory.locator('.memory-scale .memory-gradient');
+	await expect(ramp).toHaveCSS('background-image', /^linear-gradient\(/);
+	const memoryBar = memory.locator('[data-ranked-row] .memory-track .memory-gradient').first();
+	const darkRamp = await ramp.evaluate((node) => getComputedStyle(node).backgroundImage);
+	await expect(memoryBar).toHaveCSS('background-image', darkRamp);
+	const revealed = await memoryBar.evaluate((node) => ({
+		width: node.getBoundingClientRect().width,
+		track: node.parentElement!.getBoundingClientRect().width,
+		clip: getComputedStyle(node).clipPath
+	}));
+	expect(revealed.width).toBeCloseTo(revealed.track);
+	const unfilled = Number(/^inset\(0px ([\d.]+)% /.exec(revealed.clip)?.[1]);
+	const available = parseFloat(await memory.locator('[data-ranked-cell="value"]').first().innerText());
+	const capacity = Number(await memory.locator('[data-ranked-max]').getAttribute('data-ranked-max'));
+	expect((1 - unfilled / 100) * capacity).toBeCloseTo(available, 2);
 	const reuse = page.locator('[data-console-panel-id="prompt-reuse"]');
 	for (const call of ['summary', 'label']) {
 		await expect(reuse.locator(`[data-chart-name="prompt-reuse-${call}"] text`).filter({ hasText: /^100%$/ }),
@@ -246,6 +262,7 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 	await expect(page.locator('[data-console-nav]')).not.toBeVisible();
 	await page.getByRole('button', { name: 'Switch to the light theme' }).click();
 	await expect(page.locator('html')).toHaveCSS('background-color', 'rgb(242, 241, 237)');
+	await expect(ramp).not.toHaveCSS('background-image', darkRamp);
 	await expect(page.locator('[data-site-footer] [data-theme-toggle]')).toBeVisible();
 	await page.screenshot({ path: test.info().outputPath('console-footer-narrow-light.png') });
 	await page.locator('[data-console-top]').click();

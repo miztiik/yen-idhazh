@@ -375,7 +375,9 @@ Cache shares stay separate by call because they move independently: between
 the calls; the same flat fills identify cached and fresh tokens in both.
 The tooltip and keyboard readout print both shares, prompt tokens and article
 counts. Read/prefill and write/decode keep their respective colours elsewhere
-on Hardware; free memory keeps the violet measurement role in both memory views.
+on Hardware. The memory partition keeps its violet available segment; the
+[least-memory ranking](../../concepts/console-design/the-mark-shapes-a-panel-may-reach-for.md#a-mark-with-two-named-ends-is-not-a-range-mark-and-it-says-which-end-is-which)
+uses a continuous scale to show how little is left.
 
 ## See also
 

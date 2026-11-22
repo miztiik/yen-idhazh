@@ -72,6 +72,7 @@ async function consoleColors(style, mode, theme, choice) {
 		'color-focus': colors.focus, 'color-mark': colors.selected, 'console-selected': colors.selected,
 		'chart-axis': colors.chart_axis, 'chart-grid': colors.chart_grid, 'chart-label': colors.text_secondary,
 		'chart-measure': colors.chart_measure,
+		'chart-memory-low': colors.chart_memory_low, 'chart-memory-high': colors.chart_memory_high,
 		'chart-marker': colors.text_secondary, 'chart-readout-bg': colors.inset, 'chart-readout-text': colors.text,
 		'item-edge': colors.rule,
 		'shadow-sm': shadow(depth.panel, theme.elevation_enabled),

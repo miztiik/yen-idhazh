@@ -44,6 +44,8 @@ class ConsoleColors(Model):
     chart_axis: Color = "#b6afa0"
     chart_grid: Color = "#dad6cb"
     chart_measure: Color = "#6929c4"
+    chart_memory_low: Color = "#a02b43"
+    chart_memory_high: Color = "#206e49"
     categorical: list[Color] = Field(
         default_factory=lambda: [
             "#126e81",
@@ -90,6 +92,8 @@ class DarkConsoleColors(ConsoleColors):
     chart_axis: Color = "#565348"
     chart_grid: Color = "#393932"
     chart_measure: Color = "#a56eff"
+    chart_memory_low: Color = "#bb4e5a"
+    chart_memory_high: Color = "#64bb88"
     categorical: list[Color] = Field(
         default_factory=lambda: [
             "#6ac4d3",

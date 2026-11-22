@@ -583,7 +583,7 @@ class AppearanceConfig(Contract):
         json_schema_extra={
             "readCompatibility": (
                 "additive; absent archive controls and console_style blocks/leaves use "
-                "declared defaults, including the console measurement color; "
+                "declared defaults, including the console measurement and memory scale colors; "
                 "style arrays replace whole; numeric console frame "
                 "maxima retain their caps and null selects the full window; "
                 "chart.palette adds spectral and piyg while prior choices remain accepted; "
@@ -592,6 +592,11 @@ class AppearanceConfig(Contract):
         }
     )
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-11-22",
+            change="Add light and dark endpoints for the available-memory scale.",
+            why="Older configs use defaults without changing any other chart colors.",
+        ),
         ChangelogEntry(
             version="2026-11-20",
             change="Separate ordinary console measurements from category colors.",
@@ -606,11 +611,6 @@ class AppearanceConfig(Contract):
             version="2026-11-12",
             change="Add built-in D3 console palettes and aligned appearance defaults.",
             why="Prior choices and explicit colours still read; field shapes are unchanged.",
-        ),
-        ChangelogEntry(
-            version="2026-11-11",
-            change="Allow an uncapped console frame and activate additive chart hover.",
-            why="Existing numeric caps still read; non-hover fact access is unchanged.",
         ),
         ChangelogEntry(
             version="2026-09-30",
