@@ -1,6 +1,6 @@
 # Elements: every fact in an article, with the characters that prove it
 
-**Last Updated**: 2026-11-18
+**Last Updated**: 2026-11-21
 
 The extraction subsystem's fact table. This page owns the element shape - the
 six kinds, the two tiers, and the span that makes a drawn figure checkable - the
@@ -193,7 +193,7 @@ producer still loads.
 
 `quantity_elements(text, limit=...)` reads `Article.text` with the number
 pattern and `date_elements(text, limit=...)` reads the same string with the date
-pattern. Each emits one element per match, in the order the article wrote them.
+pattern. Each emits its readable matches in the order the article wrote them.
 `settle(...)` decides which of the two keeps a stretch of characters both
 matched, and `element_table(article, config=...)` wraps the result in the table,
 with the article's identity and the hash of the text every span indexes. All
@@ -228,6 +228,17 @@ excerpts and `40 percent of` never is. A date's span is the whole match with
 nothing trimmed off either end, so `15 March 2026` keeps the month word that
 makes it readable on the page. Either way the excerpt is something a reader can
 find, rather than a phrase the pattern happened to touch.
+
+The written scales `lakh` and `crore` (including `lakhs` and `crores`) mean
+100,000 and 10,000,000. The one-letter suffixes `k`, `m` and `b` mean thousand,
+million and billion only when attached to a number with an explicit currency
+symbol. `$811m` reads as 811,000,000 with unit `$` and excerpt `$811m`;
+`15 m` still reads as 15 with unit `m`. An unknown attached currency suffix or
+a separated one-letter suffix leaves the price unread. The reader does not
+recover a bare number from an unsupported prefix such as `US$811m` or `-$811m`.
+It also refuses a second magnitude word, as in `12 lakh crore rupees`, rather
+than keeping only the first scale. Extraction and chart validation use the
+same reader.
 
 ### What the date pass will read, and what it refuses
 
