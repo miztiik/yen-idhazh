@@ -32,7 +32,7 @@ from idhazh.classify.plan_visual_request import chart_forms
 from idhazh.classify.resolve_visual_choice import resolve_visual_choice
 from idhazh.contracts.article import Article
 from idhazh.contracts.call_cost import COST_FIELDS, CallCost, CallKind
-from idhazh.contracts.element import ElementKind, ElementTable
+from idhazh.contracts.element import ElementTable
 from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.visual import VisualPlan, VisualType
@@ -544,14 +544,6 @@ def summarize_one_item(
                     chart_bytes,
                 )
                 forms = ()
-            quantities = tuple(e for e in table.elements if e.kind is ElementKind.QUANTITY)
-            if forms and not dag.fits_the_window(
-                article, model.server,
-                addendum_bytes=chart_bytes + calls.chart_highlight_bytes(quantities),
-                sampling=model.sampling,
-            ):
-                LOG.warning("the chart highlights would not fit the window id=%s", article.item_id)
-                quantities = ()
             request = calls.build_summary_request(
                 article,
                 forms,
@@ -559,7 +551,6 @@ def summarize_one_item(
                 server=model.server,
                 sampling=model.sampling,
                 markers=markers,
-                chart_quantities=quantities,
                 prompt_config=settings.app.summarize,
                 prompt_files=settings.app.prompt_files,
                 config_dir=settings.config_dir,

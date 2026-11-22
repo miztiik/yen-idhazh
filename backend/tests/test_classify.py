@@ -28,7 +28,6 @@ from idhazh import config, summarize
 from idhazh.classify import dag
 from idhazh.classify.calls import (
     build_summary_request,
-    chart_addendum,
     parse_summarize_and_plan,
     recovered_completion,
     summary_system_prompt,
@@ -260,17 +259,11 @@ class TestTheSummarizeAndPlanOracle:
     def test_the_request_shows_the_article_once_and_constrains_each_chart_shape(
         self, article_ok: Article
     ) -> None:
-        table, data = chart_data_over(article_ok, OIL_FORECAST)
-        quantities = tuple(e for e in table.elements if e.kind is ElementKind.QUANTITY)
-        article = article_ok.model_copy(update={"text": OIL_FORECAST})
-        payload = a_request(article, data, chart_quantities=quantities)
-        prompt = payload["prompt"]
-        assert "India at **3%**, Africa at **2.8%** and Southeast Asia at **1.4%**" in prompt
-        assert "through 2035" in prompt
-        assert prompt.replace("**", "").count(OIL_FORECAST) == 1
-        assert article.text == OIL_FORECAST
-        assert prompt.count(FENCE_OPEN) == prompt.count(FENCE_CLOSE) == 1
-        assert re.search(r"\b(?:quantity|date)-\d+-\d+\b", prompt) is None
+        _, data = chart_data_over(article_ok, OIL_FORECAST)
+        payload = a_request(article_ok.model_copy(update={"text": OIL_FORECAST}), data)
+        assert payload["prompt"].count(OIL_FORECAST) == 1
+        assert payload["prompt"].count(FENCE_OPEN) == payload["prompt"].count(FENCE_CLOSE) == 1
+        assert re.search(r"\b(?:quantity|date)-\d+-\d+\b", payload["prompt"]) is None
         schema = payload["json_schema"]
         answers = chart_reply_fields(schema)
         assert list(schema["properties"]) == ["summary", "visual"]
@@ -290,22 +283,6 @@ class TestTheSummarizeAndPlanOracle:
         assert set(payload["json_schema"]["properties"]) == {"title", "summary"}
         assert "Available chart types:" not in payload["prompt"]
         assert summary_user_turn(dense.title or "", dense.text or "").endswith(FENCE_CLOSE)
-
-    def test_highlights_do_not_split_a_source_marker_before_it_is_sanitized(
-        self, article_ok: Article
-    ) -> None:
-        # The extractor can find a number inside text that the fence must strip.
-        marker = "<|source_40|>"
-        text = f"Demand was 20 MW. {marker} Demand rose to 30 MW."
-        table, forms = chart_data_over(article_ok, text)
-        quantities = tuple(e for e in table.elements if e.kind is ElementKind.QUANTITY)
-        payload = a_request(
-            article_ok.model_copy(update={"text": text}), forms, chart_quantities=quantities
-        )
-        turn = payload["prompt"].split(FENCE_OPEN, 1)[1].split(FENCE_CLOSE, 1)[0]
-        assert "Available chart types:" in payload["prompt"]
-        assert "Demand was 20 MW. Demand rose to 30 MW." in turn
-        assert "source_" not in turn
 
     def test_an_instruction_in_a_source_excerpt_sits_only_inside_a_fence(
         self, article_ok: Article
@@ -483,7 +460,7 @@ class TestTheChartInstructionsAreOptional:
 
         assert result.summary.status is SummaryStatus.OK
         assert ("Available chart types:" in server.sent[0]["prompt"]) is chart_asked
-        assert ("**1200 MW**" in server.sent[0]["prompt"]) is chart_asked
+        assert server.sent[0]["prompt"].count(WIND_TEXT) == 1
         assert ("the chart instructions would not fit the window" in caplog.text) is not chart_asked
         if not chart_asked:
             assert result.decision is not None
@@ -494,6 +471,8 @@ class TestTheChartInstructionsAreOptional:
         self, article_ok: Article, tmp_path: Path
     ) -> None:
         """A rare character can cost several byte-level tokens, so characters are no ceiling."""
+        from idhazh.classify.calls import chart_addendum
+
         settings = config.load(CONFIG_DIR)
         root = tmp_path / "config"
         prompts = root / "prompts"
@@ -513,20 +492,6 @@ class TestTheChartInstructionsAreOptional:
 
         assert result.summary.status is SummaryStatus.OK
         assert "Available chart types:" not in server.sent[0]["prompt"]
-
-    def test_a_window_with_room_for_the_chart_but_not_the_highlights_keeps_the_chart(
-        self, article_ok: Article, tmp_path: Path
-    ) -> None:
-        settings = config.load(CONFIG_DIR)
-        _, forms = chart_data_over(article_ok, WIND_TEXT)
-        room = len(chart_addendum(
-            forms, prompt_files=settings.app.prompt_files, config_dir=settings.config_dir,
-        ).encode("utf-8"))
-        result, server = self.read_with_room(article_ok, tmp_path, WIND_TEXT, WIND_NAMES, room)
-
-        assert result.summary.status is SummaryStatus.OK
-        assert "Available chart types:" in server.sent[0]["prompt"]
-        assert server.sent[0]["prompt"].count(WIND_TEXT) == 1
 
 
 @pytest.mark.parametrize(

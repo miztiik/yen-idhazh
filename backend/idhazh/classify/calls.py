@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import json
-import logging
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import replace
 from pathlib import Path
 from string import Template
-from typing import Annotated, Any, Final, NamedTuple
+from typing import Annotated, Any, NamedTuple
 
 from pydantic import BaseModel, Field
 
@@ -20,20 +19,15 @@ from idhazh.config import DEFAULT_CONFIG_DIR
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import Model as ContractModel
 from idhazh.contracts.base import canonical_json
-from idhazh.contracts.element import Element
 from idhazh.contracts.knobs.prompts import PromptFilesConfig
 from idhazh.contracts.knobs.summarize import SummarizeConfig
 from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.visual import VisualType
-from idhazh.elements import SpanDriftError
 from idhazh.llm.server import Completion, TurnMarkers, completion_payload, render_prompt
 from idhazh.load_prompt_text import load_prompt_text
-from idhazh.sanitize import sanitize, untrusted_block
+from idhazh.sanitize import untrusted_block
 
-LOG = logging.getLogger(__name__)
 _FENCED_JSON = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL)
-#: The literal Markdown emphasis delimiter, shared by the prompt and its rendering.
-_QUANTITY_MARK: Final = "**"
 
 
 # Decode the summary first so it is complete even if the visual reply gets cut.
@@ -98,7 +92,6 @@ def chart_addendum(
         return ""
     return "\n" + Template(load_prompt_text(config_dir, prompt_files.plan_visual)).substitute(
         chart_types=", ".join(form.value for form in forms),
-        quantity_mark=_QUANTITY_MARK,
     )
 
 
@@ -124,33 +117,6 @@ def summary_user_turn(title: str, text: str) -> str:
     return untrusted_block(f"Title:\n{title}\n\nThe item:\n{text}")
 
 
-def chart_highlight_bytes(quantities: Sequence[Element]) -> int:
-    """Budget for the two ASCII marks around each quantity."""
-    return len(quantities) * 2 * len(_QUANTITY_MARK)
-
-
-def _highlight_quantities(article: Article, quantities: Sequence[Element]) -> str:
-    text = article.text or ""
-    if not quantities:
-        return text
-    # Do not split a sequence the sanitizer would otherwise remove, or use
-    # offsets against text that sanitization has moved.
-    if sanitize(text) != text:
-        LOG.warning("chart highlights omitted: article needs sanitizing id=%s", article.item_id)
-        return text
-    parts: list[str] = []
-    cursor = 0
-    for quantity in quantities:
-        start, end = quantity.span_start, quantity.span_end
-        excerpt = text[start:end]
-        if start < cursor or end > len(text) or excerpt != quantity.span_excerpt:
-            raise SpanDriftError(f"{article.item_id}: invalid quantity span for chart highlights")
-        parts.extend((text[cursor:start], _QUANTITY_MARK, excerpt, _QUANTITY_MARK))
-        cursor = end
-    parts.append(text[cursor:])
-    return "".join(parts)
-
-
 def build_summary_request(
     article: Article,
     forms: tuple[VisualType, ...],
@@ -159,19 +125,17 @@ def build_summary_request(
     server: Mapping[str, Any],
     sampling: Mapping[str, Any],
     markers: TurnMarkers,
-    chart_quantities: Sequence[Element] = (),
     prompt_config: SummarizeConfig | None = None,
     prompt_files: PromptFilesConfig | None = None,
     config_dir: Path = DEFAULT_CONFIG_DIR,
 ) -> dict[str, Any]:
     """Use the declared model budget and the reply shape for this specific item."""
-    text = _highlight_quantities(article, chart_quantities) if forms else article.text or ""
     return completion_payload(
         model_id=model_id,
         system=summary_system_prompt(
             prompt_config, forms=forms, prompt_files=prompt_files, config_dir=config_dir
         ),
-        user=summary_user_turn(article.title or "(untitled)", text),
+        user=summary_user_turn(article.title or "(untitled)", article.text or ""),
         output_schema=summarize_and_plan_schema(forms=forms),
         server=server,
         sampling=sampling,
