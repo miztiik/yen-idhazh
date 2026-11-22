@@ -74,36 +74,47 @@ from idhazh.contracts.item_health import ElementClass
 from idhazh.contracts.knobs.extract import ElementsConfig
 from idhazh.evals.metrics import _SENTENCE_SPLIT
 
-# A number with optional thousands separators, an optional decimal part, an
-# optional magnitude word, and the one word that follows it. The leading
-# lookbehind excludes a hyphen so `COVID-19`, `GPT-4` and `Qwen3-4B` do not read
-# as quantities.
-NUMBER: Final = re.compile(
-    r"(?<![\w.-])"
-    r"(?P<currency>[$\u00a3\u20ac\u20b9]\s?)?"
-    r"(?P<sign>-)?"
-    r"(?P<value>\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)"
-    r"\s*"
-    r"(?P<magnitude>percent|per cent|%|billion|bn|million|mn|thousand|trillion|tn)?"
-    r"\s*"
-    r"(?P<unit>[a-zA-Z][a-zA-Z-]*)?",
-    re.IGNORECASE,
-)
-
-# `m` and `k` are deliberately absent. The model never writes a number, but the
-# extractor does, and reading `15 m` as fifteen million is a one-million-fold
-# error on a published bar decided by a guess about metres.
+# These are fixed meanings of the written scales, not tunable chart settings.
 MAGNITUDE: Final[dict[str, Decimal]] = {
     "thousand": Decimal(1_000),
+    "lakh": Decimal(100_000),
+    "lakhs": Decimal(100_000),
     "million": Decimal(1_000_000),
     "mn": Decimal(1_000_000),
+    "crore": Decimal(10_000_000),
+    "crores": Decimal(10_000_000),
     "billion": Decimal(1_000_000_000),
     "bn": Decimal(1_000_000_000),
     "trillion": Decimal(1_000_000_000_000),
     "tn": Decimal(1_000_000_000_000),
 }
 
+# The explicit currency and attachment disambiguate `$15m` from `15 m`.
+COMPACT_CURRENCY_MAGNITUDE: Final[dict[str, Decimal]] = {
+    "k": MAGNITUDE["thousand"],
+    "m": MAGNITUDE["million"],
+    "b": MAGNITUDE["billion"],
+}
+
 PERCENT: Final[frozenset[str]] = frozenset({"percent", "per cent", "%"})
+_CURRENCY_SYMBOLS: Final = "$\u00a3\u20ac\u20b9"
+_MAGNITUDE_WORDS: Final = "|".join(MAGNITUDE)
+_PERCENT_WORDS: Final = "|".join(sorted(PERCENT - {"%"}))
+_FOLLOWING_MAGNITUDE: Final = re.compile(rf"[\s-]+(?:{_MAGNITUDE_WORDS})\b", re.IGNORECASE)
+
+# The leading lookbehind keeps identifiers such as `COVID-19` out. Capture
+# the whole attached currency suffix so an unknown one cannot pass as a bare price.
+NUMBER: Final = re.compile(
+    r"(?<![\w.-])"
+    rf"(?P<currency>[{_CURRENCY_SYMBOLS}]\s?)?"
+    r"(?P<sign>-)?"
+    r"(?P<value>\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)"
+    rf"(?:\s*(?P<magnitude>%|(?:{_MAGNITUDE_WORDS}|{_PERCENT_WORDS})\b)"
+    r"|(?(currency)(?P<currency_suffix>\w+)))?"
+    r"\s*"
+    r"(?P<unit>[a-zA-Z][a-zA-Z-]*)?",
+    re.IGNORECASE,
+)
 
 # A bare four-digit integer in this range reads as a calendar year rather than
 # as a measurement. It lives with the number pattern because it is a fact about
@@ -153,8 +164,8 @@ _MONTH_ALTERNATION: Final = "|".join(sorted(MONTHS, key=len, reverse=True))
 # The bare-year branch matches any four digits and `_read_date` holds it to
 # YEAR_MIN..YEAR_MAX, because that bound is a number and not a spelling.
 DATE: Final = re.compile(
-    r"(?<![\w.,$\u00a3\u20ac\u20b9-])"
-    r"(?<![$\u00a3\u20ac\u20b9]\s)"
+    rf"(?<![\w.,{_CURRENCY_SYMBOLS}-])"
+    rf"(?<![{_CURRENCY_SYMBOLS}]\s)"
     r"(?:"
     r"(?P<iso_year>\d{4})-(?P<iso_month>\d{2})-(?P<iso_day>\d{2})"
     rf"|(?P<dmy_day>\d{{1,2}})(?:st|nd|rd|th)?\s+(?P<dmy_month>{_MONTH_ALTERNATION})\.?,?"
@@ -235,14 +246,29 @@ def read_quantity(match: re.Match[str]) -> Reading | None:
     only when it was read as the unit, so `40 percent of` never becomes an
     excerpt and `1,200 MW` always does.
     """
+    currency = (match.group("currency") or "").strip()
+    if not currency:
+        # A rejected currency prefix must not turn `US$811m` into `811m`.
+        start = match.start()
+        while start and match.string[start - 1].isspace():
+            start -= 1
+        if start and match.string[start - 1] in _CURRENCY_SYMBOLS:
+            return None
+
     digits = match.group("value")
     try:
         magnitude = Decimal(digits.replace(",", ""))
     except InvalidOperation:
         return None
 
-    suffix = (match.group("magnitude") or "").strip().lower()
+    suffix = (match.group("magnitude") or "").lower()
+    compact = (match.group("currency_suffix") or "").lower()
+    if compact and compact not in COMPACT_CURRENCY_MAGNITUDE:
+        return None
+
     word = normalise_unit(match.group("unit") or "")
+    if currency and word in COMPACT_CURRENCY_MAGNITUDE:
+        return None
     if word in NOT_A_UNIT or len(word) > UNIT_MAX_LENGTH:
         word = ""
 
@@ -251,12 +277,13 @@ def read_quantity(match: re.Match[str]) -> Reading | None:
         unit = "%"
         span_end = match.end("magnitude")
     else:
-        if suffix in MAGNITUDE:
-            magnitude *= MAGNITUDE[suffix]
-            span_end = match.end("magnitude")
-        currency = (match.group("currency") or "").strip()
+        if compact or suffix:
+            span_end = match.end("currency_suffix" if compact else "magnitude")
+            if _FOLLOWING_MAGNITUDE.match(match.string, span_end):
+                return None
+            magnitude *= COMPACT_CURRENCY_MAGNITUDE[compact] if compact else MAGNITUDE[suffix]
         unit = currency or word
-        if word and unit == word:
+        if word and not currency:
             span_end = match.end("unit")
 
     if match.group("sign"):

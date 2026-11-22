@@ -1,6 +1,6 @@
 # Where a drawing becomes pixels
 
-**Last Updated**: 2026-11-18
+**Last Updated**: 2026-11-22
 
 The reader's browser renders numeric charts; the pipeline never draws a chart.
 This page holds that ruling, what it cost and what it
@@ -117,18 +117,11 @@ logic tests. The width comes from
 `frontend/src/lib/visual/width.ts`, which measures the figure's content box and is one watcher
 for every chart on the page rather than one each (Guardrail #12).
 
-**The bar name sits above its bar rather than beside it, and that is what keeps the bar
-horizontal at narrow widths** (row #2, 2026-09-14). A name column has to hold the longest name the compiler
-allows - the default `visuals.max_label_characters` is 40 displayed characters, including
-the `...` suffix, about 250 CSS pixels at `--text-xs` - and a 360 px phone has roughly
-300 pixels of card to spend. Side by side, a
-column that fits the names leaves nothing for the bars and a column that fits the bars cuts
-the names in half; the old drawing hid that by scaling the type down until the names fitted,
-which is the defect above. Above the bar, the name has the whole width at every size, and the
-bar has all of it but the sixteenth reserved for the figure that sits beside it - so the
-comparison the chart exists to make gets every pixel left once the number it compares has
-somewhere to stand. What a reader gives up is the tidy left-hand column of names a desktop had
-room for, and one text line of height per bar.
+**Horizontal comparisons keep their type size and give each category its own row.**
+Names can sit beside their marks on wide charts; a narrow chart moves each
+name above its mark instead of shrinking or clipping it. The
+[story drawing rules](how-a-story-chart-is-drawn-and-what-refuses-one.md#design-rationale)
+own the responsive layout, scale and label formatting.
 
 The bar, dot, slope, line, scatter, bubble and histogram share this measured-width drawing
 path and the bounded `chart.story_geometry` settings in `config/appearance.json`.
@@ -194,7 +187,7 @@ The data and framing travel together.
 | `marks` | **A flat pool, not a list of rows.** Each mark carries what it says (`text`), what it measures (`value` with its `unit`), and where that came from - `element_id` for a slice of the article, or `derived` for a chain through the four-function allow-list. Histogram counts carry their recorded edges and every source quantity they counted. Exactly one provenance form is checked. |
 | `encoding` | Which marks fill which channel, by id, mirroring `PlanEncodings` role for role. Every role is a key and an unused one is empty. |
 | `title`, `caption` | Nullable, sanitized plan prose. The browser writes text nodes, never markup. |
-| `emphasized_mark_id` | One measured mark for an explicit selection, or null. Older data still carries its original emphasis. Unselected charts never get a default highlight. |
+| `emphasized_mark_id` | One measured mark for an explicit selection, or null. Older data keeps its selection, and the story drawing rules determine whether the family paints it. Unselected charts get no default highlight. |
 
 **The pool is flat because a row is a geometry decision.** A bar is a name and a length, a scatter
 point is two measured axes, a histogram bar is a bin - shape them into rows here and this contract
@@ -483,7 +476,7 @@ or null path remains the same chartless payload older days already carry.
 | State `renderer_version` in a second place | `spec_format` carried the same idea twice, the two disagreed on 2026-09-05T18:00, and nothing downstream can tell which of two versions to believe. |
 | A visual placeholder when a drawing refuses | It makes "we correctly decided this needed no picture" look identical to a failed image, and 94.7 percent of stories already have no visual. |
 | Install `d3-selection` or `d3-axis` for the reading page | Nothing here joins, enters or exits; `d3-axis` writes a 10px font that would be imported in order to be undone. A package absent from the lockfile cannot be imported onto a reading page. |
-| Keep the name in a column beside its bar | A name column has to hold the default 40-character label, including its `...` suffix, about 250 CSS px, against roughly 300 px of card on a phone - so either the bars or the names lose, and the old drawing hid that by scaling the type until the names fitted. |
+| Keep the name beside its bar at every width | A name column can occupy most of a phone card. Moving the name above its own mark preserves both readable type and the length of the numeric axis. |
 | Back-fill the 495 deleted drawings as marks | It means re-fetching 495 source pages that have since moved, and a chart compiled from today's page under an old day's date is a record of nothing. |
 
 ## See also

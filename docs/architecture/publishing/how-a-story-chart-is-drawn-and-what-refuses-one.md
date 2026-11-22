@@ -1,6 +1,6 @@
 # How a story chart is drawn, and what refuses one
 
-**Last Updated**: 2026-11-11
+**Last Updated**: 2026-11-22
 
 A story that carries a chart carries a pointer at its marks, and the reader's
 browser is what turns those marks into a picture. This page holds that path: who
@@ -133,14 +133,21 @@ preserves its chart and facts. No supported family silently disappears.
 Failure to find readable geometry returns to the maintainer rather than
 silently narrowing the comparison.
 
-Bars sort descending by numeric value. Equal values retain source order.
-Each category moves with its quantity, source text and emphasis; the keyboard
-description uses this same sorted drawing. Ranking is not applied to dates
-or to the two sides of a relationship.
+Bars sort descending by numeric value, with source order for ties. Each category
+moves with its quantity and source text, including in the keyboard description.
+Bars start at zero; dots show their tighter range and say when it excludes zero.
+Marks, guides and ticks use the same linear scale. The chart chooses one
+magnitude from the configured abbreviation threshold and spells it out with
+the unit, for example "billion rupiah". Tick and row labels share that magnitude
+and keep the recorded decimal precision rather than rounding away meaningful
+digits. The mark tooltip and keyboard description retain raw figures and any
+original source wording. Only horizontal story charts use this notation.
 
-Bars stay horizontal at narrow widths so category names remain readable. Dots
-use one shared value scale when position compares items better than length.
-Slopes join paired values across two labelled time columns and omit an axis;
+The first configured frame breakpoint and measured label width decide when
+names move above their own marks. Tick labels are thinned by horizontal room.
+The stored emphasis field still validates but does not force a spotlight on a
+horizontal comparison. The row names identify declared groups and move with
+their marks. Slopes join paired values across two labelled time columns and omit an axis;
 their units are still visible. Lines order source-backed measurements by
 canonical date, keep source wording for labels, and group only when each
 reading carries its own series label. They share date ticks, value axes and
@@ -148,9 +155,8 @@ measured width with the Data explorer's date-series builder. One shared drawing
 component handles these forms. A line's unit appears once at the value axis;
 numeric tick labels do not repeat it. Their bounded settings live under `chart.story_geometry`, separate from the
 console chart's fixed coordinate dimensions, and reach the browser only through
-the existing typed build-time UI configuration. The dot baseline ends at the
-same measured position as its value scale, and mark outlines take their width
-from that bounded geometry.
+the existing typed build-time UI configuration. Group and emphasis outlines on
+the other families take their width from that bounded geometry.
 
 Scatter answers whether two measures move together over the same entities.
 It reuses the Data explorer's `pairedScatter` builder, but validates every pair

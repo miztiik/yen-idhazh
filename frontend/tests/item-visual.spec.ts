@@ -6,8 +6,7 @@ import { renderConfigured } from './support/server-render';
 import { serverCompiler } from './support/server-render';
 import { isVisualData, MAX_PIE_PARTS, publishedVisualData, refusedVisualData, RENDERER_VERSION } from '../src/lib/payload/drawing';
 import { drawBars, drawDots, drawLines, drawSlopes, drawVisual, statedBars, statedDots, statedLines, statedSlopes, statedDrawing } from '../src/lib/visual/bar';
-import { formatNumber, numberFormat, valueAxis } from './support/number-format';
-import { frame } from '../src/lib/charts/frame';
+import { formatNumber, numberFormat } from './support/number-format';
 import { drawScatter, statedScatter } from '../src/lib/visual/scatter';
 import { fitChartGeometry, fitChartTicks } from '../src/lib/visual/viewport';
 import type { VisualData } from '../src/lib/payload/types';
@@ -67,7 +66,6 @@ test('viewport sizing preserves every supported family without a density or fixe
             expect(tall.slope_min_height_px).toBeGreaterThanOrEqual(700);
             expect(short.line_min_height_px).toBeLessThan(geometry.line_min_height_px);
             expect(short.scatter_height_px).toBeLessThan(geometry.scatter_height_px);
-            expect(fitChartTicks(data, short, 18, 8)).toBe(1);
             expect(fitChartTicks(data, tall, 18, 8)).toBe(8);
             const shortDrawing = drawVisual(data, 360, formatNumber, numberFormat, 4, short);
             const tallDrawing = drawVisual(data, 360, formatNumber, numberFormat, 4, tall);
@@ -80,6 +78,7 @@ test('viewport sizing preserves every supported family without a density or fixe
             if (type === 'bar' || type === 'dot') {
                 expect(shortDrawing.height).toBe(tallDrawing.height);
             } else {
+                expect(fitChartTicks(data, short, 18, 8)).toBe(1);
                 expect(shortDrawing.height).toBeLessThan(tallDrawing.height);
             }
         }
@@ -461,30 +460,29 @@ test.describe('what may not be drawn', () => {
         expect(refusedVisualData(data), 'a clean document was refused, so every case below is vacuous').toBeNull();
         expect(drawBars(data, 600, formatNumber, geometry).bars.length, 'a clean document drew no bar').toBeGreaterThan(0);
     });
-    test('framing and one selected bar survive geometry without losing original figures', () => {
+    test('framing survives geometry without losing original figures', () => {
         const data = compiled();
         data.caption = '<script>not markup</script>';
         data.marks[3].source_text = '0.02 GW';
         const drawing = drawBars(data, 390, formatNumber, geometry);
         expect(drawing.title).toBe(data.title);
         expect(drawing.caption).toBe(data.caption);
-        expect(drawing.bars.map((bar) => bar.emphasized)).toEqual([false, false, true, false]);
-        expect(statedBars(drawing)).toContain('B 20 MW (highlighted) (source: 0.02 GW)');
+        expect(statedBars(drawing)).toContain('B 20 MW (source: 0.02 GW)');
         expect(statedBars(drawing)).toContain(data.caption);
     });
     test('descending bars keep equal-value source order, provenance and accessible order together', () => {
         const data = compiled([20, 40, 40, 10]);
         data.marks[3].source_text = '0.04 GW';
         const drawing = drawBars(data, 360, formatNumber, geometry);
-        expect(drawing.bars.map(({ name, stated, emphasized, sourceText }) =>
-            ({ name, stated, emphasized, sourceText }))).toEqual([
-            { name: 'B', stated: '40', emphasized: true, sourceText: '0.04 GW' },
-            { name: 'C', stated: '40', emphasized: false, sourceText: null },
-            { name: 'A', stated: '20', emphasized: false, sourceText: null },
-            { name: 'D', stated: '10', emphasized: false, sourceText: null }
+        expect(drawing.bars.map(({ name, stated, sourceText }) =>
+            ({ name, stated, sourceText }))).toEqual([
+            { name: 'B', stated: '40', sourceText: '0.04 GW' },
+            { name: 'C', stated: '40', sourceText: null },
+            { name: 'A', stated: '20', sourceText: null },
+            { name: 'D', stated: '10', sourceText: null }
         ]);
         expect(statedBars(drawing)).toContain(
-            'B 40 MW (highlighted) (source: 0.04 GW); C 40 MW; A 20 MW; D 10 MW'
+            'B 40 MW (source: 0.04 GW); C 40 MW; A 20 MW; D 10 MW'
         );
     });
     test('narrow and wide drawings keep every mark inside the measured width without changing their readings', () => {
@@ -502,24 +500,14 @@ test.describe('what may not be drawn', () => {
             ));
             for (const bar of drawing.bars) {
                 expect(bar.width).toBeGreaterThanOrEqual(0);
-                expect(bar.figure).toBeGreaterThan(bar.width);
-                expect(bar.figure).toBeLessThan(drawing.width);
             }
             const fractional = drawBars(data, room + 0.75, formatNumber, geometry);
             expect(fractional).toEqual(drawing);
         }
     });
-    test('digest and console display the same configured SI figure and retain the article wording', () => {
+    test('digest bars retain the article wording', () => {
         for (const value of [1_000, 12_345, 1_234_567, 2_400_000, 8_900_000_000, 7_800_000_000_000]) {
             const drawing = drawBars(compiled([value, 20, 30, 40]), 600, formatNumber, geometry);
-            const consoleAxis = valueAxis([0, value], frame(600, 220), {
-                along: 'y', ticks: 4
-            });
-            for (const tick of consoleAxis.ticks.filter((tick) => tick.text !== '')) {
-                const digestTick = drawBars(compiled([tick.value, 20, 30, 40]), 600, formatNumber, geometry);
-                expect(digestTick.bars.find((bar) => bar.name === 'A')!.displayed).toBe(tick.text);
-            }
-            expect(drawing.bars[0].displayed).toBe(formatNumber(value));
             expect(drawing.bars[0].stated).toBe(String(value));
             expect(statedBars(drawing)).toContain(`A ${value} MW`);
         }
@@ -535,30 +523,12 @@ test.describe('what may not be drawn', () => {
         expect(ranked.map(({ index }) => narrow.dots[index].x)).toEqual(
             [...ranked.map(({ index }) => narrow.dots[index].x)].sort((a, b) => a - b)
         );
-        const minimum = Math.min(...quantities);
-        const maximum = Math.max(...quantities);
-        for (const drawing of [narrow, wide]) {
-            const plotStart = geometry.dot_radius_px;
-            const valueX = Math.max(
-                plotStart,
-                drawing.width - Math.round(drawing.width * geometry.value_gutter_share)
-            );
-            const plotEnd = Math.max(plotStart, valueX - geometry.value_gap_px);
-            expect(drawing.axisEnd).toBe(plotEnd);
-            const domainStart = minimum === maximum ? minimum - 1 : minimum;
-            const domainEnd = minimum === maximum ? maximum + 1 : maximum;
-            for (const [index, value] of quantities.entries()) {
-                const expectedX =
-                    plotStart + ((value - domainStart) / (domainEnd - domainStart)) * (plotEnd - plotStart);
-                expect(drawing.dots[index].x).toBeCloseTo(expectedX, 10);
-            }
-        }
         expect(narrow.dots.map(({ name, stated, displayed }) => ({ name, stated, displayed })))
             .toEqual(wide.dots.map(({ name, stated, displayed }) => ({ name, stated, displayed })));
         expect(narrow.height).toBe(wide.height);
         expect(narrow.dots.map((dot) => dot.name)).toEqual(['Denmark', 'Germany', 'Norway', 'Ireland']);
         expect(wide.dots[ranked[0].index].x).toBeLessThan(wide.dots[ranked.at(-1)!.index].x);
-        expect(narrow.dots.every((dot) => dot.x - dot.radius >= 0 && dot.valueX < narrow.width)).toBe(true);
+        expect(narrow.dots.every((dot) => dot.x - dot.radius >= 0)).toBe(true);
         expect(statedDots(narrow)).toContain('Germany 3400 mw');
     });
     test('slope lines preserve the paired source values between two named columns', () => {

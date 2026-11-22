@@ -10,6 +10,7 @@ from decimal import Decimal
 from idhazh.classify.chart_reply import Reading
 from idhazh.contracts.element import VALUE_MAX_LENGTH, Element, ElementKind, ElementTable
 from idhazh.elements import (
+    COMPACT_CURRENCY_MAGNITUDE,
     DATE,
     MAGNITUDE,
     NUMBER,
@@ -29,6 +30,7 @@ _STATED_NUMBER = re.compile(
 )
 _UNIT_TOKEN = re.compile(r"[^\W\d_]+|[%$\u00a3\u20ac\u20b9]", re.UNICODE)
 _CURRENCY = frozenset({"$", "\u00a3", "\u20ac", "\u20b9"})
+_CURRENCY_QUALIFIER = re.compile(r"^[A-Z]{2}(?=[$\u00a3\u20ac\u20b9])")
 _LEADING_ARTICLE = re.compile(r"^(?:the|a|an)\s+")
 
 
@@ -46,9 +48,16 @@ def words_key(text: str) -> str:
 
 
 def _unit_tokens(tokens: list[str]) -> tuple[str, ...]:
+    currency = next((token for token in tokens if token in _CURRENCY), None)
+    if currency is not None and len(tokens) == 2:
+        # The symbol and scale surround the coefficient in source, but the
+        # proposal has one unit field. Both orders describe the same scale.
+        tokens = [token for token in tokens if token != currency] + [currency]
     words: list[str] = []
     for token in tokens:
         scale = MAGNITUDE.get(token)
+        if scale is None and currency is not None:
+            scale = COMPACT_CURRENCY_MAGNITUDE.get(token)
         words.append(str(int(scale)) if scale is not None else "%" if token in PERCENT else token)
     return tuple(words)
 
@@ -83,7 +92,7 @@ def source_key(element: Element) -> tuple[Decimal, tuple[str, ...]] | None:
         or (checked.value, checked.unit) != (element.value, element.unit)
     ):
         return None
-    suffix = (match["magnitude"] or "").strip().casefold()
+    suffix = (match["magnitude"] or match["currency_suffix"] or "").strip().casefold()
     unit: tuple[str, ...]
     if suffix in PERCENT:
         unit = ("%",)
@@ -158,16 +167,21 @@ def source_clauses(text: str, table: ElementTable) -> list[Clause]:
             slot,
             *" " * (item.span_end - item.span_start - 1),
         ]
-    masked = "".join(chars)
-    for match in re.finditer(
-        rf"\((?:[A-Z]{{2}})?(?P<currency>[$\u00a3\u20ac\u20b9])?(?P<q>{QUANTITY}) *\)",
-        masked,
-    ):
-        equivalent = elements[match.start("q")]
-        main = masked[: match.start()].rstrip()
+    for match in re.finditer(r"\(([^()\n]+)\)", text):
+        before = match.start()
+        while before > 0 and chars[before - 1].isspace():
+            before -= 1
+        if before == 0 or chars[before - 1] != QUANTITY:
+            continue
+        # The source reader may refuse a qualified symbol as a chart reading.
+        # Here it only identifies a parenthetical amount to leave out.
+        aside = _CURRENCY_QUALIFIER.sub("", match[1].strip())
+        numbered = NUMBER.fullmatch(aside)
+        equivalent = read_quantity(numbered) if numbered else None
         if (
-            equivalent.unit in _CURRENCY or (match["currency"] and equivalent.unit is None)
-        ) and main.endswith(QUANTITY):
+            equivalent is not None and equivalent.unit in _CURRENCY
+            and equivalent.span_end == len(aside)
+        ):
             chars[match.start() : match.end()] = [ASIDE, *" " * (match.end() - match.start() - 1)]
     by_sentence: dict[int, dict[int, Element]] = {}
     for offset, item in elements.items():
