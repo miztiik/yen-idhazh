@@ -28,6 +28,7 @@
 	import { rangeBounds, sameBounds } from '$lib/console/window-coverage';
 	import RecordFrame from '$lib/console/machine/RecordFrame.svelte';
 	import MachineCharts from '$lib/console/machine/MachineCharts.svelte';
+	import ContextHeadroomPanel from '$lib/console/machine/ContextHeadroomPanel.svelte';
 	import ArticleCostPanel from '$lib/console/machine/ArticleCostPanel.svelte';
 	import MemoryHeldPanel from '$lib/console/machine/MemoryHeldPanel.svelte';
 	import PlatformMixPanel from '$lib/console/machine/PlatformMixPanel.svelte';
@@ -216,6 +217,7 @@
 	const evidence = $derived(recordingGaps || countFault !== null || refused !== null);
 	const sameWorkRange = $derived(ranges[queries.slowerOnSameWorkQuery.name]);
 	const promptRange = $derived(ranges[queries.promptReuseQuery.name]);
+	const contextRange = $derived(ranges[queries.contextHeadroomQuery.name]);
 	const sameWorkCalendar = $derived(sameWorkRange === undefined ? [] : daysInWindow({ start: sameWorkRange.from, end: sameWorkRange.to }));
 	const sameWorkRule = $derived(settingsRules(data, { from: sameWorkRange?.from ?? '', to: sameWorkRange?.to ?? '' }, 'none'));
 	function panelCoverage(id: string) {
@@ -231,7 +233,7 @@
 		'slower-machines': 'Time for the same work by CPU', 'platform-mix': 'Which machines ran our jobs, day by day',
 		'slower-on-same-work': 'Whether a run is getting slower on the same work',
 		'closest-to-memory': 'Articles with the least memory left', 'memory-held': "What is holding the machine's memory",
-		'context-headroom': 'How much of the reading limit an article takes', 'article-cost': 'What one article costs the machine',
+		'context-headroom': 'Summary prompt use and room left', 'article-cost': 'What one article costs the machine',
 		'prompt-reuse': 'How much of each prompt was already cached', 'read-against-written': 'What a run reads against what it writes'
 	};
 </script>
@@ -284,6 +286,11 @@
 							days={windowDays} {windowDays} chart={cfg.chart} />
 					{:else if id === 'memory-held'}
 						<MemoryHeldPanel record={memoryHeld(textRows(rows('memoryHeldQuery')), cfg.chart.number_format)} start={end} {end} days={1} />
+					{:else if id === 'context-headroom'}
+						{#if contextRange !== undefined}
+							<ContextHeadroomPanel rows={rows(queries.contextHeadroomQuery.name)} title={titles[id]} range={contextRange}
+								chart={cfg.chart} minValues={knobs.context_min_values} {windowDays} />
+						{/if}
 					{:else if id === 'read-against-written'}
 						<ReadWritePanel rows={rows('readAgainstWrittenQuery')} chart={cfg.chart} shell={data}
 							initialMetric={readWriteMetricDefault(knobs.read_write_default_metric)}
@@ -304,7 +311,7 @@
 					{:else}
 						<MachineCharts {id} title={titles[id]} rows={rows(PANEL_QUERIES[id][0].name)}
 							hostRows={id === 'slower-machines' ? rows('platformMixQuery') : []}
-							chart={cfg.chart} {knobs} {windowDays} />
+							chart={cfg.chart} {knobs} />
 					{/if}
 				</RecordFrame>
 			{/each}

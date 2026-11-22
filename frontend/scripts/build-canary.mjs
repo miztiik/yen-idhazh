@@ -49,12 +49,12 @@ function python(args, { capture = false } = {}) {
 	});
 }
 
-/** The window the committed model file opens, read rather than spelled.
+/** The slot settings of the committed model, read rather than spelled.
  *
  * Found through `models_file` so pointing the pointer elsewhere moves it too,
  * which is the same route `frontend/tests/console-machine-data.spec.ts` takes
  * to check this fixture against the config. */
-const COMMITTED_CTX_SIZE = JSON.parse(
+const COMMITTED_SERVER = JSON.parse(
 	readFileSync(
 		resolve(
 			CONFIG,
@@ -62,7 +62,7 @@ const COMMITTED_CTX_SIZE = JSON.parse(
 		),
 		'utf8'
 	)
-).summarizer.server['--ctx-size'];
+).summarizer.server;
 
 if (!existsSync(ROOT)) {
 	console.error(
@@ -601,7 +601,8 @@ function writeItemHealthCanary() {
 						os_mem_available_min_bytes: kernelRecorded ? floor : '',
 						os_mem_available_bytes: kernelRecorded ? floor + (scatter % 300) * 1000000 : ''
 					}),
-			n_ctx_configured: COMMITTED_CTX_SIZE,
+			n_ctx_configured: COMMITTED_SERVER['--ctx-size'],
+			n_parallel: COMMITTED_SERVER['--parallel'] ?? COMMITTED_SERVER['-np'] ?? '',
 			// Last, so the three disk-read cells beat `READINGS` on the one day both
 			// name. `READINGS` sets the copies flat across that day, and this day is
 			// here to say the copies did not move - the same fact, written by the

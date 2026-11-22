@@ -45,7 +45,7 @@ export const memoryHeldQuery = {
 
 export const contextHeadroomQuery = {
 	name: 'contextHeadroomQuery', ledger: 'item-health',
-	columns: ['label_input_tokens', 'summary_input_tokens', 'n_ctx_configured', 'n_parallel', 'truncation_cap_tokens'],
+	columns: ['date', 'summary_input_tokens', 'n_ctx_configured', 'n_parallel', 'truncation_cap_tokens'],
 	span: 'window'
 } as const satisfies PanelQuery;
 

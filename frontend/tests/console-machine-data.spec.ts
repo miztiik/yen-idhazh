@@ -1,7 +1,7 @@
 /** Deterministic machine data rules over bounded fixtures; no browser, build, or layout matrix. */
 import { expect, test } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
-import { contextReadings } from '../src/lib/console/machine/records';
+import { summaryContext, summaryContextSeries } from '../src/lib/console/machine/summary-context';
 import { machineCounters } from '../src/lib/console/machine/counters';
 import type { Row } from '../src/lib/data/ledger';
 import { itemHealthRows } from '../src/lib/server/ledger-rows';
@@ -150,70 +150,46 @@ test.describe('ledger readers respect the fixture root', () => {
         }
     });
 });
-test.describe('native context requests against recorded slot limits', () => {
-    test('label and summary inputs keep their own populations, even without a limit', () => {
-        const rows: Row[] = [
-            { n_ctx_configured: 8192, n_parallel: 2, label_input_tokens: 900, summary_input_tokens: 4000 },
-            { n_ctx_configured: 8192, n_parallel: 2, summary_input_tokens: 1000 },
-            { n_ctx_configured: 8192, n_parallel: 2, summary_input_tokens: 2000 },
-            { n_ctx_configured: 8192, n_parallel: 2, summary_input_tokens: 3000 },
-            { summary_input_tokens: 500 },
-            {}
-        ];
-        const reading = contextReadings(rows);
-        expect(reading.label).toEqual([900]);
-        expect(reading.summary).toEqual([4000, 1000, 2000, 3000, 500]);
-        expect(reading.limits).toEqual([4096]);
-        expect(reading.rules).toEqual([{ at: 4096, label: 'Reading limit: 4096 tokens per slot' }]);
-        expect(reading.cut).toBe(0);
+test.describe('summary prompts against their own recorded slots', () => {
+    const [first, next, mixed, gap] = ['2026-09-01', '2026-09-02', '2026-09-03', '2026-09-04'];
+    const summary = (date: string, tokens: number, context: number, slots = 1): Row =>
+        ({ date, summary_input_tokens: tokens, n_ctx_configured: context, n_parallel: slots });
+
+    test('daily p90 and the window peak use each prompt with its own recorded capacity', () => {
+        const reading = summaryContext([
+            ...Array.from({ length: 10 }, (_, index) => summary(first, (index + 1) * 100, 4096, 2)),
+            summary(next, 512, 1024),
+            { date: next, summary_input_tokens: 9_000, n_ctx_configured: 1024 },
+            { date: next, label_input_tokens: 20_000, truncation_cap_tokens: 26_000 }
+        ], [first, next]);
+        expect(reading.days[0].slots).toEqual([{ capacity: 2048, used: 900, room: 1148, measured: 10 }]);
+        expect(reading.days[1]).toMatchObject({ recorded: 2, measured: 1, slots: [{ capacity: 1024, used: 512, room: 512 }] });
+        expect(reading.peak).toEqual({ capacity: 1024, used: 512, share: 0.5 });
+        expect(reading.prompts).toHaveLength(12);
+        expect(reading.prompts.at(-1)).toBe(9_000);
+        expect(reading.cut).toBe(1);
+        const [limit, used] = summaryContextSeries(reading.days);
+        expect(limit.points.map((point) => point.value)).toEqual([2048, 1024]);
+        expect(used.points[1].spread).toEqual({ low: 512, high: 1024 });
     });
-    test('the reading limit divides context by parallel slots and retains changing limits', () => {
-        const reading = contextReadings([
-            { n_ctx_configured: 65536, n_parallel: 8, summary_input_tokens: 2000 },
-            { n_ctx_configured: 8192, n_parallel: 4, summary_input_tokens: 1000 },
-            { n_ctx_configured: 8192, n_parallel: 2, label_input_tokens: 900 },
-            { n_ctx_configured: 16384, n_parallel: 8 }
+
+    test('mixed slots stay separate; exact zero room, overage and a missing slot differ', () => {
+        const reading = summaryContext([
+            summary(first, 128, 256), summary(mixed, 256, 256), summary(mixed, 1025, 1024),
+            summary(gap, 20, 256, 0), summary(gap, 0, 256)
+        ], [first, next, mixed, gap]);
+        expect(reading.days[2].slots).toEqual([
+            { capacity: 256, used: 256, room: 0, measured: 1 },
+            { capacity: 1024, used: 1025, room: -1, measured: 1 }
         ]);
-        expect(reading.limits).toEqual([2048, 4096, 8192]);
-        expect(reading.rules).toEqual([{ at: 2048, label: 'Reading limit: 2048 tokens per slot' }]);
-        expect(reading.summary).toEqual([2000, 1000]);
-        expect(reading.label).toEqual([900]);
-    });
-    test('a missing half of the slot limit cannot suppress a recorded request or invent a limit', () => {
-        const reading = contextReadings([
-            { n_ctx_configured: 8192, summary_input_tokens: 1900 },
-            { n_parallel: 2, label_input_tokens: 900 },
-            { n_ctx_configured: 8192, n_parallel: 0, summary_input_tokens: 1000 },
-            { n_ctx_configured: null, n_parallel: 2 }
+        expect(reading.days[1]).toMatchObject({ recorded: 0, slots: [] });
+        expect(reading.days[3]).toMatchObject({ recorded: 1, measured: 0, slots: [] });
+        const [limit, used, ...variants] = summaryContextSeries(reading.days);
+        expect(limit.points.map((point) => point.value)).toEqual([256, null, null, null]);
+        expect(used.points.map((point) => point.value)).toEqual([128, null, null, null]);
+        expect(variants.flatMap((trace) => trace.points)).toEqual([
+            { date: mixed, value: 256 }, { date: mixed, value: 256 },
+            { date: mixed, value: 1024 }, { date: mixed, value: 1025 }
         ]);
-        expect(reading.label).toEqual([900]);
-        expect(reading.summary).toEqual([1900, 1000]);
-        expect(reading.limits).toEqual([]);
-        expect(reading.rules).toEqual([]);
-    });
-    test('the cut rule is the upper-middle label request of cut articles, not the cap or every request', () => {
-        const reading = contextReadings([
-            { truncation_cap_tokens: 1, label_input_tokens: 200 },
-            { truncation_cap_tokens: 8192, label_input_tokens: 1000 },
-            { truncation_cap_tokens: 0, label_input_tokens: 400 },
-            { truncation_cap_tokens: 64, label_input_tokens: 900 },
-            { truncation_cap_tokens: 64, label_input_tokens: null },
-            { truncation_cap_tokens: null, label_input_tokens: 90000 }
-        ]);
-        expect(reading.cut).toBe(5);
-        expect(reading.label).toEqual([200, 1000, 400, 900, 90000]);
-        expect(reading.rules).toEqual([{ at: 900, label: "Cut articles' median (p50) label request: 900 tokens" }]);
-    });
-    test('the logarithmic request population excludes zero and invalid cells without losing a recorded zero cap', () => {
-        const reading = contextReadings([
-            { label_input_tokens: 0, summary_input_tokens: 'Infinity', n_ctx_configured: 0, n_parallel: 2, truncation_cap_tokens: 0 },
-            { label_input_tokens: -1, summary_input_tokens: NaN, n_ctx_configured: 8192, n_parallel: -1 },
-            { label_input_tokens: '', summary_input_tokens: null, n_ctx_configured: 'Infinity', n_parallel: 2 },
-            { label_input_tokens: true, summary_input_tokens: '12', n_ctx_configured: 8192, n_parallel: NaN }
-        ]);
-        expect(reading).toEqual({ label: [], summary: [12], rules: [], limits: [], cut: 1 });
-    });
-    test('no query rows produce no request population or inferred reading limit', () => {
-        expect(contextReadings([])).toEqual({ label: [], summary: [], rules: [], limits: [], cut: 0 });
     });
 });
