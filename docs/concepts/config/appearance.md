@@ -284,6 +284,9 @@ The selector still accepts `piyg`, `spectral`, and `sequential` (D3 Blues).
 `console_style.colors.{light,dark}.chart_measure` independently sets the violet
 used by ordinary single-measure charts. Older appearance files use the
 declared default for this role. Reader colours remain untouched.
+`chart_memory_low` and `chart_memory_high` in the same theme blocks set the
+endpoints of Hardware's available-memory gradient. They do not replace the
+Console palette, status colours, or the free-memory fill in the memory split.
 
 The CSS producer uses D3 colour/interpolation and build-time Culori contrast
 comparison to select readable shades of the stock colours for the existing

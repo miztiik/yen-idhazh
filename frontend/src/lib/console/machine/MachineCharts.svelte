@@ -102,9 +102,22 @@
 		{:else if id === 'closest-to-memory'}
 			{#if tightest}<p class="lede" data-lede>{tightest.row.value} available at the lowest recorded point</p>{/if}
 			<p data-comparison="Lowest recorded available memory per article">Least available first. The scale ends at the largest recorded machine capacity.</p>
+			{#if closest !== null}
+				<div class="memory-scale" role="group" aria-label="Available memory colour scale">
+					<span>Less memory left</span>
+					<span class="memory-gradient chart-bar" aria-hidden="true"></span>
+					<span>More memory left</span>
+				</div>
+			{/if}
 			<RankedList geometry={closest} caption="Lowest available memory per article" maxText={gib(closest?.max ?? 0)}
-				token={SERIES_TOKENS['free-memory']} unmeasuredNote="No article has a recorded available-memory reading and total."
-				emptyNote="No article has a recorded available-memory reading and total." />
+				unmeasuredNote="No article has a recorded available-memory reading and total."
+				emptyNote="No article has a recorded available-memory reading and total.">
+				{#snippet track(row)}
+					<span class="memory-track" aria-hidden="true">
+						<span class="memory-gradient chart-bar-stack" style:--chart-filled-width={row.percent}></span>
+					</span>
+				{/snippet}
+			</RankedList>
 		{:else if id === 'context-headroom'}
 			<p data-comparison="Each prompt against the reading limit">Each prompt against the reading limit.</p>
 			<p class="lede" data-lede>{context.limits.length
@@ -132,4 +145,24 @@
 	.halves > div { min-width: 0; }
 	h4 { font-size: var(--console-body-size); line-height: var(--console-body-leading); margin-block: var(--console-control-gap); }
 	.guide { color: var(--color-text-secondary); font-size: var(--console-small-size); line-height: var(--console-small-leading); }
+	.memory-scale {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		margin-block: var(--space-2);
+		color: var(--color-text-secondary);
+		font-size: var(--console-small-size);
+		line-height: var(--console-small-leading);
+	}
+	.memory-scale .memory-gradient { flex: 1; min-inline-size: var(--space-6); }
+	.memory-track {
+		display: block;
+		border-radius: var(--radius-full);
+		background: var(--color-surface-sunken);
+	}
+	.memory-gradient {
+		display: block;
+		block-size: var(--space-3);
+		background: linear-gradient(to right in oklch, var(--chart-memory-low), var(--chart-memory-high));
+	}
 </style>
