@@ -8,10 +8,12 @@ import { serverCompiler, type Rewrite } from './support/server-render';
 import { judgeNothings, type Nothing, type PanelReading } from './support/panel-gates';
 import {
 	DRIFT_STATUS, PROBABILITY_STATUS, SAMPLE_STATUS, judgeCanaries, judgeCoverage, judgeDayAbsence, judgeStatus,
-	psiInterpretation, psiNumber
+	judgeSlices, psiInterpretation, psiNumber
 } from '../src/lib/console/judge-observations';
 import { dateSeries } from '../src/lib/charts/d3/dateSeries';
 import { frame, MARGIN } from '../src/lib/charts/frame';
+import { readoutView } from '../src/lib/charts/readout-view';
+import { judgeSliceColumns, judgeSliceEvidence } from '../src/routes/console/judgement/judge-slice-chart';
 import { numberFormat } from './support/number-format';
 
 const FRONTEND = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -41,6 +43,29 @@ test('a missing ledger, an unpublished day, a legacy row and no measurement are 
 	expect(judgeStatus('not_filed', SAMPLE_STATUS)).toContain('no verdict batch was filed');
 	expect(judgeCoverage({ pairs_drawn: 12, pairs_returned: null }).stack).toBeNull();
 	expect(judgeCoverage({ pairs_drawn: 12, pairs_returned: 0, sample_tp: 0, sample_fp: 0, sample_fn: 0, sample_tn: 0 }).stack).toEqual([0, 0, 12]);
+});
+
+test('sampled ranges keep exact drawn totals and binary denominators, while a gap has no stack', () => {
+	const slices = judgeSlices(JSON.stringify({ slices: [
+		{ low: 0.7, high: 0.8, drawn: 8, yes: 2, no: 3, unclear: 1, split: 1, refused: 0 },
+		{ low: 0.9, high: 0.92, drawn: 4, yes: 0, no: 0, unclear: 0, split: 0, refused: 0 }
+	] }))!;
+	const { ranges, readout } = judgeSliceEvidence(slices, numberFormat);
+	const plot = judgeSliceColumns(ranges, frame(900, 220), 6, numberFormat)!;
+	expect(plot.axis.domain[0]).toBe(0);
+	expect(readout.columns).toEqual(['0.7 to 0.8', '0.8 to 0.9', '0.9 to 0.92']);
+	expect(plot.columns.map(({ top, total, segments }) => [top, total, segments.length])).toEqual([
+		[plot.axis.scale(8), '8', 4], [plot.axis.scale(0), null, 0], [plot.axis.scale(4), '4', 1]
+	]);
+	const facts = (index: number) => readoutView(readout, index)?.entries.map(({ label, value }) => [label, value]);
+	expect(facts(0)).toEqual([
+		['Drawn', '8'], ['Agreed YES', '2'], ['Agreed NO', '3'], ['Other returned', '2'],
+		['Did not return', '1'], ['YES of agreed', '2 of 5 (40%)']
+	]);
+	expect(facts(1)).toEqual([['Not drawn', '']]);
+	expect(facts(2)).toContainEqual(['Did not return', '4']);
+	expect(facts(2)).toContainEqual(['YES of agreed', 'No agreed YES or NO']);
+	expect(judgeSliceColumns(ranges, frame(170, 220, MARGIN, { fontSize: 16, leading: 20, tracking: 0 }), 6, numberFormat)).toBeNull();
 });
 
 test('both configured PSI guides are Moderate, near-boundary labels preserve the side, and calendar gaps break the line', () => {
