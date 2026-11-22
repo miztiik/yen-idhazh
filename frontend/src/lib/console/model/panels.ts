@@ -14,7 +14,7 @@ export const panelQueries: Readonly<Record<string, readonly PanelQuery[]>> = {
 export const titles: Readonly<Record<string, string>> = {
 	'model-cards': 'Model figures by recorded day', 'model-throughput': 'Model tokens per second',
 	'item-cost': 'What one item cost the model',
-	'call-ending': 'How a model call ended',
+	'call-ending': 'Model calls cut off at the length limit',
 	faithfulness: 'Summary faithfulness, day by day',
 	'score-cost': 'What checking one summary cost', 'summary-length': 'How long summaries came out'
 };

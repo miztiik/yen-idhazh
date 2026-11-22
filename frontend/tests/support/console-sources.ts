@@ -69,7 +69,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	'src/lib/console/model': [
 		'rows.ts', 'call-ending.ts', 'faithfulness.ts', 'summary-length.ts',
 		'model-throughput.ts', 'model-rule.ts', 'cost.ts', 'item-cost.ts', 'ItemCost.svelte', 'Query.svelte', 'Series.svelte',
-		'Cards.svelte', 'cards.ts', 'Panels.svelte', 'panels.ts', 'slice.ts', 'work.ts'
+		'CallCutoffs.svelte', 'Cards.svelte', 'cards.ts', 'Panels.svelte', 'panels.ts', 'slice.ts', 'work.ts'
 	],
 	'src/lib/console/voices': [
 		'record.ts', 'source-health.ts', 'feeds-failed.ts', 'feed-failure-preview.ts', 'fetch-time.ts',

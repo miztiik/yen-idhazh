@@ -248,11 +248,12 @@ percentile must name its rank instead. The distance between them is the spread,
 read by eye rather than by subtracting two sentences.
 
 **The native caller compares machine kinds, not retired shard-board cells.**
-`Which machines do the same work slower` has separate reading and writing lists.
+`Time for the same work by CPU` has separate prefill and decode lists.
 `slowerMachines` in `frontend/src/lib/console/machine/records.ts` supplies each
-kind's middle time and slowest-tenth notch over its comparable article readings.
+kind's middle time and 90th-percentile marker over its comparable article readings.
 `MachineCharts.svelte` passes those rows to `rankedList`, with the reference
-machine's typical time as a named rule and the configured article floor.
+CPU's median for the same token workload as a named rule in seconds, and the
+configured article floor.
 
 **What the reader loses, named.** A range mark says nothing about the shape
 between its two ends. Different distributions can share the same median and
@@ -287,18 +288,17 @@ once. **A mark whose two ends are two different measurements is a different
 mark**, and giving it the range mark's field names would have taught a reader to
 read a floor as a median. So it carries its own names.
 
-The native `Which articles left the machine least memory` panel uses a fill for
-memory held at the item's tightest recorded point and a notch for that machine's
-total memory. `closestToMemory` in
-`frontend/src/lib/console/machine/records.ts` subtracts
-`os_mem_available_min_bytes` from `os_mem_total_bytes` and supplies the total as
-`ends.end`. Neither end is a median, and the total is not an end-of-item reading.
-Rows without a valid total and available-memory pair supply no mark.
+**Articles with the least memory left** needs only one fill. Its bar is the
+lowest recorded available memory, not memory held or an end-of-item reading.
+The shared GiB scale ends at the largest recorded capacity among eligible
+articles. Each row names its own machine capacity and displays at most two
+decimal places. A measured zero stays visible as a labelled, empty bar; a
+missing or invalid memory pair does not rank. Short bars show proximity to
+zero without a green/red gradient that would imply unmeasured danger thresholds.
 
-**What the reader loses, named.** The mark says nothing about when in the item
-the floor fell, so an item that dipped once and an item that sat at the floor
-throughout draw identically. It also says nothing about recovery after that
-point or a memory leak. Those need readings over time, not a machine-total notch.
+The panel no longer ranks memory held. It cannot show how long the machine
+stayed at the low point or how it recovered; that would require memory samples
+over time.
 
 ## A dated line declares which settings it can compare
 

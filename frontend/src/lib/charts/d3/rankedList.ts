@@ -50,6 +50,10 @@ export interface RankedOptions {
 	max?: number;
 	order?: 'largest-first' | 'smallest-first';
 	minCount?: number;
+	/** A measured reference for the scale, even when every ranked value is zero. */
+	scaleFloor?: number;
+	/** Presentation only. The numeric readings still set rank and mark length. */
+	formatValue?: (value: number) => string;
 	rules?: readonly { at: number; label: string }[];
 	tail?: string;
 }
@@ -62,6 +66,7 @@ export interface RankedSegment {
 	start: string;
 	/** How long it is along the same track, as a CSS length. */
 	size: string;
+	reading?: string;
 }
 
 export interface RankedEntry extends RankedRow<RankedDisplay> {
@@ -84,7 +89,7 @@ export interface RankedGeometry {
 	/** Rows the cap left off, and their magnitudes summed, for the tail line. */
 	hidden: number;
 	hiddenValue: number;
-	rules: { at: number; label: string; percent: string }[];
+	rules: { at: number; label: string; percent: string; reading?: string }[];
 	tail?: string;
 }
 
@@ -99,7 +104,7 @@ export function rankedGeometry<T extends RankedDisplay>(ranked: Ranked<T>): Rank
 	};
 }
 
-function segmentsOf(row: RankedInput, max: number): RankedSegment[] {
+function segmentsOf(row: RankedInput, max: number, formatValue?: RankedOptions['formatValue']): RankedSegment[] {
 	const parts = row.segments ?? [];
 	let sum = 0;
 	const placed = parts.map((part) => {
@@ -108,7 +113,8 @@ function segmentsOf(row: RankedInput, max: number): RankedSegment[] {
 		}
 		const start = sum;
 		sum += part.value;
-		return { label: part.label, value: part.value, token: part.token ?? '--chart-measure', start: percentOf(start / max), size: percentOf(part.value / max) };
+		return { label: part.label, value: part.value, token: part.token ?? '--chart-measure', start: percentOf(start / max), size: percentOf(part.value / max),
+			...(formatValue === undefined ? {} : { reading: formatValue(part.value) }) };
 	});
 	// Adding fractions can land a hair over the row; the bound is the rounding
 	// error of the sum itself. Past it, the parts claim more than the row does.
@@ -123,6 +129,9 @@ export function rankedList(rows: readonly RankedInput[], opts: RankedOptions): R
 	if (opts.max !== undefined && (!Number.isInteger(opts.max) || opts.max < 1)) {
 		throw new RangeError(`A ranked list draws one row or more; asked for ${opts.max}.`);
 	}
+	const scaleFloor = opts.scaleFloor ?? 0;
+	if (!Number.isFinite(scaleFloor) || scaleFloor < 0) throw new RangeError('A ranked scale floor must be finite and non-negative.');
+	const formatValue = opts.formatValue ?? String;
 	const named = new Set<string>();
 	for (const row of rows) {
 		if (named.has(row.label)) throw new Error(`A ranked list names each thing once; "${row.label}" came twice.`);
@@ -148,7 +157,7 @@ export function rankedList(rows: readonly RankedInput[], opts: RankedOptions): R
 		rows.map((row) => ({
 			key: row.label,
 			value: row.value,
-			row: { label: row.label, value: String(row.value), input: row }
+			row: { label: row.label, value: formatValue(row.value), input: row }
 		})),
 		0
 	);
@@ -159,7 +168,7 @@ export function rankedList(rows: readonly RankedInput[], opts: RankedOptions): R
 		a.key.localeCompare(b.key)
 	);
 	const drawn = ordered.slice(0, opts.max);
-	const max = Math.max(0, ...drawn.flatMap((entry) => [entry.value, entry.row.input.range?.high ?? 0, entry.row.input.ends?.end ?? 0]), ...rules.map((rule) => rule.at));
+	const max = Math.max(scaleFloor, ...drawn.flatMap((entry) => [entry.value, entry.row.input.range?.high ?? 0, entry.row.input.ends?.end ?? 0]), ...rules.map((rule) => rule.at));
 	if (ranked.empty || (max <= 0 && !drawn.some((entry) => short(entry.row.input)))) return null;
 	return {
 		rows: drawn.map((entry) => ({
@@ -169,7 +178,7 @@ export function rankedList(rows: readonly RankedInput[], opts: RankedOptions): R
 			value: entry.value,
 			fraction: max > 0 ? entry.value / max : 0,
 			percent: percentOf(entry.value / max),
-			segments: segmentsOf(entry.row.input, max),
+			segments: segmentsOf(entry.row.input, max, opts.formatValue),
 			range: entry.row.input.range === undefined ? null : rangeMark(entry.value, entry.row.input.range.high, max),
 			ends: entry.row.input.ends === undefined ? null : { valuePercent: percentOf(entry.value / max), endPercent: percentOf(entry.row.input.ends.end / max) },
 			refused: short(entry.row.input) ? `Too few: ${entry.row.input.range?.count} of the ${opts.minCount} articles a row needs.` : null
@@ -177,7 +186,8 @@ export function rankedList(rows: readonly RankedInput[], opts: RankedOptions): R
 		max,
 		hidden: ordered.length - drawn.length,
 		hiddenValue: ordered.slice(drawn.length).reduce((sum, entry) => sum + entry.value, 0),
-		rules: rules.map((rule) => ({ ...rule, percent: percentOf(rule.at / max) })),
+		rules: rules.map((rule) => ({ ...rule, percent: percentOf(rule.at / max),
+			...(opts.formatValue === undefined ? {} : { reading: formatValue(rule.at) }) })),
 		tail: opts.tail
 	};
 }

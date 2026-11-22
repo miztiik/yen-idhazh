@@ -215,6 +215,7 @@
 		serverNotes.startedMidWindow || serverNotes.coveredElsewhere || lostSentence));
 	const evidence = $derived(recordingGaps || countFault !== null || refused !== null);
 	const sameWorkRange = $derived(ranges[queries.slowerOnSameWorkQuery.name]);
+	const promptRange = $derived(ranges[queries.promptReuseQuery.name]);
 	const sameWorkCalendar = $derived(sameWorkRange === undefined ? [] : daysInWindow({ start: sameWorkRange.from, end: sameWorkRange.to }));
 	const sameWorkRule = $derived(settingsRules(data, { from: sameWorkRange?.from ?? '', to: sameWorkRange?.to ?? '' }, 'none'));
 	function panelCoverage(id: string) {
@@ -227,9 +228,9 @@
 		return windows.filter(({ span }, index) => !windows.slice(0, index).some((other) => sameBounds(span, other.span)));
 	}
 	const titles: Readonly<Record<string, string>> = {
-		'slower-machines': 'Which machines do the same work slower', 'platform-mix': 'Which machines ran our jobs, day by day',
+		'slower-machines': 'Time for the same work by CPU', 'platform-mix': 'Which machines ran our jobs, day by day',
 		'slower-on-same-work': 'Whether a run is getting slower on the same work',
-		'closest-to-memory': 'Which articles left the machine least memory', 'memory-held': "What is holding the machine's memory",
+		'closest-to-memory': 'Articles with the least memory left', 'memory-held': "What is holding the machine's memory",
 		'context-headroom': 'How much of the reading limit an article takes', 'article-cost': 'What one article costs the machine',
 		'prompt-reuse': 'How much of each prompt was already cached', 'read-against-written': 'What a run reads against what it writes'
 	};
@@ -289,8 +290,10 @@
 							history={tokenHistory} historyRange={tokenHistoryRange} {deviationRules}
 							{start} {end} {windowDays} />
 					{:else if id === 'prompt-reuse'}
-						<PromptReusePanel rows={rows('promptReuseQuery')} title={titles[id]} chart={cfg.chart} shell={data}
-							{start} {end} {windowDays} />
+						{#if promptRange !== undefined}
+							<PromptReusePanel rows={rows('promptReuseQuery')} title={titles[id]} chart={cfg.chart} shell={data}
+								range={promptRange} {windowDays} />
+						{/if}
 					{:else if id === 'slower-on-same-work'}
 						<Panel {id} title={titles[id]} heading="h3">
 							<div>

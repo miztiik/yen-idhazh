@@ -1,6 +1,6 @@
 # What the quality and source panels draw
 
-**Last Updated**: 2026-11-18
+**Last Updated**: 2026-11-22
 
 The panels that report what the model wrote and how the sources behaved: the
 retained cards and measurements on `/console/model/`, and
@@ -93,15 +93,21 @@ Scorer-change markers belong to the separate faithfulness plot, not these
 cards. **No card is tinted as a confidence verdict.** Its movement colour follows
 the measure's declared polarity rather than inventing a threshold.
 
-**The daily table stays, below, behind a `Show these figures day by day`
-control.** The retained readings stay available: after a card moves, the rows say which
+**The daily table stays below the cards, behind `Daily figures`.**
+The retained readings stay available: after a card moves, the rows say which
 day. It is a native disclosure, so the rows are in the prerendered document
 either way and the section works with no script at all. The rows follow the
-window control above them and the line that opens them names the span, because a
-table that ignored the preset above it was two windows on one page. Shut, it
-drops its border, background and shadow: closed it holds one line of link text,
-and a card around a footnote is what made it read as something hanging off the
-bottom of the page.
+window control; the disclosure does not repeat the span. Where the table's
+coverage differs, the panel names the dates separately.
+
+**Model calls cut off at the length limit** plots daily `length` endings from
+the summary and historical label calls. Normal stops remain in the daily
+readout, and other reported reasons count separately from stops and cutoffs.
+All nonempty reasons count in the denominator: reported endings, not all
+attempts. A day with reported reasons and no cutoffs reads zero; a day with
+no reasons is a gap. A cutoff can still produce a usable reply, and a missing
+reason does not establish a failure. A true attempt-level failure rate would
+need a record of every attempted call and its outcome.
 
 ## A distribution answers what a median refuses to
 

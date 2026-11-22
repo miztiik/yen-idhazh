@@ -84,13 +84,10 @@ test('the faithfulness scale stays bounded, never hides a measurement and keeps 
 
 test('recorded native slices drive all eligible model reducers without broadening cells', () => {
 	const endingRows = recorded('callEndingQuery');
-	const ending = callEnding(endingRows);
-	const cells = endingRows.flatMap((r) => [r.summary_finish_reason, r.label_finish_reason]).filter((v) => v !== null && v !== '');
-	expect(ending.calls).toBe(cells.length);
-	expect(ending.length).toBe(cells.filter((v) => v === 'length').length);
-	expect(ending.series[0].token).toBe('--chart-4');
-	expect(ending.series.find((series) => series.label === 'ended on its own')?.token).toBe('--chart-5');
-	expect(ending.series.reduce((total, s) => total + s.points.reduce((n, p) => n + (p.value ?? 0), 0), 0)).toBe(cells.length);
+	const ending = callEnding(endingRows, [...new Set(endingRows.map((row) => String(row.date)))].sort());
+	const cells = endingRows.flatMap((r) => [r.summary_finish_reason, r.label_finish_reason]).filter((v) => typeof v === 'string' && v !== '');
+	expect(ending.total.reported).toBe(cells.length);
+	expect(ending.total.cutoffs).toBe(cells.filter((v) => v === 'length').length);
 	const score = faithfulness(recorded('faithfulnessQuery'), { high: 80, low: 50 }, { step: 5, floorMax: 75 });
 	expect(score.days.length).toBeGreaterThan(0);
 	for (const day of score.days) {
@@ -106,6 +103,19 @@ test('recorded native slices drive all eligible model reducers without broadenin
 	const rules = failureRuleRows(recorded('failedRuleQuery'));
 	expect(rules.some((row) => row.code === null)).toBe(true);
 	expect(failureRules(rules, { start: '2026-08-01', end: '2026-08-20' }, 'summarize').failed).toBeGreaterThanOrEqual(0);
+});
+
+test('length cutoffs, normal stops, and other reasons share only the reported-endings denominator', () => {
+	const dates = ['2026-11-10', '2026-11-11', '2026-11-12', '2026-11-13'];
+	const result = callEnding([
+		{ date: dates[0], summary_finish_reason: 'length', label_finish_reason: 'stop', recovered: true },
+		{ date: dates[1], summary_finish_reason: 'stop', label_finish_reason: null },
+		{ date: dates[1], summary_finish_reason: 'other_runtime_reason' },
+		{ date: dates[2], summary_finish_reason: null, label_finish_reason: '', outcome: 'failed', stage: 'summarize' }
+	], dates);
+	expect(result.total).toEqual({ reported: 4, cutoffs: 1, stops: 2, other: 1 });
+	expect(result.days.map(({ endings }) => endings?.cutoffs ?? null)).toEqual([1, 0, null, null]);
+	expect(result.days.map(({ endings }) => endings?.reported ?? null)).toEqual([2, 2, null, null]);
 });
 
 test('only changes to the scorer mark faithfulness, while the cards keep settings alone', () => {

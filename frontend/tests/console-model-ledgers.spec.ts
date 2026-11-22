@@ -24,7 +24,7 @@ test('the integrated Summaries route reads the native record and keeps all panel
 		'the faithfulness axis carries the percent sign its series declares').toHaveCount(1);
 	await expect(page.locator('[data-console-panel-id="faithfulness"] [data-model-match-note]'))
 		.toHaveText('For a flagged summary: Automated check found a possible mismatch. Read the original.');
-	await page.locator('[data-model-table-control] > summary').click();
+	await page.getByText('Daily figures', { exact: true }).click();
 	await expect(page.locator('[data-instrument="coherence"]')).not.toHaveCount(0);
 	await expect(page.locator('[data-model-cards-note]')).toContainText('Newest recorded day: 2026-08-20 UTC.');
 	await expect(page.locator('[data-kpi="Published summaries checked"]')).toBeVisible();
@@ -36,7 +36,9 @@ test('the integrated Summaries route reads the native record and keeps all panel
 		await expect(query).toHaveAttribute('data-query-asked', '7');
 		await expect(query).toHaveAttribute('data-query-state', 'ready');
 	}
-	await expect(page.locator('[data-model="table"] caption')).toContainText('7 days');
+	const days = await page.locator('[data-model-table] tbody th').allTextContents();
+	expect(days.length).toBeGreaterThan(0);
+	expect(days.every((day) => day >= '2026-08-14' && day <= '2026-08-20')).toBe(true);
 	expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
 	await page.locator('a[href*="/console/machine/"]').first().click();
 	await expect(page).toHaveTitle(/Hardware/);

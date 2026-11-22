@@ -1,6 +1,7 @@
 /** The native low-water memory reading, from one article's own kernel cells. */
 import { expect, test } from '@playwright/test';
 import { closestToMemory } from '../src/lib/console/machine/records';
+import { rankedList } from '../src/lib/charts/d3/rankedList';
 import type { Row } from '../src/lib/data/ledger';
 
 const GIB = 2 ** 30;
@@ -14,22 +15,16 @@ function item(id: string, floor: number | null, total: number | null = 16 * GIB)
 	};
 }
 
-test('the tightest article is total less the lowest available, not a process high-water mark', () => {
-	const rows = [item('a', 4 * GIB), item('b', 2 * GIB), item('c', 3 * GIB)];
+test('the tightest article has the fewest GiB available, not the most in use', () => {
+	const rows = [item('a', 4 * GIB, 64 * GIB), item('b', 2 * GIB, 8 * GIB), item('c', 3 * GIB)];
 	const readings = closestToMemory(rows);
-	expect(readings.map((one) => [one.value, one.ends?.end])).toEqual([[12, 16], [14, 16], [13, 16]]);
-	const tightest = [...readings].sort((a, b) => b.value - a.value)[0];
-	expect(tightest.label).toBe(`b \u00b7 source-a \u00b7 ${DATE}`);
-	expect(tightest.value).toBe(14);
-	expect(readings.map((one) => one.value)).not.toContain(15);
+	expect(readings.map((one) => [one.value, one.capacity])).toEqual([[4, 64], [2, 8], [3, 16]]);
+	expect(rankedList(readings, { max: 1, order: 'smallest-first' })?.rows[0]).toMatchObject({
+		label: `b \u00b7 source-a \u00b7 ${DATE}`, value: 2
+	});
 	// Neither process owns the kernel's available-memory instrument.
 	const changed = rows.map((row) => ({ ...row, llama_rss_bytes: 64 * GIB, llama_rss_peak_bytes: 128 * GIB }));
 	expect(closestToMemory(changed)).toEqual(readings);
-});
-
-test('the endpoint is the measured machine total, never the runner ceiling or another article', () => {
-	const readings = closestToMemory([item('large', 2 * GIB, 64 * GIB), item('small', 3 * GIB, 8 * GIB)]);
-	expect(readings.map((one) => [one.value, one.ends?.end])).toEqual([[62, 64], [5, 8]]);
 });
 
 test('an absent or non-finite kernel cell is not a zero; a measured zero is retained', () => {
@@ -40,8 +35,9 @@ test('an absent or non-finite kernel cell is not a zero; a measured zero is reta
 		item('negative', -GIB), item('past-total', 17 * GIB), item('zero-total', 0, 0)
 	];
 	expect(closestToMemory(invalid)).toEqual([]);
-	expect(closestToMemory([item('none-left', 0)])[0]).toMatchObject({ value: 16, ends: { end: 16 } });
-	expect(closestToMemory([item('all-free', 16 * GIB)])[0]).toMatchObject({ value: 0, ends: { end: 16 } });
+	const measuredZero = closestToMemory([item('none-left', 0)]);
+	expect(rankedList(measuredZero, { scaleFloor: measuredZero[0].capacity })?.rows[0]).toMatchObject({ value: 0, fraction: 0 });
+	expect(closestToMemory([item('all-free', 16 * GIB)])[0]).toMatchObject({ value: 16, capacity: 16 });
 	expect(closestToMemory([])).toEqual([]);
 });
 
@@ -53,7 +49,7 @@ test('multiple attempts of one dated article keep its tightest reading in either
 	for (const input of [rows, [...rows].reverse()]) {
 		const readings = closestToMemory(input);
 		expect(readings).toHaveLength(3);
-		expect(readings.find((one) => one.label === `same \u00b7 source-a \u00b7 ${DATE}`)?.value).toBe(14);
-		expect(readings.find((one) => one.label.endsWith('2026-09-03'))?.value).toBe(15);
+		expect(readings.find((one) => one.label === `same \u00b7 source-a \u00b7 ${DATE}`)?.value).toBe(2);
+		expect(readings.find((one) => one.label.endsWith('2026-09-03'))?.value).toBe(1);
 	}
 });
