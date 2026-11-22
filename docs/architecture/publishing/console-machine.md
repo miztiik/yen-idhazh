@@ -1,6 +1,6 @@
 # What the Hardware route draws
 
-**Last Updated**: 2026-11-21
+**Last Updated**: 2026-11-22
 
 `/console/machine/` asks what machine the work actually got and how much
 resource headroom that work left.
@@ -109,14 +109,14 @@ Membership and order live in `config/console/machine.json`.
 
 | Group | Panel id | Drawing and grain |
 | --- | --- | --- |
-| What the machine was doing | `slower-machines` | Separate Reading and Writing rankings of comparable work by machine kind |
+| What the machine was doing | `slower-machines` | Separate prefill and decode rankings for the same estimated workload by CPU; measured phase means by CPU and L3 in a disclosure |
 | | `platform-mix` | Recorded jobs grouped across vendors by exact reported L3 capacity: one square a job below the configured floor, otherwise stacked day bars; never unique physical-machine counts or a probability of the next draw |
 | Where the time went | `slower-on-same-work` | One dated seconds reading for a fixed typical article on one reference machine |
-| How close we are to the limits | `closest-to-memory` | Dated articles ranked by memory held; the empty remainder ends at total machine memory |
+| How close we are to the limits | `closest-to-memory` | Dated articles ranked by minimum available memory, least GiB first |
 | | `memory-held` | Existing memory split and overlapping process brackets, for the newest day |
 | | `context-headroom` | Label and summary request distributions on one logarithmic domain, with recorded context and cut-request rules |
 | What the model spends | `article-cost` | Existing processor-time, model-time and incremental-memory tracks over the chosen window |
-| | `prompt-reuse` | Summary call and label call, each one stacked bar a UTC day from 0 to 100 percent, the axis reading 0%, 50% and 100%: the day's cached share of the call's prompt tokens at the bottom in the call's own colour, the remainder above it in the same colour tinted |
+| | `prompt-reuse` | Summary and label calls on the same UTC calendar, with cached and fresh prompt tokens as shares and dashed settings changes on their actual dates |
 | | `read-against-written` | Two run-sequence token lines; Run total or actual Median per article over one paired cohort, with measured/recorded coverage |
 
 Every settled panel has one largest lede, one comparison,
@@ -145,7 +145,7 @@ Slower machines chooses the kind with most qualifying articles as reference,
 with a deterministic name tie-break. Each article's read or write milliseconds
 per token is divided by its own run's reference median, then priced in the
 reference kind's typical seconds. The upper-middle nearest rank supplies the
-middle; the slowest-tenth notch uses `ceil(0.9*n)-1`. The configured ten-article
+middle; the 90th percentile uses `ceil(0.9*n)-1`. The configured ten-article
 floor and kind cap apply independently to each list. Runs without a reference
 reading and articles lacking comparable work are counted and printed. Reading
 and writing never become one total.
@@ -166,11 +166,10 @@ The run-wide slowest-article ranking is mounted once on
 Its source family group and newest-day clamp remain independent of Pipelines'
 ordinary item-health endpoint.
 
-Closest-to-memory uses `total - minimum available`, not process resident
-memory. Repeated readings of one dated article contribute its tightest held
-reading, with a deterministic total-memory tie-break. Date remains in the label
-so the same article measured on another day is not accidentally first-wins.
-The total-memory endpoint is the machine's own, and article length is context.
+Closest-to-memory uses the item's lowest recorded kernel `MemAvailable`, not
+memory held or process resident memory. Only valid available/total pairs rank.
+Repeated readings of one dated article contribute its lowest available reading,
+with the larger total breaking ties. Capacity is printed beside each article.
 
 Context distributions use positive readings only and share a logarithmic
 domain. The reading rule is the smallest recorded `n_ctx_configured/n_parallel`;
@@ -179,14 +178,11 @@ label-request rule. No cut rows means `No article was cut in this window.`
 Too few readings keep an honest empty distribution instead of invented marks.
 Each distribution measures its own shrinking grid cell. The share axis keeps
 space for its percentage labels, including on a narrow screen.
-Hardware's ranked rule names also stay inside their own tracks. A rule at the
-maximum must not push its name beyond the document. The label's position uses
-the same track fraction as the marker, offset by that fraction of its own width;
-long names wrap within the track. The marker and numeric rule do not move.
+Each CPU comparison labels the dashed reference once, with its workload and
+unit, rather than repeating a processor name on every track.
 
-Prompt reuse draws one stacked bar a UTC day per call, 0 to 100 percent: the
-cached share at the bottom in the call's own colour, the remainder above it in
-the same colour tinted. The share is pooled - the day's cached tokens over its
+Prompt reuse draws one stacked bar a UTC day per call, 0 to 100 percent. The
+share is pooled - the day's cached tokens over its
 prompt tokens - because a median of per-article shares is not stable here: over
 the 26 days 2026-10-20 to 2026-11-14 the label call's per-article median is
 exactly 0 on 7 days while its pooled share stays between 23.1 and 40.3 percent.
@@ -194,11 +190,11 @@ A row counts only when its prompt and cached cells are both present, finite and
 cached is not above prompt; the remainder is 100 minus the cached share, so the
 parts total exactly 100. The recorded `label_cache_pct` and `summary_cache_pct`
 are those same two cells divided and rounded (`stages/summarize_one_item.py`), not an
-independent reading, so the panel does not read them. Settings changes draw as
-dashed verticals; 2026-11-11, when the summary call's share fell from 95.4 to
-77.7 percent, is one. A day with no complete reading is a gap, and an item has
-made one call since 2026-11-17, so the label call's chart draws no bar for a day
-after it.
+independent reading, so the panel does not read them. Both plots share the exact
+query's UTC calendar. A settings change can mark a dated gap on a populated
+plot; it does not create a token reading or explain a change in cache use.
+A wholly unmeasured call keeps its empty state; unavailable change history
+is named once. The one-call pipeline has recorded no label calls since 2026-11-17.
 
 Read/write token volume reads the settled compact item-health rows, one per
 UTC date, run and article. Both sides require finite, nonnegative input and
@@ -373,16 +369,13 @@ Framing is one context line and a compact identity key. Below the plot are only
 the selected UTC day, its recorded-job total and a short selection hint. Full
 dated counts and measured speeds remain in the keyboard/touch day details.
 
-Prompt reuse is two charts, summary first, because the two calls move
-independently and one scale would hide the step in either: between 2026-11-10
-and 2026-11-11 the summary call's cached share fell from 95.4 to 77.7 percent
-while the label call's rose from 32.2 to 40.3. The remainder above the cached
-share is the call's own colour tinted, not the page ground: on the console's
-panel surface the tint stands off at about 2.5 to 1 in the dark theme and 1.5 to
-1 in the light theme, where a sunken surface would stand off at about 1.1 to 1
-and 1.2 to 1, so the top of every bar would nearly vanish. The tooltip and key
-print the cached share, the remainder taken from that printed figure so the two
-read as 100, and the day's prompt tokens and article count.
+Cache shares stay separate by call because they move independently: between
+2026-11-10 and 2026-11-11 the summary call's cached share fell from 95.4 to
+77.7 percent while the label call's rose from 32.2 to 40.3. The headings identify
+the calls; the same flat fills identify cached and fresh tokens in both.
+The tooltip and keyboard readout print both shares, prompt tokens and article
+counts. Read/prefill and write/decode keep their respective colours elsewhere
+on Hardware; free memory keeps the violet measurement role in both memory views.
 
 ## See also
 

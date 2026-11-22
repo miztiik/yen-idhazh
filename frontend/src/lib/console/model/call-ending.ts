@@ -1,31 +1,34 @@
 import type { Row } from '../../data/ledger';
-import type { SeriesInput } from '../../charts/d3/dateSeries';
-import { SERIES_TOKENS } from '../series-tokens';
 
-export function callEnding(rows: readonly Row[]): { series: SeriesInput[]; calls: number; length: number } {
-	const totals = new Map<string, number>();
-	const dates = new Map<string, Map<string, number>>();
+interface Endings {
+	reported: number;
+	cutoffs: number;
+	stops: number;
+	other: number;
+}
+
+/** A finish reason comes from a reply, not from a ledger of all attempts. */
+export function callEnding(rows: readonly Row[], dates: readonly string[]) {
+	const byDate = new Map<string, Endings>();
+	const total: Endings = { reported: 0, cutoffs: 0, stops: 0, other: 0 };
 	for (const row of rows) {
 		if (typeof row.date !== 'string') throw new Error('A call ending needs its recorded date.');
-		const day = dates.get(row.date) ?? new Map<string, number>();
-		dates.set(row.date, day);
+		const day = byDate.get(row.date) ?? { reported: 0, cutoffs: 0, stops: 0, other: 0 };
 		for (const cell of [row.summary_finish_reason, row.label_finish_reason]) {
 			if (cell === null || cell === undefined || cell === '') continue;
 			if (typeof cell !== 'string') throw new Error('A call ending must be text.');
-			day.set(cell, (day.get(cell) ?? 0) + 1);
-			totals.set(cell, (totals.get(cell) ?? 0) + 1);
+			const key = cell === 'length' ? 'cutoffs' : cell === 'stop' ? 'stops' : 'other';
+			day[key]++;
+			day.reported++;
 		}
+		if (day.reported > 0) byDate.set(row.date, day);
 	}
-	const reasons = [...totals.keys()].sort((a, b) => a === 'length' ? -1 : b === 'length' ? 1 :
-		(totals.get(b)! - totals.get(a)!) || a.localeCompare(b));
-	return {
-		calls: [...totals.values()].reduce((a, b) => a + b, 0),
-		length: totals.get('length') ?? 0,
-		series: reasons.map((reason) => ({
-			label: reason === 'length' ? 'cut off at the length limit' : reason === 'stop' ? 'ended on its own' : reason,
-			token: reason === 'length' ? SERIES_TOKENS['length-limit'] : reason === 'stop' ? SERIES_TOKENS['ended-on-own'] : SERIES_TOKENS['other-ending'],
-			points: [...dates].sort(([a], [b]) => a.localeCompare(b)).map(([date, counts]) =>
-				({ date, value: counts.get(reason) ?? 0 }))
-		}))
-	};
+	const days = dates.map((date) => {
+		const endings = byDate.get(date) ?? null;
+		if (endings !== null) {
+			for (const key of ['reported', 'cutoffs', 'stops', 'other'] as const) total[key] += endings[key];
+		}
+		return { date, endings };
+	});
+	return { total, days };
 }

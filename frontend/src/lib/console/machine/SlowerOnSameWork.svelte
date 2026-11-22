@@ -20,13 +20,13 @@
 	const geometry = $derived(dateSeries(work.series, {
 		frame: frame(width, knobs.chart_height, MARGIN), density: chart.tick_density,
 		valueTicks: 5, padding: 0.2, rule,
-		rules: work.median === null ? [] : [{ at: work.median, label: 'window median' }],
+		rules: work.median === null ? [] : [{ at: work.median, label: `Median of daily estimates: ${formatNumber(work.median, numberFormat, { si: false })} s` }],
 		number_format: chart.number_format
 	}));
 </script>
 <div use:observeWidth={(next) => measured = next}>
 <p data-lede class="lede">{work.newest === null ? 'No comparable reference work on the newest day.' : `${formatNumber(work.newest, numberFormat, { si: false })} seconds for the typical article.`}</p>
-<p data-comparison="The newest day's seconds against the window's median.">The newest day's seconds against the window's median, pricing the same article size on the same reference machine.</p>
+<p data-comparison="Daily estimates against their median">Each day estimates seconds for the same workload on the reference CPU.</p>
 <DateSeries {geometry} empty={emptyState('quiet', 'No qualifying reference-machine work was measured.')}
 	name="slower-on-same-work" label="Seconds for the same typical article, one point a recorded day"
 	{width} height={knobs.chart_height} readout={geometry === null ? null : { ...geometry.readout, columns: geometry.dates.map(shortDate) }} readoutMaxShare={chart.readout_max_share} />

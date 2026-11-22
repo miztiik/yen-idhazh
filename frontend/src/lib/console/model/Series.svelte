@@ -9,9 +9,9 @@
 	import { completeModelRule } from './model-rule';
 	import { shortDate } from '../../format';
 
-	let { series, rule, chart, name, stacked = false, rules = [], domain, note = 'No reading was recorded in this window.' }: {
+	let { series, rule, chart, name, rules = [], domain, note = 'No reading was recorded in this window.' }: {
 		series: readonly SeriesInput[]; rule: ModelRule; chart: ChartConfig; name: string;
-		stacked?: boolean; rules?: readonly { at: number; label: string }[];
+		rules?: readonly { at: number; label: string }[];
 		domain?: [number, number]; note?: string;
 	} = $props();
 	const frame = useChartFrame(() => chart);
@@ -19,7 +19,7 @@
 	const box = $derived(frame(chartWidth(measured, chart.width_px), chart.height_px));
 	const fullRule = $derived(completeModelRule(rule, series.flatMap((one) => one.points.map((point) => point.date))));
 	const geometry = $derived(dateSeries(series, {
-		frame: box, stacked, density: chart.tick_density, valueTicks: 4, padding: 0.2, rule: fullRule, rules, domain,
+		frame: box, density: chart.tick_density, valueTicks: 4, padding: 0.2, rule: fullRule, rules, domain,
 		number_format: chart.number_format
 	}));
 	const readout = $derived(geometry === null ? null : {

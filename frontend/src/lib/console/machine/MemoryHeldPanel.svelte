@@ -19,6 +19,7 @@
 	import { countDays, nameSpan, openWithSpan } from '$lib/console/span-words';
 	import { useNumberFormat } from '$lib/number-format-context';
 	import { formatNumber } from '$lib/number-format';
+	import { SERIES_TOKENS } from '$lib/console/series-tokens';
 	import { factsOf } from '$lib/charts/readout';
 	import { hoverReadout } from '$lib/charts/readout-hover';
 
@@ -34,6 +35,11 @@
 		days: number;
 	} = $props();
 	const numberFormat = useNumberFormat();
+	const paint = {
+		free: SERIES_TOKENS['free-memory'], held: SERIES_TOKENS['held-memory'],
+		server: SERIES_TOKENS['model-server-memory'], worker: SERIES_TOKENS['worker-memory'],
+		rest: SERIES_TOKENS['other-memory']
+	};
 
 	const view = $derived(memoryHeldWithin(record, start, end));
 	const latest = $derived(view.days.at(-1));
@@ -116,8 +122,9 @@
 						<span class="memory-segments chart-bar-stack">
 						{#each day.segments.filter((segment) => segment.bytes > 0) as segment (segment.key)}
 							<span
-								class="segment {segment.key}"
+								class="segment"
 								style="width: {segment.width}"
+								style:background="var({paint[segment.key]})"
 								data-memory-segment={segment.key}
 								data-memory-bytes={segment.bytes}
 							></span>
@@ -135,7 +142,7 @@
 					<ul class="keys">
 						{#each day.segments as segment (segment.key)}
 							<li>
-								<span class="swatch {segment.key}"></span>
+								<span class="swatch" style:background="var({paint[segment.key]})"></span>
 								{segment.label} <strong>{segment.figure}</strong>
 							</li>
 						{/each}
@@ -288,29 +295,6 @@
 	}
 
 	.memory-segments { display: flex; width: 100%; height: 100%; }
-
-	.segment.free,
-	.swatch.free {
-		background: var(--color-surface-sunken);
-		box-shadow: inset 0 0 0 1px var(--color-rule);
-	}
-
-	.segment.held,
-	.swatch.held,
-	.segment.server,
-	.swatch.server {
-		background: var(--chart-1);
-	}
-
-	.segment.worker,
-	.swatch.worker {
-		background: var(--chart-3);
-	}
-
-	.segment.rest,
-	.swatch.rest {
-		background: var(--chart-4);
-	}
 
 	/* Where the parts ran past the machine, this is where the machine ended. */
 	.edge {

@@ -35,6 +35,7 @@
 	import type { Snippet } from 'svelte';
 	import type { RankedDisplay, RankedRow } from '../charts/rank';
 	import type { RankedGeometry } from '../charts/d3/rankedList';
+	import type { ChartToken } from '$lib/charts/theme';
 	import { factsOf } from '$lib/charts/readout';
 	import { hoverReadout } from '$lib/charts/readout-hover';
 
@@ -46,6 +47,8 @@
 		unmeasuredNote,
 		emptyNote,
 		fitRuleLabels = false,
+		labelRules = true,
+		token,
 		hover = true,
 		tail = null,
 		selectedKey = null,
@@ -67,6 +70,9 @@
 		emptyNote: string;
 		/** Keep rule names within the track, including a rule at either endpoint. */
 		fitRuleLabels?: boolean;
+		/** A caller can name a shared rule once outside the rows. */
+		labelRules?: boolean;
+		token?: ChartToken;
 		/** A containing record chart may provide the fuller shared reading instead. */
 		hover?: boolean;
 		/** What the cap left out, in one sentence. */
@@ -85,7 +91,7 @@
 		...(row.row.context ? [{ label: 'Context', value: row.row.context }] : []),
 		...(row.row.status ? [{ label: 'Status', value: row.row.status }] : []),
 		...(row.refused ? [{ label: 'Evidence', value: row.refused }] : []),
-		...row.segments.map((part) => ({ label: part.label, value: part.value, format: String, swatch: `var(${part.token})` })),
+		...row.segments.map((part) => ({ label: part.label, value: part.reading ?? String(part.value), swatch: `var(${part.token})` })),
 		{ label: 'A full bar', value: maxText }
 	], unmeasuredNote)));
 </script>
@@ -133,7 +139,7 @@
 					<span class="ranked-value tabular-nums" data-ranked-cell="value">{row.row.value}</span>
 
 					<span class="ranked-drawing">
-						{#if fitRuleLabels && !row.refused && ranked.rules.length > 0}
+						{#if labelRules && fitRuleLabels && !row.refused && ranked.rules.length > 0}
 							<span class="ranked-rule-labels">
 								{#each ranked.rules as rule (rule.label)}
 									<span class="ranked-rule-label" style="inset-inline-start: {rule.percent}; transform: translateX(-{rule.percent})">{rule.label}</span>
@@ -146,13 +152,13 @@
 						{:else if track}
 							{@render track(row)}
 						{:else if row.range}
-							<span class="ranked-range">{@render rangeTrack(row.range)}</span>
+							<span class="ranked-range">{@render rangeTrack(row.range, token)}</span>
 						{:else if row.ends}
 							<span class="ranked-range">{@render endsTrack(row.ends.valuePercent, row.ends.endPercent)}</span>
 						{:else if row.segments.length > 0}
 							<span class="ranked-parts chart-bar-stack" style:--chart-filled-width={row.percent}>
 								{#each row.segments.filter((part) => part.value > 0) as part (part.label)}
-									<span class="ranked-part" style="inset-inline-start: {part.start}; inline-size: {part.size}; background: var({part.token})" aria-label="{part.label}: {part.value}"></span>
+									<span class="ranked-part" style="inset-inline-start: {part.start}; inline-size: {part.size}; background: var({part.token})" aria-label="{part.label}: {part.reading ?? part.value}"></span>
 								{/each}
 							</span>
 						{:else}
@@ -160,12 +166,13 @@
 								class="ranked-bar chart-bar"
 								data-ranked-cell="bar"
 								style="inline-size: {row.percent}"
+								style:background={token === undefined ? undefined : `var(${token})`}
 							></span>
 						{/if}
 						{#if !row.refused}
 							{#each ranked.rules as rule (rule.label)}
-								<span class="ranked-rule" style="inset-inline-start: {rule.percent}" aria-label="{rule.label}: {rule.at}">
-									{#if !fitRuleLabels}<span>{rule.label}</span>{/if}
+								<span class="ranked-rule" style="inset-inline-start: {rule.percent}" aria-label="{rule.label}: {rule.reading ?? rule.at}">
+									{#if labelRules && !fitRuleLabels}<span>{rule.label}</span>{/if}
 								</span>
 							{/each}
 						{/if}
