@@ -40,7 +40,9 @@ at stack joins and focus outlines against the surface rather than the fill.
 Distinct quantities and hardware groups use category colours; the axis paint
 is not a category fill. Absence keeps its reserved neutral. Green, amber and
 red express a declared status, not an ordinary measured length or count.
-Confidence and movement retain their own roles.
+The [available-memory scale](console-design/the-mark-shapes-a-panel-may-reach-for.md#a-mark-with-two-named-ends-is-not-a-range-mark-and-it-says-which-end-is-which)
+uses a separate, labelled dark-red-to-green scale for one continuous quantity,
+not status categories. Confidence and movement retain their own roles.
 
 | Token family | Meaning |
 | --- | --- |

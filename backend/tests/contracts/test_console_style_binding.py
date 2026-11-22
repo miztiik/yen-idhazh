@@ -50,7 +50,7 @@ def test_frontend_fields_defaults_and_partial_leaves_match_native_style() -> Non
         {},
         {
             "typography": {"small": {"weight": 500}},
-            "colors": {"dark": {"accent": "#58bab0"}},
+            "colors": {"dark": {"accent": "#58bab0", "chart_memory_low": "#b44d56"}},
             "elevation": {"light": {"floating": {"y_px": 8}}},
             "chart": {"grid_dash_px": [2, 4]},
         },
@@ -78,6 +78,7 @@ def test_real_css_producer_substitutes_nondefault_style_without_changing_reader_
     assert "--console-" not in reader
     assert "--color-bg:" not in reader
     assert "--chart-measure:" not in reader
+    assert "--chart-memory-" not in reader
     assert "--color-bg: #1a1a18;" in operator
     assert "--color-bg: #f3f2ee;" in operator
     assert "--console-small-size: 0.875rem;" in operator
@@ -87,3 +88,4 @@ def test_real_css_producer_substitutes_nondefault_style_without_changing_reader_
     assert "--series-1: var(--chart-1);" in operator
     assert f"--chart-measure: {style.colors.light.chart_measure};" in operator
     assert f"--chart-measure: {style.colors.dark.chart_measure};" in operator
+    assert "--chart-memory-high: #286c48;" in operator

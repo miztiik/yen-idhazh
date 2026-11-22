@@ -22,6 +22,8 @@ export interface ConsoleColors {
 	chart_axis: string;
 	chart_grid: string;
 	chart_measure: string;
+	chart_memory_low: string;
+	chart_memory_high: string;
 	/** Console category colours; the last slot is reserved for absence. */
 	categorical: string[];
 }
@@ -106,6 +108,7 @@ export const CONSOLE_STYLE_DEFAULTS: ConsoleStyleConfig = {
 			accent_hover: '#1b4612', on_accent: '#ffffff', focus: '#8e0152',
 			selected: '#e6f5d0', chart_axis: '#b6afa0', chart_grid: '#dad6cb',
 			chart_measure: '#6929c4',
+			chart_memory_low: '#a02b43', chart_memory_high: '#206e49',
 			categorical: ['#126e81', '#1746a2', '#9f1853', '#343a3f', '#2773ad', '#8b538e', '#243d72', '#6a7078']
 		},
 		dark: {
@@ -115,6 +118,7 @@ export const CONSOLE_STYLE_DEFAULTS: ConsoleStyleConfig = {
 			accent_hover: '#e6f5d0', on_accent: '#122722', focus: '#de77ae',
 			selected: '#1b4612', chart_axis: '#565348', chart_grid: '#393932',
 			chart_measure: '#a56eff',
+			chart_memory_low: '#bb4e5a', chart_memory_high: '#64bb88',
 			categorical: ['#6ac4d3', '#90a8ff', '#ff7eb6', '#dde1e6', '#74bce9', '#d397d9', '#aebfe5', '#a3aab4']
 		}
 	},
