@@ -49,7 +49,7 @@ test.describe('route-owned console configuration', () => {
 		const observations = ['judge-coverage', 'judge-score-ranges', 'pair-score-drift'];
 		expect(routes.judgement.panel_groups).toEqual([
 			{ id: 'judgement', title: 'Published grouping', panels: judgementPanels },
-			{ id: 'judge-observations', title: 'Judge observations', panels: observations }
+			{ id: 'judge-observations', title: 'Judge: Content Similarity', panels: observations }
 		]);
 		expect(routes.judgement.judged).toEqual([...judgementPanels, ...observations]);
 		const modelPanels = [

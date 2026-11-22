@@ -83,7 +83,7 @@
 	{/snippet}
 	{#snippet explorer()}
 		{#if explorerRoute}
-			Read the raw pair-verdicts and threshold-history records in
+			Read the packed pair-verdicts and threshold-history records in
 			<a href="{base}{explorerRoute.href}" data-judgement-elsewhere>{explorerRoute.label}</a>.
 		{/if}
 	{/snippet}

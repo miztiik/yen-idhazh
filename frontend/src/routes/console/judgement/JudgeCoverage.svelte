@@ -94,26 +94,9 @@
 <Panel id={name} title="Pairs drawn and returned" heading="h3" wide>
 	<div use:observeWidth={(next) => measured = next} data-windowed={name} data-window-days={windowDays}
 		data-panel-question="How many drawn pairs did the judge return?"
-		data-model-rule="no" data-model-rule-name={name} data-model-rule-none={rule.declined}>
-		<div class="judge-toolbar">
-			<p data-comparison="Pairs returned against pairs drawn.">
-				Each column shows the draw split by what came back.
-			</p>
-			<label>
-				Selected digest (UTC)
-				<select value={selected} disabled={historyState === 'loading'} onchange={(event) => onPick(event.currentTarget.value)}>
-					{#each calendar as date (date)}<option value={date}>{longDate(date)}</option>{/each}
-				</select>
-			</label>
-		</div>
-		<Reserved record panelState={historyState} {width} height={knobs.chart_height} {name} {label}>
-			<DateSeries {geometry} empty={emptyState('quiet', 'No complete draw and return stacks were measured in this window.')}
-				{name} {label} {width} height={knobs.chart_height} {readout} readoutMaxShare={chart.readout_max_share}
-				picked={picked} onPick={(index) => onPick(calendar[index]!)} restingNote=" (selected digest)"
-				hint="Left and Right inspect dates. Click, tap or press Enter to select a digest for all three panels."
-				hintOne="Click, tap or press Enter to select this digest." />
-		</Reserved>
-		<div class="judge-reading" data-judge-digest={selected}>
+		data-model-rule="no" data-model-rule-name={name} data-model-rule-none={rule.declined}
+		data-judge-digest={selected}>
+		<div class="judge-summary">
 			<p data-lede>
 				{#if chosen?.returned != null && chosen.drawn !== null}
 					<strong>{exact(chosen.returned)} of {exact(chosen.drawn)} returned</strong>{returnShare === null ? '' : ` (${returnShare})`}.
@@ -123,9 +106,21 @@
 					<strong>{longDate(selected)}:</strong> {detail ? judgeStatus(detail.sample_status, SAMPLE_STATUS) : dayNote}
 				{/if}
 				{#if chosen?.binary != null} {exact(chosen.binary)} agreed YES or NO.{/if}
-				{#if reported !== null && expected !== null} <span>{exact(reported)} of {exact(expected)} runners reported.</span>{/if}
+				{#if reported !== null && expected !== null} {exact(reported)} of {exact(expected)} runners reported.{/if}
 			</p>
-			{#if detail}
+			<p data-comparison="Pairs returned against pairs drawn.">
+				Each column shows the draw split by what came back.
+			</p>
+		</div>
+		<Reserved record panelState={historyState} {width} height={knobs.chart_height} {name} {label}>
+			<DateSeries {geometry} empty={emptyState('quiet', 'No complete draw and return stacks were measured in this window.')}
+				{name} {label} {width} height={knobs.chart_height} {readout} readoutMaxShare={chart.readout_max_share}
+				picked={picked} onPick={(index) => onPick(calendar[index]!)} restingNote=" (selected digest)"
+				hint="Left and Right inspect dates. Click, tap or press Enter to select a digest for the judge group."
+				hintOne="Click, tap or press Enter to select this digest." />
+		</Reserved>
+		{#if detail}
+			<div class="judge-reading">
 				{#if sample && chosen?.binary != null && chosen.returned !== null}
 					{@const usable = chosen.binary + sample.unclear}
 					<p>Sample usability: {exact(usable)} of {exact(chosen.returned)} returned pairs agreed YES, NO or UNCLEAR.
@@ -139,41 +134,19 @@
 					{countText(judgeNumber(detail.pairs_unreadable))} unreadable and
 					{countText(judgeNumber(detail.pairs_abandoned))} lost to the deadline.
 				</p>
-			{:else if chosen?.returned != null}
-				<p>{dayNote}</p>
-			{/if}
-		</div>
+			</div>
+		{:else if chosen?.returned != null}
+			<p class="judge-reading">{dayNote}</p>
+		{/if}
 	</div>
 </Panel>
 
 <style>
-	.judge-toolbar {
-		display: flex;
-		flex-wrap: wrap;
-		justify-content: space-between;
-		align-items: center;
-		gap: var(--space-2) var(--space-4);
+	.judge-summary {
+		display: grid;
+		gap: var(--space-2);
 		margin-block-end: var(--space-3);
 	}
-	label {
-		display: flex;
-		align-items: center;
-		flex-wrap: wrap;
-		gap: var(--space-2);
-		font-size: var(--console-small-size);
-		line-height: var(--console-small-leading);
-	}
-	select {
-		max-inline-size: 100%;
-		min-block-size: var(--console-control-min-height);
-		padding-inline: var(--console-control-padding-inline);
-		border: 1px solid var(--color-rule-strong);
-		border-radius: var(--console-control-radius);
-		background: var(--color-surface);
-		color: var(--color-text);
-		font: inherit;
-	}
-	select:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 	.judge-reading { display: grid; gap: var(--space-2); margin-block-start: var(--space-3); }
 	p { margin: 0; overflow-wrap: anywhere; }
 </style>

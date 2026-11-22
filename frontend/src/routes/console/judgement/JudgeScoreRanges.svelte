@@ -69,10 +69,39 @@
 	}
 </script>
 
-<Panel id={name} title="Judge answers by score range" heading="h3" wide>
+<Panel id={name} title="Judge answers and cutoff agreement" heading="h3" wide>
 	<div data-judge-digest={selected} data-panel-question="How did the judge answer within the ranges that were drawn?"
 		data-model-rule="no" data-model-rule-name={name} data-model-rule-none={rule}>
 		<p class="digest" data-lede><strong>{longDate(selected)}</strong> (UTC digest)</p>
+		{#if detail && cutoff}
+			<section class="cutoffs">
+				<h4>Cutoff agreement with the judge</h4>
+				<p>These compare score decisions with agreed YES or NO answers. Neither cutoff is the publication floor.
+					Hard-decision Brier is the fraction of decisions that disagreed.</p>
+				{#if cutoff.binary !== null}
+					<p>{exact(cutoff.binary)} pairs with agreed YES or NO.
+						{#if cutoff.binary < thin} Thin sample: fewer than {exact(thin)} such pairs.{/if}</p>
+					<dl>
+						<div>
+							<dt>Reporting cutoff: {score(detail.evaluated_cutoff)}</dt>
+							<dd>{exact(cutoff.tp!)} matched YES; {exact(cutoff.tn!)} matched NO.</dd>
+							<dd>{exact(cutoff.fp!)} wrong matches (judge NO); {exact(cutoff.fn!)} missed matches (judge YES).</dd>
+							<dd>Precision: {rate(detail.sample_precision, cutoff.predicted, 'no pairs at or above the cutoff', 'predicted YES')}.</dd>
+							<dd>Recall: {rate(detail.sample_recall, cutoff.judgeYes, 'the judge agreed YES on no pairs', 'judge YES')}.</dd>
+							<dd>Hard-decision Brier: {brier(detail.cutoff_brier_score, cutoff.binary)}.</dd>
+						</div>
+						<div>
+							<dt>Upper bound used for the draw: {score(detail.upper_threshold_before)}</dt>
+							<dd>Wrong-match share: {rate(detail.upper_cutoff_false_match_share, judgeNumber(detail.upper_cutoff_sample_size),
+								'no agreed YES or NO pairs at or above this bound')}.</dd>
+							<dd>Hard-decision Brier: {brier(detail.upper_cutoff_brier_score, cutoff.binary)}.</dd>
+						</div>
+					</dl>
+				{:else}
+					<p>{sampleNote} Upper bound used for the draw: {score(detail.upper_threshold_before)}.</p>
+				{/if}
+			</section>
+		{/if}
 		<p data-comparison="Agreed YES against agreed NO in each score range.">
 			All bars use the same pair-count scale. Only drawn ranges are listed.
 		</p>
@@ -95,35 +124,6 @@
 				{/snippet}
 			</PartsOfOne>
 		</Reserved>
-		{#if detail && cutoff}
-			<section class="cutoffs">
-				<h4>Cutoffs compared with the judge</h4>
-				<p>These compare score decisions with agreed YES or NO answers, not with published merges.
-					Hard-decision Brier is the fraction of decisions that disagreed.</p>
-				{#if cutoff.binary !== null}
-					<p>{exact(cutoff.binary)} pairs with agreed YES or NO.
-						{#if cutoff.binary < thin} Thin sample: fewer than {exact(thin)} such pairs.{/if}</p>
-					<dl>
-						<div>
-							<dt>Diagnostic cutoff: {score(detail.evaluated_cutoff)}</dt>
-							<dd>{exact(cutoff.tp!)} matched YES; {exact(cutoff.tn!)} matched NO.</dd>
-							<dd>{exact(cutoff.fp!)} wrong matches (judge NO); {exact(cutoff.fn!)} missed matches (judge YES).</dd>
-							<dd>Precision: {rate(detail.sample_precision, cutoff.predicted, 'no pairs at or above the cutoff', 'predicted YES')}.</dd>
-							<dd>Recall: {rate(detail.sample_recall, cutoff.judgeYes, 'the judge agreed YES on no pairs', 'judge YES')}.</dd>
-							<dd>Hard-decision Brier: {brier(detail.cutoff_brier_score, cutoff.binary)}.</dd>
-						</div>
-						<div>
-							<dt>Upper bound used for the draw: {score(detail.upper_threshold_before)}</dt>
-							<dd>Wrong-match share: {rate(detail.upper_cutoff_false_match_share, judgeNumber(detail.upper_cutoff_sample_size),
-								'no agreed YES or NO pairs at or above this bound')}.</dd>
-							<dd>Hard-decision Brier: {brier(detail.upper_cutoff_brier_score, cutoff.binary)}.</dd>
-						</div>
-					</dl>
-				{:else}
-					<p>{sampleNote} Upper bound used for the draw: {score(detail.upper_threshold_before)}.</p>
-				{/if}
-			</section>
-		{/if}
 	</div>
 </Panel>
 
@@ -134,9 +134,9 @@
 	.cutoffs {
 		display: grid;
 		gap: var(--space-2);
-		margin-block-start: var(--console-panel-gap);
-		padding-block-start: var(--console-panel-gap);
-		border-block-start: 1px solid var(--color-rule);
+		margin-block-end: var(--console-panel-gap);
+		padding-block-end: var(--console-panel-gap);
+		border-block-end: 1px solid var(--color-rule);
 	}
 	dl {
 		display: grid;
