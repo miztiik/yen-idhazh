@@ -1,16 +1,16 @@
 <script lang="ts">
 	import Panel from '$lib/components/Panel.svelte';
 	import Reserved from '$lib/components/Reserved.svelte';
-	import PartsOfOne from '$lib/charts/d3/PartsOfOne.svelte';
-	import { partsOfOne } from '$lib/charts/d3/partsOfOne';
+	import EmptyState from '$lib/charts/d3/EmptyState.svelte';
 	import { emptyState } from '$lib/charts/d3/empty';
-	import { factsOf } from '$lib/charts/readout';
-	import { judgeCutoff, judgeDecimal, judgeNumber, judgeShare, judgeSlices, judgeStatus, SAMPLE_STATUS } from '$lib/console/judge-observations';
+	import { chartWidth, observeWidth } from '$lib/charts/frame';
+	import { judgeCutoff, judgeDecimal, judgeNumber, judgeSlices, judgeStatus, SAMPLE_STATUS } from '$lib/console/judge-observations';
 	import type { PanelState } from '$lib/console/waiting';
 	import type { Row } from '$lib/data/ledger';
 	import { longDate } from '$lib/format';
 	import { numberFormatter } from '$lib/number-format';
 	import type { ChartConfig, ConsoleConfig } from '$lib/server/config';
+	import JudgeSliceChart from './JudgeSliceChart.svelte';
 
 	let { selected, detail, detailState, dayNote, thin, knobs, chart }: {
 		selected: string;
@@ -25,8 +25,8 @@
 	const name = 'judge-score-ranges';
 	const label = 'Drawn score ranges and counts by answer';
 	const rule = 'Drawn score ranges do not compare summary settings.';
-	const order = ['YES', 'NO', 'Other returned', 'Did not return'] as const;
-	const tokens = ['--chart-1', '--chart-2', '--chart-3', '--chart-8'] as const;
+	let measured = $state<number | null>(null);
+	const width = $derived(chartWidth(measured, knobs.chart_width));
 	const number = $derived(numberFormatter(chart.number_format));
 	const exact = (value: number) => number(value, { exact: true });
 	const decimal = (value: number) => judgeDecimal(value, chart.number_format);
@@ -35,23 +35,6 @@
 		return n === null ? 'Not recorded' : decimal(n);
 	};
 	const slices = $derived(judgeSlices(detail?.slice_outcomes));
-	const rows = $derived((slices ?? []).map((slice, index, drawn) => {
-		const other = slice.unclear + slice.split + slice.refused;
-		const sent = slice.yes + slice.no + other;
-		const previous = drawn[index - 1];
-		return {
-			label: `${decimal(slice.low)} to ${decimal(slice.high)}`,
-			wholeRangeLost: sent === 0,
-			before: previous !== undefined && previous.high < slice.low ? `${decimal(previous.high)} to ${decimal(slice.low)}` : null,
-			yes: slice.yes,
-			no: slice.no,
-			parts: [slice.yes, slice.no, other, slice.drawn - sent].map((value, i) => ({ label: order[i]!, value }))
-		};
-	}));
-	const geometry = $derived(partsOfOne(rows, { order, tokens }));
-	const readout = $derived(rows.map((row) => factsOf(row.label, row.parts.map((part, index) => ({
-		...part, format: exact, swatch: `var(${tokens[index]})`
-	})), 'Not measured.')));
 	const cutoff = $derived(detail === null ? null : judgeCutoff(detail));
 	const sampleNote = $derived(detail === null ? dayNote : slices?.length === 0
 		? 'No pairs were drawn for this digest.' : judgeStatus(detail.sample_status, SAMPLE_STATUS));
@@ -69,43 +52,22 @@
 	}
 </script>
 
-<Panel id={name} title="Judge answers by score range" heading="h3" wide>
+<Panel id={name} title="Judge answers and cutoff agreement" heading="h3" wide>
 	<div data-judge-digest={selected} data-panel-question="How did the judge answer within the ranges that were drawn?"
-		data-model-rule="no" data-model-rule-name={name} data-model-rule-none={rule}>
+		data-model-rule="no" data-model-rule-name={name} data-model-rule-none={rule}
+		use:observeWidth={(next) => measured = next}>
 		<p class="digest" data-lede><strong>{longDate(selected)}</strong> (UTC digest)</p>
-		<p data-comparison="Agreed YES against agreed NO in each score range.">
-			All bars use the same pair-count scale. Only drawn ranges are listed.
-		</p>
-		<Reserved record panelState={detailState} width={knobs.chart_width} height={knobs.chart_height} {name} {label}>
-			<PartsOfOne {geometry} empty={emptyState('quiet', sampleNote)}
-				{name} {label} width={knobs.chart_width} height={knobs.chart_height} {readout}
-				readoutMaxShare={chart.readout_max_share} separateSegments>
-				{#snippet rowNote(index)}
-					{@const row = rows[index]!}
-					<p>
-						<strong>{exact(row.yes)} YES</strong> / <strong>{exact(row.no)} NO</strong>.
-						{#if row.yes + row.no > 0}
-							YES: {exact(row.yes)} of {exact(row.yes + row.no)} ({judgeShare(row.yes, row.yes + row.no, chart.number_format)}).
-						{:else}
-							No agreed YES or NO.
-						{/if}
-						{#if row.wholeRangeLost} None of the drawn pairs in this range returned.{/if}
-						{#if row.before} Nothing was drawn in the gap from {row.before}.{/if}
-					</p>
-				{/snippet}
-			</PartsOfOne>
-		</Reserved>
 		{#if detail && cutoff}
 			<section class="cutoffs">
-				<h4>Cutoffs compared with the judge</h4>
-				<p>These compare score decisions with agreed YES or NO answers, not with published merges.
+				<h4>Cutoff agreement with the judge</h4>
+				<p>These compare score decisions with agreed YES or NO answers. Neither cutoff is the publication floor.
 					Hard-decision Brier is the fraction of decisions that disagreed.</p>
 				{#if cutoff.binary !== null}
 					<p>{exact(cutoff.binary)} pairs with agreed YES or NO.
 						{#if cutoff.binary < thin} Thin sample: fewer than {exact(thin)} such pairs.{/if}</p>
 					<dl>
 						<div>
-							<dt>Diagnostic cutoff: {score(detail.evaluated_cutoff)}</dt>
+							<dt>Reporting cutoff: {score(detail.evaluated_cutoff)}</dt>
 							<dd>{exact(cutoff.tp!)} matched YES; {exact(cutoff.tn!)} matched NO.</dd>
 							<dd>{exact(cutoff.fp!)} wrong matches (judge NO); {exact(cutoff.fn!)} missed matches (judge YES).</dd>
 							<dd>Precision: {rate(detail.sample_precision, cutoff.predicted, 'no pairs at or above the cutoff', 'predicted YES')}.</dd>
@@ -124,19 +86,30 @@
 				{/if}
 			</section>
 		{/if}
+		<h4>Answers by score range</h4>
+		<p data-comparison="Agreed YES against agreed NO in each score range.">
+			Counts describe only the pairs drawn for this digest, not the full score pool.
+		</p>
+		<Reserved record panelState={detailState} {width} height={knobs.chart_height} {name} {label}>
+			{#if slices !== null && slices.length > 0}
+				<JudgeSliceChart {slices} {width} height={knobs.chart_height} {name} {label} {chart} />
+			{:else}
+				<EmptyState drawing={emptyState('quiet', sampleNote)} {width} height={knobs.chart_height} {name} {label} />
+			{/if}
+		</Reserved>
 	</div>
 </Panel>
 
 <style>
 	p, h4, dl, dd { margin: 0; overflow-wrap: anywhere; }
 	.digest { margin-block-end: var(--space-2); }
-	[data-comparison] { margin-block-end: var(--space-3); }
+	[data-comparison] { margin-block: var(--space-1) var(--space-3); }
 	.cutoffs {
 		display: grid;
 		gap: var(--space-2);
-		margin-block-start: var(--console-panel-gap);
-		padding-block-start: var(--console-panel-gap);
-		border-block-start: 1px solid var(--color-rule);
+		margin-block-end: var(--console-panel-gap);
+		padding-block-end: var(--console-panel-gap);
+		border-block-end: 1px solid var(--color-rule);
 	}
 	dl {
 		display: grid;

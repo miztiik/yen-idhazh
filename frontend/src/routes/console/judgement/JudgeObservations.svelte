@@ -17,10 +17,11 @@
 	import { longDate } from '$lib/format';
 	import type { ChartConfig, ConsoleConfig } from '$lib/server/config';
 	import JudgeCoverage from './JudgeCoverage.svelte';
+	import JudgeDigestDetails from './JudgeDigestDetails.svelte';
 	import JudgeScoreRanges from './JudgeScoreRanges.svelte';
 	import PairScoreDrift from './PairScoreDrift.svelte';
 
-	let { viewport, windowDays, group, rules, knobs, chart, published, explorer }: {
+	let { viewport, windowDays, group, rules, knobs, chart, published }: {
 		viewport: TimeWindow;
 		windowDays: number;
 		group: ConsolePanelGroup;
@@ -28,7 +29,6 @@
 		knobs: ConsoleConfig;
 		chart: ChartConfig;
 		published: Snippet;
-		explorer: Snippet;
 	} = $props();
 
 	let ready = $state(false);
@@ -134,13 +134,17 @@
 	}
 </script>
 
-<RouteStatus route="judgement" {answers} days={windowDays} {through} recordScope="Judge observations"
+<RouteStatus route="judgement" {answers} days={windowDays} {through} recordScope={group.title}
 	shimmerAfterMs={knobs.shimmer_after_ms} onRetry={retry}>
 	{@render published()}
 	<PanelGroup id={group.id} title={group.title} panels={group.panels.length}>
-		<div class="observation-scope">
-			<p>These observations do not change what the site merges. {@render explorer()}</p>
-			{#if through}<p data-judge-packed-through={through}>Packed judge history through {longDate(through)} (UTC).</p>{/if}
+		<div class="digest-control">
+			<label>
+				Selected digest (UTC)
+				<select value={selected} disabled={historyState === 'loading'} onchange={(event) => pick(event.currentTarget.value)}>
+					{#each calendar as date (date)}<option value={date}>{longDate(date)}</option>{/each}
+				</select>
+			</label>
 			{#each notes as note}<p>{note}</p>{/each}
 		</div>
 		{#each group.panels as id (id)}
@@ -154,17 +158,38 @@
 					{noteFor} low={rules.low} high={rules.high} {knobs} {chart} onPick={pick} />
 			{/if}
 		{/each}
+		<JudgeDigestDetails {selected} {identity} {detail} {dayNote} {chart} />
 	</PanelGroup>
 </RouteStatus>
 
 <style>
-	.observation-scope {
+	.digest-control {
 		grid-column: 1 / -1;
 		display: grid;
-		gap: var(--space-1);
+		justify-items: start;
+		gap: var(--space-2);
 		font-size: var(--console-small-size);
 		line-height: var(--console-small-leading);
+	}
+	.digest-control p {
+		margin: 0;
 		color: var(--color-text-secondary);
 	}
-	.observation-scope p { margin: 0; }
+	label {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-2);
+	}
+	select {
+		max-inline-size: 100%;
+		min-block-size: var(--console-control-min-height);
+		padding-inline: var(--console-control-padding-inline);
+		border: 1px solid var(--color-rule-strong);
+		border-radius: var(--console-control-radius);
+		background: var(--color-surface);
+		color: var(--color-text);
+		font: inherit;
+	}
+	select:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 </style>

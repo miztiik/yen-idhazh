@@ -58,7 +58,7 @@ export type ReadoutResting = 'newest' | 'first' | 'last' | number;
 /** What a column chart hands the builder. Only the column types call this;
  * a chart whose hover is one record at a time calls `factsOf`. */
 export interface ReadoutInput {
-	type: 'dateSeries' | 'runSeries' | 'distribution' | 'tileStrip';
+	type: 'dateSeries' | 'runSeries' | 'distribution' | 'tileStrip' | 'stackedCountColumns';
 	/** The label of each hoverable column, in draw order and reader spelling. */
 	columns: readonly string[];
 	series: readonly ReadoutInputSeries[];
