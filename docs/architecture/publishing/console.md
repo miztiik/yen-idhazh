@@ -171,8 +171,9 @@ The grouping panels distinguish absent records from successful empty reads.
 The holdout carries its own coverage and shows available partial records
 without claiming there were no marks on an unread day.
 
-Under **Judge: Content Similarity**, one UTC digest control serves three
-full-width panels. The nightly Council record does not change what is merged:
+Under **Judge: Content Similarity**, one UTC digest picker leads three
+full-width panels. Warnings below the picker identify an incomplete record.
+The nightly Council record does not change what is merged:
 
 - `judge-coverage` draws pairs drawn and returned. Agreed YES or NO, other
   returns and pairs that did not return are separate parts of the draw. The
@@ -199,8 +200,8 @@ unavailable measurements and dates not yet published are distinct from a
 measured zero. Useful partial evidence stays visible.
 
 All five panels use the shared frame and explicitly decline a comparison with
-summary settings. The Data explorer link leads to the raw `pair-verdicts` and
-`threshold-history` rows and metrics not drawn here. See the [nightly judge
+summary settings. Data explorer can query the packed `pair-verdicts` and
+`threshold-history` rows, including metrics not drawn here. See the [nightly judge
 flow](how-the-content-similarity-judge-follows-its-thresholds.md#what-threshold-history-stores)
 for how those readings are produced.
 

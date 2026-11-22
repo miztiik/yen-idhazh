@@ -28,8 +28,6 @@ const GRANDFATHERED: readonly ReviewedSink[] = [
 const ADDRESS_ALLOWED: readonly ReviewedSink[] = [
 	{ file: 'src/lib/components/ConsoleNav.svelte', attribute: 'href', value: 'href="{base}{route.href}"',
 		origin: 'The fixed BAND_UNREAD route inventory.' },
-	{ file: 'src/routes/console/judgement/+page.svelte', attribute: 'href', value: 'href="{base}{explorerRoute.href}"',
-		origin: 'The fixed BAND_UNREAD route inventory, its Data explorer entry.' },
 	{ file: 'src/lib/components/DigestItem.svelte', attribute: 'href', value: 'href={day.href}',
 		origin: 'Public reader day permalink from FoundStories, made from index date and recomputed item identity.' },
 	{ file: 'src/lib/components/FilterBar.svelte', attribute: 'href', value: 'href={verticalHref(base, datePrefix, vertical.id)}',

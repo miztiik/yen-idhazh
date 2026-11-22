@@ -21,7 +21,7 @@
 	import JudgeScoreRanges from './JudgeScoreRanges.svelte';
 	import PairScoreDrift from './PairScoreDrift.svelte';
 
-	let { viewport, windowDays, group, rules, knobs, chart, published, explorer }: {
+	let { viewport, windowDays, group, rules, knobs, chart, published }: {
 		viewport: TimeWindow;
 		windowDays: number;
 		group: ConsolePanelGroup;
@@ -29,7 +29,6 @@
 		knobs: ConsoleConfig;
 		chart: ChartConfig;
 		published: Snippet;
-		explorer: Snippet;
 	} = $props();
 
 	let ready = $state(false);
@@ -139,18 +138,14 @@
 	shimmerAfterMs={knobs.shimmer_after_ms} onRetry={retry}>
 	{@render published()}
 	<PanelGroup id={group.id} title={group.title} panels={group.panels.length}>
-		<div class="observation-scope">
-			<div class="scope-copy">
-				<p>These checks do not change which stories the site merges. {@render explorer()}</p>
-				{#if through}<p data-judge-packed-through={through}>Packed judge history through {longDate(through)} (UTC).</p>{/if}
-				{#each notes as note}<p>{note}</p>{/each}
-			</div>
+		<div class="digest-control">
 			<label>
 				Selected digest (UTC)
 				<select value={selected} disabled={historyState === 'loading'} onchange={(event) => pick(event.currentTarget.value)}>
 					{#each calendar as date (date)}<option value={date}>{longDate(date)}</option>{/each}
 				</select>
 			</label>
+			{#each notes as note}<p>{note}</p>{/each}
 		</div>
 		{#each group.panels as id (id)}
 			{#if id === 'judge-coverage'}
@@ -168,22 +163,18 @@
 </RouteStatus>
 
 <style>
-	.observation-scope {
+	.digest-control {
 		grid-column: 1 / -1;
-		display: flex;
-		flex-wrap: wrap;
-		justify-content: space-between;
-		align-items: center;
-		gap: var(--space-2) var(--space-4);
+		display: grid;
+		justify-items: start;
+		gap: var(--space-2);
 		font-size: var(--console-small-size);
 		line-height: var(--console-small-leading);
 	}
-	.scope-copy {
-		display: grid;
-		gap: var(--space-1);
+	.digest-control p {
+		margin: 0;
 		color: var(--color-text-secondary);
 	}
-	.observation-scope p { margin: 0; }
 	label {
 		display: flex;
 		flex-wrap: wrap;

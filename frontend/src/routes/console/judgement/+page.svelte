@@ -1,10 +1,8 @@
 <script lang="ts">
 	/** Which stories the day merged, and where the merge line sits against pairs marked as separate stories. */
 	import { onMount } from 'svelte';
-	import { base } from '$app/paths';
 	import { useWindowChoice } from '$lib/console/window-slot';
 	import { windowFromDates, windowOfDays } from '$lib/charts/viewport';
-	import { BAND_UNREAD } from '$lib/console/band';
 	import { consoleKnobs, holdoutAxisRules, judgeObservationRules, routeConsole } from '$lib/console/route-console';
 	import { judgementEvidence } from '$lib/console/judgement-evidence';
 	import WindowControlSource from '$lib/components/WindowControlSource.svelte';
@@ -19,9 +17,6 @@
 	const axis = holdoutAxisRules(configured.knobs);
 	const rules = judgeObservationRules(configured.knobs);
 	const [grouping, observations] = configured.panel_groups;
-	/** Where the judge's own ledgers are read. The address comes from the fixed
-	 * route table the rail is built from, never from a literal here. */
-	const explorerRoute = BAND_UNREAD.routes.find((route) => route.id === 'data-explorer');
 
 	const presets = console.window_presets;
 	const choice = useWindowChoice();
@@ -81,17 +76,4 @@
 			{/each}
 		</PanelGroup>
 	{/snippet}
-	{#snippet explorer()}
-		{#if explorerRoute}
-			Read the packed pair-verdicts and threshold-history records in
-			<a href="{base}{explorerRoute.href}" data-judgement-elsewhere>{explorerRoute.label}</a>.
-		{/if}
-	{/snippet}
 </JudgeObservations>
-
-<style>
-	[data-judgement-elsewhere] {
-		color: var(--color-accent);
-		text-decoration: underline;
-	}
-</style>
