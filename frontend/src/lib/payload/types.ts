@@ -35,8 +35,7 @@ export interface DigestVisual {
  *
  * A mark is one entry in one channel - a bar's name or a bar's length, never
  * both halves of a bar - which is what gives a channel a length of its own.
- * `element_id` and `derived` are the provenance and exactly one of them is set;
- * the browser draws `text` and `value` and never reads inside the chain. */
+ * Figures cite a source or derivation. A model label declares its own origin. */
 export interface VisualMark {
 	mark_id: string;
 	text: string | null;
@@ -46,6 +45,7 @@ export interface VisualMark {
 	source_text: string | null;
 	element_id: string | null;
 	derived: unknown | null;
+	label_source?: 'model' | null;
 }
 
 /** Which marks fill which channel. Every role a key, an unused one empty. */
@@ -66,6 +66,12 @@ export interface VisualWhole {
 	text: string;
 }
 
+export interface AxisTitles {
+	x: string;
+	y: string;
+	size?: string | null;
+}
+
 /** One published visual's marks, as `digest/<Y>/<M>/<D>/<item_id>.json` holds them.
  *
  * Fetched rather than inlined, and checked by `refusedVisualData` in
@@ -83,6 +89,7 @@ export interface VisualData {
 	declared_whole: VisualWhole | null;
 	title: string | null;
 	caption: string | null;
+	axis_titles?: AxisTitles | null;
 	emphasized_mark_id: string | null;
 	marks: VisualMark[];
 	encoding: VisualEncoding;

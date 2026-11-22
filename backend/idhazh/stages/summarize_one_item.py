@@ -28,11 +28,12 @@ from idhazh import (
 )
 from idhazh.anchor_mentions import Mention
 from idhazh.classify import calls, dag
+from idhazh.classify.chart_candidates import ChartCandidate, candidate_block, chart_candidates
 from idhazh.classify.plan_visual_request import chart_forms
-from idhazh.classify.resolve_visual_choice import resolve_visual_choice
+from idhazh.classify.prepare_chart_plan import prepare_chart_plan
 from idhazh.contracts.article import Article
 from idhazh.contracts.call_cost import COST_FIELDS, CallCost, CallKind
-from idhazh.contracts.element import ElementKind, ElementTable
+from idhazh.contracts.element import ElementTable
 from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.visual import VisualPlan, VisualType
@@ -226,7 +227,8 @@ def _drawn(
 ) -> VisualDecision:
     """Validate and deliver one typed request, preserving its original choice on refusal."""
     visuals = settings.app.visuals
-    if visuals.downgrade_enabled and published_marks is None:
+    may_restyle = visuals.downgrade_enabled and plan.presentation is None
+    if may_restyle and published_marks is None:
         raise ValueError("enabled visual downgrade requires the shard's published mark population")
     if plan.type is None:
         raise ValueError("a typed visual request requires its original type")
@@ -262,7 +264,7 @@ def _drawn(
                 rejected=replacement_rejections,
                 evidence=downgrade_evidence,
             )
-            if published_marks is not None and visuals.downgrade_enabled else None
+            if may_restyle and published_marks is not None else None
         )
         outcome["deepest_downgrade_depth"] = downgrade_evidence.deepest_depth
         if downgrade_evidence.gate_floor_applied is not None:
@@ -276,12 +278,11 @@ def _drawn(
                     "; stacked_bar fallback was refused on "
                     f"{ValidatorCheck.STACKED_BAR_EXHAUSTIVE.value}"
                 )
-            refused = visual_planner.not_drawable_here(
-                summary,
-                why=f"{cause}; no safe supported replacement cleared validation and its floor"
-                if visuals.downgrade_enabled else f"{cause}; replacement is switched off",
-                **stamp,
-            )
+            if may_restyle:
+                cause += "; no safe supported replacement cleared validation and its floor"
+            elif plan.presentation is None:
+                cause += "; replacement is switched off"
+            refused = visual_planner.not_drawable_here(summary, why=cause, **stamp)
             return VisualDecision.model_validate(refused.model_dump(mode="json") | outcome)
         drawable = step.plan
         outcome["downgrade_depth"] = step.depth
@@ -529,29 +530,23 @@ def summarize_one_item(
                     article.token_count,
                 )
                 return failed(FailureCode.CONTEXT_EXCEEDED)
-            forms = chart_forms(table, visuals=visuals)
-            chart_bytes = len(calls.chart_addendum(
+            candidates = chart_candidates(table)
+            forms = chart_forms(table, visuals=visuals) if len(candidates) >= 2 else ()
+            chart_text = calls.chart_addendum(
                 forms, prompt_files=settings.app.prompt_files, config_dir=settings.config_dir,
-            ).encode("utf-8"))
+            ) + (candidate_block(candidates) if forms else "")
+            chart_bytes = len(chart_text.encode("utf-8"))
             if forms and not dag.fits_the_window(
                 article, model.server, addendum_bytes=chart_bytes, sampling=model.sampling
             ):
                 LOG.warning(
-                    "the chart instructions would not fit the window "
+                    "the chart instructions would not fit the window with their readings "
                     "id=%s tokens=%s chart_bytes=%s",
                     article.item_id,
                     article.token_count,
                     chart_bytes,
                 )
                 forms = ()
-            quantities = tuple(e for e in table.elements if e.kind is ElementKind.QUANTITY)
-            if forms and not dag.fits_the_window(
-                article, model.server,
-                addendum_bytes=chart_bytes + calls.chart_highlight_bytes(quantities),
-                sampling=model.sampling,
-            ):
-                LOG.warning("the chart highlights would not fit the window id=%s", article.item_id)
-                quantities = ()
             request = calls.build_summary_request(
                 article,
                 forms,
@@ -559,7 +554,7 @@ def summarize_one_item(
                 server=model.server,
                 sampling=model.sampling,
                 markers=markers,
-                chart_quantities=quantities,
+                candidates=candidates,
                 prompt_config=settings.app.summarize,
                 prompt_files=settings.app.prompt_files,
                 config_dir=settings.config_dir,
@@ -659,6 +654,7 @@ def summarize_one_item(
             reply,
             table,
             forms=forms,
+            candidates=candidates,
             text=article.text or "",
             settings=settings,
             date=date,
@@ -684,6 +680,7 @@ def _decide_the_visual(
     table: ElementTable,
     *,
     forms: tuple[VisualType, ...],
+    candidates: Sequence[ChartCandidate],
     text: str,
     settings: config.Settings,
     date: str,
@@ -727,7 +724,7 @@ def _decide_the_visual(
         choice = calls.parse_summarize_and_plan(completion.content).visual
         if choice is None:
             return visual_planner.declined_by_the_model(summary, **stamp)
-        plan, grounded = resolve_visual_choice(choice, forms, text, table)
+        plan = prepare_chart_plan(choice, forms, text, table, candidates)
     except (ValidationError, ValueError, json.JSONDecodeError) as error:
         shape = _shape_cells(error)
         LOG.warning(
@@ -746,6 +743,6 @@ def _decide_the_visual(
             **stamp,
         )
     return _drawn(
-        summary, plan, grounded, settings=settings, date=date, stamp=stamp,
+        summary, plan, table, settings=settings, date=date, stamp=stamp,
         run_id=run_id, render_root=render_root, published_marks=published_marks,
     )

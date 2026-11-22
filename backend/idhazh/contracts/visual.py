@@ -171,11 +171,38 @@ class PlanEncodings(Model):
         return drawn
 
 
+class AxisTitles(Model):
+    x: PlanTitle = Field(description="The title of the horizontal axis.")
+    y: PlanTitle = Field(description="The title of the vertical axis.")
+    size: PlanTitle | None = Field(default=None, description="The bubble size measure, if present.")
+
+
+_RoleLabels = Annotated[list[PlanTitle], Field(max_length=MAX_IDS_PER_ROLE)]
+
+MODEL_LABEL_ROLES: Final = (EncodingRole.CATEGORY, EncodingRole.ENTITY, EncodingRole.SERIES)
+
+
+class ChartPresentation(Model):
+    """Model wording in channel order, separate from source references."""
+
+    axis_titles: AxisTitles | None = None
+    category: _RoleLabels = Field(default_factory=list)
+    entity: _RoleLabels = Field(default_factory=list)
+    series: _RoleLabels = Field(default_factory=list)
+
+    def filled(self) -> dict[EncodingRole, list[str]]:
+        return {role: labels for role in MODEL_LABEL_ROLES if (labels := getattr(self, role.value))}
+
+
 class VisualPlan(Contract):
     """One item's visual plan: references and closed names, and nothing else."""
 
     __schema_stem__: ClassVar[str] = "visual-plan"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-11-22", change="Separate model wording from reading references.",
+            why="A display label is not source evidence.",
+        ),
         ChangelogEntry(
             version="2026-11-21",
             change="Separate display labels from evidence spans.",
@@ -190,11 +217,6 @@ class VisualPlan(Contract):
             version="2026-10-26T09:41",
             change="Plans may name one independently declared whole for composition charts.",
             why="A sum of parts is not evidence that the source declared those parts exhaustive.",
-        ),
-        ChangelogEntry(
-            version="2026-09-15T19:40",
-            change="Every element-id field now carries a self-bounding pattern.",
-            why="These are every string the constrained decoder sees, and it cannot compile one.",
         ),
         ChangelogEntry(
             version="2026-09-09T03:11",
@@ -253,6 +275,10 @@ class VisualPlan(Contract):
         exclude_if=lambda labels: not labels,
         description="Verified display wording keyed by its original label element.",
     )
+    presentation: ChartPresentation | None = Field(
+        default=None, exclude_if=lambda value: value is None,
+        description="Model-written labels and axis titles, not source evidence.",
+    )
     annotations: list[_PlanElementId] = Field(
         default_factory=list,
         max_length=MAX_ANNOTATIONS,
@@ -301,6 +327,7 @@ class VisualPlan(Contract):
                 "type": self.type,
                 "title": self.title,
                 "caption": self.caption,
+                "presentation": self.presentation,
             }
             for name, value in empty.items():
                 if value is not None:
@@ -377,6 +404,8 @@ class VisualPlan(Contract):
                 "{field} must name a drawn label element",
                 {"field": "display_labels"},
             )
+        if self.presentation is not None and label_ids:
+            raise ValueError("model wording and source label channels cannot be mixed")
         return self
 
 

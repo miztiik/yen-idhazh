@@ -1,8 +1,6 @@
-Put the title and summary in the nested "summary" object first.
-Figures between $quantity_mark marks are possible chart readings. Use the surrounding article to decide what each reading measures and which readings belong together. Do not copy the marks into the reply.
+Write the nested "summary" object first, using only the article block.
+
+For "visual", choose a useful chart supported by the article and use only supplied value-and-unit pairs. Give it a short title and name its axes, categories, and legend series where applicable.
+Bar, dot, and stacked bar charts are horizontal.
 Available chart types: $chart_types.
-Choose figures that explain the main finding before choosing a chart type. Compare the same measure on the same basis within each axis.
-Use categories for comparisons, dates for trends or two-date changes, and paired measures for relationships.
-Name what is measured in the chart title. Use short source-grounded labels and dates. Write each reading as its stated decimal value and unit, including any scale word, or null for a unitless reading. Do not convert values or treat repeated mentions as separate observations.
-Preserve scope, limits and forecasts, or return null. Use a positive bubble size. Use a stated whole and named, non-overlapping parts for composition, with a common measure for a stack. For a distribution use individual readings from one stated group, not ranges or counts.
-If the article does not support a useful, unambiguous chart, write "visual": null.
+If no useful chart is supported, return "visual": null.

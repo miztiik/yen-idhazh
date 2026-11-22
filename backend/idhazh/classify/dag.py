@@ -67,7 +67,7 @@ def prompt_tokens(article_tokens: int, *, addendum_bytes: int = 0) -> int:
     - the scaffold is fixed, and moves when a prompt file is edited;
     - the per-word rate covers the article, and moves when prose tokenizes
       harder than any build so far;
-    - optional chart instructions and highlights are counted in UTF-8 bytes.
+    - the optional chart instructions and readings are counted in UTF-8 bytes.
 
     `article_tokens` is spent back to words at `extract.TOKENS_PER_WORD`,
     because that is the unit the cap is enforced in and the rate above is a rate
@@ -116,7 +116,7 @@ def fits_the_window(
     ordinary HTTP 200, and the item publishes looking finished with its visual
     quietly missing.
 
-    `addendum_bytes` counts the optional chart instructions and highlights.
+    `addendum_bytes` is the UTF-8 length of the optional chart instructions and readings.
     """
     return (
         call_tokens(article.token_count, addendum_bytes=addendum_bytes, sampling=sampling)

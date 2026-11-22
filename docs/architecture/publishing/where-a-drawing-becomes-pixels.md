@@ -15,12 +15,18 @@ plans into visual data. Who decides a visual at all is
 **The reader's browser draws the chart. The pipeline never draws one.** Maintainer ruling,
 2026-09-13, under `CLAUDE.md` section 0.
 
-**The chain, end to end.** The model proposes a chart from the article. Code
-checks the readings, names and measures against exact source spans before
-building a plan and compiling its references into chart data. The day
+**The chain, end to end.** The model chooses the readings and writes the
+chart's wording. Code links the numbers to their source spans and prepares
+the renderer input without treating model wording as source evidence. The day
 payload points to a separate per-item JSON file;
 the reader's browser draws its SVG with d3 scale arithmetic and Svelte elements.
 Nothing draws a chart at build time and no SVG is committed.
+
+Model-written axis titles are optional framing and model-written naming marks
+declare their origin without a source ID. Archived files with no axis titles
+or model-origin marks still read and draw as before. The renderer stamp stays
+the same; the newer payload version adds fields rather than reinterpreting
+older ones.
 
 ## Historical visual kinds do not enable a retired reader
 
@@ -282,7 +288,7 @@ plan reaches this compiler.
 **Only a supported type is compiled.** This build compiles `bar`, `dot`, `slope`,
 `line`, `scatter`, `bubble`, `stacked_bar`, `pie` and `histogram`; a plan for any
 other declared chart type raises `CompileError` naming it rather than publishing
-a picture nobody planned. The [request](../summarize/prompt.md#the-model-proposes-rows-source-verification-stays-in-code)
+a picture nobody planned. The [request](../summarize/prompt.md#the-model-proposes-rows-code-binds-the-supplied-readings)
 offers the forms enabled in config that this compiler supports.
 
 ### Declared types are not delivery promises

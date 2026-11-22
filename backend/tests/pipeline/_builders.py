@@ -130,15 +130,17 @@ def declining_wind_reply() -> bytes:
 
 
 def assert_planning_readings(server: RecordedEndpoint, readings: list[str]) -> None:
-    """The actual request must show each reading once and offer a fixed row shape."""
+    """The actual request offers source readings in a separate data block."""
     assert server.served == 1, "one item must run the one production call"
     request = server.sent[0]
     prompt = str(request["prompt"])
+    candidates = prompt.split("Candidate readings:\n", 1)[1].split("\n", 1)[0]
     for reading in readings:
-        assert prompt.count(reading) == 1
+        assert reading in candidates.split("; ")
     assert re.search(r"\b[a-z]+-\d+-\d+\b", prompt) is None
     offered = chart_reply_fields(request["json_schema"])["bar"]["rows"]["items"]
     assert offered["required"] == ["label", "reading"]
+    assert offered["properties"]["reading"] == {"$ref": "#/$defs/Reading"}
 
 
 def assert_reader_accepts(path: Path, *, item_id: str) -> None:

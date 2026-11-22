@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Annotated, ClassVar, Final, Self
+from typing import Annotated, ClassVar, Final, Literal, Self
 
 from pydantic import Field, StringConstraints, model_validator
 
@@ -24,6 +24,8 @@ from idhazh.contracts.derived import DerivedFunction, DerivedNumber, DerivedUnit
 from idhazh.contracts.element import DateOrYear, ElementId
 from idhazh.contracts.visual import (
     MAX_IDS_PER_ROLE,
+    MODEL_LABEL_ROLES,
+    AxisTitles,
     EncodingRole,
     PlanCaption,
     PlanTitle,
@@ -69,11 +71,8 @@ class VisualMark(Model):
     and a channel with a length of its own is the only way a drawing can be
     caught holding four names and three figures.
 
-    **Every mark states its provenance and exactly one kind of it**, the same
-    rule `DisplayedValue` holds: the Tier 1 element whose own characters or own
-    figure it draws, or the derived value with its complete chain back to
-    several of them. Written as two optionals with no rule, a mark that came
-    from nowhere is a payload somebody can write.
+    Figures cite one source element or a complete derivation. A name written
+    by the model declares that origin without inventing a source span.
     """
 
     mark_id: MarkId = Field(
@@ -117,9 +116,22 @@ class VisualMark(Model):
             "drawn. Null on a mark cut straight out of the article."
         )
     )
+    label_source: Literal["model"] | None = Field(
+        default=None, exclude_if=lambda value: value is None,
+        description="The model wrote this text; it is not a quoted source mark.",
+    )
 
     @model_validator(mode="after")
-    def _a_mark_came_from_one_of_the_two_places(self) -> Self:
+    def _a_mark_states_its_origin(self) -> Self:
+        if self.label_source == "model":
+            if self.text is None or any(
+                value is not None
+                for value in (
+                    self.element_id, self.derived, self.time, self.value, self.source_text,
+                )
+            ):
+                raise ValueError("a model label carries text, not a source reference or figure")
+            return self
         if (self.element_id is None) == (self.derived is None):
             raise ValueError(
                 "a mark is an element the article wrote or a derived value with a chain "
@@ -226,6 +238,10 @@ class VisualData(Contract):
 
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-11-22", change="Publish model labels and axis titles.",
+            why="Display wording can reach the reader without a fabricated source span.",
+        ),
+        ChangelogEntry(
             version="2026-11-21",
             change="Allow a chart without emphasis.",
             why="Do not invent a highlight.",
@@ -239,11 +255,6 @@ class VisualData(Contract):
             version="2026-10-27T04:00",
             change="Publish pie slices as shares of a separately stated whole.",
             why="A pie's denominator and exact source total must reach its reader.",
-        ),
-        ChangelogEntry(
-            version="2026-10-27T03:00",
-            change="Publish one declared whole with its source-backed stacked parts.",
-            why="A reader needs the declared total and every part in one current drawing.",
         ),
         ChangelogEntry(
             version="2026-10-27T02:00",
@@ -285,6 +296,7 @@ class VisualData(Contract):
     )
     title: PlanTitle | None = Field(description="Sanitized plan heading, as untrusted text.")
     caption: PlanCaption | None = Field(description="Sanitized plan framing, as untrusted text.")
+    axis_titles: AxisTitles | None = Field(default=None, exclude_if=lambda value: value is None)
     emphasized_mark_id: MarkId | None = Field(
         description="One measured mark to emphasize, or null when none is selected."
     )
@@ -335,6 +347,17 @@ class VisualData(Contract):
             raise ValueError("the renderer version is not current")
         channels = self.encoding
         by_id = {mark.mark_id: mark for mark in self.marks}
+        if any(
+            by_id[mark_id].label_source == "model" and role not in MODEL_LABEL_ROLES
+            for role, mark_ids in channels.filled().items()
+            for mark_id in mark_ids
+        ):
+            raise ValueError("model wording appears only in naming channels")
+        if self.axis_titles is not None and (
+            self.type is VisualType.PIE
+            or (self.type is not VisualType.BUBBLE and self.axis_titles.size is not None)
+        ):
+            raise ValueError("axis titles apply only to displayed axes and bubble sizes")
         if self.type is not VisualType.HISTOGRAM and (
             self.histogram_unit is not None or self.histogram_unit_table_version is not None
         ):
@@ -384,10 +407,17 @@ class VisualData(Contract):
                     "a stacked bar draws only category, quantity and series channels"
                 )
             whole = by_id[channels.category[0]]
-            if whole.element_id is None or not whole.element_id.startswith("quantity-"):
+            whole_id = self.declared_whole_element_id
+            if (
+                whole_id is None
+                or not whole_id.startswith("quantity-")
+                or (whole.label_source != "model" and (
+                    whole.element_id is None or not whole.element_id.startswith("quantity-")
+                ))
+            ):
                 raise ValueError("a stacked bar's whole label cites a source quantity")
             if (
-                self.declared_whole_element_id != whole.element_id
+                (whole.label_source != "model" and whole.element_id != whole_id)
                 or self.declared_whole is not None
             ):
                 raise ValueError("a stacked bar's category mark is its declared whole")
@@ -400,7 +430,7 @@ class VisualData(Contract):
                         whole_inputs.add(part.element_id)
                 else:
                     whole_inputs.update(derived.inputs)
-            if whole.element_id in whole_inputs:
+            if whole_id in whole_inputs:
                 raise ValueError("a stacked bar's declared whole is separate from its parts")
             part_labels = [by_id[mark_id].text for mark_id in channels.series]
             if len(set(part_labels)) != len(part_labels):
@@ -424,10 +454,11 @@ class VisualData(Contract):
                 raise ValueError("pie category names remain distinct")
             for mark_id in channels.category:
                 category = by_id[mark_id]
-                if category.element_id is None or not category.element_id.startswith(
-                    ("entity-", "place-", "date-")
+                if category.label_source != "model" and (
+                    category.element_id is None
+                    or not category.element_id.startswith(("entity-", "place-", "date-"))
                 ):
-                    raise ValueError("pie categories cite source labels")
+                    raise ValueError("pie categories cite source labels or name their model origin")
             parts = [by_id[mark_id] for mark_id in channels.quantity]
             part_ids: list[str] = []
             for part in parts:
@@ -572,14 +603,14 @@ class VisualData(Contract):
                 raise ValueError("a scatter carries only entity, quantity_x, quantity and series")
             entities = [by_id[mark_id] for mark_id in channels.entity]
             if any(
-                mark.element_id is None
-                or not mark.element_id.startswith(("entity-", "place-"))
+                mark.label_source != "model" and (
+                    mark.element_id is None or not mark.element_id.startswith(("entity-", "place-"))
+                )
                 for mark in entities
             ):
-                raise ValueError("scatter entities need source element references")
-            if len({mark.element_id for mark in entities}) != count or len(
-                {mark.text for mark in entities}
-            ) != count:
+                raise ValueError("scatter entities need source references or model labels")
+            source_ids = [mark.element_id for mark in entities if mark.element_id is not None]
+            if len(set(source_ids)) != len(source_ids) or len({m.text for m in entities}) != count:
                 raise ValueError("scatter entity labels must be distinct")
         elif self.type is VisualType.BUBBLE:
             count = len(channels.quantity)
@@ -605,14 +636,14 @@ class VisualData(Contract):
                 )
             entities = [by_id[mark_id] for mark_id in channels.entity]
             if any(
-                mark.element_id is None
-                or not mark.element_id.startswith(("entity-", "place-"))
+                mark.label_source != "model" and (
+                    mark.element_id is None or not mark.element_id.startswith(("entity-", "place-"))
+                )
                 for mark in entities
             ):
-                raise ValueError("bubble entities need source element references")
-            if len({mark.element_id for mark in entities}) != count or len(
-                {mark.text for mark in entities}
-            ) != count:
+                raise ValueError("bubble entities need source references or model labels")
+            source_ids = [mark.element_id for mark in entities if mark.element_id is not None]
+            if len(set(source_ids)) != len(source_ids) or len({m.text for m in entities}) != count:
                 raise ValueError("bubble entity labels must be distinct")
             if any(Decimal(by_id[mark_id].value or "0") <= 0 for mark_id in channels.size):
                 raise ValueError("bubble size measures must be positive")

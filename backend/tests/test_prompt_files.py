@@ -16,6 +16,7 @@ from support.prompts import WIND_TEXT, chart_data_over
 
 from idhazh import config, summarize
 from idhazh.classify import calls
+from idhazh.classify.chart_candidates import chart_candidates
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import derive_text_digest, derive_url_key
@@ -195,7 +196,7 @@ def test_real_consumers_and_stamps_follow_two_selected_roots(tmp_path: Path) -> 
             target.write_text(text, encoding="utf-8", newline="\n")
         options: PromptLocation = {"prompt_files": settings.app.prompt_files, "config_dir": root}
         source = Article.model_validate(article().model_dump() | {"text": WIND_TEXT})
-        _, data = chart_data_over(source, WIND_TEXT, config_dir=root)
+        table, data = chart_data_over(source, WIND_TEXT, config_dir=root)
         for shown in (data, ()):
             request = calls.build_summary_request(
                 source,
@@ -204,6 +205,7 @@ def test_real_consumers_and_stamps_follow_two_selected_roots(tmp_path: Path) -> 
                 server=settings.models.summarizer.server,
                 sampling=settings.models.summarizer.sampling,
                 markers=a_markers(),
+                candidates=chart_candidates(table),
                 **options,
             )
             rendered = str(request["prompt"])

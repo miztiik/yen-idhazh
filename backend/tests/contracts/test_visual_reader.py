@@ -29,7 +29,7 @@ def test_frontend_chart_fields_match_the_native_contract(
     source = read_text(REPO_ROOT / "frontend/src/lib/payload/types.ts")
     found = re.search(rf"export interface {model.__name__} \{{(.*?)\n\}}", source, re.S)
     assert found is not None
-    fields = set(re.findall(r"^\t(\w+):", found[1], re.M))
+    fields = set(re.findall(r"^\t(\w+)\??:", found[1], re.M))
     assert fields == set(model.model_fields)
 
 

@@ -14,6 +14,7 @@ from test_chart_vocabulary import draw, inputs, settings
 from test_classify import a_reply
 
 from idhazh import completed_writes, elements, ledger
+from idhazh.classify.chart_candidates import chart_candidates
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.element import ElementKind, ElementTable
@@ -98,6 +99,7 @@ def test_production_decider_covers_exactly_the_five_implemented_none_gates(tmp_p
     table, data = chart_data_over(
         Article.read(CONTRACT_FIXTURES_DIR / "article" / "ok.json"), WIND_TEXT
     )
+    candidates = chart_candidates(table)
     stamp = {
         "version": VisualDecision.schema_version(), "model_id": "fixture-model",
         "decided_at": f"{DATE}T12:00:00Z",
@@ -117,7 +119,7 @@ def test_production_decider_covers_exactly_the_five_implemented_none_gates(tmp_p
     )
     decisions = [
         _decide_the_visual(
-            summary, reply, table, forms=shown, text=WIND_TEXT,
+            summary, reply, table, forms=shown, candidates=candidates, text=WIND_TEXT,
             settings=knobs, date=DATE, stamp=stamp,
             run_id=RUN,
         )
@@ -126,7 +128,7 @@ def test_production_decider_covers_exactly_the_five_implemented_none_gates(tmp_p
     declined = a_reply(True)
     decisions.append(_decide_the_visual(
         summary, Completion(content=declined, finish_reason="stop"), table,
-        forms=data, text=WIND_TEXT,
+        forms=data, candidates=candidates, text=WIND_TEXT,
         settings=knobs, date=DATE, stamp=stamp, run_id=RUN,
     ))
     assert all(
@@ -153,7 +155,8 @@ def test_shape_evidence_and_missing_compiler_refusals_persist_without_invented_r
     malformed = _decide_the_visual(
         summary,
         Completion(content=a_reply(rows="model-only words"), finish_reason="stop"),
-        wind, forms=data, text=WIND_TEXT, settings=knobs, date=DATE, stamp=stamp, run_id=RUN,
+        wind, forms=data, candidates=chart_candidates(wind), text=WIND_TEXT,
+        settings=knobs, date=DATE, stamp=stamp, run_id=RUN,
     )
     empty = ElementTable.model_validate(table.model_dump() | {"elements": []})
     evidence = _drawn(

@@ -26,6 +26,7 @@ from idhazh import config, summarize
 from idhazh.classify.calls import (
     summarize_and_plan_model,
     summarize_and_plan_schema,
+    summary_user_turn,
 )
 from idhazh.contracts.article import Article
 from idhazh.contracts.element import ElementTable
@@ -147,15 +148,17 @@ class TestAnItemWithNoChartDataIsNotAskedForAPlan:
     def test_suppressing_the_plan_leaves_the_article_unchanged(
         self, article_ok: Article
     ) -> None:
-        """Only the chart-capable variant has the system addendum."""
+        """Both requests give the model the same article; only one offers readings."""
         wind = article_ok.model_copy(update={"text": WIND_TEXT})
         _, data = chart_data_over(article_ok, WIND_TEXT)
         whole = summary_payload(wind, data=data)
         suppressed = summary_payload(wind)
         assert "Available chart types:" in whole["prompt"]
         assert "Available chart types:" not in suppressed["prompt"]
-        suffix = whole["prompt"].split(WIND_TEXT, 1)[1]
-        assert suppressed["prompt"].split(WIND_TEXT, 1)[1] == suffix
+        source = summary_user_turn(wind.title or "(untitled)", WIND_TEXT)
+        assert source in whole["prompt"] and source in suppressed["prompt"]
+        assert "Candidate readings:" in whole["prompt"]
+        assert "Candidate readings:" not in suppressed["prompt"]
 
 class TestTheNoneReasonOnAStoredDecision:
     """What a stored decision may say about why it carries no picture.

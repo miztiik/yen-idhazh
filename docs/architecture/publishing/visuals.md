@@ -324,7 +324,7 @@ flowchart TD
 |---|---|
 | `CP` | Code extracts quantities and dates, with the characters and offsets recording their source. |
 | `TA` | A local process the run starts, asked once per article before the model reads it. The pipeline reads a label and two offsets of each mention and nothing else; the words it returns are compared with the characters those offsets cut from `Article.text`, and a mention whose words differ is dropped. No word it returns reaches a prompt, path, URL or command |
-| `TB` | A single fenced source block; the [source evidence](../summarize/prompt.md#the-model-proposes-rows-source-verification-stays-in-code) is checked in code. |
+| `TB` | One fenced article and a separate data-only list of [candidate readings](../summarize/prompt.md#the-model-proposes-rows-code-binds-the-supplied-readings). |
 | `C2` | Decides from the article and cites the readings and label text for the chosen form; cannot author a measured value. |
 | `VP` | Resolves source references into the existing typed plan; no geometry, literal value, authored labels or alt text. |
 | `VV` | Ten checks: elements exist; semantically compatible; units convertible; roles valid for the type; enough data; no duplicate in a role; no invented values; numerals matched; plan version current; stacked parts equal a separate declared whole |

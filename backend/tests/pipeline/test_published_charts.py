@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from decimal import Decimal
 from pathlib import Path
 
@@ -43,11 +44,18 @@ def test_assemble_publishes_a_chart_from_its_decision_alone(
     if assemble stops writing it.
     """
     worker = tmp_path / "worker"
+    response = json.loads(DRAWS_SUMMARIZE_AND_PLAN.read_bytes())
+    message = response["choices"][0]["message"]
+    content = json.loads(message["content"])
+    content["visual"]["axis_titles"] = {"x": "Capacity approved", "y": "Award recipients"}
+    for row in content["visual"]["rows"]:
+        row["series"] = "Offshore awards"
+    message["content"] = json.dumps(content)
     with finding_the_wind_countries(config.load(CONFIG_DIR)) as settings:
         run_plan, items, server = _work_stage(
             worker,
             monkeypatch,
-            replies=(DRAWS_SUMMARIZE_AND_PLAN.read_bytes(),),
+            replies=(json.dumps(response).encode("utf-8"),),
             fetcher=drawable_article_fetch,
             run_plan=plan(item_count=1),
             settings=settings,
@@ -56,7 +64,6 @@ def test_assemble_publishes_a_chart_from_its_decision_alone(
     decision = VisualDecision.read(items / f"{item_id}{PAYLOAD_SUFFIX}")
     relpath = asset_relpath(run_plan.date, item_id)
     assert decision.kind is VisualKind.CHART
-    assert decision.rationale == "Chart proposal verified against explicit source observations"
     assert decision.data_path == relpath
     assert decision.spec is not None
     compiled = VisualData.from_json(decision.spec)
@@ -65,6 +72,13 @@ def test_assemble_publishes_a_chart_from_its_decision_alone(
         ["1200 MW", "900 MW", "640 MW", "410 MW"],
     )
     marks = {mark.mark_id: mark for mark in compiled.marks}
+    assert compiled.axis_titles and compiled.axis_titles.x == "Capacity approved"
+    assert compiled.axis_titles.y == "Award recipients"
+    assert {marks[name].text for name in compiled.encoding.series} == {"Offshore awards"}
+    assert all(
+        marks[name].label_source == "model" and marks[name].element_id is None
+        for name in [*compiled.encoding.category, *compiled.encoding.series]
+    )
     assert [marks[name].text for name in compiled.encoding.category] == [
         "Denmark", "Germany", "Poland", "Ireland"
     ]

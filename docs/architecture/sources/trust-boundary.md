@@ -313,13 +313,13 @@ A service that cannot answer costs the item its names and nothing else: no retry
 warning that carries the item's id and no text, and the item publishes on the figures
 and dates the patterns found.
 
-## Source evidence stays behind the model boundary
+## Chart readings cross as data
 
-The model sees no offsets, service annotations or second copy of source
-words. The capability list comes from config and the compiler, never from
-the article. [Chart verification](../summarize/prompt.md#the-model-proposes-rows-source-verification-stays-in-code)
-checks proposals against exact slices of `Article.text`. It does not run
-instructions in a reply or write reply wording back into a source span.
+The model sees candidate readings, but no offsets, service annotations or
+second copy of the article. The capability list comes from config and the
+compiler, never from the article. [Chart preparation](../summarize/prompt.md#the-model-proposes-rows-code-binds-the-supplied-readings)
+uses exact source readings and keeps model wording as display data. It does
+not run instructions in a reply or write wording back into a source span.
 
 ## Model output never becomes an action
 

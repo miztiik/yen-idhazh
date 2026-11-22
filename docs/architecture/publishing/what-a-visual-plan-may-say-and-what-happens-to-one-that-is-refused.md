@@ -17,8 +17,8 @@ is the only thing a compiler is allowed to read, and code builds it: the model n
 one ([how](#a-chart-answer-becomes-a-plan-in-code)). It carries
 element references and closed vocabularies: a decision, a purpose, a type, one channel per encoding
 role, a separately declared whole where needed, and the elements it draws from.
-It records a reason, title, optional caption and vocabulary stamp. A historical
-plan can still carry an explicit emphasis or confidence.
+It records a reason, title, model-written chart names and vocabulary stamp.
+A historical plan can still carry a caption, an explicit emphasis or confidence.
 
 What it may not carry is as much of the contract as what it holds.
 
@@ -37,7 +37,7 @@ safe diagnosis without copying the rejected payload.
 | --- | --- |
 | **No geometry** | Geometry is a number, and the plan's schema admits exactly one number, `confidence`, which is bounded and never drawn. The model's answer has none, and a payload that names a pixel names a key nothing declares; an undeclared key does not load. |
 | **No literal values** | Every drawn figure is reached through a verified element. The proposal's literal value never supplies the drawing. |
-| **No unchecked display words** | Labels cite source elements. A verified display spelling can differ from the exact evidence slice; the plan keeps it in `display_labels`, keyed by the original element id. |
+| **No fabricated source labels** | The model's wording stays in `presentation`, separate from reading references. Historical plans may still carry `display_labels` for source labels. |
 | **No `alt_text`** | The field is not declared, it is named in `FORBIDDEN_FIELDS`, and the module refuses to import if one is added back. |
 
 **The geometry ban is what keeps the compiler swappable.** A plan that names a pixel is a plan bound
@@ -45,39 +45,26 @@ to one renderer, and the renderer is a choice this project has already changed o
 plan says how wide, how tall, what colour or what font; a compiler decides all four and a second
 compiler may decide them differently over the same plan.
 
-**Alt text is the compiler's, and the reason is worth keeping.** Assembled from element values the
-compiler already holds, it is correct by construction. Written by the model it would be one prose
-channel restating the chart's own data, and no validator can read prose to check it - so it would be
-the last unguarded channel in a design whose whole claim is that a stranger's page cannot reach a
-drawn figure.
+**The drawing supplies its own accessible description.** It uses the
+same figures and wording as the chart rather than asking the model to
+restate them in a separate field.
 
-Code records the reason and supplies a caption when needed to preserve
-context or name relationship axes. Neither is a free-prose channel in the
-chart proposal. No text field supplies a value to the renderer.
+Code records the reason. The proposal names its axes directly, and no
+display text supplies a value to the renderer.
 
 ## A chart answer becomes a plan in code
 
-The [model proposes rows](../summarize/prompt.md#the-model-proposes-rows-source-verification-stays-in-code)
-and can decline with null. Code re-reads checked quantity and date spans
-and accepts rows only where a source statement attaches them to the proposed
-measure, name, date or group. Equal values and nearby words do not establish
-that attachment. Repeated mentions of one fact cannot become multiple rows;
-equal values for independent named observations or distinct members of an
-explicit sample can. A title uses verified measure phrases, not unresolved
-facts or words borrowed from caveats.
+The [model proposes rows](../summarize/prompt.md#the-model-proposes-rows-code-binds-the-supplied-readings)
+and can decline with null. Preparation accepts only supplied reading pairs
+and assigns matching source occurrences in source order. Equal pairs use
+distinct occurrences; a proposal cannot use more copies than the list held.
+Dates on time axes must match dates in the article. Display names, titles and
+the choice of comparison are the model's, not independently verified facts.
 
-The reader recognizes explicit statements, grouped observations and declared
-parts, not arbitrary paraphrase or omitted context. It can preserve a
-stated period or an explicit forecast in a caption; it refuses limits and
-other scope it cannot faithfully display. Different enforcement amounts can
-be compared only when the source links the same actor and context, not merely
-because their currencies match. An unresolved row, title or scope drops the
-visual and keeps the summary. Evidence refusals name the rule and field.
-
-The existing role, units, exhaustiveness and compiler checks still apply.
-Verified display spelling is separate from the exact source span. The current
-plan is not assigned a highlight. Older plans with a deliberate highlight
-continue to resolve it to the same measured mark.
+The role, unit, exhaustiveness and compiler checks still apply. An invalid
+chart leaves the summary intact. New plans do not invent a highlight or
+substitute a different chart type after a refusal. Older plans with a
+deliberate highlight retain it.
 
 ## Every encoding role is a key, and an unused one is empty
 
@@ -99,13 +86,9 @@ declares and cannot require the keys of a map. An eighteen-branch union, one per
 reached the same place and was refused: a writer would have to pick a branch before it has picked
 a type.
 
-**There is no `label` role, and `labels` is why.** `labels` is the one naming channel - the elements
-whose own characters name the marks and the axes, capped at eight marks and two axes. A `label` role
-would name the same marks a second time inside `encodings`, and a plan that names them twice
-can name them two ways with nothing to settle which. So naming stays one field and `encodings`
-answers a different question: which elements are drawn, and by which channel. `event_label` is not
-the exception it looks like - a timeline's `time` channel places a dot and nothing else, so the event
-text is the mark rather than a name for one.
+For current plans, `presentation` names categories, entities, series and
+axes. Their source-reference channels stay empty; a plan cannot name the
+same mark both ways. Historical label references remain readable.
 
 ## The validator refuses, and each check refuses on its own
 
@@ -135,7 +118,7 @@ is the module being replaced.
 | `numerals_matched` | Every numeral in `title`, `caption` and `why` is one a cited element states. | A caption that converted a figure, or reached one from nowhere. |
 | `plan_version_current` | The plan met the vocabulary this build holds. | Contract drift, found rather than drawn. |
 | `stacked_bar_exhaustive` | A separately cited source quantity is the whole, distinct from the parts, and exactly equals their converted sum. | A stack that omits a part or treats a sum of the supplied parts as a declared whole. |
-| `pie_exhaustive` | The declared source quantity is independent of every part, and the parts exactly make it in one canonical measure and unit. | A pie whose parts do not exactly make its stated total or need mixed measures or units. |
+| `pie_exhaustive` | The declared source quantity is independent of every part, and the parts exactly make it in one unit. | A pie whose parts do not exactly make its stated total or use mixed units. |
 
 **Each check returns at most one refusal, carrying its own stable name.** That is a design
 constraint rather than a testing preference. A validator that answers with one string cannot say

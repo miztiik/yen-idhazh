@@ -196,6 +196,7 @@ def _roles_valid_for_type(
     visual_type: VisualType,
     filled: Mapping[EncodingRole, Sequence[str]],
     elements_by_role: Mapping[EncodingRole, Sequence[Element]],
+    model_labels: Mapping[EncodingRole, Sequence[str]],
 ) -> Rejection | None:
     """Are the filled channels the ones this type declares?
 
@@ -223,7 +224,9 @@ def _roles_valid_for_type(
     if visual_type is VisualType.LINE:
         times = elements_by_role.get(EncodingRole.TIME, ())
         line_quantities = elements_by_role.get(EncodingRole.QUANTITY, ())
-        line_series = elements_by_role.get(EncodingRole.SERIES, ())
+        line_series = model_labels.get(EncodingRole.SERIES) or [
+            element.span_excerpt for element in elements_by_role.get(EncodingRole.SERIES, ())
+        ]
         if len(times) != len(line_quantities) or (
             line_series and len(line_series) != len(line_quantities)
         ):
@@ -245,7 +248,7 @@ def _roles_valid_for_type(
         dates_by_series: dict[str, set[str]] = {}
         counts_by_series: dict[str, int] = {}
         for index, element in enumerate(times):
-            label = line_series[index].span_excerpt if line_series else ""
+            label = line_series[index] if line_series else ""
             date = element.value
             if date is None:
                 continue
@@ -272,14 +275,16 @@ def _roles_valid_for_type(
                 "a stacked bar has one declared whole and one series label per part",
             )
     if visual_type is VisualType.PIE:
-        pie_categories = elements_by_role.get(EncodingRole.CATEGORY, ())
+        pie_categories = model_labels.get(EncodingRole.CATEGORY) or [
+            element.span_excerpt for element in elements_by_role.get(EncodingRole.CATEGORY, ())
+        ]
         pie_quantities = elements_by_role.get(EncodingRole.QUANTITY, ())
         if len(pie_categories) != len(pie_quantities):
             return Rejection(
                 ValidatorCheck.ROLES_VALID_FOR_TYPE,
                 "a pie pairs one category with each part quantity",
             )
-        names = [element.span_excerpt.strip().casefold() for element in pie_categories]
+        names = [label.strip().casefold() for label in pie_categories]
         if len(names) != len(set(names)):
             return Rejection(
                 ValidatorCheck.ROLES_VALID_FOR_TYPE,
@@ -345,7 +350,7 @@ def _composition_exhaustive(
             check,
             f"{whole_id} is not a source-declared quantity for the whole",
         )
-    if whole_is_row_label:
+    if whole_is_row_label and plan.presentation is None:
         categories = drawn.get(EncodingRole.CATEGORY, ())
         if len(categories) != 1 or categories[0].element_id != whole_id:
             return Rejection(
@@ -363,7 +368,8 @@ def _composition_exhaustive(
             check,
             f"{whole_id} does not state a positive whole",
         )
-    if require_same_measure_and_unit and whole.measure_canonical is None:
+    require_measure = require_same_measure_and_unit and plan.presentation is None
+    if require_measure and whole.measure_canonical is None:
         return Rejection(
             check,
             f"{whole_id} has no canonical measure",
@@ -376,7 +382,7 @@ def _composition_exhaustive(
                 f"{part.element_id} is not a non-negative part quantity",
             )
         if require_same_measure_and_unit:
-            if part.measure_canonical != whole.measure_canonical:
+            if require_measure and part.measure_canonical != whole.measure_canonical:
                 return Rejection(
                     check,
                     f"{part.element_id} and {whole_id} do not state the same canonical measure",
@@ -470,6 +476,7 @@ def _enough_data(
 
 def _no_duplicate_in_role(
     filled: Mapping[EncodingRole, Sequence[str]], *, visual_type: VisualType | None,
+    uses_model_labels: bool,
 ) -> Rejection | None:
     """Does any element fill one channel twice?
 
@@ -478,7 +485,9 @@ def _no_duplicate_in_role(
     under three names publishes - every value true and the comparison invented.
     """
     for role, ids in sorted(filled.items(), key=lambda pair: pair[0].value):
-        if visual_type is VisualType.LINE and role is EncodingRole.SERIES:
+        if visual_type is VisualType.LINE and (
+            role is EncodingRole.SERIES or (uses_model_labels and role is EncodingRole.TIME)
+        ):
             # A series can name several readings; the compiler checks that it
             # holds at most one reading for a date.
             continue
@@ -601,6 +610,8 @@ def validate_plan(
             role: [known[cited] for cited in ids if cited in known]
             for role, ids in filled.items()
         }
+        model_labels = plan.presentation.filled() if plan.presentation is not None else {}
+        channels = filled | model_labels
         cited = [known[one] for one in plan.element_ids if one in known]
         found = [
             _element_exists(plan, known),
@@ -614,7 +625,7 @@ def validate_plan(
         # The contract refuses a plan that proposes a visual and states no type,
         # so this narrows rather than branches.
         if plan.type is not None:
-            roles = _roles_valid_for_type(plan.type, filled, drawn)
+            roles = _roles_valid_for_type(plan.type, channels, drawn, model_labels)
             if roles is None and plan.type in (VisualType.SCATTER, VisualType.BUBBLE):
                 detail = refuse_relationship(plan, drawn)
                 if detail is not None:
@@ -623,12 +634,14 @@ def validate_plan(
             found.append(_stacked_bar_exhaustive(plan, drawn, known))
             found.append(_pie_exhaustive(plan, drawn, known))
             found.append(
-                _enough_data(plan.type, filled, visuals=visuals)
+                _enough_data(plan.type, channels, visuals=visuals)
             )
         found += [
-            _no_duplicate_in_role(filled, visual_type=plan.type),
+            _no_duplicate_in_role(
+                filled, visual_type=plan.type, uses_model_labels=plan.presentation is not None,
+            ),
             _no_invented_values(cited),
-            _numerals_matched(plan, cited),
+            _numerals_matched(plan, table.elements if plan.presentation is not None else cited),
         ]
         rejections += [rejection for rejection in found if rejection is not None]
     # A plan that declines draws nothing, so eight of the nine have nothing to

@@ -198,6 +198,12 @@ def compile_chart(
         role: [value for value in resolved.values if value.role is role] if role in allowed else []
         for role in EncodingRole
     }
+    if plan.presentation is not None:
+        for role, display_names in plan.presentation.filled().items():
+            channels[role] = [
+                DisplayedValue(role=role, element_id=None, derived=None, model_text=name)
+                for name in display_names
+            ]
     max_label_characters = (
         None if visual_type is VisualType.STACKED_BAR else visuals.max_label_characters
     )
@@ -402,6 +408,7 @@ def _chart_data(
                         source_text=None,
                         element_id=value.element_id,
                         derived=value.derived,
+                        label_source="model" if value.model_text is not None else None,
                     )
                 )
             encoded[role.value].append(mark_id)
@@ -442,6 +449,7 @@ def _chart_data(
         ),
         title=sanitize(plan.title).strip() or None if plan.title is not None else None,
         caption=sanitize(plan.caption).strip() or None if plan.caption is not None else None,
+        axis_titles=plan.presentation.axis_titles if plan.presentation is not None else None,
         emphasized_mark_id=emphasized,
         marks=marks,
         encoding=VisualEncoding(**encoded),
@@ -607,7 +615,11 @@ def _mark_text(
     *,
     max_length: int | None,
 ) -> str:
-    """Use verified display wording without editing the evidence element."""
+    """Read model wording directly or fit a historical source label."""
+    if value.model_text is not None:
+        if sanitize(value.model_text) != value.model_text:
+            raise CompileError("a model label must be plain text")
+        return value.model_text
     if value.element_id is None:
         raise CompileError("a label has to be an element the article wrote")
     source_span = labels.display.get(
