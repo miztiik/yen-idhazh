@@ -94,7 +94,10 @@ sends it:
   `plan-visual.txt` addendum for a chart-capable request. The addendum and the
   separate reply schema name exactly the same forms.
 - **The user turn** is one sanitized, fenced block containing the headline and
-  the article body. No instruction follows it.
+  the article body. For chart-capable requests, `**` around existing quantity
+  spans draws attention to possible readings without repeating the prose.
+  These marks do not pair readings or assign labels. No instruction follows
+  the block.
 
 The prompt is rendered explicitly rather than by the model's chat template. The shared
 system text is a reusable prefix for items with the same request shape.
@@ -131,8 +134,11 @@ Fenced headline and article text remain untrusted data. Do not let either become
 ### The model is shown no sentence address
 
 Only the sanitized source block enters the prompt. Its sanitization does not
-change stored `Article.text`. No sentence address, element id, offset, text
-analysis annotation or tagged copy goes to the model.
+change stored `Article.text`. The quantity highlights change only the
+prompt's copy, and no sentence address, element id, offset, or text-analysis
+annotation goes to the model. If the body needs sanitizing again or the
+highlights would not fit the window, the chart request keeps the plain body.
+Summary-only requests never add highlights.
 
 Source verification uses the original element table over `Article.text`. Code
 re-slices each excerpt rather than trusting a proposed label or words returned
