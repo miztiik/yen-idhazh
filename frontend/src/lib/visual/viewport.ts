@@ -1,4 +1,5 @@
 /** Size a story plot from viewport room and its readable content, not mark density. */
+import type { ChartLabels } from '../charts/frame';
 import type { VisualData } from '../payload/types';
 import type { StoryChartGeometryConfig } from '../server/config';
 import { roomIn } from './width';
@@ -7,6 +8,7 @@ export interface ChartRoom {
 	width: number;
 	height: number;
 	textHeight: number;
+	comparisonLabels?: ChartLabels;
 }
 
 /** Axis guides need text clearance too; thinning guides never removes source marks. */
@@ -16,6 +18,7 @@ export function fitChartTicks(
 	textHeight: number,
 	maximum: number
 ): number {
+	if (data.type === 'bar' || data.type === 'dot') return maximum;
 	const span = data.type === 'scatter' || data.type === 'bubble'
 		? geometry.scatter_height_px - geometry.scatter_margin_top_px - geometry.scatter_margin_bottom_px
 		: geometry.line_min_height_px - geometry.line_axis_margin_top_px - geometry.axis_band_px;
@@ -70,6 +73,22 @@ type Measured = (room: ChartRoom) => void;
 const figures = new Map<Element, Measured>();
 let observer: ResizeObserver | null = null;
 let pendingFrame: number | null = null;
+let textContext: CanvasRenderingContext2D | null = null;
+
+function comparisonLabels(style: CSSStyleDeclaration): ChartLabels {
+	const font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+	textContext ??= document.createElement('canvas').getContext('2d');
+	const context = textContext;
+	return {
+		fontSize: parseFloat(style.fontSize),
+		leading: parseFloat(style.lineHeight),
+		tracking: style.letterSpacing === 'normal' ? 0 : parseFloat(style.letterSpacing),
+		measure: context ? (text) => {
+			context.font = font;
+			return context.measureText(text).width;
+		} : undefined
+	};
+}
 
 function measure(node: Element): ChartRoom {
 	const plot = node.querySelector<SVGSVGElement>(':scope > svg');
@@ -82,11 +101,13 @@ function measure(node: Element): ChartRoom {
 	const furniture = node.getBoundingClientRect().height -
 		(plot?.getBoundingClientRect().height ?? 0) +
 		parseFloat(style.marginTop) + parseFloat(style.marginBottom);
-	const textHeight = text ? text.getBBox().height : parseFloat(style.fontSize);
+	const labels = node.classList.contains('comparison') ? comparisonLabels(style) : undefined;
+	const textHeight = labels?.leading ?? (text ? text.getBBox().height : parseFloat(style.fontSize));
 	return {
 		width: roomIn(node),
 		height: Math.max(0, (window.visualViewport?.height ?? window.innerHeight) - occlusion - furniture),
-		textHeight
+		textHeight,
+		comparisonLabels: labels
 	};
 }
 

@@ -1,6 +1,6 @@
 # Design System
 
-**Last Updated**: 2026-11-21
+**Last Updated**: 2026-11-22
 
 Shared rules for typography, layout, colour, motion and controls. [Console design](console-design.md) owns panel-specific presentation; [appearance configuration](config/appearance.md) owns tunable values.
 
@@ -174,14 +174,16 @@ own selection, placement and the bounded renderer inventory. Reader-chart
 interaction is unchanged.
 
 A chart shows its title above the marks and its optional caption below them.
-Both are untrusted text, never markup. Exactly one selected measured mark takes
-the second chart token and a visible outline; colour is not its only cue.
-Neither emphasis nor framing changes the values or their order.
+Both are untrusted text, never markup. Missing framing takes no reserved space.
+Horizontal bars and dots put each category beside its mark when room allows
+and directly above it when space is tight. A single measure uses one colour
+without a spotlight. Declared groups keep their own labels and colours; do not
+add a legend that repeats those row labels. Other families retain their own
+emphasis and series cues.
 Bars rank by numeric value, largest first, with original order for equal values.
-The full row and accessible reading order move together, including source values
-and emphasis. Other chart families keep their own semantic order.
-The accessible name includes the framing, the highlighted bar and original
-source figures for converted values. Missing framing takes no reserved space.
+The full row and accessible reading order move together, including source values.
+Other chart families keep their own semantic order. The accessible name
+includes the framing and original source figures for converted values.
 Pies show the article's stated total and every named share in a visible list
 beside the circle where room allows, and below it when it does not. The circle
 never carries the only copy of a value or a category name.
@@ -275,7 +277,12 @@ visible category count could change its colour when a series disappears.
 Hardware's job counts and capacities are already expressed by the marks and
 labels. Shading each segment again does not add a reading.
 
-The digest drawing and console use one TypeScript number formatter. Its locale, SI prefix threshold and significant digits come only from `visuals.number_format` in `config/idhazh.json`, never from a reader's browser. Where a shortened figure differs from the article's text, the accessible description keeps the original characters. Maintainer ruling: 2026-10-24.
+The digest drawing and console share the locale, SI prefix threshold and
+significant digits declared in `visuals.number_format` in `config/idhazh.json`.
+Horizontal story comparisons have [one display unit per chart](../architecture/publishing/how-a-story-chart-is-drawn-and-what-refuses-one.md#design-rationale)
+instead of independently abbreviated SI labels. Console notation is unchanged.
+Where formatting differs from the article's text, the accessible description
+keeps the original characters.
 
 Measured values, axes and dated readouts share the configured precision and SI prefixes. Exact event counts retain every digit with the same locale's grouping. Standalone component tests provide the real page's number settings through the shared server-render helper or browser component mount; a missing page context still fails rather than choosing another locale.
 
