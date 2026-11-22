@@ -249,7 +249,7 @@ function declaredPanelQuery(expression: ts.Expression, tree: ts.SourceFile): {
 	readonly tree: ts.SourceFile; readonly columns: ts.Expression;
 } | null {
 	const origin = symbolOrigin(expression, tree);
-	if (!origin?.imported || !/\/console\/queries\/(?:machine|model|pipelines|shared|voices)\.ts$/.test(origin.tree.fileName.replaceAll('\\', '/')) ||
+	if (!origin?.imported || !/\/console\/queries\/(?:judgement|machine|model|pipelines|shared|voices)\.ts$/.test(origin.tree.fileName.replaceAll('\\', '/')) ||
 		!origin.value) return null;
 	const queryTree = origin.tree;
 	let satisfied = false;

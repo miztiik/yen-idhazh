@@ -282,6 +282,7 @@
 	note="The original holdout labels came from a model, not a human review. A score can clear the merge line without the stories folding."
 	{tone}
 	wide
+	heading="h3"
 >
 	<div
 		data-holdout

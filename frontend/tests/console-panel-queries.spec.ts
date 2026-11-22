@@ -8,6 +8,10 @@ import { platformMixQuery, runShardsQuery, slowerOnSameWorkQuery } from '../src/
 import { summaryLengthQuery } from '../src/lib/console/queries/model';
 import { compareRuns, failedRuleQuery, hostKey, joinItemHosts, newestRunRows } from '../src/lib/console/queries/shared';
 import { feedsFailedQuery } from '../src/lib/console/queries/voices';
+import { judgeDayQuery, judgeHistoryQuery } from '../src/lib/console/queries/judgement';
+import {
+	exactJudgeDay, judgeCoverage, judgeRange, latestJudgeReadings, selectedJudgeDate
+} from '../src/lib/console/judge-observations';
 import { modelThroughput } from '../src/lib/console/model/model-throughput';
 import { throughputWithin } from '../src/lib/server/model-work';
 import {
@@ -31,6 +35,50 @@ import { rankedList } from '../src/lib/charts/d3/rankedList';
 import { numberFormat } from './support/number-format';
 
 const PRESETS = [3, 7, 30] as const;
+
+test('Judgement intersects the displayed digest window with packed history and opens only the selected run and attempt', async ({}, info) => {
+	const root = info.outputPath('judge-history');
+	const date = '2026-08-18';
+	const legacy = { date: '2026-08-17', run_id: '2026-08-20-1', attempt: 1 };
+	const currentRun = { date, run_id: '2026-08-20-10' };
+	const staleAttempt = { ...currentRun, attempt: 1, pairs_drawn: 11, pairs_returned: 7 };
+	const selectedRow = {
+		...currentRun, attempt: 2, pairs_drawn: 8, pairs_returned: 6,
+		sample_tp: 2, sample_fp: 1, sample_fn: 0, sample_tn: 1, score_psi: 0, runners_reported: 1
+	};
+	const olderRun = {
+		...selectedRow, run_id: '2026-08-20-9', attempt: 4, pairs_drawn: 50, pairs_returned: 46,
+		sample_tp: null, sample_fp: null, sample_fn: null, sample_tn: null, score_psi: null, runners_reported: null
+	};
+	await buildRows(root, 'threshold-history', [
+		{ covers: legacy.date, rows: [legacy] },
+		{ covers: date, rows: [olderRun, selectedRow] },
+		{ covers: '2026-08-19', rows: [] },
+		{ covers: '2026-08-20', rows: [] },
+		{ covers: '2026-08-21', rows: [{ date: '2026-08-21', run_id: '2026-08-21-1', attempt: 1, score_psi: 0.8 }] }
+	]);
+	const queries = createQueryWindow(diskDoor(root), PRESETS.length);
+	const ledger = judgeHistoryQuery.ledger;
+	const reach = (await queries.routeReach([ledger])).ledgers[ledger]!;
+	const range = judgeRange({ start: '2026-08-16', end: '2026-08-20' }, reach)!;
+	expect(range).toEqual({ from: legacy.date, to: '2026-08-20', days: 4, asked: 5 });
+	const history = await queries.sliceOnce(judgeHistoryQuery, range);
+	expect(history.state).toBe('ok');
+	const readings = latestJudgeReadings([...history.rows, staleAttempt]);
+	expect([...readings.keys()].sort()).toEqual([legacy.date, date]);
+	const calendar = [legacy.date, date, '2026-08-19', '2026-08-20'];
+	expect(selectedJudgeDate(calendar, null, readings)).toBe(date);
+	expect(selectedJudgeDate(calendar, legacy.date, readings)).toBe(legacy.date);
+	expect(selectedJudgeDate(calendar.slice(1), legacy.date, readings)).toBe(date);
+	const selected = readings.get(date)!;
+	expect(selected.identity).toEqual({ date, run: currentRun.run_id, attempt: 2 });
+	expect(judgeCoverage(selected.cells).stack).toEqual([4, 2, 2]);
+	expect(selected.cells.score_psi).toBe(0);
+	expect(judgeCoverage(readings.get(legacy.date)!.cells).stack).toBeNull();
+	const details = await queries.sliceOnce(judgeDayQuery, { from: date, to: date, days: 1, asked: 1 });
+	expect(exactJudgeDay([...details.rows, staleAttempt], selected.identity)?.runners_reported).toBe(1);
+	expect(exactJudgeDay([olderRun, staleAttempt], selected.identity)).toBeNull();
+});
 
 test('only Pipelines asks the shared failed-rule question and retains every recorded model stage', () => {
 	expect(modelPanels).not.toHaveProperty('refusing-rule');

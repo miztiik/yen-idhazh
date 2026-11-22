@@ -1,7 +1,7 @@
-/** Judgement reports its window on the one surface that follows it. */
+/** The holdout owns its reach; the selected-day ranges follow the selected digest. */
 import type { RouteExpect } from './index';
 
 export const EXPECT: RouteExpect | null = {
-	windowed: ['merged-stories'],
+	windowed: ['merged-stories', 'judge-coverage', 'pair-score-drift'],
 	dailyTable: false
 };

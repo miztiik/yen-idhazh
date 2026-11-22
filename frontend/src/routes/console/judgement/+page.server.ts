@@ -17,9 +17,9 @@ export type { MergeDay };
 
 /** What Judgement reads, and what it costs.
  *
- * Two reads, both at build time, and nothing is fetched by a browser. Every span
- * the window control can draw is already in the document, so changing the
- * window costs no request.
+ * The two published-grouping reads are both at build time. Their entire span
+ * is already in the document. The observations below them use the browser's
+ * packed ledger reader and do not come through this loader.
  *
  * The first is one day file for each published day inside the widest span the
  * window control offers. The day payload is the biggest file the build reads and

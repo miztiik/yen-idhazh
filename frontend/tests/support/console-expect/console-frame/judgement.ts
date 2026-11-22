@@ -1,8 +1,11 @@
-/** Judgement draws two named panels in one untitled group. */
+/** Keep publication evidence separate from nightly judge diagnostics. */
 import type { RouteExpect } from './index';
 export const EXPECT: RouteExpect = {
 	layout: null,
-	groups: null,
+	groups: [
+		{ id: 'judgement', title: 'Published grouping', panels: ['merged-stories', 'holdout-margin'] },
+		{ id: 'judge-observations', title: 'Judge observations', panels: ['judge-coverage', 'judge-score-ranges', 'pair-score-drift'] }
+	],
 	verdict: null,
 	runSquares: false,
 	prerender: true

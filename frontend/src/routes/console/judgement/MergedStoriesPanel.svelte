@@ -188,6 +188,7 @@
 	title="Stories the day merged"
 	note="One column is one day: the stories that day folded behind another because we read them as the same story. The dot is the biggest group that day, counting the one we kept."
 	wide
+	heading="h3"
 >
 	<div
 		data-windowed="merged-stories"

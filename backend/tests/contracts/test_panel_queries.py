@@ -19,12 +19,26 @@ from idhazh.contracts.item_health import COLUMN_READERS as ITEM_READERS
 from idhazh.contracts.item_health import MACHINE_CELLS_RENAMED, UNREAD_CELLS, ItemHealthRow
 from idhazh.contracts.ledgers import LedgersConfig
 from idhazh.contracts.run_shards import RunShards
+from idhazh.contracts.story_similarity_diagnostics import (
+    JudgeProbabilityEvidence,
+    JudgeProbabilityStatus,
+    SampleStatus,
+    ScoreDriftBaseline,
+    ScoreDriftSource,
+    ScoreDriftStatus,
+    SliceOutcome,
+    SliceOutcomes,
+)
+from idhazh.contracts.story_similarity_pair_verdict import SameStoryVerdict
+from idhazh.contracts.story_similarity_threshold_history_row import (
+    StorySimilarityThresholdHistoryRow,
+)
 
 pytestmark = pytest.mark.contract
 LEGACY_HOST_INPUT_COLUMNS: Final = ("cores", "threads", "mhz_max", "mhz_at_probe")
 
 #: Fixed input inventory, in the registry's ownership order.
-QUERY_MODULES: Final = ("shared", "pipelines", "model", "machine", "voices", "window")
+QUERY_MODULES: Final = ("shared", "pipelines", "model", "machine", "voices", "judgement", "window")
 QUERY_ROOT: Final = "frontend/src/lib/console/queries"
 EXPECTED_NAMES: Final = {
     "shared": ("failedRuleQuery",),
@@ -45,6 +59,7 @@ EXPECTED_NAMES: Final = {
         "promptReuseQuery", "readAgainstWrittenQuery",
     ),
     "voices": ("feedsFailedQuery", "fetchTimeQuery", "sourceCutsQuery", "whyChosenQuery"),
+    "judgement": ("judgeHistoryQuery", "judgeDayQuery"),
     "window": (),
 }
 
@@ -91,6 +106,23 @@ EXPECTED_COLUMNS: Final[Mapping[str, tuple[str, ...]]] = {
     "fetchTimeQuery": ("source_id", "fetch_ms", "fetch_connect_ms", "fetch_ttfb_ms", "robots_ms", "retry_total_ms", "retry_count"),
     "sourceCutsQuery": ("date", "source_id", "url_key", "source_words_before_cap", "source_words"),
     "whyChosenQuery": ("date", "run_id", "item_id", "source_id", "selection_score", "authority_score", "tier_score", "feed_weight", "feed_reliability", "recency_bonus", "lens_bonus", "watchlist_bonus", "carriage_step"),
+    "judgeHistoryQuery": (
+        "date", "run_id", "attempt", "pairs_drawn", "pairs_returned",
+        "sample_tp", "sample_fp", "sample_fn", "sample_tn", "score_psi",
+    ),
+    "judgeDayQuery": (
+        "date", "run_id", "attempt", "pairs_drawn", "pairs_returned",
+        "runners_reported", "runners_expected", "pairs_dealt", "pairs_valid", "pairs_agreed",
+        "disagreement_rate", "pairs_refused", "pairs_unreadable", "pairs_abandoned", "unclear_rate",
+        "slice_outcomes", "sample_status", "evaluated_cutoff",
+        "sample_tp", "sample_fp", "sample_fn", "sample_tn", "sample_precision", "sample_recall",
+        "upper_threshold_before", "upper_cutoff_false_match_share", "upper_cutoff_sample_size",
+        "upper_cutoff_brier_score", "cutoff_brier_score",
+        "score_drift_baseline", "score_drift_status", "score_psi", "score_wasserstein_distance", "score_ks_distance",
+        "judge_probability_evidence", "judge_probability_status", "judge_probability_brier_score",
+        "judge_probability_baseline_brier_score", "judge_probability_ece",
+        "canary_answers", "canary_expectations", "canary_kappa", "canary_kappa_pairs",
+    ),
 }
 
 
@@ -168,7 +200,50 @@ def row_columns() -> dict[str, tuple[str, ...]]:
         "item-health": ItemHealthRow.csv_columns(),
         "host-fingerprint": HostFingerprintRow.csv_columns(),
         "summary-quality-evals": EvalRow.csv_columns(),
+        # The compact ledger keeps the winning writer's envelope attempt next to the row.
+        "threshold-history": (*StorySimilarityThresholdHistoryRow.model_fields, "attempt"),
     }
+
+
+def test_judgement_reads_only_the_compact_diagnostic_fields_it_displays() -> None:
+    source = read_text(REPO_ROOT / "frontend/src/lib/console/judge-observations.ts")
+    parsed = re.search(r"interface SliceOutcome \{(.*?)\n\}", source, re.S)
+    assert parsed is not None
+    assert set(re.findall(r"\b(\w+):", parsed[1])) == SliceOutcome.model_fields.keys() - {
+        "bucket", "available",
+    }
+    fields = {
+        "judgeSlices": ({"slices"}, SliceOutcomes.model_fields.keys()),
+        "judgeDriftBaseline": (
+            {"sources", "required_days", "date"},
+            (ScoreDriftBaseline.model_fields.keys() - {"share_floor"})
+            | (ScoreDriftSource.model_fields.keys() - {"run_id", "histogram_sha256"}),
+        ),
+        "judgeProbabilityEvidence": (
+            {"source_date", "source_run_id", "pairs", "yes", "bins"},
+            JudgeProbabilityEvidence.model_fields.keys() - {"fit_sha256"},
+        ),
+    }
+    for name, (used, native) in fields.items():
+        assert used == native
+        body = source.split(f"export function {name}(", 1)[1].split("\n}", 1)[0]
+        for field in native:
+            assert re.search(rf"\b{field}\b", body), (name, field)
+
+
+def test_judgement_names_the_producers_diagnostic_statuses_and_verdicts() -> None:
+    source = read_text(REPO_ROOT / "frontend/src/lib/console/judge-observations.ts")
+    for name, native in (
+        ("SAMPLE_STATUS", SampleStatus),
+        ("DRIFT_STATUS", ScoreDriftStatus),
+        ("PROBABILITY_STATUS", JudgeProbabilityStatus),
+    ):
+        found = re.search(rf"export const {name} = \{{(.*?)\n\}} as const;", source, re.S)
+        assert found is not None
+        assert set(re.findall(r"^\s*(\w+):", found[1], re.M)) == {entry.value for entry in native}
+    verdicts = re.search(r"const VERDICTS = \[(.*?)\] as const;", source)
+    assert verdicts is not None
+    assert set(re.findall(r"'([^']+)'", verdicts[1])) == {entry.value for entry in SameStoryVerdict}
 
 
 def explorer_ledgers() -> tuple[str, ...]:

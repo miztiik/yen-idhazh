@@ -14,6 +14,7 @@
 	import { factsOf, markReadout, recordsOf, type ReadoutFacts } from '$lib/charts/readout';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import { percentOf } from '$lib/charts/rank';
+	import type { Snippet } from 'svelte';
 
 	let {
 		geometry,
@@ -25,7 +26,8 @@
 		readout = null,
 		readoutMaxShare = 1,
 		separateSegments = false,
-		showTotal = true
+		showTotal = true,
+		rowNote
 	}: {
 		geometry: PartsGeometry | null;
 		empty: EmptyDrawing | null;
@@ -37,6 +39,7 @@
 		readoutMaxShare?: number;
 		separateSegments?: boolean;
 		showTotal?: boolean;
+		rowNote?: Snippet<[number]>;
 	} = $props();
 	let selected = $state<number | null>(null);
 	const records = $derived(recordsOf(readout ?? (geometry?.rows ?? []).map((row) => factsOf(
@@ -89,6 +92,7 @@
 						</span>
 					</span>
 					{#if showTotal && row.total !== null}<span class="parts-total">{row.total}</span>{/if}
+					{#if rowNote}<div class="parts-context">{@render rowNote(index)}</div>{/if}
 				</li>
 			{/each}
 		</ol>
@@ -145,6 +149,11 @@
 
 	.parts-name {
 		overflow-wrap: anywhere;
+	}
+
+	.parts-context {
+		grid-column: 1 / -1;
+		color: var(--color-text-secondary);
 	}
 
 	.parts-track {
