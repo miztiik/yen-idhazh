@@ -19,7 +19,6 @@ import {
 import {
 	chartRule,
 	horizonRate as horizonRateWithFormat,
-	siteCostMeasure,
 	type GlanceDay
 } from '../src/lib/charts/glance';
 import { dailyFiguresPointer, dailyFiguresRows, dailyFiguresSummary } from '../src/lib/console/daily-figures';
@@ -95,16 +94,10 @@ test('a table of daily figures opens on one day, and on seven day by day, newest
 	);
 });
 
-test('the per-article measurement names the published articles and payload days it counts', () => {
-	expect(siteCostMeasure(1)).toBe(
-		'Bytes the committed payload tree gained in this one day, over the articles the day published.'
-	);
-	expect(siteCostMeasure(7)).toBe(
-		'Bytes the committed payload tree gained on each published day, over the articles that day published. Over 7 days.'
-	);
+test('the cap estimate distinguishes a single publishing day from a median rate', () => {
 	// The rate stays a rate at one day; it is that day's own count.
-	expect(horizonRate(300, 1)).toBe("300 articles a published day, this one day's count");
-	expect(horizonRate(334.4, 7)).toBe('a median of 334 articles a published day');
+	expect(horizonRate(300, 1)).toBe('300 articles per publishing day');
+	expect(horizonRate(334.4, 7)).toBe('a median of 334 articles per publishing day');
 });
 
 test('the merge sentences name the days they counted', () => {

@@ -36,7 +36,8 @@
 		narrow,
 		tickDensity,
 		readout = null,
-		selected = $bindable(null)
+		selected = $bindable(null),
+		descriptionId
 	}: {
 		/** One entry per day of the window, oldest first. */
 		days: DayColumn[];
@@ -49,6 +50,7 @@
 		readout?: Readout | null;
 		/** The day both figures are showing, or null for the newest. */
 		selected?: number | null;
+		descriptionId?: string;
 	} = $props();
 
 	/** The square under the chart, or null where the strip has to be drawn. */
@@ -151,6 +153,7 @@
 		tabindex="0"
 		role="group"
 		aria-label={keysLabel}
+		aria-describedby={descriptionId}
 		data-run-history="under-chart"
 		data-grid="days"
 		use:pointerReadout={{
@@ -205,6 +208,7 @@
 			tabindex="0"
 			role="group"
 			aria-label={keysLabel}
+			aria-describedby={descriptionId}
 			use:pointerReadout={{
 				marks: stripMarks,
 				width: strip_.width,

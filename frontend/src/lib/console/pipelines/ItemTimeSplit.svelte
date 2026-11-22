@@ -33,13 +33,13 @@
 	{width} height={knobs.chart_height} readout={{ ...readout, columns: readout.columns.map(shortDate) }} readoutMaxShare={chart.readout_max_share} />
 {#if split.recorded > 0}
 	<details class="console-disclosure" data-time-split-readings>
-		<summary class="console-summary">Clock exclusions and call timings</summary>
-		<p>Call timings are within stages, not added to the bars.</p>
+		<summary class="console-summary">Clock exclusions and calls</summary>
+		<p>Calls are part of Summarize. The summary call includes the visual plan.</p>
 		{#each split.days.filter((day) => day.recorded > 0) as day (day.date)}
-			<p><time datetime={day.date}>{shortDate(day.date)} UTC</time>: {day.count} of {day.recorded} used; {day.missing} missing, {day.invalid} invalid, {day.inconsistent} inconsistent. {day.overlapping} with overlapping stages.</p>
+			<p><time datetime={day.date}>{shortDate(day.date)} UTC</time>: {day.count} of {day.recorded} used; {day.missing} missing, {day.invalid} invalid, {day.inconsistent} inconsistent; {day.overlapping} with overlap.</p>
 			<dl>
 				{#each day.details as part (part.cell)}
-					<div><dt>{part.label}</dt><dd>{part.value === null ? 'No full-cohort mean' : `${formatNumber(part.value / 1000, numberFormat, { si: false })} s`} ({part.timed} of {day.count} timed)</dd></div>
+					<div><dt>{part.label}</dt><dd>{part.value === null ? 'No mean' : `${formatNumber(part.value / 1000, numberFormat, { si: false })} s`} ({part.timed} of {day.count} timed)</dd></div>
 				{/each}
 			</dl>
 		{/each}

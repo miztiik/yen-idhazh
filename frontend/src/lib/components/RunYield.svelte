@@ -63,6 +63,7 @@
 		tickDensity,
 		readout = null,
 		selected = $bindable(null),
+		descriptionId,
 		onPick,
 		below
 	}: {
@@ -77,6 +78,7 @@
 		readout?: Readout | null;
 		/** The day picked on this chart or on a figure beside it, or null for none. */
 		selected?: number | null;
+		descriptionId?: string;
 		/** A deliberate pick on this chart - a step key or a tap, never a hover. */
 		onPick?: (index: number) => void;
 		/** What stands under the chart's date row, handed the chart's own day slots
@@ -238,6 +240,7 @@
 			role="img"
 			tabindex="0"
 			aria-label={headline}
+			aria-describedby={descriptionId}
 			data-run-yield-chart
 			use:pointerReadout={{
 				marks,

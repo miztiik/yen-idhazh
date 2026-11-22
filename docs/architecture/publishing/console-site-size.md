@@ -34,13 +34,12 @@ that is what a chart owes anybody who cannot see it, and it is also the only way
 the flags can be checked: `frontend/tests/console-site-size.spec.ts` recomputes
 the band from exactly those numbers and fails if the marks disagree.
 
-**The panel says what it is for.** Its note must do more than describe its own
-axes - bytes gained, over articles published - because a reader would meet a
-chart of four-digit numbers with nothing to hold them against. It is not a chart
-of data growth across days; it is the marginal cost of one more article, and it
-is on the page to answer how long the project can keep publishing under the 1 GB
-Pages cap. The note opens with that question and the panel closes with the
-answer.
+**The panel leads with the window's median in bytes per article.** A short
+caption names what it measures: the daily change in payload size divided by
+the articles published that day. The spread appears only when measured.
+The plot and its dated readout retain the median guide and any settings
+changes. The size change and the cap estimate sit below the chart rather
+than restating the headline.
 
 **The horizon is two measured rates over one set of days.** `publishingHorizon`
 divides the headroom by the window's median cost, which gives articles, and then
@@ -73,7 +72,10 @@ column positions.
 is its own bytes minus the previous manifest's, so the oldest day on screen
 still reads against the day before it. Differenced against zero it would report
 the whole tree as one day's work, and the window would invent an outlier every
-time it moved.
+time it moved. When the manifest record is unavailable, the chart says so;
+a readable window can instead have no paired size and publication record.
+Decreases keep their signed readings in a visible list, not zero-height bars.
+A window with only decreases is measured even though it draws no bars.
 
 **The `Site size` fact carries the level, a track against the cap, the window's
 delta and a runway.** The runway is headroom over the per-article cost, and what

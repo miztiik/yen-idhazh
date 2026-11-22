@@ -79,6 +79,64 @@ for (const one of cases) {
 	});
 }
 
+test('the timing key follows the painted marks, not the unplotted call details', async ({ page }, info) => {
+	const incomplete = dayBefore(THROUGH, 1);
+	const root = await packedPipelines(info.outputPath('timing-key'), [
+		{ covers: incomplete, rows: [nativeRow(incomplete)] },
+		{ covers: THROUGH, rows: [
+			timedRow(THROUGH, { item_id: 'gap', analyze_ms: 40, item_total_ms: 840 }),
+			timedRow(THROUGH, { item_id: 'overlap', item_total_ms: 700, stage_gap_ms: -50 }),
+			nativeRow(THROUGH, { item_id: 'missing' }),
+			timedRow(THROUGH, { item_id: 'invalid', fetch_ms: -100 }),
+			timedRow(THROUGH, { item_id: 'inconsistent', item_total_ms: 801 })
+		].map((row) => ({ analyze_ms: null, ...row })) }
+	]);
+	await servePipelines(page, root);
+	await page.goto(routeHref('pipelines'));
+	await hydrated(page);
+	await setWindow(page, 7);
+	await settled(page);
+	const section = page.locator('[data-windowed="item-time-split"]');
+	const plot = section.locator('[data-chart-name="item-time-split"]');
+	const readout = section.locator('[data-readout="item-time-split"]');
+	await expect(readout.locator('[data-readout-row="Elapsed time"]')).toContainText('0.77 s');
+	await expect(plot.locator(`[data-series-day="${THROUGH}"]`)).toHaveCount(6);
+	await expect(plot.locator('[data-stack-overlap]')).toHaveCount(1);
+	const comparePaint = () => section.locator('[data-series-bar], [data-stack-elapsed], [data-stack-overlap]')
+		.evaluateAll((marks) => marks.map((mark) => {
+			const stage = mark.getAttribute('data-series-bar');
+			const label = stage ?? (mark.hasAttribute('data-stack-elapsed') ? 'Elapsed time' : 'Overlap');
+			const paint = getComputedStyle(mark)[stage === null ? 'stroke' : 'fill'];
+			const swatch = mark.closest('[data-windowed]')?.querySelector(`[data-readout-row="${label}"] .readout-swatch`);
+			return { label, paint, swatch: swatch ? getComputedStyle(swatch).backgroundColor : null };
+		}));
+	const theme = page.locator('html');
+	const first = await theme.getAttribute('data-theme');
+	const initial = await comparePaint();
+	await page.locator('[data-site-footer] [data-theme-toggle]').click();
+	await expect(theme).toHaveAttribute('data-theme', first === 'light' ? 'dark' : 'light');
+	const switched = await comparePaint();
+	for (const marks of [initial, switched]) {
+		for (const { label, paint, swatch } of marks) {
+			expect(paint, label).not.toMatch(/^(none|transparent|rgba\(0, 0, 0, 0\))$/);
+			expect(swatch, label).toBe(paint);
+		}
+	}
+	expect(switched).not.toEqual(initial);
+	await expect(readout.locator('[data-readout-row="Visual plan (detail, not added)"]')).toContainText('0.06 s');
+	await expect(readout.locator('[data-readout-row*="detail, not added"] .readout-swatch, [data-readout-row="Complete clocks"] .readout-swatch')).toHaveCount(0);
+
+	const details = section.locator('[data-time-split-readings]');
+	await details.locator('summary').click();
+	await expect(details).toContainText('The summary call includes the visual plan.');
+	await expect(details).toContainText('2 of 5 used; 1 missing, 1 invalid, 1 inconsistent; 1 with overlap.');
+	await expect(details.getByText('0.06 s (2 of 2 timed)')).toBeVisible();
+	await plot.press('ArrowLeft');
+	await expect(readout.locator('[data-readout-day]')).toHaveText(shortDate(incomplete));
+	await expect(readout.locator('[data-readout-row="Fetch"]')).toContainText('Not measured for the complete cohort');
+	await expect(plot.locator(`[data-series-day="${incomplete}"]`)).toHaveCount(0);
+});
+
 test('THE ORACLE: before a script reads the window, each panel holds its waiting box and says nothing of the window', async ({ page }) => {
 	const document = await (await page.request.get(routeHref('pipelines'))).text();
 	for (const name of ['failure-mix', 'item-time-split']) expect(document).toContain(`data-reserved="${name}"`);
