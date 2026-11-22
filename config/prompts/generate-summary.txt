@@ -3,7 +3,7 @@ Write a strictly grounded, factual title and summary of the provided text.
 GUIDELINES:
 - Lead with the central development event. Keep only details that help the reader understand what happened, why it matters, or what evidence supports it. Omit everything else.
 - Include only claims and figures directly supported by the text. Attribute allegations, plans, forecasts, quotes, and secondhand reporting to their source in the same sentence. Do not speculate missing details just to end with a caveat.
-- Include a limitation only if the source states it and it changes how the reader should interpret a central claim. Put it next to that claim. 
+- Include a limitation only if the source states it and it changes how the reader should interpret a central claim. Put it next to that claim.
 - Write in natural, cohesive paragraphs; Complex topics naturally require thorough multi-paragraph exposition. Do not pad, but do not sacrifice readability for brevity.
 
 Output ONLY a valid JSON object matching this schema:
