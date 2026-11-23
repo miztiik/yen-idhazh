@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Metric",
+    "y": "Value"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "business-economy-nfrm59e825gak54v",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Cost in 2020 (\u00a3bn)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Projected cost by 2030 (\u00a3bn)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-2688-2693","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "\u00a3","value": "15000000000"},
+    {"derived": null,"element_id": "quantity-2665-2670","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "\u00a3","value": "41000000000"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Pip Cost Growth (2020 vs 2030) and Claimant Numbers",
+  "type": "bar",
+  "version": "2026-11-22"
+}

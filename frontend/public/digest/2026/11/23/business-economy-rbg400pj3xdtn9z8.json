@@ -1,0 +1,45 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Index / Market",
+    "y": "Change"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "business-economy-rbg400pj3xdtn9z8",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Kospi (South Korea)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Nasdaq Composite (US)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Taiwan TW50","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-2833-2839","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "-3.7"},
+    {"derived": null,"element_id": "quantity-2855-2861","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "%","value": "-5.28"},
+    {"derived": null,"element_id": "quantity-3169-3173","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "%","value": "2.2"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Weekly index movements across Asia-Pacific and US markets (last week)",
+  "type": "bar",
+  "version": "2026-11-22"
+}

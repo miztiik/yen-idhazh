@@ -1,0 +1,65 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Device",
+    "y": "Price (\u00a3 GBP)"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3",
+      "m4",
+      "m5",
+      "m6",
+      "m7"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m8",
+      "m9",
+      "m10",
+      "m11",
+      "m12",
+      "m13",
+      "m14",
+      "m15"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "business-economy-n8cqqk8556982947",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Apple iPhone Duo","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Samsung Galaxy Z Fold 8 Ultra","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Google Pixel 11 Pro Fold","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m3","source_text": null,"text": "Samsung Galaxy Z Fold 8","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m4","source_text": null,"text": "iPhone 18 Pro Max","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m5","source_text": null,"text": "iPhone Air","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m6","source_text": null,"text": "iPhone 18 Pro","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m7","source_text": null,"text": "Honor Magic V6","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-215-221","mark_id": "m8","source_text": null,"text": null,"time": null,"unit": "\u00a3","value": "1999"},
+    {"derived": null,"element_id": "quantity-8723-8729","mark_id": "m9","source_text": null,"text": null,"time": null,"unit": "\u00a3","value": "1899"},
+    {"derived": null,"element_id": "quantity-8766-8772","mark_id": "m10","source_text": null,"text": null,"time": null,"unit": "\u00a3","value": "1799"},
+    {"derived": null,"element_id": "quantity-8683-8689","mark_id": "m11","source_text": null,"text": null,"time": null,"unit": "\u00a3","value": "1699"},
+    {"derived": null,"element_id": "quantity-8583-8589","mark_id": "m12","source_text": null,"text": null,"time": null,"unit": "\u00a3","value": "1299"},
+    {"derived": null,"element_id": "quantity-8612-8618","mark_id": "m13","source_text": null,"text": null,"time": null,"unit": "\u00a3","value": "1099"},
+    {"derived": null,"element_id": "quantity-8547-8553","mark_id": "m14","source_text": null,"text": null,"time": null,"unit": "\u00a3","value": "1199"},
+    {"derived": null,"element_id": "quantity-8802-8808","mark_id": "m15","source_text": null,"text": null,"time": null,"unit": "\u00a3","value": "1300"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "iPhone Duo Pricing vs. Competing Smartphones (GBP)",
+  "type": "bar",
+  "version": "2026-11-22"
+}

@@ -1,0 +1,45 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Model / Refrigerant",
+    "y": "Capacity (kW)"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "energy-tq9wcs85td6tdf3t",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "R-32 (new RXYSA-B)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "R-32 (new RXYSA-B)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "R-32 (new RXYSA-B)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-749-753","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "hp","value": "4"},
+    {"derived": null,"element_id": "quantity-755-759","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "hp","value": "5"},
+    {"derived": null,"element_id": "quantity-765-769","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "hp","value": "6"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Daikin Mini VRV 5 S-series Capacity Ratings by Model Type",
+  "type": "bar",
+  "version": "2026-11-22"
+}
