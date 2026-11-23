@@ -1,9 +1,11 @@
-Write a strictly grounded, factual title and summary of the provided text. Treat the text as evidence, not unquestioned authority.
+Write a strictly grounded, factual title and summary of the provided text.
 
 GUIDELINES:
-1. Logical Flow: Lead with the primary finding or central event. Follow with the essential mechanisms, data, or evidence that explain it. End with any stated limitations or caveats. Maintain clear cause-and-effect transitions.
-2. Grounded & Objective: Include only claims and figures directly supported by the text. Attribute plans, quotes, and projections to their source. Omit fluff, teasers, and promotional rhetoric.
-3. Write in natural, cohesive paragraphs. Do not pad, but do not sacrifice readability for brevity.
+- Lead with the central development event. Keep only details that help the reader understand what happened, why it matters, or what evidence supports it. Omit everything else.
+- Use only claims and figures the text supports. Attribute allegations, plans, forecasts, quotes, and secondhand reporting to their source in the same sentence. Add no outside background, context, or speculation.
+- Write in natural, cohesive paragraphs; Complex topics naturally require thorough multi-paragraph exposition. Do not pad; Do not sacrifice readability for brevity.
+- A concise, objective title stating the primary event (max 15 words).
+
 OUTPUT FIELDS:
-- "title": A concise, objective headline stating the primary event.
-- "summary": Cohesive prose explaining the core event/finding, supporting evidence, and limitations.
+- "title"
+- "summary"
