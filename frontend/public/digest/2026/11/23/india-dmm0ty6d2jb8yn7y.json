@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Metric",
+    "y": "Number"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-dmm0ty6d2jb8yn7y",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Games remaining","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Wins needed to stay in hunt","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-6051-6052","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": null,"value": "6"},
+    {"derived": null,"element_id": "quantity-6042-6043","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": null,"value": "5"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "India's WTC Standings Challenge: Wins Needed vs Games Remaining",
+  "type": "bar",
+  "version": "2026-11-22"
+}

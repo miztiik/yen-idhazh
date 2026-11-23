@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Sector of Lost Work Hours (%)",
+    "y": "Value (%)"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-9z0q3c3krtk1ebc5",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Agriculture","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Construction","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-8000-8003","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "%","value": "66"},
+    {"derived": null,"element_id": "quantity-8043-8046","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "20"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "India Heat Exposure Impact (2025 Lancet Countdown, 2024)",
+  "type": "bar",
+  "version": "2026-11-22"
+}

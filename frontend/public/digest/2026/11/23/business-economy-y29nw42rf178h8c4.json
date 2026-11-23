@@ -1,0 +1,45 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Metric",
+    "y": "Value"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "business-economy-y29nw42rf178h8c4",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Gas storage level (full)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Typical seasonal storage level","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "UK quarterly price cap rise from January","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-775-778","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "69"},
+    {"derived": null,"element_id": "quantity-811-814","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "%","value": "80"},
+    {"derived": null,"element_id": "quantity-1207-1210","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "%","value": "26"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "European Gas Storage vs Typical Level and UK Price Cap Rise",
+  "type": "bar",
+  "version": "2026-11-22"
+}

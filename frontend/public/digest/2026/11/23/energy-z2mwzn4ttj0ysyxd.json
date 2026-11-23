@@ -1,0 +1,53 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Emitting Company / Source",
+    "y": "SF6 Emitted"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3",
+      "m4"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m5",
+      "m6",
+      "m7",
+      "m8",
+      "m9"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "energy-z2mwzn4ttj0ysyxd",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Advanced Magnesium Alloys Corp.","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Magnesium Products of America (reported)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Terves","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m3","source_text": null,"text": "Spartan Light Metal Products","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m4","source_text": null,"text": "MagReTech (first half 2024)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-353-362","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "metric","value": "10"},
+    {"derived": null,"element_id": "quantity-3908-3916","mark_id": "m6","source_text": null,"text": null,"time": null,"unit": "metric","value": "6"},
+    {"derived": null,"element_id": "quantity-4745-4755","mark_id": "m7","source_text": null,"text": null,"time": null,"unit": "metric","value": "3.7"},
+    {"derived": null,"element_id": "quantity-5266-5276","mark_id": "m8","source_text": null,"text": null,"time": null,"unit": "metric","value": "5.3"},
+    {"derived": null,"element_id": "quantity-6319-6329","mark_id": "m9","source_text": null,"text": null,"time": null,"unit": "metric","value": "1.6"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "SF6 Emissions by U.S. Magnesium Producers in 2024 (Metric Tons)",
+  "type": "bar",
+  "version": "2026-11-22"
+}

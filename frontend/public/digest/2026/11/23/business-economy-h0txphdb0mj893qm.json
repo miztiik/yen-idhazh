@@ -1,0 +1,45 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Profit reduction (\u00a3 millions)",
+    "y": "Amount"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "business-economy-h0txphdb0mj893qm",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Previous expected reduction","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Revised forecast range (low)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Revised forecast range (high)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-1399-1403","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "\u00a3","value": "40000000"},
+    {"derived": null,"element_id": "quantity-1336-1340","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "\u00a3","value": "85000000"},
+    {"derived": null,"element_id": "quantity-1345-1349","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "\u00a3","value": "95000000"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Capita's Revised Profit Forecast vs. Previous Expectation (2027)",
+  "type": "bar",
+  "version": "2026-11-22"
+}

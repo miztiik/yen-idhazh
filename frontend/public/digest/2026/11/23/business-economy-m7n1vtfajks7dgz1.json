@@ -1,0 +1,57 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Amount (\u00a3m)",
+    "y": "Value"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m6",
+      "m7",
+      "m8",
+      "m9",
+      "m10",
+      "m11"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "business-economy-m7n1vtfajks7dgz1",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Pre-tax loss reported","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Prior-year profit (same period)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Ofwat improvement order","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m3","source_text": null,"text": "Spending on supply interruptions","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m4","source_text": null,"text": "Redress package set aside","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m5","source_text": null,"text": "Shareholder funding request (Oct)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-257-263","mark_id": "m6","source_text": null,"text": null,"time": null,"unit": "\u00a3","value": "22900000"},
+    {"derived": null,"element_id": "quantity-325-331","mark_id": "m7","source_text": null,"text": null,"time": null,"unit": "\u00a3","value": "18200000"},
+    {"derived": null,"element_id": "quantity-420-426","mark_id": "m8","source_text": null,"text": null,"time": null,"unit": "\u00a3","value": "30500000"},
+    {"derived": null,"element_id": "quantity-79-83","mark_id": "m9","source_text": null,"text": null,"time": null,"unit": "\u00a3","value": "29000000"},
+    {"derived": null,"element_id": "quantity-803-809","mark_id": "m10","source_text": null,"text": null,"time": null,"unit": "\u00a3","value": "14600000"},
+    {"derived": null,"element_id": "quantity-1126-1130","mark_id": "m11","source_text": null,"text": null,"time": null,"unit": "\u00a3","value": "50000000"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "South East Water Financial Figures (Six Months to Sept)",
+  "type": "bar",
+  "version": "2026-11-22"
+}

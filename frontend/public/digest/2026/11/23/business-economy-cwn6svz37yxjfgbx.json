@@ -1,0 +1,49 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Outcome among first-generation youth",
+    "y": "Change"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m4",
+      "m5",
+      "m6",
+      "m7"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "business-economy-cwn6svz37yxjfgbx",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Technical course enrolment","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Probability of choosing technical field (among attendees)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Technical degree completion","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m3","source_text": null,"text": "Regular salaried employment (ages 25\u201329)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-5253-5267","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "percentage","value": "3.7"},
+    {"derived": null,"element_id": "quantity-5478-5492","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "percentage","value": "8.1"},
+    {"derived": null,"element_id": "quantity-5548-5562","mark_id": "m6","source_text": null,"text": null,"time": null,"unit": "percentage","value": "3.6"},
+    {"derived": null,"element_id": "quantity-6956-6970","mark_id": "m7","source_text": null,"text": null,"time": null,"unit": "percentage","value": "4.3"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Estimated Effects of FGGS on First-Generation Youth (Annadurai and Sahoo, 2026)",
+  "type": "bar",
+  "version": "2026-11-22"
+}
