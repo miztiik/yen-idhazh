@@ -1,0 +1,49 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Index / Asset",
+    "y": "Change (%)"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m4",
+      "m5",
+      "m6",
+      "m7"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-f6gcvxrng3cc3b18",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "S&P 500 Index","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Nasdaq 100 Index","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Kospi (South Korea)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m3","source_text": null,"text": "Brent Crude","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-37-41","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "%","value": "1.9"},
+    {"derived": null,"element_id": "quantity-85-89","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "%","value": "2.6"},
+    {"derived": null,"element_id": "quantity-285-289","mark_id": "m6","source_text": null,"text": null,"time": null,"unit": "%","value": "2.6"},
+    {"derived": null,"element_id": "quantity-958-962","mark_id": "m7","source_text": null,"text": null,"time": null,"unit": "%","value": "0.8"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Market Movements and Forecasts in Asian Trading Session",
+  "type": "bar",
+  "version": "2026-11-22"
+}

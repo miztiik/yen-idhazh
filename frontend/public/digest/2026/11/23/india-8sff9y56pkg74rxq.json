@@ -1,0 +1,53 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Metric",
+    "y": "Per cent"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3",
+      "m4"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m5",
+      "m6",
+      "m7",
+      "m8",
+      "m9"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-8sff9y56pkg74rxq",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "CPI, Oct 2026","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "CPI, Sep 2026","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Food inflation (Oct)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m3","source_text": null,"text": "Core inflation (ex food & fuel)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m4","source_text": null,"text": "Repo rate","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-2102-2115","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "%","value": "6.09"},
+    {"derived": null,"element_id": "quantity-2136-2149","mark_id": "m6","source_text": null,"text": null,"time": null,"unit": "%","value": "5.54"},
+    {"derived": null,"element_id": "quantity-2324-2337","mark_id": "m7","source_text": null,"text": null,"time": null,"unit": "%","value": "8.94"},
+    {"derived": null,"element_id": "quantity-2426-2438","mark_id": "m8","source_text": null,"text": null,"time": null,"unit": "%","value": "4.5"},
+    {"derived": null,"element_id": "quantity-2747-2760","mark_id": "m9","source_text": null,"text": null,"time": null,"unit": "%","value": "5.5"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "India's October Inflation vs. Policy Rate (per cent)",
+  "type": "bar",
+  "version": "2026-11-22"
+}

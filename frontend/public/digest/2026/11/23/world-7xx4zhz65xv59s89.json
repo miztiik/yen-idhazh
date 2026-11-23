@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Dam capacity level (%)",
+    "y": "Percentage of capacity"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "world-7xx4zhz65xv59s89",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Current level","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "One year ago","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-309-320","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "%","value": "33"},
+    {"derived": null,"element_id": "quantity-333-344","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "74"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Mare aux Vacoas dam capacity: current vs one year ago (per cent)",
+  "type": "bar",
+  "version": "2026-11-22"
+}

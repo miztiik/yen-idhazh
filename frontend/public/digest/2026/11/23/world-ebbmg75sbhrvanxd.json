@@ -1,0 +1,45 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Contract Value ($ millions)",
+    "y": "Contracts"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "world-ebbmg75sbhrvanxd",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Skubal (Mets, 9 years)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Yamamoto (Dodgers, 12 years)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Scherzer / Verlander annual value","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-112-124","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "$","value": "450000000"},
+    {"derived": null,"element_id": "quantity-692-704","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "$","value": "325000000"},
+    {"derived": null,"element_id": "quantity-509-522","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "$","value": "43300000"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Pitching Contract Records Set by Skubal Deal",
+  "type": "bar",
+  "version": "2026-11-22"
+}
