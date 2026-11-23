@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Metric",
+    "y": "Megawatts (MW)"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-15cst9pqsnvsdge8",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Current annual imports from Nepal","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Long-term target over 10 years","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-3680-3688","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "mw","value": "1200"},
+    {"derived": null,"element_id": "quantity-3598-3607","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "mw","value": "10000"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "India\u2013Nepal Energy Trade: Current Imports vs. Long-Term Target (MW)",
+  "type": "bar",
+  "version": "2026-11-22"
+}

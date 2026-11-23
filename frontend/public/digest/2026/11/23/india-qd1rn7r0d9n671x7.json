@@ -1,0 +1,45 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Broker / Analyst",
+    "y": "Nifty Target Level"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-qd1rn7r0d9n671x7",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Mishra (Religare)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Jain (Motilal Oswal)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Shah (Asit Mehta)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-285-291","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": null,"value": "26341"},
+    {"derived": null,"element_id": "quantity-1562-1568","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": null,"value": "26300"},
+    {"derived": null,"element_id": "quantity-3153-3159","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": null,"value": "26300"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Analyst Nifty Targets Compared",
+  "type": "bar",
+  "version": "2026-11-22"
+}

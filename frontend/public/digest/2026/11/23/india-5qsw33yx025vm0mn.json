@@ -1,0 +1,49 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "US Fiscal Year",
+    "y": "Number of unaccompanied Indian minors"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m4",
+      "m5",
+      "m6",
+      "m7"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-5qsw33yx025vm0mn",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "FY23","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "FY24","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "FY25","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m3","source_text": null,"text": "FY26","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-73-76","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": null,"value": "730"},
+    {"derived": null,"element_id": "quantity-86-89","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": null,"value": "517"},
+    {"derived": null,"element_id": "quantity-99-101","mark_id": "m6","source_text": null,"text": null,"time": null,"unit": null,"value": "91"},
+    {"derived": null,"element_id": "quantity-114-116","mark_id": "m7","source_text": null,"text": null,"time": null,"unit": null,"value": "51"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Unaccompanied Indian minors travelling without parents/guardians by US fiscal (f",
+  "type": "bar",
+  "version": "2026-11-22"
+}

@@ -1,0 +1,53 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Value (thousands of barrels per day or millions as labeled)",
+    "y": "Barrel rate"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3",
+      "m4"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m5",
+      "m6",
+      "m7",
+      "m8",
+      "m9"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "energy-qcckff1yyc0wz8rh",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Q4 2026 surplus forecast","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Previous Q4 deficit forecast","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "October supply estimate increase","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m3","source_text": null,"text": "2027 demand cut","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m4","source_text": null,"text": "OPEC crude call reduction","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-819-834","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "bpd","value": "1700000"},
+    {"derived": null,"element_id": "quantity-887-902","mark_id": "m6","source_text": null,"text": null,"time": null,"unit": "bpd","value": "1800000"},
+    {"derived": null,"element_id": "quantity-953-968","mark_id": "m7","source_text": null,"text": null,"time": null,"unit": "bpd","value": "3300000"},
+    {"derived": null,"element_id": "quantity-1018-1028","mark_id": "m8","source_text": null,"text": null,"time": null,"unit": "bpd","value": "80000"},
+    {"derived": null,"element_id": "quantity-1097-1108","mark_id": "m9","source_text": null,"text": null,"time": null,"unit": "bpd","value": "220000"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "IEA Oil Market Forecasts (bpd)",
+  "type": "bar",
+  "version": "2026-11-22"
+}

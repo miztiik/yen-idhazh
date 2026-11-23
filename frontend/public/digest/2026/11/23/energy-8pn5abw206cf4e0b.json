@@ -1,0 +1,53 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Market share (%)",
+    "y": "Energy commodity"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3",
+      "m4"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m5",
+      "m6",
+      "m7",
+      "m8",
+      "m9"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "energy-8pn5abw206cf4e0b",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Crude oil exports (2018)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Crude oil exports (recent)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "LNG share (2018)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m3","source_text": null,"text": "LNG share (recent months)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m4","source_text": null,"text": "Propane market share (year to date)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-1687-1689","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "%","value": "5"},
+    {"derived": null,"element_id": "quantity-1717-1720","mark_id": "m6","source_text": null,"text": null,"time": null,"unit": "%","value": "15"},
+    {"derived": null,"element_id": "quantity-1987-1989","mark_id": "m7","source_text": null,"text": null,"time": null,"unit": "%","value": "5"},
+    {"derived": null,"element_id": "quantity-1932-1935","mark_id": "m8","source_text": null,"text": null,"time": null,"unit": "%","value": "30"},
+    {"derived": null,"element_id": "quantity-2086-2089","mark_id": "m9","source_text": null,"text": null,"time": null,"unit": "%","value": "70"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "U.S. Global Market Share of Key Energy Exports",
+  "type": "bar",
+  "version": "2026-11-22"
+}

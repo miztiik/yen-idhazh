@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Planet / Body",
+    "y": "Diameter"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "business-economy-p07e3zdfy24txrwp",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Earth","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Mercury","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-2006-2017","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "mile","value": "7926"},
+    {"derived": null,"element_id": "quantity-1935-1946","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "mile","value": "3032"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Mercury vs. Earth: Size Comparison (Diameter)",
+  "type": "bar",
+  "version": "2026-11-22"
+}

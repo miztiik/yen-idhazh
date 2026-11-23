@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Villages/Category",
+    "y": "Number of poles"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-w9bfga1xkm7jskb7",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Kumharon Ki Dhani (cleared)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Other villages halted after sarpanches agreed to pay bills","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-1610-1618","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "pole","value": "10"},
+    {"derived": null,"element_id": "quantity-3096-3104","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "pole","value": "40"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Street light removal in Tonk villages by phase",
+  "type": "bar",
+  "version": "2026-11-22"
+}
