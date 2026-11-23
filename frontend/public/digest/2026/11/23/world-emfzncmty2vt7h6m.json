@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Metric",
+    "y": "Change (%)"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "world-emfzncmty2vt7h6m",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Nvidia stock change (early Monday)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Nasdaq change (Monday)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-474-477","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "%","value": "26"},
+    {"derived": null,"element_id": "quantity-517-519","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "5"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Market Reaction After Nvidia's CEO Reinstatement",
+  "type": "bar",
+  "version": "2026-11-22"
+}

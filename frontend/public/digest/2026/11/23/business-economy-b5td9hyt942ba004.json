@@ -1,0 +1,65 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Company Rank / Market Value ($B)",
+    "y": "Rank"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3",
+      "m4",
+      "m5",
+      "m6",
+      "m7"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m8",
+      "m9",
+      "m10",
+      "m11",
+      "m12",
+      "m13",
+      "m14",
+      "m15"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "business-economy-b5td9hyt942ba004",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Microsoft","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Amazon","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Broadcom","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m3","source_text": null,"text": "Cisco Systems","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m4","source_text": null,"text": "Palo Alto Networks","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m5","source_text": null,"text": "IBM","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m6","source_text": null,"text": "CrowdStrike Holdings","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m7","source_text": null,"text": "Fortinet","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-2161-2175","mark_id": "m8","source_text": null,"text": null,"time": null,"unit": "$","value": "3580000000000"},
+    {"derived": null,"element_id": "quantity-3793-3806","mark_id": "m9","source_text": null,"text": null,"time": null,"unit": "$","value": "2800000000000"},
+    {"derived": null,"element_id": "quantity-5271-5285","mark_id": "m10","source_text": null,"text": null,"time": null,"unit": "$","value": "1810000000000"},
+    {"derived": null,"element_id": "quantity-6911-6925","mark_id": "m11","source_text": null,"text": null,"time": null,"unit": "$","value": "439900000000"},
+    {"derived": null,"element_id": "quantity-7772-7787","mark_id": "m12","source_text": null,"text": null,"time": null,"unit": "$","value": "304920000000"},
+    {"derived": null,"element_id": "quantity-8886-8901","mark_id": "m13","source_text": null,"text": null,"time": null,"unit": "$","value": "219210000000"},
+    {"derived": null,"element_id": "quantity-10092-10107","mark_id": "m14","source_text": null,"text": null,"time": null,"unit": "$","value": "216810000000"},
+    {"derived": null,"element_id": "quantity-11286-11301","mark_id": "m15","source_text": null,"text": null,"time": null,"unit": "$","value": "115930000000"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Market Value of Top 10 Cybersecurity Companies (US$ Billions)",
+  "type": "bar",
+  "version": "2026-11-22"
+}

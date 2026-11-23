@@ -1,0 +1,45 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Number of People",
+    "y": "Shareholding Value"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "ai-q5xad734yg6eqv9v",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Each co-founder","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "600 employees","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "2,800 other employees","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-530-535","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "$","value": "20000000000"},
+    {"derived": null,"element_id": "quantity-633-638","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "$","value": "100000000"},
+    {"derived": null,"element_id": "quantity-689-693","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "$","value": "10000000"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Anthropic IPO Wealth Distribution Among Founders and Employees (Estimated)",
+  "type": "bar",
+  "version": "2026-11-22"
+}

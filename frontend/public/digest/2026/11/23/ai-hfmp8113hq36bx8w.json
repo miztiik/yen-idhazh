@@ -1,0 +1,45 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "TPC-H scale factor / dataset size",
+    "y": "Speedup over best tested CPU-based DuckDB"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "ai-hfmp8113hq36bx8w",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "SF100 (100 GB) - runtime speedup","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "SF3K (3 TB) - total query runtime speedup","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "SF10K (10 TB) - total query runtime speedup","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-4427-4432","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "x","value": "5.5"},
+    {"derived": null,"element_id": "quantity-4641-4646","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "x","value": "4.69"},
+    {"derived": null,"element_id": "quantity-4418-4423","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "x","value": "3.25"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Sirius vs CPU-Based DuckDB: Speedup at TPC-H Scale Factors (Tuned Two-GPU)",
+  "type": "bar",
+  "version": "2026-11-22"
+}

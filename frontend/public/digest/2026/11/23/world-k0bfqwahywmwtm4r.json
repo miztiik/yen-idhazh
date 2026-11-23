@@ -1,0 +1,45 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Hectares / Acres",
+    "y": "% of Colombian Amazon"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "world-k0bfqwahywmwtm4r",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Resolution 0961 protected area","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Oil and gas blocks (total)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Oil and gas blocks overlapping intact forests","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-2679-2698","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "hectare","value": "48000000"},
+    {"derived": null,"element_id": "quantity-388-407","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "hectare","value": "14000000"},
+    {"derived": null,"element_id": "quantity-2470-2488","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "hectare","value": "8000000"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Amazon protection coverage vs. extractive footprint in Colombia (October 2025)",
+  "type": "bar",
+  "version": "2026-11-22"
+}
