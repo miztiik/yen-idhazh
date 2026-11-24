@@ -209,6 +209,50 @@ summary settings. Data explorer can query the packed `pair-verdicts` and
 flow](how-the-content-similarity-judge-follows-its-thresholds.md#what-threshold-history-stores)
 for how those readings are produced.
 
+### Content Similarity visual trial
+
+The `judge_visual_trial_enabled` switch in `config/console/judgement.json`
+adds the following views under the same UTC digest selection. It does not
+change the published grouping, Council, data contracts, or existing coverage
+and PSI trends. Turning it off restores the count view and skips the trial's
+queries. Remove the trial-only views and reads after the usage review unless
+they are chosen to stay.
+
+- **Answers by score range:** Each horizontal stack is 100% of the original
+  draw in that band, with its exact draw count beside it. Agreed YES, NO,
+  UNCLEAR, split, refused and unreturned are disjoint. An unsampled gap has
+  no stack. The **draw ranges and bounds by date** plot uses actual saved
+  intervals and count-scaled composition ticks. The stepped lines show
+  bounds in force; open diamonds mark changes decided after a draw.
+- **Verdict and entropy heatmaps:** Date and fixed score band locate
+  separate YES, NO and split percentages over all recorded pair rows.
+  Entropy instead uses only two valid orders per pair, with MAYBE grouping
+  split and agreed UNCLEAR. A single populated outcome, including MAYBE,
+  gives zero bits; equal thirds give `log2(3)` bits. Show support and
+  distinguish zero from no evidence. Changes in the mix or in recorded
+  settings are not proof of judge drift. Negative scores occupy an underflow
+  band in these heatmaps.
+- **Score zone matrix and precision vs recall:** The matrix crosses agreed
+  judge outcomes (MAYBE also includes split) with the three pipeline score
+  zones from the saved draw bounds. It excludes refusals and prints counts
+  and row shares. The scatter is for one selected digest, not a time trend.
+  It uses equally scored agreed YES/NO pairs together, and marks the lower
+  and upper draw bounds, reporting cutoff and saved 90% recall point with
+  filled shapes. Neither view measures accuracy against human labels.
+- **Full score pool and PSI:** The histogram uses the stored full-pool
+  score bins, not records of what the judge was sent. It can draw without a
+  reference. An outline compares the saved reference only when all of its
+  named histograms are present and verify; the stored PSI point and its
+  availability reason are independent of whether the overlay can be drawn.
+
+The trial reads named staged columns through the same [panel door](how-the-query-door-answers-a-panel.md).
+The heavier pair projection starts near the view, is capped at the configured
+default window, and is shared by the heatmaps and selected-day score
+comparisons. A selected date outside its cap may read just that date.
+Every pair must match the selected aggregate's date, run and attempt.
+Pair analytics cannot infer missing draw counts, and the histogram does
+not fetch outside its bounded reference window.
+
 ## Design rationale
 
 One chart library is enough once each route draws through native components.
@@ -227,17 +271,17 @@ No current item query selects the last four. A column list, normalization or
 unused counter field is not an answer that reads a cell. Schema versions,
 writers and historical normalizers do not change for an ownership-only edit.
 
-Judgement's nightly panels read the filed aggregate instead of loading
-individual pair verdicts or reconstructing readings in the browser. This
-keeps the read bounded and preserves the meaning of the exact attempt.
+Judgement's standard nightly panels read the filed aggregate. The separate
+visual trial uses bounded pair projections only where per-pair scores or
+both verdicts are needed; it never replaces the filed draw totals.
 Published grouping is independent: it reads committed outcomes and compares
 holdout labels with the current `floor_min`, not with a nightly draw bound
 or the recorded floor of an older run.
 
 Judgement's score ranges are ordered categories, not a continuous score axis.
-A line would imply readings between differently sized slices; a percentage
-stack would hide how many pairs were drawn. A zero-based count scale preserves
-that comparison without making a claim about the full score pool.
+a line would imply readings between differently sized slices. The default
+count scale preserves sample size in the bar length; the trial's percentage
+scale preserves it as a count beside each bar.
 
 | Alternative | Why not |
 | --- | --- |

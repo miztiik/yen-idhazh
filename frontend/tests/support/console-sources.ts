@@ -29,10 +29,11 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'theme.ts', 'viewport.ts'
 	],
 	'src/lib/charts/d3': [
-		'axis.ts', 'DateSeries.svelte', 'dateSeries.ts', 'Distribution.svelte', 'distribution.ts',
+		'axis.ts', 'DateSeries.svelte', 'dateSeries.ts', 'DiagnosticGrid.svelte', 'diagnosticGrid.ts', 'Distribution.svelte', 'distribution.ts',
 		'empty.ts', 'EmptyState.svelte', 'Flow.svelte', 'flow.ts', 'model-rule.ts', 'motion.ts', 'ordered-colour.ts',
 		'overlapTimeline.ts', 'paired.ts', 'PairedScatter.svelte', 'pairedScatter.ts',
-		'PartsOfOne.svelte', 'partsOfOne.ts', 'rankedList.ts', 'RunSeries.svelte', 'runSeries.ts', 'scale.ts', 'TileStrip.svelte', 'tileStrip.ts'
+		'PartsOfOne.svelte', 'partsOfOne.ts', 'PrecisionRecall.svelte', 'precisionRecall.ts', 'rankedList.ts',
+		'RunSeries.svelte', 'runSeries.ts', 'scale.ts', 'ScoreIntervals.svelte', 'scoreIntervals.ts', 'TileStrip.svelte', 'tileStrip.ts'
 	],
 	'src/lib/components': [
 		'ArchiveSearch.svelte', 'ChartReadout.svelte', 'ChoiceTiles.svelte',
@@ -52,7 +53,8 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	'src/lib/console': [
 		'band.ts', 'chrome.ts', 'completeness.ts', 'console-style.ts', 'daily-figures.ts',
 		'duration-cohort.ts', 'eval-instruments.ts', 'failure-rules.ts',
-		'holdout.ts', 'judge-observations.ts', 'judgement-evidence.ts', 'merged-stories.ts', 'model-cards.ts',
+		'holdout.ts', 'judge-cutoff-evidence.ts', 'judge-draw.ts', 'judge-observations.ts', 'judge-pair-evidence.ts',
+		'judge-score-pool.ts', 'judge-trial-read.svelte.ts', 'judgement-evidence.ts', 'merged-stories.ts', 'model-cards.ts',
 		'query-state.ts', 'rates.ts', 'recording.ts', 'RecordNotes.svelte', 'route-console.ts', 'run-square.ts', 'series-tokens.ts',
 		'settings-moved.ts', 'span-words.ts', 'TimeCost.svelte', 'waiting.ts', 'window-coverage.ts', 'window-preference.ts', 'window-slot.ts'
 	],
@@ -114,7 +116,9 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	'src/routes/console/judgement': [
 		'+page.server.ts', '+page.svelte', 'HoldoutMargin.svelte', 'MergedStoriesPanel.svelte',
 		'JudgeObservations.svelte', 'JudgeCoverage.svelte', 'JudgeScoreRanges.svelte', 'JudgeSliceChart.svelte',
-		'judge-slice-chart.ts', 'PairScoreDrift.svelte'
+		'JudgeCutoffDiagnostics.svelte', 'JudgeDrawIntervals.svelte', 'JudgePairEvidence.svelte', 'JudgePercentStacks.svelte',
+		'JudgePoolHistogram.svelte', 'JudgeVerdictHeatmaps.svelte', 'JudgeVisualTrial.svelte',
+		'judge-slice-chart.ts', 'judge-trial-style.ts', 'PairScoreDrift.svelte'
 	],
 	'src/routes/console/machine': ['+page.server.ts', '+page.svelte'],
 	'src/routes/console/model': ['+page.server.ts', '+page.svelte'],

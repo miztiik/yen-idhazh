@@ -54,6 +54,9 @@ export interface Bin {
 	height: number;
 	/** Percent of every reading at or below this bin's upper edge. */
 	share: number;
+	/** Pre-binned data may use zero-based shares and a comparable reference. */
+	percent?: number;
+	reference?: { count: number; percent: number; top: number; height: number };
 }
 
 export interface PlacedRule extends DistributionRule {
@@ -74,6 +77,39 @@ export interface BinGeometry {
 	rules: PlacedRule[];
 	/** Readings drawn. */
 	count: number;
+	preBinned?: boolean;
+}
+
+export function binnedDistribution(
+	edges: readonly number[], counts: readonly number[], reference: readonly number[] | null,
+	opts: Pick<DistributionOptions, 'frame' | 'valueTicks' | 'number_format' | 'minValues'>
+): BinGeometry | null {
+	const box = opts.frame;
+	const total = counts.reduce((sum, n) => sum + n, 0);
+	const referenceTotal = reference?.reduce((sum, n) => sum + n, 0) ?? 0;
+	if (total < opts.minValues || !box.innerWidth || !box.innerHeight) return null;
+	const shares = counts.map((n) => FULL_SHARE * n / total);
+	const referenceShares = referenceTotal > 0 && reference ? reference.map((n) => FULL_SHARE * n / referenceTotal) : null;
+	const axes = { ticks: opts.valueTicks, number_format: opts.number_format };
+	const x = valueAxis([edges[0], edges[edges.length - 1]], box, { ...axes, along: 'x', zero: false });
+	const y = valueAxis([...shares, ...(referenceShares ?? [])], box, {
+		...axes, along: 'y', format: (value) => `${formatNumber(value, opts.number_format, { si: false })}%`
+	});
+	let below = 0;
+	const bins = counts.map((count, index): Bin => {
+		const x0 = edges[index], x1 = edges[index + 1], percent = shares[index];
+		const left = x.scale(x0), top = y.scale(percent);
+		const ref = referenceShares?.[index];
+		below += count;
+		return {
+			x0, x1, count, left, width: x.scale(x1) - left, top, height: y.scale(0) - top,
+			share: FULL_SHARE * below / total, percent,
+			...(ref == null || reference === null ? {} : {
+				reference: { count: reference[index], percent: ref, top: y.scale(ref), height: y.scale(0) - y.scale(ref) }
+			})
+		};
+	});
+	return { frame: box, x, y, share: y, bins, cumulative: '', rules: [], count: total, preBinned: true };
 }
 
 function finiteOf(values: readonly number[]): number[] {
