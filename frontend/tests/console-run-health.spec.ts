@@ -110,7 +110,7 @@ test('a run manifest reads into the facts its square and its line are built from
             startedAt: '2030-06-15T12:00:00Z',
             sourceListStale: true,
             shards: null,
-            decided: 0,
+            decided: null,
             prefiltered: 0,
             chartsDrafted: 0,
             chartEvidence: null,
@@ -126,6 +126,17 @@ test('a run manifest reads into the facts its square and its line are built from
         "Run 2 on 15 Jun 2030: 0 of 3 succeeded, under 70%, 3 failed, reused yesterday's list of sources, the run failed"
     ]);
 });
+
+test('a manifest that records no decisions keeps its measured zero', () => {
+    const date = '2030-06-15';
+    const { digest } = publishedSite(test.info().outputPath('site'), { published: [date] });
+    writeFileSync(join(digest, '2030', '06', '15', 'run.json'), JSON.stringify({
+        date,
+        runs: [{ run_id: `${date}-1`, n: 1, items_routed: 0 }]
+    }));
+    expect(loadManifests(digest, 1)[0].records[0].decided).toBe(0);
+});
+
 test('a square carries the whole run in one sentence', () => {
     // The square's accessible name and the readout line are built from one set
     // of facts, and the line carries every clause the name does - the strip is
