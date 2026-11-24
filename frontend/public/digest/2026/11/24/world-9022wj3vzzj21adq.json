@@ -1,0 +1,61 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Company",
+    "y": "Daily decline (%)"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3",
+      "m4",
+      "m5",
+      "m6"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m7",
+      "m8",
+      "m9",
+      "m10",
+      "m11",
+      "m12",
+      "m13"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "world-9022wj3vzzj21adq",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Nvidia","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Advanced Micro Devices","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Micron Technology","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m3","source_text": null,"text": "Marvell Technology","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m4","source_text": null,"text": "Anthropic","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m5","source_text": null,"text": "CoreWeave","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m6","source_text": null,"text": "Nebius","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-27-29","mark_id": "m7","source_text": null,"text": null,"time": null,"unit": "%","value": "6"},
+    {"derived": null,"element_id": "quantity-674-678","mark_id": "m8","source_text": null,"text": null,"time": null,"unit": "%","value": "7.9"},
+    {"derived": null,"element_id": "quantity-709-713","mark_id": "m9","source_text": null,"text": null,"time": null,"unit": "%","value": "7.4"},
+    {"derived": null,"element_id": "quantity-795-799","mark_id": "m10","source_text": null,"text": null,"time": null,"unit": "%","value": "5.5"},
+    {"derived": null,"element_id": "quantity-829-833","mark_id": "m11","source_text": null,"text": null,"time": null,"unit": "%","value": "6.8"},
+    {"derived": null,"element_id": "quantity-896-898","mark_id": "m12","source_text": null,"text": null,"time": null,"unit": "%","value": "8"},
+    {"derived": null,"element_id": "quantity-903-907","mark_id": "m13","source_text": null,"text": null,"time": null,"unit": "%","value": "7.8"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Stock Declines Nov. 24, 2026 (After Monday's Rally)",
+  "type": "bar",
+  "version": "2026-11-22"
+}
