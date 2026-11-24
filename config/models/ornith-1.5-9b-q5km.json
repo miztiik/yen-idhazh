@@ -31,7 +31,7 @@
   "--cache-prompt": null,
   "--cpu-range": "0-3",
   "--cpu-strict": 1,
-  "--ctx-size": 65536,
+  "--ctx-size": 32768,
   "--jinja": null,
   "--metrics": null,
   "--prio": 1,
