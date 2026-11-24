@@ -25,9 +25,9 @@ from collections import Counter
 from datetime import date as date_type
 from enum import StrEnum
 from types import MappingProxyType
-from typing import Final, Literal, Self
+from typing import Annotated, Final, Literal, Self
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import AfterValidator, Field, StringConstraints, field_validator, model_validator
 
 from idhazh.contracts.base import (
     PRINTABLE_LINE_PATTERN,
@@ -46,8 +46,22 @@ from idhazh.contracts.story_similarity_pair_verdict import SameStoryVerdict
 #: thresholds.
 MAX_CANARY_PAIRS: Final = 12
 
-#: What an id starts with when the pair was written by hand and not found in a published day.
+#: The id prefix for a pair explicitly marked as hand-written.
 SYNTHETIC_PREFIX: Final = "synthetic-"
+
+
+def _a_day_that_exists(day: str) -> str:
+    try:
+        date_type.fromisoformat(day)
+    except ValueError as error:
+        raise ValueError(f"{day} is not a calendar day") from error
+    return day
+
+
+CanaryDate = Annotated[
+    DateStamp, AfterValidator(_a_day_that_exists), Field(json_schema_extra={"format": "date"})
+]
+ReviewNote = Annotated[str, StringConstraints(pattern=PRINTABLE_LINE_PATTERN)]
 
 
 class CanaryKind(StrEnum):
@@ -70,7 +84,7 @@ ANSWER_OF_KIND: Final = MappingProxyType(
 
 
 class CanarySide(Model):
-    """One of a pair's two summaries, and the published item it was copied from."""
+    """One of a pair's two summaries, with a source pointer only when recorded."""
 
     summary: str = Field(
         min_length=1,
@@ -81,15 +95,13 @@ class CanarySide(Model):
             "summary is copied in."
         ),
     )
-    date: DateStamp | None = Field(
+    date: CanaryDate | None = Field(
         default=None,
-        description=(
-            "The UTC digest day the summary was copied from. Empty on a hand-written pair."
-        ),
+        description="The UTC digest day the summary was copied from, if recorded.",
     )
     item_id: ItemId | None = Field(
         default=None,
-        description="The item's id in that day. Empty on a hand-written pair.",
+        description="The item's id in that UTC digest day, if recorded.",
     )
 
     @field_validator("summary")
@@ -105,16 +117,6 @@ class CanarySide(Model):
             )
         return text
 
-    @field_validator("date")
-    @classmethod
-    def _a_day_that_exists(cls, day: str | None) -> str | None:
-        if day is not None:
-            try:
-                date_type.fromisoformat(day)
-            except ValueError as error:
-                raise ValueError(f"{day} is not a calendar day") from error
-        return day
-
     @model_validator(mode="after")
     def _the_day_and_the_item_come_together(self) -> Self:
         if (self.date is None) != (self.item_id is None):
@@ -125,13 +127,14 @@ class CanarySide(Model):
 
 
 class CanaryPair(Model):
-    """Two summaries, the answer the judge ought to give, and why."""
+    """Two summaries, the expected answer, and any recorded review notes."""
 
     id: Slug = Field(
         description=(
             "Stable name of the pair, and the key its answer is filed under on the night's "
-            "threshold row. Never reused for different text or a different expected answer: a "
-            "corrected pair gets a new id, so one pair's history reads down the nights."
+            "threshold row. Across config revisions, the same id identifies the same case "
+            "only if both summaries and the expected answer are unchanged. "
+            "The summaries are addressed as <pair-id>.left.summary and <pair-id>.right.summary."
         ),
     )
     kind: CanaryKind = Field(
@@ -147,18 +150,28 @@ class CanaryPair(Model):
             "is written out so a mislabelled pair is a disagreement the file refuses."
         ),
     )
-    origin: Literal["published", "synthetic"] = Field(
+    date: CanaryDate | None = Field(
+        default=None,
+        description="UTC date recorded for the pair, not a source pointer for either summary.",
+    )
+    origin: Literal["published", "synthetic"] | None = Field(
+        default=None,
         description=(
-            "published: both summaries were found in a published day. synthetic: written by "
-            "hand, which the id says by starting with `synthetic-`."
+            "Recorded provenance: published requires both summaries to name their source "
+            "items; synthetic requires no source items and an id starting with `synthetic-`."
         ),
     )
-    labelled_by: Literal["agent", "person"] = Field(
-        description="Who decided the expected answer, from the summaries alone.",
+    labelled_by: Literal["agent", "person"] | None = Field(
+        default=None,
+        description="Who decided the expected answer from the summaries alone, if recorded.",
     )
-    basis: str = Field(
-        pattern=PRINTABLE_LINE_PATTERN,
-        description="One line of ASCII saying why the expected answer is the right one.",
+    failure_mode: ReviewNote | None = Field(
+        default=None,
+        description="One line of ASCII naming the mistake this pair checks for, if recorded.",
+    )
+    basis: ReviewNote | None = Field(
+        default=None,
+        description="One line of ASCII explaining the expected answer, if recorded.",
     )
     left: CanarySide = Field(description="The first summary, in file order.")
     right: CanarySide = Field(description="The second summary, in file order.")
@@ -170,6 +183,8 @@ class CanaryPair(Model):
                 f"{self.id} is of kind {self.kind.value}, which is answered "
                 f"{ANSWER_OF_KIND[self.kind].value}, and it expects {self.expected.value}"
             )
+        if self.origin is None:
+            return self
         if self.id.startswith(SYNTHETIC_PREFIX) != (self.origin == "synthetic"):
             raise ValueError(
                 f"{self.id} has origin {self.origin}, and a hand-written pair is the one whose "

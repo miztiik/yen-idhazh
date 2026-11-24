@@ -67,7 +67,6 @@ def test_the_committed_file_is_ascii_and_holds_one_pair_of_every_kind_at_least()
     assert {pair.kind for pair in pairs} == set(CanaryKind)
     assert len(pairs) <= MAX_CANARY_PAIRS
     assert all(pair.expected is ANSWER_OF_KIND[pair.kind] for pair in pairs)
-    assert all(pair.origin == "published" for pair in pairs), "no hand-written pair ships yet"
 
 
 def test_a_well_formed_hand_written_pair_is_accepted() -> None:
@@ -81,7 +80,7 @@ def test_a_well_formed_hand_written_pair_is_accepted() -> None:
     assert loaded.pairs[-1].left.item_id is None
 
 
-def drop_both_unclear_pairs(raw: dict[str, Any]) -> None:
+def drop_all_unclear_pairs(raw: dict[str, Any]) -> None:
     raw["pairs"] = [pair for pair in raw["pairs"] if pair["kind"] != "unclear"]
 
 
@@ -104,11 +103,20 @@ def give_a_hand_written_pair_a_plain_id(raw: dict[str, Any]) -> None:
     raw["pairs"].append(a_hand_written_pair("same-3"))
 
 
+def record_published_sources(raw: dict[str, Any]) -> None:
+    pair = raw["pairs"][0]
+    pair["origin"] = "published"
+    pair["left"].update(date="2026-11-07", item_id="india-4at2refk8ng9fhy3")
+    pair["right"].update(date="2026-11-07", item_id="india-689nbq3f7gm8ja9d")
+
+
 def give_a_published_pair_the_hand_written_prefix(raw: dict[str, Any]) -> None:
+    record_published_sources(raw)
     raw["pairs"][0]["id"] = "synthetic-same-1"
 
 
 def forget_where_a_published_pair_came_from(raw: dict[str, Any]) -> None:
+    record_published_sources(raw)
     raw["pairs"][0]["left"].pop("item_id")
     raw["pairs"][0]["left"].pop("date")
 
@@ -126,17 +134,19 @@ def name_an_item_for_a_hand_written_pair(raw: dict[str, Any]) -> None:
 
 
 def name_a_day_without_an_item(raw: dict[str, Any]) -> None:
+    record_published_sources(raw)
     raw["pairs"][0]["left"].pop("item_id")
 
 
 def name_a_day_that_does_not_exist(raw: dict[str, Any]) -> None:
+    record_published_sources(raw)
     raw["pairs"][0]["left"]["date"] = "2026-02-30"
 
 
 @pytest.mark.parametrize(
     ("change", "refused"),
     [
-        pytest.param(drop_both_unclear_pairs, "no pair of kind ['unclear']", id="a missing kind"),
+        pytest.param(drop_all_unclear_pairs, "no pair of kind ['unclear']", id="a missing kind"),
         pytest.param(repeat_an_id, "ids repeat", id="duplicate ids"),
         pytest.param(mislabel_a_same_pair, "which is answered YES", id="a mislabelled kind"),
         pytest.param(
