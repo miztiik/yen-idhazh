@@ -1,5 +1,5 @@
 {
-  "addresses_considered": 10257,
+  "addresses_considered": 10273,
   "date": "2026-11-24",
   "extraction": {
     "chartable": 237,
@@ -28,8 +28,8 @@
   "items_published": 388,
   "items_truncated": 0,
   "model_id": "ornith-1-5-9b-q5-k-m",
-  "revision": 7,
-  "runs": 7,
+  "revision": 8,
+  "runs": 8,
   "sources": [
     {"published": 11,"source_id": "abc-au-world","truncated": 0},
     {"published": 11,"source_id": "africanews","truncated": 0},
