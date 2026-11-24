@@ -845,6 +845,7 @@
     {"bytes": 23683,"items": 0,"path": "raw/feed-health/2026/11/24/01a20be7-d286-8445-8742-f75af6331d19.parquet","root": "state"},
     {"bytes": 23696,"items": 0,"path": "raw/feed-health/2026/11/24/01a20c30-1ffa-8f36-ab86-0e02c0ae900f.parquet","root": "state"},
     {"bytes": 23693,"items": 0,"path": "raw/feed-health/2026/11/24/01a20cfe-3f69-82d9-8b57-b9f9cb4f1cc7.parquet","root": "state"},
+    {"bytes": 23695,"items": 0,"path": "raw/feed-health/2026/11/24/01a20d8f-e012-8f9b-b5b7-760c4526c1f3.parquet","root": "state"},
     {"bytes": 5626,"items": 0,"path": "raw/run-shards/2026/10/11/01a12b55-4743-8b65-b0ea-50d9081e4336.parquet","root": "state"},
     {"bytes": 5626,"items": 0,"path": "raw/run-shards/2026/10/11/01a12c0c-ffa5-8f85-9fd8-de8fc15684f8.parquet","root": "state"},
     {"bytes": 5682,"items": 0,"path": "raw/run-shards/2026/10/11/01a12d2f-f6c6-8e13-968b-e5d8f66aa6c4.parquet","root": "state"}
