@@ -53,7 +53,7 @@
 		<button type="button" class="back-to-top" aria-label="Back to top" title="Back to top" onclick={goTop}
 			data-console-top={reading ? undefined : ''} data-reader-top={reading ? '' : undefined}
 			style:--console-footer-room="{footerVisible ? footerHeight : 0}px">
-			{#if reading}<Icon id="go-top" /><span>Back to top</span>{:else}<Icon id="sort-ascending" /><span>Top</span>{/if}
+			{#if reading}<Icon id="go-top" size={24} />{:else}<Icon id="sort-ascending" /><span>Top</span>{/if}
 		</button>
 	{/if}
 </span>
@@ -102,23 +102,19 @@
 		inset-inline-end: calc(var(--gutter) + env(safe-area-inset-right));
 		min-inline-size: var(--space-7);
 		min-block-size: var(--space-7);
-		gap: var(--space-2);
-		padding-inline: var(--space-3);
-		border-radius: var(--radius-md);
+		padding: 0;
+		border-radius: var(--radius-full);
 		background: var(--color-surface);
 		box-shadow: none;
 		color: var(--color-text-secondary);
-		font-size: var(--text-sm);
-		line-height: var(--leading-sm);
 		cursor: pointer;
 	}
-	.reader .back-to-top span { display: inline; }
-	.reader .back-to-top:hover { color: var(--color-accent-strong); }
+	.reader .back-to-top:hover {
+		border-color: var(--color-accent);
+		color: var(--color-accent-strong);
+	}
 	.reader.docked .back-to-top {
 		position: static;
-		padding-inline: 0;
-		border-color: transparent;
 		background: transparent;
 	}
-	.reader.docked .back-to-top:hover { text-decoration: underline; }
 </style>

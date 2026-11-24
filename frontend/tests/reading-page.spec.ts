@@ -228,9 +228,14 @@ test(journey, async ({ page }) => {
 	// Exercise the real read handler without leaving the local published fixture.
 	await originalLink.evaluate((link) => link.addEventListener('click', (event) => event.preventDefault(), { once: true }));
 	await originalLink.click();
-	const readingControls = page.getByRole('region', { name: 'Reading controls' });
-	expect((await readingControls.boundingBox())!.y).toBeLessThan((await marked.boundingBox())!.y);
-	const unreadOnly = readingControls.getByRole('checkbox', { name: 'Unread only' });
+	const options = page.getByText('Reading options', { exact: true });
+	const readingControls = page.locator('details').filter({ has: options });
+	const unreadOnly = readingControls.getByLabel('Unread only');
+	const lastStory = (await stories.last().boundingBox())!;
+	await expect(options).toBeVisible();
+	expect((await options.boundingBox())!.y).toBeGreaterThanOrEqual(lastStory.y + lastStory.height);
+	await expect(unreadOnly).toBeHidden();
+	await options.press('Enter');
 	await unreadOnly.check();
 	await expect(marked).toHaveCount(0);
 	const clear = readingControls.getByRole('button', { name: "Clear this edition's read marks" });
@@ -247,6 +252,7 @@ test(journey, async ({ page }) => {
 	await expect(backToTop).toHaveCSS('position', 'fixed');
 	await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
 	await expect(continuation.getByRole('button', { name: 'Back to top' })).toHaveCSS('position', 'static');
+	await expect(backToTop).toHaveText('');
 	await backToTop.focus();
 	await page.keyboard.press('Enter');
 	await expect(page.getByRole('region', { name: 'About today' }).getByRole('heading', { level: 1 })).toBeFocused();

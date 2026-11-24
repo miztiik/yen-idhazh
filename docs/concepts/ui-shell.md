@@ -57,9 +57,9 @@ for panel titles and "the visual planner" for that actor.
 - **Story continuation:** Show more stories and the displayed count belong to
   the list before the footer. Only a fully shown, unfiltered edition gets an
   end marker; narrowed views name their own endpoint and unfinished loads keep
-  their wait or retry. Unread only and this edition's read-mark reset sit with
-  topic and search controls. The reader's Back to top is available mid-scroll
-  and docks with the list controls at the bottom.
+  their wait or retry. Unread only and this edition's read-mark reset sit
+  under Reading options at the end of the list. The reader's icon-only Back
+  to top is available mid-scroll and docks with the list controls.
 - **Data loading:** validate fetched and cached payloads at the same boundary. A malformed payload must not leave a blank page. Publication checks still run before publishing; a successful static build is not proof that every day is valid.
 - **Page states:** shared loading, empty, missing and degraded behavior.
 - **Local logging:** the browser console records which payload failed and why. No remote log collector or reader tracking.

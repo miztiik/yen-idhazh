@@ -491,25 +491,7 @@
 	const headBefore = $derived(split ? ui.sections.slice(0, leadsAt) : ui.sections);
 	const headAfter = $derived(split ? ui.sections.slice(leadsAt + 1, streamAt) : []);
 	const stream = $derived(split ? ui.sections.slice(streamAt) : []);
-	const hasTopicControls = $derived(ui.sections.includes('topics') && desks.length > 0);
 </script>
-
-{#snippet readingControls()}
-	{#if found === null && (read.size > 0 || cleared)}
-		<section class="reading-controls" aria-label="Reading controls">
-			<div class="reading-actions">
-				<label>
-					<input type="checkbox" checked={hideRead} onchange={toggleHide} disabled={read.size === 0} />
-					<span>Unread only</span>
-				</label>
-				<button type="button" onclick={clearRead} aria-disabled={read.size === 0}>
-					Clear this edition's read marks
-				</button>
-			</div>
-			<p class="reading-progress" role="status">{cleared && read.size === 0 ? 'Read marks cleared for this edition.' : ''}</p>
-		</section>
-	{/if}
-{/snippet}
 
 {#snippet closeStream(showProgress: boolean)}
 	<div class="continuation" data-continuation aria-busy={loading}>
@@ -579,9 +561,7 @@
 				onRetry={() => void ask()}
 			/>
 		{/if}
-		{@render readingControls()}
 	{:else if section === 'items'}
-		{#if !hasTopicControls}{@render readingControls()}{/if}
 		{#if found !== null && found.hits.length > 0}
 			<FoundStories
 				{found}
@@ -629,6 +609,21 @@
 			{/if}
 		{/if}
 		{@render closeStream(found === null && visible.length > 0)}
+		{#if found === null && (read.size > 0 || cleared)}
+			<details class="reading-options">
+				<summary>Reading options</summary>
+				<div class="reading-actions">
+					<label>
+						<input type="checkbox" checked={hideRead} onchange={toggleHide} disabled={read.size === 0} />
+						<span>Unread only</span>
+					</label>
+					<button type="button" onclick={clearRead} aria-disabled={read.size === 0}>
+						Clear this edition's read marks
+					</button>
+				</div>
+				<p class="reading-progress" role="status">{cleared && read.size === 0 ? 'Read marks cleared for this edition.' : ''}</p>
+			</details>
+		{/if}
 	{/if}
 {/snippet}
 
@@ -659,9 +654,20 @@
 			margin-block-start: var(--space-4);
 			padding-inline: var(--story-text-inset) var(--story-card-padding);
 		}
-		.reading-controls {
+		.reading-options {
 			margin-block-start: var(--space-2);
+			margin-inline: var(--story-text-inset) var(--story-card-padding);
 		}
+		.reading-options summary {
+			inline-size: fit-content;
+			min-block-size: var(--space-7);
+			padding-block: var(--space-3);
+			color: var(--color-text-secondary);
+			font-size: var(--text-sm);
+			line-height: var(--leading-sm);
+			cursor: pointer;
+		}
+		.reading-options summary:hover { color: var(--color-accent-strong); }
 		.reading-progress, .pager-noscript {
 			margin: 0;
 			color: var(--color-text-secondary);

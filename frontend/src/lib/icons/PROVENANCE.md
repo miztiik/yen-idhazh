@@ -1,6 +1,6 @@
 # Icon provenance
 
-**Last Updated**: 2026-11-15
+**Last Updated**: 2026-11-24
 
 ## Source
 
@@ -45,7 +45,8 @@ stroke. The filename is a semantic id this project chose - `topic-ai`, not
 
 The reading page's return control uses `go-top` from Lucide
 `chevron-up`, unmodified from the same upstream version.
-The shared footer uses `previous-edition` from `chevron-left`.
+The shared footer uses `previous-edition` from `chevron-left` and `source-code`
+from `code-xml` in the same version.
 
 ## How a new icon is added
 

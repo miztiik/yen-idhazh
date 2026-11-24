@@ -13,7 +13,9 @@
 </script>
 
 {#snippet sourceCode()}
-	<a href={repoUrl} target="_blank" rel="noopener noreferrer">Source code</a>
+	<a href={repoUrl} target="_blank" rel="noopener noreferrer">
+		<Icon id="source-code" size={14} /> <span>Source code</span>
+	</a>
 {/snippet}
 
 <footer class="site-footer" class:operator data-site-footer>
