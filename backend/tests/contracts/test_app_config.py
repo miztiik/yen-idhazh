@@ -14,6 +14,8 @@ from support.paths import CONFIG_DIR, REPO_ROOT, read_text
 
 from idhazh import config
 from idhazh.classify import dag
+from idhazh.classify.calls import summary_system_prompt
+from idhazh.classify.plan_visual_request import chart_capabilities
 from idhazh.contracts import app_config
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.appearance_config import AppearanceConfig, ChartConfig
@@ -357,51 +359,31 @@ def test_the_longest_article_the_cap_allows_still_fits_the_window() -> None:
     )
 
 
-def _worst_one_call_sequence_tokens(committed: AppConfig) -> tuple[int, int]:
-    """The digest call's prompt at the cap, and the whole sequence behind it.
-
-    A second derivation and not a widening of the one above, because the two
-    paths render different prompts. The standalone summarizer sends one system
-    turn and the article. The digest call sends its own system turn and the
-    article, and then writes up to the model file's response limit. The tables
-    of figures ride behind the article only where the work stage finds they fit:
-    it reads an item without them otherwise, so the worst case the window has to
-    hold is the article alone.
-
-    **The arithmetic itself is `classify.dag`'s and this is the gate over it.**
-    It used to be written out here, which put the number the production path
-    never checked and the number this file asserts in two places - and two
-    derivations of one quantity disagree the first time a term moves. What stays
-    here is the cap, the knob and the window, all three read from `config/`
-    (Guardrail #6).
-    """
-    cap = committed.extract.truncation_cap_tokens
-    sampling = committed_models().summarizer.sampling
-    return (
-        dag.prompt_tokens(cap),
-        dag.call_tokens(cap, sampling=sampling),
-    )
-
-
 def test_the_call_fits_the_window_at_the_cap() -> None:
-    """Preserve admission under the existing pre-call estimate.
-
-    This does not certify a complete continuation with finalized evidence or
-    an explicit response limit. Those are diagnosed from the actual request.
-    """
+    """Check nominal configuration offline, not the fit of any real article."""
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
-    models = committed_models()
-    n_ctx = window(models.summarizer.server)
-    prompt, sequence = _worst_one_call_sequence_tokens(committed)
+    model = committed_models().summarizer
+    cap = committed.extract.truncation_cap_tokens
+    reply_limit = response_limit(model.sampling)
+    n_ctx = window(model.server)
+    enabled_forms = chart_capabilities(committed.visuals)
 
-    assert sequence <= n_ctx, (
-        f"the longest article extract.truncation_cap_tokens "
-        f"({committed.extract.truncation_cap_tokens}) lets through makes a {prompt}-token "
-        f"prompt. The "
-        f"{response_limit(models.summarizer.sampling)}-token response limit puts the call at "
-        f"{sequence} against a window of {n_ctx}, over by {sequence - n_ctx}. Measure the "
-        "complete request before proposing a configuration or article-admission change."
-    )
+    for forms in ((), enabled_forms) if enabled_forms else ((),):
+        instructions = summary_system_prompt(
+            committed.summarize,
+            forms=forms,
+            prompt_files=committed.prompt_files,
+            config_dir=CONFIG_DIR,
+        )
+        instruction_bytes = len(instructions.encode("utf-8"))
+        sequence_budget = cap + instruction_bytes + reply_limit
+        variant = "summary with charts" if forms else "summary only"
+        assert sequence_budget <= n_ctx, (
+            f"{variant}: the nominal {cap}-token article allowance, "
+            f"{instruction_bytes} UTF-8 bytes reserved at one token per byte for instructions, "
+            f"and {reply_limit} reply tokens exceed the {n_ctx}-token window "
+            f"by {sequence_budget - n_ctx} tokens in the offline budget."
+        )
 
 
 def test_the_gate_holds_room_for_the_whole_response_limit_the_model_file_names() -> None:
