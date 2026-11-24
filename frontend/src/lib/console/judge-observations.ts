@@ -192,31 +192,9 @@ export function judgeProbabilityEvidence(cell: Row[string] | undefined) {
 }
 
 const VERDICTS = ['YES', 'NO', 'UNCLEAR'] as const;
-type Verdict = (typeof VERDICTS)[number];
+export type Verdict = (typeof VERDICTS)[number];
 export function verdictOf(cell: unknown): Verdict | null {
 	return VERDICTS.find((verdict) => verdict === cell) ?? null;
-}
-
-export function judgeCanaries(cells: Row) {
-	const key = judgeCompact(cells.canary_expectations);
-	const answers = judgeCompact(cells.canary_answers);
-	const graded = key !== null;
-	const items = Object.keys(key ?? answers ?? {}).map((id) => {
-		const expected = verdictOf(key?.[id]);
-		const answer = answers?.[id];
-		const forward = Array.isArray(answer) ? verdictOf(answer[0]) : null;
-		const swapped = Array.isArray(answer) ? verdictOf(answer[1]) : null;
-		const outcome = !Array.isArray(answer) ? 'Missing'
-			: forward === null || swapped === null ? 'Refused'
-			: forward !== swapped ? 'Split'
-			: expected === null ? 'Not graded'
-			: forward === expected ? 'Matched' : 'Differed';
-		return { id, expected, forward, swapped, outcome };
-	});
-	return {
-		items, graded, matches: items.filter((item) => item.outcome === 'Matched').length,
-		eligible: judgeCount(cells.canary_kappa_pairs), kappa: judgeNumber(cells.canary_kappa)
-	};
 }
 
 export function psiInterpretation(value: number, low: number, high: number): string {

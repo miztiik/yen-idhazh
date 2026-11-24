@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { CanaryReading } from '$lib/console/judge-canaries';
 	import {
 		judgeNumber, judgeProbabilityEvidence, judgeStatus, PROBABILITY_STATUS, type JudgeIdentity
 	} from '$lib/console/judge-observations';
@@ -6,15 +7,15 @@
 	import { longDate } from '$lib/format';
 	import { numberFormatter } from '$lib/number-format';
 	import type { ChartConfig } from '$lib/server/config';
-	import JudgeCanaryChart from './JudgeCanaryChart.svelte';
+	import JudgeCanaryDetails from './JudgeCanaryDetails.svelte';
 
-	let { selected, identity, detail, dayNote, chart, showKnownAnswers = true }: {
+	let { selected, identity, detail, dayNote, chart, canaries }: {
 		selected: string;
 		identity: JudgeIdentity | null;
 		detail: Row | null;
 		dayNote: string;
 		chart: ChartConfig;
-		showKnownAnswers?: boolean;
+		canaries: CanaryReading | null;
 	} = $props();
 
 	const number = $derived(numberFormatter(chart.number_format));
@@ -34,7 +35,7 @@
 	</p>
 	{#if detail}
 		<div class="selected-notes">
-			{#if showKnownAnswers}<JudgeCanaryChart {selected} {detail} {dayNote} {chart} asChart={false} />{/if}
+			{#if canaries}<JudgeCanaryDetails reading={canaries} format={chart.number_format} />{/if}
 			<section aria-labelledby="judge-prior-fit">
 				<h4 id="judge-prior-fit">Prior-fit calibration</h4>
 				{#if detail.judge_probability_status === 'measured' && probability}

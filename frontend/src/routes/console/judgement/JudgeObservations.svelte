@@ -4,6 +4,7 @@
 	import PanelGroup from '$lib/components/PanelGroup.svelte';
 	import RouteStatus from '$lib/components/RouteStatus.svelte';
 	import { daysInWindow, type TimeWindow } from '$lib/charts/viewport';
+	import { judgeCanaries } from '$lib/console/judge-canaries';
 	import {
 		exactJudgeDay, judgeDayAbsence, judgeRange, latestJudgeReadings, matchesJudgeAttempt, selectedJudgeDate,
 		type JudgeIdentity, type JudgeReading
@@ -52,7 +53,9 @@
 	const noReadings = new Map<string, JudgeReading>();
 	const readings = $derived(current?.readings ?? noReadings);
 	const selected = $derived(selectedJudgeDate(calendar, held, readings));
-	const identity = $derived(readings.get(selected)?.identity ?? null);
+	const selectedReading = $derived(readings.get(selected));
+	const identity = $derived(selectedReading?.identity ?? null);
+	const legacyCanaries = $derived(rules.trialBins == null && selectedReading ? judgeCanaries(selectedReading.cells) : null);
 	const detailAnswer = $derived(identity !== null && day?.identity === identity ? day.answer : 'pending');
 	const detail = $derived(day?.identity === identity ? day.row : null);
 	const historyState = $derived(stateOf(historyAnswer));
@@ -186,9 +189,9 @@
 			{/if}
 		{/each}
 		{#if rules.trialBins != null}
-			<JudgeCanaryChart {selected} {detail} {dayNote} {chart} />
+			<JudgeCanaryChart {calendar} {selected} {readings} {noteFor} {knobs} {chart} onPick={pick} />
 		{/if}
-		<JudgeDigestDetails {selected} {identity} {detail} {dayNote} {chart} showKnownAnswers={rules.trialBins == null} />
+		<JudgeDigestDetails {selected} {identity} {detail} {dayNote} {chart} canaries={legacyCanaries} />
 	</PanelGroup>
 </RouteStatus>
 

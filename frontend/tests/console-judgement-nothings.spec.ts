@@ -6,8 +6,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { renderConfigured as render } from './support/server-render';
 import { serverCompiler, type Rewrite } from './support/server-render';
 import { judgeNothings, type Nothing, type PanelReading } from './support/panel-gates';
+import { judgeCanaries } from '../src/lib/console/judge-canaries';
 import {
-	DRIFT_STATUS, PROBABILITY_STATUS, SAMPLE_STATUS, judgeCanaries, judgeCoverage, judgeDayAbsence, judgeStatus,
+	DRIFT_STATUS, PROBABILITY_STATUS, SAMPLE_STATUS, judgeCoverage, judgeDayAbsence, judgeStatus,
 	judgeSlices, psiInterpretation, psiNumber
 } from '../src/lib/console/judge-observations';
 import { dateSeries } from '../src/lib/charts/d3/dateSeries';
@@ -93,17 +94,22 @@ test('both configured PSI guides are Moderate, near-boundary labels preserve the
 	expect(plot.lines[0].points[1].y).toBeLessThan(plot.rules[1].y);
 });
 
-test('known-answer states grade only against the recorded key', () => {
+test('each saved pair counts once, with reversal, invalid reply and no reply distinct from an agreed answer', () => {
 	const cells = {
 		canary_expectations: '{"a":"YES","b":"YES","c":"NO","d":"UNCLEAR","e":"NO"}',
-		canary_answers: '{"a":["YES","YES"],"b":["NO","NO"],"c":["YES","NO"],"d":[null,"YES"]}',
+		canary_answers: '{"a":["YES","YES"],"b":["NO","NO"],"c":["YES","NO"],"d":[null,"YES"],"extra":["YES","YES"]}',
 		canary_kappa_pairs: 2
 	};
-	expect(judgeCanaries(cells).items.map(({ outcome }) => outcome)).toEqual(['Matched', 'Differed', 'Split', 'Refused', 'Missing']);
-	expect(judgeCanaries(cells)).toMatchObject({ matches: 1, eligible: 2, kappa: null });
+	const result = judgeCanaries(cells);
+	expect(result.items.map(({ outcome }) => outcome)).toEqual(['Matched', 'Differed', 'Changed on reversal', 'Invalid', 'Missing']);
+	expect(result.groups.YES).toMatchObject({ matched: 1, expected: 2, counts: { YES: 1, NO: 1 } });
+	expect(result.groups.NO).toMatchObject({ matched: 0, expected: 2, counts: { NO: 0, changed: 1, missing: 1 } });
+	expect(result.groups.UNCLEAR).toMatchObject({ matched: 0, expected: 1, counts: { invalid: 1 } });
 	const legacy = judgeCanaries({ canary_answers: cells.canary_answers });
-	expect(legacy.graded).toBe(false);
-	expect(legacy.items[0]).toMatchObject({ expected: null, forward: 'YES', swapped: 'YES', outcome: 'Not graded' });
+	expect(legacy.keyState).toBe('absent');
+	expect(legacy.groups.YES.expected).toBe(0);
+	expect(legacy.items[0]).toMatchObject({ expected: null, original: 'YES', reversed: 'YES', outcome: 'Not graded' });
+	expect(judgeCanaries({ ...cells, canary_expectations: '{"a":"MAYBE"}' }).keyState).toBe('invalid');
 });
 
 for (const [id, name] of PANELS) {
