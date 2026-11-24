@@ -1,6 +1,6 @@
 # Visual planning and rendering
 
-**Last Updated**: 2026-11-21
+**Last Updated**: 2026-11-24
 
 How an item gets a numeric chart or - most of the time - nothing at
 all: which pass decides, which gate refuses, and what every refusal is called.
@@ -55,17 +55,14 @@ article, and both payloads validate - so nothing would say it had happened. What
 while it ran is in
 [what-drawing-costs-and-what-has-been-retired-for-it.md](what-drawing-costs-and-what-has-been-retired-for-it.md).
 
-Two things follow from `work` being the job that draws. It is sharded four ways, so four runners
-render a quarter of the day each instead of one runner rendering all of it against a budget; and
-the file a shard writes stays on its runner, which is thrown away. What reaches `assemble` is the
-decision inside `items-<n>`, and a rendered decision carries the chart's bytes in `spec` - the
-same string the shard wrote to its file. `assemble` positively selects chart
-decisions and writes their files before recording the day, without replacing
-a file already present. Retired visual kinds produce no view or asset; their
-historical outcome metadata remains unchanged. Until 2026-10-04 each shard also uploaded its whole
-day directory as `shard-visuals-<n>` and `assemble` merged the four into its own. In run
-`37212772816` two of them carried a newer `digest.json` than the other two, and the merged file
-could not be read. No job hands a file under `frontend/public/` to another job now.
+Each work shard saves chart data in `backend/var/run/<date>/chart-scratch/`,
+outside both its uploaded item directory and its publication receipt. The
+receipt can publish the attempt row, but not the chart asset. What reaches
+`assemble` is the decision inside `items-<n>`: its `spec` carries the exact
+saved bytes and its `data_path` is still relative to `frontend/public/`.
+Assembly alone writes the public asset before recording the day, without
+replacing a file already present. Retired visual kinds produce no view or
+asset; their historical outcome metadata remains unchanged.
 
 **The flag is the first of two commits** (plan 11 rows #5b and #6). The second deletes the flag,
 the small model, this stage and its job together. Until then the flag off leaves the pipeline
@@ -77,12 +74,13 @@ the production call against a local boundary reply. Real extraction and anchorin
 the evidence; the actual request must show the readings and admit their
 references. Only named serialized article, summary, decision and item-health
 outputs, plus their input fingerprint, cross into a fresh publisher tree.
-Neither the worker's public directory nor its captures cross.
+Neither the worker's scratch files nor its captures cross.
 
-Ordinary `stage_assemble` must recreate the named asset from those outputs.
-The test checks its exact worker bytes, the digest reference and the
-publication inventory, then feeds those published bytes to the actual
-TypeScript reader guard. A legitimate declining boundary answer separately
+The test lands the worker's exact saved attempt through the publication
+adapter, with no chart asset in its receipt. Ordinary `stage_assemble` then
+recreates the named asset from the item outputs. The test checks its bytes,
+the digest reference and the inventory, then feeds the published bytes to
+the actual TypeScript reader guard. A separate legitimate declining answer
 keeps its summary publishable, records `model_declined` and publishes no visual.
 Removing the numeric assembly writer or rejecting the compiler's payload in the
 reader breaks this coverage.

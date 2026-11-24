@@ -79,7 +79,10 @@ for (const [id, name] of PANELS) {
 				quiet: { manifests: [{ date: DAY.date, records: [], siteBytes: null }], publishedItems: { [DAY.date]: 0 }, sizeBytes: null },
 				absent: { manifests: [], publishedItems: {}, sizeBytes: null }
 			},
-			'chart-drawing': { quiet: { days: [DAY] }, absent: { days: [] } },
+			'chart-drawing': {
+				quiet: { days: [DAY], typeCounts: [{ type: 'bar', proposed: 0, saved: 0, published: 0 }] },
+				absent: { days: [], typeCounts: [{ type: 'bar', proposed: null, saved: null, published: null }] }
+			},
 			'visual-refusals': {
 				quiet: { days: [], read: { state: 'read', first: DAY.date, through: DAY.date, lastRows: null, lostDays: [], setAside: {} } },
 				absent: { days: [], read: { state: 'not-packed' } }
@@ -103,6 +106,10 @@ for (const [id, name] of PANELS) {
 			expect(absent).not.toContain('data-comparison=');
 		} else {
 			expect(absent).toContain('data-comparison=');
+		}
+		if (name === 'ChartDrawing') {
+			expect(words(quiet)).toContain('bar 0 0 0');
+			expect(words(absent)).toContain('bar Missing Missing Missing');
 		}
 		if (name === 'SiteCostPerItem') {
 			expect(quiet).toContain('data-empty-state="quiet"');

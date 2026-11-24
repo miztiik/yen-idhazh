@@ -1,8 +1,12 @@
 /** What does each published day's chart-drawing row hold, over runs and payload counts a test writes? */
 import { expect, test } from '@playwright/test';
-import { chartDays } from '../src/lib/server/chart-days';
-import type { RunRecord, RunSummary } from '../src/lib/server/payload';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { chartDays, chartTypeDays } from '../src/lib/server/chart-days';
+import { loadManifests, publishedCharts, type RunRecord, type RunSummary } from '../src/lib/server/payload';
 import { readChartEvidence } from '../src/lib/chart-evidence';
+import type { PublicationInventory } from '../src/lib/server/publication';
+import { publishedSite } from './support/published-site';
 
 /** One run of a day, with the planner's counts a case names and nothing else. */
 function run(date: string, n: number, cells: Partial<RunRecord>): RunRecord {
@@ -81,4 +85,35 @@ test('a day sums its runs, and only a run that timed the planner adds minutes', 
 		{ date: '2030-06-13', reached: 1, asked: 1, drafted: 1, published: 0, items: 3, plannerMinutes: 1, minutesPerChart: null },
 		{ date: '2030-06-12', reached: 0, asked: 0, drafted: 0, published: 0, items: 0, plannerMinutes: 2, minutesPerChart: null }
 	]);
+});
+
+test('publication reads the digest, inventory and actual chart without depending on attempt rows', ({}, info) => {
+	const date = '2030-06-15';
+	const { site, digest } = publishedSite(info.outputPath('site'), { published: [date, '2030-06-14'] });
+	const folder = join(digest, '2030', '06', '15');
+	const bar = JSON.parse(readFileSync(new URL(
+		'../../tests/fixtures/contracts/visual-data/bars-from-the-committed-plan.json', import.meta.url
+	), 'utf8'));
+	const path = `digest/2030/06/15/${bar.item_id}.json`;
+	const asset = join(site, path);
+	const inventoryPath = join(site, 'publication.json');
+	const inventory: PublicationInventory = JSON.parse(readFileSync(inventoryPath, 'utf8'));
+	writeFileSync(join(folder, 'digest.json'), JSON.stringify({ date, items: [{
+		item_id: bar.item_id, introduced_by_run: 1, visual: { kind: 'chart', state: 'rendered', data_path: path }
+	}] }));
+	writeFileSync(join(folder, 'run.json'), JSON.stringify({ runs: [{ run_id: `${date}-1`, n: 1, items_routed: 1 }] }));
+	const tracking = () => chartTypeDays(loadManifests(digest, 1), publishedCharts(digest, 1), {
+		rows: [], read: { state: 'read', first: date, through: date, lastRows: null, lostDays: [], setAside: {} }
+	});
+
+	writeFileSync(asset, JSON.stringify(bar));
+	expect(tracking()).toEqual([{ date, proposed: null, saved: null, published: null }]); // not inventoried
+	inventory.entries.push({ root: 'public', path, bytes: 0, items: 0 });
+	writeFileSync(inventoryPath, JSON.stringify(inventory));
+	writeFileSync(asset, '');
+	expect(tracking()[0].published).toBeNull();
+	writeFileSync(asset, JSON.stringify({ ...bar, item_id: 'energy-99' }));
+	expect(tracking()[0].published).toBeNull();
+	writeFileSync(asset, JSON.stringify(bar));
+	expect(tracking()).toEqual([{ date, proposed: null, saved: null, published: { bar: 1 } }]);
 });

@@ -25,6 +25,10 @@ test('the actual visual overview retains its stage colours in the diagram and na
 	await drawClient(page, code, 'ChartDrawing', {
 		days: [{ date: '2030-06-01', reached: 100, asked: 70, drafted: 20, published: 10,
 			items: 100, plannerMinutes: 10, minutesPerChart: 1 }],
+		typeCounts: [
+			{ type: 'bar', proposed: null, saved: null, published: 10 },
+			{ type: 'dot', proposed: null, saved: null, published: 0 }
+		],
 		windowDays: 7, knobs: consoleConfig()
 	});
 	const expected = ['--chart-1', '--chart-2', '--chart-3', '--chart-4', '--chart-1', '--chart-2', '--chart-3'];
@@ -36,6 +40,9 @@ test('the actual visual overview retains its stage colours in the diagram and na
 	expect(await page.locator('.stage-swatch').evaluateAll((nodes) => nodes.map((node) => (node as HTMLElement).style.background)))
 		.toEqual(['--chart-1', '--chart-1', '--chart-2', '--chart-2', '--chart-3', '--chart-3', '--chart-4'].map((token) => `var(${token})`));
 	await expect(page.locator('[data-flow-shape="stepped"]')).toContainText('Did not survive the checks: 10 (10%)');
+	const types = page.getByRole('table', { name: 'Charts by type' });
+	await expect(types.getByRole('row', { name: 'bar Missing Missing 10' })).toBeVisible();
+	await expect(types.getByRole('row', { name: 'dot Missing Missing 0' })).toBeVisible();
 });
 
 test.describe('daily refusal inspection', () => {

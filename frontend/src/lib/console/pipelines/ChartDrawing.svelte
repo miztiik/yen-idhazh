@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { chartRule, chartFlow, visualsPublished, minutesText, coverageText } from './chart-drawing';
+	import { chartRule, chartFlow, visualsPublished, minutesText, coverageText, type ChartTypeCount } from './chart-drawing';
 	import TargetBar from '$lib/components/TargetBar.svelte';
 	import Sparkline from '$lib/components/Sparkline.svelte';
 	import { movementVerdict } from '$lib/charts/theme';
@@ -14,7 +14,9 @@
 	import type { ConsoleConfig } from '$lib/server/config';
 	import { formatNumber } from '$lib/number-format';
 	import { useNumberFormat } from '$lib/number-format-context';
-	let { days, windowDays, knobs }: { days: ChartDay[]; windowDays: number; knobs: ConsoleConfig } = $props();
+	let { days, typeCounts, windowDays, knobs }: {
+		days: ChartDay[]; typeCounts: ChartTypeCount[]; windowDays: number; knobs: ConsoleConfig
+	} = $props();
 	const numberFormat = useNumberFormat();
 	const frame = useChartFrame();
 	let measured = $state<number | null>(null);
@@ -26,6 +28,7 @@
 		drops: step.lost === null ? [] : [{ label: step.lost.label, count: step.lost.value }]
 	})), { narrow: measured !== null && measured < 700, frame: frame(measured ?? knobs.chart_width, 260, { ...MARGIN, right: 170 }), nodeWidth: 12, nodeGap: 34, number_format: numberFormat }));
 	const minutes = (value: number | null) => value === null ? '-' : formatNumber(value, numberFormat, { si: false });
+	const count = (value: number | null) => value === null ? 'Missing' : formatNumber(value, numberFormat, { exact: true });
 </script>
 <div use:observeWidth={(width) => measured = width} data-windowed="chart-drawing" data-window-days={windowDays}>
 	{#if days.length > 0}<p data-lede class="lede">{visualsPublished(days)} visuals published.</p>{/if}
@@ -58,6 +61,20 @@
 		name="chart-drawing" label="Where the visual planner's items went" width={knobs.chart_width} height={260} />
 	</div>
 	<p data-flow-shares>Every share is of the items the visual planner reached.</p>
+	<h3 id="chart-type-counts">Charts by type</h3>
+	<p>Proposed and saved counts cover decisions received by assembly. Published counts come from the final edition and its asset inventory.</p>
+	{#if typeCounts.some((row) => row.proposed === null || row.saved === null || row.published === null)}
+		<p>Missing means there is not enough evidence for the selected window. It does not mean zero.</p>
+	{/if}
+	<div class="console-table">
+		<table class="chart-types" aria-labelledby="chart-type-counts">
+			<thead><tr><th scope="col">Chart type</th><th scope="col">Proposed</th><th scope="col">Saved by worker</th><th scope="col">Published</th></tr></thead>
+			<tbody>{#each typeCounts as row (row.type)}<tr>
+				<th scope="row">{row.type.replaceAll('_', ' ')}</th>
+				<td>{count(row.proposed)}</td><td>{count(row.saved)}</td><td>{count(row.published)}</td>
+			</tr>{/each}</tbody>
+		</table>
+	</div>
 	<details data-charts="daily" data-daily-figures="pipelines" data-daily-rows={days.length}>
 		<summary data-charts-toggle>{dailyFiguresSummary(windowDays)}</summary>
 		<p>{dailyFiguresRows(windowDays)} A dash means no minutes are on record.</p>
@@ -77,6 +94,8 @@
 <style>
 	.lede { font-size: var(--text-2xl); }
 	[data-flow="chart"] :global(svg) { inline-size: 100%; max-inline-size: 100%; block-size: auto; }
+	.chart-types { inline-size: 100%; border-collapse: collapse; font-size: var(--console-small-size); font-variant-numeric: tabular-nums; }
+	.chart-types th, .chart-types td { padding: var(--space-1) var(--space-2); text-align: start; border-block-end: 1px solid var(--color-rule); }
 	details { margin-block-start: var(--space-6); font-size: var(--text-sm); }
 	details[open] { padding: var(--space-5); border: 1px solid var(--color-rule); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); }
 </style>

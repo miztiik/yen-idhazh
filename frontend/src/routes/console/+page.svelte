@@ -7,6 +7,7 @@
 	import { recordWindowBounds } from '$lib/console/waiting';
 	import { rangeBounds } from '$lib/console/window-coverage';
 	import { PIPELINES_QUERY_GROUPS } from '$lib/console/pipelines/query-groups';
+	import { chartTypeCounts } from '$lib/console/pipelines/chart-drawing';
 	import * as queries from '$lib/console/queries/pipelines';
 	import { settingsRules } from '$lib/console/settings-moved';
 	import { daysInWindow, windowFromDates, windowOfDays } from '$lib/charts/viewport';
@@ -69,6 +70,7 @@
 	const attemptWindow = $derived(windowFromDates(data.visualAttempts.days.map((day) => day.date), windowDays));
 	const settings = $derived(settingsRules(data, { from: viewport.start, to: viewport.end }, 'none'));
 	const charts = $derived(data.charts.filter((day) => day.date >= viewport.start && day.date <= viewport.end));
+	const typeCounts = $derived(chartTypeCounts(data.chartTypes, windowOfDays(data.windowDay, windowDays, knobs.today_anchor)));
 	const record = $derived(pipelinesRecord(reach, windowDays));
 	const packedWindow = $derived(recordWindowBounds(record));
 
@@ -204,7 +206,7 @@
 						{:else if id === 'site-cost-per-item'}
 							<SiteCostPerItem manifests={data.manifests} publishedItems={data.publishedItems} window={viewport} {knobs} chart={data.chart} rule={settings} />
 						{:else if id === 'chart-drawing'}
-							<ChartDrawing days={charts} {windowDays} {knobs} />
+							<ChartDrawing days={charts} {typeCounts} {windowDays} {knobs} />
 						{:else if id === 'visual-refusals'}
 							<VisualRefusals days={data.visualAttempts.days} read={data.visualAttempts.read} window={attemptWindow ?? viewport} common={publishedWindow} {knobs} chart={data.chart} />
 						{:else if id === 'run-timeline'}

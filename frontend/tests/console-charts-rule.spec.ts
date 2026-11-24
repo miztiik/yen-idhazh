@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { chartRule, coverageOf, type ChartThresholds, type GlanceDay } from '../src/lib/charts/glance';
 import { targetGeometry } from '../src/lib/charts/targetbar';
+import { chartTypeCounts } from '../src/lib/console/pipelines/chart-drawing';
 import { numberFormat } from './support/number-format';
 const REPO = resolve(process.cwd(), '..');
 const CONFIG = JSON.parse(readFileSync(join(REPO, 'config', 'appearance.json'), 'utf8')) as {
@@ -28,6 +29,24 @@ function day(date: string, over: Partial<GlanceDay> = {}): GlanceDay {
 }
 const chartRuleFor = (days: readonly GlanceDay[], thresholds: ChartThresholds, windowDays: number) =>
     chartRule(days, thresholds, windowDays, numberFormat);
+
+test('type totals keep a measured zero, incomplete attempts and a missing day distinct', () => {
+    const first = '2030-06-13', last = '2030-06-14';
+    const days = [
+        { date: first, proposed: { bar: 2 }, saved: { bar: 1 }, published: { bar: 1 } },
+        { date: last, proposed: null, saved: null, published: { bar: 2 } }
+    ];
+    const bar = 'bar', dot = 'dot';
+    const quiet = chartTypeCounts(days, { start: first, end: first });
+    expect(quiet).toContainEqual({ type: bar, proposed: 2, saved: 1, published: 1 });
+    expect(quiet).toContainEqual({ type: dot, proposed: 0, saved: 0, published: 0 });
+    const partial = chartTypeCounts(days, { start: first, end: last });
+    expect(partial).toContainEqual({ type: bar, proposed: null, saved: null, published: 3 });
+    expect(partial).toContainEqual({ type: dot, proposed: null, saved: null, published: 0 });
+    const gap = chartTypeCounts(days, { start: first, end: '2030-06-15' });
+    expect(gap).toContainEqual({ type: bar, proposed: null, saved: null, published: null });
+});
+
 test.describe('the arithmetic behind the two bars', () => {
     test('a share of nothing is an absence, never zero percent', () => {
         expect(coverageOf(day('2026-08-01'))).toBeNull();

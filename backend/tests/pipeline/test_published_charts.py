@@ -7,19 +7,32 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
+from gardener._garden import an_origin, git, quiet_git
 from pytest import MonkeyPatch
 from support.paths import CONFIG_DIR, read_text
+from support.server import RecordedEndpoint
 
-from idhazh import assemble, config
+from idhazh import assemble, completed_writes, config, ledger, run_context
+from idhazh.contracts.base import ServerJob
 from idhazh.contracts.digest_day import DigestDay
+from idhazh.contracts.file_envelope import WriterIdentity
+from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.run_manifest import RunManifest
+from idhazh.contracts.visual import VisualType
 from idhazh.contracts.visual_data import VisualData
 from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX, VisualDecision, VisualKind
+from idhazh.contracts.visual_telemetry import VisualAttemptRow
+from idhazh.ledger import staging
 from idhazh.publication import read_inventory
 from idhazh.render.write import asset_relpath
+from idhazh.stages import common
+from idhazh.stages.work import stage_work
+from utilities import digest_publish, publication_evidence
+from utilities.publication_git import Repository
+from utilities.publish_to_repo import Status
 
 from ._builders import (
     DRAWS_SUMMARIZE_AND_PLAN,
-    _work_stage,
     assert_planning_readings,
     assert_reader_accepts,
     drawable_article_fetch,
@@ -34,16 +47,26 @@ pytestmark = pytest.mark.visual
 def test_assemble_publishes_a_chart_from_its_decision_alone(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
-    """Two trees, and only the items directory crosses between them, as in `digest.yml`.
+    """Work lands the recorded save; only the item handoff reaches fresh assembly."""
+    quiet_git(tmp_path, monkeypatch)
+    origin, worker = an_origin(
+        tmp_path, {"config/push-retry.json": read_text(CONFIG_DIR / "push-retry.json")}
+    )
+    run_plan = plan(item_count=1)
+    identity = WriterIdentity(
+        run_id=run_plan.run_id,
+        attempt=run_context.run_attempt(),
+        job=ServerJob.WORK,
+        shard=0,
+        producer=digest_publish.__name__,
+        git_sha=git(worker, "rev-parse", "HEAD").strip(),
+    )
+    worker_public = worker / "frontend" / "public"
+    worker_var = worker / "backend" / "var" / "run"
+    monkeypatch.setattr(common, "PUBLIC_ROOT", worker_public / "digest")
+    monkeypatch.setattr(common, "VAR_ROOT", worker_var)
+    monkeypatch.setattr(common, "STATE_ROOT", worker / "state")
 
-    The work shard draws on a runner that is thrown away, and `items-<shard>` is
-    all assemble receives. Run `37212772816` (2026-10-04) also carried each
-    shard's whole day directory across to bring the charts, and the merged
-    copies of `digest.json` left a file assemble could not read. A test that ran
-    both stages in one tree could not tell who wrote the chart; this one fails
-    if assemble stops writing it.
-    """
-    worker = tmp_path / "worker"
     response = json.loads(DRAWS_SUMMARIZE_AND_PLAN.read_bytes())
     message = response["choices"][0]["message"]
     content = json.loads(message["content"])
@@ -51,21 +74,52 @@ def test_assemble_publishes_a_chart_from_its_decision_alone(
     for row in content["visual"]["rows"]:
         row["series"] = "Offshore awards"
     message["content"] = json.dumps(content)
-    with finding_the_wind_countries(config.load(CONFIG_DIR)) as settings:
-        run_plan, items, server = _work_stage(
-            worker,
-            monkeypatch,
-            replies=(json.dumps(response).encode("utf-8"),),
-            fetcher=drawable_article_fetch,
-            run_plan=plan(item_count=1),
+    with (
+        completed_writes.collect() as writes,
+        finding_the_wind_countries(config.load(CONFIG_DIR)) as settings,
+        RecordedEndpoint(200, json.dumps(response).encode("utf-8")) as server,
+    ):
+        stage_work(
+            run_plan,
             settings=settings,
+            scorer=None,
+            fetcher=drawable_article_fetch,
+            model_endpoint=server.endpoint,
+            commit_sha=identity.git_sha,
         )
+    publication_evidence.save(worker, identity, "work", writes)
+    result = digest_publish.land(repo=worker, identity=identity, date=run_plan.date)
+    assert result.status is Status.LANDED, result
+
+    items = worker_var / run_plan.date / "items"
     item_id = run_plan.items[0].item_id
     decision = VisualDecision.read(items / f"{item_id}{PAYLOAD_SUFFIX}")
     relpath = asset_relpath(run_plan.date, item_id)
     assert decision.kind is VisualKind.CHART
     assert decision.data_path == relpath
     assert decision.spec is not None
+    chart_bytes = decision.spec.encode("utf-8")
+    assert (items.parent / "chart-scratch" / relpath).read_bytes() == chart_bytes
+    assert not (items / relpath).exists()
+    assert not (worker_public / relpath).exists()
+
+    receipt = publication_evidence.read(worker, identity, ("work",))
+    chart_path = f"frontend/public/{relpath}"
+    assert chart_path not in receipt
+    remote = Repository(origin, git_dir=origin)
+    assert remote.entry("main", chart_path) is None
+    attempt_root = staging.staged_path(LedgerName.VISUAL_DESIGN_ATTEMPTS)
+    (attempt_path,) = [path for path in receipt if path.startswith(f"{attempt_root}/")]
+    attempt_entry = remote.entry("main", attempt_path)
+    assert attempt_entry is not None
+    attempt_file = worker / attempt_path
+    assert remote.blob(attempt_entry.oid) == attempt_file.read_bytes()
+    (attempt,) = ledger.load([attempt_file], model=VisualAttemptRow)
+    assert (attempt.run_id, attempt.item_id, attempt.visual_id) == (
+        run_plan.run_id, item_id, decision.visual_id,
+    )
+    assert attempt.planned_type is attempt.rendered_type is VisualType.BAR
+
     compiled = VisualData.from_json(decision.spec)
     assert_planning_readings(
         server,
@@ -97,9 +151,9 @@ def test_assemble_publishes_a_chart_from_its_decision_alone(
     named = {item.visual.data_path for item in day.items if item.visual is not None}
     inventoried = {entry.path for entry in read_inventory(public).entries}
     assert relpath in named, f"the published day does not name {relpath}"
-    assert (public / relpath).read_bytes() == (worker / "public" / relpath).read_bytes(), (
-        f"{relpath} is not the chart the work shard drew"
-    )
+    assert (public / relpath).read_bytes() == chart_bytes
     assert VisualData.read(public / relpath) == compiled
     assert relpath in inventoried, f"the inventory does not count {relpath}"
+    manifest = RunManifest.read(assemble.day_dir(public / "digest", run_plan.date) / "run.json")
+    assert [(run.run_id, run.items_decided) for run in manifest.runs] == [(attempt.run_id, 1)]
     assert_reader_accepts(public / relpath, item_id=item_id)
