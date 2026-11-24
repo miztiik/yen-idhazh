@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from support.config import canary_config
 from support.paths import CONFIG_DIR
 
 from idhazh import config
@@ -31,9 +32,7 @@ def known_answer_pairs(root: Path, **changes: object) -> Path:
     """Write the known-answer pairs file beside the judge's, with some keys changed."""
     path = root / "judges" / "content-similarity-canaries.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    raw = json.loads(
-        (CONFIG_DIR / "judges" / "content-similarity-canaries.json").read_text(encoding="utf-8")
-    )
+    raw = canary_config().model_dump(mode="json", exclude_none=True)
     raw.update(changes)
     path.write_text(json.dumps(raw), encoding="utf-8", newline="\n")
     return path

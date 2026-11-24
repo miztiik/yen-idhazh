@@ -395,6 +395,8 @@ The file holds at most 12 pairs and at least one of each kind, with the summary 
 into it so that a published day that retires cannot orphan a pair. It changes only by a
 reviewed edit that bumps its `version`. Nothing refreshes it from the published days, because
 that would put fetched text into the reference set unreviewed.
+Editing, adding or removing pairs does not require changing the tests when the file still
+fits the contract and the run budget. The tests for runner behavior use their own examples.
 
 | Kind | Expected answer | What the pair is |
 | --- | --- | --- |
@@ -402,10 +404,10 @@ that would put fetched text into the reference set unreviewed.
 | different | NO | Two events with no actor, place or topic in common |
 | unclear | UNCLEAR | At least one summary too vague to name what happened, the judge prompt's own definition |
 
-The committed set has eight pairs: two `same`, two `different`, and four `unclear`, up
-from two of each. The new `unclear` cases test whether overlapping context is enough to
-identify one event. Both summaries must be nonempty and follow the published summary shape
-in ASCII.
+The `2026-11-24` revision increased the set from two of each kind to two `same`, two
+`different`, and four `unclear`. Its new `unclear` cases test whether overlapping context
+is enough to identify one event. Both summaries must be nonempty and follow the published
+summary shape in ASCII.
 
 The pair slug is the answer key on the night's row. Address either summary as
 `<pair-id>.left.summary` or `<pair-id>.right.summary`, using file order even on the
@@ -426,10 +428,10 @@ An explicit `published` origin requires both sides to name their sources. An exp
 How a run uses them:
 
 - **Each pair is judged once a run, on one runner.** The pair at position `i` of the file
-  goes to runner `(i + the date's ordinal) mod the runners`. Eight pairs on four runners is
-  two per runner, up from two on the busiest runners and one on the others. The pairs move
-  one runner a night, so over four nights each has run on every runner. A night with no
-  draw runs no runner and judges none.
+  goes to runner `(i + the date's ordinal) mod the runners`. With eight pairs and four
+  runners, each gets two; with six pairs, two runners get two and the others one. The
+  pairs move one runner a night, so over four nights each has run on every runner. A
+  night with no draw runs no runner and judges none.
 - **The request is a drawn pair's.** The same prompt, fence, grammar and sampler, with nothing
   marking the pair, so the judge cannot tell it from the night's own. Only the two summary
   texts go to the judge, in file order and then swapped. The text is never presented as an
@@ -451,10 +453,10 @@ How a run uses them:
 
 The plan-time guard counts them. The busiest runner judges
 `ceil(draw / runners) + ceil(known-answer pairs / runners)` pairs at the measured 110.98 seconds
-a pair: at the committed 4 runners that is 38 + 2 = 40 pairs, 4,439 seconds against the 10,500 a
-runner has to work in. The cost a pair was measured at is from 2026-09-18 on another model file,
-so the figure is an estimate. A file that does not load stops the night in the planning job,
-before any runner restores its weights.
+a pair. With 150 drawn pairs and eight known-answer pairs on four runners, that is 38 + 2 = 40
+pairs, 4,439 seconds against the 10,500 a runner has to work in. The cost a pair was measured at
+is from 2026-09-18 on another model file, so the figure is an estimate. A file that does not
+load stops the night in the planning job, before any runner restores its weights.
 
 The judge had never answered UNCLEAR on a real pair when the original set was chosen
 (2026-11-17). The aggregate agreement can move across revisions just because the case

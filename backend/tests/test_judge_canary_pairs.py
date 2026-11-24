@@ -23,6 +23,7 @@ from typing import Any, Final
 
 import pytest
 from pydantic import TypeAdapter
+from support.config import canary_config
 from support.judge_reader import ProtocolReplies, native_reply
 from support.judged_pairs import (
     CONFIG_VERSIONS,
@@ -33,7 +34,7 @@ from support.judged_pairs import (
     a_verdict_file,
 )
 from support.models import a_markers
-from support.paths import CONFIG_DIR
+from support.paths import CONFIG_DIR, read_text
 from support.threshold_nights import LOOKBACK, RULES
 
 from idhazh import atomic_write, config
@@ -57,8 +58,8 @@ from idhazh.similarity.night_totals import merged_canary_answers, runner_columns
 from idhazh.stages import judge_canary_pairs
 from idhazh.stages.review_thresholds import build_threshold_row, stage_review_thresholds
 
-#: The committed pairs in file order.
-PAIRS: Final = judge_settings.load_canaries(CONFIG_DIR).pairs
+CANARIES: Final = canary_config()
+PAIRS: Final = CANARIES.pairs
 
 
 def an_hour_away() -> float:
@@ -84,7 +85,7 @@ def a_reply(word: str) -> bytes:
 
 
 def a_perfect_judge() -> tuple[bytes, ...]:
-    """Both orders of every committed pair answered as the file says, in file order."""
+    """Both orders of each test pair, answered as the key says, in file order."""
     return tuple(a_reply(pair.expected.value) for pair in PAIRS for _ in range(2))
 
 
@@ -266,16 +267,16 @@ def test_the_calls_are_counted_for_the_venue_and_nowhere_else() -> None:
 #: goes to runner (i + 3) mod 4 on the first night and i mod 4 on the second.
 DEALT: Final = {
     "2026-11-19": {
-        0: ["same-2", "unclear-2"],
-        1: ["different-1", "unclear-3"],
-        2: ["different-2", "unclear-4"],
+        0: ["same-2"],
+        1: ["different-1"],
+        2: ["different-2"],
         3: ["same-1", "unclear-1"],
     },
     "2026-11-20": {
         0: ["same-1", "unclear-1"],
-        1: ["same-2", "unclear-2"],
-        2: ["different-1", "unclear-3"],
-        3: ["different-2", "unclear-4"],
+        1: ["same-2"],
+        2: ["different-1"],
+        3: ["different-2"],
     },
 }
 
@@ -398,8 +399,20 @@ def test_four_runners_ship_their_share_and_the_night_names_every_pair_exactly_on
     """The shipped runner readings file the actual answers, the key and agreement in history."""
     date = "2026-11-19"
     run_id = f"{date}-9"
+    config_dir = tmp_path / "config"
+    atomic_write.write_atomic(
+        config_dir / judge_settings.JUDGE_FILE, read_text(CONFIG_DIR / judge_settings.JUDGE_FILE)
+    )
+    atomic_write.write_atomic(
+        config_dir / judge_settings.CANARY_FILE, CANARIES.model_dump_json(exclude_none=True)
+    )
     draw_path, state = tmp_path / "draw.csv", tmp_path / "state"
-    draw = a_night_of_pairs([(0.80, "YES")] * 4, date=date, answered=False)
+    draw = a_night_of_pairs(
+        [(0.80, "YES")] * 4,
+        date=date,
+        answered=False,
+        config_versions=judge_settings.config_versions(config_dir),
+    )
     atomic_write.write_atomic(
         draw_path,
         a_verdict_file(
@@ -441,7 +454,7 @@ def test_four_runners_ship_their_share_and_the_night_names_every_pair_exactly_on
         identity=a_saver(run_id),
         expected_shards=4,
         state_dir=state,
-        config_dir=CONFIG_DIR,
+        config_dir=config_dir,
     )
 
     (filed,) = load_threshold_history(state, [date])
@@ -457,7 +470,7 @@ def test_four_runners_ship_their_share_and_the_night_names_every_pair_exactly_on
     }
     assert answers["unclear-1"][:2] == ["NO", "NO"], "keep the answer, not what the key wanted"
     assert filed.canary_kappa_pairs == len(PAIRS)
-    assert filed.canary_kappa == 17 / 21, "seven of eight matches, with chance agreement 22/64"
+    assert filed.canary_kappa == 2 / 3, "four of five matches, with chance agreement 2/5"
 
 
 @pytest.mark.parametrize(
