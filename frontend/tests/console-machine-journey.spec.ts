@@ -66,7 +66,8 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 	expect(shellWidth.content).toBeCloseTo(shellWidth.available, 1);
 	const footer = page.getByRole('contentinfo');
 	await expect(footer.getByRole('link')).toHaveText(['Back to digest', 'Source code']);
-	await expect(footer.getByRole('link', { name: 'Back to digest' })).toHaveAttribute('href', '/');
+	expect(await footer.getByRole('link', { name: 'Back to digest' }).evaluate((link: HTMLAnchorElement) => link.href))
+		.toBe(new URL('/', page.url()).href);
 	await expect(page.locator('[data-site-header] [data-theme-toggle]')).toHaveCount(0);
 	await expect(footer.locator('[data-theme-toggle]')).toHaveCount(1);
 	await expect(page.locator('[data-console-nav] small')).toHaveCount(0);
