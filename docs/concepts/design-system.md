@@ -1,6 +1,6 @@
 # Design System
 
-**Last Updated**: 2026-11-22
+**Last Updated**: 2026-11-24
 
 Shared rules for typography, layout, colour, motion and controls. [Console design](console-design.md) owns panel-specific presentation; [appearance configuration](config/appearance.md) owns tunable values.
 
@@ -299,7 +299,10 @@ bin edges and counts, so a reader sees one distribution rather than two
 independently calculated versions. Range labels keep the configured precision
 unless distinct recorded edges would otherwise display as the same value.
 
-The shared footer must not depend on the latest day's data or build identity: either would change unrelated pages on every publication. The current link-only footer has limited visual hierarchy. Improve it with stable content rather than restoring those dependencies.
+The [shared footer band](ui-shell.md#what-the-shell-provides-once) uses a quiet
+surface, one neutral edge and visible link groups in both themes. The digest
+aligns the band and its story controls with the story text, not the source mark.
+Keep secondary links quieter than the action that continues the current task.
 
 ## See also
 

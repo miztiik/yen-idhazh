@@ -141,6 +141,8 @@
 	   theme, and light is named explicitly below - which keeps the item right
 	   whichever theme is the base. */
 	--item-edge: var(--color-rule-strong);
+	--story-card-padding: var(--space-4);
+	--story-mark-gap: var(--space-3);
 }
 
 [data-theme='light'] {
@@ -164,10 +166,15 @@ body {
    sits on the text elements that need it, because a measure on the shell gives
    the whole application a paragraph's width (design-system.md). */
 .frame {
+	--story-text-inset: calc(var(--story-card-padding) + 1px);
 	width: 100%;
 	margin-inline: auto;
 	padding-inline: var(--gutter);
 	max-width: var(--frame-reading);
+}
+
+.frame.with-source-marks {
+	--story-text-inset: calc(var(--story-card-padding) + 1px + var(--zone-mark) + var(--story-mark-gap));
 }
 
 /* Every digest address and the archive use the configured window gutters. */
@@ -274,6 +281,8 @@ html:has([data-surface='operator']) { scroll-padding-block-start: var(--console-
    than clip them. The width matches `frame.breakpoints_px[1]`, which a media
    query cannot read. */
 @media (min-width: 1024px) {
+	:root { --story-card-padding: var(--space-5); }
+
 	.frame:has([data-console-chrome='workbench']) {
 		display: flex;
 		flex-direction: column;

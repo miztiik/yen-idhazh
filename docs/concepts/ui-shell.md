@@ -1,6 +1,6 @@
 # UI Shell
 
-**Last Updated**: 2026-11-16
+**Last Updated**: 2026-11-24
 
 **Known noncompliance:** Existing prerendering does not meet [Telemetry Intent](telemetry-intent.md) and will be removed as existing pages migrate. All new designs, charts and visuals must render in the browser; none may be prerendered.
 
@@ -48,7 +48,18 @@ for panel titles and "the visual planner" for that actor.
 
 ## What the shell provides, once
 
-- **Page frame:** shared header, navigation, footer and spacing. The archive omits the footer so the single search surface ends with its stories.
+- **Page frame:** shared header, navigation, footer and spacing. The same footer
+  band groups edition and project links on reading pages, in the same order
+  when stacked on phones. Only the home page links to the previous published
+  edition when known. The console footer offers Back to digest, Source code
+  and the theme control, not reader search or a link to itself. The archive
+  omits the band so its single search surface ends with its stories.
+- **Story continuation:** Show more stories and the displayed count belong to
+  the list before the footer. Only a fully shown, unfiltered edition gets an
+  end marker; narrowed views name their own endpoint and unfinished loads keep
+  their wait or retry. Unread only and this edition's read-mark reset sit with
+  topic and search controls. The reader's Back to top is available mid-scroll
+  and docks with the list controls at the bottom.
 - **Data loading:** validate fetched and cached payloads at the same boundary. A malformed payload must not leave a blank page. Publication checks still run before publishing; a successful static build is not proof that every day is valid.
 - **Page states:** shared loading, empty, missing and degraded behavior.
 - **Local logging:** the browser console records which payload failed and why. No remote log collector or reader tracking.
@@ -144,6 +155,10 @@ See [deployment](../how-to/ship-to-github-pages.md).
 
 - Browser rendering follows the maintainer's no-prerender direction (2026-09-29) and [Telemetry Intent](telemetry-intent.md). A shipped implementation cannot override it.
 - Shared loading and validation keep error handling consistent across surfaces.
+- The list ends with reading actions, the footer with destinations. Native
+  links work even if the digest fails to arrive or JavaScript is unavailable.
+  Keep the shared footer independent of the current day's data and build
+  identity so unrelated pages do not change with every edition.
 - Readability is a requirement for operator pages too, not decoration.
 - A spinner reports neither progress nor failure. A named wait and stable panel dimensions communicate what is missing without moving content.
 - Cookies transmit reader state with requests. Local preferences need not leave the device. Offline caches retain requested content without fetching the archive.

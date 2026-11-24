@@ -1,6 +1,6 @@
 # What sits above every console route
 
-**Last Updated**: 2026-11-14
+**Last Updated**: 2026-11-24
 
 How the console keeps navigation, the selected window and dated evidence in reach
 without putting a screen of repeated status ahead of the first useful reading.
@@ -28,10 +28,9 @@ digest, without a second Console label. It scrolls away in normal page flow:
 there is no animated shrink or compensating spacer. Reading routes keep their
 existing header. No font or icon asset is added.
 
-The existing theme control sits at the right of the shared footer beside
-Archive, Console and Source code. It wraps to a right-aligned second line when
-needed. Workbench routes keep this compact footer too. Theme storage and the
-before-paint theme resolution are unchanged.
+The theme control sits to the right of the [console's footer links](../../concepts/ui-shell.md#what-the-shell-provides-once).
+It wraps to a right-aligned line when needed. The footer follows the actual
+workbench content rather than overlapping it.
 
 ## Route identity and the window lead the evidence
 

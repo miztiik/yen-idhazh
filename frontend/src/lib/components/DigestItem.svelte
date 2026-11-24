@@ -279,10 +279,10 @@
 		display: grid;
 		grid-template-columns: minmax(0, 1fr);
 		align-items: start;
-		column-gap: var(--space-3);
+		column-gap: var(--story-mark-gap);
 		row-gap: var(--space-2);
 		margin-block-start: var(--space-4);
-		padding: var(--space-4);
+		padding: var(--story-card-padding);
 		border: 1px solid var(--item-edge);
 		border-radius: var(--radius-lg);
 		background: var(--color-surface);
@@ -358,12 +358,5 @@
 	.item:focus-within {
 		border-color: var(--color-accent);
 		box-shadow: var(--shadow-md);
-	}
-
-	/* Matches frame.breakpoints_px[1]; media queries cannot read CSS tokens. */
-	@media (min-width: 1024px) {
-		.item {
-			padding: var(--space-5);
-		}
 	}
 </style>
