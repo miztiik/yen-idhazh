@@ -117,6 +117,7 @@ EXPECTED_COLUMNS: Final[Mapping[str, tuple[str, ...]]] = {
     "judgeHistoryQuery": (
         "date", "run_id", "attempt", "pairs_drawn", "pairs_returned",
         "sample_tp", "sample_fp", "sample_fn", "sample_tn", "score_psi",
+        "canary_answers", "canary_expectations", "canary_kappa", "canary_kappa_pairs", "config_versions",
     ),
     "judgeDayQuery": (
         "date", "run_id", "attempt", "pairs_drawn", "pairs_returned",
@@ -129,7 +130,6 @@ EXPECTED_COLUMNS: Final[Mapping[str, tuple[str, ...]]] = {
         "score_drift_baseline", "score_drift_status", "score_psi", "score_wasserstein_distance", "score_ks_distance",
         "judge_probability_evidence", "judge_probability_status", "judge_probability_brier_score",
         "judge_probability_baseline_brier_score", "judge_probability_ece",
-        "canary_answers", "canary_expectations", "canary_kappa", "canary_kappa_pairs",
     ),
     "judgeDrawTrialQuery": (
         "date", "run_id", "attempt", "pairs_drawn", "pairs_returned", "sample_status", "slice_outcomes",

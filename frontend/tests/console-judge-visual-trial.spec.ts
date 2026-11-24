@@ -8,11 +8,13 @@ import { scoreIntervals } from '../src/lib/charts/d3/scoreIntervals';
 import { precisionRecall } from '../src/lib/charts/d3/precisionRecall';
 import { judgeCutoffSweep, judgeZoneMatrix } from '../src/lib/console/judge-cutoff-evidence';
 import { drawCoverageByOutcome, drawOf, sliceParts } from '../src/lib/console/judge-draw';
+import { judgeCanaryDays } from '../src/lib/console/judge-canaries';
 import { latestJudgeReadings } from '../src/lib/console/judge-observations';
 import { countBandOutcomes, judgeEntropy, judgePairDays, judgeScoreBands } from '../src/lib/console/judge-pair-evidence';
 import { judgePool, savedPoolBaseline } from '../src/lib/console/judge-score-pool';
 import { judgeObservationRules } from '../src/lib/console/route-console';
 import type { Row } from '../src/lib/data/slice-shapes';
+import { judgeCanaryTimeline } from '../src/routes/console/judgement/judge-canary-timeline';
 import { numberFormat } from './support/number-format';
 import { renderConfigured, serverCompiler, type Rewrite } from './support/server-render';
 
@@ -61,34 +63,78 @@ test('daily coverage uses recorded outcomes, and never paints a refusal or unkno
 	expect(drawCoverageByOutcome({ ...summary, pairs_returned: null }, null)).toBeNull();
 });
 
-test('canary tiles keep expected and both observed orders, and never grade a legacy key', async ({}, testInfo) => {
+const setVersion = (version: string) => JSON.stringify({ 'judges/content-similarity-canaries.json': version });
+const canaryReference = {
+	date: '2026-11-22', run_id: '2026-11-23-1', attempt: 2,
+	config_versions: setVersion('2026-11-19'),
+	canary_expectations: '{"same-1":"YES","same-2":"YES","unclear-1":"UNCLEAR","unclear-2":"UNCLEAR","different-1":"NO","different-2":"NO"}',
+	canary_answers: '{"same-1":["YES","YES"],"same-2":["YES","YES"],"unclear-1":["NO","NO"],"unclear-2":["NO","NO"],"different-1":["NO","NO"],"different-2":["NO","NO"]}',
+	canary_kappa: 0.5, canary_kappa_pairs: 6
+};
+
+test('canary lines use fixed endpoints, keep incomplete days visible, and never bridge a gap or set change', () => {
+	const days = ['20', '21', '22', '23', '24', '25', '26', '27'].map((day) => `2026-11-${day}`);
+	const complete = { canary_expectations: '{"same":"YES"}', canary_answers: '{"same":["YES","YES"]}' };
+	const older = { ...complete, config_versions: setVersion('2026-11-18') };
+	const recent = { ...complete, config_versions: canaryReference.config_versions };
+	const mixed = { ...recent, canary_expectations: '{"a":"YES","b":"YES","c":"YES","d":"YES"}',
+		canary_answers: '{"a":["NO","NO"],"b":["UNCLEAR","UNCLEAR"],"c":["YES","YES"],"d":["UNCLEAR","UNCLEAR"]}' };
+	const readings = latestJudgeReadings([
+		older, older, canaryReference, mixed, { canary_answers: canaryReference.canary_answers },
+		{ ...recent, canary_answers: '{"same":[null,"YES"]}' }, recent, { ...recent, config_versions: null }
+	].map((cells, index) => ({ ...canaryReference, ...cells, date: days[index],
+		canary_expectations: 'canary_expectations' in cells ? cells.canary_expectations : null })));
+	const box = frame(520, 108);
+	const plot = judgeCanaryTimeline(judgeCanaryDays(days, readings), box, 6);
+	const [same, unclear, different] = plot.timelines;
+	expect(same.columns[2].point).toEqual({ y: box.top, incomplete: false });
+	expect(unclear.columns[2].point).toEqual({ y: plot.stripBottom, incomplete: false });
+	expect(different.columns[2].point).toEqual({ y: box.top, incomplete: false });
+	expect([same, unclear, different].map(({ columns }) => columns[2].segments.map(({ band }) => band)))
+		.toEqual([['YES'], ['NO'], ['NO']]);
+	const segments = same.columns[3].segments;
+	const height = box.bottom - plot.blockTop;
+	expect(segments.map(({ band, height: part }) => [band, part / height]))
+		.toEqual([['YES', 0.25], ['UNCLEAR', 0.5], ['NO', 0.25]]);
+	expect(same.columns[3].point?.y).toBeCloseTo(plot.stripBottom - (plot.stripBottom - box.top) * 0.25);
+	expect(same.columns[4]).toMatchObject({ point: null, segments: [] });
+	expect(same.columns[5]).toMatchObject({ point: { y: plot.stripBottom, incomplete: true }, segments: [{ band: 'invalid' }] });
+	expect(same.columns[7].point?.y).toBe(box.top);
+	expect(same.path.match(/M/g)).toHaveLength(2);
+	expect(same.path.match(/L/g)).toHaveLength(2);
+	expect(plot.changes).toEqual([{ date: days[2], x: (same.columns[1].x + same.columns[2].x) / 2 }]);
+});
+
+test('the Canaries panel keeps three timelines and exact selected-day answers without a table', async ({}, testInfo) => {
 	const compile = serverCompiler(testInfo.outputPath('canary-chart'));
 	const href = (file: string) => pathToFileURL(resolve(file)).href;
-	const rewrites: Rewrite[] = ['charts/readout', 'charts/readout-view', 'charts/d3/diagnosticGrid',
-		'console/judge-observations', 'format', 'number-format'].map((file) => [`$lib/${file}`, href(`src/lib/${file}.ts`)]);
-	for (const file of ['components/Panel', 'components/ChartReadout', 'charts/d3/DiagnosticGrid']) {
+	const rewrites: Rewrite[] = ['charts/frame', 'charts/label-context', 'charts/readout', 'charts/readout-view',
+		'console/judge-canaries', 'format', 'number-format'].map((file) => [`$lib/${file}`, href(`src/lib/${file}.ts`)]);
+	for (const file of ['components/Panel', 'components/ChartReadout']) {
 		const name = file.split('/').at(-1)!;
 		rewrites.push([`$lib/${file}.svelte`, href(await compile(`src/lib/${file}.svelte`, name, rewrites))]);
 	}
 	const route = 'src/routes/console/judgement';
+	const details = await compile(`${route}/JudgeCanaryDetails.svelte`, 'JudgeCanaryDetails', rewrites);
 	const module = await compile(`${route}/JudgeCanaryChart.svelte`, 'JudgeCanaryChart', [
-		...rewrites, ['./judge-trial-style', href(`${route}/judge-trial-style.ts`)]
+		...rewrites, ['./JudgeCanaryDetails.svelte', href(details)], ['./judge-trial-style', href(`${route}/judge-trial-style.ts`)],
+		['./judge-canary-timeline', href(`${route}/judge-canary-timeline.ts`)]
 	]);
 	const { default: chart } = await import(href(module));
-	const plot = (detail: Row) => renderConfigured(chart, { props: {
-		selected: now.date, detail, dayNote: 'Unavailable', chart: { number_format: numberFormat, readout_max_share: 1 }
+	const plot = (rows: Row[]) => renderConfigured(chart, { props: {
+		selected: canaryReference.date, calendar: [canaryReference.date], readings: latestJudgeReadings(rows),
+		noteFor: () => 'Unavailable', knobs: { chart_width: 520 },
+		chart: { number_format: numberFormat, readout_max_share: 1, sparkline_height_px: 36, tick_density: 6 }
 	} }).body.replace(/<!--[\s\S]*?-->/g, '');
-	const answers = { canary_answers: '{"different":["NO","NO"],"unclear":["NO","NO"],"split":["YES","NO"]}' };
-	const measured = plot({ ...answers, canary_expectations: '{"different":"NO","unclear":"UNCLEAR","split":"YES","missing":"NO"}',
-		canary_kappa: 0, canary_kappa_pairs: 2 });
-	expect(measured).toContain('data-chart-name="judge-canaries"');
-	expect(measured).toMatch(/1 of 4 pairs matched/);
-	expect(measured).toMatch(/Cohen's kappa:\s*0 across 2 pairs/);
-	const unclear = measured.match(/<tr[^>]*><th[^>]*>unclear<\/th>[\s\S]*?<\/tr>/)?.[0];
-	expect(unclear?.match(/<span>(UNCLEAR|NO|Differed)<\/span>/g)).toEqual(
-		['<span>UNCLEAR</span>', '<span>NO</span>', '<span>NO</span>', '<span>Differed</span>']);
-	expect(plot(answers)).toContain('The observed answers are not graded.');
-	expect(plot({})).not.toContain('data-chart-name="judge-canaries"');
+	const measured = plot([canaryReference, { ...canaryReference, attempt: 1, canary_expectations: '{"earlier":"YES"}' }]);
+	expect(measured.match(/data-chart-name="judge-canaries-(yes|unclear|no)"/g)).toEqual([
+		'data-chart-name="judge-canaries-yes"', 'data-chart-name="judge-canaries-unclear"', 'data-chart-name="judge-canaries-no"'
+	]);
+	expect(measured.match(/\d\/2 matched/g)).toEqual(['2/2 matched', '0/2 matched', '2/2 matched']);
+	expect(measured).toMatch(/Expected: UNCLEAR\s+\u00b7\s*Original: NO\s+\u00b7 Reversed: NO/);
+	expect(measured).not.toContain('<table');
+	expect(plot([{ ...canaryReference, canary_expectations: null }])).toContain('The observed answers are not graded.');
+	expect(plot([])).not.toContain('data-chart-type="canaryTimeline"');
 });
 
 test('an exact attempt is counted once, with threshold-edge zones and binary cutoff ties', () => {

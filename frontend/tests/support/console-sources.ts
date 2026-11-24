@@ -53,7 +53,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	'src/lib/console': [
 		'band.ts', 'chrome.ts', 'completeness.ts', 'console-style.ts', 'daily-figures.ts',
 		'duration-cohort.ts', 'eval-instruments.ts', 'failure-rules.ts',
-		'holdout.ts', 'judge-cutoff-evidence.ts', 'judge-draw.ts', 'judge-observations.ts', 'judge-pair-evidence.ts',
+		'holdout.ts', 'judge-canaries.ts', 'judge-cutoff-evidence.ts', 'judge-draw.ts', 'judge-observations.ts', 'judge-pair-evidence.ts',
 		'judge-score-pool.ts', 'judge-trial-read.svelte.ts', 'judgement-evidence.ts', 'merged-stories.ts', 'model-cards.ts',
 		'query-state.ts', 'rates.ts', 'recording.ts', 'RecordNotes.svelte', 'route-console.ts', 'run-square.ts', 'series-tokens.ts',
 		'settings-moved.ts', 'span-words.ts', 'TimeCost.svelte', 'waiting.ts', 'window-coverage.ts', 'window-preference.ts', 'window-slot.ts'
@@ -115,11 +115,11 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	'src/routes/console/data-explorer': ['+page.svelte', '+page.ts'],
 	'src/routes/console/judgement': [
 		'+page.server.ts', '+page.svelte', 'HoldoutMargin.svelte', 'MergedStoriesPanel.svelte',
-		'JudgeObservations.svelte', 'JudgeCanaryChart.svelte', 'JudgeCoverage.svelte', 'JudgeDigestDetails.svelte',
+		'JudgeObservations.svelte', 'JudgeCanaryChart.svelte', 'JudgeCanaryDetails.svelte', 'JudgeCoverage.svelte', 'JudgeDigestDetails.svelte',
 		'JudgeScoreRanges.svelte', 'JudgeSliceChart.svelte',
 		'JudgeCutoffDiagnostics.svelte', 'JudgeDrawIntervals.svelte', 'JudgePairEvidence.svelte', 'JudgePercentStacks.svelte',
 		'JudgePoolHistogram.svelte', 'JudgeVerdictHeatmaps.svelte', 'JudgeVisualTrial.svelte',
-		'judge-slice-chart.ts', 'judge-trial-style.ts', 'PairScoreDrift.svelte'
+		'judge-canary-timeline.ts', 'judge-slice-chart.ts', 'judge-trial-style.ts', 'PairScoreDrift.svelte'
 	],
 	'src/routes/console/machine': ['+page.server.ts', '+page.svelte'],
 	'src/routes/console/model': ['+page.server.ts', '+page.svelte'],

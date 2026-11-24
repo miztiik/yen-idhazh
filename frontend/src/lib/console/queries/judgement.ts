@@ -6,7 +6,8 @@ export const judgeHistoryQuery = {
 	ledger: 'threshold-history',
 	columns: [
 		'date', 'run_id', 'attempt', 'pairs_drawn', 'pairs_returned',
-		'sample_tp', 'sample_fp', 'sample_fn', 'sample_tn', 'score_psi'
+		'sample_tp', 'sample_fp', 'sample_fn', 'sample_tn', 'score_psi',
+		'canary_answers', 'canary_expectations', 'canary_kappa', 'canary_kappa_pairs', 'config_versions'
 	],
 	span: 'window'
 } as const satisfies PanelQuery;
@@ -24,8 +25,7 @@ export const judgeDayQuery = {
 		'upper_cutoff_brier_score', 'cutoff_brier_score',
 		'score_drift_baseline', 'score_drift_status', 'score_psi', 'score_wasserstein_distance', 'score_ks_distance',
 		'judge_probability_evidence', 'judge_probability_status', 'judge_probability_brier_score',
-		'judge_probability_baseline_brier_score', 'judge_probability_ece',
-		'canary_answers', 'canary_expectations', 'canary_kappa', 'canary_kappa_pairs'
+		'judge_probability_baseline_brier_score', 'judge_probability_ece'
 	],
 	span: 'window'
 } as const satisfies PanelQuery;
