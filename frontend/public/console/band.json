@@ -18,13 +18,13 @@
   },
   "compaction_lag_days": 0,
   "covers_through": "2026-11-24",
-  "generated_at": "2026-11-24T05:41:42Z",
+  "generated_at": "2026-11-24T07:02:31Z",
   "routes": [
-    {"carries": "The model spent 7 h 58 m of this.","description": "Did the runs work, and what each stage cost.","href": "/console/","id": "pipelines","label": "Pipelines","severity": 3,"worst": "46 feeds resting"},
-    {"carries": "This day ran in 3 runs, 1.14x apart on read speed.","description": "What the model wrote, how long it took, and what it got wrong.","href": "/console/model/","id": "model","label": "Summaries","severity": 3,"worst": "40 items failed"},
-    {"carries": "200 articles on this day.","description": "The hardware the model ran on, and how much it varied between runs.","href": "/console/machine/","id": "machine","label": "Hardware","severity": 2,"worst": "4 shards reported nothing"},
+    {"carries": "The model spent 10 h 51 m of this.","description": "Did the runs work, and what each stage cost.","href": "/console/","id": "pipelines","label": "Pipelines","severity": 3,"worst": "45 feeds resting"},
+    {"carries": "This day ran in 4 runs, 1.14x apart on read speed.","description": "What the model wrote, how long it took, and what it got wrong.","href": "/console/model/","id": "model","label": "Summaries","severity": 3,"worst": "53 items failed"},
+    {"carries": "267 articles on this day.","description": "The hardware the model ran on, and how much it varied between runs.","href": "/console/machine/","id": "machine","label": "Hardware","severity": 2,"worst": "6 shards reported nothing"},
     {"carries": "Summary measurements and writing costs are on Summaries.","description": "Which stories the day merged, and how close the merge line sits to pairs a person marked apart.","href": "/console/judgement/","id": "judgement","label": "Judgement","severity": 0,"worst": null},
-    {"carries": "46 feeds rested over these 562 runs.","description": "Who supplied the day, and how far each feed is discounted.","href": "/console/voices/","id": "voices","label": "Voices","severity": 2,"worst": "6 feeds discounted to the floor"},
+    {"carries": "45 feeds rested over these 563 runs.","description": "Who supplied the day, and how far each feed is discounted.","href": "/console/voices/","id": "voices","label": "Voices","severity": 2,"worst": "6 feeds discounted to the floor"},
     {"carries": "Every published ledger the other routes draw from, open to a question of your own.","description": "What the ledgers hold, and whatever you ask of them.","href": "/console/data-explorer/","id": "data-explorer","label": "Data explorer","severity": 0,"worst": null}
   ],
   "rows_uncompacted": 0,
@@ -206,12 +206,12 @@
     "compared_from": "2026-09-14"
   },
   "size": {
-    "articles_to_cap": 466178,
-    "bytes": 80623056,
-    "cap_fraction": 0.0750860720872879,
-    "left_mb": 947.1118621826172,
+    "articles_to_cap": 466084,
+    "bytes": 80824675,
+    "cap_fraction": 0.0752738444134593,
+    "left_mb": 946.9195833206177,
     "measured_days": 88,
-    "sentence": "76.9 MB of the 1 GB limit - room for about 466,000 more articles."
+    "sentence": "77.1 MB of the 1 GB limit - room for about 466,000 more articles."
   },
   "verdict": {
     "date": "2026-11-24",
@@ -220,15 +220,16 @@
     "runs": [
       {"health": "amber","label": "Run 1 is worth a look"},
       {"health": "amber","label": "Run 2 is worth a look"},
-      {"health": "amber","label": "Run 3 is worth a look"}
+      {"health": "amber","label": "Run 3 is worth a look"},
+      {"health": "amber","label": "Run 4 is worth a look"}
     ],
-    "sentence": "2026-11-24 ran 3 runs and published 200 of 240 planned items. 40 items failed."
+    "sentence": "2026-11-24 ran 4 runs and published 267 of 320 planned items. 53 items failed."
   },
   "version": "2026-10-11T21:00",
   "worst": {
     "href": "/console/",
     "id": "pipelines",
     "label": "Pipelines",
-    "sentence": "46 feeds are resting, so nothing they carry reaches the digest. Each is asked again after 5 runs."
+    "sentence": "45 feeds are resting, so nothing they carry reaches the digest. Each is asked again after 5 runs."
   }
 }

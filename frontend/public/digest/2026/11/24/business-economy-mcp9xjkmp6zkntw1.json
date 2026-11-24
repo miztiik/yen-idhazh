@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Percentage (%)",
+    "y": "Value"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "business-economy-mcp9xjkmp6zkntw1",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Nvidia's Nasdaq-linked market rally (attributed by ally)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Huang's Nvidia share ownership","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-4954-4964","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "%","value": "7"},
+    {"derived": null,"element_id": "quantity-6375-6387","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "3.5"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Key Percentages in Nvidia/Jensen Huang Story",
+  "type": "bar",
+  "version": "2026-11-22"
+}

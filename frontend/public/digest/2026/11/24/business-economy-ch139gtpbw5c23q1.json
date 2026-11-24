@@ -1,0 +1,45 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Broadcaster",
+    "y": "Percentage decline in Unilever ad spend"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "business-economy-ch139gtpbw5c23q1",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Channel 4","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Sky","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "ITV","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-775-778","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "92"},
+    {"derived": null,"element_id": "quantity-1384-1387","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "%","value": "44"},
+    {"derived": null,"element_id": "quantity-1421-1424","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "%","value": "42"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Unilever UK TV Ad Spend Decline by Broadcaster (2025 vs. prior period)",
+  "type": "bar",
+  "version": "2026-11-22"
+}
