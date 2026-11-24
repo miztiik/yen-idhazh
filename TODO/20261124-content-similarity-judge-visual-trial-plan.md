@@ -10,7 +10,7 @@ Table A - Operating contract
 | Id | Field | Value |
 | --- | --- | --- |
 | A1 | Why this plan exists | Give the operator a short production trial that shows what the judge answered, where the sample came from, and where score decisions agreed with it. |
-| A2 | Hard scope - in | The ten individual drawings in Table B, including the existing PSI line and three separate verdict heatmaps; one shared UTC digest selection; a reversible Pages release and removal after use. |
+| A2 | Hard scope - in | The eleven drawings in Table B, including the existing PSI line, three verdict heatmaps and canary matrix; one UTC digest selection; a reversible Pages release and removal after use. |
 | A3 | Chosen strategy | Separate the full draw from recorded verdicts and the full eligible pool. Native static reads, browser-only drawing, and one trial switch keep the views removable. Susan owns presentation; the existing Council contracts own the evidence. |
 | A4 | Authorities | The [Console surface](../docs/architecture/publishing/console.md#judgement-draws-the-published-merges-and-the-holdout-labels), [published read boundary](../docs/architecture/publishing/how-the-query-door-answers-a-panel.md), [judge measurements](../docs/architecture/publishing/how-the-content-similarity-judge-follows-its-thresholds.md#what-threshold-history-stores), and [chart vocabulary](../docs/concepts/console-design/the-mark-shapes-a-panel-may-reach-for.md) govern the rows below. The plan changes decisions in those living pages with the corresponding code, not by treating this plan as a runtime contract. |
 | A5 | Identity and availability | Reuse the current latest run then greatest attempt per UTC digest; all date details and pair reads must match that exact `(date, run_id, attempt)`. Keep loading, failed read, not yet packed, not recorded, no eligible evidence, and measured zero distinct. Do not select an older attempt to fill a gap. Data in other charts stays visible when one source fails. |
@@ -18,7 +18,7 @@ Table A - Operating contract
 | A7 | ESCALATE triggers | 1. A chart requires a new persisted writer, ledger field or trust-boundary change.<br>2. Staged data cannot support a requested definition without substituting a cohort.<br>3. The bounded read cannot fit the existing site budget or a new dependency is required.<br>4. A scope change, unresolved design conflict or cost overrun meets the execution contract's pause rule. |
 | A8 | Execution | Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and delegates where it pays; parallel N = 1 because all rows edit the same route, docs and Reckoner; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. |
 
-Table B - Chart inventory (ten individual drawings; existing daily coverage stays)
+Table B - Chart inventory (daily coverage stays and uses the same outcome colors)
 
 | Id | No. | Chart type and question | Grain and source | Row |
 | --- | ---: | --- | --- | --- |
@@ -32,6 +32,7 @@ Table B - Chart inventory (ten individual drawings; existing daily coverage stay
 | B8 | 8 | **PSI line chart with gaps** - How far did the full pool move from its saved reference? | Window, stored `score_psi`; retains the existing line and guides and links its selected digest to B7. | 4 |
 | B9 | 9 | **Precision-recall scatterplot with filled cutoff markers** - What would another cutoff trade away? | Point in time: one selected UTC digest and exact attempt, agreed binary `pair-verdicts` only. | 3 |
 | B10 | 10 | **Shannon entropy heatmap** - Where does the mix of YES, MAYBE and NO spread across outcomes? | Same time/band grid as B2, using only two valid orders per pair. | 2 |
+| B11 | 11 | **Canary answer tile matrix** - Which known-answer pairs matched or changed when reversed? | Selected digest, saved key and both orders from the exact `threshold-history` attempt. | 6 |
 
 Table C - Metrics inventory beyond the drawings
 
@@ -42,7 +43,7 @@ Table C - Metrics inventory beyond the drawings
 | C3 | Sample and runner health: draws, returns, valid pairs, split, unclear, refusals, unreadable, deadline losses and runner coverage | Keep the daily coverage plot and current readout. Decode time in total and for the slowest runner are stored, not charted in this trial. |
 | C4 | Repeatability diagnostics: first-token margin and probabilities, pair-order split rates, grammar and decode evidence | B4 shows where splits occur; a margin-versus-split plot and per-pair diagnostic details stay outside this chart count. Their source is `pair-verdicts`. |
 | C5 | Drift and probability checks: baseline source dates, binned KS and Wasserstein, prior-fit Brier, comparison Brier and expected calibration error | Keep the drift distances with B8 and prior-fit metrics with their existing selected-date support and unavailable reasons. Do not draw metrics that were not measured. |
-| C6 | Known-answer controls: expected key, both orders, match count and kappa | Keep the existing detailed list with support. The saved model-labelled key is not a human reference set. |
+| C6 | Known-answer controls: expected key, both orders, match count and kappa | Show the key and both orders in B11, with the match count and kappa alongside. The saved model-labelled key is not a human reference set. |
 
 Table D - Scope boundaries
 
@@ -63,7 +64,8 @@ Table E - Trial outcomes
 | E3 | 3 | Inspect score zones and cutoff trade-offs for one digest | 2 | C | DONE | - | - | - |
 | E4 | 4 | Separate incoming score shape from pool drift | 3 | D | DONE | - | - | - |
 | E5 | 5 | Release all ten drawings behind the trial switch | 4 | E | DONE | - | - | - |
-| E6 | 6 | End the production trial and remove unused views | 5 | F | PENDING | - | - | - |
+| E6 | 6 | Align outcome colors and chart canary answers | 5 | F | DONE | - | - | - |
+| E7 | 7 | End the production trial and remove unused views | 6 | G | PENDING | - | - | - |
 
 ## 2. Saved draw
 
@@ -251,9 +253,52 @@ Table O - Rejected alternatives
 | --- | --- | --- | --- | --- |
 | O1 | Dispatch a producer or raise budgets to make every view nonempty on release | New data is not needed to prove correct empty states; budgets protect the published site. | Separately authorized production work or a measured smaller read. | Publication boundary |
 
-## 7. Trial removal
+## 7. Judge chart refinements
 
-### Row #6 - End the production trial and remove unused views
+### Row #6 - Align outcome colors and chart canary answers
+
+- **Scope:** Show consistent judge colors in daily coverage, retain the signed score range without a toggle, condense detail readouts, and add B11.
+- **Files touched:**
+  - `TODO/20261124-content-similarity-judge-visual-trial-plan.md`
+  - `config/console/judgement.json`
+  - `frontend/src/lib/charts/d3/DiagnosticGrid.svelte`
+  - `frontend/src/lib/charts/d3/diagnosticGrid.ts`
+  - `frontend/src/lib/charts/d3/ScoreIntervals.svelte`
+  - `frontend/src/lib/charts/d3/scoreIntervals.ts`
+  - `frontend/src/lib/console/judge-draw.ts`
+  - `frontend/src/lib/console/route-console.ts`
+  - `frontend/src/routes/console/judgement/JudgeCanaryChart.svelte` (new)
+  - `frontend/src/routes/console/judgement/JudgeCoverage.svelte`
+  - `frontend/src/routes/console/judgement/JudgeDigestDetails.svelte`
+  - `frontend/src/routes/console/judgement/JudgeDrawIntervals.svelte`
+  - `frontend/src/routes/console/judgement/JudgeObservations.svelte`
+  - `frontend/src/routes/console/judgement/JudgeVisualTrial.svelte`
+  - `frontend/src/routes/console/judgement/JudgeVerdictHeatmaps.svelte`
+  - `frontend/src/routes/console/judgement/judge-slice-chart.ts`
+  - `frontend/src/routes/console/judgement/judge-trial-style.ts`
+  - `frontend/tests/console-judge-visual-trial.spec.ts`
+  - `frontend/tests/support/console-sources.ts`
+  - `docs/architecture/publishing/console.md`
+- **Acceptance gates:** Use the row 1 local selection. CI: full suite and Pages weight. In the integrated browser, verify the daily stack, labelled scale transition, expanded detail tables and canary matrix on a measured digest and a legacy digest without a saved key. Preserve the existing no-reading PSI state.
+- **Oracle:** For a selected measured digest, the daily stack reconciles with the saved slices without assigning unknown returns to MAYBE; the signed interval shows its true endpoints and the canary matrix agrees with the exact attempt's saved key. This does not measure judge accuracy.
+
+Table R - Decisions
+
+| Id | Decision | Authority |
+| --- | --- | --- |
+| R1 | Coverage uses F5's colors for YES, NO and MAYBE, with a neutral segment for refusals or returns that cannot be classified. It reuses the draw projection. | Console |
+| R2 | Compress the signed scale below the lowest visible lower bound using the validated context share. Preserve endpoints and label the change in scale; put exact counts and fit support in compact tables. | Console |
+| R3 | B11 uses one row per canary with expected, file-order, swapped and outcome tiles. Wrap to a labelled row on a narrow pane. Never grade an older response against a key that was not saved. | Susan |
+
+Table S - Rejected alternatives
+
+| Id | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| S1 | Log the raw similarity score or show only a canary pass rate | A log cannot show the saved signed domain; a pass rate hides which result changed. | A separately documented transform or a second per-pair diagnostic. | Console |
+
+## 8. Trial removal
+
+### Row #7 - End the production trial and remove unused views
 
 - **Scope:** Disable the trial after the review window and remove the trial views unless specifically selected to keep.
 - **Files touched:**
@@ -277,6 +322,9 @@ Table O - Rejected alternatives
   - `frontend/src/lib/charts/d3/Distribution.svelte`
   - `frontend/src/lib/charts/d3/PartsOfOne.svelte`
   - `frontend/src/routes/console/judgement/JudgeObservations.svelte`
+  - `frontend/src/routes/console/judgement/JudgeCanaryChart.svelte`
+  - `frontend/src/routes/console/judgement/JudgeCoverage.svelte`
+  - `frontend/src/routes/console/judgement/JudgeDigestDetails.svelte`
   - `frontend/src/routes/console/judgement/JudgeScoreRanges.svelte`
   - `frontend/src/routes/console/judgement/JudgePercentStacks.svelte`
   - `frontend/src/routes/console/judgement/JudgeDrawIntervals.svelte`
@@ -285,6 +333,7 @@ Table O - Rejected alternatives
   - `frontend/src/routes/console/judgement/JudgeCutoffDiagnostics.svelte`
   - `frontend/src/routes/console/judgement/JudgePoolHistogram.svelte`
   - `frontend/src/routes/console/judgement/JudgeVisualTrial.svelte`
+  - `frontend/src/routes/console/judgement/judge-slice-chart.ts`
   - `frontend/src/routes/console/judgement/judge-trial-style.ts`
   - `frontend/scripts/test-groups.ts`
   - `frontend/tests/console-judge-visual-trial.spec.ts`

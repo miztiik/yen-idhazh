@@ -32,6 +32,7 @@
     "psi_significant_above": 0.25,
     "judge_thin_sample_pairs": 20,
     "judge_visual_trial_enabled": 1,
-    "judge_visual_trial_score_bins": 10
+    "judge_visual_trial_score_bins": 10,
+    "judge_visual_trial_context_share": 0.2
   }
 }

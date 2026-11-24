@@ -14,6 +14,8 @@ export interface GridDiagnostic {
 	readonly facts: ReadoutFacts;
 	readonly text?: string;
 	readonly diagonal?: boolean;
+	readonly emphasized?: boolean;
+	readonly edge?: string;
 }
 
 export function diagnosticGrid(

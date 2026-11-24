@@ -115,7 +115,8 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	'src/routes/console/data-explorer': ['+page.svelte', '+page.ts'],
 	'src/routes/console/judgement': [
 		'+page.server.ts', '+page.svelte', 'HoldoutMargin.svelte', 'MergedStoriesPanel.svelte',
-		'JudgeObservations.svelte', 'JudgeCoverage.svelte', 'JudgeScoreRanges.svelte', 'JudgeSliceChart.svelte',
+		'JudgeObservations.svelte', 'JudgeCanaryChart.svelte', 'JudgeCoverage.svelte', 'JudgeDigestDetails.svelte',
+		'JudgeScoreRanges.svelte', 'JudgeSliceChart.svelte',
 		'JudgeCutoffDiagnostics.svelte', 'JudgeDrawIntervals.svelte', 'JudgePairEvidence.svelte', 'JudgePercentStacks.svelte',
 		'JudgePoolHistogram.svelte', 'JudgeVerdictHeatmaps.svelte', 'JudgeVisualTrial.svelte',
 		'judge-slice-chart.ts', 'judge-trial-style.ts', 'PairScoreDrift.svelte'

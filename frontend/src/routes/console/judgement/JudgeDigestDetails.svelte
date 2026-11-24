@@ -1,18 +1,20 @@
 <script lang="ts">
 	import {
-		judgeCanaries, judgeNumber, judgeProbabilityEvidence, judgeStatus, PROBABILITY_STATUS, type JudgeIdentity
+		judgeNumber, judgeProbabilityEvidence, judgeStatus, PROBABILITY_STATUS, type JudgeIdentity
 	} from '$lib/console/judge-observations';
 	import type { Row } from '$lib/data/ledger';
 	import { longDate } from '$lib/format';
 	import { numberFormatter } from '$lib/number-format';
 	import type { ChartConfig } from '$lib/server/config';
+	import JudgeCanaryChart from './JudgeCanaryChart.svelte';
 
-	let { selected, identity, detail, dayNote, chart }: {
+	let { selected, identity, detail, dayNote, chart, showKnownAnswers = true }: {
 		selected: string;
 		identity: JudgeIdentity | null;
 		detail: Row | null;
 		dayNote: string;
 		chart: ChartConfig;
+		showKnownAnswers?: boolean;
 	} = $props();
 
 	const number = $derived(numberFormatter(chart.number_format));
@@ -21,7 +23,6 @@
 		const n = judgeNumber(value);
 		return n === null ? 'Not recorded' : number(n, { si: false });
 	};
-	const canaries = $derived(detail === null ? null : judgeCanaries(detail));
 	const probability = $derived(judgeProbabilityEvidence(detail?.judge_probability_evidence));
 </script>
 
@@ -31,39 +32,9 @@
 		<time datetime={selected}>{longDate(selected)}</time> (UTC digest){#if identity},
 			Council run {identity.run}, attempt {exact(identity.attempt)}{/if}.
 	</p>
-	{#if detail && canaries}
+	{#if detail}
 		<div class="selected-notes">
-			<section aria-labelledby="judge-known-answers">
-				<h4 id="judge-known-answers">Known-answer pairs</h4>
-				{#if canaries.graded}
-					<p><strong>{exact(canaries.matches)} of {exact(canaries.items.length)} expected pairs matched</strong> the saved agent-labelled key.</p>
-					<p>Cohen's kappa:
-						{#if canaries.kappa !== null && canaries.eligible !== null}
-							{measuredText(canaries.kappa)} across {exact(canaries.eligible)} {canaries.eligible === 1 ? 'pair' : 'pairs'}.
-						{:else if canaries.eligible !== null && canaries.eligible < canaries.items.length}
-							Not measured: only {exact(canaries.eligible)} of {exact(canaries.items.length)} pairs agreed in both orders.
-						{:else if canaries.eligible === canaries.items.length}
-							Not measured: the chance-adjusted denominator was zero.
-						{:else}
-							Not recorded.
-						{/if}
-					</p>
-				{:else}
-					<p>Not recorded: this digest has no saved expected key. Observed answers are not graded.</p>
-				{/if}
-				{#if canaries.items.length > 0}
-					<ul class="known-answers">
-						{#each canaries.items as item (item.id)}
-							<li>
-								<strong>{item.id}</strong>
-								<span>{#if item.expected}Expected {item.expected} &middot; {/if}
-									File order: {item.forward ?? 'no answer'} &middot; Swapped: {item.swapped ?? 'no answer'}</span>
-								<span class="outcome">{item.outcome}</span>
-							</li>
-						{/each}
-					</ul>
-				{/if}
-			</section>
+			{#if showKnownAnswers}<JudgeCanaryChart {selected} {detail} {dayNote} {chart} asChart={false} />{/if}
 			<section aria-labelledby="judge-prior-fit">
 				<h4 id="judge-prior-fit">Prior-fit calibration</h4>
 				{#if detail.judge_probability_status === 'measured' && probability}
@@ -114,17 +85,4 @@
 	}
 	.selected-notes section { display: grid; gap: var(--space-2); }
 	@media (min-width: 1024px) { .selected-notes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-	.known-answers { list-style: none; margin: 0; padding: 0; }
-	.known-answers li {
-		display: grid;
-		grid-template-columns: auto minmax(0, 1fr) auto;
-		align-items: baseline;
-		gap: var(--space-1) var(--space-3);
-		padding-block: var(--space-2);
-		border-block-start: 1px solid var(--color-rule);
-		font-size: var(--console-small-size);
-		line-height: var(--console-small-leading);
-		overflow-wrap: anywhere;
-	}
-	.outcome { color: var(--color-text-secondary); }
 </style>

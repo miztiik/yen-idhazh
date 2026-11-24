@@ -213,22 +213,31 @@ for how those readings are produced.
 
 The `judge_visual_trial_enabled` switch in `config/console/judgement.json`
 adds the following views under the same UTC digest selection. It does not
-change the published grouping, Council, data contracts, or existing coverage
-and PSI trends. Turning it off restores the count view and skips the trial's
-queries. Remove the trial-only views and reads after the usage review unless
-they are chosen to stay.
+change the published grouping, Council, data contracts, or the PSI trend.
+Turning it off restores the standard views and skips the trial's queries.
+Remove trial-only views and reads after the usage review unless chosen to stay.
 
+- **Pairs drawn and returned:** The daily coverage bars share the trial's
+  palette: cobalt is YES, cyan is NO, and berry is split or combined MAYBE.
+  When split and agreed UNCLEAR are shown separately, UNCLEAR is orchid.
+  Refusals, unclassified returns and missing returns are neutral, not MAYBE.
+  The coverage and interval charts share one exact-attempt draw projection.
 - **Answers by score range:** Each horizontal stack is 100% of the original
   draw in that band, with its exact draw count beside it. Agreed YES, NO,
   UNCLEAR, split, refused and unreturned are disjoint. An unsampled gap has
   no stack. The **draw ranges and bounds by date** plot uses actual saved
   intervals and count-scaled composition ticks. The stepped lines show
-  bounds in force; open diamonds mark changes decided after a draw.
+  bounds in force; open diamonds mark changes decided after a draw. The
+  signed scale keeps every interval, compressing scores below the lowest
+  shown lower bound into the configured `judge_visual_trial_context_share`
+  of the plot when that expands the range of interest. A scale mark labels
+  that transition. Exact slice counts and fit support are compact tables.
 - **Verdict and entropy heatmaps:** Date and fixed score band locate
   separate YES, NO and split percentages over all recorded pair rows.
   Entropy instead uses only two valid orders per pair, with MAYBE grouping
   split and agreed UNCLEAR. A single populated outcome, including MAYBE,
-  gives zero bits; equal thirds give `log2(3)` bits. Show support and
+  gives zero bits; equal thirds give `log2(3)` bits. Its violet-to-amber
+  scale measures entropy, not verdict identity. Show support and
   distinguish zero from no evidence. Changes in the mix or in recorded
   settings are not proof of judge drift. Negative scores occupy an underflow
   band in these heatmaps.
@@ -244,6 +253,11 @@ they are chosen to stay.
   reference. An outline compares the saved reference only when all of its
   named histograms are present and verify; the stored PSI point and its
   availability reason are independent of whether the overlay can be drawn.
+- **Canary answers by order:** A tile matrix shows each known-answer pair's
+  saved expectation, file-order answer, swapped answer and outcome. Match
+  counts and kappa describe the saved agent-labelled key, not human truth.
+  Older rows without a key show ungraded answers. This chart uses the
+  existing selected-attempt response and starts no additional read.
 
 The trial reads named staged columns through the same [panel door](how-the-query-door-answers-a-panel.md).
 The heavier pair projection starts near the view, is capped at the configured

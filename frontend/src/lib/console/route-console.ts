@@ -68,11 +68,15 @@ export function judgeObservationRules(knobs: Readonly<Record<string, number>>) {
 	}
 	const enabled = knobs.judge_visual_trial_enabled ?? 0;
 	const bins = knobs.judge_visual_trial_score_bins;
+	const context = knobs.judge_visual_trial_context_share ?? null;
 	if (enabled !== 0 && enabled !== 1) throw new Error(`${at}.judge_visual_trial_enabled must be 0 or 1`);
 	if ((enabled === 1 || bins !== undefined) && (!Number.isSafeInteger(bins) || bins < 1 || bins > MAX_SCORE_BINS)) {
 		throw new Error(`${at}.judge_visual_trial_score_bins must be a whole number from 1 to ${MAX_SCORE_BINS}`);
 	}
-	return { low, high, thin, trialBins: enabled === 1 ? bins : null };
+	if (context !== null && !(context > 0 && context < 1)) {
+		throw new Error(`${at}.judge_visual_trial_context_share must be between 0 and 1`);
+	}
+	return { low, high, thin, trialBins: enabled === 1 ? bins : null, trialContextShare: context };
 }
 
 function object(value: unknown, path: string): Record<string, unknown> {

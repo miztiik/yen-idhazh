@@ -1,6 +1,6 @@
 /** What was actually drawn, and which recorded score bounds were in force? */
 import type { Row } from '../data/slice-shapes';
-import { judgeCount, judgeNumber, judgeSlices, type SliceOutcome } from './judge-observations';
+import { judgeCount, judgeCoverage, judgeCutoff, judgeNumber, judgeSlices, type SliceOutcome } from './judge-observations';
 
 export const SCORE_MIN = -1;
 export const SCORE_MAX = 1;
@@ -37,3 +37,25 @@ export function drawOf(row: Row | null) {
 }
 
 export type JudgeDraw = ReturnType<typeof drawOf>;
+
+export function drawCoverageByOutcome(summary: Row, detail: Row | null) {
+	const { drawn, returned, lost } = judgeCoverage(summary);
+	if (drawn === null || returned === null || lost === null) return null;
+	const draw = drawOf(detail);
+	if (draw.slices !== null && draw.drawn === drawn && draw.returned === returned) {
+		const parts = { yes: 0, no: 0, maybe: 0, refused: 0, missing: lost, unclassified: 0 };
+		for (const { yes, no, split, unclear, refused } of draw.slices) {
+			parts.yes += yes;
+			parts.no += no;
+			parts.maybe += split + unclear;
+			parts.refused += refused;
+		}
+		return parts;
+	}
+	const { binary, judgeYes, fp, tn } = judgeCutoff(summary);
+	const known = binary !== null && binary <= returned && judgeYes !== null && fp !== null && tn !== null;
+	return {
+		yes: known ? judgeYes : null, no: known ? fp + tn : null, maybe: null, refused: null, missing: lost,
+		unclassified: returned - (known ? binary : 0)
+	};
+}

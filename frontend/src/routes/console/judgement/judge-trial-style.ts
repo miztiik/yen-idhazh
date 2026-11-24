@@ -9,5 +9,6 @@ export const OUTCOME_STYLE = {
 	unclear: { label: 'Agreed UNCLEAR', token: '--chart-6' },
 	split: { label: 'Split on reversal', token: '--chart-3' },
 	refused: { label: 'Refused', token: '--chart-4' },
-	missing: { label: 'No return', token: '--chart-8' }
+	missing: { label: 'No return', token: '--chart-8' },
+	unclassified: { label: 'Other returns (not classified)', token: '--chart-4' }
 } as const satisfies Record<string, { label: string; token: ChartToken }>;

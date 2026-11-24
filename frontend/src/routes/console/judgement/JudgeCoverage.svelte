@@ -7,19 +7,22 @@
 	import { MARGIN, chartWidth, observeWidth } from '$lib/charts/frame';
 	import { useChartFrame } from '$lib/charts/label-context';
 	import { readoutOf } from '$lib/charts/readout';
+	import { drawCoverageByOutcome } from '$lib/console/judge-draw';
 	import { judgeCoverage, judgeNumber, judgeShare, judgeSlices, judgeStatus, SAMPLE_STATUS, type JudgeReading } from '$lib/console/judge-observations';
 	import type { PanelState } from '$lib/console/waiting';
 	import type { Row } from '$lib/data/ledger';
 	import { longDate } from '$lib/format';
 	import { numberFormatter } from '$lib/number-format';
 	import type { ChartConfig, ConsoleConfig } from '$lib/server/config';
+	import { OUTCOME_STYLE } from './judge-trial-style';
 
-	let { calendar, windowDays, readings, selected, detail, historyState, dayNote, noteFor, knobs, chart, onPick }: {
+	let { calendar, windowDays, readings, selected, detail, trialDraws = null, historyState, dayNote, noteFor, knobs, chart, onPick }: {
 		calendar: readonly string[];
 		windowDays: number;
 		readings: ReadonlyMap<string, JudgeReading>;
 		selected: string;
 		detail: Row | null;
+		trialDraws?: ReadonlyMap<string, Row> | null;
 		historyState: PanelState;
 		dayNote: string;
 		noteFor: (date: string) => string;
@@ -31,11 +34,12 @@
 	const name = 'judge-coverage';
 	const label = 'Daily counts of pairs drawn and returned';
 	const rule = { declined: 'A nightly judge draw does not compare summary settings.' };
-	const parts = [
+	const legacyParts = [
 		{ label: 'Agreed YES or NO', token: '--chart-4', part: 'binary' },
 		{ label: 'Other returned', token: '--chart-3', part: 'other' },
 		{ label: 'Did not return', token: '--chart-8', part: 'lost' }
 	] as const;
+	const outcomeParts = ['yes', 'no', 'maybe', 'refused', 'unclassified', 'missing'] as const;
 	let measured = $state<number | null>(null);
 	const frame = useChartFrame(() => chart);
 	const width = $derived(chartWidth(measured, knobs.chart_width));
@@ -48,8 +52,18 @@
 	}));
 	const picked = $derived(calendar.indexOf(selected));
 	const chosen = $derived(counts[picked] ?? null);
-	const geometry = $derived(dateSeries(parts.map(({ label, token }, index) => ({
-		label, token, points: calendar.map((date, day) => ({ date, value: counts[day]?.stack?.[index] ?? null }))
+	const outcomes = $derived(trialDraws === null ? null : calendar.map((date) => {
+		const reading = readings.get(date);
+		return reading ? drawCoverageByOutcome(reading.cells, trialDraws?.get(date) ?? (date === selected ? detail : null)) : null;
+	}));
+	const series = $derived(outcomes === null ? legacyParts.map(({ label, token, part }, index) => ({
+		label, token, values: counts.map((day) => day?.[part] ?? null), drawn: counts.map((day) => day?.stack?.[index] ?? null)
+	})) : outcomeParts.map((part) => {
+		const values = outcomes.map((day) => day?.[part] ?? null);
+		return { ...OUTCOME_STYLE[part], values, drawn: values };
+	}));
+	const geometry = $derived(dateSeries(series.map(({ label, token, drawn }) => ({
+		label, token, points: calendar.map((date, day) => ({ date, value: drawn[day] }))
 	})), {
 		frame: frame(width, knobs.chart_height, MARGIN),
 		stacked: true, density: chart.tick_density, valueTicks: 4, padding: 0.25,
@@ -66,8 +80,8 @@
 				}),
 				format: exact
 			},
-			...parts.map(({ label, token, part }) => ({
-				label, swatch: `var(${token})`, values: counts.map((day) => day?.[part] ?? null), format: exact
+			...series.map(({ label, token, values }) => ({
+				label, swatch: `var(${token})`, values, format: exact
 			}))
 		],
 		notMeasured: 'Not measured.',
@@ -110,6 +124,7 @@
 			</p>
 			<p data-comparison="Pairs returned against pairs drawn.">
 				Each column shows the draw split by what came back.
+				{#if trialDraws !== null}MAYBE includes split and agreed UNCLEAR, not refusals.{/if}
 			</p>
 		</div>
 		<Reserved record panelState={historyState} {width} height={knobs.chart_height} {name} {label}>
