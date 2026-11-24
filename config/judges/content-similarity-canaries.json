@@ -1,5 +1,5 @@
 {
-  "version": "2026-11-19",
+  "version": "2026-11-24",
   "pairs": [
     {
       "id": "same-1",
@@ -63,7 +63,7 @@
         "summary": "A market regulatory alert confirmed that an established European fintech firm received an emergency operational suspension on Wednesday morning following an unscheduled capital adequacy audit. Financial supervisors cited unresolved liquidity discrepancies, but declined to name the affected institution or specify the potential deficit."
       },
       "right": {
-        "summary": "Germany's financial watchdog BaFin ordered Munich-based digital payments provider PayDirect GmbH to halt all customer onboarding and merchant settlement processing on Wednesday. The emergency decree followed an ad-hoc inspection that revealed a €42 million capital shortfall in the company's segregated escrow accounts."
+        "summary": "Germany's financial watchdog BaFin ordered Munich-based digital payments provider PayDirect GmbH to halt all customer onboarding and merchant settlement processing on Wednesday. The emergency decree followed an ad-hoc inspection that revealed a EUR 42 million capital shortfall in the company's segregated escrow accounts."
       }
     },
     {

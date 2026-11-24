@@ -23,6 +23,7 @@ from typing import Any, Final
 
 import pytest
 from pydantic import TypeAdapter
+from support.config import canary_config
 from support.judge_reader import ProtocolReplies, native_reply
 from support.judged_pairs import (
     CONFIG_VERSIONS,
@@ -33,7 +34,7 @@ from support.judged_pairs import (
     a_verdict_file,
 )
 from support.models import a_markers
-from support.paths import CONFIG_DIR
+from support.paths import CONFIG_DIR, read_text
 from support.threshold_nights import LOOKBACK, RULES
 
 from idhazh import atomic_write, config
@@ -57,8 +58,8 @@ from idhazh.similarity.night_totals import merged_canary_answers, runner_columns
 from idhazh.stages import judge_canary_pairs
 from idhazh.stages.review_thresholds import build_threshold_row, stage_review_thresholds
 
-#: The committed pairs in file order: same-1, same-2, different-1, different-2, unclear-1, unclear-2.
-PAIRS: Final = judge_settings.load_canaries(CONFIG_DIR).pairs
+CANARIES: Final = canary_config()
+PAIRS: Final = CANARIES.pairs
 
 
 def an_hour_away() -> float:
@@ -84,7 +85,7 @@ def a_reply(word: str) -> bytes:
 
 
 def a_perfect_judge() -> tuple[bytes, ...]:
-    """Both orders of every committed pair answered as the file says, in file order."""
+    """Both orders of each test pair, answered as the key says, in file order."""
     return tuple(a_reply(pair.expected.value) for pair in PAIRS for _ in range(2))
 
 
@@ -121,7 +122,7 @@ def warnings_of(caplog: pytest.LogCaptureFixture) -> list[str]:
 def test_a_right_answer_is_stored_in_six_cells_and_logs_nothing(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """One runner dealt all six: every id once, each with its own words, both margins and tokens."""
+    """One runner dealt every pair: each id once, with its own words, margins and tokens."""
     with caplog.at_level(logging.WARNING, logger="idhazh"):
         report, decodes = judge_them(*a_perfect_judge())
 
@@ -133,8 +134,8 @@ def test_a_right_answer_is_stored_in_six_cells_and_logs_nothing(
     assert answers["same-1"] == ["YES", "YES", margin, margin, 7, 0]
     assert answers["different-2"][:2] == ["NO", "NO"]
     assert answers["unclear-1"][:2] == ["UNCLEAR", "UNCLEAR"]
-    assert (report.owned, report.judged, report.wrong) == (6, 6, 0)
-    assert len(decodes) == 12, "two readings for each of six pairs"
+    assert (report.owned, report.judged, report.wrong) == (len(PAIRS), len(PAIRS), 0)
+    assert len(decodes) == 2 * len(PAIRS), "two readings per pair"
     assert warnings_of(caplog) == []
     assert TypeAdapter(CanaryAnswersText).validate_python(report.answers) == report.answers
 
@@ -150,8 +151,8 @@ def test_a_wrong_answer_is_logged_by_id_and_stored_as_the_judge_gave_it(
 
     assert report.answers is not None
     assert json.loads(report.answers)["same-1"][:2] == ["NO", "NO"], "stored as given"
-    assert (report.judged, report.wrong) == (6, 1), "the run went on and judged every pair"
-    assert len(decodes) == 12
+    assert (report.judged, report.wrong) == (len(PAIRS), 1), "the run judged every pair"
+    assert len(decodes) == 2 * len(PAIRS)
     assert warnings_of(caplog) == [
         "judge-canary-pairs shard=0 date=2026-11-20 canary=same-1 expected=YES answered=NO,NO"
     ]
@@ -196,7 +197,7 @@ def test_a_call_that_raises_stores_nothing_for_its_pair_and_the_rest_go_on(
     """This runs before the night's own pairs, so one pair's fault must not cost the night.
 
     The transport fails on the first call of the second pair. That pair is logged as an error
-    naming its id, left out of the answers, and the four pairs after it are still judged.
+    naming its id, left out of the answers, and the remaining pairs are still judged.
     """
     perfect = iter(a_perfect_judge())
     calls: list[int] = []
@@ -220,7 +221,7 @@ def test_a_call_that_raises_stores_nothing_for_its_pair_and_the_rest_go_on(
 
     assert report.answers is not None
     assert "same-2" not in json.loads(report.answers)
-    assert (report.owned, report.judged) == (6, 5)
+    assert (report.owned, report.judged) == (len(PAIRS), len(PAIRS) - 1)
     errors = [r.getMessage() for r in caplog.records if r.levelno == logging.ERROR]
     assert len(errors) == 1 and "canary=same-2" in errors[0]
 
@@ -244,7 +245,7 @@ def test_a_deadline_that_has_passed_leaves_every_pair_unjudged() -> None:
     """A pair is never begun after the instant the runner must stop by."""
     report, decodes = judge_them(a_reply("YES"), deadline=time.monotonic() - 1.0)
 
-    assert (report.owned, report.judged) == (6, 0)
+    assert (report.owned, report.judged) == (len(PAIRS), 0)
     assert report.answers is None
     assert decodes == []
 
@@ -253,7 +254,11 @@ def test_the_calls_are_counted_for_the_venue_and_nowhere_else() -> None:
     """Two calls a pair at 7 prompt and 2 generated tokens each, counted at the seam."""
     report, _ = judge_them(*a_perfect_judge())
 
-    assert (report.model_calls, report.tokens_in, report.tokens_out) == (12, 84, 24)
+    assert (report.model_calls, report.tokens_in, report.tokens_out) == (
+        2 * len(PAIRS),
+        14 * len(PAIRS),
+        4 * len(PAIRS),
+    )
     assert report.model_seconds > 0.0
 
 
@@ -262,14 +267,14 @@ def test_the_calls_are_counted_for_the_venue_and_nowhere_else() -> None:
 #: goes to runner (i + 3) mod 4 on the first night and i mod 4 on the second.
 DEALT: Final = {
     "2026-11-19": {
-        0: ["same-2", "unclear-2"],
+        0: ["same-2"],
         1: ["different-1"],
         2: ["different-2"],
         3: ["same-1", "unclear-1"],
     },
     "2026-11-20": {
         0: ["same-1", "unclear-1"],
-        1: ["same-2", "unclear-2"],
+        1: ["same-2"],
         2: ["different-1"],
         3: ["different-2"],
     },
@@ -388,14 +393,26 @@ def test_the_nights_row_carries_the_answers_as_the_runners_gave_them_and_no_coun
     assert StorySimilarityThresholdHistoryRow.model_validate_json(row.to_json()) == row
 
 
-def test_four_runners_ship_their_share_and_the_night_names_all_six_exactly_once(
+def test_four_runners_ship_their_share_and_the_night_names_every_pair_exactly_once(
     tmp_path: Path,
 ) -> None:
     """The shipped runner readings file the actual answers, the key and agreement in history."""
     date = "2026-11-19"
     run_id = f"{date}-9"
+    config_dir = tmp_path / "config"
+    atomic_write.write_atomic(
+        config_dir / judge_settings.JUDGE_FILE, read_text(CONFIG_DIR / judge_settings.JUDGE_FILE)
+    )
+    atomic_write.write_atomic(
+        config_dir / judge_settings.CANARY_FILE, CANARIES.model_dump_json(exclude_none=True)
+    )
     draw_path, state = tmp_path / "draw.csv", tmp_path / "state"
-    draw = a_night_of_pairs([(0.80, "YES")] * 4, date=date, answered=False)
+    draw = a_night_of_pairs(
+        [(0.80, "YES")] * 4,
+        date=date,
+        answered=False,
+        config_versions=judge_settings.config_versions(config_dir),
+    )
     atomic_write.write_atomic(
         draw_path,
         a_verdict_file(
@@ -437,7 +454,7 @@ def test_four_runners_ship_their_share_and_the_night_names_all_six_exactly_once(
         identity=a_saver(run_id),
         expected_shards=4,
         state_dir=state,
-        config_dir=CONFIG_DIR,
+        config_dir=config_dir,
     )
 
     (filed,) = load_threshold_history(state, [date])
@@ -452,8 +469,8 @@ def test_four_runners_ship_their_share_and_the_night_names_all_six_exactly_once(
         canary_id: runner for runner, ids in DEALT[date].items() for canary_id in ids
     }
     assert answers["unclear-1"][:2] == ["NO", "NO"], "keep the answer, not what the key wanted"
-    assert filed.canary_kappa_pairs == 6
-    assert filed.canary_kappa == 0.75, "five of six matches against one-third chance agreement"
+    assert filed.canary_kappa_pairs == len(PAIRS)
+    assert filed.canary_kappa == 2 / 3, "four of five matches, with chance agreement 2/5"
 
 
 @pytest.mark.parametrize(
@@ -468,7 +485,7 @@ def test_incomplete_canary_answers_keep_support_but_do_not_score_kappa(
 
     columns = canary_columns(PAIRS, canary_answers_text(answers))
 
-    assert columns["canary_kappa_pairs"] == 5
+    assert columns["canary_kappa_pairs"] == len(PAIRS) - 1
     assert columns["canary_kappa"] is None
 
 

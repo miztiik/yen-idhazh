@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import math
+from typing import Final
 
 import pytest
+from support.config import canary_config
 from support.paths import CONFIG_DIR, read_text
 
+from idhazh import config
 from idhazh.content_similarity_judge import settings as judge_settings
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.knobs.content_similarity_canaries import ContentSimilarityCanaryConfig
@@ -18,6 +21,8 @@ from idhazh.similarity import budget
 #: A config-contract rule wearing a judge's arithmetic: every case here turns on
 #: what `config/idhazh.json` says, so a change to either block has to run it.
 pytestmark = pytest.mark.contract
+
+CANARIES: Final = canary_config()
 
 
 def _with(pair_budget: int) -> ContentSimilarityJudgeConfig:
@@ -32,7 +37,7 @@ def _check(
     pair_budget: int,
     *,
     council: CouncilConfig,
-    canaries: ContentSimilarityCanaryConfig | None = None,
+    canaries: ContentSimilarityCanaryConfig = CANARIES,
 ) -> None:
     budget.refuse_a_night_this_tenant_cannot_finish(
         AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")),
@@ -43,7 +48,7 @@ def _check(
 
 
 def _the_widest_draw_that_fits(
-    council: CouncilConfig, *, canaries: ContentSimilarityCanaryConfig | None = None
+    council: CouncilConfig, *, canaries: ContentSimilarityCanaryConfig = CANARIES
 ) -> int:
     """How many pairs a night may draw and still finish, derived rather than written.
 
@@ -53,9 +58,8 @@ def _the_widest_draw_that_fits(
     the known-answer pairs, so what is left for the draw is the pairs that fit less
     that share.
     """
-    known = canaries or judge_settings.load_canaries(CONFIG_DIR)
     window = compute_shard_deadline(council, started=0.0)
-    checks = math.ceil(len(known.pairs) / council.shards)
+    checks = math.ceil(len(canaries.pairs) / council.shards)
     return (math.floor(window / budget.SECONDS_A_JUDGED_PAIR) - checks) * council.shards
 
 
@@ -65,11 +69,11 @@ def test_the_committed_draw_finishes_inside_the_window_the_council_leaves() -> N
     Passing is the call returning at all: the check refuses by raising, so there
     is nothing else for it to hand back.
     """
-    committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
+    committed = config.load(CONFIG_DIR)
 
     budget.refuse_a_night_this_tenant_cannot_finish(
-        committed,
-        council=CouncilConfig.model_validate_json(read_text(CONFIG_DIR / "llm_council.json")),
+        committed.app,
+        council=committed.council,
     )
 
 
@@ -96,21 +100,17 @@ def test_the_known_answer_pairs_take_their_share_of_the_busiest_runners_window()
     """The pairs a runner checks itself with are judged before its own, so the guard counts them.
 
     A draw that fits beside three of them (one pair on the busiest of four runners) is refused
-    beside the committed six (two pairs), and the refusal says the pairs are why. The widest
-    draw beside six is accepted, so a guard that refused every draw would not pass this.
+    beside five (two pairs), and the refusal says the pairs are why. The widest draw beside
+    five is accepted, so a guard that refused every draw would not pass this.
     """
-    council = CouncilConfig()
-    committed = judge_settings.load_canaries(CONFIG_DIR)
-    fewer = committed.model_copy(update={"pairs": committed.pairs[::2]})
-    assert math.ceil(len(fewer.pairs) / council.shards) < math.ceil(
-        len(committed.pairs) / council.shards
-    ), "the committed pairs no longer cost a runner more than three do, so this proves nothing"
+    council = CouncilConfig(shards=4)
+    fewer = ContentSimilarityCanaryConfig(version=CANARIES.version, pairs=CANARIES.pairs[::2])
     fits_beside_three = _the_widest_draw_that_fits(council, canaries=fewer)
 
     _check(fits_beside_three, council=council, canaries=fewer)
     with pytest.raises(ValueError, match="known-answer pairs add"):
-        _check(fits_beside_three, council=council, canaries=committed)
-    _check(_the_widest_draw_that_fits(council, canaries=committed), council=council)
+        _check(fits_beside_three, council=council)
+    _check(_the_widest_draw_that_fits(council), council=council)
 
 
 def test_the_window_is_the_bound_less_what_the_venue_spends_around_the_work() -> None:

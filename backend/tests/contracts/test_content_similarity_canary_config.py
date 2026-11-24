@@ -1,13 +1,12 @@
 """Does the file of known-answer pairs refuse every shape that would make the check meaningless?
 
-The committed file is read as the judge reads it. Each refusal then changes one thing in an
-in-memory copy of it, so a case goes red only for the rule it names, and one positive control
+The committed file is read as the judge reads it. Each refusal changes one thing in a
+valid in-memory example, so a case goes red only for the rule it names, and one positive control
 (a well-formed hand-written pair) shows the refusals are not refusing everything.
 """
 
 from __future__ import annotations
 
-import copy
 import json
 import re
 from collections.abc import Callable
@@ -16,7 +15,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from support.paths import CONFIG_DIR, read_text
+from support.config import canary_config
+from support.paths import CONFIG_DIR
 
 from idhazh.content_similarity_judge import settings as judge_settings
 from idhazh.contracts.knobs.content_similarity_canaries import (
@@ -31,10 +31,9 @@ pytestmark = pytest.mark.contract
 COMMITTED_FILE = CONFIG_DIR / "judges" / "content-similarity-canaries.json"
 
 
-def committed() -> dict[str, Any]:
-    """The committed file as raw JSON, for a case to change one thing in."""
-    raw: dict[str, Any] = json.loads(read_text(COMMITTED_FILE))
-    return raw
+def example() -> dict[str, Any]:
+    """A valid example as a fresh JSON-shaped dict for each case to change."""
+    return canary_config().model_dump(mode="json", exclude_none=True)
 
 
 def a_hand_written_pair(identifier: str = "synthetic-same-1", **changes: Any) -> dict[str, Any]:
@@ -67,12 +66,11 @@ def test_the_committed_file_is_ascii_and_holds_one_pair_of_every_kind_at_least()
     assert {pair.kind for pair in pairs} == set(CanaryKind)
     assert len(pairs) <= MAX_CANARY_PAIRS
     assert all(pair.expected is ANSWER_OF_KIND[pair.kind] for pair in pairs)
-    assert all(pair.origin == "published" for pair in pairs), "no hand-written pair ships yet"
 
 
 def test_a_well_formed_hand_written_pair_is_accepted() -> None:
     """The positive control: what the refusals below are not refusing."""
-    raw = committed()
+    raw = example()
     raw["pairs"].append(a_hand_written_pair())
 
     loaded = ContentSimilarityCanaryConfig.model_validate(raw)
@@ -81,7 +79,7 @@ def test_a_well_formed_hand_written_pair_is_accepted() -> None:
     assert loaded.pairs[-1].left.item_id is None
 
 
-def drop_both_unclear_pairs(raw: dict[str, Any]) -> None:
+def drop_all_unclear_pairs(raw: dict[str, Any]) -> None:
     raw["pairs"] = [pair for pair in raw["pairs"] if pair["kind"] != "unclear"]
 
 
@@ -104,11 +102,20 @@ def give_a_hand_written_pair_a_plain_id(raw: dict[str, Any]) -> None:
     raw["pairs"].append(a_hand_written_pair("same-3"))
 
 
+def record_published_sources(raw: dict[str, Any]) -> None:
+    pair = raw["pairs"][0]
+    pair["origin"] = "published"
+    pair["left"].update(date="2026-11-07", item_id="india-4at2refk8ng9fhy3")
+    pair["right"].update(date="2026-11-07", item_id="india-689nbq3f7gm8ja9d")
+
+
 def give_a_published_pair_the_hand_written_prefix(raw: dict[str, Any]) -> None:
+    record_published_sources(raw)
     raw["pairs"][0]["id"] = "synthetic-same-1"
 
 
 def forget_where_a_published_pair_came_from(raw: dict[str, Any]) -> None:
+    record_published_sources(raw)
     raw["pairs"][0]["left"].pop("item_id")
     raw["pairs"][0]["left"].pop("date")
 
@@ -126,17 +133,19 @@ def name_an_item_for_a_hand_written_pair(raw: dict[str, Any]) -> None:
 
 
 def name_a_day_without_an_item(raw: dict[str, Any]) -> None:
+    record_published_sources(raw)
     raw["pairs"][0]["left"].pop("item_id")
 
 
 def name_a_day_that_does_not_exist(raw: dict[str, Any]) -> None:
+    record_published_sources(raw)
     raw["pairs"][0]["left"]["date"] = "2026-02-30"
 
 
 @pytest.mark.parametrize(
     ("change", "refused"),
     [
-        pytest.param(drop_both_unclear_pairs, "no pair of kind ['unclear']", id="a missing kind"),
+        pytest.param(drop_all_unclear_pairs, "no pair of kind ['unclear']", id="a missing kind"),
         pytest.param(repeat_an_id, "ids repeat", id="duplicate ids"),
         pytest.param(mislabel_a_same_pair, "which is answered YES", id="a mislabelled kind"),
         pytest.param(
@@ -165,7 +174,7 @@ def name_a_day_that_does_not_exist(raw: dict[str, Any]) -> None:
 def test_a_set_that_would_make_the_check_meaningless_is_refused(
     change: Callable[[dict[str, Any]], None], refused: str
 ) -> None:
-    raw = committed()
+    raw = example()
     change(raw)
 
     assert refused in refusal_of(raw)
@@ -185,18 +194,18 @@ def test_a_set_that_would_make_the_check_meaningless_is_refused(
 def test_a_summary_that_is_empty_or_not_ascii_or_not_shaped_like_a_published_one_is_refused(
     summary: str, refused: str
 ) -> None:
-    raw = committed()
+    raw = example()
     raw["pairs"][0]["right"]["summary"] = summary
 
     assert refused in refusal_of(raw)
 
 
 def test_a_file_with_no_version_or_an_unknown_key_is_refused() -> None:
-    no_version = committed()
+    no_version = example()
     del no_version["version"]
-    unknown = committed()
+    unknown = example()
     unknown["pairs"][0]["url"] = "https://example.invalid/"
-    unknown_kind = committed()
+    unknown_kind = example()
     unknown_kind["pairs"][0]["kind"] = "similar"
 
     assert "version" in refusal_of(no_version)
@@ -205,7 +214,7 @@ def test_a_file_with_no_version_or_an_unknown_key_is_refused() -> None:
 
 
 def test_a_basis_is_one_line_of_ascii() -> None:
-    raw = committed()
+    raw = example()
     raw["pairs"][0]["basis"] = "Two lines\nof reasons"
 
     assert "basis" in refusal_of(raw)
@@ -219,7 +228,7 @@ def test_a_basis_is_one_line_of_ascii() -> None:
 def test_a_version_that_is_not_a_past_date_is_refused_by_the_reader(
     tmp_path: Path, version: object
 ) -> None:
-    raw = committed()
+    raw = example()
     raw["version"] = version
     target = tmp_path / "judges" / "content-similarity-canaries.json"
     target.parent.mkdir(parents=True)
@@ -233,7 +242,7 @@ def test_a_version_of_today_is_read_and_a_file_that_breaks_a_rule_names_itself(
     tmp_path: Path,
 ) -> None:
     today = datetime.now(UTC).date().isoformat()
-    raw = copy.deepcopy(committed()) | {"version": today}
+    raw = example() | {"version": today}
     target = tmp_path / "judges" / "content-similarity-canaries.json"
     target.parent.mkdir(parents=True)
     target.write_text(json.dumps(raw), encoding="utf-8", newline="\n")

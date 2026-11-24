@@ -1,6 +1,6 @@
 # How the content-similarity judge follows its thresholds
 
-**Last Updated**: 2026-11-21
+**Last Updated**: 2026-11-24
 
 Which pairs of stories does the nightly judge read, what does it keep about each, and
 where do its two thresholds sit and move? This page owns the nightly draw, the rows it
@@ -380,12 +380,12 @@ a better verdict, and that replay is priced and unrun.
 
 ## The known-answer pairs
 
-The judge is checked against six pairs whose right answer was decided before it saw them,
+The judge is checked against pairs whose right answer was decided before it saw them,
 once a run and on top of the night's own pairs. The check is narrow on purpose. A wrong
 model, a runtime change that breaks the constrained answer, or an edited prompt or grammar
 shows as an answer that is not the expected one, and it shows before a runner's first drawn
 pair, because each runner judges its share of them first. It cannot show decay late in a run,
-and it cannot say whether the judge is right on pairs unlike these six.
+and it cannot say whether the judge is right on pairs unlike these.
 
 The pairs live in
 [config/judges/content-similarity-canaries.json](../../../config/judges/content-similarity-canaries.json),
@@ -395,6 +395,8 @@ The file holds at most 12 pairs and at least one of each kind, with the summary 
 into it so that a published day that retires cannot orphan a pair. It changes only by a
 reviewed edit that bumps its `version`. Nothing refreshes it from the published days, because
 that would put fetched text into the reference set unreviewed.
+Editing, adding or removing pairs does not require changing the tests when the file still
+fits the contract and the run budget. The tests for runner behavior use their own examples.
 
 | Kind | Expected answer | What the pair is |
 | --- | --- | --- |
@@ -402,23 +404,39 @@ that would put fetched text into the reference set unreviewed.
 | different | NO | Two events with no actor, place or topic in common |
 | unclear | UNCLEAR | At least one summary too vague to name what happened, the judge prompt's own definition |
 
-The six committed pairs are real published summaries, two of each kind, found and labelled by
-an agent from the summaries alone; no person marked them. Each pair records who labelled it, a
-one-line basis, and the day and item each summary was copied from. A summary is copied as
-published, with an accent folded to its plain letter because the file is ASCII (one accent in
-one summary today). A pair written by hand is allowed and says so: its id starts with
-`synthetic-` and its origin is `synthetic`.
+The `2026-11-24` revision increased the set from two of each kind to two `same`, two
+`different`, and four `unclear`. Its new `unclear` cases test whether overlapping context
+is enough to identify one event. Both summaries must be nonempty and follow the published
+summary shape in ASCII.
+
+The pair slug is the answer key on the night's row. Address either summary as
+`<pair-id>.left.summary` or `<pair-id>.right.summary`, using file order even on the
+swapped reading. A slug identifies the same case across revisions only while both summaries
+and the expected answer stay the same. The inputs for `unclear-1` and `unclear-2`
+changed in the `2026-11-24` revision. Use the recorded `config_versions` to distinguish
+answers for the old and new inputs when reading history.
+
+`failure_mode` names the mistake a pair checks for, and `basis` explains its expected
+answer. Both are optional, single-line ASCII review notes. The optional pair-level `date`
+is a UTC calendar day for the pair; it does not identify a source item. The current file
+does not attest to an `origin`, a `labelled_by`, or a source item on either side. Older
+files still load: a side source takes both its UTC digest `date` and `item_id` or neither.
+An explicit `published` origin requires both sides to name their sources. An explicit
+`synthetic` origin requires the `synthetic-` prefix and no side sources; an explicit
+`published` pair may not use that prefix.
 
 How a run uses them:
 
 - **Each pair is judged once a run, on one runner.** The pair at position `i` of the file
-  goes to runner `(i + the date's ordinal) mod the runners`. Six pairs on four runners is two,
-  two, one and one, and the pairs move one runner a night, so over four nights each has run on
-  every runner. A night with no draw runs no runner and judges none.
+  goes to runner `(i + the date's ordinal) mod the runners`. With eight pairs and four
+  runners, each gets two; with six pairs, two runners get two and the others one. The
+  pairs move one runner a night, so over four nights each has run on every runner. A
+  night with no draw runs no runner and judges none.
 - **The request is a drawn pair's.** The same prompt, fence, grammar and sampler, with nothing
-  marking the pair, so the judge cannot tell it from the night's own. It is never presented as
-  an instruction, and the comparison with the expected answer is made by code and never by
-  the model.
+  marking the pair, so the judge cannot tell it from the night's own. Only the two summary
+  texts go to the judge, in file order and then swapped. The text is never presented as an
+  instruction, and the comparison with the expected answer is made by code and never by the
+  model.
 - **A wrong answer is a reading.** The expected word in both orders is right. The other word, a
   split between the two orders and a reading outside the grammar are wrong: each is logged as a
   warning naming the pair and stored as the judge gave it. Nothing holds, re-runs or stops the
@@ -435,14 +453,14 @@ How a run uses them:
 
 The plan-time guard counts them. The busiest runner judges
 `ceil(draw / runners) + ceil(known-answer pairs / runners)` pairs at the measured 110.98 seconds
-a pair: at the committed 4 runners that is 38 + 2 = 40 pairs, 4,439 seconds against the 10,500 a
-runner has to work in. The cost a pair was measured at is from 2026-09-18 on another model file,
-so the figure is an estimate. A file that does not load stops the night in the planning job,
-before any runner restores its weights.
+a pair. With 150 drawn pairs and eight known-answer pairs on four runners, that is 38 + 2 = 40
+pairs, 4,439 seconds against the 10,500 a runner has to work in. The cost a pair was measured at
+is from 2026-09-18 on another model file, so the figure is an estimate. A file that does not
+load stops the night in the planning job, before any runner restores its weights.
 
-The judge had never answered UNCLEAR on a real pair when the six were chosen (2026-11-17), so
-the two unclear pairs may be answered NO every night. That is a finding about the judge and not
-a fault in the check, and a change in those two answers is the signal.
+The judge had never answered UNCLEAR on a real pair when the original set was chosen
+(2026-11-17). The aggregate agreement can move across revisions just because the case
+mix changed; compare unchanged cases to isolate changes in the judge's answers.
 
 ## Finding where each threshold belongs
 
@@ -767,10 +785,8 @@ must sit inside the limits and at least the smallest gap apart.
 The known-answer pairs have a file of their own,
 [config/judges/content-similarity-canaries.json](../../../config/judges/content-similarity-canaries.json),
 with its own `version`, bumped by the same rule, and `config_versions` on every row of a night
-names both files. It holds no tunable number. Its contract fixes the most pairs at 12 and
-refuses a set missing a kind, a repeated id, an expected answer that does not match its kind,
-an empty or non-ASCII summary, and a hand-written pair whose id does not start with
-`synthetic-`.
+names both files. It holds no tunable number. The list limits and metadata rules are
+under [the known-answer pairs](#the-known-answer-pairs).
 
 ## What to read after the first nights
 
@@ -787,7 +803,7 @@ rows, and a setting changes by an edit that bumps its file's `version`
 | First ordinary settlement with a pool histogram | Match the histogram count to the picker's `available` count, not to the draw. Until the baseline fills there are no distances. Once it fills, check the saved earlier dates, runs and histogram digests against the configured number of comparable pools. | Check the declaration and scoring stamp. Missing comparators do not warrant a production rerun or backfill. |
 | First ordinary settlement with a comparable prior fit | Check that the reference names an earlier digest and earlier Council run. Before a fit with exact keys is retained, no reference is expected. | Check the stored training settings, keys and support against the current attempt. Do not reconstruct an old fit or rerun the judge. |
 | First council run | Every drawn pair names at least one item of the night's published day | Revert the guard in `assemble.cross_source_pairs`. [What the guard gives up](autotune-content-similarity.md#design-rationale) is a story added to the day after the council read it |
-| First council run | `canary_answers` on the night's `threshold-history` row holds all six ids once, and a lost runner's ids are absent. Read each answer against its expected one. The two `unclear` pairs may answer NO: that is a predicted finding about the judge, and not a fault | A wrong answer on a `same` or `different` pair points at the model, runtime, prompt, grammar or label (an agent wrote the labels). Nothing holds or re-runs the night, so a person reads it. A missing id while every runner reported means its call raised, which the log names ([the check](#the-known-answer-pairs)) |
+| First council run | `canary_answers` on the night's `threshold-history` row holds each configured id once, and a lost runner's ids are absent. Read each answer against its expected one | A wrong answer may point at the model, runtime, prompt, grammar or label. Nothing holds or re-runs the night, so a person reads it. For a missing id when every runner reported, check the runner log for an error or deadline ([the check](#the-known-answer-pairs)) |
 | First council run | Older nights with no `pair-verdicts` row are named one a night, newest first, until the 7-night window has slid past the rest | A night that has rows and is named again is a fault in the scheduler's read ([which nights](#which-nights-the-judge-is-behind-on)) |
 | First gardener run | Three compaction tasks for this judge: `pair-verdicts`, `threshold-history` and `holdout-pairs` | A ledger missing from the list is never packed: its compaction declaration or its name in the gardener's task list is missing ([adding a ledger](../contracts/ledger-registry.md#onboarding-and-offboarding)) |
 | First 7 real nights | Per threshold, whether `usable_pairs_used` reached `minimum_usable_pairs` (240), and where `estimate` sits against the configured start (0.70 and 0.93) | Short of 240: raise `draw.pair_budget` (the guard has [room](#the-known-answer-pairs)) or reweight `draw.bucket_weights`. Far from its start: nothing to edit, because the threshold walks to the estimate and a start is read only while no row is in the last 14 days. A `thresholds` setting the rows contradict is re-derived from them |
@@ -839,7 +855,7 @@ id stand, and a foreign row would skew its slice's chance unseen.
 
 **A re-run judges the whole night again, and a re-run that judges only what it lacks is not
 built.** A second run of a night draws the same pairs and puts all of them to the judge
-again: 150 pairs and the six known-answer pairs, shared over four runners.
+again: 150 drawn pairs and the configured known-answer pairs, shared over four runners.
 [The guard](#the-known-answer-pairs) prices the busiest runner's share, 40 pairs (38 drawn
 and 2 known-answer), at 4,439 s of its 10,500 s. The thresholds are not harmed, because the
 evidence counts each pair once, by its newest row; what a re-run costs is model time.
@@ -978,10 +994,9 @@ A wrong model or a broken constrained answer then shows before the first drawn p
 this stage runs first, an error in one pair's call would otherwise cost the night every pair
 behind it, so it is logged for that pair and the runner goes on.
 
-**What the known-answer pairs do not settle.** Whether the labels are right: an agent wrote
-them and no person marked them, so an accuracy rate against people needs a person or a
-labelling resource, run through [the offline evaluation](../../how-to/evaluate-content-similarity-judge.md).
-And whether the judge is right on pairs unlike these six.
+**What the known-answer pairs do not settle.** Whether the labels are right or whether the
+judge is right on unlike pairs. An accuracy rate against people needs human labels, run
+through [the offline evaluation](../../how-to/evaluate-content-similarity-judge.md).
 
 **What none of this settles.** Whether the real judge's answers follow a logistic curve
 below 0.88, because no pair there has been judged yet. And a judge that answers YES on

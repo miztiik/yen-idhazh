@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
+from support.config import canary_config
 from support.judge_reader import ProtocolReplies, native_reply
 from support.models import a_markers
 from support.paths import CONFIG_DIR, read_text
@@ -1534,18 +1535,15 @@ def test_a_known_answer_pair_is_judged_first_and_puts_the_model_the_same_request
 ) -> None:
     """The row's oracle: the judge cannot tell a known-answer pair from one of the night's own.
 
-    A committed known-answer pair's two summaries become two items of a published day, and the
+    A known-answer pair's two summaries become two items of a published day, and the
     draw takes them as a pair. The shard judges the known-answer pair first and the drawn pair
     second, so the first two requests are the known pair's and the next two the drawn pair's, and
     they have to be the same whole request body. The replies tell the order: the first two are
     wrong answers for the known pair, and they land on its row, not on the drawn pair's.
 
-    What it cannot settle is whether the labels are right, or whether the judge is right on pairs
-    unlike these six.
+    The replies here exercise routing, not the model's judgement.
     """
-    from idhazh.content_similarity_judge import settings as judge_settings
-
-    known = judge_settings.load_canaries(CONFIG_DIR).pairs[0]
+    known = canary_config().pairs[0]
     day = _a_day()
     first, second = sorted(day.items[:2], key=lambda item: derive_url_key(item.source_url))
     day = day.model_copy(
@@ -1597,9 +1595,7 @@ def test_a_known_answer_pair_adds_to_no_drawn_count_file_or_clock(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The venue's cost cells hold the known-answer calls; the funnel, the file and the clock do not."""
-    from idhazh.content_similarity_judge import settings as judge_settings
-
-    known = judge_settings.load_canaries(CONFIG_DIR).pairs[:2]
+    known = canary_config().pairs[:2]
     day = _a_day()
     root = _a_day_on_disk(tmp_path, day)
     monkeypatch.setattr(common, "PUBLIC_ROOT", root)
@@ -1645,9 +1641,7 @@ def test_a_shard_with_no_drawn_pair_still_judges_and_ships_its_known_answer_pair
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The outcome describes the night's own work, so it stays `nothing_to_do` while answers ship."""
-    from idhazh.content_similarity_judge import settings as judge_settings
-
-    known = judge_settings.load_canaries(CONFIG_DIR).pairs[:1]
+    known = canary_config().pairs[:1]
     day = _a_day()
     root = _a_day_on_disk(tmp_path, day)
     monkeypatch.setattr(common, "PUBLIC_ROOT", root)
