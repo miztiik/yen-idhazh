@@ -1,0 +1,49 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Payment type / rate level",
+    "y": "Amount (\u00a3 per week)"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m4",
+      "m5",
+      "m6",
+      "m7"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "business-economy-20n8q68mhttj66rt",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Daily living - standard rate","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Daily living - enhanced rate","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Mobility - standard rate","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m3","source_text": null,"text": "Mobility - enhanced rate","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-958-964","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "\u00a3","value": "76.7"},
+    {"derived": null,"element_id": "quantity-996-1003","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "\u00a3","value": "114.6"},
+    {"derived": null,"element_id": "quantity-1103-1109","mark_id": "m6","source_text": null,"text": null,"time": null,"unit": "\u00a3","value": "30.3"},
+    {"derived": null,"element_id": "quantity-1141-1147","mark_id": "m7","source_text": null,"text": null,"time": null,"unit": "\u00a3","value": "80"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Pip payment rates (per week)",
+  "type": "bar",
+  "version": "2026-11-22"
+}

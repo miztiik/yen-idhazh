@@ -1,0 +1,53 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Company",
+    "y": "Value"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3",
+      "m4"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m5",
+      "m6",
+      "m7",
+      "m8",
+      "m9"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "energy-kt7gbpr3ft17xfws",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "ExxonMobil adjusted profit","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Texas Pacific Land net income","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Valero quarterly earnings","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m3","source_text": null,"text": "Cheniere nine-month net income","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m4","source_text": null,"text": "Kinder Morgan Q3 interest expense","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-1949-1962","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "$","value": "17500000000"},
+    {"derived": null,"element_id": "quantity-3999-4013","mark_id": "m6","source_text": null,"text": null,"time": null,"unit": "$","value": "167400000"},
+    {"derived": null,"element_id": "quantity-5151-5163","mark_id": "m7","source_text": null,"text": null,"time": null,"unit": "$","value": "6800000000"},
+    {"derived": null,"element_id": "quantity-6762-6774","mark_id": "m8","source_text": null,"text": null,"time": null,"unit": "$","value": "736000000"},
+    {"derived": null,"element_id": "quantity-9586-9598","mark_id": "m9","source_text": null,"text": null,"time": null,"unit": "$","value": "430000000"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Third-Quarter Financial Metrics for Five Energy Stocks (per article)",
+  "type": "bar",
+  "version": "2026-11-22"
+}
