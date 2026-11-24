@@ -43,10 +43,9 @@ Each file keeps Lucide's own geometry, its 24-unit box and its `currentColor`
 stroke. The filename is a semantic id this project chose - `topic-ai`, not
 `cpu` - because the page names what a mark means, never what it looks like.
 
-The reading page's circular return control uses `go-top` from Lucide
+The reading page's return control uses `go-top` from Lucide
 `chevron-up`, unmodified from the same upstream version.
-The digest footer also uses `load-more` from `plus`, `clear-read` from
-`eraser` and `previous-edition` from `chevron-left`.
+The shared footer uses `previous-edition` from `chevron-left`.
 
 ## How a new icon is added
 

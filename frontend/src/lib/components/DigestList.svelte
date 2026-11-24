@@ -25,7 +25,6 @@
 	import FoundStories from '$lib/components/FoundStories.svelte';
 	import LeadingStories from '$lib/components/LeadingStories.svelte';
 	import SearchState from '$lib/components/SearchState.svelte';
-	import Icon from '$lib/icons/Icon.svelte';
 	import { base } from '$app/paths';
 	import { loadDay, restoreAnchor, type DayStatus } from '$lib/assist/day';
 	import { loadIndex, loadVectors } from '$lib/assist/index';
@@ -414,6 +413,13 @@
 		filtering || hideRead || folded.size > 0 ? visible.length : Math.max(visible.length, total)
 	);
 	const remaining = $derived(Math.max(reachable - paged.length, 0));
+	const complete = $derived(status === 'ready' && inScope.length >= total);
+	const ending = $derived(
+		!complete || remaining > 0 ? null
+			: vertical !== null || filtering || hideRead ? 'All matching stories shown'
+			: folded.size > 0 ? 'All stories in this view shown'
+			: 'End of this edition'
+	);
 	// A fragment naming a story this page never draws. The whole day rather than
 	// what is visible, so a story the reader has hidden or filtered out is not
 	// reported as absent - it is here, and the controls to bring it back are on
@@ -485,7 +491,56 @@
 	const headBefore = $derived(split ? ui.sections.slice(0, leadsAt) : ui.sections);
 	const headAfter = $derived(split ? ui.sections.slice(leadsAt + 1, streamAt) : []);
 	const stream = $derived(split ? ui.sections.slice(streamAt) : []);
+	const hasTopicControls = $derived(ui.sections.includes('topics') && desks.length > 0);
 </script>
+
+{#snippet readingControls()}
+	{#if found === null && (read.size > 0 || cleared)}
+		<section class="reading-controls" aria-label="Reading controls">
+			<div class="reading-actions">
+				<label>
+					<input type="checkbox" checked={hideRead} onchange={toggleHide} disabled={read.size === 0} />
+					<span>Unread only</span>
+				</label>
+				<button type="button" onclick={clearRead} aria-disabled={read.size === 0}>
+					Clear this edition's read marks
+				</button>
+			</div>
+			<p class="reading-progress" role="status">{cleared && read.size === 0 ? 'Read marks cleared for this edition.' : ''}</p>
+		</section>
+	{/if}
+{/snippet}
+
+{#snippet closeStream(showProgress: boolean)}
+	<div class="continuation" data-continuation aria-busy={loading}>
+		{#if showProgress}
+			{#if status === 'ready' && paged.length < visible.length}
+				<button type="button" data-pager-scripted onclick={() => void loadMore()} class="load-more">
+					Show more stories
+				</button>
+			{/if}
+			<p class="reading-progress" role="status">
+				{#if added > 0}<span class="sr-only">{plural(added, 'more story', 'more stories')} shown. </span>{/if}
+				{#if ending}
+					<strong>{ending}</strong>
+				{:else}
+					Showing {paged.length} of {plural(reachable, 'story', 'stories')}
+				{/if}
+			</p>
+		{/if}
+		<BackToTop reading />
+	</div>
+	{#if showProgress && remaining > 0}
+		<noscript>
+			<style>
+				[data-pager-scripted][data-pager-scripted] {
+					display: none;
+				}
+			</style>
+			<p class="pager-noscript">{plural(remaining, 'more story needs', 'more stories need')} JavaScript. Every topic above is a link and still works.</p>
+		</noscript>
+	{/if}
+{/snippet}
 
 {#snippet part(section: string)}
 	{#if section === 'notice'}
@@ -524,7 +579,9 @@
 				onRetry={() => void ask()}
 			/>
 		{/if}
+		{@render readingControls()}
 	{:else if section === 'items'}
+		{#if !hasTopicControls}{@render readingControls()}{/if}
 		{#if found !== null && found.hits.length > 0}
 			<FoundStories
 				{found}
@@ -550,7 +607,7 @@
 		{:else}
 			{#if visible.length === 0}
 				<p class="py-12 text-base text-text-secondary">
-					You have read everything here today.
+					{complete ? 'No unread stories in this view.' : 'No unread stories among those loaded so far.'}
 				</p>
 			{:else}
 				{#each paged as item (item.item_id)}
@@ -569,54 +626,9 @@
 						onRead={() => (read = markRead(item.item_id, read, day.date))}
 					/>
 				{/each}
-
-				<div class="continuation" data-continuation aria-busy={loading}>
-					{#if remaining > 0}
-						<!-- The noscript rule uses an attribute because it cannot reach scoped classes. -->
-						<button
-							type="button"
-							data-pager-scripted
-							onclick={() => void loadMore()}
-							disabled={status !== 'ready'}
-							class="load-more"
-						>
-							{#if status === 'ready'}<Icon id="load-more" />{/if}
-							<span>{loading ? 'Loading more...' : status === 'ready' ? 'Load more' : 'More stories unavailable'}</span>
-						</button>
-						<noscript>
-							<style>
-								[data-pager-scripted][data-pager-scripted] {
-									display: none;
-								}
-							</style>
-							<p class="pager-noscript w-full py-6 text-sm text-text-tertiary">
-								{remaining} more stories need JavaScript. Every topic above is a link and still works.
-							</p>
-						</noscript>
-					{/if}
-					<p class="reading-progress" role="status">
-						{#if added > 0}<span class="sr-only">{plural(added, 'more story', 'more stories')} loaded. </span>{/if}
-						{paged.length} of {plural(reachable, 'story', 'stories')}
-					</p>
-				</div>
-			{/if}
-
-			{#if read.size > 0 || cleared}
-				<section class="reading-controls" aria-label="Reading controls">
-					<div class="reading-actions">
-						<label>
-							<input type="checkbox" checked={hideRead} onchange={toggleHide} disabled={read.size === 0} />
-							<span>Unread only</span>
-						</label>
-						<button type="button" onclick={clearRead} aria-disabled={read.size === 0}>
-							<Icon id="clear-read" />
-							<span>Clear read marks</span>
-						</button>
-					</div>
-					<p class="reading-progress" role="status">{cleared && read.size === 0 ? 'Read marks cleared for this day.' : ''}</p>
-				</section>
 			{/if}
 		{/if}
+		{@render closeStream(found === null && visible.length > 0)}
 	{/if}
 {/snippet}
 
@@ -638,61 +650,64 @@
 			{@render part(section)}
 		{/each}
 	</div>
-	<BackToTop reading />
-
 	<style>
 		.continuation {
 			display: flex;
 			flex-direction: column;
-			align-items: center;
-			gap: var(--space-2);
-			margin-block-start: var(--space-5);
-			text-align: center;
+			align-items: flex-start;
+			gap: var(--space-2) var(--space-4);
+			margin-block-start: var(--space-4);
+			padding-inline: var(--story-text-inset) var(--story-card-padding);
 		}
 		.reading-controls {
-			margin-block-start: var(--space-3);
-			/* Keep the wrapped controls clear of the floating Back to top button. */
-			padding-inline: var(--space-7);
-			text-align: center;
+			margin-block-start: var(--space-2);
 		}
-		.reading-progress {
+		.reading-progress, .pager-noscript {
 			margin: 0;
 			color: var(--color-text-secondary);
 			font-size: var(--text-sm);
 			line-height: var(--leading-sm);
 		}
+		.reading-progress strong {
+			color: var(--color-text);
+			font-weight: 600;
+		}
+		.pager-noscript {
+			margin-block-start: var(--space-2);
+			padding-inline-start: var(--story-text-inset);
+		}
 		.load-more, .reading-actions > * {
 			display: inline-flex;
 			align-items: center;
 			gap: var(--space-2);
-			min-block-size: calc(var(--space-6) + var(--space-3));
+			min-block-size: var(--space-7);
 			border-radius: var(--radius-md);
 			cursor: pointer;
 		}
 		.load-more {
+			justify-content: center;
+			inline-size: 100%;
 			padding: var(--space-2) var(--space-4);
-			border: 1px solid var(--color-rule-strong);
-			background: var(--color-surface);
-			color: var(--color-accent);
+			background: var(--color-accent);
+			color: var(--color-on-accent);
 			font-size: var(--text-base);
 			line-height: var(--leading-base);
+			font-weight: 600;
 		}
-		.load-more:hover:not(:disabled) {
-			border-color: var(--color-accent);
-			background: var(--tint-accent);
+		.load-more:hover {
+			background: var(--color-accent-strong);
 		}
 		.reading-actions {
 			display: flex;
 			flex-wrap: wrap;
-			justify-content: center;
 			column-gap: var(--space-2);
 		}
 		.reading-actions > * {
-			padding-inline: var(--space-2);
 			color: var(--color-text-secondary);
 			font-size: var(--text-sm);
 			line-height: var(--leading-sm);
 		}
+		.reading-actions button { padding-inline: var(--space-2); }
 		.reading-actions input {
 			flex: none;
 			inline-size: var(--space-4);
@@ -704,9 +719,18 @@
 			background: var(--tint-accent);
 			color: var(--color-accent);
 		}
-		.load-more:disabled, .reading-actions :is(label:has(:disabled), button[aria-disabled='true']) {
+		.reading-actions :is(label:has(:disabled), button[aria-disabled='true']) {
 			color: var(--color-text-tertiary);
 			cursor: default;
+		}
+		/* Matches frame.breakpoints_px[0]; media queries cannot read CSS tokens. */
+		@media (min-width: 640px) {
+			.continuation {
+				flex-direction: row;
+				flex-wrap: wrap;
+				align-items: center;
+			}
+			.load-more { inline-size: auto; }
 		}
 	</style>
 
@@ -727,4 +751,5 @@
 			{/each}
 		</div>
 	{/if}
+	{#if streamAt < 0}{@render closeStream(false)}{/if}
 </div>
