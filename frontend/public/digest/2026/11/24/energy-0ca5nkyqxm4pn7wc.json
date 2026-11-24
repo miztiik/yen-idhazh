@@ -1,0 +1,45 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Company",
+    "y": "Stock increase (%)"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "energy-0ca5nkyqxm4pn7wc",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Constellation","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "GE Vernova","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Bloom Energy","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-1799-1801","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "6"},
+    {"derived": null,"element_id": "quantity-1949-1951","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "%","value": "8"},
+    {"derived": null,"element_id": "quantity-2133-2136","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "%","value": "18"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Stock Rallies for Power Companies After Jensen Huang's Return",
+  "type": "bar",
+  "version": "2026-11-22"
+}

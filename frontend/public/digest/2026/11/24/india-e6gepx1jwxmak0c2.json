@@ -1,0 +1,49 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Index",
+    "y": "Gain %"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m4",
+      "m5",
+      "m6",
+      "m7"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-e6gepx1jwxmak0c2",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Nasdaq 100","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "S&P 500","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "STOXX 600","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m3","source_text": null,"text": "KOSPI (change)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-559-563","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "%","value": "6.5"},
+    {"derived": null,"element_id": "quantity-586-590","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "%","value": "4.7"},
+    {"derived": null,"element_id": "quantity-636-640","mark_id": "m6","source_text": null,"text": null,"time": null,"unit": "%","value": "1.8"},
+    {"derived": null,"element_id": "quantity-2625-2629","mark_id": "m7","source_text": null,"text": null,"time": null,"unit": "%","value": "3.3"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Monday equity index gains (%)",
+  "type": "bar",
+  "version": "2026-11-22"
+}
