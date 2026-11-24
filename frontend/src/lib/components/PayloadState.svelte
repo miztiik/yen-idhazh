@@ -6,8 +6,8 @@
 	 * Missing means a day was never published; Unreachable means the fetch
 	 * failed. Telling a reader a day was never published when their train went
 	 * into a tunnel is a lie they can check, so the two never share a sentence -
-	 * and Missing is not drawn here at all. It is the same screen a wrong address
-	 * gets, which [NotHere.svelte](NotHere.svelte) owns.
+	 * and a missing dated page belongs to [NotHere.svelte](NotHere.svelte).
+	 * When a home seed is already visible, only the rest of that day is missing.
 	 *
 	 * **No spinner, no skeleton, no bar.** The frame a reader already has is
 	 * readable, so there is nothing to fill. Past the threshold this says one
@@ -67,7 +67,7 @@
 <div aria-live="polite" data-payload-state={status}>
 	{#if status === 'slow'}
 		<p class="waiting">{holding ? `The rest of ${day} is still loading.` : `${day} is still loading.`}</p>
-	{:else if status === 'unreachable'}
+	{:else if status === 'unreachable' || (holding && status === 'missing')}
 		<section class="failed">
 			<p class="failed-headline">
 				{holding ? `The rest of ${day} did not arrive.` : `${day} did not arrive.`}

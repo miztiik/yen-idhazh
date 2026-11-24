@@ -1,6 +1,7 @@
 import { BAND_UNREAD, type RouteId } from './band';
 import type { ConsoleConfig } from '../server/config';
 import { checkedTokenDeviationRules, type TokenDeviationRules } from '../data/token-deviation-query';
+import { MAX_SCORE_BINS } from './judge-score-pool';
 
 export interface ConsolePanelGroup {
 	readonly id: string;
@@ -65,7 +66,13 @@ export function judgeObservationRules(knobs: Readonly<Record<string, number>>) {
 	if (!Number.isSafeInteger(thin) || thin < 1) {
 		throw new Error(`${at}.judge_thin_sample_pairs must be a positive whole number`);
 	}
-	return { low, high, thin };
+	const enabled = knobs.judge_visual_trial_enabled ?? 0;
+	const bins = knobs.judge_visual_trial_score_bins;
+	if (enabled !== 0 && enabled !== 1) throw new Error(`${at}.judge_visual_trial_enabled must be 0 or 1`);
+	if ((enabled === 1 || bins !== undefined) && (!Number.isSafeInteger(bins) || bins < 1 || bins > MAX_SCORE_BINS)) {
+		throw new Error(`${at}.judge_visual_trial_score_bins must be a whole number from 1 to ${MAX_SCORE_BINS}`);
+	}
+	return { low, high, thin, trialBins: enabled === 1 ? bins : null };
 }
 
 function object(value: unknown, path: string): Record<string, unknown> {

@@ -45,7 +45,7 @@
 	});
 </script>
 
-<div class="frame">
+<div class="frame" class:with-source-marks={data?.ui?.source_mark}>
 	<!-- The chrome renders when this layout has its own data, and an address the
 	     site does not have is the case where it does not. A static host answers
 	     an unknown path with the fallback shell, the shell asks for that route's
@@ -62,6 +62,6 @@
 		{@render children()}
 	</main>
 	{#if data?.ui && page.route.id !== '/archive'}
-		<SiteFooter repoUrl={data.ui.repo_url} showTheme={operator} {home} {previousEdition} />
+		<SiteFooter repoUrl={data.ui.repo_url} {operator} {home} {previousEdition} />
 	{/if}
 </div>

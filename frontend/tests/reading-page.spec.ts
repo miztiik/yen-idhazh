@@ -40,18 +40,30 @@ test(journey, async ({ page }) => {
 	await page.goto('/');
 	await dayReady(page);
 	const stories = page.locator('article.item');
-	const archive = page.getByRole('link', { name: 'Archive & search', exact: true });
+	const footer = page.getByRole('contentinfo');
+	const archive = footer.getByRole('link', { name: 'Archive & search', exact: true });
+	const continuation = page.locator('[data-continuation]');
+	await expect(footer.getByRole('heading', { name: 'More editions' })).toBeVisible();
+	await expect(footer.getByRole('heading', { name: 'Project' })).toBeVisible();
 	await expect(stories.first()).toBeVisible();
 	await expect(stories.first().locator('[data-item-summary]').first()).not.toBeEmpty();
 	if (build.mode === 'real') {
-		const continuation = page.locator('[data-continuation]');
-		const progress = (await continuation.getByRole('status').innerText()).match(/^(\d+) of (\d+) stor(?:y|ies)$/);
-		if (!progress) throw new Error('continuation must show the displayed and reachable story counts');
-		const [, displayed, reachable] = progress;
-		if (Number(displayed) < Number(reachable)) {
-			await continuation.getByRole('button', { name: 'Load more', exact: true }).click();
-			await expect(stories.nth(Number(displayed))).toBeFocused();
+		const status = await continuation.getByRole('status').innerText();
+		const progress = status.match(/^Showing (\d+) of (\d+) stor(?:y|ies)$/);
+		const more = continuation.getByRole('button', { name: 'Show more stories', exact: true });
+		if (progress) {
+			const [, displayed, reachable] = progress.map(Number);
+			expect(displayed).toBe(await stories.count());
+			expect(displayed).toBeLessThan(reachable);
+			await more.click();
+			await expect(stories.nth(displayed)).toBeFocused();
+		} else {
+			expect(status).toMatch(/^(End of this edition|All stories in this view shown)$/);
+			await expect(more).toHaveCount(0);
 		}
+		const editionDate = await page.locator('h1 time').getAttribute('datetime');
+		if (!editionDate) throw new Error('the home edition must name its date');
+		const dayAsset = new URL(`/digest/${editionDate.replaceAll('-', '/')}/digest.json`, page.url()).href;
 		// Check the dated route fetches and renders without depending on the day's
 		// topic counts, edition status or charts.
 		await archive.click();
@@ -63,6 +75,20 @@ test(journey, async ({ page }) => {
 		const story = page.locator(`article.item[id=${JSON.stringify(id)}]`);
 		await expect(story).toBeVisible();
 		await expect(story.locator('[data-item-summary]').first()).not.toBeEmpty();
+
+		// Home already holds a seed, so a missing full payload is not a missing edition.
+		expectedMissing.add(dayAsset);
+		await page.route(dayAsset, (route) => route.fulfill({ status: 404, body: '' }), { times: 1 });
+		await page.goto('/');
+		const retry = page.getByRole('button', { name: 'Try again', exact: true });
+		await expect(retry).toBeVisible();
+		await expect(stories.first()).toBeVisible();
+		await expect(archive).toBeVisible();
+		await expect(more).toHaveCount(0);
+		await expect(continuation.getByRole('status')).not.toHaveText('End of this edition');
+		await retry.click();
+		await dayReady(page);
+		expect(missingResponses).toEqual([dayAsset]);
 		expect(errors).toEqual([]);
 		return;
 	}
@@ -155,6 +181,7 @@ test(journey, async ({ page }) => {
 	await page.keyboard.insertText(title.slice(prefix.length));
 	await expect.poll(() => stories.count()).toBeLessThan(before);
 	await expect(stories.first().getByRole('heading')).toHaveText(title);
+	await expect(continuation.getByRole('status')).toHaveText('All matching stories shown');
 	await expectFullArticleWidth();
 	await expect(searchOtherDays).toBeVisible();
 	await expect(searchOtherDays).toHaveCSS('clip-path', 'none');
@@ -202,18 +229,25 @@ test(journey, async ({ page }) => {
 	await originalLink.evaluate((link) => link.addEventListener('click', (event) => event.preventDefault(), { once: true }));
 	await originalLink.click();
 	const readingControls = page.getByRole('region', { name: 'Reading controls' });
+	expect((await readingControls.boundingBox())!.y).toBeLessThan((await marked.boundingBox())!.y);
 	const unreadOnly = readingControls.getByRole('checkbox', { name: 'Unread only' });
 	await unreadOnly.check();
 	await expect(marked).toHaveCount(0);
-	const clear = readingControls.getByRole('button', { name: 'Clear read marks' });
+	const clear = readingControls.getByRole('button', { name: "Clear this edition's read marks" });
 	await clear.press('Enter');
 	await expect(clear).toBeFocused();
 	await expect(clear).toBeDisabled();
 	await expect(unreadOnly).not.toBeChecked();
 	await expect(marked).toBeVisible();
-	await expect(readingControls).toContainText('Read marks cleared for this day.');
+	await expect(readingControls).toContainText('Read marks cleared for this edition.');
 	await page.emulateMedia({ reducedMotion: 'reduce' });
-	await page.locator('[data-reader-top]').focus();
+	const backToTop = page.getByRole('button', { name: 'Back to top' });
+	await page.locator('[data-site-header]').evaluate((header) =>
+		window.scrollTo(0, scrollY + header.getBoundingClientRect().bottom + 1));
+	await expect(backToTop).toHaveCSS('position', 'fixed');
+	await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+	await expect(continuation.getByRole('button', { name: 'Back to top' })).toHaveCSS('position', 'static');
+	await backToTop.focus();
 	await page.keyboard.press('Enter');
 	await expect(page.getByRole('region', { name: 'About today' }).getByRole('heading', { level: 1 })).toBeFocused();
 	await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
@@ -275,7 +309,7 @@ test(journey, async ({ page }) => {
 	await expect.poll(() => page.evaluate(
 		() => document.documentElement.scrollWidth <= document.documentElement.clientWidth
 	)).toBe(true);
-	const previous = page.getByRole('link', { name: 'Previous edition' });
+	const previous = footer.getByRole('link', { name: 'Previous edition' });
 	const previousDate = publishedDates().at(-2);
 	if (!previousDate) throw new Error('the reader canary must publish a previous edition');
 	await previous.click();

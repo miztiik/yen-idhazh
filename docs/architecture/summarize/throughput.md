@@ -1,6 +1,6 @@
 # Model throughput and why it drifts inside a run
 
-**Last Updated**: 2026-11-18
+**Last Updated**: 2026-11-24
 What the two model rates mean, why the slow half of a run is slow, and what a
 change in either number is allowed to prove.
 
@@ -344,8 +344,8 @@ that were taken on a longer prompt than the one sent and so sit above it, plus t
 UTF-8 bytes of the optional chart addendum, plus `sampling.max_tokens`. **The
 addendum is counted a token a byte**: a token spans at least one byte of the text the tokenizer reads, so the
 bytes shown are a ceiling that needs no reading of the tokenizer. A count in characters
-would not be one, because a rare character can cost several byte-level tokens. The
-contract test and the production refusal read the same function.
+would not be one, because a rare character can cost several byte-level tokens.
+This estimate is unchanged; neither check below decides whether an item is sent.
 
 **An article the window cannot hold is refused before the call is sent.**
 `dag.fits_the_window` is the check, run on the article alone first, and
@@ -361,19 +361,22 @@ because that whole decode is spent before the reason can be written.
 fits and the extra instructions would not, one warning is logged, the chart question is
 left off, and the decision records `not_reachable`.
 
-**How many items the window refuses, and it is none.** Over the trailing 30 days
-ending 2026-09-13, 8,938 items carry a recorded prompt: the median is 1,672
-tokens, the 95th percentile 3,378 and the worst 8,741. Read once from
-`ledger.load_item_health` with a 30-day cover, 2026-09-13; that reader is
-`ledger.load_days` over the same 30 days now. Behind the prompt the call holds a
-fixed 8,192 tokens, the model file's response limit. The longest article the
-extractor passes (26,000 tokens) sums to 52,874 tokens with that limit and without the addendum,
-against the 65,536-token window (computed 2026-11-18 from the committed window and
-cap), so no committed article is refused by the summary-only estimate. That leaves
-12,662 tokens for optional instructions at the cap, and a model file that names a
-larger `max_tokens` reduces that allowance one token for one. How often the
-addendum is dropped for want of room is not measured here;
-the logged warning counts it.
+**The offline config check uses the nominal allowance.** It adds the configured
+article cap and reply limit to a conservative UTF-8 byte budget for the rendered
+instructions, for the summary-only and enabled chart variants. It reads no
+tokenizer. The cap estimates tokens from words, so passing does not promise
+that a real article at the cap fits.
+
+**The live report counts the instruction and message overhead.** After the
+server proves readiness, the digest asks the configured model server to
+tokenize both rendered variants (chart only when enabled), using its real turn
+markers and an empty headline, body and readings. The report subtracts that
+exact scaffold count and the request's effective reply limit from the server's
+reported context window per slot. It logs the remaining room and warns when
+it is below the nominal article allowance or when the diagnostic is unavailable.
+It sends no completion and logs no prompt text. A full request includes the
+article and any chart readings; the report neither measures that request nor
+changes worker admission.
 
 ## The write rate still falls through a run, and the cause is the ordering
 

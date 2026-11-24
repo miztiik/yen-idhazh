@@ -1,0 +1,65 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Date",
+    "y": "Daily Change in Nvidia Shares (%)"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3",
+      "m4",
+      "m5",
+      "m6",
+      "m7"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m8",
+      "m9",
+      "m10",
+      "m11",
+      "m12",
+      "m13",
+      "m14",
+      "m15"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "business-economy-k4yxv5xyyz06y2bk",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Oct 29","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Oct 30","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Nov 5","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m3","source_text": null,"text": "Nov 6","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m4","source_text": null,"text": "Nov 9","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m5","source_text": null,"text": "Nov 10","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m6","source_text": null,"text": "Nov 12","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m7","source_text": null,"text": "Nov 13","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-2286-2298","mark_id": "m8","source_text": null,"text": null,"time": null,"unit": "%","value": "0.8"},
+    {"derived": null,"element_id": "quantity-3441-3453","mark_id": "m9","source_text": null,"text": null,"time": null,"unit": "%","value": "4.2"},
+    {"derived": null,"element_id": "quantity-5035-5047","mark_id": "m10","source_text": null,"text": null,"time": null,"unit": "%","value": "9.3"},
+    {"derived": null,"element_id": "quantity-5959-5971","mark_id": "m11","source_text": null,"text": null,"time": null,"unit": "%","value": "2.8"},
+    {"derived": null,"element_id": "quantity-6754-6766","mark_id": "m12","source_text": null,"text": null,"time": null,"unit": "%","value": "4.3"},
+    {"derived": null,"element_id": "quantity-7352-7364","mark_id": "m13","source_text": null,"text": null,"time": null,"unit": "%","value": "5.5"},
+    {"derived": null,"element_id": "quantity-8297-8309","mark_id": "m14","source_text": null,"text": null,"time": null,"unit": "%","value": "4.3"},
+    {"derived": null,"element_id": "quantity-9063-9073","mark_id": "m15","source_text": null,"text": null,"time": null,"unit": "%","value": "2"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Nvidia Closing Share Price Changes by Date (Late October\u2013November 2026)",
+  "type": "bar",
+  "version": "2026-11-22"
+}

@@ -4,6 +4,7 @@
 	import EmptyState from '$lib/charts/d3/EmptyState.svelte';
 	import { emptyState } from '$lib/charts/d3/empty';
 	import { chartWidth, observeWidth } from '$lib/charts/frame';
+	import { drawOf } from '$lib/console/judge-draw';
 	import { judgeCutoff, judgeDecimal, judgeNumber, judgeSlices, judgeStatus, SAMPLE_STATUS } from '$lib/console/judge-observations';
 	import type { PanelState } from '$lib/console/waiting';
 	import type { Row } from '$lib/data/ledger';
@@ -11,8 +12,9 @@
 	import { numberFormatter } from '$lib/number-format';
 	import type { ChartConfig, ConsoleConfig } from '$lib/server/config';
 	import JudgeSliceChart from './JudgeSliceChart.svelte';
+	import JudgePercentStacks from './JudgePercentStacks.svelte';
 
-	let { selected, detail, detailState, dayNote, thin, knobs, chart }: {
+	let { selected, detail, detailState, dayNote, thin, knobs, chart, trial = false }: {
 		selected: string;
 		detail: Row | null;
 		detailState: PanelState;
@@ -20,6 +22,7 @@
 		thin: number;
 		knobs: ConsoleConfig;
 		chart: ChartConfig;
+		trial?: boolean;
 	} = $props();
 
 	const name = 'judge-score-ranges';
@@ -34,7 +37,7 @@
 		const n = judgeNumber(value);
 		return n === null ? 'Not recorded' : decimal(n);
 	};
-	const slices = $derived(judgeSlices(detail?.slice_outcomes));
+	const slices = $derived(trial ? drawOf(detail).slices : judgeSlices(detail?.slice_outcomes));
 	const cutoff = $derived(detail === null ? null : judgeCutoff(detail));
 	const sampleNote = $derived(detail === null ? dayNote : slices?.length === 0
 		? 'No pairs were drawn for this digest.' : judgeStatus(detail.sample_status, SAMPLE_STATUS));
@@ -88,11 +91,16 @@
 		{/if}
 		<h4>Answers by score range</h4>
 		<p data-comparison="Agreed YES against agreed NO in each score range.">
-			Counts describe only the pairs drawn for this digest, not the full score pool.
+			{trial ? 'Each bar is 100% of the pairs drawn in its range. The count shows how much evidence each bar has.'
+				: 'Counts describe only the pairs drawn for this digest, not the full score pool.'}
 		</p>
 		<Reserved record panelState={detailState} {width} height={knobs.chart_height} {name} {label}>
 			{#if slices !== null && slices.length > 0}
-				<JudgeSliceChart {slices} {width} height={knobs.chart_height} {name} {label} {chart} />
+				{#if trial}
+					<JudgePercentStacks {slices} {width} height={knobs.chart_height} {thin} {chart} />
+				{:else}
+					<JudgeSliceChart {slices} {width} height={knobs.chart_height} {name} {label} {chart} />
+				{/if}
 			{:else}
 				<EmptyState drawing={emptyState('quiet', sampleNote)} {width} height={knobs.chart_height} {name} {label} />
 			{/if}

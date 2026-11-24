@@ -18,7 +18,9 @@
 	import type { ChartConfig, ConsoleConfig } from '$lib/server/config';
 	import JudgeCoverage from './JudgeCoverage.svelte';
 	import JudgeDigestDetails from './JudgeDigestDetails.svelte';
+	import JudgePoolHistogram from './JudgePoolHistogram.svelte';
 	import JudgeScoreRanges from './JudgeScoreRanges.svelte';
+	import JudgeVisualTrial from './JudgeVisualTrial.svelte';
 	import PairScoreDrift from './PairScoreDrift.svelte';
 
 	let { viewport, windowDays, group, rules, knobs, chart, published }: {
@@ -152,8 +154,16 @@
 				<JudgeCoverage {calendar} {windowDays} {readings} {selected} {detail} {historyState}
 					{dayNote} {noteFor} {knobs} {chart} onPick={pick} />
 			{:else if id === 'judge-score-ranges'}
-				<JudgeScoreRanges {selected} {detail} {detailState} {dayNote} thin={rules.thin} {knobs} {chart} />
+				<JudgeScoreRanges {selected} {detail} {detailState} {dayNote} thin={rules.thin} {knobs} {chart}
+					trial={rules.trialBins != null} />
+				{#if rules.trialBins != null && reach !== null}
+					<JudgeVisualTrial {viewport} {calendar} {reach} {readings} {selected} {identity} {detail}
+						binCount={rules.trialBins} thin={rules.thin} {chart} {knobs} onPick={pick} />
+				{/if}
 			{:else if id === 'pair-score-drift'}
+				{#if rules.trialBins != null && reach !== null}
+					<JudgePoolHistogram {viewport} {reach} {selected} {identity} {detail} {chart} {knobs} />
+				{/if}
 				<PairScoreDrift {calendar} {windowDays} {readings} {selected} {detail} {historyState} {dayNote}
 					{noteFor} low={rules.low} high={rules.high} {knobs} {chart} onPick={pick} />
 			{/if}

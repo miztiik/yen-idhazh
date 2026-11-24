@@ -1,8 +1,8 @@
 # The mark shapes a panel may reach for
 
-**Last Updated**: 2026-11-17
+**Last Updated**: 2026-11-24
 
-Ten chart types, the house style they draw with, five named mark shapes and
+Chart types, the house style they draw with, five named mark shapes and
 three panel-level controls. **A panel is built from one chart type, and a mark
 shape is drawn inside a type** - a range mark is a row of a ranked list, a tile
 strip is what the `tileStrip` type lays out. Each shape is here because a reader
@@ -45,6 +45,9 @@ a listed type with no module both fail the build.
 | 8 | `flow` | where did they go, and where did they leave | never - where the panel is narrow the same call returns the stepped list | Susan, 2026-09-26 | `Flow.svelte` |
 | 9 | `pairedScatter` | do these two move together | it has fewer readings or fewer subjects than its two floors - and it never draws a trend line | Susan, 2026-09-26 | `PairedScatter.svelte` |
 | 10 | `runSeries` | what changes from one run to the next | runs have no known chronological order, or horizontal distance must represent elapsed time rather than run sequence | Susan, 2026-11-11 | `RunSeries.svelte` |
+| 11 | `scoreIntervals` | where a saved draw sat on the score scale, and what its draw contained | interval edges, support or the applied bounds have been inferred from returns | Susan | `ScoreIntervals.svelte` |
+| 12 | `diagnosticGrid` | which intersections have the most of a measured outcome | rows or columns do not share their declared denominator, or missing cells look like a measured zero | Susan | `DiagnosticGrid.svelte` |
+| 13 | `precisionRecall` | which trade-offs the observed scores support at a cutoff | pooled cohorts or interpolated points would be mistaken for observed cutoffs | Susan | `PrecisionRecall.svelte` |
 
 Five rules hold every type.
 

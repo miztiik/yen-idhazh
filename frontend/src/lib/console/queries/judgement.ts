@@ -29,3 +29,43 @@ export const judgeDayQuery = {
 	],
 	span: 'window'
 } as const satisfies PanelQuery;
+
+export const judgeDrawTrialQuery = {
+	name: 'judgeDrawTrialQuery',
+	ledger: 'threshold-history',
+	columns: [
+		'date', 'run_id', 'attempt', 'pairs_drawn', 'pairs_returned', 'sample_status', 'slice_outcomes',
+		'lower_threshold_before', 'upper_threshold_before', 'lower_threshold_after', 'upper_threshold_after'
+	],
+	span: 'window'
+} as const satisfies PanelQuery;
+
+export const judgePairTrialQuery = {
+	name: 'judgePairTrialQuery',
+	ledger: 'pair-verdicts',
+	columns: [
+		'date', 'run_id', 'attempt', 'pair_key', 'similarity_score', 'verdict', 'verdict_swapped',
+		'lower_threshold_in_force', 'upper_threshold_in_force', 'scorer_model', 'cosine_weight',
+		'judge_model', 'prompt_digest', 'grammar_digest', 'judge_policy_version', 'judge_temperature'
+	],
+	span: 'window'
+} as const satisfies PanelQuery;
+
+export const judgeCutoffTrialQuery = {
+	name: 'judgeCutoffTrialQuery',
+	ledger: 'threshold-history',
+	columns: [
+		'date', 'run_id', 'attempt', 'sample_f0_5', 'sample_average_precision',
+		'sample_precision_at_recall_90', 'sample_recall_90_cutoff', 'sample_recall_at_recall_90_cutoff',
+		'lower_estimate', 'lower_nights_used', 'lower_usable_pairs_used', 'lower_held_because', 'lower_move_limited_by',
+		'upper_estimate', 'upper_nights_used', 'upper_usable_pairs_used', 'upper_held_because', 'upper_move_limited_by'
+	],
+	span: 'window'
+} as const satisfies PanelQuery;
+
+export const judgePoolTrialQuery = {
+	name: 'judgePoolTrialQuery',
+	ledger: 'threshold-history',
+	columns: ['date', 'run_id', 'attempt', 'score_pool_histogram'],
+	span: 'window'
+} as const satisfies PanelQuery;
