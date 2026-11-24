@@ -5,12 +5,13 @@ import { AXIS_LABEL_GAP_PX, labelWidth, type Frame } from '../../../lib/charts/f
 import { readoutOf } from '../../../lib/charts/readout';
 import { judgeDecimal, judgeShare, type SliceOutcome } from '../../../lib/console/judge-observations';
 import { numberFormatter, type NumberFormatConfig } from '../../../lib/number-format';
+import { OUTCOME_STYLE } from './judge-trial-style';
 
 const OUTCOMES = [
-	{ label: 'Agreed YES', token: '--chart-1' },
-	{ label: 'Agreed NO', token: '--chart-2' },
-	{ label: 'Other returned', token: '--chart-3' },
-	{ label: 'Did not return', token: '--chart-8' }
+	OUTCOME_STYLE.yes,
+	OUTCOME_STYLE.no,
+	{ label: 'Other returned', token: OUTCOME_STYLE.unclassified.token },
+	{ label: 'Did not return', token: OUTCOME_STYLE.missing.token }
 ] as const;
 
 export const NOT_DRAWN = 'Not drawn';

@@ -3,9 +3,9 @@
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import type { diagnosticGrid } from './diagnosticGrid';
 
-	let { drawing, name, label, corner, labels = false, maxShare, onPick = null }: {
+	let { drawing, name, label, corner, labels = false, tileRows = false, maxShare, onPick = null }: {
 		drawing: NonNullable<ReturnType<typeof diagnosticGrid>>;
-		name: string; label: string; corner: string; labels?: boolean; maxShare: number;
+		name: string; label: string; corner: string; labels?: boolean; tileRows?: boolean; maxShare: number;
 		onPick?: ((column: number) => void) | null;
 	} = $props();
 
@@ -16,7 +16,7 @@
 
 <div data-readout-records={drawing.records.length}>
 	<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions (The grid has one keyboard stop and an exact readout.) -->
-	<div class="grid-view" role="region" aria-label={label} tabindex="0"
+	<div class="grid-view" class:tileRows role="region" aria-label={label} tabindex="0"
 		use:markReadout={{ count: drawing.records.length, walk: drawing.columns.length, selected: at,
 			onSelect: select, hover: { name, readout: drawing.records } }}
 		onkeydown={(event) => {
@@ -46,11 +46,13 @@
 							{@const chosen = drawing.columns[x].chosen}
 							<td data-readout-at={index} data-grid-missing={cell.paint === null ? '' : undefined}
 								class:change={drawing.columns[x].change} class:chosen class:diagonal={cell.diagonal}
-								class:active={index === at} style:--cell-paint={cell.paint}>
+								class:active={index === at} class:emphasized={cell.emphasized}
+								style:--cell-paint={cell.paint} style:--cell-edge={cell.edge}>
 								{#if onPick}
 									<button type="button" tabindex="-1" aria-label={cell.facts.subject}
 										onfocus={() => select(index)} onclick={() => onPick?.(x)}>{cell.text ?? ''}</button>
 								{:else}
+									{#if tileRows}<span class="tile-label" aria-hidden="true">{drawing.columns[x].label}</span>{/if}
 									<span>{cell.text ?? ''}</span>
 								{/if}
 							</td>
@@ -87,6 +89,7 @@
 		background: repeating-linear-gradient(135deg, var(--color-surface) 0 var(--space-1), var(--chart-grid) var(--space-1) var(--space-2));
 	}
 	td.active { outline: 2px solid var(--color-focus); outline-offset: -2px; }
+	td.emphasized { border-color: var(--cell-edge, var(--color-rule-strong)); font-weight: var(--console-panel-title-weight); }
 	.change { border-inline-start: 2px dashed var(--chart-change); }
 	th.chosen { text-decoration: underline; }
 	td.chosen { border-block-color: var(--color-rule-strong); }
@@ -100,5 +103,35 @@
 		inline-size: 100%;
 		min-block-size: var(--console-control-min-height);
 		cursor: pointer;
+	}
+	.tileRows { container-type: inline-size; }
+	.tileRows table { min-inline-size: 0; }
+	.tileRows tbody th { white-space: normal; }
+	.tileRows :is(th, td) { overflow-wrap: anywhere; min-inline-size: 0; }
+	.tileRows :is(th, td):nth-child(2) { border-inline-end: 1px solid var(--color-rule-strong); }
+	.tile-label { display: none; }
+	@container (max-width: 32rem) {
+		.tileRows thead {
+			position: absolute;
+			inline-size: 1px;
+			block-size: 1px;
+			overflow: hidden;
+			clip-path: inset(50%);
+		}
+		.tileRows :is(table, tbody) { display: block; }
+		.tileRows tbody tr {
+			display: grid;
+			grid-template-columns: repeat(calc(var(--grid-columns) - 1), minmax(0, 1fr));
+			gap: var(--space-1);
+			margin-block-end: var(--space-2);
+		}
+		.tileRows tbody th { grid-column: 1 / -2; grid-row: 1; align-self: center; }
+		.tileRows tbody td:not(:last-child) { grid-row: 2; }
+		.tileRows tbody td:last-child { grid-column: -2 / -1; grid-row: 1; }
+		.tileRows tbody td:not(:last-child) .tile-label {
+			display: block;
+			margin-block-end: var(--space-1);
+			color: var(--color-text-secondary);
+		}
 	}
 </style>

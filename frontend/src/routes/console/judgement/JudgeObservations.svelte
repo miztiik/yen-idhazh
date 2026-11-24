@@ -5,10 +5,11 @@
 	import RouteStatus from '$lib/components/RouteStatus.svelte';
 	import { daysInWindow, type TimeWindow } from '$lib/charts/viewport';
 	import {
-		exactJudgeDay, judgeDayAbsence, judgeRange, latestJudgeReadings, selectedJudgeDate,
+		exactJudgeDay, judgeDayAbsence, judgeRange, latestJudgeReadings, matchesJudgeAttempt, selectedJudgeDate,
 		type JudgeIdentity, type JudgeReading
 	} from '$lib/console/judge-observations';
-	import { judgeDayQuery, judgeHistoryQuery } from '$lib/console/queries/judgement';
+	import { judgeDayQuery, judgeDrawTrialQuery, judgeHistoryQuery } from '$lib/console/queries/judgement';
+	import { useJudgeTrialAnswer } from '$lib/console/judge-trial-read.svelte';
 	import { routeReach, retryAsks, sliceOnce } from '$lib/console/queries/window';
 	import type { ConsolePanelGroup, judgeObservationRules } from '$lib/console/route-console';
 	import { evidenceOf, rowsOf, stateOf, type Answer } from '$lib/console/voices/record';
@@ -16,6 +17,7 @@
 	import { readSession } from '$lib/data/read-session';
 	import { longDate } from '$lib/format';
 	import type { ChartConfig, ConsoleConfig } from '$lib/server/config';
+	import JudgeCanaryChart from './JudgeCanaryChart.svelte';
 	import JudgeCoverage from './JudgeCoverage.svelte';
 	import JudgeDigestDetails from './JudgeDigestDetails.svelte';
 	import JudgePoolHistogram from './JudgePoolHistogram.svelte';
@@ -60,6 +62,20 @@
 	const notes = $derived(evidenceOf(historyAnswer, reach === null ? null : judgeRange(viewport, reach)));
 	const noteFor = (date: string) => judgeDayAbsence(date, historyAnswer, reach);
 	const dayNote = $derived(identity === null ? noteFor(selected) : judgeDayAbsence(selected, detailAnswer, reach));
+	const drawHistory = useJudgeTrialAnswer(judgeDrawTrialQuery, () => {
+		const packed = reach;
+		if (rules.trialBins == null || packed === null) return null;
+		return packed.state === 'ok' ? judgeRange(viewport, packed) ?? { state: 'quiet' } : packed;
+	}, (range) => sliceOnce(judgeDrawTrialQuery, range));
+	const drawRows = $derived.by(() => {
+		const matched = new Map<string, Row>();
+		for (const row of rowsOf(drawHistory.answer)) {
+			if (typeof row.date !== 'string') continue;
+			const reading = readings.get(row.date);
+			if (reading && matchesJudgeAttempt(row, reading.identity)) matched.set(row.date, row);
+		}
+		return matched;
+	});
 
 	onMount(() => { ready = true; });
 
@@ -152,13 +168,14 @@
 		{#each group.panels as id (id)}
 			{#if id === 'judge-coverage'}
 				<JudgeCoverage {calendar} {windowDays} {readings} {selected} {detail} {historyState}
-					{dayNote} {noteFor} {knobs} {chart} onPick={pick} />
+					trialDraws={rules.trialBins == null ? null : drawRows} {dayNote} {noteFor} {knobs} {chart} onPick={pick} />
 			{:else if id === 'judge-score-ranges'}
 				<JudgeScoreRanges {selected} {detail} {detailState} {dayNote} thin={rules.thin} {knobs} {chart}
 					trial={rules.trialBins != null} />
 				{#if rules.trialBins != null && reach !== null}
 					<JudgeVisualTrial {viewport} {calendar} {reach} {readings} {selected} {identity} {detail}
-						binCount={rules.trialBins} thin={rules.thin} {chart} {knobs} onPick={pick} />
+						{drawRows} drawAnswer={drawHistory.answer} onDrawRetry={drawHistory.retry}
+						binCount={rules.trialBins} contextShare={rules.trialContextShare} thin={rules.thin} {chart} {knobs} onPick={pick} />
 				{/if}
 			{:else if id === 'pair-score-drift'}
 				{#if rules.trialBins != null && reach !== null}
@@ -168,7 +185,10 @@
 					{noteFor} low={rules.low} high={rules.high} {knobs} {chart} onPick={pick} />
 			{/if}
 		{/each}
-		<JudgeDigestDetails {selected} {identity} {detail} {dayNote} {chart} />
+		{#if rules.trialBins != null}
+			<JudgeCanaryChart {selected} {detail} {dayNote} {chart} />
+		{/if}
+		<JudgeDigestDetails {selected} {identity} {detail} {dayNote} {chart} showKnownAnswers={rules.trialBins == null} />
 	</PanelGroup>
 </RouteStatus>
 

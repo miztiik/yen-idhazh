@@ -1,17 +1,20 @@
 import { expect, test } from '@playwright/test';
 import { createHash } from 'node:crypto';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { frame } from '../src/lib/charts/frame';
 import { binnedDistribution } from '../src/lib/charts/d3/distribution';
 import { scoreIntervals } from '../src/lib/charts/d3/scoreIntervals';
 import { precisionRecall } from '../src/lib/charts/d3/precisionRecall';
 import { judgeCutoffSweep, judgeZoneMatrix } from '../src/lib/console/judge-cutoff-evidence';
-import { drawOf, sliceParts } from '../src/lib/console/judge-draw';
+import { drawCoverageByOutcome, drawOf, sliceParts } from '../src/lib/console/judge-draw';
 import { latestJudgeReadings } from '../src/lib/console/judge-observations';
 import { countBandOutcomes, judgeEntropy, judgePairDays, judgeScoreBands } from '../src/lib/console/judge-pair-evidence';
 import { judgePool, savedPoolBaseline } from '../src/lib/console/judge-score-pool';
 import { judgeObservationRules } from '../src/lib/console/route-console';
 import type { Row } from '../src/lib/data/slice-shapes';
 import { numberFormat } from './support/number-format';
+import { renderConfigured, serverCompiler, type Rewrite } from './support/server-render';
 
 const now = { date: '2026-11-21', run_id: '2026-11-22-101', attempt: 2 };
 const prior = { date: '2026-11-20', run_id: '2026-11-21-99', attempt: 1 };
@@ -34,14 +37,58 @@ test('draws exact intervals and proportions without confusing a new bound with t
 		{ date: '2026-11-19', used: [null, null], decided: [], slices: [] },
 		{ date: prior.date, used: [0.7, 0.93], decided: [], slices: [] },
 		{ date: now.date, used: [bounds!.lower, bounds!.upper], decided: [decided!.lower, decided!.upper],
-			slices: [{ low: 0.84, high: 0.87, parts: [5, 2, 1, 2] }] }
-	], box, -1, 1, 4)!;
-	const [mark] = drawing.columns[2].marks;
+			slices: [{ low: -1, high: 0.7, parts: [0, 4, 0, 0] }, { low: 0.84, high: 0.87, parts: [5, 2, 1, 2] }] }
+	], box, -1, 1, 4, { focus: 0.68, share: 0.2 })!;
+	const [tail, mark] = drawing.columns[2].marks;
 	const widths = mark.segments.map(({ start, end }) => end - start);
 	expect(widths[0] / widths.reduce((a, b) => a + b)).toBeCloseTo(0.5);
 	expect(mark.y1).toBe(drawing.axis.scale(0.87));
+	expect(tail.y0).toBe(box.bottom);
+	expect(tail.y).toBeCloseTo(drawing.axis.scale(-0.15));
+	expect(drawing.axis.scale(0.68)).toBeCloseTo(box.bottom - 0.2 * box.innerHeight);
+	expect(drawing.axis.scale(1)).toBe(box.top);
 	expect(drawing.columns[0].marks).toEqual([]);
 	expect(drawing.guides[0].at(-1)).toMatchObject({ y: drawing.axis.scale(0.7), decision: drawing.axis.scale(0.68) });
+});
+
+test('daily coverage uses recorded outcomes, and never paints a refusal or unknown return as MAYBE', () => {
+	const summary = { pairs_drawn: 10, pairs_returned: 8, sample_tp: 2, sample_fp: 1, sample_fn: 1, sample_tn: 0 };
+	const draw = { ...summary, sample_status: 'measured', slice_outcomes: JSON.stringify({ slices: [
+		{ low: 0.7, high: 0.8, drawn: 10, yes: 3, no: 1, split: 1, unclear: 1, refused: 2 }
+	] }) };
+	expect(drawCoverageByOutcome(summary, draw)).toEqual({ yes: 3, no: 1, maybe: 2, refused: 2, missing: 2, unclassified: 0 });
+	expect(drawCoverageByOutcome(summary, null)).toEqual({ yes: 3, no: 1, maybe: null, refused: null, missing: 2, unclassified: 4 });
+	expect(drawCoverageByOutcome({ ...summary, pairs_returned: null }, null)).toBeNull();
+});
+
+test('canary tiles keep expected and both observed orders, and never grade a legacy key', async ({}, testInfo) => {
+	const compile = serverCompiler(testInfo.outputPath('canary-chart'));
+	const href = (file: string) => pathToFileURL(resolve(file)).href;
+	const rewrites: Rewrite[] = ['charts/readout', 'charts/readout-view', 'charts/d3/diagnosticGrid',
+		'console/judge-observations', 'format', 'number-format'].map((file) => [`$lib/${file}`, href(`src/lib/${file}.ts`)]);
+	for (const file of ['components/Panel', 'components/ChartReadout', 'charts/d3/DiagnosticGrid']) {
+		const name = file.split('/').at(-1)!;
+		rewrites.push([`$lib/${file}.svelte`, href(await compile(`src/lib/${file}.svelte`, name, rewrites))]);
+	}
+	const route = 'src/routes/console/judgement';
+	const module = await compile(`${route}/JudgeCanaryChart.svelte`, 'JudgeCanaryChart', [
+		...rewrites, ['./judge-trial-style', href(`${route}/judge-trial-style.ts`)]
+	]);
+	const { default: chart } = await import(href(module));
+	const plot = (detail: Row) => renderConfigured(chart, { props: {
+		selected: now.date, detail, dayNote: 'Unavailable', chart: { number_format: numberFormat, readout_max_share: 1 }
+	} }).body.replace(/<!--[\s\S]*?-->/g, '');
+	const answers = { canary_answers: '{"different":["NO","NO"],"unclear":["NO","NO"],"split":["YES","NO"]}' };
+	const measured = plot({ ...answers, canary_expectations: '{"different":"NO","unclear":"UNCLEAR","split":"YES","missing":"NO"}',
+		canary_kappa: 0, canary_kappa_pairs: 2 });
+	expect(measured).toContain('data-chart-name="judge-canaries"');
+	expect(measured).toMatch(/1 of 4 pairs matched/);
+	expect(measured).toMatch(/Cohen's kappa:\s*0 across 2 pairs/);
+	const unclear = measured.match(/<tr[^>]*><th[^>]*>unclear<\/th>[\s\S]*?<\/tr>/)?.[0];
+	expect(unclear?.match(/<span>(UNCLEAR|NO|Differed)<\/span>/g)).toEqual(
+		['<span>UNCLEAR</span>', '<span>NO</span>', '<span>NO</span>', '<span>Differed</span>']);
+	expect(plot(answers)).toContain('The observed answers are not graded.');
+	expect(plot({})).not.toContain('data-chart-name="judge-canaries"');
 });
 
 test('an exact attempt is counted once, with threshold-edge zones and binary cutoff ties', () => {
@@ -108,4 +155,5 @@ test('the trial is off without an explicit valid switch and bin count', () => {
 	expect(judgeObservationRules(old).trialBins).toBeNull();
 	expect(judgeObservationRules({ ...old, judge_visual_trial_enabled: 1, judge_visual_trial_score_bins: 8 }).trialBins).toBe(8);
 	expect(() => judgeObservationRules({ ...old, judge_visual_trial_enabled: 1 })).toThrow(/score_bins/);
+	expect(() => judgeObservationRules({ ...old, judge_visual_trial_context_share: 1 })).toThrow(/context_share/);
 });

@@ -52,7 +52,7 @@
 			const entropy = judgeEntropy(countsAt);
 			const fraction = view.key === 'entropy' ? null : countsAt[view.key] / n;
 			const paint = view.key === 'entropy'
-				? entropy === null ? null : `color-mix(in oklab, var(--chart-change) ${100 * entropy / MAX_ENTROPY_BITS}%, var(--chart-2))`
+				? entropy === null ? null : `color-mix(in oklab, var(--chart-change) ${100 * entropy / MAX_ENTROPY_BITS}%, var(--chart-measure))`
 				: `color-mix(in oklab, var(${OUTCOME_STYLE[view.key].token}) ${100 * (fraction ?? 0)}%, var(--chart-grid))`;
 			const day = days.get(date);
 			return { paint, facts: factsOf(heading, [
@@ -86,7 +86,7 @@
 						<h4>{view.title}</h4>
 						<p>{view.note}</p>
 						{#if view.key === 'entropy'}
-							<div class="key"><span>0 bits</span><span class="ramp" style:--from="var(--chart-2)" style:--to="var(--chart-change)" aria-hidden="true"></span><span>{number(MAX_ENTROPY_BITS, { si: false })} bits at an even three-way mix</span></div>
+							<div class="key"><span>0 bits</span><span class="ramp" style:--from="var(--chart-measure)" style:--to="var(--chart-change)" aria-hidden="true"></span><span>{number(MAX_ENTROPY_BITS, { si: false })} bits at an even three-way mix</span></div>
 							<p>A band of only MAYBE also has zero entropy. Changes in this chart are not proof of judge drift.</p>
 						{:else}
 							<div class="key"><span>0%</span><span class="ramp" style:--from="var(--chart-grid)" style:--to="var({OUTCOME_STYLE[view.key].token})" aria-hidden="true"></span><span>100%</span></div>

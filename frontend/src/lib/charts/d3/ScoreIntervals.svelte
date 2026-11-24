@@ -3,6 +3,7 @@
 	import { columnPick, pointerReadout, readoutMarks, type ReadoutFacts } from '$lib/charts/readout';
 	import type { ChartToken } from '$lib/charts/theme';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
+	import { spaceValueTicks } from './axis';
 	import type { scoreIntervals } from './scoreIntervals';
 
 	let { drawing, selected, facts, tokens, format, maxShare, onPick }: {
@@ -20,6 +21,9 @@
 	const at = $derived(pointed ?? rest);
 	const marks = $derived(readoutMarks(drawing.xs));
 	const box = $derived(drawing.box);
+	const ticks = $derived(spaceValueTicks(drawing.axis.ticks.map((value) => ({
+		value, at: drawing.axis.scale(value), text: format(value)
+	})), box, 'y'));
 	const diamond = $derived(symbol(symbolDiamond, box.labels.fontSize ** 2 / 3)() ?? '');
 </script>
 
@@ -30,11 +34,16 @@
 		data-chart-type="scoreIntervals" data-chart-name={name}
 		use:pointerReadout={{ marks, width: box.width, selected: at, onSelect: (next) => pointed = next, hover: { name, readout: facts } }}
 		use:columnPick={{ marks, width: box.width, showing: at, onPick: (index) => onPick(drawing.columns[index].date) }}>
-		{#each drawing.axis.ticks as tick (tick)}
-			{@const y = drawing.axis.scale(tick)}
-			<line x1={box.left} x2={box.right} y1={y} y2={y} stroke="var(--chart-grid)" />
-			<text x={box.left} y={y} dx="-0.35em" dy="0.35em" text-anchor="end">{format(tick)}</text>
+		{#each ticks as tick (tick.value)}
+			<line x1={box.left} x2={box.right} y1={tick.at} y2={tick.at} stroke="var(--chart-grid)" />
+			{#if tick.text}
+				<text x={box.left} y={tick.at} dx="-0.35em" dy="0.35em" text-anchor="end">{tick.text}</text>
+			{/if}
 		{/each}
+		{#if drawing.axis.focus !== null}
+			{@const join = drawing.axis.scale(drawing.axis.focus)}
+			<path d="M{box.left - 4},{join + 3}l8,-3m-8,0l8,-3" stroke="var(--chart-marker)" fill="none" data-score-context />
+		{/if}
 		{#each drawing.guides as guide, side (side)}
 			{#each guide as mark (mark.x)}
 				<path d="M{mark.x},{mark.y}H{mark.end}{mark.next === null ? '' : `V${mark.next}`}"
@@ -52,18 +61,13 @@
 					<line x1={column.x - box.labels.fontSize / 4} x2={column.x + box.labels.fontSize / 4}
 						y1={endpoint} y2={endpoint} stroke="var(--chart-marker)" />
 				{/each}
-				{#if mark.y !== null}
-					{#each mark.segments as part, index (index)}
-						{#if part.end > part.start}
-							<line x1={part.start} x2={part.end} y1={mark.y} y2={mark.y}
-								stroke="var({tokens[index]})" stroke-width="3" />
-						{/if}
-					{/each}
-				{/if}
+				{#each mark.segments as part, index (index)}
+					{#if part.end > part.start}
+						<line x1={part.start} x2={part.end} y1={mark.y} y2={mark.y}
+							stroke="var({tokens[index]})" stroke-width="3" />
+					{/if}
+				{/each}
 			{/each}
-			{#if column.clipped}
-				<text x={column.x} y={box.bottom} dy="-0.3em" text-anchor="middle" data-interval-clipped>&lt;</text>
-			{/if}
 		{/each}
 		{#if drawing.columns[at]}
 			<line x1={drawing.columns[at].x} x2={drawing.columns[at].x} y1={box.top} y2={box.bottom}
