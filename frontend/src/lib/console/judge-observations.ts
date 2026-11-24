@@ -50,7 +50,11 @@ export function latestJudgeReadings(rows: readonly Row[]): ReadonlyMap<string, J
 }
 
 export function exactJudgeDay(rows: readonly Row[], identity: JudgeIdentity): Row | null {
-	return rows.find((row) => row.date === identity.date && row.run_id === identity.run && row.attempt === identity.attempt) ?? null;
+	return rows.find((row) => matchesJudgeAttempt(row, identity)) ?? null;
+}
+
+export function matchesJudgeAttempt(row: Row, identity: JudgeIdentity): boolean {
+	return row.date === identity.date && row.run_id === identity.run && row.attempt === identity.attempt;
 }
 
 export function selectedJudgeDate(calendar: readonly string[], held: string | null, readings: ReadonlyMap<string, JudgeReading>): string {
@@ -74,7 +78,7 @@ export function judgeShare(numerator: number | null, denominator: number | null,
 		? `${formatNumber(100 * numerator / denominator, config, { si: false })}%` : null;
 }
 
-function count(value: unknown): number | null {
+export function judgeCount(value: unknown): number | null {
 	const number = judgeNumber(value);
 	return number !== null && Number.isSafeInteger(number) && number >= 0 ? number : null;
 }
@@ -84,13 +88,13 @@ function total(parts: readonly (number | null)[]): number | null {
 }
 
 export function judgeCutoff(cells: Row) {
-	const tp = count(cells.sample_tp), fp = count(cells.sample_fp);
-	const fn = count(cells.sample_fn), tn = count(cells.sample_tn);
+	const tp = judgeCount(cells.sample_tp), fp = judgeCount(cells.sample_fp);
+	const fn = judgeCount(cells.sample_fn), tn = judgeCount(cells.sample_tn);
 	return { tp, fp, fn, tn, binary: total([tp, fp, fn, tn]), predicted: total([tp, fp]), judgeYes: total([tp, fn]) };
 }
 
 export function judgeCoverage(cells: Row) {
-	const drawn = count(cells.pairs_drawn), returned = count(cells.pairs_returned);
+	const drawn = judgeCount(cells.pairs_drawn), returned = judgeCount(cells.pairs_returned);
 	const { binary } = judgeCutoff(cells);
 	const other = returned !== null && binary !== null && binary <= returned ? returned - binary : null;
 	const lost = drawn !== null && returned !== null && returned <= drawn ? drawn - returned : null;
@@ -126,7 +130,7 @@ function object(value: unknown): Record<string, unknown> | null {
 	return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }
 
-function compact(cell: Row[string] | undefined): Record<string, unknown> | null {
+export function judgeCompact(cell: Row[string] | undefined): Record<string, unknown> | null {
 	if (typeof cell !== 'string') return null;
 	try { return object(JSON.parse(cell)); }
 	catch (error) {
@@ -147,15 +151,15 @@ export interface SliceOutcome {
 }
 
 export function judgeSlices(cell: Row[string] | undefined): SliceOutcome[] | null {
-	const saved = compact(cell);
+	const saved = judgeCompact(cell);
 	if (!Array.isArray(saved?.slices)) return null;
 	const slices: SliceOutcome[] = [];
 	for (const entry of saved.slices) {
 		const row = object(entry);
 		if (row === null) return null;
 		const low = judgeNumber(row.low), high = judgeNumber(row.high);
-		const drawn = count(row.drawn), yes = count(row.yes), no = count(row.no);
-		const unclear = count(row.unclear), split = count(row.split), refused = count(row.refused);
+		const drawn = judgeCount(row.drawn), yes = judgeCount(row.yes), no = judgeCount(row.no);
+		const unclear = judgeCount(row.unclear), split = judgeCount(row.split), refused = judgeCount(row.refused);
 		if (low === null || high === null || low < -1 || high > 1 || low >= high ||
 			(slices.at(-1)?.high ?? -1) > low || drawn === null || yes === null || no === null ||
 			unclear === null || split === null || refused === null || yes + no + unclear + split + refused > drawn) return null;
@@ -165,9 +169,9 @@ export function judgeSlices(cell: Row[string] | undefined): SliceOutcome[] | nul
 }
 
 export function judgeDriftBaseline(cell: Row[string] | undefined) {
-	const row = compact(cell);
+	const row = judgeCompact(cell);
 	if (!Array.isArray(row?.sources)) return null;
-	const required = count(row.required_days);
+	const required = judgeCount(row.required_days);
 	const days: string[] = [];
 	for (const source of row.sources) {
 		const date = object(source)?.date;
@@ -178,10 +182,10 @@ export function judgeDriftBaseline(cell: Row[string] | undefined) {
 }
 
 export function judgeProbabilityEvidence(cell: Row[string] | undefined) {
-	const row = compact(cell);
+	const row = judgeCompact(cell);
 	if (row === null) return null;
 	const { source_date, source_run_id } = row;
-	const pairs = count(row.pairs), yes = count(row.yes), bins = count(row.bins);
+	const pairs = judgeCount(row.pairs), yes = judgeCount(row.yes), bins = judgeCount(row.bins);
 	if (typeof source_date !== 'string' || !isDay(source_date) || typeof source_run_id !== 'string' ||
 		pairs === null || yes === null || yes > pairs || bins === null) return null;
 	return { date: source_date, run: source_run_id, pairs, yes, bins };
@@ -189,13 +193,13 @@ export function judgeProbabilityEvidence(cell: Row[string] | undefined) {
 
 const VERDICTS = ['YES', 'NO', 'UNCLEAR'] as const;
 type Verdict = (typeof VERDICTS)[number];
-function verdictOf(cell: unknown): Verdict | null {
+export function verdictOf(cell: unknown): Verdict | null {
 	return VERDICTS.find((verdict) => verdict === cell) ?? null;
 }
 
 export function judgeCanaries(cells: Row) {
-	const key = compact(cells.canary_expectations);
-	const answers = compact(cells.canary_answers);
+	const key = judgeCompact(cells.canary_expectations);
+	const answers = judgeCompact(cells.canary_answers);
 	const graded = key !== null;
 	const items = Object.keys(key ?? answers ?? {}).map((id) => {
 		const expected = verdictOf(key?.[id]);
@@ -211,7 +215,7 @@ export function judgeCanaries(cells: Row) {
 	});
 	return {
 		items, graded, matches: items.filter((item) => item.outcome === 'Matched').length,
-		eligible: count(cells.canary_kappa_pairs), kappa: judgeNumber(cells.canary_kappa)
+		eligible: judgeCount(cells.canary_kappa_pairs), kappa: judgeNumber(cells.canary_kappa)
 	};
 }
 
