@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Date / Reference Point",
+    "y": "Share Price"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "business-economy-1hbv42hbta8e8f2a",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Record high last month","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Price after return (Monday)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-2575-2581","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": null,"value": "239.24"},
+    {"derived": null,"element_id": "quantity-2518-2524","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": null,"value": "165.57"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Nvidia Stock Price Around Jensen Huang's Return (WSJ Report)",
+  "type": "bar",
+  "version": "2026-11-22"
+}
