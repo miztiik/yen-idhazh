@@ -19,7 +19,7 @@ const FILES: Record<FrontendGroup, readonly string[]> = {
 		'console-data-explorer-keep', 'console-data-explorer-shape', 'console-date-axis',
 		'console-drawn-cells', 'console-failure',
 		'console-flow', 'console-frame', 'console-host-spans',
-		'console-item-cost', 'console-judgement-nothings', 'console-machine',
+		'console-item-cost', 'console-judge-visual-trial', 'console-judgement-nothings', 'console-machine',
 		'console-machine-data', 'console-machine-split', 'console-model',
 		'console-memory-board',
 		'console-model-instruments', 'console-model-nothings', 'console-model-panels',

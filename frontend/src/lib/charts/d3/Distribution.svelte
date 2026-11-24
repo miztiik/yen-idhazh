@@ -49,7 +49,14 @@
 		columns: geometry.bins.map((bin) => `${formatNumber(bin.x0, numberFormat)} to ${formatNumber(bin.x1, numberFormat)}`),
 		series: [
 			{ label: binLabel, swatch: 'var(--chart-measure)', values: geometry.bins.map((bin) => bin.count), format: (value) => formatNumber(value, numberFormat, { exact: true }) },
-			{ label: 'At or below', swatch: null, values: geometry.bins.map((bin) => bin.share), format: formatShare }
+			geometry.preBinned
+				? { label: 'Share of this pool', swatch: null, values: geometry.bins.map((bin) => bin.percent ?? null), format: formatShare }
+				: { label: 'At or below', swatch: null, values: geometry.bins.map((bin) => bin.share), format: formatShare },
+			...(geometry.bins.some((bin) => bin.reference) ? [{
+				label: 'Saved baseline', swatch: null,
+				values: geometry.bins.map((bin) => bin.reference ? `${formatShare(bin.reference.percent)} (${formatNumber(bin.reference.count, numberFormat, { exact: true })})` : null),
+				format: String
+			}] : [])
 		],
 		notMeasured: 'No readings in this bin.',
 		resting: geometry.bins.reduce((best, bin, index, bins) => bin.count > bins[best].count ? index : best, 0)
@@ -88,7 +95,7 @@
 				>
 			{/if}
 		{/each}
-		{#each geometry.share.ticks as tick (tick.value)}
+		{#each geometry.preBinned ? [] : geometry.share.ticks as tick (tick.value)}
 			{#if tick.text}
 				<text
 					x={box.right + TICK}
@@ -102,9 +109,13 @@
 		{/each}
 
 		{#each geometry.bins as bin (bin.x0)}
-			<rect x={bin.left} y={bin.top} width={bin.width} height={bin.height} fill="var(--chart-measure)" aria-label={`${formatNumber(bin.x0, numberFormat)} to ${formatNumber(bin.x1, numberFormat)}: ${formatNumber(bin.count, numberFormat, { exact: true })} ${binLabel.toLowerCase()}, ${formatShare(bin.share)} at or below`} />
+			<rect x={bin.left} y={bin.top} width={bin.width} height={bin.height} fill="var(--chart-measure)" aria-label={`${formatNumber(bin.x0, numberFormat)} to ${formatNumber(bin.x1, numberFormat)}: ${formatNumber(bin.count, numberFormat, { exact: true })} ${binLabel.toLowerCase()}, ${bin.percent === undefined ? `${formatShare(bin.share)} at or below` : `${formatShare(bin.percent)} of the pool`}`} />
+			{#if bin.reference && bin.reference.height > 0}
+				<rect x={bin.left} y={bin.reference.top} width={bin.width} height={bin.reference.height}
+					fill="none" stroke="var(--color-text)" data-baseline-bin />
+			{/if}
 		{/each}
-		<path d={geometry.cumulative} fill="none" stroke="var(--color-text)" stroke-width={CURVE} />
+		{#if !geometry.preBinned}<path d={geometry.cumulative} fill="none" stroke="var(--color-text)" stroke-width={CURVE} />{/if}
 
 		<line x1={box.left} x2={box.right} y1={box.bottom} y2={box.bottom} stroke="var(--chart-axis)" />
 		{#each geometry.x.ticks as tick, index (tick.value)}
@@ -144,7 +155,8 @@
 		<dl class="record-readout" data-readout={name} data-readout-shape="record" style="max-width: {readoutMaxShare * 100}%">
 			<dt data-readout-subject>{readout.columns[at]}</dt>
 			<div data-readout-row="rows"><dd>{binLabel}</dd><dd>{readout.series[0]?.values[at]}</dd></div>
-			<div data-readout-row="share"><dd>At or below</dd><dd>{readout.series[1]?.values[at]}</dd></div>
+			<div data-readout-row="share"><dd>{readout.series[1]?.label}</dd><dd>{readout.series[1]?.values[at]}</dd></div>
+			{#if readout.series[2]}<div data-readout-row="reference"><dd>{readout.series[2].label}</dd><dd>{readout.series[2].values[at]}</dd></div>{/if}
 		</dl>
 	{/if}
 	</div>

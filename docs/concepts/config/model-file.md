@@ -164,6 +164,11 @@ Config preflight refuses duplicate aliases, even with equal values, and
 opposing consumed switches. Unknown unrelated flags remain the runtime's
 responsibility. Interpretation never rewrites the model's server block or argv.
 
+The Ornith preset uses `--spec-type draft-mtp` so its built-in draft head
+can propose tokens for the main model to verify together. It uses the
+runtime's default draft length and needs no companion file or request
+sampling changes.
+
 Earlier alias-blind recording could report long-spelled flags as
 `runtime-default` or omit an item setting. Corrected fingerprints may therefore
 change without a runtime setting changing. Historical records remain valid and

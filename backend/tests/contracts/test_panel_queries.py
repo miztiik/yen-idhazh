@@ -20,16 +20,21 @@ from idhazh.contracts.item_health import MACHINE_CELLS_RENAMED, UNREAD_CELLS, It
 from idhazh.contracts.ledgers import LedgersConfig
 from idhazh.contracts.run_shards import RunShards
 from idhazh.contracts.story_similarity_diagnostics import (
+    MAX_SCORE_BINS,
     JudgeProbabilityEvidence,
     JudgeProbabilityStatus,
     SampleStatus,
     ScoreDriftBaseline,
     ScoreDriftSource,
     ScoreDriftStatus,
+    ScorePoolHistogram,
     SliceOutcome,
     SliceOutcomes,
 )
-from idhazh.contracts.story_similarity_pair_verdict import SameStoryVerdict
+from idhazh.contracts.story_similarity_pair_verdict import (
+    SameStoryVerdict,
+    StorySimilarityPairVerdict,
+)
 from idhazh.contracts.story_similarity_threshold_history_row import (
     StorySimilarityThresholdHistoryRow,
 )
@@ -59,7 +64,10 @@ EXPECTED_NAMES: Final = {
         "promptReuseQuery", "readAgainstWrittenQuery",
     ),
     "voices": ("feedsFailedQuery", "fetchTimeQuery", "sourceCutsQuery", "whyChosenQuery"),
-    "judgement": ("judgeHistoryQuery", "judgeDayQuery"),
+    "judgement": (
+        "judgeHistoryQuery", "judgeDayQuery", "judgeDrawTrialQuery", "judgePairTrialQuery", "judgeCutoffTrialQuery",
+        "judgePoolTrialQuery",
+    ),
     "window": (),
 }
 
@@ -123,6 +131,22 @@ EXPECTED_COLUMNS: Final[Mapping[str, tuple[str, ...]]] = {
         "judge_probability_baseline_brier_score", "judge_probability_ece",
         "canary_answers", "canary_expectations", "canary_kappa", "canary_kappa_pairs",
     ),
+    "judgeDrawTrialQuery": (
+        "date", "run_id", "attempt", "pairs_drawn", "pairs_returned", "sample_status", "slice_outcomes",
+        "lower_threshold_before", "upper_threshold_before", "lower_threshold_after", "upper_threshold_after",
+    ),
+    "judgePairTrialQuery": (
+        "date", "run_id", "attempt", "pair_key", "similarity_score", "verdict", "verdict_swapped",
+        "lower_threshold_in_force", "upper_threshold_in_force", "scorer_model", "cosine_weight",
+        "judge_model", "prompt_digest", "grammar_digest", "judge_policy_version", "judge_temperature",
+    ),
+    "judgeCutoffTrialQuery": (
+        "date", "run_id", "attempt", "sample_f0_5", "sample_average_precision",
+        "sample_precision_at_recall_90", "sample_recall_90_cutoff", "sample_recall_at_recall_90_cutoff",
+        "lower_estimate", "lower_nights_used", "lower_usable_pairs_used", "lower_held_because", "lower_move_limited_by",
+        "upper_estimate", "upper_nights_used", "upper_usable_pairs_used", "upper_held_because", "upper_move_limited_by",
+    ),
+    "judgePoolTrialQuery": ("date", "run_id", "attempt", "score_pool_histogram"),
 }
 
 
@@ -202,6 +226,7 @@ def row_columns() -> dict[str, tuple[str, ...]]:
         "summary-quality-evals": EvalRow.csv_columns(),
         # The compact ledger keeps the winning writer's envelope attempt next to the row.
         "threshold-history": (*StorySimilarityThresholdHistoryRow.model_fields, "attempt"),
+        "pair-verdicts": (*StorySimilarityPairVerdict.model_fields, "attempt"),
     }
 
 
@@ -244,6 +269,15 @@ def test_judgement_names_the_producers_diagnostic_statuses_and_verdicts() -> Non
     verdicts = re.search(r"const VERDICTS = \[(.*?)\] as const;", source)
     assert verdicts is not None
     assert set(re.findall(r"'([^']+)'", verdicts[1])) == {entry.value for entry in SameStoryVerdict}
+
+
+def test_judgement_pool_reader_uses_the_native_fields_and_bound() -> None:
+    source = read_text(REPO_ROOT / "frontend/src/lib/console/judge-score-pool.ts")
+    body = source.split("export function judgePool(", 1)[1].split("\n}", 1)[0]
+    assert set(re.findall(r"\bsaved(?:\.|\?\.)([a-z_]\w*)", body)) == ScorePoolHistogram.model_fields.keys()
+    bound = re.search(r"^export const MAX_SCORE_BINS = (\d+);$", source, re.M)
+    assert bound is not None
+    assert int(bound[1]) == MAX_SCORE_BINS
 
 
 def explorer_ledgers() -> tuple[str, ...]:

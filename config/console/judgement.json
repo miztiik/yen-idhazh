@@ -30,6 +30,8 @@
     "holdout_axis_above_line": 0.01,
     "psi_moderate_min": 0.10,
     "psi_significant_above": 0.25,
-    "judge_thin_sample_pairs": 20
+    "judge_thin_sample_pairs": 20,
+    "judge_visual_trial_enabled": 1,
+    "judge_visual_trial_score_bins": 10
   }
 }

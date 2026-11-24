@@ -49,6 +49,7 @@
   "--no-repack": null,
   "--parallel": 1,
   "--slot-prompt-similarity": 0.1,
+  "--spec-type": "draft-mtp",
   "--threads-batch": 4
 },
     "sha256": "e4d9634a3b6546a5c00a8680568fe1125f6c98c704ee51ae52ba07650fb4247d",

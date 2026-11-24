@@ -27,6 +27,7 @@
 		readoutMaxShare = 1,
 		separateSegments = false,
 		showTotal = true,
+		rowTotal,
 		rowNote
 	}: {
 		geometry: PartsGeometry | null;
@@ -39,6 +40,7 @@
 		readoutMaxShare?: number;
 		separateSegments?: boolean;
 		showTotal?: boolean;
+		rowTotal?: Snippet<[number]>;
 		rowNote?: Snippet<[number]>;
 	} = $props();
 	let selected = $state<number | null>(null);
@@ -76,6 +78,7 @@
 						class="parts-track"
 						class:overlapping={geometry.overlapping}
 						class:separated={separateSegments}
+						class:empty-track={row.total === 0 && rowTotal !== undefined}
 					>
 						<span class="parts-fills" class:overlapping={geometry.overlapping}
 							class:chart-bar-stack={!geometry.overlapping}
@@ -91,7 +94,8 @@
 						{/each}
 						</span>
 					</span>
-					{#if showTotal && row.total !== null}<span class="parts-total">{row.total}</span>{/if}
+					{#if rowTotal}<span class="parts-total">{@render rowTotal(index)}</span>
+					{:else if showTotal && row.total !== null}<span class="parts-total">{row.total}</span>{/if}
 					{#if rowNote}<div class="parts-context">{@render rowNote(index)}</div>{/if}
 				</li>
 			{/each}
@@ -162,6 +166,7 @@
 		background: var(--chart-grid);
 		border-radius: var(--radius-sm);
 	}
+	.parts-track.empty-track { background: transparent; }
 
 	.parts-segment {
 		position: absolute;
