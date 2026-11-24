@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Indian seafarers affected",
+    "y": "Number of people"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-5rm1bzsb7dctxckr",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "MV Omorfi crew member killed","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "MV Royad Mammadov Indian nationals aboard","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-4811-4813","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": null,"value": "4"},
+    {"derived": null,"element_id": "quantity-4829-4831","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": null,"value": "2"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "India's Reported Casualties from Black Sea Shipping Attacks (2026)",
+  "type": "bar",
+  "version": "2026-11-22"
+}

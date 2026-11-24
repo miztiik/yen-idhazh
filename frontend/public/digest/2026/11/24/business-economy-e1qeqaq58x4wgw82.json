@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Metric",
+    "y": "Percentage (%)"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "business-economy-e1qeqaq58x4wgw82",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Hypotheses with available results","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Available results that are null findings","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-436-439","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "%","value": "42"},
+    {"derived": null,"element_id": "quantity-545-548","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "64"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Missing Results in Economics Research (5,057 pre-registered hypotheses)",
+  "type": "bar",
+  "version": "2026-11-22"
+}

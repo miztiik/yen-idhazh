@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Period",
+    "y": "Number of Bird Species"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "world-2v1b62qze3ew1v4v",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Before recovery (baseline)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "After recovery (2020)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-133-136","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": null,"value": "148"},
+    {"derived": null,"element_id": "quantity-140-143","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": null,"value": "397"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Bird Species in China's Mangroves: Before Recovery vs. After (1998\u20132020)",
+  "type": "bar",
+  "version": "2026-11-22"
+}

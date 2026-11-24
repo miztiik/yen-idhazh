@@ -18,13 +18,13 @@
   },
   "compaction_lag_days": 0,
   "covers_through": "2026-11-24",
-  "generated_at": "2026-11-24T02:19:01Z",
+  "generated_at": "2026-11-24T04:50:58Z",
   "routes": [
-    {"carries": "The model spent 2 h 14 m of this.","description": "Did the runs work, and what each stage cost.","href": "/console/","id": "pipelines","label": "Pipelines","severity": 3,"worst": "44 feeds resting"},
-    {"carries": "This day ran as one run, so there is nothing to compare it against.","description": "What the model wrote, how long it took, and what it got wrong.","href": "/console/model/","id": "model","label": "Summaries","severity": 3,"worst": "15 items failed"},
-    {"carries": "65 articles on this day.","description": "The hardware the model ran on, and how much it varied between runs.","href": "/console/machine/","id": "machine","label": "Hardware","severity": 2,"worst": "4 shards reported nothing"},
+    {"carries": "The model spent 5 h 1 m of this.","description": "Did the runs work, and what each stage cost.","href": "/console/","id": "pipelines","label": "Pipelines","severity": 3,"worst": "45 feeds resting"},
+    {"carries": "This day ran in 2 runs, 1.12x apart on read speed.","description": "What the model wrote, how long it took, and what it got wrong.","href": "/console/model/","id": "model","label": "Summaries","severity": 3,"worst": "27 items failed"},
+    {"carries": "133 articles on this day.","description": "The hardware the model ran on, and how much it varied between runs.","href": "/console/machine/","id": "machine","label": "Hardware","severity": 2,"worst": "4 shards reported nothing"},
     {"carries": "Summary measurements and writing costs are on Summaries.","description": "Which stories the day merged, and how close the merge line sits to pairs a person marked apart.","href": "/console/judgement/","id": "judgement","label": "Judgement","severity": 0,"worst": null},
-    {"carries": "44 feeds rested over these 560 runs.","description": "Who supplied the day, and how far each feed is discounted.","href": "/console/voices/","id": "voices","label": "Voices","severity": 2,"worst": "6 feeds discounted to the floor"},
+    {"carries": "45 feeds rested over these 561 runs.","description": "Who supplied the day, and how far each feed is discounted.","href": "/console/voices/","id": "voices","label": "Voices","severity": 2,"worst": "6 feeds discounted to the floor"},
     {"carries": "Every published ledger the other routes draw from, open to a question of your own.","description": "What the ledgers hold, and whatever you ask of them.","href": "/console/data-explorer/","id": "data-explorer","label": "Data explorer","severity": 0,"worst": null}
   ],
   "rows_uncompacted": 0,
@@ -206,27 +206,28 @@
     "compared_from": "2026-09-14"
   },
   "size": {
-    "articles_to_cap": 466379,
-    "bytes": 80194383,
-    "cap_fraction": 0.07468683924525976,
-    "left_mb": 947.520676612854,
+    "articles_to_cap": 466281,
+    "bytes": 80404856,
+    "cap_fraction": 0.0748828575015068,
+    "left_mb": 947.319953918457,
     "measured_days": 88,
-    "sentence": "76.5 MB of the 1 GB limit - room for about 466,000 more articles."
+    "sentence": "76.7 MB of the 1 GB limit - room for about 466,000 more articles."
   },
   "verdict": {
     "date": "2026-11-24",
     "health": "amber",
     "more_runs": 0,
     "runs": [
-      {"health": "amber","label": "Run 1 is worth a look"}
+      {"health": "amber","label": "Run 1 is worth a look"},
+      {"health": "amber","label": "Run 2 is worth a look"}
     ],
-    "sentence": "2026-11-24 ran 1 run and published 65 of 80 planned items. 15 items failed."
+    "sentence": "2026-11-24 ran 2 runs and published 133 of 160 planned items. 27 items failed."
   },
   "version": "2026-10-11T21:00",
   "worst": {
     "href": "/console/",
     "id": "pipelines",
     "label": "Pipelines",
-    "sentence": "44 feeds are resting, so nothing they carry reaches the digest. Each is asked again after 5 runs."
+    "sentence": "45 feeds are resting, so nothing they carry reaches the digest. Each is asked again after 5 runs."
   }
 }
