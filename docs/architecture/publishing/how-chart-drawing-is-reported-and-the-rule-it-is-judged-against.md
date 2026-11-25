@@ -180,8 +180,12 @@ and **Saved by worker** counts `rendered_type` from the packed
 one type when proposed and another when saved. These columns cover only
 decisions received by assembly, not every model call or every worker run.
 For each run in the day's `run.json`, distinct settled decisions must match
-assembly's `items_routed`. Lost or unread inputs, unpacked days and untyped
-proposals leave a gap rather than a partial total.
+assembly's `items_routed`. An explicit validation refusal before a typed plan
+settles a decision without adding a chart. Older attempts without type evidence,
+unexplained blanks, lost or unread inputs and unpacked days leave a coverage
+gap. An incomplete window shows **Missing** for its attempt totals and labels
+positive recorded subtotals with the number of complete UTC days they cover
+out of the selected days. The newest day can still be waiting for packing.
 
 **Published** counts the types actually readable from the final `digest.json`
 references and the matching assets named in `publication.json`. It does not

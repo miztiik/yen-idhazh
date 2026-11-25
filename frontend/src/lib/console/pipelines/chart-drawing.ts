@@ -23,25 +23,53 @@ export interface ChartTypeCount {
 	proposed: number | null;
 	saved: number | null;
 	published: number | null;
+	recordedProposed: number | null;
+	recordedSaved: number | null;
 }
 
-export function chartTypeCounts(days: readonly ChartTypeDay[], window: TimeWindow): ChartTypeCount[] {
+export interface ChartTypeWindow {
+	rows: ChartTypeCount[];
+	coveredDays: number;
+	selectedDays: number;
+}
+
+export function chartTypeCounts(days: readonly ChartTypeDay[], window: TimeWindow): ChartTypeWindow {
 	const byDate = new Map(days.map((day) => [day.date, day]));
-	const selected = daysInWindow(window).map((date) => byDate.get(date));
+	const selected = daysInWindow(window);
 	const types = new Set<string>(DRAWABLE);
-	const total = (column: 'proposed' | 'saved' | 'published') => {
-		const counts = new Map<string, number>();
-		let complete = true;
-		for (const day of selected) {
-			const daily = day?.[column];
-			if (daily == null) complete = false;
-			else for (const [type, count] of Object.entries(daily)) {
-				types.add(type);
-				counts.set(type, (counts.get(type) ?? 0) + count);
-			}
+	const proposed = new Map<string, number>(), saved = new Map<string, number>(), published = new Map<string, number>();
+	const add = (counts: Map<string, number>, day: ChartTypeTotals) => {
+		for (const [type, count] of Object.entries(day)) {
+			types.add(type);
+			counts.set(type, (counts.get(type) ?? 0) + count);
 		}
-		return (type: string) => complete ? counts.get(type) ?? 0 : null;
 	};
-	const proposed = total('proposed'), saved = total('saved'), published = total('published');
-	return [...types].map((type) => ({ type, proposed: proposed(type), saved: saved(type), published: published(type) }));
+	let coveredDays = 0, publishedDays = 0;
+	for (const date of selected) {
+		const day = byDate.get(date);
+		if (day === undefined) continue;
+		if (day.proposed !== null && day.saved !== null) {
+			add(proposed, day.proposed);
+			add(saved, day.saved);
+			coveredDays++;
+		}
+		if (day.published !== null) {
+			add(published, day.published);
+			publishedDays++;
+		}
+	}
+	const complete = coveredDays === selected.length;
+	const rows = [...types].map((type) => {
+		const proposedCount = proposed.get(type) ?? 0;
+		const savedCount = saved.get(type) ?? 0;
+		return {
+			type,
+			proposed: complete ? proposedCount : null,
+			saved: complete ? savedCount : null,
+			published: publishedDays === selected.length ? published.get(type) ?? 0 : null,
+			recordedProposed: !complete && proposedCount > 0 ? proposedCount : null,
+			recordedSaved: !complete && savedCount > 0 ? savedCount : null
+		};
+	});
+	return { rows, coveredDays, selectedDays: selected.length };
 }

@@ -45,6 +45,9 @@ export function tallyChartTypes(types: Iterable<string>): ChartTypeTotals {
 
 interface SettledAttempt { visualId: string; planned: string; saved: string }
 
+// Earlier VisualAttemptRow versions did not record types, even for typed decisions.
+const TYPED_ATTEMPTS_FROM = '2026-10-29';
+
 /** Match the assembled cohort, not every attempt on the day. */
 export function visualAttemptTypes(
 	date: string, rows: readonly Row[], read: RecordRead, runs: readonly Pick<RunRecord, 'runId' | 'n' | 'decided'>[],
@@ -66,11 +69,13 @@ export function visualAttemptTypes(
 		const saved = cell(row, 'rendered_type');
 		const state = cell(row, 'state');
 		const decision = cell(row, 'decision');
-		const declined = decision === 'none' && state === 'absent' && !planned && !saved;
+		const refusedBeforeTyping = decision === 'visual' && cell(row, 'version') >= TYPED_ATTEMPTS_FROM &&
+			cell(row, 'none_reason') === 'validation_failed' && !cell(row, 'rejection_reason');
+		const noChart = state === 'absent' && !planned && !saved && (decision === 'none' || refusedBeforeTyping);
 		const typed = decision === 'visual' && planned && (
 			(state === 'rendered' && saved) || ((state === 'absent' || state === 'render_failed') && !saved)
 		);
-		if (!itemId || !visualId || (!declined && !typed)) return null;
+		if (!itemId || !visualId || (!noChart && !typed)) return null;
 
 		// Assembly holds one decision per item. Identical repeats do not fill a missing
 		// item; conflicting identities cannot say which decision assembly received.

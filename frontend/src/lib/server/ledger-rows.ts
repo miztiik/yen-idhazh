@@ -222,7 +222,7 @@ export async function feedHealthRows(window: TimeWindow, root: string = STATE_RO
  * identities before counting typed outcomes. Neither exposes raw rows.
  */
 export const VISUAL_ATTEMPT_COLUMNS = [
-	'date', 'run_id', 'item_id', 'decision', 'rejection_reason', 'state', 'visual_id',
+	'version', 'date', 'run_id', 'item_id', 'decision', 'none_reason', 'rejection_reason', 'state', 'visual_id',
 	'planned_type', 'rendered_type'
 ] as const;
 

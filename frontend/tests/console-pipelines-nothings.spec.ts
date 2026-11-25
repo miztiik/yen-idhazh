@@ -7,6 +7,7 @@ import { renderConfigured as render } from './support/server-render';
 import { numberFormat } from './support/number-format';
 import { serverCompiler, type Rewrite } from './support/server-render';
 import { BUILD_TIME } from './support/panel-drivers/pipelines';
+import { chartTypeCounts } from '../src/lib/console/pipelines/chart-drawing';
 
 const FRONTEND = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DAY = { date: '2030-06-01', reached: 0, asked: 0, drafted: 0, published: 0, items: 0, plannerMinutes: null, minutesPerChart: null };
@@ -80,8 +81,10 @@ for (const [id, name] of PANELS) {
 				absent: { manifests: [], publishedItems: {}, sizeBytes: null }
 			},
 			'chart-drawing': {
-				quiet: { days: [DAY], typeCounts: [{ type: 'bar', proposed: 0, saved: 0, published: 0 }] },
-				absent: { days: [], typeCounts: [{ type: 'bar', proposed: null, saved: null, published: null }] }
+				quiet: { days: [DAY], typeCounts: chartTypeCounts([
+					{ date: DAY.date, proposed: {}, saved: {}, published: {} }
+				], common.window) },
+				absent: { days: [], typeCounts: chartTypeCounts([], common.window) }
 			},
 			'visual-refusals': {
 				quiet: { days: [], read: { state: 'read', first: DAY.date, through: DAY.date, lastRows: null, lostDays: [], setAside: {} } },

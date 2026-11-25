@@ -86,6 +86,31 @@ const READ: RecordRead = {
 	lostDays: ['2030-06-05'], setAside: { '2030-06-06': 1 }
 };
 
+test('a refusal before a typed plan still settles the assembled decision without adding a chart', async ({}, info) => {
+	const date = '2030-06-02';
+	const window = { start: date, end: date };
+	const run = { runId: `${date}-1`, n: 1, decided: 2 };
+	const saved = {
+		version: '2026-10-29', date, run_id: run.runId, item_id: 'story-01', visual_id: 'a'.repeat(64),
+		decision: 'visual', none_reason: null, rejection_reason: null, state: 'rendered',
+		planned_type: 'bar', rendered_type: 'bar'
+	};
+	const refused = {
+		...saved, item_id: 'story-02', visual_id: 'b'.repeat(64), none_reason: 'validation_failed',
+		state: 'absent', planned_type: null, rendered_type: null
+	};
+	const root = info.outputPath('attempts');
+	await buildRows(root, 'visual-design-attempts', [{ covers: date, rows: [saved, refused] }]);
+	const table = await visualAttemptRows(window, root);
+	const published = [{ itemId: saved.item_id, run: run.n, type: 'bar' }];
+	expect(visualAttemptTypes(date, table.rows, table.read, [run], published))
+		.toEqual({ proposed: { bar: 1 }, saved: { bar: 1 } });
+	for (const unclear of [
+		{ ...refused, none_reason: null },
+		{ ...refused, version: '2026-10-27T11:32' }
+	]) expect(visualAttemptTypes(date, [saved, unclear], table.read, [run], published)).toBeNull();
+});
+
 test('each assembled run must account for its own distinct decisions and published saves', () => {
 	const date = '2030-06-02';
 	const runs = [{ runId: 'first', n: 1, decided: 1 }, { runId: 'second', n: 2, decided: 1 }];

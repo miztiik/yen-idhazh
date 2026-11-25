@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { chartRule, chartFlow, visualsPublished, minutesText, coverageText, type ChartTypeCount } from './chart-drawing';
+	import { chartRule, chartFlow, visualsPublished, minutesText, coverageText, type ChartTypeWindow } from './chart-drawing';
 	import TargetBar from '$lib/components/TargetBar.svelte';
 	import Sparkline from '$lib/components/Sparkline.svelte';
 	import { movementVerdict } from '$lib/charts/theme';
@@ -15,7 +15,7 @@
 	import { formatNumber } from '$lib/number-format';
 	import { useNumberFormat } from '$lib/number-format-context';
 	let { days, typeCounts, windowDays, knobs }: {
-		days: ChartDay[]; typeCounts: ChartTypeCount[]; windowDays: number; knobs: ConsoleConfig
+		days: ChartDay[]; typeCounts: ChartTypeWindow; windowDays: number; knobs: ConsoleConfig
 	} = $props();
 	const numberFormat = useNumberFormat();
 	const frame = useChartFrame();
@@ -29,6 +29,7 @@
 	})), { narrow: measured !== null && measured < 700, frame: frame(measured ?? knobs.chart_width, 260, { ...MARGIN, right: 170 }), nodeWidth: 12, nodeGap: 34, number_format: numberFormat }));
 	const minutes = (value: number | null) => value === null ? '-' : formatNumber(value, numberFormat, { si: false });
 	const count = (value: number | null) => value === null ? 'Missing' : formatNumber(value, numberFormat, { exact: true });
+	const hasSubtotals = $derived(typeCounts.rows.some((row) => row.recordedProposed !== null || row.recordedSaved !== null));
 </script>
 <div use:observeWidth={(width) => measured = width} data-windowed="chart-drawing" data-window-days={windowDays}>
 	{#if days.length > 0}<p data-lede class="lede">{visualsPublished(days)} visuals published.</p>{/if}
@@ -63,15 +64,20 @@
 	<p data-flow-shares>Every share is of the items the visual planner reached.</p>
 	<h3 id="chart-type-counts">Charts by type</h3>
 	<p>Proposed and saved counts cover decisions received by assembly. Published counts come from the final edition and its asset inventory.</p>
-	{#if typeCounts.some((row) => row.proposed === null || row.saved === null || row.published === null)}
+	{#if typeCounts.rows.some((row) => row.proposed === null || row.saved === null || row.published === null)}
 		<p>Missing means there is not enough evidence for the selected window. It does not mean zero.</p>
 	{/if}
+	{#if hasSubtotals}
+		<p id="chart-type-coverage">Recorded subtotals use complete tracking from {count(typeCounts.coveredDays)} of {count(typeCounts.selectedDays)} selected UTC days.</p>
+	{/if}
 	<div class="console-table">
-		<table class="chart-types" aria-labelledby="chart-type-counts">
+		<table class="chart-types" aria-labelledby="chart-type-counts" aria-describedby={hasSubtotals ? 'chart-type-coverage' : undefined}>
 			<thead><tr><th scope="col">Chart type</th><th scope="col">Proposed</th><th scope="col">Saved by worker</th><th scope="col">Published</th></tr></thead>
-			<tbody>{#each typeCounts as row (row.type)}<tr>
+			<tbody>{#each typeCounts.rows as row (row.type)}<tr>
 				<th scope="row">{row.type.replaceAll('_', ' ')}</th>
-				<td>{count(row.proposed)}</td><td>{count(row.saved)}</td><td>{count(row.published)}</td>
+				<td>{@render attemptCount(row.proposed, row.recordedProposed)}</td>
+				<td>{@render attemptCount(row.saved, row.recordedSaved)}</td>
+				<td>{count(row.published)}</td>
 			</tr>{/each}</tbody>
 		</table>
 	</div>
@@ -87,6 +93,9 @@
 		</table></div>
 	</details>
 </div>
+{#snippet attemptCount(total: number | null, recorded: number | null)}
+	{count(total)}{#if recorded !== null}<br />Recorded: {count(recorded)}{/if}
+{/snippet}
 {#snippet movement(value: number | null, sense: TargetSense, name: string)}
 	{#if value !== null}<p data-rule-move={name}><span data-movement={value.toFixed(4)} data-polarity={sense}
 		data-movement-verdict={movementVerdict(value, sense)} data-movement-paint="color">{value >= 0 ? '+' : ''}{formatNumber(value * 100, numberFormat, { si: false })}%</span> across this window</p>{/if}
@@ -95,7 +104,7 @@
 	.lede { font-size: var(--text-2xl); }
 	[data-flow="chart"] :global(svg) { inline-size: 100%; max-inline-size: 100%; block-size: auto; }
 	.chart-types { inline-size: 100%; border-collapse: collapse; font-size: var(--console-small-size); font-variant-numeric: tabular-nums; }
-	.chart-types th, .chart-types td { padding: var(--space-1) var(--space-2); text-align: start; border-block-end: 1px solid var(--color-rule); }
+	.chart-types th, .chart-types td { padding: var(--space-1) var(--space-2); text-align: start; vertical-align: top; border-block-end: 1px solid var(--color-rule); }
 	details { margin-block-start: var(--space-6); font-size: var(--text-sm); }
 	details[open] { padding: var(--space-5); border: 1px solid var(--color-rule); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); }
 </style>

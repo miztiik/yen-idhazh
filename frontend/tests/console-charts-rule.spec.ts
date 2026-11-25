@@ -30,21 +30,31 @@ function day(date: string, over: Partial<GlanceDay> = {}): GlanceDay {
 const chartRuleFor = (days: readonly GlanceDay[], thresholds: ChartThresholds, windowDays: number) =>
     chartRule(days, thresholds, windowDays, numberFormat);
 
-test('type totals keep a measured zero, incomplete attempts and a missing day distinct', () => {
+test('a late attempt day leaves window totals missing but keeps positive recorded subtotals', () => {
     const first = '2030-06-13', last = '2030-06-14';
     const days = [
         { date: first, proposed: { bar: 2 }, saved: { bar: 1 }, published: { bar: 1 } },
         { date: last, proposed: null, saved: null, published: { bar: 2 } }
     ];
-    const bar = 'bar', dot = 'dot';
     const quiet = chartTypeCounts(days, { start: first, end: first });
-    expect(quiet).toContainEqual({ type: bar, proposed: 2, saved: 1, published: 1 });
-    expect(quiet).toContainEqual({ type: dot, proposed: 0, saved: 0, published: 0 });
+    expect(quiet.rows).toContainEqual({
+        type: 'bar', proposed: 2, saved: 1, published: 1, recordedProposed: null, recordedSaved: null
+    });
+    expect(quiet.rows).toContainEqual({
+        type: 'dot', proposed: 0, saved: 0, published: 0, recordedProposed: null, recordedSaved: null
+    });
     const partial = chartTypeCounts(days, { start: first, end: last });
-    expect(partial).toContainEqual({ type: bar, proposed: null, saved: null, published: 3 });
-    expect(partial).toContainEqual({ type: dot, proposed: null, saved: null, published: 0 });
+    expect(partial).toMatchObject({ coveredDays: 1, selectedDays: 2 });
+    expect(partial.rows).toContainEqual({
+        type: 'bar', proposed: null, saved: null, published: 3, recordedProposed: 2, recordedSaved: 1
+    });
+    expect(partial.rows).toContainEqual({
+        type: 'dot', proposed: null, saved: null, published: 0, recordedProposed: null, recordedSaved: null
+    });
     const gap = chartTypeCounts(days, { start: first, end: '2030-06-15' });
-    expect(gap).toContainEqual({ type: bar, proposed: null, saved: null, published: null });
+    expect(gap.rows).toContainEqual({
+        type: 'bar', proposed: null, saved: null, published: null, recordedProposed: 2, recordedSaved: 1
+    });
 });
 
 test.describe('the arithmetic behind the two bars', () => {
