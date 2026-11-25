@@ -1,9 +1,10 @@
 {
+  "coverage": [],
   "entries": [
-    {"bytes": 6542,"covers": "2026-08","lost_days": [],"rows": 39,"set_aside": 0,"state": "packed"},
-    {"bytes": 8555,"covers": "2026-09","lost_days": [],"rows": 129,"set_aside": 0,"state": "packed"}
+    {"bytes": 6542,"covers": "2026-08","rows": 39},
+    {"bytes": 8555,"covers": "2026-09","rows": 129}
   ],
   "ledger": "run-shards",
   "period": "monthly",
-  "version": "2026-10-07"
+  "version": "2026-11-25"
 }

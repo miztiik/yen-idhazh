@@ -1,8 +1,9 @@
 {
+  "coverage": [],
   "entries": [
-    {"bytes": 11828,"covers": "2026-09","lost_days": [],"rows": 91,"set_aside": 0,"state": "packed"}
+    {"bytes": 11828,"covers": "2026-09","rows": 91}
   ],
   "ledger": "visual-prunes",
   "period": "monthly",
-  "version": "2026-10-25"
+  "version": "2026-11-25"
 }

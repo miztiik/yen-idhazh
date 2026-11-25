@@ -1,8 +1,9 @@
 {
+  "coverage": [],
   "entries": [
-    {"bytes": 10588,"covers": "2026-09","lost_days": [],"rows": 41,"set_aside": 0,"state": "packed"}
+    {"bytes": 10588,"covers": "2026-09","rows": 41}
   ],
   "ledger": "council-run-records",
   "period": "monthly",
-  "version": "2026-10-25"
+  "version": "2026-11-25"
 }

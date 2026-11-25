@@ -1,8 +1,9 @@
 {
+  "coverage": [],
   "entries": [
-    {"bytes": 577552,"covers": "2026-09","lost_days": [],"rows": 13568,"set_aside": 0,"state": "packed"}
+    {"bytes": 577552,"covers": "2026-09","rows": 13568}
   ],
   "ledger": "counterfactual-scores",
   "period": "monthly",
-  "version": "2026-10-25"
+  "version": "2026-11-25"
 }
