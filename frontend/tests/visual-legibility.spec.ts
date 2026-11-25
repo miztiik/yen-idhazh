@@ -1,5 +1,5 @@
 /** The reader's real drawing keeps its text size, marks and geometry across loads. */
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DigestDay, VisualData } from '../src/lib/payload/types';
@@ -13,6 +13,57 @@ import { CANARY, newestDate, payloadOf } from './support/published';
 
 test.use({ viewport: { width: 390, height: 844 } });
 const geometry = storyChartGeometryConfig();
+
+async function checkComparison(figure: Locator, data: VisualData) {
+	const held = new Map(data.marks.map((mark) => [mark.mark_id, mark]));
+	const readings = data.encoding.quantity.map((id, index) => {
+		const quantity = held.get(id)!;
+		const category = held.get(data.encoding.category[index])!.text!;
+		const series = held.get(data.encoding.series[index])?.text;
+		return {
+			name: series && series !== category ? `${category} (${series})` : category,
+			stated: quantity.value!,
+			unit: quantity.unit
+		};
+	});
+	if (data.type === 'bar') readings.sort((a, b) => Number(b.stated) - Number(a.stated));
+	const groups = figure.locator('.comparison-row');
+	await expect(groups).toHaveCount(readings.length);
+	await expect(figure.locator('.chart-title dl')).toHaveCount(0);
+	if (new Set(data.encoding.series.map((id) => held.get(id)!.text)).size <= 1) {
+		await expect(figure.locator('ul')).toHaveCount(0);
+	}
+	for (const [index, { name, stated, unit }] of readings.entries()) {
+		const group = groups.nth(index);
+		const value = unit ? `${stated} ${unit}` : stated;
+		await expect(group.locator('.name')).toHaveText(name);
+		await expect(group.locator('.figure')).toHaveText(value);
+		await expect(group.locator('rect.bar title, circle.dot title')).toContainText(`${name} ${value}`);
+	}
+
+	const result = await figure.evaluate((node) => {
+		const plot = node.querySelector<SVGSVGElement>('svg')!;
+		const separated = (first: DOMRect, second: DOMRect) =>
+			first.right <= second.left || second.right <= first.left ||
+			first.bottom <= second.top || second.bottom <= first.top;
+		return {
+			noOverlap: [...plot.querySelectorAll('.comparison-row')].every((row) => {
+				const name = row.querySelector('.name')!.getBoundingClientRect();
+				const reading = row.querySelector('.figure')!.getBoundingClientRect();
+				const mark = row.querySelector('rect.bar, circle.dot')!.getBoundingClientRect();
+				return separated(name, reading) && separated(name, mark) && separated(reading, mark);
+			}),
+			labelsFit: [...plot.querySelectorAll<SVGTextElement>('text')].every((text) => {
+				const { x, y, width, height } = text.getBBox();
+				return x >= 0 && x + width <= plot.viewBox.baseVal.width &&
+					y >= 0 && y + height <= plot.viewBox.baseVal.height;
+			}),
+			noOverflow: node.scrollWidth <= node.clientWidth &&
+				document.documentElement.scrollWidth <= document.documentElement.clientWidth
+		};
+	});
+	expect(result).toEqual({ noOverlap: true, labelsFit: true, noOverflow: true });
+}
 
 test('reader labels clear the text floor without scaling, and every mark survives navigation and reload', async ({ page }) => {
 	const errors: string[] = [];
@@ -32,13 +83,27 @@ test('reader labels clear the text floor without scaling, and every mark survive
 	const day = payloadOf(date) as unknown as DigestDay;
 	const visuals = day.items.flatMap((item) =>
 		item.visual?.state === 'rendered' && isChartKind(item.visual.kind) && item.visual.data_path
-			? [{ id: item.item_id, data: JSON.parse(readFileSync(
+			? [{ id: item.item_id, path: item.visual.data_path, data: JSON.parse(readFileSync(
 				join(CANARY, '..', item.visual.data_path), 'utf8'
 			)) as VisualData }]
 			: []
 	);
 	expect(visuals.length, 'the fixture must exercise an actual drawing').toBeGreaterThan(0);
 	const axisCharts = visuals.filter(({ data }) => data.type !== 'stacked_bar');
+	const comparisonId = axisCharts.find(({ data }) =>
+		data.type === 'bar' && data.marks.some((mark) => mark.unit)
+	)?.id;
+	if (!comparisonId) throw new Error('the canary must include a bar comparison with a reported unit');
+	const relationshipTitles = { x: 'Installed wind capacity', y: 'Annual electricity output' };
+	for (const { id, path, data } of axisCharts) {
+		const axis_titles = id === comparisonId
+			? { x: 'Country', y: 'Reported wind capacity' }
+			: data.type === 'bubble' ? relationshipTitles : null;
+		if (axis_titles) {
+			await page.route((url) => url.pathname.endsWith(`/${path}`), (route) =>
+				route.fulfill({ json: { ...data, axis_titles } }));
+		}
+	}
 
 	async function drawings(page: Page) {
 		await dayReady(page);
@@ -168,7 +233,20 @@ test('reader labels clear the text floor without scaling, and every mark survive
 			await expect(caption).toHaveCount(data.caption ? 1 : 0);
 			if (data.title) await expect(heading).toHaveText(data.title);
 			if (data.caption) await expect(caption).toHaveText(data.caption);
-			if (expected.type === 'slope') {
+			await expect(figure.getByText(/^(Horizontal|Vertical):$/)).toHaveCount(0);
+			if (expected.type === 'bar' || expected.type === 'dot') {
+				await checkComparison(figure, data);
+				if (id === comparisonId) {
+					const narrow = page.viewportSize()!.width === 390;
+					await expect(svg.locator('[data-comparison-orientation]'))
+						.toHaveAttribute('data-comparison-orientation', narrow ? 'horizontal' : 'vertical');
+					if (!narrow) await expect(svg.locator('.tick')).toHaveCount(await svg.locator('.guide').count());
+					const lengths = measured.bars.map(([, , width, height]) => narrow ? width : height);
+					expect(new Set(lengths).size).toBeGreaterThan(1);
+					const origins = measured.bars.map(([x, y, , height]) => narrow ? x : y + height);
+					for (const origin of origins) expect(origin).toBeCloseTo(origins[0]);
+				}
+			} else if (expected.type === 'slope') {
 				const lines = await svg.locator('line.slope-line').evaluateAll((marks) =>
 					marks.map((line) => ['x1', 'y1', 'x2', 'y2'].map((key) => Number(line.getAttribute(key))))
 				);
@@ -189,6 +267,10 @@ test('reader labels clear the text floor without scaling, and every mark survive
 					marks.map((point) => ['cx', 'cy', 'r'].map((key) => Number(point.getAttribute(key))))
 				);
 				expect(points).toEqual(expected.points.map((point) => [point.cx, point.cy, point.radius]));
+				await expect(svg.locator('xpath=preceding-sibling::*[1][@data-scale="y"]'))
+					.toContainText(relationshipTitles.y);
+				await expect(svg.locator('xpath=following-sibling::*[1][@data-scale="x"]'))
+					.toContainText(relationshipTitles.x);
 				await expect(figure.locator('.bubble-size-key')).toContainText(
 					`Circle area represents ${expected.sizeUnit}`
 				);
@@ -231,7 +313,10 @@ test('reader labels clear the text floor without scaling, and every mark survive
 					...(expected.unit ? [expected.unit] : [])
 				]);
 			}
-			await expect(figure).toHaveAccessibleName(statedDrawing(expected));
+			const stated = statedDrawing(expected);
+			await expect(figure).toHaveAccessibleName(expected.type === 'bubble'
+				? `${stated} x: ${relationshipTitles.x}. y: ${relationshipTitles.y}.`
+				: stated);
 			await figure.focus();
 			await expect(figure).toBeFocused();
 			snapshots.push(measured);

@@ -1,6 +1,6 @@
 # How a story chart is drawn, and what refuses one
 
-**Last Updated**: 2026-11-22
+**Last Updated**: 2026-11-25
 
 A story that carries a chart carries a pointer at its marks, and the reader's
 browser is what turns those marks into a picture. This page holds that path: who
@@ -99,17 +99,8 @@ cannot establish that a series is a stock or cumulative amount rather than a
 rate. No area chart is supported until a separately approved source-evidence
 design can make that distinction.
 
-**Maintainer ruling, 2026-10-26 UTC.** The exact direction was: "engage susan
-agent. do not want fixed numbers that is not current design pattern it should
-allow to fit device screen or viewport. mor over sort the bar graph from
-ascending or descending choose one." The rejected fixed density proposal was
-an editorial budget, not a measured readability result. It is not a gate.
-The follow-up choice was "A1 - Fit where possible; allow normal page scrolling".
-This replaces the inherited undefined density obligation for bar, dot, slope,
-line and scatter. The existing text floor remains.
-
 The browser measures the visible viewport, the sticky filter band and all
-figure content outside the plot. Bar and dot rows retain content-sized height;
+figure content outside the plot. Bar and dot layouts retain content-sized height;
 the other plots use the remaining room or the height needed for readable text
 and marks, whichever is larger. Slope endpoints also reserve separation for
 distinct values within each column; coincident readings remain coincident.
@@ -137,18 +128,25 @@ Bars sort descending by numeric value, with source order for ties. Each category
 moves with its quantity and source text, including in the keyboard description.
 Bars start at zero; dots show their tighter range and say when it excludes zero.
 Marks, guides and ticks use the same linear scale. The chart chooses one
-magnitude from the configured abbreviation threshold and spells it out with
-the unit, for example "billion rupiah". Tick and row labels share that magnitude
-and keep the recorded decimal precision rather than rounding away meaningful
-digits. The mark tooltip and keyboard description retain raw figures and any
-original source wording. Only horizontal story charts use this notation.
+magnitude for ticks from the configured abbreviation threshold and spells it out
+with the unit only when every reading carries the same unit. Each mark's
+visible reading and keyboard description use the exact stored decimal and its own
+unit, not a rescaled tick. Tooltips and the keyboard description also keep any
+original source wording.
 
-The first configured frame breakpoint and measured label width decide when
-names move above their own marks. Tick labels are thinned by horizontal room.
-The stored emphasis field still validates but does not force a spotlight on a
-horizontal comparison. The row names identify declared groups and move with
-their marks. Slopes join paired values across two labelled time columns and omit an axis;
-their units are still visible. Lines order source-backed measurements by
+[The design system](../../concepts/design-system.md#every-fact-a-drawing-shows-is-reachable-without-a-pointer)
+owns the column and row fit rule. The browser measures both names and readings
+at the computed text size, reserves room for the ticks, and places the same
+marks in columns only when every pair fits. It thins scale labels rather than
+shrinking text. The stored emphasis does not force a spotlight on a comparison.
+Bar and dot category names and the measured scale label the drawn channels.
+Legacy `axis_titles.x` and `.y` are model-written positions, not source evidence
+for what is being measured. A missing measure name or unit stays absent. To name
+a measure or show its missing unit, the Python producer would need to carry the
+source-backed measure name and the reported unit on the corresponding reading.
+Slopes join paired values across two labelled time columns and omit an axis;
+their units are still visible. Lines name their time and measure roles when
+titles are supplied. Lines order source-backed measurements by
 canonical date, keep source wording for labels, and group only when each
 reading carries its own series label. They share date ticks, value axes and
 measured width with the Data explorer's date-series builder. One shared drawing
@@ -161,7 +159,8 @@ the other families take their width from that bounded geometry.
 Scatter answers whether two measures move together over the same entities.
 It reuses the Data explorer's `pairedScatter` builder, but validates every pair
 before that builder can filter missing values. Both axes use shared value
-scales and number formatting. The plot has no fitted line and does not force
+scales and number formatting. A supplied axis title sits next to that drawn
+scale, with its unit. The plot has no fitted line and does not force
 zero onto either axis. Its readings below the plot name every entity and both
 values; the figure's keyboard description includes the source figures when
 unit conversion changed a displayed value. Axis units distinguish x from y.

@@ -34,7 +34,7 @@ Table C - Delivery rows
 | ID | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | 1 | Restore chart tracking | - | A | DONE | shiny-waffle | - | 7d4dc3a9-8ea5-44d3-a6f4-e456abd87961 |
-| C2 | 2 | Draw comparisons with matching labels | - | A | PENDING | - | - | - |
+| C2 | 2 | Draw comparisons with matching labels | - | A | DONE | symmetrical-system | - | 1647f5a7-d3f4-4b05-9a47-776083f50bb7 |
 | C3 | 3 | Record the model's decision reason | 1 | B | PENDING | - | - | - |
 | C4 | 4 | Ground chart decisions in source evidence | 2, 3 | C | PENDING | - | - | - |
 
