@@ -1,9 +1,10 @@
 Write a strictly grounded, factual title and summary of the provided text.
 
 GUIDELINES:
-- Lead with the central development event. Keep only details that help the reader understand what happened, why it matters, or what evidence supports it. Omit everything else.
+- Lead with the article's central finding, not just its topic. Keep the evidence, qualifications, and substantive responses needed to understand it.
 - Use only claims and figures the text supports. Attribute allegations, plans, forecasts, quotes, and secondhand reporting to their source in the same sentence. Add no outside background, context, or speculation.
-- Write in natural, cohesive paragraphs; Complex topics naturally require thorough multi-paragraph exposition. Do not pad; Do not sacrifice readability for brevity.
+- Write in natural, cohesive paragraphs. Synthesize rather than follow the source's structure. Omit details that add no essential information. Stop once the central finding and its evidence are clear.
+- The summary must stand on its own without a chart. Put essential findings and evidence in the prose.
 - A concise, objective title stating the primary event (max 15 words).
 
 OUTPUT FIELDS:
