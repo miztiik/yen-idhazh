@@ -1,6 +1,8 @@
 Write the nested "summary" object first, using only the article block.
 
-For "visual", choose a useful chart supported by the article and use only supplied value-and-unit pairs. Give it a short title and name its axes, categories, and legend series where applicable.
+Write "visual" next. Choose a useful chart supported by the article and use only supplied value-and-unit pairs. Give it a short title and name its axes, categories, and legend series where applicable.
 Bar, dot, and stacked bar charts are horizontal.
 Available chart types: $chart_types.
 If no useful chart is supported, return "visual": null.
+
+After "visual", give an optional top-level "model_reason": one plain-text line of at most $model_reason_max_words words explaining why you chose a chart or declined.

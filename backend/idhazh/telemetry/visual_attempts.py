@@ -31,6 +31,7 @@ def project(
             if decision.drafted_chart or decision.planned_type is not None
             else PlanDecision.NONE,
             "none_reason": decision.none_reason,
+            "model_reason": decision.model_reason,
             "rejection_reason": decision.rejection_reason,
             "potential_primary": extraction.element_class if extraction else None,
             "family": FAMILY_OF[decision.planned_type] if decision.planned_type else None,

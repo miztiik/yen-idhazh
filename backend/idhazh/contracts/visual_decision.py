@@ -12,9 +12,10 @@ never fails the run.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import ClassVar, Final, Self
+from typing import Annotated, ClassVar, Final, Self
+from unicodedata import category
 
-from pydantic import ConfigDict, Field, model_validator
+from pydantic import AfterValidator, ConfigDict, Field, Strict, model_validator
 
 from idhazh.contracts.article import UntrustedLine
 from idhazh.contracts.base import (
@@ -38,6 +39,21 @@ from idhazh.contracts.visual_validation import ValidatorCheck
 #: where they disagree uploads an empty artifact and publishes with no pictures.
 PAYLOAD_SUFFIX: Final = ".visual.json"
 _VISUAL_ID_FORMAT: Final = "visual-id-v1"
+
+# A reply format limit shared by the prompt and the stored reason, not a tuning knob.
+MODEL_REASON_MAX_WORDS: Final = 20
+
+
+def _reason_line(text: str) -> str:
+    if not 1 <= len(text.split()) <= MODEL_REASON_MAX_WORDS or any(
+        char in "<>`" or (not char.isprintable() and char != "\t" and category(char) != "Zs")
+        for char in text
+    ):
+        raise ValueError("model reason must be one short plain-text line")
+    return text
+
+
+ModelReason = Annotated[UntrustedLine, Strict(), AfterValidator(_reason_line)]
 
 
 class VisualKind(StrEnum):
@@ -105,11 +121,17 @@ class VisualDecision(Contract):
         json_schema_extra={
             "readCompatibility": (
                 "historical whowhat outcomes retain their metadata; their retired nested "
-                "whowhat_grid payload is discarded and never published or rendered"
+                "whowhat_grid payload is discarded and never published or rendered; "
+                "decisions without model_reason read it as null"
             )
         }
     )
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-11-25",
+            change="Record the optional reason for the model's chart choice.",
+            why="A model explanation is separate from a validator's outcome.",
+        ),
         ChangelogEntry(
             version="2026-11-18",
             change="not_reachable means no table of names and figures was on offer.",
@@ -126,11 +148,6 @@ class VisualDecision(Contract):
             why="Attempt records need typed evidence from the decision producer.",
         ),
         ChangelogEntry(
-            version="2026-10-28",
-            change="Add a separate whowhat grid payload and visual kind.",
-            why="Actor/claim grids must not be encoded as chart data.",
-        ),
-        ChangelogEntry(
             version="2026-08-21",
             change="Earlier changes are in this file's git history.",
             why="A changelog says what moved lately; git is the archive.",
@@ -141,6 +158,10 @@ class VisualDecision(Contract):
     url_key: UrlKey
     kind: VisualKind
     rationale: UntrustedLine | None = None
+    model_reason: ModelReason | None = Field(
+        default=None,
+        description="Untrusted explanation of the model's chart choice or decline, not site data.",
+    )
     spec: str | None = Field(
         default=None,
         description=(

@@ -20,6 +20,7 @@ from pipeline._builders import (
 from pipeline._builders import (
     plan as fixture_plan,
 )
+from support.ledger import COMPACTION
 from support.models import a_markers
 from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
 from support.prompts import WIND_TEXT, chart_data_over, chart_reply_fields
@@ -33,6 +34,7 @@ from idhazh.classify.plan_visual_request import chart_capabilities
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.element import ElementTable
+from idhazh.contracts.file_envelope import Period
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.summary import Summary
@@ -40,6 +42,7 @@ from idhazh.contracts.visual import VisualPlan, VisualType
 from idhazh.contracts.visual_data import VisualData
 from idhazh.contracts.visual_decision import (
     PAYLOAD_SUFFIX,
+    NoneReason,
     VisualDecision,
     VisualState,
 )
@@ -302,11 +305,20 @@ def test_real_shard_projects_outcomes_before_sealing(
     isolate_ledgers(tmp_path, monkeypatch)
     run_plan = fixture_plan(item_count=2)
     knobs = settings(downgrade_enabled=True, type_selection_enabled=False)
+    envelope = json.loads(DRAWS_SUMMARIZE_AND_PLAN.read_bytes())
+    message = envelope["choices"][0]["message"]
+    answer = json.loads(message["content"])
+    chart_reason = "The awards compare the same capacity measure across countries."
+    decline_reason = "The comparison would not add to the summary."
+    message["content"] = json.dumps(answer | {"model_reason": chart_reason})
+    chart_reply = json.dumps(envelope).encode()
+    message["content"] = json.dumps(answer | {"visual": None, "model_reason": decline_reason})
+    decline_reply = json.dumps(envelope).encode()
 
     caplog.set_level(logging.INFO, logger="idhazh")
     with (
         finding_the_wind_countries(knobs) as read,
-        RecordedEndpoint(200, DRAWS_SUMMARIZE_AND_PLAN.read_bytes()) as server,
+        RecordedEndpoint(200, chart_reply, decline_reply) as server,
     ):
         stage_work(
             run_plan, settings=read, scorer=None, fetcher=drawable_article_fetch,
@@ -322,33 +334,53 @@ def test_real_shard_projects_outcomes_before_sealing(
         common.STATE_ROOT, LedgerName.ITEM_HEALTH, [run_plan.date], model=ItemHealthRow
     )
     assert {row.item_id for row in rows} == {item.item_id for item in run_plan.items}
-    assert all(
-        row.planned_type is VisualType.BAR
-        and row.rendered_type is VisualType.BAR
-        and row.downgrade_depth == 0
-        and row.marks == 4
-        for row in rows
-    )
+    (chart,) = [row for row in rows if row.rendered_type is VisualType.BAR]
+    assert chart.planned_type is VisualType.BAR and chart.downgrade_depth == 0 and chart.marks == 4
+    reasons = (chart_reason, decline_reason)
+    assert all("model_reason" not in row.model_dump() for row in rows)
+    assert all(reason not in row.model_dump_json() for row in rows for reason in reasons)
+    assert all(reason not in caplog.text for reason in reasons)
     attempts = ledger.load_days(
         common.STATE_ROOT, LedgerName.VISUAL_DESIGN_ATTEMPTS,
         [run_plan.date], model=VisualAttemptRow,
     )
     assert len(attempts) == len(run_plan.items)
+    assert {row.rendered_type: row.model_reason for row in attempts} == {
+        VisualType.BAR: chart_reason, None: decline_reason,
+    }
     for row in attempts:
         decision = VisualDecision.read(
             common._run_dir(run_plan.date) / "items" / f"{row.item_id}{PAYLOAD_SUFFIX}"
         )
         assert row.visual_id == decision.visual_id
+        assert decision.model_reason == row.model_reason
+        if row.rendered_type is not None:
+            assert decision.spec is not None
+            assert "model_reason" not in decision.spec and chart_reason not in decision.spec
+        else:
+            assert row.none_reason is NoneReason.MODEL_DECLINED
         assert row.elements_found is not None
         assert row.potential_primary is not None
         assert row.downgrade_depth == decision.deepest_downgrade_depth
+    attempt_ledger = LedgerName.VISUAL_DESIGN_ATTEMPTS
+    raw = ledger.list_raw_files(common.STATE_ROOT, attempt_ledger, days=[run_plan.date])
+    compact = ledger.persist_period(
+        common.STATE_ROOT,
+        ledger.load_stored([file.path for file in raw], model=VisualAttemptRow),
+        ledger=attempt_ledger, covers=run_plan.date, period=Period.DAILY,
+        built_from=len(raw), model=VisualAttemptRow, identity=COMPACTION,
+    )
+    packed = ledger.load([compact], model=VisualAttemptRow)
+    assert {row.visual_id: row.model_reason for row in packed} == {
+        row.visual_id: row.model_reason for row in attempts
+    }
     report = next(
         json.loads(line) for line in caplog.messages
         if line.startswith("{") and json.loads(line).get("name") == "shard.done"
     )
     assert report["visual_outcomes"] == {
-        "requested_types": {"bar": len(rows)},
-        "measured_requests": len(rows),
+        "requested_types": {"bar": 1},
+        "measured_requests": 1,
         "wasted_decode_rate": 0.0,
     }
 

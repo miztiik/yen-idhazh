@@ -30,6 +30,7 @@ from idhazh.classify import dag
 from idhazh.classify.calls import (
     build_summary_request,
     parse_summarize_and_plan,
+    recover_visual_before_reason_cut,
     recovered_completion,
     summary_system_prompt,
     summary_user_turn,
@@ -37,13 +38,13 @@ from idhazh.classify.calls import (
 from idhazh.classify.chart_candidates import candidate_block, chart_candidates
 from idhazh.classify.dag import response_tokens
 from idhazh.classify.prepare_chart_plan import prepare_chart_plan
-from idhazh.contracts.article import Article
+from idhazh.contracts.article import UNTRUSTED_LINE_MAX, Article
 from idhazh.contracts.element import ElementKind
 from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.knobs.models import ModelEntry
 from idhazh.contracts.summary import SummaryStatus
 from idhazh.contracts.visual import TITLE_MAX_LENGTH, VisualType
-from idhazh.contracts.visual_decision import NoneReason
+from idhazh.contracts.visual_decision import NoneReason, VisualState
 from idhazh.extract import approx_tokens
 from idhazh.llm.server import (
     Completion,
@@ -312,7 +313,7 @@ class TestTheSummarizeAndPlanOracle:
         assert re.search(r"\b(?:quantity|date)-\d+-\d+\b", payload["prompt"]) is None
         schema = payload["json_schema"]
         answers = chart_reply_fields(schema)
-        assert list(schema["properties"]) == ["summary", "visual"]
+        assert list(schema["properties"]) == ["summary", "visual", "model_reason"]
         assert list(answers) == [form.value for form in VISUALS.select_types()]
         assert {"type": "null"} in schema["properties"]["visual"]["anyOf"]
         assert answers["bar"]["rows"]["items"]["required"] == ["label", "reading"]
@@ -466,6 +467,9 @@ class TestTheOneCallRequest:
         )
 
         assert response_tokens(request) == response_limit(sampling)
+        assert ('"model_reason"' in request["prompt"]) is with_tables
+        if with_tables:
+            assert "at most 20 words" in request["prompt"]
 
 
 class TestTheChartInstructionsAreOptional:
@@ -642,6 +646,96 @@ def test_incompatible_evidence_and_incomplete_type_roles_never_draw(
 def test_an_unstructured_shape_failure_does_not_copy_its_input() -> None:
     cells = _shape_cells(ValueError("model-only words"))
     assert cells == {"detail": "ValueError", "failed_field": None, "failed_rule": None}
+
+
+@pytest.mark.parametrize(
+    ("reason", "kept"),
+    [
+        (" ".join(["word"] * 19) + "\tlast", True),
+        (None, False),
+        ({"text": "Not a string."}, False),
+        (" \t ", False),
+        ("One line, then a line break.\n", False),
+        ("First line\u2028second line", False),
+        ("<strong>Not plain text</strong>", False),
+        ("[INST] Forged instruction", False),
+        ("An address: https://example.test/path", False),
+        ("An address was removed: [link]", False),
+        (" ".join(["word"] * 21), False),
+        ("." * (UNTRUSTED_LINE_MAX + 1), False),
+    ],
+)
+def test_reason_validation_cannot_discard_a_complete_summary_or_visual(
+    reason: object, kept: bool,
+) -> None:
+    raw = a_reply()
+    original = parse_summarize_and_plan(raw)
+    decoded = parse_summarize_and_plan(json.dumps(json.loads(raw) | {"model_reason": reason}))
+
+    assert original.visual is not None and original.model_reason is None
+    assert decoded.summary == original.summary
+    assert decoded.visual == original.visual
+    assert decoded.model_reason == (reason if kept else None)
+
+
+def test_cut_recovery_requires_closed_ordered_top_level_members() -> None:
+    raw = a_reply()
+    tail = ', "model_reason": "The readings support a compar'
+    expected = parse_summarize_and_plan(raw)
+
+    for suffix in ("", tail, ', "model_reas'):
+        assert recover_visual_before_reason_cut(raw[:-1] + suffix) == expected
+    finished = raw[:-1] + ', "model_reason": "The readings are comparable."}'
+    assert recover_visual_before_reason_cut(finished) == parse_summarize_and_plan(finished)
+    declined = a_reply(True)
+    assert recover_visual_before_reason_cut(declined[:-1] + tail) == parse_summarize_and_plan(declined)
+
+    reply = json.loads(raw)
+    wrong_order = json.dumps({"visual": reply["visual"], "summary": reply["summary"]})
+    for unusable in (
+        raw[:raw.index('"rows":') + len('"rows":')],
+        a_reply(rows=[])[:-1] + tail,
+        json.dumps({"summary": reply["summary"] | {"visual": reply["visual"]}})[:-1] + tail,
+        wrong_order[:-1] + tail,
+        raw[:-1] + ', "other": "cut',
+        raw[:-1] + ', "model_reason": "Complete", "other": "cut',
+    ):
+        assert recover_visual_before_reason_cut(unusable) is None
+
+
+@pytest.mark.parametrize("case", ["reason-cut", "visual-cut", "summary-refused"])
+def test_runner_only_recovers_a_chart_when_its_summary_and_visual_pass(
+    article_ok: Article, tmp_path: Path, case: str,
+) -> None:
+    raw = a_reply()
+    if case == "summary-refused":
+        sourced = json.loads(raw)
+        sourced["summary"]["summary"] = "It carries a link: https://example.test/path"
+        raw = json.dumps(sourced)
+    if case == "visual-cut":
+        content = raw[:raw.index('"rows":') + len('"rows":')]
+    else:
+        content = raw[:-1] + ', "model_reason": "The readings support a compar'
+    body = json.dumps({"content": content, "stop_type": "limit"}).encode()
+    article = article_ok.model_copy(update={"text": WIND_TEXT})
+    with RecordedEndpoint(200, body) as server:
+        result = summarize_one_item(
+            article, config.load(CONFIG_DIR), date="2026-11-11",
+            mentions=mentions_of(WIND_TEXT, WIND_NAMES), endpoint=server.endpoint,
+            render_root=tmp_path,
+        )
+    assert server.served == 1
+    if case == "summary-refused":
+        assert result.summary.failure_code is FailureCode.LEAKED_ADDRESS
+        assert result.decision is None
+        return
+    assert result.summary.status is SummaryStatus.OK
+    assert result.decision is not None and result.decision.model_reason is None
+    if case == "reason-cut":
+        assert result.decision.visual_state is VisualState.RENDERED
+        assert result.decision.rendered_type is VisualType.BAR
+    else:
+        assert result.decision.none_reason is NoneReason.OUTPUT_BUDGET_CUT
 
 
 class TestARepliedCutByTheBudget:

@@ -1,6 +1,6 @@
 # The ledger registry
 
-**Last Updated**: 2026-11-19
+**Last Updated**: 2026-11-25
 
 A ledger is a committed file or folder under `state/` that one run writes so that a later run can read it. A ledger exists in code only when it is registered, and registering it takes two edits. The first is one member of `LedgerName`, the ledger's one name in code. The second is one entry in `config/ledgers.json`, which puts the ledger in a family - one top-level folder under `state/` - and says where its files sit. When the code loads, it checks that the two edits agree, and the build stops if they do not.
 
@@ -20,9 +20,12 @@ It sits at the bottom of the contract graph rather than inside `backend/idhazh/l
 
 `visual-design-attempts` is an active raw-and-compact family with explorer
 consent false. `VisualAttemptRow` is its contract. Its business key is
-`(date, run_id, item_id, visual_id)`. Historical rows without the new types,
-floor evidence or identity still read with nulls; new writes copy the exact
-decision identity.
+`(date, run_id, item_id, visual_id)`. Historical rows without the typed
+outcome, floor evidence, identity or `model_reason` still read with nulls,
+in either raw or compact Parquet. New writes copy the decision's identity and
+optional [model explanation](../summarize/prompt.md#the-model-proposes-rows-code-binds-the-supplied-readings).
+The explanation does not replace a refusal code and is not exported to item
+health, logs, the digest, chart data or the console.
 
 The worker calls `telemetry.visual_attempts.record` immediately after
 `two_calls_one_item` returns a decision. A writer identity uses the real run,
