@@ -46,7 +46,7 @@ def test_the_fixture_ledgers_pack_and_keep_a_later_raw_write(
             assert (held.ledger, held.period) == (which, period)
             assert held.expired_through is None
             if which not in filed:
-                assert held.entries == []
+                assert held.period_entries == []
 
     raw_day = state / "raw" / "item-health" / build_canary_day.UNPACKED_DATE.replace("-", "/")
     assert raw_day.is_dir()

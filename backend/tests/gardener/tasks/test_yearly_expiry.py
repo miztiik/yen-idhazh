@@ -31,7 +31,12 @@ from idhazh.contracts.knobs.gardener import (
     ForeverWindow,
     MonthsWindow,
 )
-from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, EntryState
+from idhazh.contracts.ledger_index import (
+    COMPACT_INDEX_SPLIT_VERSION,
+    CompactEntry,
+    CompactIndex,
+    EntryState,
+)
 from idhazh.contracts.shard_landing import ShardLanding
 from idhazh.gardener import event_log, run_summary, runner
 from idhazh.gardener.one_at_a_time import Pass
@@ -375,25 +380,35 @@ def test_cap_empty_entries_and_restart_after_every_entry_is_deleted(tmp_path: Pa
             CompactEntry(covers="2026", rows=1, bytes=paths["2026"].stat().st_size),
         ],
     )
+    index = ledger.compact_index_path(state(tmp_path), VISUALS, Period.YEARLY)
+    live = {"covers": "2026", "rows": 1, "bytes": paths["2026"].stat().st_size}
     first = run(tmp_path, max_periods_per_run=1)
     assert first.stopped_because is StopReason.CEILING
     assert first.resume_from == "2025"
     assert not paths["2024"].exists() and paths["2026"].exists()
+    payload = json.loads(index.read_bytes())
+    assert payload["version"] == COMPACT_INDEX_SPLIT_VERSION
+    assert (payload["entries"], payload["coverage"], payload["expired_through"]) == (
+        [live], [{"covers": "2025", "state": "empty"}], "2024",
+    )
     run(tmp_path, max_periods_per_run=1)
+    payload = json.loads(index.read_bytes())
+    assert (payload["entries"], payload["coverage"], payload["expired_through"]) == (
+        [live], [], "2025",
+    )
     run(tmp_path, max_periods_per_run=1)
-    held = CompactIndex.read(ledger.compact_index_path(state(tmp_path), VISUALS, Period.YEARLY))
-    assert held.entries == [] and held.expired_through == "2026"
+    before_restart = index.read_bytes()
+    payload = json.loads(before_restart)
+    assert (payload["entries"], payload["coverage"], payload["expired_through"]) == (
+        [], [], "2026",
+    )
+    assert not paths["2026"].exists()
     assert marks_on_disk(state(tmp_path), VISUALS)[Period.YEARLY] == "2026"
     again = run(tmp_path, max_periods_per_run=1)
     assert not any("/yearly/" in path for path in again.written)
     disabled = run(tmp_path, max_periods_per_run=1, yearly_prune_enable=False)
     assert not any("/yearly/" in path for path in disabled.written)
-    assert (
-        CompactIndex.read(
-            ledger.compact_index_path(state(tmp_path), VISUALS, Period.YEARLY)
-        ).expired_through
-        == "2026"
-    )
+    assert index.read_bytes() == before_restart
 
 
 def test_all_formats_are_deleted_but_unindexed_files_are_not_walked(tmp_path: Path) -> None:
@@ -424,7 +439,7 @@ def test_missing_yearly_index_fails_by_name_and_new_tree_initializes(tmp_path: P
     run(empty)
     for period in Period:
         held = CompactIndex.read(ledger.compact_index_path(state(empty), VISUALS, period))
-        assert held.entries == [] and held.expired_through is None
+        assert held.period_entries == [] and held.expired_through is None
     fresh = tmp_path / "new"
     from .test_compaction import a_pass, filed
 
@@ -472,7 +487,7 @@ def test_recovery_never_adopts_expired_months(tmp_path: Path) -> None:
     ledger.compact_index_path(state(tmp_path), VISUALS, Period.MONTHLY).unlink()
     run(tmp_path)
     held = CompactIndex.read(ledger.compact_index_path(state(tmp_path), VISUALS, Period.MONTHLY))
-    assert not any(entry.covers.startswith("2026") for entry in held.entries)
+    assert not any(entry.covers.startswith("2026") for entry in held.period_entries)
     assert stale.exists()
 
 
@@ -514,7 +529,7 @@ def test_manual_pruning_preserves_the_expiry_mark(tmp_path: Path) -> None:
     path = ledger.compact_index_path(state(root), VISUALS, Period.YEARLY)
     held = CompactIndex.read(path)
     assert held.entries
-    path.write_bytes(held.model_copy(update={"expired_through": "2025"}).to_json().encode("ascii"))
+    index_entries(root, Period.YEARLY, held.period_entries, expired_through="2025")
     take_days(
         state(root),
         VISUALS,
@@ -524,7 +539,9 @@ def test_manual_pruning_preserves_the_expiry_mark(tmp_path: Path) -> None:
         dry_run=False,
         identity=COMPACTION,
     )
-    assert CompactIndex.read(path).expired_through == "2025"
+    payload = json.loads(path.read_bytes())
+    assert payload["version"] == COMPACT_INDEX_SPLIT_VERSION
+    assert payload["expired_through"] == "2025"
 
 
 def test_reader_floor_is_finite_and_toggle_restores_forever(tmp_path: Path) -> None:

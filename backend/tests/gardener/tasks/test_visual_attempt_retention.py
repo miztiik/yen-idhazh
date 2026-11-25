@@ -88,7 +88,7 @@ def test_shipped_policy_retains_full_rows_then_deletes_without_an_aggregate(tmp_
     assert not monthly.exists()
     assert ledger.load_days(state, LEDGER, [row.date], model=VisualAttemptRow) == []
     index = CompactIndex.read(ledger.compact_index_path(state, LEDGER, Period.MONTHLY))
-    assert not any(entry.covers == "2026-08" for entry in index.entries)
+    assert not any(entry.covers == "2026-08" for entry in index.period_entries)
     policy = declared()[TASK]
     assert isinstance(policy, CompactionPolicy)
     assert policy.monthly_window.model_dump() == {"unit": "months", "value": 14}
