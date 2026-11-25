@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import functools
 import hashlib
+import json
 import shutil
 import signal
 import sys
@@ -56,7 +57,7 @@ from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.gardener_fault import GardenerFault
 from idhazh.contracts.item_health import ItemHealthRow, ItemStage
 from idhazh.contracts.knobs.gardener import CompactionPolicy, TaskPolicy
-from idhazh.contracts.ledger_index import CompactEntry, CompactIndex
+from idhazh.contracts.ledger_index import COMPACT_INDEX_SPLIT_VERSION, CompactEntry, CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain
 from idhazh.telemetry import prune
@@ -300,7 +301,7 @@ def census_by_day(state: Path) -> dict[str, list[ItemHealthRow]]:
 def indexes(state: Path) -> dict[Period, list[CompactEntry]]:
     """Every compact index of the census, each read whole, so one that cannot load fails here."""
     return {
-        period: CompactIndex.read(ledger.compact_index_path(state, CENSUS, period)).entries
+        period: CompactIndex.read(ledger.compact_index_path(state, CENSUS, period)).period_entries
         for period in Period
     }
 
@@ -609,18 +610,20 @@ def test_a_file_whose_every_row_goes_stays_as_an_empty_file_its_index_names(
     day = ledger.compact_file(state, CENSUS, Period.DAILY, "2026-02-10")
     assert month is not None and day is not None, "an emptied period lost its file"
     assert ledger.load([month, day], model=ItemHealthRow) == []
-    entries = indexes(state)
-    assert CompactEntry(covers="2026-01", rows=0, bytes=month.stat().st_size) in entries[
-        Period.MONTHLY
-    ]
-    assert CompactEntry(covers="2026-02-10", rows=0, bytes=day.stat().st_size) in entries[
-        Period.DAILY
-    ]
+    for period, covers, file in (
+        (Period.MONTHLY, "2026-01", month),
+        (Period.DAILY, "2026-02-10", day),
+    ):
+        path = ledger.compact_index_path(state, CENSUS, period)
+        payload = json.loads(path.read_bytes())
+        assert payload["version"] == COMPACT_INDEX_SPLIT_VERSION
+        assert {"covers": covers, "rows": 0, "bytes": file.stat().st_size} in payload["entries"]
+        assert all(record["covers"] != covers for record in payload["coverage"])
     assert ledger.list_ledger_files(state, CENSUS).holes == ()
 
 
 def a_month_with_lost_days(state: Path) -> CompactIndex:
-    """Row 8's sample monthly index, written over a real file for the month that names one.
+    """The legacy sample monthly index, written over a real file for the month that names one.
 
     That month is packed through the door from census rows filed on two of its
     days, and its entry counts that file's rows and bytes; its state, lost days
@@ -631,7 +634,7 @@ def a_month_with_lost_days(state: Path) -> CompactIndex:
         read_text(CONTRACT_FIXTURES_DIR / "compact-index" / "a-month-with-lost-days.json")
     )
     entries: list[CompactEntry] = []
-    for entry in sample.entries:
+    for entry in sample.period_entries:
         if not entry.names_file:
             entries.append(entry)
             continue
@@ -677,7 +680,7 @@ def test_a_rebuilt_entry_keeps_its_state_its_lost_days_and_what_was_set_aside(
     bytes left and drops the two days recorded lost and the file set aside, so the record of
     a gap is gone. The empty month beside it is carried as it was."""
     state = tmp_path / ledger.STATE_DIRNAME
-    empty, packed = a_month_with_lost_days(state).entries
+    empty, packed = a_month_with_lost_days(state).period_entries
 
     prune_range(
         state,
@@ -693,10 +696,17 @@ def test_a_rebuilt_entry_keeps_its_state_its_lost_days_and_what_was_set_aside(
     assert month is not None
     left = ledger.load([month], model=ItemHealthRow)
     assert [row.date for row in left] == [f"{packed.covers}-20"]
-    assert indexes(state)[Period.MONTHLY] == [
-        empty,
-        packed.model_copy(update={"rows": len(left), "bytes": month.stat().st_size}),
-    ]
+    path = ledger.compact_index_path(state, CENSUS, Period.MONTHLY)
+    payload = json.loads(path.read_bytes())
+    assert payload["version"] == COMPACT_INDEX_SPLIT_VERSION
+    assert payload["coverage"] == [{"covers": empty.covers, "state": "empty"}]
+    assert payload["entries"] == [{
+        "covers": packed.covers,
+        "rows": len(left),
+        "bytes": month.stat().st_size,
+        "lost_days": packed.lost_days,
+        "set_aside": packed.set_aside,
+    }]
 
 
 def test_a_rebuilt_file_names_the_prune_as_its_writer_and_each_kept_row_keeps_its_own(

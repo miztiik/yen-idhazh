@@ -52,7 +52,13 @@ from idhazh.contracts.gardener_events import (
 )
 from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
 from idhazh.contracts.knobs.gardener import MonthsWindow
-from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, EntryState
+from idhazh.contracts.ledger_index import (
+    COMPACT_INDEX_LEGACY_VERSION,
+    COMPACT_INDEX_SPLIT_VERSION,
+    CompactEntry,
+    CompactIndex,
+    EntryState,
+)
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import LedgersConfig
 from idhazh.contracts.visual_prune import VisualPruneRow
@@ -123,13 +129,13 @@ def state(root: Path) -> Path:
 def daily_covers(root: Path, which: LedgerName = VISUALS) -> list[str]:
     """What the daily index names, oldest first."""
     index = CompactIndex.read(ledger.compact_index_path(state(root), which, Period.DAILY))
-    return [entry.covers for entry in index.entries]
+    return [entry.covers for entry in index.period_entries]
 
 
 def monthly_covers(root: Path) -> list[str]:
     """What the monthly index names, oldest first."""
     index = CompactIndex.read(ledger.compact_index_path(state(root), VISUALS, Period.MONTHLY))
-    return [entry.covers for entry in index.entries]
+    return [entry.covers for entry in index.period_entries]
 
 
 def mark(root: Path, period: Period, which: LedgerName = VISUALS) -> str | None:
@@ -266,18 +272,19 @@ def test_a_raw_day_folder_entry_that_is_not_a_file_needs_manual_action(
 def test_a_first_pass_starts_at_its_oldest_raw_day_and_a_quiet_day_has_no_file(
     tmp_path: Path,
 ) -> None:
-    """No day before the first raw day is recorded, and a day with no row is an entry with no file."""
+    """Only the packed day names a file; the next day is recorded as coverage."""
     root = tmp_path / "checkout"
     filed(root, a_pass("2026-09-20"))
 
     outcome = compact(root, date(2026, 9, 23), max_periods_per_run=31)
 
-    index = CompactIndex.read(ledger.compact_index_path(state(root), VISUALS, Period.DAILY))
-    assert [entry.covers for entry in index.entries] == ["2026-09-20", "2026-09-21"]
+    index = json.loads(index_of(root, Period.DAILY).read_bytes())
+    packed = ledger.compact_file(state(root), VISUALS, Period.DAILY, "2026-09-20")
+    assert packed is not None
+    assert index["version"] == COMPACT_INDEX_SPLIT_VERSION
+    assert index["entries"] == [{"covers": "2026-09-20", "rows": 1, "bytes": packed.stat().st_size}]
+    assert index["coverage"] == [{"covers": "2026-09-21", "state": "empty"}]
     assert compact_rows(root, Period.DAILY, "2026-09-20") == [a_pass("2026-09-20")]
-    assert index.entries[1] == CompactEntry(
-        covers="2026-09-21", rows=0, bytes=0, state=EntryState.EMPTY
-    )
     assert ledger.compact_file(state(root), VISUALS, Period.DAILY, "2026-09-21") is None
     assert ledger.compact_file(state(root), VISUALS, Period.DAILY, "2026-09-01") is None
     assert outcome.periods is not None
@@ -312,7 +319,7 @@ def test_an_empty_ledger_initializes_indexes_and_ends_done(
     assert set(files_under(root)) == {path.relative_to(root).as_posix() for path in indexes}
     for path in indexes:
         held = CompactIndex.read(path)
-        assert held.entries == []
+        assert held.period_entries == []
         assert held.expired_through is None
     assert (outcome.written, outcome.taken, outcome.stopped_because) == (
         tuple(path.relative_to(root).as_posix() for path in reversed(indexes)),
@@ -343,7 +350,7 @@ def test_after_every_pass_the_daily_index_names_every_due_day_a_quiet_one_includ
     assert mark(root, Period.DAILY) == "2026-09-11"
     assert daily_covers(root)[0] == "2026-09-03"
     index = CompactIndex.read(ledger.compact_index_path(state(root), VISUALS, Period.DAILY))
-    assert index.entries[-1].state is EntryState.EMPTY
+    assert index.period_entries[-1].state is EntryState.EMPTY
     assert ledger.compact_file(state(root), VISUALS, Period.DAILY, "2026-09-11") is None
 
 
@@ -486,7 +493,8 @@ def test_a_file_moved_aside_is_taken_from_its_path_and_frees_no_byte(tmp_path: P
         outcome.written
     )
     assert outcome.bytes_freed == 0
-    entries = {entry.covers: entry for entry in CompactIndex.read(index_of(root, Period.DAILY)).entries}
+    index = CompactIndex.read(index_of(root, Period.DAILY))
+    entries = {entry.covers: entry for entry in index.period_entries}
     assert entries["2026-09-02"] == CompactEntry(
         covers="2026-09-02", rows=0, bytes=0, state=EntryState.EMPTY, set_aside=1
     )
@@ -642,10 +650,9 @@ def test_a_day_the_daily_index_lost_with_its_file_is_recorded_lost_and_its_month
     filed(root, a_pass("2026-08-05"))
     filed(root, a_pass("2026-08-10", run="2"))
     compact(root, date(2026, 10, 20), max_periods_per_run=100)
-    index_path = ledger.compact_index_path(state(root), VISUALS, Period.DAILY)
-    index = CompactIndex.read(index_path)
-    kept = [entry for entry in index.entries if entry.covers != "2026-08-10"]
-    index_path.write_bytes(index.model_copy(update={"entries": kept}).to_json().encode("ascii"))
+    index = CompactIndex.read(index_of(root, Period.DAILY))
+    kept = [entry for entry in index.period_entries if entry.covers != "2026-08-10"]
+    an_index(root, Period.DAILY, kept, version=index.version)
     lost = ledger.compact_file(state(root), VISUALS, Period.DAILY, "2026-08-10")
     assert lost is not None
     lost.unlink()
@@ -697,6 +704,8 @@ def test_a_day_file_that_cannot_be_read_when_its_month_closes_is_set_aside_and_i
     filed(root, a_pass("2026-08-05"))
     filed(root, a_pass("2026-08-20", run="2"))
     compact(root, date(2026, 10, 20), max_periods_per_run=100)
+    daily = CompactIndex.read(index_of(root, Period.DAILY))
+    an_index(root, Period.DAILY, daily.period_entries, version=COMPACT_INDEX_LEGACY_VERSION)
     broken = ledger.compact_file(state(root), VISUALS, Period.DAILY, "2026-08-05")
     assert broken is not None
     broken.write_bytes(b"not a ledger file\n")
@@ -704,11 +713,24 @@ def test_a_day_file_that_cannot_be_read_when_its_month_closes_is_set_aside_and_i
     outcome = compact(root, date(2026, 10, 20), max_periods_per_run=100)
 
     assert outcome.stopped_because is StopReason.EXHAUSTED, outcome.resume_from
-    (august,) = CompactIndex.read(index_of(root, Period.MONTHLY)).entries
-    assert (august.state, august.lost_days, august.set_aside) == (
-        EntryState.PACKED,
-        ["2026-08-05"],
-        1,
+    august = ledger.compact_file(state(root), VISUALS, Period.MONTHLY, "2026-08")
+    assert august is not None
+    monthly = json.loads(index_of(root, Period.MONTHLY).read_bytes())
+    assert monthly["version"] == COMPACT_INDEX_SPLIT_VERSION
+    assert monthly["entries"] == [{
+        "covers": "2026-08",
+        "rows": 1,
+        "bytes": august.stat().st_size,
+        "lost_days": ["2026-08-05"],
+        "set_aside": 1,
+    }]
+    assert monthly["coverage"] == []
+    kept = json.loads(index_of(root, Period.DAILY).read_bytes())
+    assert kept["version"] == COMPACT_INDEX_SPLIT_VERSION
+    assert all(
+        not record["covers"].startswith("2026-08-")
+        for records in (kept["entries"], kept["coverage"])
+        for record in records
     )
     assert compact_rows(root, Period.MONTHLY, "2026-08") == [a_pass("2026-08-20", run="2")]
     moved = state(root) / "raw/visual-prunes/set-aside/compact/visual-prunes/daily/2026/08/05.parquet"
@@ -1011,11 +1033,11 @@ def test_a_pass_that_writes_the_daily_index_writes_the_other_two_empty_when_none
 
     for period in Period:
         held = CompactIndex.read(index_of(root, period))
-        assert held.version == "2026-10-25" and held.coverage is None
+        assert held.version == COMPACT_INDEX_SPLIT_VERSION and held.coverage is not None
         assert (held.ledger, held.period) == (VISUALS, period)
         assert index_of(root, period).relative_to(root).as_posix() in outcome.written
         if period in COARSER:
-            assert held.entries == []
+            assert held.period_entries == []
             assert mark(root, period) is None, f"an empty list is not a packed {period.value}"
     assert disjoint(outcome)
 
@@ -1032,7 +1054,7 @@ def test_a_ledger_packed_before_the_indexes_were_written_together_gains_the_one_
 
     outcome = compact(root, date(2026, 9, 24), max_periods_per_run=31)
 
-    assert CompactIndex.read(index_of(root, period)).entries == []
+    assert CompactIndex.read(index_of(root, period)).period_entries == []
     assert index_of(root, period).relative_to(root).as_posix() in outcome.written
 
 
@@ -1053,10 +1075,12 @@ def test_a_pass_never_deletes_a_coarser_index_and_leaves_an_empty_one_as_it_is(
     assert daily_covers(root)[-1] == "2026-09-23"
 
 
-def an_index(root: Path, period: Period, entries: list[CompactEntry]) -> None:
-    """One period's index naming these entries, as a compaction writes it."""
+def an_index(
+    root: Path, period: Period, entries: list[CompactEntry], *, version: str | None = None
+) -> None:
+    """One period's index naming these periods, in the selected wire format."""
     held = CompactIndex.from_period_entries(
-        ledger=VISUALS, period=period, entries=entries
+        ledger=VISUALS, period=period, entries=entries, version=version
     )
     path = index_of(root, period)
     path.parent.mkdir(parents=True, exist_ok=True)

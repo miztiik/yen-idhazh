@@ -1,6 +1,6 @@
 # Ledger compaction
 
-**Last Updated**: 2026-11-19
+**Last Updated**: 2026-11-25
 
 How a ledger's daily, monthly and yearly files are packed and dropped. The
 gardener runs a compaction like any other task; how a wake runs its tasks and
@@ -547,10 +547,11 @@ holds a file over 100 MiB, and one that did would stall every later wake.
 ## Yearly expiry
 
 The expiry step reads the yearly index, not the history tree. It selects due
-entries oldest first, at most `max_periods_per_run`, and lists each year's exact
-file path in every supported format. It deletes by those names without reading
-rows. An empty entry expires too. The yearly index stays on disk even when no
-entries remain. Before it deletes anything, it says what it chose once, as one
+years from file entries and no-file coverage together, oldest first, at most
+`max_periods_per_run`, and lists each year's exact file path in every supported
+format. It deletes by those names without reading rows and removes the expired
+years from the index. The yearly index stays on disk even when both lists are
+empty. Before it deletes anything, it says what it chose once, as one
 `expired-years-chosen` event: the ledger and the expired years it takes, oldest
 first, or none when no year is due.
 
@@ -562,8 +563,8 @@ paths and changes nothing, regardless of the expiry switch.
 
 `expired_through` records the newest year deleted. It is nullable and belongs
 only to the yearly index. Writers omit it when no year has expired; absent
-fields and explicit null both read as null. Entries at or before
-it are invalid. The packing marks include this value, so deleting the last
+fields and explicit null both read as null. Neither list can name a year at or
+before it. The packing marks include this value, so deleting the last
 year cannot reset progress. Recovery of a monthly or daily index starts after
 this mark and cannot adopt, or pack again, an expired year.
 
@@ -673,14 +674,20 @@ entry that calls the period whole while it holds only the rows that ran again.
 
 **A ledger's three indexes exist together.** Whatever writes one of
 `index/daily.json`, `index/monthly.json` and `index/yearly.json` also writes
-each of the others the ledger does not have, with no entries, and no pass
-deletes one. An empty index truthfully says no period of its kind is packed yet;
+each of the others the ledger does not have, with both lists empty, and no pass
+deletes one. An empty index truthfully says no period of its kind is recorded yet;
 a missing one says nothing, so a reader could not tell a lost list from a period
 never packed, and would have to ask the site for a file that is not there. A
 ledger that holds `daily.json` alone gains the other two, empty, at its next pass
 that writes a day. A ledger whose declaration packs no year still has an empty
 `yearly.json`, because the console reads all three together
 ([how-the-query-door-answers-a-panel.md](how-the-query-door-answers-a-panel.md#how-far-a-ledger-reaches)).
+
+When a month or year closes, the finer records it replaces leave their
+indexes, whether they named files or only coverage. The replacement carries
+the lost days and set-aside counts even if it has no file. Only indexes
+written by the pass use the current [split format](../contracts/persistence.md#what-an-index-entry-says);
+an untouched legacy index stays as it was.
 
 **An index that is not there is rebuilt from the files of its periods before
 any step runs, except a yearly index under enabled finite pruning.** That index
@@ -753,9 +760,9 @@ fault on both sides.
 | 4 | `day-missing` | A day between the first and the newest packed day that no index names | A month adopts the day's own file or lists the day lost ([A month](#a-month)). A year adopts a month's own file, or lists the month's days lost when nothing of it is left, and refuses the month while its days are still there ([A year](#a-year)) |
 
 **Four gaps are expected, and none of them is a fault**: a day newer than the
-newest packed day, an entry with `rows: 0`, an entry `empty` or `lost`, and an
-index with no entries. None of them makes a reader ask for a file that is not
-there.
+newest recorded day, a file with `rows: 0`, `empty` or `lost` coverage, and an
+index with both lists empty. A zero-row file is still a file; a coverage record
+never makes the reader ask for one.
 
 ## What a dry run does, and what the record says
 

@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Metric / scenario count",
+    "y": "Percentage"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-vqb7nwa8mxgpymvv",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Success rate per individual driving scenario","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Chance of completing 1,000 independent scenarios without failure","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-1288-1301","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "%","value": "99.9"},
+    {"derived": null,"element_id": "quantity-1351-1364","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "36.8"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Reliability figures cited for autonomous driving systems (Paul)",
+  "type": "bar",
+  "version": "2026-11-25"
+}

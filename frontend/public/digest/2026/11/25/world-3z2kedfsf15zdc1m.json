@@ -1,0 +1,45 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Trading partner / product category",
+    "y": "Tariff rate (%)"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "world-3z2kedfsf15zdc1m",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "China (new)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Total China (stacked)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Vietnam","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-874-885","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "20"},
+    {"derived": null,"element_id": "quantity-958-969","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "%","value": "45"},
+    {"derived": null,"element_id": "quantity-993-1004","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "%","value": "20"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Tariff Rates Announced by USTR (per cent)",
+  "type": "bar",
+  "version": "2026-11-25"
+}

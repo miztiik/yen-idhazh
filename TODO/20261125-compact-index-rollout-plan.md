@@ -34,7 +34,7 @@ Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and d
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Merge and deploy compatible compact-index readers | - | A | DONE | improved-fortnight | - | - |
-| 2 | Switch compact-index writers and verify the first normal write | 1 | B | PENDING | - | - | - |
+| 2 | Switch compact-index writers and verify the first normal write | 1 | B | DONE | ideal-garbanzo | - | - |
 
 ## Row #1 - Merge and deploy compatible compact-index readers
 
@@ -113,6 +113,7 @@ Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and d
   - `docs/architecture/contracts/persistence.md`
   - `docs/architecture/publishing/ledger-compaction.md`
 - **Acceptance gates:** Local: use the shared selector and extend the named promotion, expiry and prune checks with legacy inputs and raw serialized output assertions. CI: require all checks green on the merge candidate. Before merging to `main`, verify the deployed dual reader, let active/queued legacy gardener runs finish and use fresh `main` runs and operator checkouts instead of legacy reruns. After merge, confirm the PR landed on remote `main`; on the next scheduled write, inspect the changed registered index and its named member paths in the same commit. If there is no write yet, leave the operational observation pending; do not force a live run as a merge gate.
+- **Operational observation:** Pending the first scheduled compaction write on the new writer.
 - **Oracle:** Start with legacy indexes that name real files and no-file periods. Check the serialized indexes after daily-to-monthly and monthly-to-yearly promotion and after expiry and restart. Each retained worked period must have exactly one live file entry or a coverage record, not both; superseded entries and coverage must leave when the replacement lands, and loss metadata must survive at the coarser tier. Expiry removes the year from both lists without rewinding progress. The named-prune check must preserve unrelated coverage and keep a real zero-row file indexed. This does not prove that idle indexes have all upgraded.
 
 **Table F - Write and release decisions**
