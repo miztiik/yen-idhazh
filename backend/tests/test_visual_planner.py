@@ -131,18 +131,14 @@ WHOLE = (
 
 class TestAnItemWithNoChartDataIsNotAskedForAPlan:
     def test_the_suppressed_grammar_has_nowhere_to_write_a_plan(self) -> None:
-        """The grammar is the control: a suppressed request cannot carry a plan.
-
-        Every name is read from the models the grammars are derived from: the
-        reply declares its summary first and its plan second, and the suppressed
-        reply is the summary draft alone.
-        """
-        summary_field, plan_field = summarize_and_plan_model().model_fields
+        """A summary-only request cannot carry a plan or explain a chart choice."""
+        fields = list(summarize_and_plan_model().model_fields)
+        _, plan_field, reason_field = fields
         whole = summarize_and_plan_schema()
         suppressed = summarize_and_plan_schema(plan=False)
 
-        assert set(whole["properties"]) == {summary_field, plan_field}
-        assert plan_field not in suppressed["properties"]
+        assert list(whole["properties"]) == fields
+        assert {plan_field, reason_field}.isdisjoint(suppressed["properties"])
         assert set(suppressed["properties"]) == set(summarize.SummaryDraft.model_fields)
 
     def test_suppressing_the_plan_leaves_the_article_unchanged(
