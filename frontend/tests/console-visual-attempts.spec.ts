@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { visualAttemptDays } from '../src/lib/console/pipelines/visual-attempts';
+import { visualAttemptDays, visualAttemptTypes } from '../src/lib/console/pipelines/visual-attempts';
 import { refusalLines } from '../src/lib/console/pipelines/visual-refusals';
 import type { RecordRead } from '../src/lib/console/recording';
 import { frame } from '../src/lib/charts/frame';
@@ -14,14 +14,22 @@ function fixture(): Row[] {
 	return JSON.parse(readFileSync(new URL('../../tests/fixtures/visual-attempt-console.json', import.meta.url), 'utf8'));
 }
 
-test('the private attempt read retains UTC refusal counts without fetching unused state or types', async ({}, info) => {
-	const rows = fixture();
+test('the packed read preserves refusals and distinguishes proposed, saved and untyped attempts', async ({}, info) => {
+	const rows = fixture().map<Row>((row, index) => ({
+		...row, run_id: 'run', item_id: `story-0${index + 1}`, visual_id: String(index).padStart(64, '0')
+	}));
 	const root = info.outputPath('attempts');
 	await buildRows(root, 'visual-design-attempts', ['2030-06-13', '2030-06-14', '2030-06-15'].map((date) => ({
-		covers: date, rows: rows.filter((row) => row.date === date).map((row) => ({ ...row, run_id: 'run' }))
+		covers: date, rows: rows.filter((row) => row.date === date)
 	})));
 	const table = await visualAttemptRows({ start: '2030-06-13', end: '2030-06-15' }, root);
-	expect(table.rows).toContainEqual({ date: '2030-06-13', run_id: 'run', rejection_reason: '' });
+	const sameDay = (date: string) => table.rows.filter((row) => row.date === date);
+	const run = { runId: 'run', n: 1 };
+	expect(visualAttemptTypes('2030-06-13', sameDay('2030-06-13'), table.read, [{ ...run, decided: 3 }],
+		[{ itemId: 'story-01', run: 1, type: 'bar' }])).toEqual({ proposed: { bar: 2, dot: 1 }, saved: { bar: 2 } });
+	expect(visualAttemptTypes('2030-06-14', sameDay('2030-06-14'), table.read, [{ ...run, decided: 4 }], [])).toBeNull();
+	expect(visualAttemptTypes('2030-06-15', sameDay('2030-06-15'), table.read, [{ ...run, decided: 1 }], []))
+		.toEqual({ proposed: {}, saved: {} });
 	const days = visualAttemptDays(table.rows);
 	const expectedRefusals = rows.filter((row) => row.rejection_reason).reduce<Record<string, number>>((held, row) => {
 		const key = `${row.date}/${row.rejection_reason}`;
@@ -77,6 +85,54 @@ const READ: RecordRead = {
 	state: 'read', first: '2030-06-02', through: '2030-06-06', lastRows: null,
 	lostDays: ['2030-06-05'], setAside: { '2030-06-06': 1 }
 };
+
+test('a refusal before a typed plan still settles the assembled decision without adding a chart', async ({}, info) => {
+	const date = '2030-06-02';
+	const window = { start: date, end: date };
+	const run = { runId: `${date}-1`, n: 1, decided: 2 };
+	const saved = {
+		version: '2026-10-29', date, run_id: run.runId, item_id: 'story-01', visual_id: 'a'.repeat(64),
+		decision: 'visual', none_reason: null, rejection_reason: null, state: 'rendered',
+		planned_type: 'bar', rendered_type: 'bar'
+	};
+	const refused = {
+		...saved, item_id: 'story-02', visual_id: 'b'.repeat(64), none_reason: 'validation_failed',
+		state: 'absent', planned_type: null, rendered_type: null
+	};
+	const root = info.outputPath('attempts');
+	await buildRows(root, 'visual-design-attempts', [{ covers: date, rows: [saved, refused] }]);
+	const table = await visualAttemptRows(window, root);
+	const published = [{ itemId: saved.item_id, run: run.n, type: 'bar' }];
+	expect(visualAttemptTypes(date, table.rows, table.read, [run], published))
+		.toEqual({ proposed: { bar: 1 }, saved: { bar: 1 } });
+	for (const unclear of [
+		{ ...refused, none_reason: null },
+		{ ...refused, version: '2026-10-27T11:32' }
+	]) expect(visualAttemptTypes(date, [saved, unclear], table.read, [run], published)).toBeNull();
+});
+
+test('each assembled run must account for its own distinct decisions and published saves', () => {
+	const date = '2030-06-02';
+	const runs = [{ runId: 'first', n: 1, decided: 1 }, { runId: 'second', n: 2, decided: 1 }];
+	const first = {
+		date, run_id: 'first', item_id: 'story-01', visual_id: 'first-chart',
+		decision: 'visual', state: 'rendered', planned_type: 'bar', rendered_type: 'bar'
+	};
+	const second = { ...first, run_id: 'second', visual_id: 'second-chart', planned_type: 'dot', rendered_type: 'dot' };
+	const rows = [first, first, second, { ...first, run_id: 'unassembled' }];
+	const published = [{ itemId: 'story-01', run: 1, type: 'bar' }];
+	expect(visualAttemptTypes(date, rows, READ, runs, published))
+		.toEqual({ proposed: { bar: 1, dot: 1 }, saved: { bar: 1, dot: 1 } });
+	// A second run's surplus does not fill the missing first run, even at the same total.
+	expect(visualAttemptTypes(date, [second, { ...second, item_id: 'story-02' }], READ, runs, [])).toBeNull();
+	expect(visualAttemptTypes(date, [...rows, { ...first, visual_id: 'another-attempt' }], READ, runs, published)).toBeNull();
+	expect(visualAttemptTypes(date, rows, READ, runs, [{ ...published[0], type: 'dot' }])).toBeNull();
+	expect(visualAttemptTypes(date, rows, { ...READ, setAside: { '2030-06': 1 } }, runs, published)).toBeNull();
+	expect(visualAttemptTypes(date, rows, { ...READ, lostDays: [date] }, runs, published)).toBeNull();
+	expect(visualAttemptTypes(date, rows, { state: 'not-packed' }, runs, published)).toBeNull();
+	expect(visualAttemptTypes(date, [], READ, [{ ...runs[0], decided: null }], [])).toBeNull();
+	expect(visualAttemptTypes(date, [], READ, [{ ...runs[0], decided: 0 }], [])).toEqual({ proposed: {}, saved: {} });
+});
 
 test('daily refusal lines keep recorded zeros, unknown dates, partial counts and exact attempt readouts distinct', () => {
 	const days = visualAttemptDays([

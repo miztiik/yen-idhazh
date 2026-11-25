@@ -137,9 +137,9 @@ def test_the_feed_record_asks_only_for_columns_the_contract_declares_in_its_orde
 
 
 def test_the_attempt_record_asks_only_for_columns_the_contract_declares_in_its_order() -> None:
-    """The Pipelines refusal view reads part of the attempt record, in the contract's order.
+    """The Pipelines refusal and type views share a projection of the attempt record.
 
-    `ledger-rows.ts` spells the `VisualAttemptRow` columns the refusal view reads. A
+    `ledger-rows.ts` spells the `VisualAttemptRow` columns those views read. A
     column the contract renames or drops would reach the view as an empty
     reading rather than as an error.
     """

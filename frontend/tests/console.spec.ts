@@ -191,7 +191,7 @@ test('a visual that never drew is a visual and is not a published chart', () => 
             item(4, null)
         ]
     }));
-    expect(publishedCharts(digest, 1)).toEqual(new Map([['2030-06-15', { items: 4, charts: 2 }]]));
+    expect(publishedCharts(digest, 1)).toEqual(new Map([['2030-06-15', { items: 4, charts: 2, assets: null }]]));
 });
 test('the articles a day published are read off its own payload, over the days the cover reaches', () => {
     // Three published days: 4 articles on 13 Jun 2030, none on the 14th and 2 on the
@@ -218,12 +218,12 @@ test('the articles a day published are read off its own payload, over the days t
         }));
     }
     expect(publishedCharts(digest, 3)).toEqual(new Map([
-        ['2030-06-15', { items: 2, charts: 0 }],
-        ['2030-06-14', { items: 0, charts: 0 }],
-        ['2030-06-13', { items: 4, charts: 0 }]
+        ['2030-06-15', { items: 2, charts: 0, assets: [] }],
+        ['2030-06-14', { items: 0, charts: 0, assets: [] }],
+        ['2030-06-13', { items: 4, charts: 0, assets: [] }]
     ]));
     expect(publishedCharts(digest, 2)).toEqual(new Map([
-        ['2030-06-15', { items: 2, charts: 0 }],
-        ['2030-06-14', { items: 0, charts: 0 }]
+        ['2030-06-15', { items: 2, charts: 0, assets: [] }],
+        ['2030-06-14', { items: 0, charts: 0, assets: [] }]
     ]));
 });

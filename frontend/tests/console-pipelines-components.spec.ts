@@ -4,6 +4,7 @@ import { clientCode, drawClient } from './support/console-window/client-render';
 import { numberFormat } from './support/number-format';
 import { failureRuleRows } from '../src/lib/console/failure-rules';
 import { SERIES_TOKENS } from '../src/lib/console/series-tokens';
+import { chartTypeCounts } from '../src/lib/console/pipelines/chart-drawing';
 import { visualAttemptDays } from '../src/lib/console/pipelines/visual-attempts';
 import { chartConfig, consoleConfig } from '../src/lib/server/config';
 
@@ -25,7 +26,11 @@ test('the actual visual overview retains its stage colours in the diagram and na
 	await drawClient(page, code, 'ChartDrawing', {
 		days: [{ date: '2030-06-01', reached: 100, asked: 70, drafted: 20, published: 10,
 			items: 100, plannerMinutes: 10, minutesPerChart: 1 }],
-		windowDays: 7, knobs: consoleConfig()
+		typeCounts: chartTypeCounts([
+			{ date: '2030-06-01', proposed: { bar: 2 }, saved: { bar: 1 }, published: { bar: 1 } },
+			{ date: '2030-06-02', proposed: null, saved: null, published: { bar: 9 } }
+		], { start: '2030-06-01', end: '2030-06-02' }),
+		windowDays: 2, knobs: consoleConfig()
 	});
 	const expected = ['--chart-1', '--chart-2', '--chart-3', '--chart-4', '--chart-1', '--chart-2', '--chart-3'];
 	await expect(page.locator('[data-flow-shape="diagram"]')).toBeVisible();
@@ -36,6 +41,11 @@ test('the actual visual overview retains its stage colours in the diagram and na
 	expect(await page.locator('.stage-swatch').evaluateAll((nodes) => nodes.map((node) => (node as HTMLElement).style.background)))
 		.toEqual(['--chart-1', '--chart-1', '--chart-2', '--chart-2', '--chart-3', '--chart-3', '--chart-4'].map((token) => `var(${token})`));
 	await expect(page.locator('[data-flow-shape="stepped"]')).toContainText('Did not survive the checks: 10 (10%)');
+	const types = page.getByRole('table', { name: 'Charts by type' });
+	await expect(types).toHaveAccessibleDescription('Recorded subtotals use complete tracking from 1 of 2 selected UTC days.');
+	const bar = types.getByRole('row').filter({ has: page.getByRole('rowheader', { name: 'bar', exact: true }) });
+	await expect(bar.getByRole('cell')).toHaveText([/Missing\s*Recorded: 2/, /Missing\s*Recorded: 1/, '10']);
+	await expect(types.getByRole('row', { name: 'dot Missing Missing 0' })).toBeVisible();
 });
 
 test.describe('daily refusal inspection', () => {

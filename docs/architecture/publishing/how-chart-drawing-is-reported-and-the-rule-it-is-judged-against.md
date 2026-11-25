@@ -1,10 +1,10 @@
 # How chart drawing is reported, and the rule it is judged against
 
-**Last Updated**: 2026-11-11
+**Last Updated**: 2026-11-24
 
-`Visuals drawn for articles` is a Pipelines section in three parts: a flow of
-where items go, the two figures the retirement rule names, and a daily table
-behind a disclosure. Two cards beside it count what was published.
+`Visuals drawn for articles` is a Pipelines section with a flow of where items
+go, the two figures the retirement rule names, a table by chart type, and a
+daily table behind a disclosure. Two cards beside it count what was published.
 
 It is the only console section carrying a written decision rule in its own prose,
 which is why it gets a page: over a stated span chart drawing is retired if the
@@ -171,6 +171,30 @@ control like every other windowed surface.
 **No chart type is registered for this section**, so the lazy engine chunk does
 not move for it at all. What every route weighs is
 [../../reference/site-weight.md](../../reference/site-weight.md).
+
+## Chart types are counted at three different points
+
+The table follows the selected UTC window. **Proposed** counts `planned_type`
+and **Saved by worker** counts `rendered_type` from the packed
+`state/compact/visual-design-attempts/` record. A replacement can count under
+one type when proposed and another when saved. These columns cover only
+decisions received by assembly, not every model call or every worker run.
+For each run in the day's `run.json`, distinct settled decisions must match
+assembly's `items_routed`. An explicit validation refusal before a typed plan
+settles a decision without adding a chart. Older attempts without type evidence,
+unexplained blanks, lost or unread inputs and unpacked days leave a coverage
+gap. An incomplete window shows **Missing** for its attempt totals and labels
+positive recorded subtotals with the number of complete UTC days they cover
+out of the selected days. The newest day can still be waiting for packing.
+
+**Published** counts the types actually readable from the final `digest.json`
+references and the matching assets named in `publication.json`. It does not
+depend on the attempt record. If one of those assets has no matching save for
+the same item and run, the attempt columns are missing. If an expected asset
+cannot be read, the published total is also missing. A complete window shows
+zero for an unused type. The difference between the columns is not a
+rejection rate: a chart can be replaced, saved without publishing, or
+published while its attempt record is missing.
 
 ## Visuals published sits beside Articles published, and one is the denominator
 

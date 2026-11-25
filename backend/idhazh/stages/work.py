@@ -396,6 +396,8 @@ def stage_work(
     )
 
     items_dir = _run_dir(plan.date) / "items"
+    # The decision crosses to assembly; the worker's chart file must not enter its receipt.
+    chart_scratch = items_dir.parent / "chart-scratch"
     _write_inputs(items_dir, inputs=inputs)
     LOG.info(
         "working shard=%s/%s items=%s model=%s",
@@ -576,6 +578,7 @@ def stage_work(
                 run_id=plan.run_id,
                 tracer=tracer,
                 recorder=recorder,
+                render_root=chart_scratch,
                 published_marks=published_marks,
             )
             summarize_ms = int((time.monotonic() - model_started) * 1000)

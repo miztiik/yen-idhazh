@@ -22,7 +22,8 @@ import { publicFiles } from './publication';
 import { dayKey, monthsInWindow, toDay, type TimeWindow } from '../charts/viewport';
 import { deskOf, orderByTime } from '../day-shape';
 import { settled } from '../feed-health';
-import { dropVectors, coverageOf } from '../payload/project';
+import { isVisualData, publishedVisualData } from '../payload/drawing';
+import { dropVectors, coverageOf, isChartKind } from '../payload/project';
 import type { DigestDay, DigestItem } from '$lib/payload/types';
 import { feedHealthRows } from './ledger-rows';
 
@@ -170,7 +171,11 @@ export function publishedDates(
 	root: string = DIGEST_ROOT,
 	windowDays: number = ARCHIVE_WINDOW_DAYS
 ): string[] {
-	const found = publicFiles(resolve(root, '..'))
+	return inventoryDates(root, windowDays, publicFiles(resolve(root, '..')));
+}
+
+function inventoryDates(root: string, windowDays: number, files: readonly string[]): string[] {
+	const found = files
 		.flatMap((file) => {
 			const date = /^digest\/(\d{4})\/(\d{2})\/(\d{2})\/digest\.json$/.exec(file);
 			return date && existsSync(join(root, date[1], date[2], date[3], 'digest.json'))
@@ -847,8 +852,8 @@ export interface RunRecord {
 	 * predates the cell. Null is unknown: it is never the count of shards that
 	 * filed a row, which is the numerator this is the denominator of. */
 	shards: number | null;
-	/** Items the visual planner posted to the model. */
-	decided: number;
+	/** Serialized decisions assembly received, or null where the count is unrecorded. */
+	decided: number | null;
 	/** Items the planner decided without posting, because no enabled kind could survive its checks. */
 	prefiltered: number;
 	/** Items whose planner reply asked for a chart, whatever the decision became. */
@@ -913,18 +918,19 @@ export function loadManifests(
 				skipped: Number(run.items_skipped ?? 0) || 0,
 				startedAt: String(run.started_at ?? ''),
 				sourceListStale: run.source_list_stale === true,
-							shards: typeof run.shards === 'number' ? run.shards : null,
-							decided: Number(run.items_routed ?? 0) || 0,
-							prefiltered: Number(run.items_prefiltered ?? 0) || 0,
-							chartsDrafted: Number(run.charts_drafted ?? 0) || 0,
-							chartEvidence: readChartEvidence(run.chart_evidence),
-							// The manifest writes an integer or a literal null. `Number(null)` is 0,
-							// so coercing here would turn "never measured" into "measured zero".
-							decisionMs: typeof run.route_ms === 'number' ? run.route_ms : null,
-							inputs:
-								typeof run.inputs === 'object' && run.inputs !== null
-									? (run.inputs as Record<string, unknown>)
-									: null
+				shards: typeof run.shards === 'number' ? run.shards : null,
+				decided: typeof run.items_routed === 'number' && Number.isSafeInteger(run.items_routed) &&
+					run.items_routed >= 0 ? run.items_routed : null,
+				prefiltered: Number(run.items_prefiltered ?? 0) || 0,
+				chartsDrafted: Number(run.charts_drafted ?? 0) || 0,
+				chartEvidence: readChartEvidence(run.chart_evidence),
+				// The manifest writes an integer or a literal null. `Number(null)` is 0,
+				// so coercing here would turn "never measured" into "measured zero".
+				decisionMs: typeof run.route_ms === 'number' ? run.route_ms : null,
+				inputs:
+					typeof run.inputs === 'object' && run.inputs !== null
+						? (run.inputs as Record<string, unknown>)
+						: null
 			}));
 			const last = runs.at(-1) ?? {};
 			const models = runs.flatMap((run) =>
@@ -952,16 +958,50 @@ export interface DayVisuals {
 	/** Every item the day published. The denominator of the chart coverage rule
 	 * and of the per-article cost. */
 	items: number;
-	/** Charts a reader can actually see. */
+	/** Rendered chart references, the existing chart rule's input. */
 	charts: number;
 }
 
-/** Charts a reader can actually see on each published day, and what they are of.
+export interface PublishedChart {
+	itemId: string;
+	run: number;
+	type: string;
+}
+
+export interface PublishedDayCharts extends DayVisuals {
+	/** The final, verified references, or null when even one expected asset is missing. */
+	assets: PublishedChart[] | null;
+}
+
+function readPublishedChart(
+	date: string, item: DigestItem, publicRoot: string, inventory: ReadonlySet<string>
+): PublishedChart | null {
+	const path = `digest/${date.replaceAll('-', '/')}/${item.item_id}.json`;
+	if (item.visual?.data_path !== path || !publishedVisualData(path) || !inventory.has(path)) {
+		return null;
+	}
+	try {
+		const data: unknown = JSON.parse(readFileSync(join(publicRoot, path), 'utf8'));
+		if (!isVisualData(data) || data.item_id !== item.item_id) {
+			console.warn(`[chart-tracking] ${path}: invalid chart data or mismatched item.`);
+			return null;
+		}
+		return { itemId: item.item_id, run: item.updated_by_run ?? item.introduced_by_run, type: data.type };
+	} catch (cause) {
+		const reason = cause instanceof Error && 'code' in cause ? cause.code :
+			cause instanceof Error ? cause.name : typeof cause;
+		console.warn(`[chart-tracking] ${path}: unreadable (${String(reason)})`);
+		return null;
+	}
+}
+
+/** Chart references and verified assets on each published day, and what they are of.
  *
  * Counted from the day payload rather than from the manifest, because the
  * manifest records what the planner decided and this records what survived to
  * the page. A chart whose render failed is a visual and is not a published
- * chart.
+ * chart. Counts by type additionally require the named file to match the
+ * digest reference, the publication inventory and the browser's chart contract.
  *
  * The item count rides along rather than costing a second pass: chart drawing's
  * second threshold is a share of what the day published, the console's
@@ -980,16 +1020,21 @@ export interface DayVisuals {
 export function publishedCharts(
 	root: string = DIGEST_ROOT,
 	windowDays: number = ARCHIVE_WINDOW_DAYS
-): Map<string, DayVisuals> {
-	const found = new Map<string, DayVisuals>();
-	for (const date of publishedDates(root, windowDays)) {
+): Map<string, PublishedDayCharts> {
+	const found = new Map<string, PublishedDayCharts>();
+	const publicRoot = resolve(root, '..');
+	const files = publicFiles(publicRoot);
+	const inventory = new Set(files);
+	for (const date of inventoryDates(root, windowDays, files)) {
 		const day = loadDay(date, root);
 		if (day === null) continue;
+		const rendered = day.items.filter((item) => item.visual?.state === 'rendered');
+		const assets = rendered.filter((item) => isChartKind(item.visual?.kind))
+			.map((item) => readPublishedChart(date, item, publicRoot, inventory));
 		found.set(date, {
 			items: day.items.length,
-			charts: day.items.filter(
-				(item) => item.visual?.kind === 'chart' && item.visual.state === 'rendered'
-			).length
+			charts: rendered.filter((item) => item.visual?.kind === 'chart').length,
+			assets: assets.every((asset) => asset !== null) ? assets : null
 		});
 	}
 	return found;
