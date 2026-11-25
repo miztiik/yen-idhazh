@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { COMPACT_INDEX_STAMP, readIndex, type CompactEntry, type Period } from '../src/lib/data/compact-index';
+import { COMPACT_INDEX_STAMP, LEGACY_COMPACT_INDEX_STAMP, readIndex, type CompactEntry, type Period } from '../src/lib/data/compact-index';
 import { nodeEngine } from '../src/lib/data/engine';
 import { compactBytes, fetchedBytes, type Fetcher } from '../src/lib/data/fetched-bytes';
 import { dropOwnedViews, readAsk, readAskCost } from '../src/lib/data/ask-reader';
@@ -188,8 +188,8 @@ test('compact index absence, partial sets, malformed data and identity failures 
 		{ [DAILY_INDEX]: { status: 404 } },
 		{ [MONTHLY_INDEX]: { status: 404 } },
 		{ [YEARLY_INDEX]: { status: 200, body: new TextEncoder().encode('{') } },
-		{ [YEARLY_INDEX]: { status: 200, body: encoded({ version: COMPACT_INDEX_STAMP, ledger: 'seen', period: 'yearly', entries: [] }) } },
-		{ [MONTHLY_INDEX]: { status: 200, body: encoded({ version: COMPACT_INDEX_STAMP, ledger: LEDGER, period: 'daily', entries: [] }) } }
+		{ [YEARLY_INDEX]: { status: 200, body: encoded({ version: LEGACY_COMPACT_INDEX_STAMP, ledger: 'seen', period: 'yearly', entries: [] }) } },
+		{ [MONTHLY_INDEX]: { status: 200, body: encoded({ version: LEGACY_COMPACT_INDEX_STAMP, ledger: LEDGER, period: 'daily', entries: [] }) } }
 	] satisfies Record<string, Rule>[]) {
 		const response = recorded(rules);
 		const answer = await warnings(() => readAsk(freshPage(response.fetcher), opts));
@@ -544,7 +544,7 @@ const LOST_DAY: CompactEntry = { covers: '2026-09-04', rows: 0, bytes: 0, state:
  *  hole `lost`, and `more` after the newest day. */
 function withNoFile(more: CompactEntry[] = []): { version: string; ledger: typeof LEDGER; period: Period; entries: CompactEntry[] } {
 	const entries = fixtureEntries('daily').flatMap((entry) => (entry.covers === EMPTY_DAY.covers ? [EMPTY_DAY, LOST_DAY] : [entry]));
-	return { version: COMPACT_INDEX_STAMP, ledger: LEDGER, period: 'daily', entries: [...entries, ...more] };
+	return { version: LEGACY_COMPACT_INDEX_STAMP, ledger: LEDGER, period: 'daily', entries: [...entries, ...more] };
 }
 
 /** That index as the site serves it: a period with no file has no file to send. */
@@ -1641,7 +1641,7 @@ test.describe('THE ORACLE for a missing file: a name, the state it draws, and on
 });
 
 test.describe('an empty monthly.json or yearly.json is a gap the design expects: nothing leads to a file that is not there', () => {
-	const EMPTY_MONTHS = { version: COMPACT_INDEX_STAMP, ledger: LEDGER, period: 'monthly', entries: [] };
+	const EMPTY_MONTHS = { version: LEGACY_COMPACT_INDEX_STAMP, ledger: LEDGER, period: 'monthly', entries: [] };
 
 	test('a span that starts before the oldest daily day, and the reach, ask the site for no file it lacks', async () => {
 		const { fetcher, asked } = recorded({ [MONTHLY_INDEX]: { status: 200, body: encoded(EMPTY_MONTHS) } });
@@ -1713,6 +1713,26 @@ test.describe('THE ORACLE for a period with no file: an empty day is quiet, a lo
 			lostDays: ['2026-09-04'],
 			setAside: {}
 		});
+		expect(dataAsked(asked)).toEqual([]);
+		expect(engine.opened()).toBe(0);
+	});
+
+	test('split daily coverage preserves both quiet and lost dates without fetching Parquet', async () => {
+		const legacy = withNoFile();
+		const { fetcher, asked } = recorded({
+			[DAILY_INDEX]: { status: 200, body: encoded({
+				...legacy, version: COMPACT_INDEX_STAMP,
+				entries: legacy.entries.filter(namesFile),
+				coverage: [{ covers: EMPTY_DAY.covers, state: 'empty' }, { covers: LOST_DAY.covers, state: 'lost', set_aside: 2 }]
+			}) }
+		});
+		const engine = counted();
+		const page = freshPage(fetcher, engine);
+		expect(await readSlice(page, LEDGER, ask(EMPTY_DAY.covers, LOST_DAY.covers))).toMatchObject({
+			state: 'quiet', first: EMPTY_DAY.covers, through: '2026-09-05',
+			lostDays: [LOST_DAY.covers], setAside: { [LOST_DAY.covers]: 2 }
+		});
+		expect(await readReach(page, LEDGER)).toMatchObject({ state: 'ok', through: '2026-09-05' });
 		expect(dataAsked(asked)).toEqual([]);
 		expect(engine.opened()).toBe(0);
 	});
@@ -2000,7 +2020,7 @@ test.describe('THE ORACLE for ask(): a written question over chosen ledgers', ()
 	});
 
 	test('empty published ledger is missing, and broken coarser indexes are unreachable', async () => {
-		const empty = { version: COMPACT_INDEX_STAMP, ledger: LEDGER, period: 'daily', entries: [] };
+		const empty = { version: COMPACT_INDEX_STAMP, ledger: LEDGER, period: 'daily', entries: [], coverage: [] };
 		const missing = await readAsk(freshPage(recorded({
 			[DAILY_INDEX]: { status: 200, body: encoded(empty) },
 			[MONTHLY_INDEX]: { status: 200, body: encoded({ ...empty, period: 'monthly' }) },
@@ -2018,7 +2038,7 @@ test.describe('THE ORACLE for ask(): a written question over chosen ledgers', ()
 		const zeroRows = bytesOf(dataPath('item-health', 'daily', '2026-09-03'));
 		const index = (period: Period, entries: CompactEntry[]): Rule => ({
 			status: 200,
-			body: encoded({ version: COMPACT_INDEX_STAMP, ledger: 'item-health', period, entries })
+			body: encoded({ version: COMPACT_INDEX_STAMP, ledger: 'item-health', period, entries, coverage: [] })
 		});
 		const page = freshPage(recorded({
 			[indexPath('item-health', 'daily')]: index('daily', [{ covers: '2026-09-01', rows: 0, bytes: zeroRows.byteLength }]),
@@ -2040,7 +2060,7 @@ test.describe('THE ORACLE for ask(): a written question over chosen ledgers', ()
 	test('a selected ledger with no file to take its columns from answers missing, and reaches no engine as an empty view', async () => {
 		const index = (period: Period): Rule => ({
 			status: 200,
-			body: encoded({ version: COMPACT_INDEX_STAMP, ledger: 'item-health', period, entries: [] })
+			body: encoded({ version: COMPACT_INDEX_STAMP, ledger: 'item-health', period, entries: [], coverage: [] })
 		});
 		const page = freshPage(recorded({
 			[indexPath('item-health', 'daily')]: index('daily'),

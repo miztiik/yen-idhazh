@@ -1,6 +1,6 @@
 /** Which bounded represented health days are named by local publication inventory and compact periods? */
 import {
-  COMPACT_INDEX_VERSION, CompactIndexSchema, DateStampSchema, PublicationInventoryInputSchema,
+  CompactIndexSchema, DateStampSchema, PublicationInventoryInputSchema, compactPeriods,
 } from "@idhazh/common-contracts";
 import type { CompactIndex } from "@idhazh/common-contracts";
 import type { LedgerDayInput } from "../config/service-settings";
@@ -58,7 +58,7 @@ export async function resolveHealthDays(input: {
       const raw = await input.read(defaults.indexes[period]);
       if (raw === undefined) continue;
       const index = CompactIndexSchema.parse(raw);
-      if (index.version > COMPACT_INDEX_VERSION || index.ledger !== input.ledger || index.period !== period) {
+      if (index.ledger !== input.ledger || index.period !== period) {
         throw new LedgerHistoryReadError("Health index is unsupported or belongs to another registered output");
       }
       compact.push(index);
@@ -138,7 +138,7 @@ export async function resolveHealthDays(input: {
   }
   const selected = [...days.values()].sort((a, b) => a.day.localeCompare(b.day)).slice(-input.health_window_days);
   const from = selected[0]?.day;
-  if (from !== undefined && compact.some(index => index.entries.some(entry =>
+  if (from !== undefined && compact.some(index => compactPeriods(index).some(entry =>
     (entry.state === "lost" && entry.covers >= from && entry.covers <= input.now.slice(0, 10))
       || entry.lost_days.some(day => day >= from && day <= input.now.slice(0, 10))
       || (entry.set_aside > 0 && entry.covers >= from.slice(0, entry.covers.length)

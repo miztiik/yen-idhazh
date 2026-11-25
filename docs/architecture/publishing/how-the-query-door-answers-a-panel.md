@@ -1,6 +1,6 @@
 # How the query door answers a panel
 
-**Last Updated**: 2026-11-13
+**Last Updated**: 2026-11-25
 
 The query door is the one module a console panel calls to read a committed
 ledger: `slice()` for rows and `ledgerReach()` for how far a ledger reaches, both
@@ -88,6 +88,9 @@ The ledger carries its own indexes, because a browser cannot list a directory:
 `index/yearly.json`, written together by the gardener's compaction task - an
 index for a period never packed names nothing - and declared as `CompactIndex` in
 `backend/idhazh/contracts/ledger_index.py`.
+The door reads [both index layouts](../contracts/persistence.md#what-an-index-entry-says).
+Site staging trims file entries and no-file coverage to the same window and
+copies only the Parquet members.
 
 The prefix is the ledger's `prefix` list in the committed
 `config/ledgers.json`, joined with `/`. The validated frontend catalog checks

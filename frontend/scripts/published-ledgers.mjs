@@ -9,8 +9,7 @@
  *
  * **The indexes are the compact list.** A reader asks only for compact files an
  * index names, so a compact file no index names is bytes nobody fetches.
- * An entry `empty` or `lost` stays in its index and names no file, so it is never copied or
- * reported missing.
+ * No-file coverage stays in its index and never names a file to copy or report missing.
  * The copy is capped from each ledger's newest packed period rather than the
  * build clock, so a canary build keeps publishing the same fixture files next month.
  * That window is `src/lib/data/site-window.ts`. Reading the list rather than
@@ -37,6 +36,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { siteKeepsFrom } from '../src/lib/data/site-window.ts';
 import { namesFile, newestNamed } from '../src/lib/data/slice.ts';
+import { COMPACT_INDEX_STAMP, compactPeriods, readIndex } from '../src/lib/data/compact-index.ts';
 import { CONFIG_ROOT, ledgerCatalog, ledgerFolders, REGISTRY } from './ledger-prefixes.mjs';
 
 const APPEARANCE_FILE = join(CONFIG_ROOT, 'appearance.json');
@@ -121,42 +121,25 @@ function entryRange(period, covers) {
 }
 
 /**
- * The file one index entry names, under `compact/<ledger>/`, or null when
- * `covers` is not that period's shape.
+ * The file a validated period names under `compact/<ledger>/`.
  *
  * @param {Period} period
- * @param {unknown} covers
- * @returns {string | null}
+ * @param {string} covers
  */
 function namedFile(period, covers) {
-	if (typeof covers !== 'string') return null;
-	if (period === 'daily') {
-		const day = /^(\d{4})-(\d{2})-(\d{2})$/.exec(covers);
-		return day ? `daily/${day[1]}/${day[2]}/${day[3]}.parquet` : null;
-	}
-	if (period === 'yearly') {
-		return /^\d{4}$/.test(covers) ? `yearly/${covers}/${covers}.parquet` : null;
-	}
-	const month = /^(\d{4})-(\d{2})$/.exec(covers);
-	return month ? `monthly/${month[1]}/${month[2]}.parquet` : null;
+	const partition = period === 'yearly' ? `${covers}/${covers}` : covers.replaceAll('-', '/');
+	return `${period}/${partition}.parquet`;
 }
 
 /**
- * The files one index names after trimming it to the published window, or the reason it cannot be acted on.
- *
- * Only what the copy needs is checked: that the file is this ledger's index for
- * this period, and that every entry covers a day, month or year of that period.
- * The browser's door checks the rest of the shape when it reads the file.
+ * Check the membership and coverage the copy uses, without changing the wire layout.
  *
  * @param {string} text
  * @param {string} ledger
- * @param {string} folder
  * @param {Period} period
- * @param {number} firstDay
- * @param {number} lastDay
- * @returns {{files: string[], text: string} | string} The named files and trimmed index, or why it was refused.
+ * @returns {import('../src/lib/data/compact-index.ts').CompactIndex | string}
  */
-function filesNamedIn(text, ledger, folder, period, firstDay, lastDay) {
+function indexForCopy(text, ledger, period) {
 	/** @type {unknown} */
 	let index;
 	try {
@@ -165,28 +148,48 @@ function filesNamedIn(text, ledger, folder, period, firstDay, lastDay) {
 		return 'is not JSON';
 	}
 	if (index === null || typeof index !== 'object') return 'is not an index';
-	const held = /** @type {{ledger?: unknown, period?: unknown, entries?: unknown}} */ (index);
+	const held = /** @type {{ledger?: unknown, period?: unknown, version?: unknown, entries?: unknown}} */ (index);
 	if (held.ledger !== ledger || held.period !== period) {
 		return `describes ${String(held.ledger)} ${String(held.period)}, not ${ledger} ${period}`;
 	}
 	if (!Array.isArray(held.entries)) return 'has no list of entries';
-	/** @type {string[]} */
-	const files = [];
-	const entries = [];
+	const unit = period === 'daily' ? 'day' : period === 'monthly' ? 'month' : 'year';
 	for (const entry of held.entries) {
 		const covers = entry !== null && typeof entry === 'object' ? entry.covers : undefined;
-		const file = namedFile(period, covers);
-		if (file === null) {
-			const unit = period === 'daily' ? 'day' : period === 'monthly' ? 'month' : 'year';
+		if (entryRange(period, covers) === null) {
 			return `names ${JSON.stringify(covers)}, which is not a UTC ${unit}`;
 		}
-		const range = entryRange(period, covers);
-		if (range === null) return `names ${JSON.stringify(covers)}, which is not a UTC period`;
-		if (range.last < firstDay || range.first > lastDay) continue;
-		entries.push(entry);
-		if (namesFile(entry)) files.push(`compact/${folder}/${file}`);
 	}
-	return { files, text: `${JSON.stringify({ ...held, entries }, null, 2)}\n` };
+	if ('coverage' in held || (typeof held.version === 'string' && held.version >= COMPACT_INDEX_STAMP)) {
+		const reading = readIndex(held, ledger, period);
+		if ('refused' in reading) return reading.refused.reason === 'newer'
+			? `is stamped ${reading.refused.stamp} and this build reads ${COMPACT_INDEX_STAMP} or older`
+			: reading.refused.detail;
+	}
+	return /** @type {import('../src/lib/data/compact-index.ts').CompactIndex} */ (held);
+}
+
+/**
+ * @param {string} text
+ * @param {string} ledger
+ * @param {string} folder
+ * @param {Period} period
+ * @param {number} firstDay
+ * @param {number} lastDay
+ */
+function filesNamedIn(text, ledger, folder, period, firstDay, lastDay) {
+	const index = indexForCopy(text, ledger, period);
+	if (typeof index === 'string') return index;
+	/** @param {{covers: string}} entry */
+	const kept = (entry) => {
+		const range = entryRange(period, entry.covers);
+		return range !== null && range.last >= firstDay && range.first <= lastDay;
+	};
+	const entries = index.entries.filter(kept);
+	const files = entries.filter(namesFile).map(entry => `compact/${folder}/${namedFile(period, entry.covers)}`);
+	const trimmed = { ...index, entries };
+	if (index.coverage) trimmed.coverage = index.coverage.filter(kept);
+	return { files, text: `${JSON.stringify(trimmed, null, 2)}\n` };
 }
 
 /**
@@ -214,43 +217,19 @@ function packedIndexes(stateRoot, ledger, folder, rootName) {
 	for (const period of PERIODS) {
 		const index = `compact/${folder}/index/${period}.json`;
 		const at = join(stateRoot, ...index.split('/'));
-		let parsed;
+		let text;
 		try {
-			parsed = JSON.parse(readFileSync(at, 'utf8'));
+			text = readFileSync(at, 'utf8');
 		} catch {
 			errors.push(`${ledger}: ${rootName}/${index} is not JSON`);
 			continue;
 		}
-		if (parsed === null || typeof parsed !== 'object') {
-			errors.push(`${ledger}: ${rootName}/${index} is not an index`);
+		const held = indexForCopy(text, ledger, period);
+		if (typeof held === 'string') {
+			errors.push(`${ledger}: ${rootName}/${index} ${held}`);
 			continue;
 		}
-		const held = /** @type {{ledger?: unknown, period?: unknown, entries?: unknown}} */ (parsed);
-		if (held.ledger !== ledger || held.period !== period) {
-			errors.push(
-				`${ledger}: ${rootName}/${index} describes ${String(held.ledger)} ${String(held.period)}, not ${ledger} ${period}`
-			);
-			continue;
-		}
-		if (!Array.isArray(held.entries)) {
-			errors.push(`${ledger}: ${rootName}/${index} has no list of entries`);
-			continue;
-		}
-		/** @type {{covers: string, rows: number, bytes: number}[]} */
-		const entries = [];
-		for (const entry of held.entries) {
-			const covers = entry !== null && typeof entry === 'object' ? entry.covers : undefined;
-			const range = entryRange(period, covers);
-			if (range === null) {
-				const unit = period === 'daily' ? 'day' : period === 'monthly' ? 'month' : 'year';
-				errors.push(
-					`${ledger}: ${rootName}/${index} names ${JSON.stringify(covers)}, which is not a UTC ${unit}`
-				);
-				continue;
-			}
-			entries.push(/** @type {{covers: string, rows: number, bytes: number}} */ (entry));
-		}
-		byPeriod[period] = entries;
+		byPeriod[period] = compactPeriods(held);
 	}
 	const newest = newestNamed(byPeriod.daily, byPeriod.monthly, byPeriod.yearly);
 	return { newest: newest === null ? null : dayNumber(newest), days: byPeriod.daily.map((entry) => entry.covers), errors };

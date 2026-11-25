@@ -106,8 +106,8 @@ def seeded(state: Path) -> None:
 
 
 def indexed(state: Path, period: Period, entries: list[CompactEntry]) -> Path:
-    index = CompactIndex(
-        version=CompactIndex.schema_version(), ledger=LEDGER, period=period, entries=entries,
+    index = CompactIndex.from_period_entries(
+        ledger=LEDGER, period=period, entries=entries,
     )
     path = ledger.compact_index_path(state, LEDGER, period)
     path.parent.mkdir(parents=True, exist_ok=True)

@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ledgerCopy, publishedLedgers } from '../scripts/published-ledgers.mjs';
 import { siteKeepsFrom } from '../src/lib/data/site-window';
+import { COMPACT_INDEX_STAMP } from '../src/lib/data/compact-index';
 import { daysBetween } from '../src/lib/data/slice';
 import { backendPython } from './support/backend-python';
 import { sliceFromDisk } from '../src/lib/server/ledger-disk';
@@ -655,6 +656,29 @@ test('an empty or a lost day stays in its index and names no file, so none is co
 		'2026-09-02',
 		'2026-09-03'
 	]);
+});
+
+test('split coverage anchors the copy window and is trimmed without adding files', () => {
+	const tree = aWholeLedger('host-fingerprint');
+	const index = 'compact/host-fingerprint/index/daily.json';
+	const coverage = [
+		{ covers: '2026-09-03', state: 'lost', set_aside: 1 },
+		{ covers: '2026-09-04', state: 'empty' },
+		{ covers: '2026-09-05', state: 'lost' }
+	];
+	tree[index] = JSON.stringify({
+		version: COMPACT_INDEX_STAMP, ledger: 'host-fingerprint', period: 'daily',
+		entries: [{ covers: '2026-09-01', rows: 1, bytes: 4 }], coverage
+	});
+	const copy = ledgerCopy(aStateTree(tree), ['host-fingerprint'], 'state', 2);
+	expect(copy.refused).toEqual([]);
+	expect(copy.missing).toEqual([]);
+	expect(copy.files).toEqual([
+		index, 'compact/host-fingerprint/index/monthly.json', 'compact/host-fingerprint/index/yearly.json'
+	]);
+	expect(JSON.parse(copy.indexes[index])).toMatchObject({
+		version: COMPACT_INDEX_STAMP, entries: [], coverage: coverage.slice(1)
+	});
 });
 
 test('an index that is not this ledger\'s, or names a path rather than a day, stops the build', () => {

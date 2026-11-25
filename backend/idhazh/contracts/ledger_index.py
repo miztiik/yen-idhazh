@@ -4,19 +4,17 @@ Two small files answer it, one question each, and a later run reads both of
 them, so each is a contract with its own stem and changelog:
 
 - `RawDayIndex` lists the raw files one day of one ledger holds.
-- `CompactIndex` lists the compact files one period of one ledger holds. It is
-  what a reader outside Python fetches to learn which days, months and years
-  exist, and what the compaction works out how far it has packed from: every
-  period it has looked at has an entry, an empty one included.
+- `CompactIndex` lists the compact files one period of one ledger holds and
+  records which periods were checked but have no file. Readers use both to
+  find the covered days, and compaction uses both to work out how far it packed.
 
 Each is written whole, never appended to. `CompactEntry` is one line of a
 `CompactIndex` and has no file of its own, so it is a `Model`.
 
-**An entry says whether its period has a file.** A `packed` period has one. An
-`empty` period held no row and a `lost` day lost its rows, so neither has a
-file, and a lost day inside a closed month or year is listed on that period's
-entry. A reader then tells a quiet day from a lost one, and a lost one from a
-hole, without opening a file.
+**A `packed` period has a file.** An `empty` period held no row and a `lost`
+day lost its rows. Older indexes mix these no-file periods into `entries`;
+split indexes put them in `coverage`. A lost day inside a closed month or year
+is listed on that period's record, whether or not it has a file.
 
 **A day, a month and a year are told apart by shape, and one function decides
 the shape.** A `PeriodStamp` holds any of them, so without a check a daily index
@@ -53,6 +51,10 @@ from idhazh.contracts.base import (
 )
 from idhazh.contracts.file_envelope import Period, Tier, covers_fits
 from idhazh.contracts.ledger_name import LedgerName
+
+COMPACT_INDEX_LEGACY_VERSION: Final = "2026-10-25"
+COMPACT_INDEX_SPLIT_VERSION: Final = "2026-11-25"
+COMPACT_INDEX_WRITE_VERSION: Final = COMPACT_INDEX_LEGACY_VERSION
 
 #: What each period's stamp looks like, in the words a refusal prints.
 _SHAPE: Final[dict[Period, str]] = {
@@ -191,6 +193,13 @@ class EntryState(StrEnum):
     LOST = "lost"
 
 
+class CoverageState(StrEnum):
+    """The outcomes of a checked period that has no file."""
+
+    EMPTY = EntryState.EMPTY
+    LOST = EntryState.LOST
+
+
 class CompactEntry(Model):
     """One period of a `CompactIndex`: what it covers, whether it has a file, its rows and size."""
 
@@ -261,17 +270,40 @@ class CompactEntry(Model):
         return self.state is EntryState.PACKED
 
 
-class CompactIndex(Contract):
-    """Which compact files exist in one period of one ledger.
+class CompactCoverage(Model):
+    """A checked period with no file, and the quality information it retains."""
 
-    Sufficient on its own: a date is in yearly, or in monthly, or in daily, or it
-    is not available. The newest daily entry is the newest day compacted, which
-    is how a browser tells a day not yet compacted from a hole. An entry whose
-    state is `empty` or `lost` names a period that has no file.
+    covers: PeriodStamp
+    state: CoverageState
+    lost_days: list[DateStamp] = Field(default_factory=list, exclude_if=lambda days: not days)
+    set_aside: int = Field(default=0, ge=0, exclude_if=lambda count: count == 0)
+
+    def as_entry(self) -> CompactEntry:
+        """Present no-file coverage in the reader's common period shape."""
+        return CompactEntry(
+            covers=self.covers,
+            rows=0,
+            bytes=0,
+            state=EntryState(self.state),
+            lost_days=self.lost_days,
+            set_aside=self.set_aside,
+        )
+
+
+class CompactIndex(Contract):
+    """Which compact files exist in one period of one ledger, and what has no file.
+
+    Read both layouts without changing a retained index's version or its layout.
+    `period_entries` gives the same period records to readers of either layout.
     """
 
     __schema_stem__: ClassVar[str] = "compact-index"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-11-25",
+            change="Compact entries list files only; no-file outcomes move to coverage.",
+            why="Readers can identify live files without treating coverage as file membership.",
+        ),
         ChangelogEntry(
             version="2026-10-25",
             change="Packed entries may carry the exact Parquet file digest.",
@@ -303,8 +335,16 @@ class CompactIndex(Contract):
     )
     entries: list[CompactEntry] = Field(
         description=(
-            "One entry per period recorded, with a file or without one, ascending by what it "
-            "covers and none twice. Every entry covers one period of the kind `period` names."
+            "Live files in ascending period order, none twice. Legacy indexes also list "
+            "no-file periods here."
+        )
+    )
+    coverage: list[CompactCoverage] | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+        description=(
+            "Checked periods with no file, ascending and disjoint from entries. "
+            "Required on split indexes, omitted on legacy indexes."
         )
     )
     expired_through: YearStamp | None = Field(
@@ -315,6 +355,65 @@ class CompactIndex(Contract):
         ),
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def _stamp_current_version(cls, data: object) -> object:
+        """An unstamped compact index can only have the legacy layout."""
+        if isinstance(data, dict) and "version" not in data:
+            return {**data, "version": COMPACT_INDEX_LEGACY_VERSION}
+        return data
+
+    @property
+    def period_entries(self) -> list[CompactEntry]:
+        """All recorded periods in order, including the ones that name no file."""
+        if not self.coverage:
+            return self.entries
+        return sorted(
+            [*self.entries, *(record.as_entry() for record in self.coverage)],
+            key=lambda record: record.covers,
+        )
+
+    @classmethod
+    def from_period_entries(
+        cls,
+        *,
+        ledger: LedgerName,
+        period: Period,
+        entries: list[CompactEntry],
+        expired_through: str | None = None,
+        version: str | None = None,
+    ) -> Self:
+        """Build a wire index from sorted period records in the requested format."""
+        stamp = cls.schema_version() if version is None else version
+        if stamp < COMPACT_INDEX_SPLIT_VERSION:
+            return cls(
+                version=stamp, ledger=ledger, period=period, entries=entries,
+                expired_through=expired_through,
+            )
+        files: list[CompactEntry] = []
+        coverage: list[CompactCoverage] = []
+        for entry in entries:
+            if entry.names_file:
+                files.append(entry)
+                continue
+            if entry.rows or entry.bytes or entry.file_sha256 is not None:
+                raise ValueError(
+                    f"{ledger.value} {entry.covers}: a no-file period has file metadata"
+                )
+            coverage.append(
+                CompactCoverage(
+                    covers=entry.covers,
+                    state=CoverageState(entry.state),
+                    lost_days=entry.lost_days,
+                    set_aside=entry.set_aside,
+                )
+            )
+        return cls(
+            version=stamp, ledger=ledger, period=period, expired_through=expired_through,
+            entries=files,
+            coverage=coverage,
+        )
+
     def to_json(self) -> str:
         """One entry a line - see `records_json`.
 
@@ -322,40 +421,57 @@ class CompactIndex(Contract):
         fields mean nothing apart. The layout is not part of the shape, so
         a file in the older layout is still read and is re-laid-out when written.
         """
-        return records_json(self.model_dump(mode="json"))
+        payload = self.model_dump(mode="json")
+        if self.coverage is not None:
+            payload["entries"] = [
+                entry.model_dump(mode="json", exclude_defaults=True) for entry in self.entries
+            ]
+        return records_json(payload)
 
     @model_validator(mode="after")
     def _the_entries_ascend_once_each_at_the_period_s_grain(self) -> Self:
         """A daily index lists days, a monthly one months and a yearly one years, in order."""
         where = f"the {self.ledger.value} {self.period.value} index"
+        if self.version > self.schema_version():
+            raise ValueError(f"{where} has a newer version {self.version}")
+        if self.version >= COMPACT_INDEX_SPLIT_VERSION:
+            if self.coverage is None:
+                raise ValueError(f"{where} must list coverage")
+            if any(not entry.names_file for entry in self.entries):
+                raise ValueError(f"{where} may only list files in entries")
+        elif "coverage" in self.model_fields_set:
+            raise ValueError(f"{where} may not list coverage in a legacy index")
+        coverage = self.coverage or []
+        records: list[CompactEntry | CompactCoverage] = [*self.entries, *coverage]
         if self.expired_through is not None:
             if self.period is not Period.YEARLY:
                 raise ValueError(f"{where} may not set expired_through")
-            if any(entry.covers <= self.expired_through for entry in self.entries):
-                raise ValueError(f"{where} lists entries at or before expired_through")
-        for entry in self.entries:
+            if any(entry.covers <= self.expired_through for entry in records):
+                raise ValueError(f"{where} lists periods at or before expired_through")
+        for entry in records:
             if not covers_fits(entry.covers, tier=Tier.COMPACT, period=self.period):
                 raise ValueError(
                     f"{where} holds an entry covering {entry.covers!r}, and every entry "
                     f"in it covers {_SHAPE[self.period]}"
                 )
-        covers = [entry.covers for entry in self.entries]
+        covers = [entry.covers for entry in records]
         repeated = _repeated(covers)
         if repeated:
             raise ValueError(f"{where} lists {repeated} more than once")
-        descent = _first_descent(covers)
-        if descent is not None:
-            raise ValueError(
-                f"{where} lists its entries out of order: {descent[0]!r} comes before "
-                f"{descent[1]!r}, and what they cover must ascend"
-            )
+        for key, items in (("entries", self.entries), ("coverage", coverage)):
+            descent = _first_descent([entry.covers for entry in items])
+            if descent is not None:
+                raise ValueError(
+                    f"{where} lists its {key} out of order: {descent[0]!r} comes before "
+                    f"{descent[1]!r}, and what they cover must ascend"
+                )
         return self
 
     @model_validator(mode="after")
     def _an_entry_with_no_file_counts_nothing_and_its_lost_days_are_its_own(self) -> Self:
         """An entry with no file counts nothing, and a lost day is a day its own entry covers."""
         where = f"the {self.ledger.value} {self.period.value} index"
-        for entry in self.entries:
+        for entry in self.period_entries:
             if entry.state is not EntryState.PACKED and (entry.rows or entry.bytes):
                 raise ValueError(
                     f"{where} marks {entry.covers!r} {entry.state.value} with rows {entry.rows} "

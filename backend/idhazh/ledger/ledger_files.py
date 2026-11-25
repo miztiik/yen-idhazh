@@ -279,9 +279,9 @@ def list_ledger_files(
         raise ValueError(f"{ledger.value} history is read by the TypeScript planner")
     yearly, monthly, daily = _indexes(state_dir, ledger, registry=registry)
     named_by: dict[Period, list[CompactEntry]] = {
-        Period.YEARLY: yearly.entries if yearly else [],
-        Period.MONTHLY: monthly.entries if monthly else [],
-        Period.DAILY: daily.entries if daily else [],
+        Period.YEARLY: yearly.period_entries if yearly else [],
+        Period.MONTHLY: monthly.period_entries if monthly else [],
+        Period.DAILY: daily.period_entries if daily else [],
     }
     years = [entry.covers for entry in named_by[Period.YEARLY]]
     months = [entry.covers for entry in named_by[Period.MONTHLY]]
@@ -416,7 +416,7 @@ def held_months(
         index = _index(state_dir, ledger, period, registry=registry)
         if index is None:
             continue
-        for entry in index.entries:
+        for entry in index.period_entries:
             if period is Period.YEARLY:
                 months.update(_year_months(entry.covers))
             else:
@@ -548,9 +548,9 @@ def load_days[C: LedgerContract](
         index is None for index in (yearly, monthly, daily)
     ):
         read_status.complete = False
-    years = {entry.covers: entry for entry in yearly.entries} if yearly else {}
-    months = {entry.covers: entry for entry in monthly.entries} if monthly else {}
-    compact_days = {entry.covers: entry for entry in daily.entries} if daily else {}
+    years = {entry.covers: entry for entry in yearly.period_entries} if yearly else {}
+    months = {entry.covers: entry for entry in monthly.period_entries} if monthly else {}
+    compact_days = {entry.covers: entry for entry in daily.period_entries} if daily else {}
     wanted = sorted(set(days))
     raw_wanted = {
         day

@@ -1,6 +1,6 @@
 # How the query door answers a written question
 
-**Last Updated**: 2026-10-23
+**Last Updated**: 2026-11-25
 
 The Data explorer runs one operator-written, read-only DuckDB statement over the tables that SQL names. Repository tables use selected UTC days; local Parquet tables do not. The statement sees views, not repository addresses.
 
@@ -56,6 +56,8 @@ Repository files are fetched as buffers. The engine receives only names it minte
 ## Compact selection and failure
 
 Each selected ledger reads its daily, monthly and yearly index from its validated registry prefix. All three absent means no packed record is available. A partial set, invalid JSON, unsupported shape, wrong ledger or wrong period is a named failure. A missing named Parquet file or a byte-length mismatch is also a failure, never a quiet answer. The browser console names the index or file. Retry with Refresh, then Run.
+
+File selection and date coverage are unchanged across the [two index layouts](../contracts/persistence.md#what-an-index-entry-says). If a reader refuses a newer stamp, reload the page to load the current reader before running the query again.
 
 `filesFor()` chooses the coarsest packed file covering each UTC day, once: year, month, then day. It does not probe directories, list an API or discover raw writer files. The newest data waits for packing.
 

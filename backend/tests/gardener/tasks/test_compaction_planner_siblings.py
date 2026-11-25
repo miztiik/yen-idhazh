@@ -46,8 +46,7 @@ def fixture_tree(
         path = ledger.compact_index_path(state_dir, which, period)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
-            CompactIndex(
-                version=CompactIndex.schema_version(),
+            CompactIndex.from_period_entries(
                 ledger=which,
                 period=period,
                 entries=[],

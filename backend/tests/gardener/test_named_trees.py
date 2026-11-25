@@ -234,8 +234,7 @@ def test_a_compact_file_is_found_by_the_name_the_disk_finds(tmp_path: Path) -> N
 
 def an_index(state: Path, period: Period, covers: Iterable[str]) -> None:
     """One compact index naming these periods, as the compaction writes it."""
-    held = CompactIndex(
-        version=CompactIndex.schema_version(),
+    held = CompactIndex.from_period_entries(
         ledger=RAW,
         period=period,
         entries=[CompactEntry(covers=each, rows=1, bytes=1) for each in covers],

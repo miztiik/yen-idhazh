@@ -714,8 +714,8 @@ def test_an_operator_range_only_narrows_the_drops_and_refuses_nothing(
 def an_index(root: Path, which: LedgerName, period: Period, entries: list[CompactEntry]) -> None:
     path = ledger.compact_index_path(state(root), which, period)
     path.parent.mkdir(parents=True, exist_ok=True)
-    held = CompactIndex(
-        version=CompactIndex.schema_version(), ledger=which, period=period, entries=entries
+    held = CompactIndex.from_period_entries(
+        ledger=which, period=period, entries=entries
     )
     path.write_bytes(held.to_json().encode("ascii"))
 

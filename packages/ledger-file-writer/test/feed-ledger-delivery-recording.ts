@@ -34,7 +34,8 @@ export async function buildFeedDeliveryRecording(state: string) {
       await mkdir(dirname(path), { recursive: true });
       await writeFile(path, JSON.stringify(CompactIndexSchema.parse({
         version: COMPACT_INDEX_VERSION, ledger: fixture.name, period,
-        entries: period === "daily" ? [...entries, { covers: "2026-10-21", rows: 0, bytes: 0, state: "empty" }] : [],
+        entries: period === "daily" ? entries : [],
+        coverage: period === "daily" ? [{ covers: "2026-10-21", state: "empty" }] : [],
       })));
     }
     columns[fixture.name] = describeObjectSchema(fixture.contract.schema).fields.map(field => field.name);

@@ -32,7 +32,12 @@ from support.paths import CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh.contracts.base import Contract
 from idhazh.contracts.file_envelope import FileEnvelope
-from idhazh.contracts.ledger_index import CompactIndex, EntryState, RawDayIndex
+from idhazh.contracts.ledger_index import (
+    COMPACT_INDEX_LEGACY_VERSION,
+    CompactIndex,
+    EntryState,
+    RawDayIndex,
+)
 
 pytestmark = pytest.mark.contract
 
@@ -194,6 +199,47 @@ def test_a_compact_index_writes_one_entry_a_line_and_reads_back_what_it_wrote() 
         CompactIndex.model_validate(
             _sample("compact-index", "an-empty-day") | {"entries": [empty]}
         )
+
+
+def test_split_indexes_keep_the_same_periods_as_legacy_indexes_without_fake_sizes() -> None:
+    legacy = CompactIndex.model_validate(_sample("compact-index", "a-month-with-lost-days"))
+    split = CompactIndex.from_period_entries(
+        ledger=legacy.ledger, period=legacy.period, entries=legacy.period_entries
+    )
+
+    payload = json.loads(split.to_json())
+    assert [entry["covers"] for entry in payload["entries"]] == [
+        entry.covers for entry in legacy.entries if entry.names_file
+    ]
+    (record,) = payload["coverage"]
+    assert not {"rows", "bytes", "file_sha256"}.intersection(record)
+    assert CompactIndex.model_validate(payload).period_entries == legacy.period_entries
+    downgraded = CompactIndex.from_period_entries(
+        ledger=split.ledger,
+        period=split.period,
+        entries=split.period_entries,
+        version=COMPACT_INDEX_LEGACY_VERSION,
+    )
+    assert downgraded.entries == legacy.entries
+    assert "coverage" not in json.loads(downgraded.to_json())
+
+
+def test_split_indexes_refuse_missing_overlap_or_expired_coverage() -> None:
+    base = {
+        "version": CompactIndex.schema_version(), "ledger": "seen", "period": "yearly",
+        "entries": [{"covers": "2026", "bytes": 128, "rows": 0}],
+        "coverage": [{"covers": "2025", "state": "empty"}],
+    }
+    assert CompactIndex.model_validate(base).entries[0].names_file
+    refusals: list[tuple[dict[str, Any], str]] = [
+        ({"coverage": None}, "must list coverage"),
+        ({"coverage": [{"covers": "2026", "state": "empty"}]}, "more than once"),
+        ({"expired_through": "2025"}, "at or before expired_through"),
+        ({"version": COMPACT_INDEX_LEGACY_VERSION}, "legacy index"),
+    ]
+    for patch, reason in refusals:
+        with pytest.raises(ValidationError, match=reason):
+            CompactIndex.model_validate(base | patch)
 
 
 def test_a_daily_index_refuses_an_entry_that_covers_a_month_by_ledger_and_period() -> None:

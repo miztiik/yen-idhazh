@@ -1009,11 +1009,14 @@ def test_a_pass_that_writes_the_daily_index_writes_the_other_two_empty_when_none
 
     outcome = compact(root, date(2026, 9, 23), max_periods_per_run=31)
 
-    for period in COARSER:
+    for period in Period:
         held = CompactIndex.read(index_of(root, period))
-        assert (held.ledger, held.period, held.entries) == (VISUALS, period, [])
+        assert held.version == "2026-10-25" and held.coverage is None
+        assert (held.ledger, held.period) == (VISUALS, period)
         assert index_of(root, period).relative_to(root).as_posix() in outcome.written
-        assert mark(root, period) is None, f"an empty list is not a packed {period.value}"
+        if period in COARSER:
+            assert held.entries == []
+            assert mark(root, period) is None, f"an empty list is not a packed {period.value}"
     assert disjoint(outcome)
 
 
@@ -1052,8 +1055,8 @@ def test_a_pass_never_deletes_a_coarser_index_and_leaves_an_empty_one_as_it_is(
 
 def an_index(root: Path, period: Period, entries: list[CompactEntry]) -> None:
     """One period's index naming these entries, as a compaction writes it."""
-    held = CompactIndex(
-        version=CompactIndex.schema_version(), ledger=VISUALS, period=period, entries=entries
+    held = CompactIndex.from_period_entries(
+        ledger=VISUALS, period=period, entries=entries
     )
     path = index_of(root, period)
     path.parent.mkdir(parents=True, exist_ok=True)

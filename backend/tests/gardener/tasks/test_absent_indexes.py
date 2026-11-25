@@ -438,12 +438,15 @@ def test_an_absent_monthly_index_is_rebuilt_from_its_month_files(tmp_path: Path)
     an_index(root, Period.DAILY, quiet_days("2026-09-01", "2026-10-18"))
     an_index(root, Period.YEARLY, [])
     monthly = index_of(root, Period.MONTHLY)
-    before = monthly.read_bytes()
+    before = CompactIndex.read(monthly)
     monthly.unlink()
 
     outcome = compact(root, date(2026, 10, 20), wake=True)
 
-    assert monthly.read_bytes() == before
+    rebuilt = CompactIndex.read(monthly)
+    assert (rebuilt.ledger, rebuilt.period, rebuilt.period_entries) == (
+        before.ledger, before.period, before.period_entries,
+    )
     assert recovered(outcome, "2026-08") == [RecoveryNote.INDEX_REBUILT]
     assert august.is_file()
     assert (outcome.written, outcome.taken) == ((monthly.relative_to(root).as_posix(),), ())

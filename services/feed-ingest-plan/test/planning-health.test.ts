@@ -217,7 +217,7 @@ test("a declared missing compact period stays partial without discarding raw sib
     const indexPath = join(setup.inputs.outputRoot, "compact", "feed-ingest-plan", "feed-health-state", "index", "monthly.json");
     await mkdir(dirname(indexPath), { recursive: true });
     await writeFile(indexPath, JSON.stringify(CompactIndexSchema.parse({
-      version: COMPACT_INDEX_VERSION, ledger: "feed-health-state", period: "monthly",
+      version: COMPACT_INDEX_VERSION, ledger: "feed-health-state", period: "monthly", coverage: [],
       entries: [{ covers: setup.row.date.slice(0, 7), state: "packed", rows: 1, bytes: (await stat(compact.path!)).size }],
     })));
     await rm(compact.path!);

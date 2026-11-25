@@ -48,7 +48,7 @@ def check_compact_period(state_dir: Path, which: LedgerName, period: Period, cov
             raise ValueError(f"{index_path.name}: {refusal}") from refusal
         if (index.ledger, index.period) != (which, period):
             raise ValueError(f"{index_path.name}: index names another ledger or period")
-        entry = next((row for row in index.entries if row.covers == covers), None)
+        entry = next((row for row in index.period_entries if row.covers == covers), None)
     files = [
         path
         for fmt in Format

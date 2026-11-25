@@ -16,7 +16,12 @@ from idhazh.contracts.file_envelope import Period
 from idhazh.contracts.knobs.gardener import CompactionPolicy, DaysWindow, MonthsWindow
 from idhazh.contracts.knobs.page_weight import PageWeightConfig
 from idhazh.contracts.knobs.windows import months_a_window_can_touch
-from idhazh.contracts.ledger_index import CompactEntry, CompactIndex
+from idhazh.contracts.ledger_index import (
+    COMPACT_INDEX_LEGACY_VERSION,
+    CompactEntry,
+    CompactIndex,
+    EntryState,
+)
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import LedgersConfig
 from idhazh.ledger import door_folders
@@ -43,7 +48,10 @@ def index_key(ledger: LedgerName) -> str:
     return f"{LEDGERS}compact/{'/'.join(door_folders(ledger))}/index/"
 
 
-def an_index(ledger: LedgerName, period: Period, entries: int) -> bytes:
+def an_index(
+    ledger: LedgerName, period: Period, entries: int, *,
+    version: str | None = None, include_coverage: bool = False
+) -> bytes:
     """An index of `entries` entries, written the way the compaction writes one.
 
     The row counts and sizes differ from entry to entry, four and six digits wide,
@@ -58,12 +66,13 @@ def an_index(ledger: LedgerName, period: Period, entries: int) -> bytes:
         for step in range(entries)
     ]
     return (
-        CompactIndex(
-            version=CompactIndex.schema_version(),
+        CompactIndex.from_period_entries(
+            version=version,
             ledger=ledger,
             period=period,
             entries=[
-                CompactEntry(
+                CompactEntry(covers=cover, rows=0, bytes=0, state=EntryState.EMPTY)
+                if include_coverage and step % 2 else CompactEntry(
                     covers=cover,
                     rows=1_000 + step * 7_919 % 9_000,
                     bytes=100_000 + step * 104_729 % 900_000,
@@ -247,8 +256,9 @@ def test_every_published_ledger_bounds_its_indexes_at_twice_their_longest() -> N
         days = policy.daily_keep_days + LONGEST_MONTH_DAYS
         months = months_kept(policy)
         heaviest = max(
-            gzipped(an_index(ledger, Period.DAILY, days)),
-            gzipped(an_index(ledger, Period.MONTHLY, months)),
+            gzipped(an_index(ledger, period, size, version=version, include_coverage=mixed))
+            for period, size in ((Period.DAILY, days), (Period.MONTHLY, months))
+            for version, mixed in ((COMPACT_INDEX_LEGACY_VERSION, False), (None, False), (None, True))
         )
         assert payloads[index_key(ledger)] >= 2 * heaviest, (
             f"{index_key(ledger)} is capped at {payloads[index_key(ledger)]} bytes, and "

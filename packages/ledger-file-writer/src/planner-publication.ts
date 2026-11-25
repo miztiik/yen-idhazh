@@ -2,7 +2,7 @@
 import {
   PlannerPublicationRequestSchema, PlannerPublicationResultSchema,
 } from "@idhazh/common-contracts";
-import type { CompactIndex, PlannerPublicationResult } from "@idhazh/common-contracts";
+import type { CompactCoverage, CompactIndex, PlannerPublicationResult } from "@idhazh/common-contracts";
 import { PlannerUnsupportedFormatError } from "./read-planner-file";
 import { readNamedPlannerFile } from "./validate-planner-files";
 
@@ -37,16 +37,22 @@ export async function selectPlannerPublication(root: string, raw: unknown): Prom
       result.refused.push({ ...file, envelope_version: error.envelopeVersion, row_schema_version: error.rowSchemaVersion });
     }
   }
-  for (const index of Object.values(result.indexes)) for (const entry of index.entries) {
-    if (!refused.has(periodFile(index.ledger, index.period, entry.covers))) continue;
-    entry.state = index.period === "daily" ? "lost" : "empty";
-    entry.rows = 0;
-    entry.bytes = 0;
-    entry.file_sha256 = null;
-    if (index.period !== "daily") {
-      entry.lost_days = coveredDays(index.period, entry.covers);
-      entry.set_aside++;
-    }
+  for (const index of Object.values(result.indexes)) {
+    index.entries = index.entries.flatMap(entry => {
+      if (entry.state !== "packed" || !refused.has(periodFile(index.ledger, index.period, entry.covers))) {
+        return [entry];
+      }
+      const daily = index.period === "daily";
+      const coverage: CompactCoverage = {
+        covers: entry.covers, state: daily ? "lost" : "empty",
+        lost_days: daily ? [] : coveredDays(index.period, entry.covers),
+        set_aside: entry.set_aside + (daily ? 0 : 1),
+      };
+      if (index.coverage === undefined) return [{ ...coverage, rows: 0, bytes: 0, file_sha256: null }];
+      index.coverage.push(coverage);
+      return [];
+    });
+    index.coverage?.sort((left, right) => left.covers.localeCompare(right.covers));
   }
   return PlannerPublicationResultSchema.parse(result);
 }

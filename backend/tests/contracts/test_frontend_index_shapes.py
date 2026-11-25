@@ -28,7 +28,12 @@ from support.paths import REPO_ROOT, read_text
 
 from idhazh.contracts.file_envelope import Period
 from idhazh.contracts.ledger_fault import LedgerFault
-from idhazh.contracts.ledger_index import CompactIndex, EntryState
+from idhazh.contracts.ledger_index import (
+    COMPACT_INDEX_LEGACY_VERSION,
+    CompactIndex,
+    CoverageState,
+    EntryState,
+)
 from idhazh.ledger.keys import DATE_CELL
 
 pytestmark = pytest.mark.contract
@@ -112,12 +117,16 @@ def constant_list(text: str, name: str, where: Path) -> list[str]:
 
 
 def schemas() -> dict[str, dict[str, Any]]:
-    """The two shapes' schemas, the entry read out of the index's own definitions."""
+    """The index and both record shapes from its own definitions."""
     index = CompactIndex.json_schema()
-    return {"CompactIndex": index, "CompactEntry": index["$defs"]["CompactEntry"]}
+    return {
+        "CompactIndex": index,
+        "CompactEntry": index["$defs"]["CompactEntry"],
+        "CompactCoverage": index["$defs"]["CompactCoverage"],
+    }
 
 
-@pytest.mark.parametrize("interface", ["CompactIndex", "CompactEntry"])
+@pytest.mark.parametrize("interface", ["CompactIndex", "CompactEntry", "CompactCoverage"])
 def test_the_copy_names_every_field_with_the_contract_s_type_in_its_order(interface: str) -> None:
     """No field more, none fewer, none retyped, none moved."""
     theirs = copied_cells(read_text(COPY), interface)
@@ -135,6 +144,9 @@ def test_the_stamp_the_door_reads_is_the_one_the_contract_declares() -> None:
         f"{COPY.name} reads compact indexes stamped {stamp} or older, and the contract is at "
         f"{CompactIndex.schema_version()}"
     )
+    assert constant(read_text(COPY), "LEGACY_COMPACT_INDEX_STAMP", COPY) == (
+        COMPACT_INDEX_LEGACY_VERSION
+    )
 
 
 def test_the_periods_are_the_contract_s_own() -> None:
@@ -149,6 +161,9 @@ def test_the_entry_states_are_the_contract_s_own() -> None:
         f"{COPY.name} names the entry states {states} and EntryState in "
         f"backend/idhazh/contracts/ledger_index.py names {[state.value for state in EntryState]}"
     )
+    assert constant_list(read_text(COPY), "COVERAGE_STATES", COPY) == [
+        state.value for state in CoverageState
+    ]
 
 
 def test_every_ledger_the_door_may_query_is_a_ledger() -> None:

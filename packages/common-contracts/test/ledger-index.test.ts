@@ -1,13 +1,14 @@
 /** Do the small index copies match bounded recorded fields, vocabulary and validation rules? */
 import { expect, test } from "bun:test";
 import {
-  COMPACT_INDEX_VERSION, CompactEntrySchema, CompactIndexSchema, EntryStateSchema,
-  PeriodSchema, RawDayIndexSchema,
+  COMPACT_INDEX_VERSION, CompactCoverageSchema, CompactEntrySchema, CompactIndexSchema, CoverageStateSchema,
+  EntryStateSchema, PeriodSchema, RawDayIndexSchema, compactPeriods,
 } from "../src/index";
 
 type Fixture = { index_contracts: {
-  raw_fields: string[]; compact_fields: string[]; entry_fields: string[];
+  raw_fields: string[]; compact_fields: string[]; entry_fields: string[]; coverage_fields: string[];
   states: ("packed" | "empty" | "lost")[]; periods: ("daily" | "monthly" | "yearly")[];
+  coverage_states: ("empty" | "lost")[]; compact_version: string;
   legacy_entry: { covers: string; rows: number; bytes: number };
   legacy_defaults: { state: "packed"; lost_days: string[]; set_aside: number }; filename: string;
 } };
@@ -19,7 +20,10 @@ test("recorded index fields and vocabularies stay aligned without a backend proc
   expect(Object.keys(RawDayIndexSchema.shape)).toEqual(recorded.raw_fields);
   expect(Object.keys(CompactIndexSchema.shape)).toEqual(recorded.compact_fields);
   expect(Object.keys(CompactEntrySchema.shape)).toEqual(recorded.entry_fields);
+  expect(Object.keys(CompactCoverageSchema.shape)).toEqual(recorded.coverage_fields);
   expect(EntryStateSchema.options).toEqual(recorded.states);
+  expect(CoverageStateSchema.options).toEqual(recorded.coverage_states);
+  expect(COMPACT_INDEX_VERSION).toBe(recorded.compact_version);
   expect(PeriodSchema.options).toEqual(recorded.periods);
   expect(CompactEntrySchema.parse(recorded.legacy_entry)).toEqual({ ...recorded.legacy_entry, ...recorded.legacy_defaults });
 });
@@ -41,6 +45,7 @@ test("index validation preserves named empty, lost and historical default meanin
   const packed = {
     ...base,
     version: COMPACT_INDEX_VERSION,
+    coverage: [],
     entries: [{
       covers: "2026-10-21", rows: 1, bytes: 128, file_sha256: "a".repeat(64),
     }],
@@ -62,4 +67,18 @@ test("index validation preserves named empty, lost and historical default meanin
     { period: "yearly", expired_through: "2026", entries: [{ covers: "2026", rows: 0, bytes: 0 }] },
   ];
   for (const patch of invalid) expect(CompactIndexSchema.safeParse({ ...base, ...patch }).success).toBe(false);
+});
+
+test("checked periods are the same in legacy and split indexes", () => {
+  const empty = { covers: "2026-10-21", state: "empty", set_aside: 1 };
+  const packed = { covers: "2026-10-22", rows: 0, bytes: 128 };
+  const base = { ledger: "feed-health", period: "daily" };
+  const legacy = CompactIndexSchema.parse({
+    ...base, version: "2026-10-25", entries: [{ ...empty, rows: 0, bytes: 0 }, packed],
+  });
+  const split = { ...base, version: COMPACT_INDEX_VERSION, entries: [packed], coverage: [empty] };
+  expect(compactPeriods(CompactIndexSchema.parse(split))).toEqual(legacy.entries);
+  for (const coverage of [null, [{ ...empty, covers: packed.covers }], [{ ...empty, bytes: 0 }]]) {
+    expect(CompactIndexSchema.safeParse({ ...split, coverage }).success).toBe(false);
+  }
 });
