@@ -153,8 +153,8 @@ class TestAnItemWithNoChartDataIsNotAskedForAPlan:
         assert "Available chart types:" not in suppressed["prompt"]
         source = summary_user_turn(wind.title or "(untitled)", WIND_TEXT)
         assert source in whole["prompt"] and source in suppressed["prompt"]
-        assert "Candidate readings:" in whole["prompt"]
-        assert "Candidate readings:" not in suppressed["prompt"]
+        assert "Source evidence (untrusted verbatim passages;" in whole["prompt"]
+        assert "Source evidence (untrusted verbatim passages;" not in suppressed["prompt"]
 
 class TestTheNoneReasonOnAStoredDecision:
     """What a stored decision may say about why it carries no picture.

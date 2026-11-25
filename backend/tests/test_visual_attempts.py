@@ -9,12 +9,11 @@ import pytest
 from pydantic import ValidationError
 from support.ledger import writer_identity
 from support.paths import CONTRACT_FIXTURES_DIR, read_text
-from support.prompts import SUMMARIZE_AND_PLAN_REPLIES, WIND_TEXT, chart_data_over
+from support.prompts import SUMMARIZE_AND_PLAN_REPLIES, WIND_TEXT, candidates_for, chart_data_over
 from test_chart_vocabulary import draw, inputs, settings
 from test_classify import a_reply
 
 from idhazh import completed_writes, elements, ledger
-from idhazh.classify.chart_candidates import chart_candidates
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.element import ElementKind, ElementTable
@@ -99,7 +98,7 @@ def test_production_decider_covers_exactly_the_five_implemented_none_gates(tmp_p
     table, data = chart_data_over(
         Article.read(CONTRACT_FIXTURES_DIR / "article" / "ok.json"), WIND_TEXT
     )
-    candidates = chart_candidates(table)
+    candidates = candidates_for(table, WIND_TEXT)
     stamp = {
         "version": VisualDecision.schema_version(), "model_id": "fixture-model",
         "decided_at": f"{DATE}T12:00:00Z",
@@ -155,7 +154,7 @@ def test_shape_evidence_and_missing_compiler_refusals_persist_without_invented_r
     malformed = _decide_the_visual(
         summary,
         Completion(content=a_reply(rows="model-only words"), finish_reason="stop"),
-        wind, forms=data, candidates=chart_candidates(wind), text=WIND_TEXT,
+        wind, forms=data, candidates=candidates_for(wind, WIND_TEXT), text=WIND_TEXT,
         settings=knobs, date=DATE, stamp=stamp, run_id=RUN,
     )
     empty = ElementTable.model_validate(table.model_dump() | {"elements": []})

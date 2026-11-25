@@ -30,6 +30,7 @@ from idhazh.contracts.knobs.retention import PAGES_HARD_CAP_MB, RetentionConfig
 from idhazh.contracts.knobs.similarity import SimilarityConfig
 from idhazh.contracts.knobs.text_analysis import TextAnalysisConfig
 from idhazh.contracts.knobs.ui import UiConfig, VisualSide
+from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.extract import TOKENS_PER_WORD
 from idhazh.llm.server import DEFAULT_MAX_TOKENS, response_limit, window
 from idhazh.measured import PROMPT_OVERHEAD_TOKENS as _PROMPT_OVERHEAD
@@ -105,6 +106,19 @@ def test_a_fresh_clone_runs_on_the_defaults() -> None:
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
     minimal = AppConfig.model_validate({"models_file": committed.models_file})
     assert (CONFIG_DIR / minimal.models_file).is_file()
+
+
+def test_legacy_config_without_evidence_bounds_uses_defaults() -> None:
+    legacy = AppConfig.model_validate({
+        "version": "2026-11-18",
+        "models_file": "models/test.json",
+        "visuals": {"max_facts": 8},
+    })
+    defaults = VisualsConfig()
+    assert legacy.visuals.evidence_max_chars == defaults.evidence_max_chars
+    assert legacy.visuals.evidence_max_readings == defaults.evidence_max_readings
+    assert legacy.visuals.max_facts == 8
+    assert AppConfig.from_json(legacy.to_json()).visuals == legacy.visuals
 
 
 def test_source_code_does_not_select_a_model_when_the_pointer_is_missing() -> None:

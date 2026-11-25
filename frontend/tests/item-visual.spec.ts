@@ -49,6 +49,42 @@ function sourceQuantities(data: VisualData): number[] {
     });
 }
 
+test('negative magnitude provenance is readable without changing the drawing protocol', () => {
+    const data = sourceCompiledChart('dot-from-wind.json');
+    const mark = data.marks.find((mark) => mark.mark_id === data.encoding.quantity[0])!;
+    const source = mark.element_id!;
+    mark.value = String(-Math.abs(Number(mark.value)));
+    mark.derived = {
+        function: 'negative_magnitude', version: '2026-11-25',
+        inputs: [source], value: mark.value, unit: mark.unit,
+        bin_lower: null, bin_upper: null
+    };
+    mark.element_id = null;
+    expect(data.renderer_version).toBe(RENDERER_VERSION);
+    expect(refusedVisualData(data)).toBeNull();
+    const drawing = drawDots(data, 360, formatNumber, geometry);
+    expect(statedDots(drawing)).toContain('-');
+
+    for (const change of [
+        { inputs: [source, source] },
+        { inputs: ['entity-0-6'] },
+        { value: '12' },
+        { value: '-999999' },
+        { source_unit: 'kt' },
+        { unit_table_version: '2026-11-25' },
+        { source_unit: mark.unit, unit_table_version: '2026-11-25' },
+        { bin_lower: '0', bin_upper: '10' }
+    ]) {
+        const invalid = structuredClone(data);
+        const target = invalid.marks.find((candidate) => candidate.mark_id === mark.mark_id)!;
+        Object.assign(target.derived!, change);
+        expect(refusedVisualData(invalid)).toContain('negative-magnitude provenance');
+    }
+    mark.derived.source_unit = 'kw';
+    mark.derived.unit_table_version = '2026-11-25';
+    expect(refusedVisualData(data)).toBeNull();
+});
+
 test('viewport sizing preserves every supported family without a density or fixed-height floor', () => {
     for (const filename of [
         'dot-from-wind.json', 'slope-from-wind.json', 'line-from-wind.json',

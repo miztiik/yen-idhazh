@@ -94,3 +94,25 @@ def test_bubble_refuses_missing_or_ambiguous_relationship_measures(
     assert any(reason.check.value == "roles_valid_for_type" for reason in rejections)
     with pytest.raises(CompileError):
         compile_chart(plan, table, visuals=visuals)
+
+
+@pytest.mark.parametrize("role", ["quantity", "quantity_x", "size"])
+def test_bubble_checks_compiled_signed_measures_not_unsigned_source_values(role: str) -> None:
+    plan, table = _inputs()
+    selected = getattr(plan.encodings, role)[0]
+    plan = VisualPlan.model_validate(plan.model_dump() | {
+        "negative_magnitude_element_ids": [selected],
+    })
+    source = next(element for element in table.elements if element.element_id == selected)
+    assert Decimal(source.value or "") > 0
+    visuals = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).visuals
+    if role == "size":
+        with pytest.raises(CompileError, match="positive"):
+            compile_chart(plan, table, visuals=visuals)
+    else:
+        chart = compile_chart(plan, table, visuals=visuals)
+        mark_id = getattr(chart.data.encoding, role)[0]
+        mark = next(mark for mark in chart.data.marks if mark.mark_id == mark_id)
+        assert mark.derived is not None and mark.derived.inputs == [selected]
+        assert Decimal(mark.value or "") < 0
+    assert Decimal(source.value or "") > 0

@@ -12,11 +12,10 @@ from pydantic import ValidationError
 from support.judge_reader import ProtocolReplies, native_reply
 from support.models import a_markers
 from support.paths import CONFIG_DIR
-from support.prompts import WIND_TEXT, chart_data_over
+from support.prompts import WIND_TEXT, candidates_for, chart_data_over
 
 from idhazh import config, summarize
 from idhazh.classify import calls
-from idhazh.classify.chart_candidates import chart_candidates
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import derive_text_digest, derive_url_key
@@ -205,7 +204,7 @@ def test_real_consumers_and_stamps_follow_two_selected_roots(tmp_path: Path) -> 
                 server=settings.models.summarizer.server,
                 sampling=settings.models.summarizer.sampling,
                 markers=a_markers(),
-                candidates=chart_candidates(table),
+                candidates=candidates_for(table, WIND_TEXT),
                 **options,
             )
             rendered = str(request["prompt"])

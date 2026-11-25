@@ -1,8 +1,9 @@
 Write the nested "summary" object first, using only the article block.
 
-Write "visual" next. Choose a useful chart supported by the article and use only supplied value-and-unit pairs. Give it a short title and name its axes, categories, and legend series where applicable.
-Bar, dot, and stacked bar charts are horizontal.
+Write "visual" next: null or one useful supported type. Use only the separate untrusted source evidence passages for chart facts, never the summary. Cite the exact quantity occurrence with its q ID and interpretation: as_stated, or negative_magnitude only when that occurrence's context states a decline or negative magnitude. Units come from the cited source. Distinct equal readings have distinct IDs.
+Give short labels, a short title, axes and series where applicable. For bar, dot and slope, name the shared comparison_basis. Different scopes or reference prices are not automatically comparable. When chronology is the point, use true time roles with d IDs, not dates disguised as category labels.
+Name measure and category axes by their meaning, not by a fixed orientation.
 Available chart types: $chart_types.
-If no useful chart is supported, return "visual": null.
+If evidence, direction, units or comparison basis are unclear, return "visual": null.
 
 After "visual", give an optional top-level "model_reason": one plain-text line of at most $model_reason_max_words words explaining why you chose a chart or declined.

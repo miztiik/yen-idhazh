@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from collections import defaultdict, deque
+from collections import defaultdict
 from collections.abc import Sequence
 
 from pydantic_core import PydanticCustomError
 
-from idhazh.classify.chart_candidates import ChartCandidate, plain_chart_words
+from idhazh.classify.chart_candidates import ChartCandidate, plain_chart_words, time_candidates
 from idhazh.classify.chart_reply import (
     Bubble,
     ChartProposal,
@@ -20,7 +20,7 @@ from idhazh.classify.chart_reply import (
     Slope,
     StackedBar,
 )
-from idhazh.contracts.element import Element, ElementKind, ElementTable
+from idhazh.contracts.element import ElementKind, ElementTable
 from idhazh.contracts.visual import (
     AxisTitles,
     ChartPresentation,
@@ -31,7 +31,7 @@ from idhazh.contracts.visual import (
     VisualPurpose,
     VisualType,
 )
-from idhazh.elements import SpanDriftError, read_value
+from idhazh.elements import SpanDriftError
 from idhazh.visual_vocabulary import PLAN_VOCABULARY_VERSION
 
 _R = EncodingRole
@@ -53,32 +53,39 @@ def _refuse(field: str, reason: str) -> PydanticCustomError:
 
 
 class _Channels:
-    def __init__(self, table: ElementTable, candidates: Sequence[ChartCandidate]) -> None:
-        self.readings: dict[tuple[str, str | None], deque[Element]] = defaultdict(deque)
-        for reading, element in candidates:
-            self.readings[reading.value, reading.unit].append(element)
+    def __init__(self, candidates: Sequence[ChartCandidate]) -> None:
+        self.readings = {candidate.evidence_id: candidate.element for candidate in candidates}
         self.dates = {
-            element.value: element for element in reversed(table.elements)
-            if element.kind is ElementKind.DATE and element.value
+            candidate.evidence_id: candidate.element for candidate in time_candidates(candidates)
         }
+        self.interpretations: dict[str, str] = {}
+        self.negative_ids: list[str] = []
         self.references: dict[EncodingRole, list[str]] = defaultdict(list)
 
     def take(self, reading: Reading) -> str:
-        held = self.readings.get((reading.value, reading.unit))
-        if not held:
-            raise _refuse("rows", "each plot value needs an unused supplied reading and its unit")
-        return held.popleft().element_id
+        element = self.readings.get(reading.evidence_id)
+        if element is None or element.kind is not ElementKind.QUANTITY:
+            raise _refuse("rows", "each plot value needs a supplied quantity occurrence ID")
+        previous = self.interpretations.setdefault(element.element_id, reading.interpretation)
+        if previous != reading.interpretation:
+            raise _refuse("rows", "one source occurrence must have one interpretation")
+        if (
+            reading.interpretation == "negative_magnitude"
+            and element.element_id not in self.negative_ids
+        ):
+            self.negative_ids.append(element.element_id)
+        return element.element_id
 
     def number(self, role: EncodingRole, reading: Reading) -> None:
         self.references[role].append(self.take(reading))
 
     def date(self, words: str) -> str:
         # Dates may name an axis position but are never supplied as numeric readings.
-        value = read_value(ElementKind.DATE, words)
-        if value is None or (element := self.dates.get(value)) is None:
-            raise _refuse("date", "a chart date must match a date in the article")
+        element = self.dates.get(words)
+        if element is None or element.kind is not ElementKind.DATE or element.value is None:
+            raise _refuse("date", "a time role needs a supplied date occurrence ID")
         self.references[_R.TIME].append(element.element_id)
-        return value
+        return element.value
 
 
 def _series(names: Sequence[str | None]) -> list[str]:
@@ -101,7 +108,7 @@ def prepare_chart_plan(
         raise _refuse("type", "the renderer did not offer that form")
     if drift := table.span_drift(text):
         raise SpanDriftError(drift)
-    channels = _Channels(table, candidates)
+    channels = _Channels(candidates)
     whole: str | None = None
     presentation = ChartPresentation()
     if isinstance(choice, Scatter | Bubble):
@@ -157,6 +164,7 @@ def prepare_chart_plan(
     axes = presentation.axis_titles
     names = [
         choice.title,
+        *([choice.comparison_basis] if isinstance(choice, Comparison | Slope) else []),
         *(label for group in presentation.filled().values() for label in group),
         *([axes.x, axes.y, *([axes.size] if axes.size is not None else [])] if axes else []),
     ]
@@ -177,6 +185,7 @@ def prepare_chart_plan(
         declared_whole_element_id=whole,
         encodings=PlanEncodings(**{role.value: references[role] for role in EncodingRole}),
         element_ids=list(ids),
+        negative_magnitude_element_ids=channels.negative_ids,
         presentation=presentation,
         why="Prepared from model wording and supplied source readings.",
         title=choice.title,

@@ -424,6 +424,8 @@
       "dot",
       "bar"
     ],
+    "evidence_max_chars": 1600,
+    "evidence_max_readings": 12,
     "histogram_bins": 4,
     "lead_words": 120,
     "max_chart_points": 8,

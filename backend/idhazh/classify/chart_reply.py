@@ -7,19 +7,23 @@ from typing import Annotated, Literal
 from pydantic import Field, StringConstraints
 
 from idhazh.contracts.base import Model
-from idhazh.contracts.element import UNIT_MAX_LENGTH, VALUE_MAX_LENGTH
+from idhazh.contracts.element import ELEMENT_ID_OFFSET_DIGITS
 from idhazh.contracts.visual import MAX_IDS_PER_ROLE, TITLE_MAX_LENGTH, AxisTitles
 
 # These are decoder bounds, not editorial targets. The pattern itself must
 # bound the decode: the native grammar ignores maxLength when a pattern exists.
 ChartWords = Annotated[str, StringConstraints(pattern=rf'^[^"\\\r\n<>]{{1,{TITLE_MAX_LENGTH}}}$')]
-StatedNumber = Annotated[str, StringConstraints(pattern=rf"^[-0-9.,]{{1,{VALUE_MAX_LENGTH}}}$")]
-StatedUnit = Annotated[str, StringConstraints(pattern=rf'^[^"\\\r\n<>]{{1,{UNIT_MAX_LENGTH}}}$')]
+QuantityId = Annotated[
+    str, StringConstraints(pattern=rf"^q[0-9]{{1,{ELEMENT_ID_OFFSET_DIGITS}}}$"),
+]
+DateId = Annotated[
+    str, StringConstraints(pattern=rf"^d[0-9]{{1,{ELEMENT_ID_OFFSET_DIGITS}}}$"),
+]
 
 
 class Reading(Model):
-    value: StatedNumber
-    unit: StatedUnit | None
+    evidence_id: QuantityId
+    interpretation: Literal["as_stated", "negative_magnitude"]
 
 
 class NamedReading(Model):
@@ -32,7 +36,7 @@ class CategoryReading(NamedReading):
 
 
 class DatedReading(Model):
-    date: ChartWords
+    date: DateId
     reading: Reading
     series: ChartWords | None = None
 
@@ -65,6 +69,7 @@ class _AxisProposal(_Proposal):
 
 class Comparison(_AxisProposal):
     type: Literal["bar", "dot"]
+    comparison_basis: ChartWords
     rows: Annotated[list[CategoryReading], Field(min_length=2, max_length=MAX_IDS_PER_ROLE)]
 
 
@@ -75,8 +80,9 @@ class Line(_AxisProposal):
 
 class Slope(_AxisProposal):
     type: Literal["slope"]
-    start_date: ChartWords
-    end_date: ChartWords
+    comparison_basis: ChartWords
+    start_date: DateId
+    end_date: DateId
     rows: Annotated[list[Change], Field(min_length=2, max_length=MAX_IDS_PER_ROLE // 2)]
 
 

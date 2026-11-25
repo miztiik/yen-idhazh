@@ -1,10 +1,10 @@
-"""The four ways code may reach a number the article did not write, and the proof it reached no fifth.
+"""The five ways code may reach a number the article did not write, and no sixth.
 
 The oracle here has two halves and neither is sufficient alone. **Every
 displayed value resolves** - to a Tier 1 element, or to a derived value whose
 chain names its function, its version and every input element - and **a function
 the list does not hold is refused by name**. The first half without the second
-passes on a build that quietly grew a fifth function; the second without the
+passes on a build that quietly grew a sixth function; the second without the
 first passes on a build that draws a figure nothing resolves.
 
 No model runs here and none can: every input is a committed file under
@@ -23,7 +23,7 @@ import ast
 import json
 import subprocess
 import sys
-from decimal import Decimal
+from decimal import Decimal, localcontext
 from pathlib import Path
 from typing import Any, Final
 
@@ -39,6 +39,7 @@ from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.visual import EncodingRole, VisualPlan, VisualType
 from idhazh.derived_values import (
     DERIVED_VALUE_VERSION,
+    NEGATIVE_MAGNITUDE_VERSION,
     DerivedValueError,
     Refusal,
     ResolverCheck,
@@ -46,6 +47,7 @@ from idhazh.derived_values import (
     convert,
     count,
     derived_value_rate,
+    negative_magnitude,
     resolve_displayed_values,
     share_of_declared_whole,
     sum_of,
@@ -179,21 +181,102 @@ def crowded_table(*keep: str) -> ElementTable:
     return ElementTable.model_validate(payload)
 
 
-def test_the_allow_list_is_four_functions_and_it_is_closed() -> None:
-    """Four, and the shortness is the guarantee (O45, O47).
-
-    Asserted as an equality rather than as a length, because a fifth function
-    arriving as a rename of a fourth would pass a count. ESCALATE trigger 2 says
-    a fifth is not this row's to add; this is that trigger made mechanical, so
-    the next person to reach for one meets a failing test rather than a
-    paragraph.
-    """
+def test_the_allow_list_is_five_functions_and_it_is_closed() -> None:
+    """Selected direction is bounded arithmetic, not an arbitrary expression."""
     assert {member.value for member in DerivedFunction} == {
         "count",
         "sum",
         "share_of_declared_whole",
         "convert",
+        "negative_magnitude",
     }
+
+
+@pytest.mark.parametrize("stated", ["1200", "-1200", "0", "123456789012345678901234567890.123456789"])
+def test_negative_magnitude_is_exact_idempotent_and_preserves_the_source(stated: str) -> None:
+    element = elements_of(load_table("wind"), WIND_QUANTITIES[1])[0].model_copy(
+        update={"value": stated},
+    )
+    before = element.model_dump()
+    with localcontext() as context:
+        context.prec = 3
+        derived = negative_magnitude(element)
+    assert Decimal(derived.value) == Decimal(stated).copy_abs().copy_negate()
+    assert derived.function is DerivedFunction.NEGATIVE_MAGNITUDE
+    assert derived.version == NEGATIVE_MAGNITUDE_VERSION
+    assert derived.inputs == [element.element_id]
+    assert derived.source_unit is None and derived.unit_table_version is None
+    assert derived.bin_lower is None and derived.bin_upper is None
+    assert element.model_dump() == before
+
+
+def test_selected_sign_and_exact_normalization_share_one_original_input_chain() -> None:
+    plan = load_plan("units-convert")
+    table = load_table("tonnes-and-kilotonnes")
+    selected = "quantity-55-61"
+    plan = VisualPlan.model_validate(
+        plan.model_dump() | {"negative_magnitude_element_ids": [selected]},
+    )
+    before = table.to_json()
+    values = [one for one in resolve(plan, table) if one.role is EncodingRole.QUANTITY]
+    assert values[0].derived is None and values[2].derived is None
+    chain = values[1].derived
+    assert chain is not None
+    assert chain.function is DerivedFunction.NEGATIVE_MAGNITUDE
+    assert chain.inputs == [selected]
+    assert chain.value == "-4200"
+    assert chain.source_unit == "kt" and chain.unit == "t"
+    assert chain.unit_table_version == UNIT_TABLE_VERSION
+    assert table.to_json() == before
+
+
+def test_negative_magnitude_normalization_does_not_round_to_the_global_context() -> None:
+    element = elements_of(load_table("tonnes-and-kilotonnes"), "quantity-55-61")[0].model_copy(
+        update={"value": "123456789012345678901234567890.123456"},
+    )
+    with localcontext() as context:
+        context.prec = 3
+        chain = negative_magnitude(element, target="t")
+    assert chain.value == "-123456789012345678901234567890123.456"
+
+
+def test_a_histogram_cannot_silently_discard_a_selected_negative_interpretation() -> None:
+    plan = built_plan(VisualType.HISTOGRAM, bins=list(WIND_QUANTITIES))
+    plan = VisualPlan.model_validate(plan.model_dump() | {
+        "negative_magnitude_element_ids": [WIND_QUANTITIES[0]],
+    })
+    refused = refusal_of(plan, load_table("wind"))
+    assert refused.check is ResolverCheck.INTERPRETATION_IS_DRAWABLE
+
+
+def test_one_selected_reading_has_the_same_interpretation_on_every_use() -> None:
+    selected = WIND_QUANTITIES[0]
+    plan = built_plan(VisualType.SCATTER, quantity=[selected], quantity_x=[selected])
+    plan = VisualPlan.model_validate(plan.model_dump() | {
+        "negative_magnitude_element_ids": [selected],
+    })
+    values = resolve(plan, load_table("wind"))
+    assert len(values) == 2
+    for value in values:
+        assert value.derived is not None
+        assert value.derived.function is DerivedFunction.NEGATIVE_MAGNITUDE
+        assert value.derived.inputs == [selected]
+        assert value.derived.value == "-900"
+
+
+@pytest.mark.parametrize("change", [
+    {"inputs": ["quantity-58-66", "quantity-76-84"]},
+    {"inputs": ["entity-41-48"]},
+    {"value": "1"},
+    {"source_unit": "kt"},
+    {"unit_table_version": UNIT_TABLE_VERSION},
+    {"source_unit": "mw", "unit_table_version": UNIT_TABLE_VERSION},
+    {"bin_lower": "0", "bin_upper": "1"},
+])
+def test_negative_magnitude_rejects_malformed_provenance(change: dict[str, Any]) -> None:
+    chain = negative_magnitude(elements_of(load_table("wind"), WIND_QUANTITIES[1])[0])
+    with pytest.raises(ValidationError):
+        DerivedValue.model_validate(chain.model_dump() | change)
 
 
 def test_a_function_the_list_does_not_hold_is_refused_by_name() -> None:

@@ -20,11 +20,10 @@ from typing import Any, Final
 
 from pytest import LogCaptureFixture, MonkeyPatch
 from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR
-from support.prompts import WIND_TEXT, chart_data_over
+from support.prompts import WIND_TEXT, candidates_for, chart_data_over
 from test_classify import a_reply
 
 from idhazh import config
-from idhazh.classify.chart_candidates import chart_candidates
 from idhazh.contracts.article import Article
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.run_plan import RunPlan
@@ -284,7 +283,7 @@ def test_a_malformed_chart_answer_keeps_shape_diagnostics_off_the_success_detail
             content=a_reply(rows="model-only words"), finish_reason="stop"
         ),
         table,
-        forms=data, candidates=chart_candidates(table), text=WIND_TEXT,
+        forms=data, candidates=candidates_for(table, WIND_TEXT), text=WIND_TEXT,
         settings=settings, date="2026-08-21",
         stamp={
             "version": VisualDecision.schema_version(), "model_id": "fixture-model",
