@@ -390,12 +390,16 @@ class CompactIndex(Contract):
                 version=stamp, ledger=ledger, period=period, entries=entries,
                 expired_through=expired_through,
             )
+        files: list[CompactEntry] = []
         coverage: list[CompactCoverage] = []
         for entry in entries:
             if entry.names_file:
+                files.append(entry)
                 continue
             if entry.rows or entry.bytes or entry.file_sha256 is not None:
-                raise ValueError(f"{ledger.value} {entry.covers}: a no-file period has file metadata")
+                raise ValueError(
+                    f"{ledger.value} {entry.covers}: a no-file period has file metadata"
+                )
             coverage.append(
                 CompactCoverage(
                     covers=entry.covers,
@@ -406,7 +410,7 @@ class CompactIndex(Contract):
             )
         return cls(
             version=stamp, ledger=ledger, period=period, expired_through=expired_through,
-            entries=[entry for entry in entries if entry.names_file],
+            entries=files,
             coverage=coverage,
         )
 
@@ -438,7 +442,7 @@ class CompactIndex(Contract):
         elif "coverage" in self.model_fields_set:
             raise ValueError(f"{where} may not list coverage in a legacy index")
         coverage = self.coverage or []
-        records = [*self.entries, *coverage]
+        records: list[CompactEntry | CompactCoverage] = [*self.entries, *coverage]
         if self.expired_through is not None:
             if self.period is not Period.YEARLY:
                 raise ValueError(f"{where} may not set expired_through")
