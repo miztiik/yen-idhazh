@@ -1,0 +1,45 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Country",
+    "y": "Tariff rate"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-xav64xb41819anw7",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "India (after signing)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Bangladesh, Indonesia and Vietnam","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Vietnam (potentially once signed)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-1597-1608","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "17"},
+    {"derived": null,"element_id": "quantity-1649-1660","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "%","value": "18"},
+    {"derived": null,"element_id": "quantity-1720-1731","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "%","value": "20"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Proposed US Tariff Rates by Country After Signing a Bilateral Deal (per cent)",
+  "type": "bar",
+  "version": "2026-11-25"
+}
