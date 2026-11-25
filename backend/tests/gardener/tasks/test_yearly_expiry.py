@@ -488,16 +488,14 @@ def test_old_indexes_migrate_and_expiry_only_belongs_to_yearly() -> None:
     assert CompactIndex.from_json(marked.to_json()).expired_through == "2026"
     for period in (Period.DAILY, Period.MONTHLY):
         with pytest.raises(ValueError, match="may not set expired_through"):
-            CompactIndex(
-                version=CompactIndex.schema_version(),
+            CompactIndex.from_period_entries(
                 ledger=VISUALS,
                 period=period,
                 entries=[],
                 expired_through="2026",
             )
     with pytest.raises(ValueError, match="at or before expired_through"):
-        CompactIndex(
-            version=CompactIndex.schema_version(),
+        CompactIndex.from_period_entries(
             ledger=VISUALS,
             period=Period.YEARLY,
             entries=[CompactEntry(covers="2026", rows=0, bytes=0, state=EntryState.EMPTY)],

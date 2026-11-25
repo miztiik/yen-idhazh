@@ -157,8 +157,7 @@ def test_planner_delivery_keeps_the_initial_source_when_head_changes(
     target = f"{prefix}/index/daily.json"
 
     def index(day: str | None) -> str:
-        return CompactIndex(
-            version=CompactIndex.schema_version(),
+        return CompactIndex.from_period_entries(
             ledger=LedgerName.FEED_INGEST_PLAN_DISCOVERED_ARTICLES, period=Period.DAILY,
             entries=[] if day is None else [
                 CompactEntry(covers=day, rows=0, bytes=0, state=EntryState.EMPTY),

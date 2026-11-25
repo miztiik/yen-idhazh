@@ -3,8 +3,8 @@
  *
  * `state/compact/<ledger>/index/<period>.json` is written by the gardener's
  * compaction task, one writer per ledger, and declared once, as `CompactIndex`
- * and `CompactEntry` in `backend/idhazh/contracts/ledger_index.py`. This module
- * is the frontend's hand copy of those two shapes, the stamp this build reads,
+ * and its records in `backend/idhazh/contracts/ledger_index.py`. This module
+ * is the frontend's hand copy of those shapes, the stamp this build reads,
  * and the guard that decides whether a fetched index may be acted on.
  * `backend/tests/contracts/test_frontend_index_shapes.py` holds the copy and the
  * stamp in step with the Pydantic originals.
@@ -24,15 +24,17 @@
  * address. An entry that carries no `state`, `lost_days` or `set_aside` was
  * written before entries had them, and is handed on without them: `namesFile()`
  * in `slice.ts` reads it as packed, with nothing lost or set aside, as the
- * contract does.
+ * contract does. Split indexes list live files in `entries` and no-file
+ * outcomes in `coverage`. Both layouts serve the same ordered period view.
  *
  * Imports nothing tied to one environment, so a Node test loads it as it is.
  */
 
-import { isDay, type LedgerName } from './slice-shapes';
+import { isDay, type LedgerName } from './slice-shapes.ts';
 
 /** The `CompactIndex` stamp this build reads: `CompactIndex.schema_version()`. */
-export const COMPACT_INDEX_STAMP = '2026-10-25';
+export const COMPACT_INDEX_STAMP = '2026-11-25';
+export const LEGACY_COMPACT_INDEX_STAMP = '2026-10-25';
 
 /** How much time one compact file covers. Also the directory name. */
 export const COMPACT_PERIODS = ['daily', 'monthly', 'yearly'] as const;
@@ -43,6 +45,10 @@ export type Period = (typeof COMPACT_PERIODS)[number];
 export const ENTRY_STATES = ['packed', 'empty', 'lost'] as const;
 
 export type EntryState = (typeof ENTRY_STATES)[number];
+
+export const COVERAGE_STATES = ['empty', 'lost'] as const;
+
+export type CoverageState = (typeof COVERAGE_STATES)[number];
 
 /** One period of a `CompactIndex`: what it covers, whether it has a file, its rows and size. */
 export interface CompactEntry {
@@ -55,12 +61,21 @@ export interface CompactEntry {
 	set_aside?: number;
 }
 
+/** A checked period that has no file. */
+export interface CompactCoverage {
+	covers: string;
+	state: CoverageState;
+	lost_days?: string[];
+	set_aside?: number;
+}
+
 /** Which compact files exist in one period of one ledger. */
 export interface CompactIndex {
 	version?: string;
 	ledger: LedgerName;
 	period: Period;
 	entries: CompactEntry[];
+	coverage?: CompactCoverage[] | null;
 	expired_through?: string | null;
 }
 
@@ -112,35 +127,47 @@ function brokenLostDays(days: unknown, covers: string, period: Period): string |
 }
 
 /** The first entry that breaks the shape, named, or null when every entry holds it. */
-function brokenEntry(entries: unknown[], period: Period): string | null {
+function brokenRecords(
+	entries: unknown[], period: Period, kind: 'legacy' | 'files' | 'coverage'
+): string | null {
+	const noFile = kind === 'coverage';
 	let previous = '';
 	for (const [at, entry] of entries.entries()) {
-		if (!isRecord(entry)) return `entry ${at} is not an object`;
+		const label = `${noFile ? 'coverage record' : 'entry'} ${at}`;
+		if (!isRecord(entry)) return `${label} is not an object`;
 		const { covers, rows, bytes, file_sha256: fileSha256, state, lost_days: lostDays, set_aside: setAside } = entry;
 		if (typeof covers !== 'string' || !COVERS[period].test(covers)) {
-			return `entry ${at} covers ${JSON.stringify(covers)}, which is not a ${period} period`;
+			return `${label} covers ${JSON.stringify(covers)}, which is not a ${period} period`;
 		}
-		if (!isCount(rows)) return `entry ${at} (${covers}) has rows ${JSON.stringify(rows)}`;
-		if (!isCount(bytes)) return `entry ${at} (${covers}) has bytes ${JSON.stringify(bytes)}`;
-		if (fileSha256 !== undefined && fileSha256 !== null
-			&& (typeof fileSha256 !== 'string' || !/^[0-9a-f]{64}$/.test(fileSha256))) {
-			return `entry ${at} (${covers}) has file_sha256 ${JSON.stringify(fileSha256)}`;
-		}
-		if (covers <= previous) return `entry ${at} (${covers}) does not come after ${previous}`;
-		if (state !== undefined && !isState(state)) return `entry ${at} (${covers}) has state ${JSON.stringify(state)}`;
-		if (state !== undefined && state !== 'packed' && (rows > 0 || bytes > 0)) {
-			return `entry ${at} (${covers}) is ${state}, which names no file, and has rows ${rows} and bytes ${bytes}`;
-		}
-		if (state !== undefined && state !== 'packed' && fileSha256 != null) {
-			return `entry ${at} (${covers}) is ${state}, which names no file, and has a file digest`;
+		if (covers <= previous) return `${label} (${covers}) does not come after ${previous}`;
+		if (noFile) {
+			if (!(COVERAGE_STATES as readonly unknown[]).includes(state)) {
+				return `${label} (${covers}) has invalid state ${JSON.stringify(state)}`;
+			}
+			if (Object.keys(entry).some((key) => !['covers', 'state', 'lost_days', 'set_aside'].includes(key))) {
+				return `${label} (${covers}) names fields other than coverage`;
+			}
+		} else {
+			if (!isCount(rows)) return `${label} (${covers}) has rows ${JSON.stringify(rows)}`;
+			if (!isCount(bytes)) return `${label} (${covers}) has bytes ${JSON.stringify(bytes)}`;
+			if (fileSha256 !== undefined && fileSha256 !== null
+				&& (typeof fileSha256 !== 'string' || !/^[0-9a-f]{64}$/.test(fileSha256))) {
+				return `${label} (${covers}) has file_sha256 ${JSON.stringify(fileSha256)}`;
+			}
+			if (state !== undefined && !isState(state)) return `${label} (${covers}) has state ${JSON.stringify(state)}`;
+			if (state !== undefined && state !== 'packed') {
+				if (kind === 'files') return `${label} (${covers}) does not name a file`;
+				if (rows > 0 || bytes > 0) return `${label} (${covers}) is ${state}, which names no file, and has rows ${rows} and bytes ${bytes}`;
+				if (fileSha256 != null) return `${label} (${covers}) is ${state}, which names no file, and has a file digest`;
+			}
 		}
 		if (state === 'lost' && period !== 'daily') {
-			return `entry ${at} (${covers}) is lost, and only a day is: a ${period} entry lists the days it lost in lost_days`;
+			return `${label} (${covers}) is lost, and only a day is: a ${period} entry lists the days it lost in lost_days`;
 		}
 		const lost = lostDays === undefined ? null : brokenLostDays(lostDays, covers, period);
-		if (lost !== null) return `entry ${at} (${covers}) ${lost}`;
+		if (lost !== null) return `${label} (${covers}) ${lost}`;
 		if (setAside !== undefined && !isCount(setAside)) {
-			return `entry ${at} (${covers}) has set_aside ${JSON.stringify(setAside)}`;
+			return `${label} (${covers}) has set_aside ${JSON.stringify(setAside)}`;
 		}
 		previous = covers;
 	}
@@ -151,13 +178,12 @@ function brokenEntry(entries: unknown[], period: Period): string | null {
  * Whether a parsed index can be acted on, for the ledger and period it was
  * fetched as.
  *
- * A missing `version` reads as this build's own stamp, as the contract stamps a
- * document that omits one.
+ * A missing `version` can only mean the legacy layout.
  */
 export function readIndex(value: unknown, ledger: LedgerName, period: Period): IndexReading {
 	const unreadable = (detail: string): IndexReading => ({ refused: { reason: 'unreadable', detail } });
 	if (!isRecord(value)) return unreadable('it is not a JSON object');
-	const stamp = value.version ?? COMPACT_INDEX_STAMP;
+	const stamp = value.version === undefined ? LEGACY_COMPACT_INDEX_STAMP : value.version;
 	if (typeof stamp !== 'string' || !STAMP.test(stamp)) {
 		return unreadable(`its version ${JSON.stringify(stamp)} is not a stamp`);
 	}
@@ -165,14 +191,27 @@ export function readIndex(value: unknown, ledger: LedgerName, period: Period): I
 	if (value.ledger !== ledger) return unreadable(`it names the ledger ${JSON.stringify(value.ledger)}`);
 	if (value.period !== period) return unreadable(`it names the period ${JSON.stringify(value.period)}`);
 	if (!Array.isArray(value.entries)) return unreadable('it has no list of entries');
+	const split = stamp >= COMPACT_INDEX_STAMP;
+	const coverage = value.coverage;
+	if (split && !Array.isArray(coverage)) return unreadable('it has no list of coverage records');
+	if (!split && 'coverage' in value) return unreadable('a legacy index does not list coverage');
 	const expired = value.expired_through ?? null;
 	if (expired !== null && (period !== 'yearly' || typeof expired !== 'string' || !COVERS.yearly.test(expired))) {
 		return unreadable('its expired_through is not a UTC year on a yearly index');
 	}
-	const broken = brokenEntry(value.entries, period);
+	const broken = brokenRecords(value.entries, period, split ? 'files' : 'legacy');
 	if (broken !== null) return unreadable(broken);
-	if (typeof expired === 'string' && value.entries.some((entry) => entry.covers <= expired)) {
-		return unreadable('it lists entries at or before expired_through');
+	if (Array.isArray(coverage)) {
+		const brokenCoverage = brokenRecords(coverage, period, 'coverage');
+		if (brokenCoverage !== null) return unreadable(brokenCoverage);
+		const files = new Set(value.entries.map((entry) => entry.covers));
+		if (coverage.some((record) => files.has(record.covers))) {
+			return unreadable('it lists a period in both entries and coverage');
+		}
+	}
+	if (typeof expired === 'string' &&
+		[...value.entries, ...(Array.isArray(coverage) ? coverage : [])].some((record) => record.covers <= expired)) {
+		return unreadable('it lists periods at or before expired_through');
 	}
 	const entries = (value.entries as CompactEntry[]).map(({ covers, rows, bytes, file_sha256, state, lost_days, set_aside }) => ({
 		covers,
@@ -183,5 +222,18 @@ export function readIndex(value: unknown, ledger: LedgerName, period: Period): I
 		lost_days,
 		set_aside
 	}));
-	return { index: { version: stamp, ledger, period, entries, expired_through: expired } };
+	return {
+		index: {
+			version: stamp, ledger, period, entries,
+			...(Array.isArray(coverage) ? { coverage: coverage as CompactCoverage[] } : {}),
+			expired_through: expired
+		}
+	};
+}
+
+/** Every checked period in order, regardless of which index format was read. */
+export function compactPeriods(index: CompactIndex): CompactEntry[] {
+	if (!index.coverage?.length) return index.entries;
+	return [...index.entries, ...index.coverage.map((record) => ({ ...record, rows: 0, bytes: 0 }))]
+		.sort((left, right) => left.covers.localeCompare(right.covers));
 }

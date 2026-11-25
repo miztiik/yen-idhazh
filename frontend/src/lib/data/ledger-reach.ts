@@ -40,7 +40,7 @@
  * environment, so a Node test loads it as it is.
  */
 
-import type { CompactEntry, IndexReading, Period } from './compact-index';
+import { compactPeriods, type CompactEntry, type IndexReading, type Period } from './compact-index';
 import type { PageKeeper } from './page-keeper';
 import { firstNamed, newestHeld, newestNamed, type HeldPeriod } from './slice';
 import { explainRefusal, faultLine, LOG_PREFIX, readIndexFrom } from './slice-reader';
@@ -61,7 +61,7 @@ export type LedgerReach =
 
 /** The entries of an index this build acts on, and none for one it will not or that is not there. */
 function entriesOf(reading: IndexReading | null): CompactEntry[] {
-	return reading === null || 'refused' in reading ? [] : reading.index.entries;
+	return reading === null || 'refused' in reading ? [] : compactPeriods(reading.index);
 }
 
 /** The oldest and the newest day `ledger` holds, from its three indexes as the page keeps them. */
@@ -92,7 +92,7 @@ export async function readReach(keeper: PageKeeper, ledger: LedgerName): Promise
 		keeper.warn(faultLine(keeper.catalog, ledger, { fault: 'index-missing', period }));
 		fault = 'index-missing';
 	}
-	const days = daily.index.entries;
+	const days = compactPeriods(daily.index);
 	const months = entriesOf(monthly);
 	const years = entriesOf(yearly);
 	const through = newestNamed(days, months, years);

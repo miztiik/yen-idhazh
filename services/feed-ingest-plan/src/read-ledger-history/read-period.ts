@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { readFile as readFileFromDisk, stat } from "node:fs/promises";
 import { dirname, join, basename } from "node:path";
 import {
-  COMPACT_INDEX_VERSION, RAW_DAY_INDEX_VERSION,
+  RAW_DAY_INDEX_VERSION, compactPeriods,
   CompactIndexSchema, DateStampSchema, LedgerNameSchema, RawDayIndexSchema,
 } from "@idhazh/common-contracts";
 import type { CompactIndex } from "@idhazh/common-contracts";
@@ -76,11 +76,10 @@ export async function readLedgerDay<T extends object>(input: NamedDayInput<T>): 
       continue;
     }
     const index = CompactIndexSchema.parse(value);
-    if (index.version > COMPACT_INDEX_VERSION) throw new LedgerHistoryReadError("Compact index schema is newer than the declared reader");
     if (index.ledger !== ledger || index.period !== period) throw new LedgerHistoryReadError("Named compact index belongs to another ledger or period");
     if (period === "yearly" && index.expired_through !== null && day.slice(0, 4) <= index.expired_through) expired = true;
     const covers = period === "yearly" ? day.slice(0, 4) : period === "monthly" ? day.slice(0, 7) : day;
-    const entry = index.entries.find(entry => entry.covers === covers);
+    const entry = compactPeriods(index).find(entry => entry.covers === covers);
     if (entry !== undefined) matches.push({ period, entry, indexPath: path });
   }
   const result = (

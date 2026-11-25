@@ -131,8 +131,7 @@ def compacted(
 
 def indexed(state: Path, period: Period, covers: list[str]) -> Path:
     """One period's index naming these periods, written whole."""
-    index = CompactIndex(
-        version=CompactIndex.schema_version(),
+    index = CompactIndex.from_period_entries(
         ledger=WHICH,
         period=period,
         entries=[CompactEntry(covers=one, rows=1, bytes=1) for one in covers],

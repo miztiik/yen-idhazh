@@ -52,7 +52,7 @@ test("native raw and daily reads preserve another family's original writer ident
     const indexPath = join(root, "compact", "published", "index", "daily.json");
     await mkdir(dirname(indexPath), { recursive: true });
     await writeFile(indexPath, JSON.stringify({
-      version: COMPACT_INDEX_VERSION, ledger: "published", period: "daily", entries: [{
+      version: COMPACT_INDEX_VERSION, ledger: "published", period: "daily", coverage: [], entries: [{
         covers: day, rows: 1, bytes: (await stat(join(root, compact.files[0]!.path))).size, state: "packed",
       }],
     }));
@@ -157,7 +157,7 @@ test("planner compact members keep native validation and never fall through on a
     for (const state of ["empty", "lost"] as const) {
       await writeFile(externalIndex, JSON.stringify({
         version: COMPACT_INDEX_VERSION, ledger: "published", period: "daily",
-        entries: [{ covers: day, rows: 0, bytes: 0, state }],
+        entries: [], coverage: [{ covers: day, state }],
       }));
       const held = await readLedgerDay({
         ledger: "published", day, contract: publishedContract, indexes: { daily: externalIndex },
@@ -168,7 +168,7 @@ test("planner compact members keep native validation and never fall through on a
     }
     const expired = join(dirname(externalIndex), "yearly.json");
     await writeFile(expired, JSON.stringify({
-      version: COMPACT_INDEX_VERSION, ledger: "published", period: "yearly", expired_through: "2026", entries: [],
+      version: COMPACT_INDEX_VERSION, ledger: "published", period: "yearly", expired_through: "2026", entries: [], coverage: [],
     }));
     expect((await readLedgerDay({ ledger: "published", day, contract: publishedContract,
       indexes: { yearly: expired }, rawFiles: publication.files.map(file => join(root, file.path)) })).status).toBe("missing");

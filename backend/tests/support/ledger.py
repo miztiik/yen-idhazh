@@ -245,8 +245,8 @@ def seed_compact_index(
     state_dir: Path, which: LedgerName, period: Period, entries: Sequence[CompactEntry]
 ) -> Path:
     """One period's index naming these entries, written whole."""
-    index = CompactIndex(
-        version=CompactIndex.schema_version(), ledger=which, period=period, entries=list(entries)
+    index = CompactIndex.from_period_entries(
+        ledger=which, period=period, entries=list(entries)
     )
     path = ledger.compact_index_path(state_dir, which, period)
     path.parent.mkdir(parents=True, exist_ok=True)

@@ -286,8 +286,8 @@ def a_ledger_on_origin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple
         index = ledger.compact_index_path(state_dir, CLOSED, period)
         index.parent.mkdir(parents=True, exist_ok=True)
         index.write_bytes(
-            CompactIndex(
-                version=CompactIndex.schema_version(), ledger=CLOSED, period=period, entries=held
+            CompactIndex.from_period_entries(
+                ledger=CLOSED, period=period, entries=held
             )
             .to_json()
             .encode("ascii")
@@ -342,8 +342,8 @@ def planner_indexes(root: Path, which: LedgerName) -> tuple[str, ...]:
     for period in Period:
         path = ledger.compact_index_path(root / ledger.STATE_DIRNAME, which, period)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(CompactIndex(
-            version=CompactIndex.schema_version(), ledger=which, period=period, entries=[],
+        path.write_text(CompactIndex.from_period_entries(
+            ledger=which, period=period, entries=[],
         ).to_json(), encoding="ascii")
         paths.append(path.relative_to(root).as_posix())
     return tuple(paths)

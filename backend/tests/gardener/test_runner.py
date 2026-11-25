@@ -478,8 +478,7 @@ def test_a_missing_yearly_index_needs_manual_action_and_lands_the_failed_record(
 ) -> None:
     """THE ORACLE: the real runner preserves an established tree and records the refusal."""
     indexes = {
-        f"state/compact/gardener/index/{period.value}.json": CompactIndex(
-            version=CompactIndex.schema_version(),
+        f"state/compact/gardener/index/{period.value}.json": CompactIndex.from_period_entries(
             ledger=LedgerName.GARDENER,
             period=period,
             entries=[],

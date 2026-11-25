@@ -66,8 +66,7 @@ def _tree(tmp_path: Path) -> tuple[Path, Path, Path]:
     index = ledger.compact_index_path(root, WHICH, Period.DAILY)
     index.parent.mkdir(parents=True, exist_ok=True)
     index.write_text(
-        CompactIndex(
-            version=CompactIndex.schema_version(),
+        CompactIndex.from_period_entries(
             ledger=WHICH,
             period=Period.DAILY,
             entries=[CompactEntry(covers=DAY, rows=1, bytes=compact.stat().st_size)],

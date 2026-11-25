@@ -28,7 +28,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileS
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { ledgerCopy } from '../../scripts/published-ledgers.mjs';
-import { COMPACT_INDEX_STAMP, type CompactEntry, type Period } from '../../src/lib/data/compact-index';
+import { LEGACY_COMPACT_INDEX_STAMP, type CompactEntry, type Period } from '../../src/lib/data/compact-index';
 import { nodeEngine } from '../../src/lib/data/engine';
 import type { Fetcher } from '../../src/lib/data/fetched-bytes';
 import { ledgerFolder } from '../../src/lib/data/slice-reader';
@@ -126,7 +126,7 @@ async function writeParquet(
 }
 
 function indexText(ledger: LedgerName, period: Period, entries: CompactEntry[]): string {
-	return `${JSON.stringify({ entries, ledger, period, version: COMPACT_INDEX_STAMP }, null, 2)}\n`;
+	return `${JSON.stringify({ entries, ledger, period, version: LEGACY_COMPACT_INDEX_STAMP }, null, 2)}\n`;
 }
 
 /** The files a packed or lost day set aside, as its entry carries them: absent when it set none aside. */

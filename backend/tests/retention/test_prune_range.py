@@ -660,8 +660,8 @@ def a_month_with_lost_days(state: Path) -> CompactIndex:
         index = (
             planted
             if period is planted.period
-            else CompactIndex(
-                version=CompactIndex.schema_version(), ledger=CENSUS, period=period, entries=[]
+            else CompactIndex.from_period_entries(
+                ledger=CENSUS, period=period, entries=[]
             )
         )
         path = ledger.compact_index_path(state, CENSUS, period)

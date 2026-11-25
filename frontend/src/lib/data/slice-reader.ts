@@ -70,7 +70,7 @@
  * state root on disk for a build-time reader.
  */
 
-import { COMPACT_INDEX_STAMP, readIndex, type CompactEntry, type IndexReading, type IndexRefusal, type Period } from './compact-index';
+import { COMPACT_INDEX_STAMP, compactPeriods, readIndex, type CompactEntry, type IndexReading, type IndexRefusal, type Period } from './compact-index';
 import type { FileShortfall, PageKeeper, WantedFile } from './page-keeper';
 import { filesFor, firstNamed, newestNamed, type ChosenFile } from './slice';
 import { rowsFor } from './slice-query';
@@ -236,7 +236,7 @@ export async function readSlice(
 		return { state: 'missing', rows: [], fault: 'not-packed' };
 	}
 	if ('refused' in daily) return unreachable(request.from, explainRefusal('daily', daily.refused));
-	const days = daily.index.entries;
+	const days = compactPeriods(daily.index);
 
 	let months: CompactEntry[] = [];
 	let years: CompactEntry[] = [];
@@ -244,12 +244,12 @@ export async function readSlice(
 		const monthly = await readIndexFrom(keeper, ledger, 'monthly');
 		if (monthly === null) return faulted(request.from, { fault: 'index-missing', period: 'monthly' });
 		if ('refused' in monthly) return unreachable(request.from, explainRefusal('monthly', monthly.refused));
-		months = monthly.index.entries;
+		months = compactPeriods(monthly.index);
 		if (days.length === 0 || request.from < firstNamed(days, months, [])) {
 			const yearly = await readIndexFrom(keeper, ledger, 'yearly');
 			if (yearly === null) return faulted(request.from, { fault: 'index-missing', period: 'yearly' });
 			if ('refused' in yearly) return unreachable(request.from, explainRefusal('yearly', yearly.refused));
-			years = yearly.index.entries;
+			years = compactPeriods(yearly.index);
 		}
 	}
 

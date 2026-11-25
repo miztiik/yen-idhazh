@@ -124,7 +124,7 @@ test("bounded discovery history preserves covered-day membership and planner raw
   for (const ledger of ["feed-health-state", "published"] as const) {
     const prefix = ledger === "published" ? ["published"] : ["feed-ingest-plan", ledger];
     const rawPath = `state/raw/${prefix.join("/")}/2026/01/01/${rawName}`;
-    const compact = CompactIndexSchema.parse({ version: COMPACT_INDEX_VERSION, ledger, period: "monthly",
+    const compact = CompactIndexSchema.parse({ version: COMPACT_INDEX_VERSION, ledger, period: "monthly", coverage: [],
       entries: [{ covers: "2026-01", rows: 1, bytes: 20 }] });
     const inventory = resolveHistoryInventory({ ledger, prefix, days: ["2026-01-01"], compact: [compact], rawFiles: [rawPath] });
     expect(inventory).toContain(`state/compact/${prefix.join("/")}/monthly/2026/01.parquet`);
@@ -153,7 +153,7 @@ test("bounded discovery history preserves covered-day membership and planner raw
         const index = join(directory, "state", "compact", ...registration.prefix, "index", "monthly.json");
         await mkdir(dirname(index), { recursive: true });
         await writeFile(index, JSON.stringify(CompactIndexSchema.parse({
-          version: COMPACT_INDEX_VERSION, ledger: registration.name, period: "monthly",
+          version: COMPACT_INDEX_VERSION, ledger: registration.name, period: "monthly", coverage: [],
           entries: [{ covers: "2024-01", rows: 1, bytes: (await stat(join(directory, monthPath))).size }],
         })));
       }

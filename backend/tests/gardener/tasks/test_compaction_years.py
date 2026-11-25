@@ -147,8 +147,8 @@ def index_entries(root: Path, period: Period, entries: list[CompactEntry]) -> No
     """One period's index, as a compaction writes it."""
     path = ledger.compact_index_path(state(root), VISUALS, period)
     path.parent.mkdir(parents=True, exist_ok=True)
-    index = CompactIndex(
-        version=CompactIndex.schema_version(), ledger=VISUALS, period=period, entries=entries
+    index = CompactIndex.from_period_entries(
+        ledger=VISUALS, period=period, entries=entries
     )
     path.write_bytes(index.to_json().encode("ascii"))
 

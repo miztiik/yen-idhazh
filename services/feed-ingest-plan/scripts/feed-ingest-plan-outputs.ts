@@ -3,7 +3,7 @@ import { randomUUID, createHash } from "node:crypto";
 import { appendFile } from "node:fs/promises";
 import { posix } from "node:path";
 import {
-  COMPACT_INDEX_VERSION, RAW_DAY_INDEX_VERSION, CompactIndexSchema, DateStampSchema, PlannerLedgerNameSchema, RawDayIndexSchema,
+  RAW_DAY_INDEX_VERSION, CompactIndexSchema, DateStampSchema, PlannerLedgerNameSchema, RawDayIndexSchema, compactPeriods,
 } from "../../../packages/common-contracts/src/index";
 import type { CompactIndex } from "../../../packages/common-contracts/src/index";
 import type { LedgerRegistration } from "../../../packages/ledger-file-writer/src/index";
@@ -93,7 +93,7 @@ export function resolveHistoryInventory(input: {
     ?? `state/raw/${input.prefix.join("/")}/${day.replaceAll("-", "/")}/index.json`;
   const raw = (input.raw ?? []).map(value => RawDayIndexSchema.parse(value));
   const compact = input.compact.map(value => CompactIndexSchema.parse(value));
-  if (compact.some(index => index.version > COMPACT_INDEX_VERSION || index.ledger !== input.ledger)
+  if (compact.some(index => index.ledger !== input.ledger)
     || raw.some(index => index.version > RAW_DAY_INDEX_VERSION || index.ledger !== input.ledger)
     || new Set(raw.map(index => index.date)).size !== raw.length
     || new Set(compact.map(index => index.period)).size !== compact.length) {
@@ -112,7 +112,7 @@ export function resolveHistoryInventory(input: {
       const index = compact.find(index => index.period === period);
       if (period === "yearly" && index?.expired_through != null && day.slice(0, 4) <= index.expired_through) { covered = true; break; }
       const covers = period === "yearly" ? day.slice(0, 4) : period === "monthly" ? day.slice(0, 7) : day;
-      const entry = index?.entries.find(entry => entry.covers === covers);
+      const entry = index === undefined ? undefined : compactPeriods(index).find(entry => entry.covers === covers);
       if (entry?.state === "packed") {
         paths.add(`${posix.dirname(posix.dirname(indexes[period]))}/${period}/${period === "yearly" ? `${covers}/${covers}` : covers.replaceAll("-", "/")}.parquet`);
         covered = true;

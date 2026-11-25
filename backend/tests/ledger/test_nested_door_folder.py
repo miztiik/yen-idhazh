@@ -117,8 +117,7 @@ def _compact_one_day[C: Contract](
         fmt=Format.JSON,
         registry=registry,
     )
-    index = CompactIndex(
-        version=CompactIndex.schema_version(),
+    index = CompactIndex.from_period_entries(
         ledger=which,
         period=Period.DAILY,
         entries=[CompactEntry(covers=day, rows=len(settled), bytes=compact.stat().st_size)],

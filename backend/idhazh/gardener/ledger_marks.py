@@ -154,7 +154,7 @@ def read_marks(state_dir: Path, ledger_name: LedgerName, listing: FileListing) -
             indexed.add(period)
             if period is Period.YEARLY:
                 expired_through = held.expired_through
-        entries[period] = {entry.covers: entry for entry in held.entries} if held else {}
+        entries[period] = {entry.covers: entry for entry in held.period_entries} if held else {}
     return LedgerMarks(
         entries=entries, indexed=frozenset(indexed), expired_through=expired_through
     )

@@ -121,12 +121,12 @@ def test_unbounded_published_inputs_use_the_declared_start_and_all_index_heads(
             head = paths.compact_path(Path("state"), which, period, covers).as_posix()
             heads.add(head)
             seed[head] = "head\n"
-            seed[paths.compact_index_path(Path("state"), which, period).as_posix()] = CompactIndex(
-                version=CompactIndex.schema_version(),
+            index = CompactIndex.from_period_entries(
                 ledger=which,
                 period=period,
                 entries=[CompactEntry(covers=covers, rows=1, bytes=5)],
-            ).to_json()
+            )
+            seed[paths.compact_index_path(Path("state"), which, period).as_posix()] = index.to_json()
     repo, tip = a_repository(tmp_path, seed)
     settings = config.load(CONFIG_DIR)
     settings.app.collect.published_window_days = -1

@@ -8,16 +8,25 @@ import {
 
 // These stamps identify existing persisted index formats, not runtime settings.
 export const RAW_DAY_INDEX_VERSION = "2026-10-03";
-export const COMPACT_INDEX_VERSION = "2026-10-25";
+export const COMPACT_INDEX_LEGACY_VERSION = "2026-10-25";
+export const COMPACT_INDEX_VERSION = "2026-11-25";
 export const FileIdNameSchema = z.string().regex(
   /^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(parquet|json)$/,
 );
 export const EntryStateSchema = z.enum(["packed", "empty", "lost"]);
+export const CoverageStateSchema = EntryStateSchema.exclude(["packed"]);
+const CoversSchema = z.union([DateStampSchema, MonthStampSchema, YearStampSchema]);
+const PeriodQuality = {
+  lost_days: z.array(DateStampSchema).default([]), set_aside: CountSchema.default(0),
+};
 export const CompactEntrySchema = z.strictObject({
-  covers: z.union([DateStampSchema, MonthStampSchema, YearStampSchema]),
+  covers: CoversSchema,
   rows: CountSchema, bytes: CountSchema, file_sha256: Sha256Schema.nullable().optional(),
   state: EntryStateSchema.default("packed"),
-  lost_days: z.array(DateStampSchema).default([]), set_aside: CountSchema.default(0),
+  ...PeriodQuality,
+});
+export const CompactCoverageSchema = z.strictObject({
+  covers: CoversSchema, state: CoverageStateSchema, ...PeriodQuality,
 });
 function ascending(values: readonly string[]): boolean {
   return values.every((value, index) => index === 0 || values[index - 1]! < value);
@@ -36,18 +45,33 @@ export const RawDayIndexSchema = z.strictObject({
 });
 export const CompactIndexSchema = z.strictObject({
   version: SchemaVersionSchema, ledger: LedgerNameSchema, period: PeriodSchema,
-  entries: z.array(CompactEntrySchema), expired_through: YearStampSchema.nullable().default(null),
+  entries: z.array(CompactEntrySchema), coverage: z.array(CompactCoverageSchema).optional(),
+  expired_through: YearStampSchema.nullable().default(null),
 }).superRefine((value, ctx) => {
+  if (value.version > COMPACT_INDEX_VERSION) reject(ctx, "compact index schema is newer than the declared reader");
+  const split = value.version >= COMPACT_INDEX_VERSION;
+  if (split !== (value.coverage !== undefined)) reject(ctx, "coverage is required only in split indexes");
+  if (split && value.entries.some(entry => entry.state !== "packed")) reject(ctx, "split entries must name files");
   if (!ascending(value.entries.map(entry => entry.covers))) reject(ctx, "compact entries must ascend without repeats");
+  const coverage = value.coverage ?? [];
+  if (!ascending(coverage.map(record => record.covers))) reject(ctx, "compact coverage must ascend without repeats");
+  const periods = [...value.entries, ...coverage];
+  if (new Set(periods.map(record => record.covers)).size !== periods.length) {
+    reject(ctx, "a period cannot appear in both entries and coverage");
+  }
   if (value.expired_through !== null && (value.period !== "yearly"
-    || value.entries.some(entry => entry.covers <= value.expired_through!))) {
-    reject(ctx, "only yearly indexes may expire years, and entries must follow expired_through");
+    || periods.some(record => record.covers <= value.expired_through!))) {
+    reject(ctx, "only yearly indexes may expire years, and periods must follow expired_through");
   }
   const stamp = value.period === "yearly" ? YearStampSchema : value.period === "monthly" ? MonthStampSchema : DateStampSchema;
   for (const entry of value.entries) {
-    if (!stamp.safeParse(entry.covers).success) reject(ctx, "covers must match index period");
     if (entry.state !== "packed" && (entry.rows !== 0 || entry.bytes !== 0 || entry.file_sha256 != null)) {
       reject(ctx, "an entry without a file counts no rows or bytes or digest");
+    }
+  }
+  for (const entry of periods) {
+    if (!stamp.safeParse(entry.covers).success) {
+      reject(ctx, "covers must match index period");
     }
     if (entry.state === "lost" && value.period !== "daily") reject(ctx, "only a daily entry can be lost");
     if (entry.lost_days.length > 0 && (value.period === "daily" || !ascending(entry.lost_days)
@@ -57,4 +81,12 @@ export const CompactIndexSchema = z.strictObject({
   }
 });
 export type CompactIndex = z.infer<typeof CompactIndexSchema>;
+export type CompactCoverage = z.infer<typeof CompactCoverageSchema>;
 export type RawDayIndex = z.infer<typeof RawDayIndexSchema>;
+
+/** Every checked period in order, regardless of which index format was read. */
+export function compactPeriods(index: CompactIndex): CompactIndex["entries"] {
+  if (index.coverage === undefined || index.coverage.length === 0) return index.entries;
+  return [...index.entries, ...index.coverage.map(record => ({ ...record, rows: 0, bytes: 0 }))]
+    .sort((left, right) => left.covers.localeCompare(right.covers));
+}

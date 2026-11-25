@@ -58,8 +58,7 @@ def an_index(
     root: Path, period: Period, covers: Sequence[str], *, which: LedgerName = WHICH
 ) -> None:
     """One period's index naming these periods, as a compaction writes it."""
-    held = CompactIndex(
-        version=CompactIndex.schema_version(),
+    held = CompactIndex.from_period_entries(
         ledger=which,
         period=period,
         entries=[CompactEntry(covers=each, rows=1, bytes=1) for each in covers],

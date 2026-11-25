@@ -1,6 +1,6 @@
 /** How does a written question read one session's consented compact ledgers? */
 
-import { COMPACT_PERIODS, type CompactEntry, type Period } from './compact-index';
+import { COMPACT_PERIODS, compactPeriods, type CompactEntry, type Period } from './compact-index';
 import type { FileShortfall, PageKeeper, WantedFile } from './page-keeper';
 import { coveredDays, filesFor, firstNamed, newestFile, newestNamed } from './slice';
 import { listOf, type QueryEngine } from './slice-query';
@@ -71,7 +71,7 @@ export async function readIndexes(keeper: PageKeeper, ledger: LedgerName): Promi
 	}
 	const indexes: Indexes = { daily: [], monthly: [], yearly: [] };
 	for (const one of readings) {
-		if (one.reading != null && 'index' in one.reading) indexes[one.period] = one.reading.index.entries;
+		if (one.reading != null && 'index' in one.reading) indexes[one.period] = compactPeriods(one.reading.index);
 	}
 	return indexes;
 }

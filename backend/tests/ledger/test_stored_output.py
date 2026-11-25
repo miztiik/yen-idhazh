@@ -65,8 +65,7 @@ def _compact(root: Path) -> tuple[Path, Path]:
     index_path = ledger.compact_index_path(root, WHICH, Period.DAILY)
     index_path.parent.mkdir(parents=True, exist_ok=True)
     index_path.write_text(
-        CompactIndex(
-            version=CompactIndex.schema_version(),
+        CompactIndex.from_period_entries(
             ledger=WHICH,
             period=Period.DAILY,
             entries=[CompactEntry(covers=DAY, rows=1, bytes=path.stat().st_size)],
@@ -127,7 +126,7 @@ def test_an_entry_with_no_file_is_indexed_until_a_file_holds_it(
     index_path = ledger.compact_index_path(tmp_path, WHICH, index.period)
     index_path.parent.mkdir(parents=True, exist_ok=True)
     index_path.write_text(index.to_json(), encoding="ascii", newline="\n")
-    (covers,) = [entry.covers for entry in index.entries if not entry.names_file]
+    (covers,) = [entry.covers for entry in index.period_entries if not entry.names_file]
 
     assert check_compact_period(tmp_path, WHICH, index.period, covers)
 

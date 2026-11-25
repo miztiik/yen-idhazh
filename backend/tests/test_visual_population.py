@@ -98,8 +98,8 @@ def test_raw_and_compact_history_supply_the_same_floor(tmp_path: Path, period: P
         ledger=LedgerName.ITEM_HEALTH, period=period, covers=covers,
         identity=writer_identity(f"{fixture['date']}-1"), built_from=len(raw),
     )
-    index = CompactIndex(
-        version=CompactIndex.schema_version(), ledger=LedgerName.ITEM_HEALTH, period=period,
+    index = CompactIndex.from_period_entries(
+        ledger=LedgerName.ITEM_HEALTH, period=period,
         entries=[CompactEntry(covers=covers, rows=len(rows), bytes=packed.stat().st_size)],
     )
     index_path = ledger.compact_index_path(state, LedgerName.ITEM_HEALTH, period)
