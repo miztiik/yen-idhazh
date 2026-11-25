@@ -286,23 +286,11 @@ def preparation(
                 target = safe_file(scratch, path, exists=False)
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes((repo / path).read_bytes())
-            assets = [
-                path
-                for path in original.writes
-                if path.startswith(f"frontend/public/digest/{date.replace('-', '/')}/")
-                and Path(path).name not in {"digest.json", "run.json"}
-            ]
-            for path in assets:
-                # The first published asset for an item wins, even when this
-                # invocation rendered other bytes for the same item.
-                if git.entry(base, path) is None:
-                    target = safe_file(scratch, path, exists=False)
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    target.write_bytes((repo / path).read_bytes())
             previous = common.STATE_ROOT, common.PUBLIC_ROOT
             common.STATE_ROOT = scratch / "state"
             common.PUBLIC_ROOT = scratch / "frontend" / "public" / "digest"
             try:
+                # The chart writer follows the rebuilt day and retains files from main.
                 with completed_writes.collect() as rebuilt:
                     producer.stage_assemble(
                         plan,
@@ -359,15 +347,6 @@ def preparation(
                 if not any(contains(scope, path) for scope in scopes):
                     raise IntegrityError("rebuild wrote outside derived declaration", (path,))
                 writes[path] = Write(digest, git.entry(base, path), baseline_tip=base)
-            for path in assets:
-                target = scratch / path
-                if not target.is_file():
-                    raise IntegrityError("completed asset disappeared during rebuild", (path,))
-                writes[path] = Write(
-                    hashlib.sha256(target.read_bytes()).hexdigest(),
-                    git.entry(base, path),
-                    baseline_tip=base,
-                )
             # No partial derived set is copied into the publication source until
             # the producer and all consistency checks have succeeded.
             copied = writes.keys() - immutable.keys()
