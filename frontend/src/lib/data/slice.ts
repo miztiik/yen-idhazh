@@ -10,12 +10,12 @@
  * instead of a file set: drawing the days around a hole would be an undercount
  * nobody could see.
  *
- * **An entry may name a period that has no file.** An `empty` one held no row,
+ * **A period record may have no file.** An `empty` one held no row,
  * so its days are quiet and nothing is fetched for them. A `lost` day lost its
  * rows, and so did each day a month or a year lists in its `lost_days`: those
  * days come back by name, beside the files, because a day with no record is not
- * a day with no rows. `namesFile()` is the one reading of whether an entry has a
- * file, so every reader and the site build agree on it. **An entry may also
+ * a day with no rows. Range selection receives file entries and coverage as one
+ * ordered view. **A record may also
  * count files its packing set aside unread** (`set_aside`); each such period
  * the range is read from comes back with its count, because its file, if it has
  * one, holds every row but theirs.
@@ -45,9 +45,8 @@ export type FileSelection = { files: ChosenFile[]; lostDays: DateStamp[]; setAsi
 
 const DAY_MS = 86_400_000;
 
-/** Whether an index entry names a file. A `packed` period has one; an `empty`
- *  or a `lost` one has none. An entry with no state was written before entries
- *  had one, when every entry named a file, so it reads as `packed`. */
+/** Whether a period record has a file. `packed` is the default file state;
+ *  `empty` and `lost` are coverage only. */
 export function namesFile(entry: CompactEntry): boolean {
 	return entry.state === undefined || entry.state === 'packed';
 }

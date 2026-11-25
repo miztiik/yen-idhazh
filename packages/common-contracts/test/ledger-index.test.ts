@@ -9,8 +9,8 @@ type Fixture = { index_contracts: {
   raw_fields: string[]; compact_fields: string[]; entry_fields: string[]; coverage_fields: string[];
   states: ("packed" | "empty" | "lost")[]; periods: ("daily" | "monthly" | "yearly")[];
   coverage_states: ("empty" | "lost")[]; compact_version: string;
-  legacy_entry: { covers: string; rows: number; bytes: number };
-  legacy_defaults: { state: "packed"; lost_days: string[]; set_aside: number }; filename: string;
+  minimal_entry: { covers: string; rows: number; bytes: number };
+  entry_defaults: { state: "packed"; lost_days: string[]; set_aside: number }; filename: string;
 } };
 async function fixture() {
   return (await Bun.file(new URL("../../../tests/fixtures/feed-ingest-plan/ledger-history.json", import.meta.url)).json() as Fixture).index_contracts;
@@ -25,9 +25,9 @@ test("recorded index fields and vocabularies stay aligned without a backend proc
   expect(CoverageStateSchema.options).toEqual(recorded.coverage_states);
   expect(COMPACT_INDEX_VERSION).toBe(recorded.compact_version);
   expect(PeriodSchema.options).toEqual(recorded.periods);
-  expect(CompactEntrySchema.parse(recorded.legacy_entry)).toEqual({ ...recorded.legacy_entry, ...recorded.legacy_defaults });
+  expect(CompactEntrySchema.parse(recorded.minimal_entry)).toEqual({ ...recorded.minimal_entry, ...recorded.entry_defaults });
 });
-test("index validation preserves named empty, lost and historical default meanings", async () => {
+test("index validation keeps raw listings and no-file coverage distinct", async () => {
   const recorded = await fixture();
   const raw = {
     version: "2026-10-03", ledger: "feed-health", date: "2026-10-21",
@@ -38,13 +38,12 @@ test("index validation preserves named empty, lost and historical default meanin
   expect(RawDayIndexSchema.safeParse({ ...raw, files: ["../escape.parquet"] }).success).toBe(false);
   expect(RawDayIndexSchema.safeParse({ ...raw, bytes: [] }).success).toBe(false);
   const base = {
-    version: "2026-10-07", ledger: "feed-health", period: "daily",
-    entries: [{ covers: "2026-10-21", rows: 0, bytes: 0, state: "empty" }],
+    version: COMPACT_INDEX_VERSION, ledger: "feed-health", period: "daily",
+    entries: [], coverage: [{ covers: "2026-10-21", state: "empty" }],
   };
-  expect(CompactIndexSchema.parse(base).entries[0]!.state).toBe("empty");
+  expect(CompactIndexSchema.parse(base).coverage[0]!.state).toBe("empty");
   const packed = {
     ...base,
-    version: COMPACT_INDEX_VERSION,
     coverage: [],
     entries: [{
       covers: "2026-10-21", rows: 1, bytes: 128, file_sha256: "a".repeat(64),
@@ -52,33 +51,34 @@ test("index validation preserves named empty, lost and historical default meanin
   };
   expect(CompactIndexSchema.parse(packed).entries[0]!.file_sha256).toBe("a".repeat(64));
   const invalid = [
-    { entries: [{ ...base.entries[0], file_sha256: "a".repeat(64) }] },
+    { coverage: [{ ...base.coverage[0], file_sha256: "a".repeat(64) }] },
     { entries: [{ covers: "2026-10-21", rows: 1, bytes: 128, file_sha256: "not-a-digest" }] },
-    { entries: [{ ...base.entries[0], state: "lost", rows: 1 }] },
-    { entries: [{ ...base.entries[0], bytes: 1 }] },
-    { entries: [base.entries[0], base.entries[0]] },
-    { entries: [{ ...base.entries[0], covers: "2026-10" }] },
-    { entries: [{ ...base.entries[0], lost_days: ["2026-10-21"] }] },
+    { coverage: [{ ...base.coverage[0], state: "lost", rows: 1 }] },
+    { coverage: [{ ...base.coverage[0], bytes: 1 }] },
+    { coverage: [base.coverage[0], base.coverage[0]] },
+    { coverage: [{ ...base.coverage[0], covers: "2026-10" }] },
+    { coverage: [{ ...base.coverage[0], lost_days: ["2026-10-21"] }] },
     { expired_through: "2025" },
-    { period: "monthly", entries: [{ covers: "2026-10", rows: 0, bytes: 0, state: "lost" }] },
-    { period: "monthly", entries: [{ covers: "2026-10", rows: 0, bytes: 0, lost_days: ["2026-10-32"] }] },
-    { period: "monthly", entries: [{ covers: "2026-10", rows: 0, bytes: 0, lost_days: ["2026-09-30"] }] },
-    { period: "monthly", entries: [{ covers: "2026-10", rows: 0, bytes: 0, lost_days: ["2026-10-02", "2026-10-01"] }] },
-    { period: "yearly", expired_through: "2026", entries: [{ covers: "2026", rows: 0, bytes: 0 }] },
+    { period: "monthly", coverage: [{ covers: "2026-10", state: "lost" }] },
+    ...[["2026-10-32"], ["2026-09-30"], ["2026-10-02", "2026-10-01"]].map(lost_days => ({
+      period: "monthly", coverage: [{ covers: "2026-10", state: "empty", lost_days }],
+    })),
+    { period: "yearly", expired_through: "2026", coverage: [{ covers: "2026", state: "empty" }] },
   ];
   for (const patch of invalid) expect(CompactIndexSchema.safeParse({ ...base, ...patch }).success).toBe(false);
 });
 
-test("checked periods are the same in legacy and split indexes", () => {
+test("checked periods include real zero-row files and separate no-file coverage", () => {
   const empty = { covers: "2026-10-21", state: "empty", set_aside: 1 };
   const packed = { covers: "2026-10-22", rows: 0, bytes: 128 };
-  const base = { ledger: "feed-health", period: "daily" };
-  const legacy = CompactIndexSchema.parse({
-    ...base, version: "2026-10-25", entries: [{ ...empty, rows: 0, bytes: 0 }, packed],
-  });
-  const split = { ...base, version: COMPACT_INDEX_VERSION, entries: [packed], coverage: [empty] };
-  expect(compactPeriods(CompactIndexSchema.parse(split))).toEqual(legacy.entries);
-  for (const coverage of [null, [{ ...empty, covers: packed.covers }], [{ ...empty, bytes: 0 }]]) {
-    expect(CompactIndexSchema.safeParse({ ...split, coverage }).success).toBe(false);
+  const base = { ledger: "feed-health", period: "daily", version: COMPACT_INDEX_VERSION, entries: [packed], coverage: [empty] };
+  const checked = compactPeriods(CompactIndexSchema.parse(base));
+  expect(checked[0]).toMatchObject({ ...empty, rows: 0, bytes: 0 });
+  expect(checked[1]).toMatchObject({ ...packed, state: "packed" });
+  for (const patch of [
+    { coverage: undefined }, { coverage: [{ ...empty, covers: packed.covers }] },
+    { entries: [{ ...packed, state: "empty" }] }, { version: "2026-10-25" },
+  ]) {
+    expect(CompactIndexSchema.safeParse({ ...base, ...patch }).success).toBe(false);
   }
 });

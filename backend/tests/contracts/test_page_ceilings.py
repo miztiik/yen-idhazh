@@ -16,12 +16,7 @@ from idhazh.contracts.file_envelope import Period
 from idhazh.contracts.knobs.gardener import CompactionPolicy, DaysWindow, MonthsWindow
 from idhazh.contracts.knobs.page_weight import PageWeightConfig
 from idhazh.contracts.knobs.windows import months_a_window_can_touch
-from idhazh.contracts.ledger_index import (
-    COMPACT_INDEX_LEGACY_VERSION,
-    CompactEntry,
-    CompactIndex,
-    EntryState,
-)
+from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, EntryState
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import LedgersConfig
 from idhazh.ledger import door_folders
@@ -50,7 +45,7 @@ def index_key(ledger: LedgerName) -> str:
 
 def an_index(
     ledger: LedgerName, period: Period, entries: int, *,
-    version: str | None = None, include_coverage: bool = False
+    include_coverage: bool = False
 ) -> bytes:
     """An index of `entries` entries, written the way the compaction writes one.
 
@@ -67,7 +62,6 @@ def an_index(
     ]
     return (
         CompactIndex.from_period_entries(
-            version=version,
             ledger=ledger,
             period=period,
             entries=[
@@ -256,9 +250,9 @@ def test_every_published_ledger_bounds_its_indexes_at_twice_their_longest() -> N
         days = policy.daily_keep_days + LONGEST_MONTH_DAYS
         months = months_kept(policy)
         heaviest = max(
-            gzipped(an_index(ledger, period, size, version=version, include_coverage=mixed))
+            gzipped(an_index(ledger, period, size, include_coverage=mixed))
             for period, size in ((Period.DAILY, days), (Period.MONTHLY, months))
-            for version, mixed in ((COMPACT_INDEX_LEGACY_VERSION, False), (None, False), (None, True))
+            for mixed in (False, True)
         )
         assert payloads[index_key(ledger)] >= 2 * heaviest, (
             f"{index_key(ledger)} is capped at {payloads[index_key(ledger)]} bytes, and "

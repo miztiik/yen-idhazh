@@ -1,6 +1,6 @@
 # A ledger's life, as its indexes record it
 
-**Last Updated**: 2026-10-07
+**Last Updated**: 2026-11-25
 
 What a ledger's three compact indexes hold at each stage of its life, from declared to stopped, and what they cannot tell apart. A ledger starts, pauses, resumes and stops, and so does the gardener task that packs it. Neither is written down as an event: the three indexes under the ledger's compact folder, `index/daily.json`, `index/monthly.json` and `index/yearly.json`, are the whole record. What one entry says is [persistence.md](persistence.md#what-an-index-entry-says), and how the compaction writes the entries is [ledger-compaction.md](../publishing/ledger-compaction.md). What a reader answers at each stage is on the two door pages: a console panel in [how-the-query-door-answers-a-panel.md](../publishing/how-the-query-door-answers-a-panel.md), and the Data explorer in [how-the-query-door-answers-a-written-question.md](../publishing/how-the-query-door-answers-a-written-question.md).
 
@@ -13,16 +13,16 @@ A family's `lifecycle_status` in `config/ledgers.json` says whether its writers 
 | # | Stage | What the indexes record |
 | --- | --- | --- |
 | 1 | Declared, never packed | Nothing: the ledger has no compact folder. A pass that finds no raw day due writes nothing, not even empty indexes. The first pass that packs a day writes all three |
-| 2 | Packed, never held a row | Every entry `empty`, with no file. A `packed` entry with 0 rows is a file written before a quiet period got none, and a reader takes it as quiet too |
+| 2 | Packed, never held a row | Every recorded period is `empty` coverage. A real `packed` file with no rows still has a file entry and also reads as quiet |
 | 3 | Begins mid-month | The first daily entry is the first raw day, and no day before it has an entry. Once that month closes, its entry covers the month from the 1st and lists no earlier day in `lost_days`. Once its year packs, the year entry covers it from 1 January and lists no day of an earlier month as lost |
-| 4 | Quiet day | An `empty` entry with no file. A month or a year with no row is `empty` too |
-| 5 | Lost day | A `lost` daily entry, or the day in a month's or a year's `lost_days` |
-| 6 | Writer paused, then resumed | An `empty` entry for each day the writer filed nothing, so the newest entry still moves at every wake |
+| 4 | Quiet day | An `empty` coverage record. A month or year with no rows is `empty` too |
+| 5 | Lost day | A `lost` daily coverage record, or the day in a month's or a year's `lost_days` |
+| 6 | Writer paused, then resumed | `empty` coverage for each day the writer filed nothing, so the newest recorded period still moves at every wake |
 | 7 | Writer stopped or retired | As stage 6, with no end: `empty` days up to the newest due day, and each month with no row closes `empty` |
 | 8 | Packing paused, then resumed | No new entry while the gardener does not wake the task, so the newest entry stops moving and raw days wait after it. After the resume, each wake moves it on by at most `max_periods_per_run` days until it reaches the newest due day |
 | 9 | Packing stopped | As stage 8, and the indexes stop changing |
-| 10 | Trimmed off the site, still in the archive | The committed indexes do not change. The site's copy leaves out each entry that ends before its trim line, and carries no mark of what it left out |
-| 11 | Dropped by retention | A month past the monthly window is deleted with its entry, so the oldest day the indexes name moves later |
+| 10 | Trimmed off the site, still in the archive | The committed indexes do not change. The site's copy leaves out file and coverage records that end before its trim line |
+| 11 | Dropped by retention | A month past the monthly window is removed from its index and any file is deleted, so the oldest day the indexes name moves later |
 | 12 | Index missing | Some of the three indexes, not all of them. A fault |
 | 13 | A hole inside the ledger | A day after the oldest named day that no entry names. A fault |
 | 14 | Not packed yet | Raw days after the newest packed day, which no index names yet |

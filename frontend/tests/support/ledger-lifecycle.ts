@@ -28,7 +28,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileS
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { ledgerCopy } from '../../scripts/published-ledgers.mjs';
-import { LEGACY_COMPACT_INDEX_STAMP, type CompactEntry, type Period } from '../../src/lib/data/compact-index';
+import { COMPACT_INDEX_STAMP, type CompactEntry, type CompactIndex, type Period } from '../../src/lib/data/compact-index';
 import { nodeEngine } from '../../src/lib/data/engine';
 import type { Fetcher } from '../../src/lib/data/fetched-bytes';
 import { ledgerFolder } from '../../src/lib/data/slice-reader';
@@ -125,8 +125,18 @@ async function writeParquet(
 	return statSync(target).size;
 }
 
+export function compactIndex(ledger: LedgerName, period: Period, records: CompactEntry[]): CompactIndex {
+	const index: CompactIndex = { version: COMPACT_INDEX_STAMP, ledger, period, entries: [], coverage: [] };
+	for (const record of records) {
+		const { covers, state, lost_days, set_aside } = record;
+		if (state === 'empty' || state === 'lost') index.coverage.push({ covers, state, lost_days, set_aside });
+		else index.entries.push(record);
+	}
+	return index;
+}
+
 function indexText(ledger: LedgerName, period: Period, entries: CompactEntry[]): string {
-	return `${JSON.stringify({ entries, ledger, period, version: LEGACY_COMPACT_INDEX_STAMP }, null, 2)}\n`;
+	return `${JSON.stringify(compactIndex(ledger, period, entries), null, 2)}\n`;
 }
 
 /** The files a packed or lost day set aside, as its entry carries them: absent when it set none aside. */

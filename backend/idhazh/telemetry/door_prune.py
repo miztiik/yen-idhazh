@@ -64,7 +64,7 @@ from idhazh import atomic_write, day_partition, ledger
 from idhazh.contracts.collection_prune import StopReason, stop_for
 from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.gardener_fault import GardenerFault
-from idhazh.contracts.ledger_index import COMPACT_INDEX_WRITE_VERSION, CompactEntry, CompactIndex
+from idhazh.contracts.ledger_index import CompactEntry, CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.gardener import error_cause, one_at_a_time
 from idhazh.ledger import HeldFile
@@ -131,7 +131,6 @@ def _changes(
     for period, named in entries.items():
         path = ledger.compact_index_path(state_dir, name, period)
         index = CompactIndex.from_period_entries(
-            version=COMPACT_INDEX_WRITE_VERSION,
             ledger=name,
             period=period,
             entries=[named[covers] for covers in sorted(named)],

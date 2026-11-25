@@ -685,9 +685,10 @@ that writes a day. A ledger whose declaration packs no year still has an empty
 
 When a month or year closes, the finer records it replaces leave their
 indexes, whether they named files or only coverage. The replacement carries
-the lost days and set-aside counts even if it has no file. Only indexes
-written by the pass use the current [split format](../contracts/persistence.md#what-an-index-entry-says);
-an untouched legacy index stays as it was.
+the lost days and set-aside counts even if it has no file.
+Use the [current compact-index contract](../contracts/persistence.md#what-an-index-entry-says)
+when restoring a ledger. Recover an older snapshot with its matching code,
+not by putting its old index into a current ledger.
 
 **An index that is not there is rebuilt from the files of its periods before
 any step runs, except a yearly index under enabled finite pruning.** That index

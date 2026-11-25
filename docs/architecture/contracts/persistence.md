@@ -192,12 +192,12 @@ rule does not change `run-plan` settlement, despite their shared business key
 
 ## What an index entry says
 
-`state/compact/<folders>/index/<period>.json` is a `CompactIndex`, declared in `backend/idhazh/contracts/ledger_index.py`. In the split format, `entries` lists live files and `coverage` records periods without files. Each list is ordered by what the record covers, and a period cannot be in both. On a yearly index, the optional `expired_through` records the newest deleted UTC year; neither list can contain a year at or before it. The compaction works out where its next pass starts from the newest records across both lists and this expiry mark ([ledger-compaction.md](../publishing/ledger-compaction.md#yearly-expiry)).
+`state/compact/<folders>/index/<period>.json` is a `CompactIndex`, declared in `backend/idhazh/contracts/ledger_index.py`. `entries` lists live files and `coverage` records periods without files. Each list is ordered by what the record covers, and a period cannot be in both. On a yearly index, the optional `expired_through` records the newest deleted UTC year; neither list can contain a year at or before it. The compaction works out where its next pass starts from the newest records across both lists and this expiry mark ([ledger-compaction.md](../publishing/ledger-compaction.md#yearly-expiry)).
 
 | Field | What it says |
 | --- | --- |
 | `covers` | The UTC day, month or year the entry is for, at the index's own period |
-| `rows`, `bytes` | How many rows the file holds and its size. Only file entries carry these values in the split format; the size lets readers estimate downloads and check the fetched file |
+| `rows`, `bytes` | How many rows the file holds and its size. Only file entries carry these values; the size lets readers estimate downloads and check the fetched file |
 | `file_sha256` | Optional digest of the exact Parquet bytes; never present on a coverage record |
 | `state` | `packed`: the period's rows are in its file. `empty`: the period held no row, so no file was written. `lost`: the day's rows could not be recovered, so it has no file and no record. Only a daily entry is `lost`; a month or a year lists the days it lost in `lost_days` |
 | `lost_days` | The UTC days inside a monthly or yearly entry whose rows were recorded lost, ascending. Always empty on a daily entry, where a lost day is a `lost` entry of its own |
@@ -205,7 +205,9 @@ rule does not change `run-plan` settlement, despite their shared business key
 
 **An empty or a lost period is recorded coverage, not a missing period.** A reader tells a quiet day (`empty`, or `rows: 0`) from a day whose data was lost (`lost`, or listed in its month's or year's `lost_days`). A date within the covered span that neither list names is a hole and a [fault](../publishing/ledger-compaction.md#the-three-indexes-and-a-file-that-is-missing). The [ledger lifecycle](ledger-lifecycle.md) describes how these records change.
 
-**The gardener and named prune write the split format.** Every rewritten index has a `coverage` list, even if it is empty. An omitted file state means `packed`; a real zero-row file stays in `entries` with its byte size. `lost` is daily-only, and only a month or year can list its own `lost_days`. Legacy indexes put `empty` and `lost` in `entries` with zero rows and bytes. Readers interpret them as coverage; indexes that normal work does not rewrite stay in their original format.
+**An index always has both lists, even when empty.** An omitted file state means `packed`; a real zero-row file stays in `entries` with its byte size. `lost` is daily-only, and only a month or year can list its own `lost_days`.
+
+**Current readers accept the current index format only.** All retained indexes were converted without changing Parquet or retention. To replay an older Git snapshot, use the code and indexes from that snapshot together. Do not restore a pre-conversion index by itself into a current ledger.
 
 **A rewrite of an entry changes only what it measured again.** When the named prune rebuilds a file without the days it takes ([retention.md](../publishing/retention.md#a-named-prune-one-ledger-one-range-of-days)), the file's entry takes the new `rows` and `bytes` and keeps its `state`, `lost_days` and `set_aside` as they were, so a prune never erases the record of a gap.
 

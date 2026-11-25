@@ -57,7 +57,7 @@ Repository files are fetched as buffers. The engine receives only names it minte
 
 Each selected ledger reads its daily, monthly and yearly index from its validated registry prefix. All three absent means no packed record is available. A partial set, invalid JSON, unsupported shape, wrong ledger or wrong period is a named failure. A missing named Parquet file or a byte-length mismatch is also a failure, never a quiet answer. The browser console names the index or file. Retry with Refresh, then Run.
 
-File selection and date coverage are unchanged across the [two index layouts](../contracts/persistence.md#what-an-index-entry-says). If a reader refuses a newer stamp, reload the page to load the current reader before running the query again.
+The [compact index](../contracts/persistence.md#what-an-index-entry-says) carries file membership and no-file coverage separately. If a reader refuses a newer stamp, reload the page to load the current reader before running the query again.
 
 `filesFor()` chooses the coarsest packed file covering each UTC day, once: year, month, then day. It does not probe directories, list an API or discover raw writer files. The newest data waits for packing.
 
@@ -71,7 +71,7 @@ Days before a ledger's first compact period are cut from that ledger's answer, n
 
 `createLedgerReader()` binds the catalog and compact source. `question-reader.ts` discovers the SQL dependencies and `ask-reader.ts` prepares each repository view. Each engine tracks its owned views independently of the catalog. The question reader removes them before discovery and after execution, including failed execution. Calls, column descriptions and Refresh cleanup are serialized because the engine has one connection.
 
-A selected ledger with no file in the span uses an empty view (`LIMIT 0`) over its newest indexed file when another ledger supplies rows. A zero-row packed file can supply columns; an explicit empty or lost entry supplies no file. A ledger with no file to supply that empty view is `missing`. When no referenced ledger has a file in the span and no local table is referenced, the answer is `quiet` without executing SQL after dependency discovery.
+A selected ledger with no file in the span uses an empty view (`LIMIT 0`) over its newest indexed file when another ledger supplies rows. A zero-row packed file can supply columns; an empty or lost coverage record supplies no file. A ledger with no file to supply that empty view is `missing`. When no referenced ledger has a file in the span and no local table is referenced, the answer is `quiet` without executing SQL after dependency discovery.
 
 The column rail describes the one table being browsed, not the query's dependencies. For a repository ledger it describes its newest file, even outside the dates. Columns belong to the ledger; dates bound repository answer rows. A ledger with no file lists no columns. Fetch or engine failures are named in the browser console. Local columns come from the already inspected file.
 

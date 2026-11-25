@@ -88,7 +88,7 @@ The ledger carries its own indexes, because a browser cannot list a directory:
 `index/yearly.json`, written together by the gardener's compaction task - an
 index for a period never packed names nothing - and declared as `CompactIndex` in
 `backend/idhazh/contracts/ledger_index.py`.
-The door reads [both index layouts](../contracts/persistence.md#what-an-index-entry-says).
+The door reads the [current compact index](../contracts/persistence.md#what-an-index-entry-says).
 Site staging trims file entries and no-file coverage to the same window and
 copies only the Parquet members.
 
@@ -489,19 +489,15 @@ that month's own file fetched whole
 ## The index copy, and the stamp it reads
 
 `frontend/src/lib/data/compact-index.ts` is the frontend's hand copy of
-`CompactEntry` and `CompactIndex`, with the stamp this build reads.
+the compact index and its file and coverage records, with the stamp this build reads.
 `backend/tests/contracts/test_frontend_index_shapes.py` holds it in step
 ([../contracts/schemas.md](../contracts/schemas.md)).
 
-**An index stamped at this build's stamp or older is read; a newer one is
-refused.** A refusal is `unreachable` from the first day asked, with both stamps
-in the console, and no data file is fetched. The gardener rewrites an index at its
-own wake rather than in the commit that moves the shape, so a build that demanded
-its own stamp exactly would blank every panel from a shape change until the next
-wake. The guard checks the fields the door acts on - the ledger, the period, and
-each entry's `covers`, `rows`, `bytes`, `state`, `lost_days`, ascending and none
-twice, and `set_aside`, a count - and ignores any other field. An entry from
-before entries had a `state` is read as `packed`, as the contract reads it.
+**An unsupported stamp is refused before any data file is fetched.** The
+answer is `unreachable` from the first day asked, with both stamps in the
+console. The guard checks the ledger, period, and both lists; only validated
+file entries can name a fetch. The ordered view of both lists determines
+range bounds and distinguishes quiet periods, lost data, and holes.
 
 ## The engine
 

@@ -57,7 +57,7 @@ from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.gardener_fault import GardenerFault
 from idhazh.contracts.item_health import ItemHealthRow, ItemStage
 from idhazh.contracts.knobs.gardener import CompactionPolicy, TaskPolicy
-from idhazh.contracts.ledger_index import COMPACT_INDEX_SPLIT_VERSION, CompactEntry, CompactIndex
+from idhazh.contracts.ledger_index import CompactEntry, CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import Grain
 from idhazh.telemetry import prune
@@ -616,14 +616,14 @@ def test_a_file_whose_every_row_goes_stays_as_an_empty_file_its_index_names(
     ):
         path = ledger.compact_index_path(state, CENSUS, period)
         payload = json.loads(path.read_bytes())
-        assert payload["version"] == COMPACT_INDEX_SPLIT_VERSION
+        assert payload["version"] == CompactIndex.schema_version()
         assert {"covers": covers, "rows": 0, "bytes": file.stat().st_size} in payload["entries"]
         assert all(record["covers"] != covers for record in payload["coverage"])
     assert ledger.list_ledger_files(state, CENSUS).holes == ()
 
 
 def a_month_with_lost_days(state: Path) -> CompactIndex:
-    """The legacy sample monthly index, written over a real file for the month that names one.
+    """The sample monthly index, written over a real file for the month that names one.
 
     That month is packed through the door from census rows filed on two of its
     days, and its entry counts that file's rows and bytes; its state, lost days
@@ -634,10 +634,7 @@ def a_month_with_lost_days(state: Path) -> CompactIndex:
         read_text(CONTRACT_FIXTURES_DIR / "compact-index" / "a-month-with-lost-days.json")
     )
     entries: list[CompactEntry] = []
-    for entry in sample.period_entries:
-        if not entry.names_file:
-            entries.append(entry)
-            continue
+    for entry in sample.entries:
         days = [f"{entry.covers}-05", f"{entry.covers}-20"]
         for number, day in enumerate(days):
             seed_item_health(
@@ -698,7 +695,7 @@ def test_a_rebuilt_entry_keeps_its_state_its_lost_days_and_what_was_set_aside(
     assert [row.date for row in left] == [f"{packed.covers}-20"]
     path = ledger.compact_index_path(state, CENSUS, Period.MONTHLY)
     payload = json.loads(path.read_bytes())
-    assert payload["version"] == COMPACT_INDEX_SPLIT_VERSION
+    assert payload["version"] == CompactIndex.schema_version()
     assert payload["coverage"] == [{"covers": empty.covers, "state": "empty"}]
     assert payload["entries"] == [{
         "covers": packed.covers,

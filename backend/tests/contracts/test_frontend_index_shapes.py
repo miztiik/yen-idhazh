@@ -28,12 +28,7 @@ from support.paths import REPO_ROOT, read_text
 
 from idhazh.contracts.file_envelope import Period
 from idhazh.contracts.ledger_fault import LedgerFault
-from idhazh.contracts.ledger_index import (
-    COMPACT_INDEX_LEGACY_VERSION,
-    CompactIndex,
-    CoverageState,
-    EntryState,
-)
+from idhazh.contracts.ledger_index import CompactIndex, CoverageState, EntryState
 from idhazh.ledger.keys import DATE_CELL
 
 pytestmark = pytest.mark.contract
@@ -143,9 +138,6 @@ def test_the_stamp_the_door_reads_is_the_one_the_contract_declares() -> None:
     assert stamp == CompactIndex.schema_version(), (
         f"{COPY.name} reads compact indexes stamped {stamp} or older, and the contract is at "
         f"{CompactIndex.schema_version()}"
-    )
-    assert constant(read_text(COPY), "LEGACY_COMPACT_INDEX_STAMP", COPY) == (
-        COMPACT_INDEX_LEGACY_VERSION
     )
 
 

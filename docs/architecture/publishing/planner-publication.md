@@ -1,6 +1,6 @@
 # Planner data in the published site
 
-**Last Updated**: 2026-10-31
+**Last Updated**: 2026-11-25
 
 Which planner table files may a site build publish?
 
@@ -15,9 +15,9 @@ indexes and configured publication window. The native TypeScript reader checks
 only the named planner compact files in that copy.
 
 An unsupported planner envelope or row stamp produces a body-free refusal
-warning. The generated copy omits those bytes and projects unavailable coverage
-into its existing compact indexes: a daily entry is lost; a month or year
-has no file and names every covered day as unavailable. Counts describe only
+warning. The generated copy removes those files from `entries` and records
+their periods in `coverage`: a day is lost; a month or year names every
+covered day as unavailable. Counts describe only
 published files, not measured reads. The source Parquet files, their counts and
 committed indexes are unchanged. Unavailable coverage is not a measured zero
 or a quiet period. Queries and automatic column reads do not fetch refused files.

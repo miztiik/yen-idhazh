@@ -1,9 +1,11 @@
 {
+  "coverage": [
+    {"covers": "2026-07","state": "empty"}
+  ],
   "entries": [
-    {"bytes": 0,"covers": "2026-07","lost_days": [],"rows": 0,"set_aside": 0,"state": "empty"},
-    {"bytes": 1231872,"covers": "2026-08","lost_days": ["2026-08-12","2026-08-13"],"rows": 6789,"set_aside": 1,"state": "packed"}
+    {"bytes": 1231872,"covers": "2026-08","lost_days": ["2026-08-12","2026-08-13"],"rows": 6789,"set_aside": 1}
   ],
   "ledger": "item-health",
   "period": "monthly",
-  "version": "2026-10-04"
+  "version": "2026-11-25"
 }

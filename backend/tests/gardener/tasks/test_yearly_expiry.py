@@ -32,7 +32,6 @@ from idhazh.contracts.knobs.gardener import (
     MonthsWindow,
 )
 from idhazh.contracts.ledger_index import (
-    COMPACT_INDEX_SPLIT_VERSION,
     CompactEntry,
     CompactIndex,
     EntryState,
@@ -387,7 +386,7 @@ def test_cap_empty_entries_and_restart_after_every_entry_is_deleted(tmp_path: Pa
     assert first.resume_from == "2025"
     assert not paths["2024"].exists() and paths["2026"].exists()
     payload = json.loads(index.read_bytes())
-    assert payload["version"] == COMPACT_INDEX_SPLIT_VERSION
+    assert payload["version"] == CompactIndex.schema_version()
     assert (payload["entries"], payload["coverage"], payload["expired_through"]) == (
         [live], [{"covers": "2025", "state": "empty"}], "2024",
     )
@@ -491,9 +490,9 @@ def test_recovery_never_adopts_expired_months(tmp_path: Path) -> None:
     assert stale.exists()
 
 
-def test_old_indexes_migrate_and_expiry_only_belongs_to_yearly() -> None:
+def test_expiry_is_optional_and_only_belongs_to_yearly() -> None:
     held = CompactIndex.model_validate(
-        {"version": "2026-10-04", "ledger": VISUALS, "period": "yearly", "entries": []}
+        {"ledger": VISUALS, "period": "yearly", "entries": [], "coverage": []}
     )
     assert held.expired_through is None
     assert "expired_through" not in held.model_dump(mode="json")
@@ -540,7 +539,7 @@ def test_manual_pruning_preserves_the_expiry_mark(tmp_path: Path) -> None:
         identity=COMPACTION,
     )
     payload = json.loads(path.read_bytes())
-    assert payload["version"] == COMPACT_INDEX_SPLIT_VERSION
+    assert payload["version"] == CompactIndex.schema_version()
     assert payload["expired_through"] == "2025"
 
 

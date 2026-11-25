@@ -32,12 +32,7 @@ from support.paths import CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh.contracts.base import Contract
 from idhazh.contracts.file_envelope import FileEnvelope
-from idhazh.contracts.ledger_index import (
-    COMPACT_INDEX_LEGACY_VERSION,
-    CompactIndex,
-    EntryState,
-    RawDayIndex,
-)
+from idhazh.contracts.ledger_index import CompactIndex, CoverageState, EntryState, RawDayIndex
 
 pytestmark = pytest.mark.contract
 
@@ -70,7 +65,6 @@ def _names_the_file(error: ErrorDetails, *words: str) -> None:
     [
         (FileEnvelope, "file-envelope", "a-raw-file"),
         (RawDayIndex, "raw-day-index", "a-populated-day"),
-        (CompactIndex, "compact-index", "a-yearly-index"),
     ],
 )
 def test_surviving_ledger_payloads_keep_their_fields_when_read_under_an_older_stamp(
@@ -192,36 +186,27 @@ def test_a_compact_index_writes_one_entry_a_line_and_reads_back_what_it_wrote() 
         _sample("compact-index", "a-daily-index") | {"entries": [packed]}
     )
     assert with_digest.entries[0].file_sha256 == "a" * 64
-    empty = _sample("compact-index", "an-empty-day")["entries"][1] | {
+    empty = _sample("compact-index", "an-empty-day")["coverage"][0] | {
         "file_sha256": "a" * 64,
     }
-    with pytest.raises(ValidationError, match="no file"):
+    with pytest.raises(ValidationError, match="Extra inputs"):
         CompactIndex.model_validate(
-            _sample("compact-index", "an-empty-day") | {"entries": [empty]}
+            _sample("compact-index", "an-empty-day") | {"coverage": [empty]}
         )
 
 
-def test_split_indexes_keep_the_same_periods_as_legacy_indexes_without_fake_sizes() -> None:
-    legacy = CompactIndex.model_validate(_sample("compact-index", "a-month-with-lost-days"))
-    split = CompactIndex.from_period_entries(
-        ledger=legacy.ledger, period=legacy.period, entries=legacy.period_entries
+def test_one_ordered_period_view_keeps_file_membership_separate_from_coverage() -> None:
+    index = CompactIndex.model_validate(_sample("compact-index", "a-month-with-lost-days"))
+    emitted = CompactIndex.from_period_entries(
+        ledger=index.ledger, period=index.period, entries=index.period_entries
     )
 
-    payload = json.loads(split.to_json())
-    assert [entry["covers"] for entry in payload["entries"]] == [
-        entry.covers for entry in legacy.entries if entry.names_file
-    ]
+    payload = json.loads(emitted.to_json())
+    assert [entry["covers"] for entry in payload["entries"]] == ["2026-08"]
     (record,) = payload["coverage"]
     assert not {"rows", "bytes", "file_sha256"}.intersection(record)
-    assert CompactIndex.model_validate(payload).period_entries == legacy.period_entries
-    downgraded = CompactIndex.from_period_entries(
-        ledger=split.ledger,
-        period=split.period,
-        entries=split.period_entries,
-        version=COMPACT_INDEX_LEGACY_VERSION,
-    )
-    assert downgraded.entries == legacy.entries
-    assert "coverage" not in json.loads(downgraded.to_json())
+    assert [entry.covers for entry in emitted.period_entries] == ["2026-07", "2026-08"]
+    assert CompactIndex.model_validate(payload).period_entries == index.period_entries
 
 
 def test_split_indexes_refuse_missing_overlap_or_expired_coverage() -> None:
@@ -232,10 +217,12 @@ def test_split_indexes_refuse_missing_overlap_or_expired_coverage() -> None:
     }
     assert CompactIndex.model_validate(base).entries[0].names_file
     refusals: list[tuple[dict[str, Any], str]] = [
-        ({"coverage": None}, "must list coverage"),
+        ({"coverage": None}, "valid list"),
         ({"coverage": [{"covers": "2026", "state": "empty"}]}, "more than once"),
         ({"expired_through": "2025"}, "at or before expired_through"),
-        ({"version": COMPACT_INDEX_LEGACY_VERSION}, "legacy index"),
+        ({"version": "2026-10-25"}, "unsupported version"),
+        ({"entries": [{"covers": "2026", "rows": 0, "bytes": 0, "state": "empty"}]},
+         "may only list files"),
     ]
     for patch, reason in refusals:
         with pytest.raises(ValidationError, match=reason):
@@ -283,24 +270,25 @@ def test_a_compact_index_refuses_a_period_it_lists_twice_by_ledger_and_period() 
 
 @pytest.mark.parametrize(
     ("name", "state"),
-    [("an-empty-day", EntryState.EMPTY), ("a-lost-day", EntryState.LOST)],
+    [("an-empty-day", CoverageState.EMPTY), ("a-lost-day", CoverageState.LOST)],
 )
 def test_a_daily_index_accepts_a_day_with_no_file_among_packed_days(
-    name: str, state: EntryState
+    name: str, state: CoverageState
 ) -> None:
     """A day the packing looked at and wrote no file for is an entry, so it is not a hole."""
     index = CompactIndex.model_validate(_sample("compact-index", name))
 
-    with_no_file = [entry for entry in index.entries if entry.state is not EntryState.PACKED]
-    assert [entry.state for entry in with_no_file] == [state]
-    assert (with_no_file[0].rows, with_no_file[0].bytes, with_no_file[0].lost_days) == (0, 0, [])
+    (record,) = index.coverage
+    assert record.state is state
+    assert record.covers not in {entry.covers for entry in index.entries}
 
 
 def test_a_monthly_index_accepts_a_month_that_names_its_lost_days() -> None:
     index = CompactIndex.model_validate(_sample("compact-index", "a-month-with-lost-days"))
 
-    empty, packed = index.entries
-    assert (empty.state, empty.rows, empty.bytes) == (EntryState.EMPTY, 0, 0)
+    (empty,) = index.coverage
+    (packed,) = index.entries
+    assert empty.state is CoverageState.EMPTY
     assert (packed.state, packed.lost_days, packed.set_aside) == (
         EntryState.PACKED,
         ["2026-08-12", "2026-08-13"],
@@ -308,9 +296,8 @@ def test_a_monthly_index_accepts_a_month_that_names_its_lost_days() -> None:
     )
 
 
-def test_an_index_written_before_entries_had_a_state_reads_as_all_packed() -> None:
-    """Every committed index has this shape, and none is rewritten to gain the new fields."""
-    payload = _sample("compact-index", "an-index-written-before-entries-had-a-state")
+def test_default_metadata_is_omitted_from_file_entries() -> None:
+    payload = _sample("compact-index", "a-daily-index")
     assert all(set(entry) == {"covers", "rows", "bytes"} for entry in payload["entries"])
 
     index = CompactIndex.model_validate(payload)
@@ -332,12 +319,9 @@ def test_an_entry_with_no_file_that_counts_rows_or_bytes_is_refused_by_ledger_an
 ) -> None:
     """An entry says either that a file exists or that none does, never both."""
     payload = _sample("compact-index", name)
-    target = next(entry for entry in payload["entries"] if entry["state"] != "packed")
-    entries = [entry | {field: count} if entry is target else entry for entry in payload["entries"]]
-
-    error = _refusal(CompactIndex, payload | {"entries": entries})
-
-    _names_the_file(error, payload["ledger"], payload["period"], target["covers"], "no file")
+    (target,) = payload["coverage"]
+    error = _refusal(CompactIndex, payload | {"coverage": [target | {field: count}]})
+    assert (error["type"], error["loc"]) == ("extra_forbidden", ("coverage", 0, field))
 
 
 def test_a_lost_day_outside_its_month_is_refused_by_ledger_and_period() -> None:
@@ -391,9 +375,11 @@ def test_a_month_or_a_year_marked_lost_is_refused_by_ledger_and_period(name: str
     """Only a day is lost, so no reader has to handle a lost month or year."""
     payload = _sample("compact-index", name)
     *rest, last = payload["entries"]
-    lost = last | {"state": "lost", "rows": 0, "bytes": 0, "lost_days": []}
+    lost = {"covers": last["covers"], "state": "lost"}
 
-    error = _refusal(CompactIndex, payload | {"entries": [*rest, lost]})
+    error = _refusal(
+        CompactIndex, payload | {"entries": rest, "coverage": [*payload["coverage"], lost]}
+    )
 
     _names_the_file(error, payload["ledger"], payload["period"], last["covers"], "only a day")
 

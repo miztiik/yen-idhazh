@@ -103,7 +103,7 @@ export async function resolveHealthDays(input: {
     const rawFiles = [...new Set([...(held.raw_files ?? []), `state/${entry.path}`])];
     days.set(day, { day, indexes: defaults.indexes, raw_files: rawFiles });
   }
-  const periods = compact.flatMap(index => index.entries.filter(entry => entry.state === "packed" && entry.rows > 0).map(entry => ({
+  const periods = compact.flatMap(index => index.entries.filter(entry => entry.rows > 0).map(entry => ({
     period: index.period, covers: entry.covers,
     path: `state/compact/${base}/${index.period}/${index.period === "yearly"
       ? `${entry.covers}/${entry.covers}` : entry.covers.replaceAll("-", "/")}.parquet`,
