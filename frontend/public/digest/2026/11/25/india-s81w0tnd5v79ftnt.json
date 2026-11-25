@@ -1,0 +1,52 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Export target / actual milestone ($ billion)",
+    "y": "Cumulative e-commerce exports from India"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "quantity_x": [],
+    "series": [
+      "m6",
+      "m7",
+      "m8"
+    ],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-s81w0tnd5v79ftnt",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "$10 billion by Dec 2025 (target set in 2020)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "$20 billion milestone reached Oct 2025","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "$80 billion by 2030 (target)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-1384-1395","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "$","value": "10000000000"},
+    {"derived": null,"element_id": "quantity-1579-1590","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "$","value": "20000000000"},
+    {"derived": null,"element_id": "quantity-356-367","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "$","value": "80000000000"},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m6","source_text": null,"text": "Target","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m7","source_text": null,"text": "Milestone achieved","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m8","source_text": null,"text": "Target","time": null,"unit": null,"value": null}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Amazon Cumulative Export Targets vs. Actual (India)",
+  "type": "bar",
+  "version": "2026-11-25"
+}

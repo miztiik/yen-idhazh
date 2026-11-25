@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Company",
+    "y": "Change"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "business-economy-1bch7y5v98ez7arw",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Autotrader","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Vertu Motors","time": null,"unit": null,"value": null},
+    {"derived": {"bin_lower": null,"bin_upper": null,"function": "negative_magnitude","inputs": ["quantity-1407-1409"],"source_unit": null,"unit": "%","unit_table_version": null,"value": "-3","version": "2026-11-25"},"element_id": null,"mark_id": "m2","source_text": "3%","text": null,"time": null,"unit": "%","value": "-3"},
+    {"derived": null,"element_id": "quantity-1809-1811","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "4"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Share Price Reactions After Amazon UK Car Sales Announcement",
+  "type": "bar",
+  "version": "2026-11-25"
+}
