@@ -212,6 +212,7 @@ def test_later_duplicate_selected_as_negative_survives_fresh_publisher_handoff(
     decision = VisualDecision.read(items / f"{item_id}{PAYLOAD_SUFFIX}")
     assert decision.kind is VisualKind.CHART, decision
     assert decision.spec is not None
+    assert decision.data_path is not None
     compiled = VisualData.from_json(decision.spec)
     by_id = {mark.mark_id: mark for mark in compiled.marks}
     signed, positive = [by_id[mark] for mark in compiled.encoding.quantity]
@@ -230,6 +231,7 @@ def test_later_duplicate_selected_as_negative_survives_fresh_publisher_handoff(
     day = publish_worker_items(run_plan, items, publisher, monkeypatch)
     published_item = next(item for item in day.items if item.visual is not None)
     assert published_item.visual is not None
+    assert published_item.visual.data_path is not None
     published = publisher / "public" / published_item.visual.data_path
     assert published.read_text(encoding="utf-8") == decision.spec
     assert VisualData.read(published) == compiled

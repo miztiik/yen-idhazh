@@ -1,6 +1,6 @@
 # Retained article verification
 
-**Last Updated**: 2026-11-18
+**Last Updated**: 2026-11-25
 
 Which inputs and native artifacts establish a fixed-input production-call
 observation without publishing or fetching an article again.
@@ -84,9 +84,9 @@ retention window. All replay files stay below the private directory
 
 The adapter supplies a configured `ItemRecorder` and explicit capture/render
 roots to the real `summarize_one_item()`, after asking the text-analysis service
-for the article's mentions as the work stage does. Where no service answers, the
-replay uses pattern readings alone. It can still ask about a chart and ground
-labels in the article. The
+for the article's mentions and sentence offsets as the work stage does. Without
+verified sentence evidence, the replay uses the existing summary-only request;
+pattern readings alone cannot furnish a chart request. The
 [caller's `text analysis result` record](../architecture/text-analysis/text-analysis-api.md#one-service-one-bounded-listener)
 appears in the `Run fresh native call pairs` step log, as a warning when the
 service fails; `analyze_ms` records what the failed request cost.

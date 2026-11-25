@@ -239,7 +239,9 @@ def test_invalid_sentence_offsets_are_dropped_without_losing_valid_features(
     payload = logged_answer(caplog, logging.WARNING)
     assert payload["dropped_sentences"] == 1
     expected_status = "text_mismatch" if "text" in spoiled else "invalid_offsets"
-    assert payload["returned_sentences"][-1] == {
+    returned_sentences = payload["returned_sentences"]
+    assert isinstance(returned_sentences, list)
+    assert returned_sentences[-1] == {
         "start_char": sentences[-1]["start_char"],
         "end_char": sentences[-1]["end_char"],
         "status": expected_status,
