@@ -1,9 +1,10 @@
 {
+  "coverage": [],
   "entries": [
-    {"bytes": 548450,"covers": "2026-08","lost_days": [],"rows": 5227,"set_aside": 0,"state": "packed"},
-    {"bytes": 2283084,"covers": "2026-09","lost_days": [],"rows": 12633,"set_aside": 0,"state": "packed"}
+    {"bytes": 548450,"covers": "2026-08","rows": 5227},
+    {"bytes": 2283084,"covers": "2026-09","rows": 12633}
   ],
   "ledger": "item-health",
   "period": "monthly",
-  "version": "2026-10-25"
+  "version": "2026-11-25"
 }

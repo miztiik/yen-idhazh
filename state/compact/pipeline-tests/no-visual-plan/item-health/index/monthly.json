@@ -1,8 +1,9 @@
 {
+  "coverage": [],
   "entries": [
-    {"bytes": 44616,"covers": "2026-09","lost_days": [],"rows": 2,"set_aside": 0,"state": "packed"}
+    {"bytes": 44616,"covers": "2026-09","rows": 2}
   ],
   "ledger": "item-health",
   "period": "monthly",
-  "version": "2026-10-25"
+  "version": "2026-11-25"
 }

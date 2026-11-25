@@ -1,8 +1,9 @@
 {
+  "coverage": [],
   "entries": [
-    {"bytes": 35103,"covers": "2026-09","lost_days": [],"rows": 200,"set_aside": 0,"state": "packed"}
+    {"bytes": 35103,"covers": "2026-09","rows": 200}
   ],
   "ledger": "holdout-pairs",
   "period": "monthly",
-  "version": "2026-10-25"
+  "version": "2026-11-25"
 }

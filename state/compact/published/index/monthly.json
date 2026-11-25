@@ -1,9 +1,10 @@
 {
+  "coverage": [],
   "entries": [
-    {"bytes": 182374,"covers": "2026-08","lost_days": [],"rows": 4062,"set_aside": 0,"state": "packed"},
-    {"bytes": 464313,"covers": "2026-09","lost_days": [],"rows": 9761,"set_aside": 0,"state": "packed"}
+    {"bytes": 182374,"covers": "2026-08","rows": 4062},
+    {"bytes": 464313,"covers": "2026-09","rows": 9761}
   ],
   "ledger": "published",
   "period": "monthly",
-  "version": "2026-10-25"
+  "version": "2026-11-25"
 }
