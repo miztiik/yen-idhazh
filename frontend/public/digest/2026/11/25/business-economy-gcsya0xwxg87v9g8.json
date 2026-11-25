@@ -1,0 +1,46 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Metric",
+    "y": "Amount (\u00a3)"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [
+      "m4",
+      "m5"
+    ],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "business-economy-gcsya0xwxg87v9g8",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Purchases (Jan\u2013Sep)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Sales (Jan\u2013Sep)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-334-338","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "$","value": "17000000"},
+    {"derived": null,"element_id": "quantity-399-403","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "$","value": "12000000"},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m4","source_text": null,"text": "Purchase range (\u00a3)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m5","source_text": null,"text": "Sale range (\u00a3)","time": null,"unit": null,"value": null}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Trump's Nvidia trades in 2025 (ranges from public declarations)",
+  "type": "bar",
+  "version": "2026-11-25"
+}

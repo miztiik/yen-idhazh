@@ -1,0 +1,45 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Stock / Index",
+    "y": "Change in Percentage Points"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "world-mszaghc0zpxvd9m1",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Nasdaq (early)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Dow Jones Industrial Average","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "S&P 500 (tech sector)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-152-162","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "4"},
+    {"derived": null,"element_id": "quantity-3156-3169","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "%","value": "11.7"},
+    {"derived": null,"element_id": "quantity-2924-2936","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "%","value": "5.2"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "US Stock Declines on AI Rout and Trump Tariffs (Wednesday Early Trading)",
+  "type": "bar",
+  "version": "2026-11-25"
+}
