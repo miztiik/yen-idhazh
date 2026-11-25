@@ -1,0 +1,45 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Log-Perplexity Score",
+    "y": "Score Value"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "ai-bydb3ex7999j753d",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "2022 base model","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Current frontier models (GPT-6.2 Astra)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Unreleased internal model","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-2249-2253","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": null,"value": "0.99"},
+    {"derived": null,"element_id": "quantity-2292-2296","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": null,"value": "0.76"},
+    {"derived": null,"element_id": "quantity-2674-2678","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": null,"value": "0.73"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "OpenAI Base-Model Log-Perplexity Scores (Lower = Better)",
+  "type": "bar",
+  "version": "2026-11-22"
+}

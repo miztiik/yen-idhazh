@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Company",
+    "y": "Percentage of Value"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-qs4y072qbqww3gzw",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Nvidia (proposed stake for U.S. government)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Intel (stake handed over last year)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-826-830","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "%","value": "100"},
+    {"derived": null,"element_id": "quantity-3564-3575","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "10"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Equity Stake Nvidia vs. Intel Offered by Trump (per text)",
+  "type": "bar",
+  "version": "2026-11-22"
+}

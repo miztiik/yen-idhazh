@@ -1,0 +1,57 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Design Task / Target Group",
+    "y": "Binding Hit Rate (%)"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m6",
+      "m7",
+      "m8",
+      "m9",
+      "m10",
+      "m11"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "ai-ngqqgtsgyva5ewp4",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Minibinders vs 5 targets","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Redesigned minibinder sequences (MDM2)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Redesigned minibinder sequences (VEGF-A)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m3","source_text": null,"text": "Redesigned minibinder sequences (PD-1)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m4","source_text": null,"text": "New antibody loop designs (IL-4R\u03b1)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m5","source_text": null,"text": "Therapeutic antibody fragment redesigns","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-6422-6427","mark_id": "m6","source_text": null,"text": null,"time": null,"unit": "%","value": "10.9"},
+    {"derived": null,"element_id": "quantity-7605-7608","mark_id": "m7","source_text": null,"text": null,"time": null,"unit": "%","value": "85"},
+    {"derived": null,"element_id": "quantity-7632-7635","mark_id": "m8","source_text": null,"text": null,"time": null,"unit": "%","value": "62"},
+    {"derived": null,"element_id": "quantity-7660-7663","mark_id": "m9","source_text": null,"text": null,"time": null,"unit": "%","value": "14"},
+    {"derived": null,"element_id": "quantity-9664-9667","mark_id": "m10","source_text": null,"text": null,"time": null,"unit": "%","value": "70"},
+    {"derived": null,"element_id": "quantity-10121-10124","mark_id": "m11","source_text": null,"text": null,"time": null,"unit": "%","value": "66"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Lab Binding Results Across GPT-6.2 Design Tasks (Hit Rates)",
+  "type": "bar",
+  "version": "2026-11-22"
+}
