@@ -300,12 +300,12 @@ class CompactIndex(Contract):
     __schema_stem__: ClassVar[str] = "compact-index"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version=COMPACT_INDEX_SPLIT_VERSION,
+            version="2026-11-25",
             change="Compact entries list files only; no-file outcomes move to coverage.",
             why="Readers can identify live files without treating coverage as file membership.",
         ),
         ChangelogEntry(
-            version=COMPACT_INDEX_LEGACY_VERSION,
+            version="2026-10-25",
             change="Packed entries may carry the exact Parquet file digest.",
             why="A bounded reader can detect changed compact content before opening it.",
         ),
