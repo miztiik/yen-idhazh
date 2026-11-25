@@ -1,11 +1,12 @@
 /** What did each published day's chart drawing cost, and what did it produce?
  *
- * Imports nothing at runtime: the browser suite loads this module in plain Node,
- * where no Vite alias resolves. The import below is a type, which the compiler
- * erases, and it is written relative for the same reason.
+ * Imports are relative: the browser suite loads this module in plain Node.
  */
 
-import type { DayVisuals, RunRecord, RunSummary } from './payload';
+import { tallyChartTypes, visualAttemptTypes } from '../console/pipelines/visual-attempts';
+import type { ChartTypeDay } from '../console/pipelines/chart-drawing';
+import type { DayVisuals, PublishedDayCharts, RunRecord, RunSummary } from './payload';
+import type { LedgerTable } from './ledger-rows';
 
 /** What one day's chart drawing cost and what it produced.
  *
@@ -46,13 +47,37 @@ export function chartDays(days: RunSummary[], charts: Map<string, DayVisuals>): 
 		const published = seen?.charts ?? 0;
 		return {
 			date: day.date,
-			reached: sum((run) => run.decided + run.prefiltered),
-			asked: sum((run) => run.decided),
+			reached: sum((run) => (run.decided ?? 0) + run.prefiltered),
+			asked: sum((run) => run.decided ?? 0),
 			drafted: sum((run) => run.chartsDrafted),
 			published,
 			items: seen?.items ?? 0,
 			plannerMinutes,
 			minutesPerChart: plannerMinutes === null || published === 0 ? null : plannerMinutes / published
+		};
+	});
+}
+
+/** Keep per-day totals and completeness, never item or attempt identities, for the console. */
+export function chartTypeDays(
+	manifests: readonly RunSummary[], days: ReadonlyMap<string, PublishedDayCharts>,
+	attempts: Pick<LedgerTable, 'rows' | 'read'>
+): ChartTypeDay[] {
+	const runsByDate = new Map(manifests.map((day) => [day.date, day.records]));
+	const rowsByDate = new Map<string, LedgerTable['rows']>();
+	for (const row of attempts.rows) {
+		const rows = rowsByDate.get(row.date);
+		if (rows) rows.push(row);
+		else rowsByDate.set(row.date, [row]);
+	}
+	return [...days].map(([date, day]) => {
+		const tracked = day.assets === null ? null :
+			visualAttemptTypes(date, rowsByDate.get(date) ?? [], attempts.read, runsByDate.get(date) ?? [], day.assets);
+		return {
+			date,
+			proposed: tracked?.proposed ?? null,
+			saved: tracked?.saved ?? null,
+			published: day.assets === null ? null : tallyChartTypes(day.assets.map((asset) => asset.type))
 		};
 	});
 }

@@ -7,6 +7,7 @@ import { renderConfigured as render } from './support/server-render';
 import { numberFormat } from './support/number-format';
 import { serverCompiler, type Rewrite } from './support/server-render';
 import { BUILD_TIME } from './support/panel-drivers/pipelines';
+import { chartTypeCounts } from '../src/lib/console/pipelines/chart-drawing';
 
 const FRONTEND = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DAY = { date: '2030-06-01', reached: 0, asked: 0, drafted: 0, published: 0, items: 0, plannerMinutes: null, minutesPerChart: null };
@@ -79,7 +80,12 @@ for (const [id, name] of PANELS) {
 				quiet: { manifests: [{ date: DAY.date, records: [], siteBytes: null }], publishedItems: { [DAY.date]: 0 }, sizeBytes: null },
 				absent: { manifests: [], publishedItems: {}, sizeBytes: null }
 			},
-			'chart-drawing': { quiet: { days: [DAY] }, absent: { days: [] } },
+			'chart-drawing': {
+				quiet: { days: [DAY], typeCounts: chartTypeCounts([
+					{ date: DAY.date, proposed: {}, saved: {}, published: {} }
+				], common.window) },
+				absent: { days: [], typeCounts: chartTypeCounts([], common.window) }
+			},
 			'visual-refusals': {
 				quiet: { days: [], read: { state: 'read', first: DAY.date, through: DAY.date, lastRows: null, lostDays: [], setAside: {} } },
 				absent: { days: [], read: { state: 'not-packed' } }
@@ -103,6 +109,10 @@ for (const [id, name] of PANELS) {
 			expect(absent).not.toContain('data-comparison=');
 		} else {
 			expect(absent).toContain('data-comparison=');
+		}
+		if (name === 'ChartDrawing') {
+			expect(words(quiet)).toContain('bar 0 0 0');
+			expect(words(absent)).toContain('bar Missing Missing Missing');
 		}
 		if (name === 'SiteCostPerItem') {
 			expect(quiet).toContain('data-empty-state="quiet"');

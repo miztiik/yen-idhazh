@@ -10,12 +10,12 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Any, ClassVar, Final, Self
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
 from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, ItemId, RunId, Sha256
 from idhazh.contracts.item_health import ElementClass
 from idhazh.contracts.visual import PlanDecision, VisualType
-from idhazh.contracts.visual_decision import NoneReason, VisualState
+from idhazh.contracts.visual_decision import ModelReason, NoneReason, VisualState
 from idhazh.contracts.visual_outcome import validate_visual_outcome
 from idhazh.contracts.visual_validation import ValidatorCheck as ValidatorCheck
 
@@ -153,7 +153,15 @@ class VisualAttemptRow(Contract):
     """
 
     __schema_stem__: ClassVar[str] = "visual-attempt-row"
+    model_config = ConfigDict(
+        json_schema_extra={"readCompatibility": "older rows without model_reason read it as null"}
+    )
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-11-25",
+            change="Retain the model's optional chart decision reason.",
+            why="An attempt keeps what the model said without replacing the recorded refusal.",
+        ),
         ChangelogEntry(
             version="2026-10-29",
             change="Record requested and delivered types and nullable floor evidence.",
@@ -168,11 +176,6 @@ class VisualAttemptRow(Contract):
             version="2026-10-27T04:00",
             change="Name pie exhaustiveness refusals in attempt records.",
             why="A refused pie must say which check stopped it.",
-        ),
-        ChangelogEntry(
-            version="2026-10-26T09:41",
-            change="Name the stacked-bar exhaustiveness refusal in attempt records.",
-            why="A refused chart must say which check stopped it.",
         ),
         ChangelogEntry(
             version="2026-09-13",
@@ -193,6 +196,10 @@ class VisualAttemptRow(Contract):
             "Which implemented gate refused delivery. May accompany a drafted plan. "
             "Null on delivery, render failure, or an older unrecorded cause."
         ),
+    )
+    model_reason: ModelReason | None = Field(
+        default=None,
+        description="The decision's untrusted model explanation, not a validator finding.",
     )
     rejection_reason: ValidatorCheck | None = Field(
         default=None,

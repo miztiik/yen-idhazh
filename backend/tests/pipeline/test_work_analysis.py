@@ -159,7 +159,7 @@ def test_an_item_the_service_could_not_read_still_publishes_on_the_patterns_alon
 
     assert Summary.read(items / f"{item_id}.summary.json").status is SummaryStatus.OK
     assert server.served == 1
-    assert "visual" in server.sent[0]["json_schema"]["properties"]
+    assert "visual" not in server.sent[0]["json_schema"]["properties"]
     assert analysis_warning(items, item_id, caplog)["outcome"] == outcome
     assert health(items, item_id).analyze_ms is not None
 
@@ -182,7 +182,7 @@ def test_a_hung_service_costs_the_item_its_deadline_and_the_wait_is_not_the_mode
     row = health(items, item_id)
 
     assert Summary.read(items / f"{item_id}.summary.json").status is SummaryStatus.OK
-    assert "visual" in server.sent[0]["json_schema"]["properties"]
+    assert "visual" not in server.sent[0]["json_schema"]["properties"]
     assert analysis_warning(items, item_id, caplog)["outcome"] == "timed_out"
     assert row.analyze_ms is not None and row.analyze_ms >= int(HUNG_DEADLINE_S * 900)
     assert row.queue_wait_ms is not None and row.queue_wait_ms < row.analyze_ms
@@ -202,7 +202,7 @@ def test_words_the_service_says_it_read_never_reach_the_model_unless_the_article
         )
 
     assert injected not in str(server.sent[0]["prompt"])
-    assert "visual" in server.sent[0]["json_schema"]["properties"]
+    assert "visual" not in server.sent[0]["json_schema"]["properties"]
     result = analysis_warning(items, item_id, caplog)
     assert result["returned_spans"] == [
         {"label": "ORG", "start_char": 55, "end_char": 55 + len(injected), "status": "text_mismatch"}

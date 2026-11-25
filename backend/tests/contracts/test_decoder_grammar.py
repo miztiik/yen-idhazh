@@ -14,10 +14,11 @@ from typing import Any
 
 import pytest
 from support.paths import CONTRACT_FIXTURES_DIR
-from support.prompts import WIND_TEXT, chart_data_over
+from support.prompts import WIND_TEXT, candidates_for, chart_data_over
 
+from idhazh import summarize
 from idhazh.classify import calls
-from idhazh.contracts.article import Article
+from idhazh.contracts.article import UNTRUSTED_LINE_MAX, Article
 
 pytestmark = pytest.mark.contract
 
@@ -77,11 +78,14 @@ def _patterns(node: Any, path: str = "") -> list[tuple[str, str]]:
 
 def _decoder_schemas() -> dict[str, dict[str, Any]]:
     """Every schema this pipeline sends a decoder, built the way the run builds it."""
-    _, data = chart_data_over(Article.read(CONTRACT_FIXTURES_DIR / "article" / "ok.json"), WIND_TEXT)
+    table, data = chart_data_over(
+        Article.read(CONTRACT_FIXTURES_DIR / "article" / "ok.json"), WIND_TEXT
+    )
+    readings = candidates_for(table, WIND_TEXT)
     return {
-        "summarize_and_plan": calls.summarize_and_plan_schema(plan=True),
+        "summarize_and_plan": calls.summarize_and_plan_schema(plan=True, readings=readings),
         "summarize_only": calls.summarize_and_plan_schema(plan=False),
-        "configured_types": calls.summarize_and_plan_schema(forms=data),
+        "configured_types": calls.summarize_and_plan_schema(forms=data, readings=readings),
     }
 
 
@@ -105,6 +109,21 @@ def test_every_decoder_pattern_bounds_its_own_length(name: str) -> None:
         f"forever: {loose}. A length bound beside a pattern does not reach the grammar, "
         "so the pattern is what has to bound the decode"
     )
+
+
+def test_only_the_chart_grammar_offers_a_bounded_reason_after_the_visual() -> None:
+    schemas = _decoder_schemas()
+    assert schemas["summarize_only"] == summarize.output_schema()
+    for name in ("summarize_and_plan", "configured_types"):
+        schema = schemas[name]
+        props = schema["properties"]
+        assert list(props) == ["summary", "visual", "model_reason"]
+        assert schema["required"] == ["summary", "visual"]
+        allowed = props["model_reason"]["anyOf"]
+        assert {"type": "null"} in allowed
+        assert next(shape for shape in allowed if shape["type"] == "string")[
+            "maxLength"
+        ] == UNTRUSTED_LINE_MAX
 
 
 def test_no_schema_builder_escapes_this_check() -> None:

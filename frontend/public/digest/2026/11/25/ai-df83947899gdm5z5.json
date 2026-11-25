@@ -1,0 +1,45 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Percentage of fully AI-generated content",
+    "y": "Share (%)"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "ai-df83947899gdm5z5",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Tracks identified as 100% AI in past 90 days","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Songs tagged entirely AI on platform (share of total)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Songs uploaded as 100% AI on Nov 6","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-936-939","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "43"},
+    {"derived": null,"element_id": "quantity-1061-1065","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "%","value": "6.3"},
+    {"derived": null,"element_id": "quantity-1122-1125","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "%","value": "60"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "AI-Generated Track Share on Tidal (Tidal figures)",
+  "type": "bar",
+  "version": "2026-11-22"
+}

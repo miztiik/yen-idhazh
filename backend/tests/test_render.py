@@ -83,6 +83,24 @@ def committed_visuals() -> VisualsConfig:
     return AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).visuals
 
 
+@pytest.mark.parametrize("plan_path,table_path", [
+    (STACKED_PLAN, STACKED_TABLE), (PIE_PLAN, PIE_TABLE),
+])
+def test_composition_refuses_compiled_negative_parts_from_positive_source_readings(
+    plan_path: Path, table_path: Path,
+) -> None:
+    plan = current_plan(plan_path)
+    selected = plan.encodings.quantity[0]
+    plan = VisualPlan.model_validate(plan.model_dump() | {
+        "negative_magnitude_element_ids": [selected],
+    })
+    table = ElementTable.read(table_path)
+    source = next(element for element in table.elements if element.element_id == selected)
+    assert Decimal(source.value or "") > 0
+    with pytest.raises(CompileError, match=r"negative|nonnegative"):
+        compile_chart(plan, table, visuals=committed_visuals())
+
+
 def histogram_plan() -> VisualPlan:
     """Build the plan shape from the committed article's four source quantities."""
     base = current_plan(BAR_PLAN)

@@ -1,6 +1,6 @@
 # Design System
 
-**Last Updated**: 2026-11-24
+**Last Updated**: 2026-11-25
 
 Shared rules for typography, layout, colour, motion and controls. [Console design](console-design.md) owns panel-specific presentation; [appearance configuration](config/appearance.md) owns tunable values.
 
@@ -142,7 +142,8 @@ and omits a chart if two different labels would become the same.
 
 Fit the complete story figure to the visible viewport where readable content
 allows it. Measure wrapped framing, readings, spacing and any sticky filter band;
-do not resize as the reader scrolls. Bar and dot rows keep their content height.
+do not resize as the reader scrolls. Bar and dot comparisons size to their labels
+and scale.
 Line, scatter, slope and bubble plots take the remaining room, bounded below by
 their text and mark clearance, not a fixed density or chart-height budget. A
 bubble plot scales to the measured plot area using the bounded
@@ -177,11 +178,13 @@ interaction is unchanged.
 
 A chart shows its title above the marks and its optional caption below them.
 Both are untrusted text, never markup. Missing framing takes no reserved space.
-Horizontal bars and dots put each category beside its mark when room allows
-and directly above it when space is tight. A single measure uses one colour
+Bars and dots draw in columns when each category or series label and its exact
+reading fit side by side beneath the mark. Otherwise they use horizontal rows,
+keeping the label and reading with their mark and wrapping text when needed.
+The same fit rule applies at every width. A single measure uses one colour
 without a spotlight. Declared groups keep their own labels and colours; do not
-add a legend that repeats those row labels. Other families retain their own
-emphasis and series cues.
+add a legend that repeats those labels. Other families retain their own emphasis
+and series cues.
 Bars rank by numeric value, largest first, with original order for equal values.
 The full row and accessible reading order move together, including source values.
 Other chart families keep their own semantic order. The accessible name
@@ -281,8 +284,8 @@ labels. Shading each segment again does not add a reading.
 
 The digest drawing and console share the locale, SI prefix threshold and
 significant digits declared in `visuals.number_format` in `config/idhazh.json`.
-Horizontal story comparisons have [one display unit per chart](../architecture/publishing/how-a-story-chart-is-drawn-and-what-refuses-one.md#design-rationale)
-instead of independently abbreviated SI labels. Console notation is unchanged.
+Bar and dot comparisons use [one shared scale for ticks and exact readings beside the names](../architecture/publishing/how-a-story-chart-is-drawn-and-what-refuses-one.md#design-rationale).
+Each reading carries its own recorded unit, if present. Console notation is unchanged.
 Where formatting differs from the article's text, the accessible description
 keeps the original characters.
 

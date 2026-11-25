@@ -136,6 +136,7 @@ class _FetchedWorkItem(NamedTuple):
     #: asked for in the fetch loop and held for the model loop. Empty when the
     #: service could not answer, and the item goes on without them.
     mentions: tuple[Mention, ...] = ()
+    sentences: tuple[ask_text_analysis.Sentence, ...] = ()
     #: How long that request took, or zero where it was never made. It is carried
     #: apart from the recorder's cell because the model loop subtracts it from the
     #: item's wait, and a wait is read in whole milliseconds like the other two.
@@ -396,6 +397,8 @@ def stage_work(
     )
 
     items_dir = _run_dir(plan.date) / "items"
+    # The decision crosses to assembly; the worker's chart file must not enter its receipt.
+    chart_scratch = items_dir.parent / "chart-scratch"
     _write_inputs(items_dir, inputs=inputs)
     LOG.info(
         "working shard=%s/%s items=%s model=%s",
@@ -498,6 +501,7 @@ def stage_work(
                 original_index=original_index,
                 recorder=recorder,
                 mentions=() if analysis is None else analysis.mentions,
+                sentences=() if analysis is None else analysis.sentences,
                 analyze_ms=0 if analysis is None else analysis.elapsed_ms,
             )
         )
@@ -572,10 +576,12 @@ def stage_work(
                 settings,
                 date=plan.date,
                 mentions=work.mentions,
+                sentences=work.sentences,
                 endpoint=model_endpoint,
                 run_id=plan.run_id,
                 tracer=tracer,
                 recorder=recorder,
+                render_root=chart_scratch,
                 published_marks=published_marks,
             )
             summarize_ms = int((time.monotonic() - model_started) * 1000)

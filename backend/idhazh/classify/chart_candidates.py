@@ -1,21 +1,49 @@
-"""Offer the article's exact readings as complete, selectable pairs."""
+"""Offer bounded verbatim sentences with distinct quantity and date occurrence IDs."""
 
 from __future__ import annotations
 
 from collections.abc import Sequence
 from typing import NamedTuple
 
-from pydantic import ValidationError
-
-from idhazh.classify.chart_reply import Reading
+from idhazh.ask_text_analysis import Sentence
 from idhazh.contracts.element import Element, ElementKind, ElementTable
-from idhazh.elements import NUMBER, PERCENT, read_quantity
+from idhazh.contracts.knobs.visuals import VisualsConfig
+from idhazh.contracts.visual import VisualType
 from idhazh.sanitize import BLOB_PLACEHOLDER, LINK_PLACEHOLDER, sanitize, untrusted_block
 
 
 class ChartCandidate(NamedTuple):
-    reading: Reading
+    evidence_id: str
     element: Element
+    sentence: Sentence
+
+
+def evidence_forms(
+    forms: tuple[VisualType, ...], candidates: Sequence[ChartCandidate],
+) -> tuple[VisualType, ...]:
+    quantities = sum(entry.element.kind is ElementKind.QUANTITY for entry in candidates)
+    if quantities < 2:
+        return ()
+    dates = bool(time_candidates(candidates))
+    return tuple(
+        form for form in forms
+        if (dates or form not in (VisualType.LINE, VisualType.SLOPE))
+        and (quantities >= 4 or form is not VisualType.SLOPE)
+    )
+
+
+def time_candidates(candidates: Sequence[ChartCandidate]) -> tuple[ChartCandidate, ...]:
+    dates: dict[int, set[str]] = {}
+    for candidate in candidates:
+        element = candidate.element
+        if element.kind is ElementKind.DATE and element.value is not None:
+            dates.setdefault(len(element.value), set()).add(element.value)
+    return tuple(
+        candidate for candidate in candidates
+        if candidate.element.kind is ElementKind.DATE
+        and candidate.element.value is not None
+        and len(dates[len(candidate.element.value)]) >= 2
+    )
 
 
 def plain_chart_words(text: str) -> bool:
@@ -27,38 +55,61 @@ def plain_chart_words(text: str) -> bool:
     )
 
 
-def chart_candidates(table: ElementTable) -> tuple[ChartCandidate, ...]:
-    """Keep the stated coefficient and unit together; preserve source order and repeats."""
-    candidates: list[ChartCandidate] = []
-    for element in table.elements:
-        if element.kind is not ElementKind.QUANTITY or not plain_chart_words(element.span_excerpt):
-            continue
-        match = NUMBER.fullmatch(element.span_excerpt)
-        if match is None or (read := read_quantity(match)) is None:
-            continue
-        if (
-            read.span_end != len(element.span_excerpt)
-            or (read.value, read.unit) != (element.value, element.unit)
+def candidate_block(candidates: Sequence[ChartCandidate]) -> str:
+    passages: dict[Sentence, list[ChartCandidate]] = {}
+    for candidate in candidates:
+        passages.setdefault(candidate.sentence, []).append(candidate)
+    lines = ["Source evidence (untrusted verbatim passages; offsets within each passage):"]
+    for sentence, readings in passages.items():
+        lines.extend(("\nPassage:", sentence.text, "Readings:"))
+        for reading in readings:
+            element = reading.element
+            start = element.span_start - sentence.start_char
+            end = element.span_end - sentence.start_char
+            lines.append(f"{reading.evidence_id} [{start}:{end}]: {element.span_excerpt}")
+    return "\n\n" + untrusted_block("\n".join(lines))
+
+
+def chart_candidates(
+    table: ElementTable,
+    text: str,
+    sentences: Sequence[Sentence],
+    *,
+    visuals: VisualsConfig | None = None,
+) -> tuple[ChartCandidate, ...]:
+    """Keep complete verified sentences in source order, never cut off a qualifier."""
+    knobs = visuals or VisualsConfig()
+    valid: set[Sentence] = set()
+    for sentence in sentences:
+        if not (
+            0 <= sentence.start_char < sentence.end_char <= len(text)
+            and text[sentence.start_char:sentence.end_char] == sentence.text
         ):
             continue
-        magnitude = match["magnitude"] or match["currency_suffix"]
-        currency = (match["currency"] or "").strip()
-        unit = None if currency else match["unit"]
-        parts = (
-            [magnitude] if magnitude and magnitude.casefold() in PERCENT
-            else [word for word in (currency, magnitude, unit) if word]
-        )
-        try:
-            reading = Reading(
-                value=(match["sign"] or "") + match["value"], unit=" ".join(parts) or None,
-            )
-        except ValidationError:
-            # A source quantity is not selectable if it exceeds the reply's decoder bounds.
+        passage = sentence.text.strip()
+        if passage:
+            start = sentence.start_char + len(sentence.text) - len(sentence.text.lstrip())
+            valid.add(Sentence(passage, start, start + len(passage)))
+    selected: list[ChartCandidate] = []
+    seen: set[str] = set()
+    for sentence in sorted(valid, key=lambda span: (span.start_char, span.end_char)):
+        proposed = list(selected)
+        for element in sorted(table.elements, key=lambda item: (item.span_start, item.span_end)):
+            if element.kind not in (ElementKind.QUANTITY, ElementKind.DATE):
+                continue
+            if element.element_id in seen or not (
+                sentence.start_char <= element.span_start < element.span_end <= sentence.end_char
+                and text[element.span_start:element.span_end] == element.span_excerpt
+            ):
+                continue
+            prefix = "q" if element.kind is ElementKind.QUANTITY else "d"
+            proposed.append(ChartCandidate(f"{prefix}{len(proposed) + 1}", element, sentence))
+        if len(proposed) == len(selected):
             continue
-        candidates.append(ChartCandidate(reading, element))
-    return tuple(candidates)
-
-
-def candidate_block(candidates: Sequence[ChartCandidate]) -> str:
-    readings = "; ".join(candidate.element.span_excerpt for candidate in candidates)
-    return "\n\n" + untrusted_block(f"Candidate readings:\n{readings}")
+        if len(proposed) > knobs.evidence_max_readings or (
+            len(candidate_block(proposed)) > knobs.evidence_max_chars
+        ):
+            continue
+        selected = proposed
+        seen.update(candidate.element.element_id for candidate in selected)
+    return tuple(selected)

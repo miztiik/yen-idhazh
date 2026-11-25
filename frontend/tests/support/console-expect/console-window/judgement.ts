@@ -2,6 +2,6 @@
 import type { RouteExpect } from './index';
 
 export const EXPECT: RouteExpect | null = {
-	windowed: ['merged-stories', 'judge-coverage', 'pair-score-drift'],
+	windowed: ['merged-stories', 'judge-coverage', 'pair-score-drift', 'judge-canaries'],
 	dailyTable: false
 };

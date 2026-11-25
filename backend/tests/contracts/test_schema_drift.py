@@ -101,6 +101,7 @@ def test_fixture_round_trips_without_losing_values(path: Path) -> None:
         elif contract.__schema_stem__ == "visual-attempt-row":
             expected = {
                 "visual_id": None,
+                "model_reason": None,
                 **original,
                 "planned_type": None,
                 "rendered_type": None,
@@ -108,6 +109,7 @@ def test_fixture_round_trips_without_losing_values(path: Path) -> None:
             }
         elif contract.__schema_stem__ == "visual-decision":
             expected = {
+                "model_reason": None,
                 **original,
                 "deepest_downgrade_depth": None,
                 "rejection_reason": None,

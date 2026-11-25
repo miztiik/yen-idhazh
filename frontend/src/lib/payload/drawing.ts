@@ -99,6 +99,29 @@ export function refusedVisualData(data: unknown): string | null {
 			mark.derived !== null || mark.source_text !== null ||
 			(mark.time !== undefined && mark.time !== null)
 		)) return 'carries invalid model wording';
+		const derived = mark.derived;
+		if (isObject(derived) && derived.function === 'negative_magnitude') {
+			const source = derived.source_unit ?? null;
+			const table = derived.unit_table_version ?? null;
+			if (
+				mark.element_id !== null || mark.text !== null ||
+				!Array.isArray(derived.inputs) || derived.inputs.length !== 1 ||
+				typeof derived.inputs[0] !== 'string' ||
+				!/^quantity-\d+-\d+$/.test(derived.inputs[0]) ||
+				!schemaVersion(derived.version) ||
+				typeof derived.value !== 'string' ||
+				!(/^-?\d+(?:\.\d+)?$/).test(derived.value) ||
+				!Number.isFinite(Number(derived.value)) || Number(derived.value) > 0 ||
+				mark.value !== derived.value || mark.unit !== derived.unit ||
+				derived.bin_lower != null || derived.bin_upper != null ||
+				((source === null) !== (table === null)) ||
+				(source !== null && (
+					typeof source !== 'string' || !source.trim() ||
+					typeof derived.unit !== 'string' || !derived.unit.trim() ||
+					source === derived.unit || !schemaVersion(table)
+				))
+			) return 'carries invalid negative-magnitude provenance';
+		}
 		held.set(mark.mark_id, mark);
 	}
 	const encoding = data.encoding;

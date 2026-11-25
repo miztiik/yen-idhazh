@@ -1,4 +1,4 @@
-"""The four functions, and the resolver that turns a validated plan into figures.
+"""The five functions, and the resolver that turns a validated plan into figures.
 
 A visual plan carries references and closed names, never a number. Something has
 to turn it into the figures a reader will read off an axis, and that something is
@@ -14,13 +14,14 @@ this module's own imports to keep it that way.
 
 ## What the resolver reaches today, and what it does not
 
-Three of the four functions are reached by resolving a plan. `convert` closes a
+Four of the five functions are reached by resolving a plan. `convert` closes a
 seam the validator leaves open: a channel measuring one thing in three spellings
 passes every validator check and is not drawable, because an axis drawn from
 those characters puts 4,200 beside 4.2. `share_of_declared_whole` is what a pie
-slice *is*, and `count` is what a histogram bar is.
+slice *is*, and `count` is what a histogram bar is. `negative_magnitude` applies
+only the direction explicitly selected for a source reading.
 
-`sum` is the fourth and nothing displays one, because no type in the vocabulary
+`sum` has no drawing caller, because no type in the vocabulary
 draws a total. It is here, tested and complete, and the resolver reaches it on the
 day a template draws one. That is a named seam rather than a gap: the function is
 on the closed list because O45 put it there, and shipping the list four short of
@@ -44,7 +45,7 @@ returns rather than raises. It is kept distinct from `enough_values_for_bins`,
 which is the same empty bar for the other reason - fewer values than bins - and
 that reason is a plan fault the validator names.
 
-The four functions and the helpers under them still raise `DerivedValueError`. A
+The functions and the helpers under them still raise `DerivedValueError`. A
 caller reaching `convert` with two units that do not measure the same thing has a
 bug rather than an article with a problem, and the boundary that a stage calls is
 the one place that turns the raise into a refusal.
@@ -78,8 +79,9 @@ contract and by `elements.max_per_article` (Guardrail #12).
 from __future__ import annotations
 
 from collections.abc import Sequence
-from decimal import Decimal, InvalidOperation, localcontext
+from decimal import Decimal, Inexact, InvalidOperation, localcontext
 from enum import StrEnum
+from fractions import Fraction
 from typing import Final, NamedTuple
 
 from idhazh.contracts.chart_evidence import ChartEvidence
@@ -100,6 +102,9 @@ from idhazh.visual_vocabulary import (
 #: the table a conversion reads and which a `convert` chain records beside this
 #: one; two inputs, two stamps, and a chain that names both can be redone.
 DERIVED_VALUE_VERSION: Final = "2026-10-27"
+#: The selected-sign operation has its own stamp; unchanged arithmetic keeps
+#: its historical stamp so existing compiled assets need no rewrite.
+NEGATIVE_MAGNITUDE_VERSION: Final = "2026-11-25"
 
 #: Where a share's division stops. Fixed here rather than inherited from
 #: `decimal.getcontext()`, which any caller in the process can move - a figure a
@@ -160,6 +165,10 @@ class ResolverCheck(StrEnum):
     #: A bin is empty because the values crowd into one end of their own range.
     #: The one refusal no validator check makes.
     VALUES_HAVE_SPREAD = "values_have_spread"
+    #: A selected interpretation cannot be retained by an aggregate's chain.
+    INTERPRETATION_IS_DRAWABLE = "interpretation_is_drawable"
+    #: Compiled areas must remain positive.
+    SIZE_IS_POSITIVE = "size_is_positive"
 
 
 class DerivedValueError(ValueError):
@@ -439,6 +448,49 @@ def bin_edges(values: Sequence[Decimal], *, bins: int) -> list[Decimal]:
         return [low + width * step for step in range(bins)] + [high]
 
 
+def negative_magnitude(element: Element, *, target: str | None = None) -> DerivedValue:
+    """Exact -abs of one selected reading, optionally normalized in the same chain."""
+    value = _quantity(element)
+    moving = target is not None and target != element.unit
+    if moving and target is not None:
+        if element.unit is None or not commensurable(element.unit, target):
+            raise DerivedValueError(
+                ResolverCheck.UNITS_COMMENSURABLE, "negative magnitude needs compatible units"
+            )
+        exact = (
+            Fraction(value)
+            * Fraction(UNIT_DIMENSIONS[element.unit][1])
+            / Fraction(UNIT_DIMENSIONS[target][1])
+        )
+        # Enough digits for every terminating quotient, independent of global
+        # Decimal precision. A repeating quotient is refused, never rounded.
+        with localcontext() as context:
+            context.prec = len(str(abs(exact.numerator))) + exact.denominator.bit_length() + 1
+            context.traps[Inexact] = True
+            try:
+                value = Decimal(exact.numerator) / Decimal(exact.denominator)
+            except Inexact as error:
+                raise DerivedValueError(
+                    ResolverCheck.CONVERSION_IS_EXACT,
+                    "negative magnitude unit normalization does not state exactly",
+                ) from error
+    signed = value.copy_abs().copy_negate()
+    stated = format(signed, "f")
+    if "." in stated:
+        stated = stated.rstrip("0").rstrip(".")
+    return DerivedValue(
+        function=DerivedFunction.NEGATIVE_MAGNITUDE,
+        version=NEGATIVE_MAGNITUDE_VERSION,
+        inputs=[element.element_id],
+        value=stated,
+        unit=target if moving else element.unit,
+        source_unit=element.unit if moving else None,
+        unit_table_version=UNIT_TABLE_VERSION if moving else None,
+        bin_lower=None,
+        bin_upper=None,
+    )
+
+
 def _target_unit(elements: Sequence[Element]) -> str | None:
     """Which unit this channel draws in, chosen from its contents and not its order.
 
@@ -478,7 +530,9 @@ def histogram_unit_and_version(elements: Sequence[Element]) -> tuple[str | None,
     )
 
 
-def _channel(role: EncodingRole, elements: Sequence[Element]) -> list[DisplayedValue]:
+def _channel(
+    role: EncodingRole, elements: Sequence[Element], *, negative_ids: set[str],
+) -> list[DisplayedValue]:
     """Every mark of one measured channel, moved onto one scale where it has to be.
 
     **Scale, not spelling.** `tonne` and `t` are two names for one unit, and
@@ -502,7 +556,12 @@ def _channel(role: EncodingRole, elements: Sequence[Element]) -> list[DisplayedV
             and element.unit is not None
             and UNIT_DIMENSIONS[element.unit][1] != scale
         )
-        if moving and target is not None:
+        if element.element_id in negative_ids:
+            drawn.append(DisplayedValue(
+                role=role, element_id=None,
+                derived=negative_magnitude(element, target=target if moving else None),
+            ))
+        elif moving and target is not None:
             drawn.append(
                 DisplayedValue(role=role, element_id=None, derived=convert(element, target=target))
             )
@@ -645,6 +704,31 @@ def _resolved(
         role: [known[cited] for cited in ids]
         for role, ids in plan.encodings.filled().items()
     }
+    negative_ids = set(plan.negative_magnitude_element_ids)
+    measured_ids = {
+        element.element_id
+        for role, elements in filled.items() if role in VALUE_ROLES
+        for element in elements
+    }
+    if negative_ids - measured_ids:
+        raise DerivedValueError(
+            ResolverCheck.INTERPRETATION_IS_DRAWABLE,
+            "a selected negative magnitude must fill a measured channel",
+        )
+    if plan.type in (VisualType.PIE, VisualType.HISTOGRAM) and negative_ids:
+        # Shares/counts have their own flat provenance. Do not silently drop a
+        # requested interpretation or publish an unrecorded intermediate value.
+        if plan.type is VisualType.PIE and any(
+            _quantity(known[cited]) != 0 for cited in negative_ids
+        ):
+            raise DerivedValueError(
+                ResolverCheck.PART_IS_NONNEGATIVE,
+                "a pie cannot draw negative magnitudes",
+            )
+        raise DerivedValueError(
+            ResolverCheck.INTERPRETATION_IS_DRAWABLE,
+            "an aggregate cannot retain a single-reading negative-magnitude chain",
+        )
     drawn: list[DisplayedValue] = []
     for role in EncodingRole:
         elements = filled.get(role)
@@ -662,7 +746,30 @@ def _resolved(
         elif plan.type is VisualType.HISTOGRAM and role is EncodingRole.BINS:
             drawn += _bars(elements, bins=visuals.histogram_bins)
         elif role in VALUE_ROLES:
-            drawn += _channel(role, elements)
+            channel = _channel(role, elements, negative_ids=negative_ids)
+            if (
+                plan.type is VisualType.BUBBLE and role is EncodingRole.SIZE
+                and any(
+                    (Decimal(value.derived.value) if value.derived is not None
+                     else _quantity(element)) <= 0
+                    for value, element in zip(channel, elements, strict=True)
+                )
+            ):
+                raise DerivedValueError(
+                    ResolverCheck.SIZE_IS_POSITIVE, "a bubble size measure must be positive",
+                )
+            if (
+                plan.type is VisualType.STACKED_BAR and role is EncodingRole.QUANTITY
+                and any(
+                    (Decimal(value.derived.value) if value.derived is not None
+                     else _quantity(element)) < 0
+                    for value, element in zip(channel, elements, strict=True)
+                )
+            ):
+                raise DerivedValueError(
+                    ResolverCheck.PART_IS_NONNEGATIVE, "a stacked part cannot be negative",
+                )
+            drawn += channel
         else:
             drawn += [
                 DisplayedValue(role=role, element_id=element.element_id, derived=None)

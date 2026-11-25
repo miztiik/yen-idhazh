@@ -1,6 +1,6 @@
 # Which console panel answers what
 
-**Last Updated**: 2026-11-19
+**Last Updated**: 2026-11-24
 
 The console tells an operator what happened to the pipeline; the digest tells a
 reader what happened in the world. This page owns the routes and panel placement.
@@ -253,11 +253,19 @@ Remove trial-only views and reads after the usage review unless chosen to stay.
   reference. An outline compares the saved reference only when all of its
   named histograms are present and verify; the stored PSI point and its
   availability reason are independent of whether the overlay can be drawn.
-- **Canary answers by order:** A tile matrix shows each known-answer pair's
-  saved expectation, file-order answer, swapped answer and outcome. Match
-  counts and kappa describe the saved agent-labelled key, not human truth.
-  Older rows without a key show ungraded answers. This chart uses the
-  existing selected-attempt response and starts no additional read.
+- **Canaries:** Three timelines, one per saved expected answer (YES, UNCLEAR,
+  NO), align a 0%-100% match line above daily blocks. Each block uses that
+  digest attempt's saved expected pairs as its denominator. Agreed YES is
+  above UNCLEAR and NO is at the bottom; changed, invalid and missing replies
+  have separate bands. Both replies must match the saved answer to count as a
+  match. Invalid or missing replies yield open points outside the connected
+  line, not ordinary zeroes. A missing saved key leaves a gap. The line
+  connects only adjacent complete digests with the same recorded canary-set
+  version; dashed dividers mark version changes. Selected-day details show
+  the counts and each pair's expected, original and reversed answers. Counts
+  and kappa use the saved agent-labelled key, not human truth. The existing
+  bounded threshold-history projection supplies the evidence without a
+  separate canary read.
 
 The trial reads named staged columns through the same [panel door](how-the-query-door-answers-a-panel.md).
 The heavier pair projection starts near the view, is capped at the configured

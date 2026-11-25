@@ -391,13 +391,13 @@ export function drawVisual(
 	tickDensity: number,
 	geometry: StoryChartGeometryConfig,
 	availableHeight: number = geometry.line_min_height_px,
-	comparison?: { narrowBelow: number; labels?: ChartLabels }
+	comparisonLabels?: ChartLabels
 ): Drawing {
 	switch (data.type) {
 		case 'bar':
-			return drawBars(data, room, formatNumber, geometry, { numberFormat, tickDensity, ...comparison });
+			return drawBars(data, room, formatNumber, geometry, { numberFormat, tickDensity, labels: comparisonLabels });
 		case 'dot':
-			return drawDots(data, room, formatNumber, geometry, { numberFormat, tickDensity, ...comparison });
+			return drawDots(data, room, formatNumber, geometry, { numberFormat, tickDensity, labels: comparisonLabels });
 		case 'slope':
 			return drawSlopes(data, room, formatNumber, geometry);
 		case 'line':

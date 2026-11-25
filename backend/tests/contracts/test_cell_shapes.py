@@ -23,6 +23,7 @@ from typing import Annotated, Any, Union, get_args, get_origin
 import pytest
 from pydantic import BeforeValidator, StringConstraints, TypeAdapter, ValidationError
 
+from idhazh.classify.calls import parse_summarize_and_plan
 from idhazh.contracts import CONTRACTS, base
 from idhazh.contracts.base import (
     CHARACTER_CLASS_PATTERNS,
@@ -32,6 +33,7 @@ from idhazh.contracts.base import (
     field_column,
     fit_cell,
 )
+from idhazh.contracts.visual_telemetry import VisualAttemptRow
 
 pytestmark = pytest.mark.contract
 
@@ -58,6 +60,9 @@ HOSTILE: dict[str, str] = {
 #: What a cell that folded away to nothing says instead. Any non-empty printable
 #: string does; these tests care that the column accepts it, not which one it is.
 ABSENT = "unprintable"
+
+# This writer checks the original words, not a folded approximation of them.
+_REASON_COLUMN = (VisualAttemptRow, "model_reason")
 
 
 def _csv_contracts() -> list[type[Contract]]:
@@ -113,9 +118,11 @@ def _minted_patterns() -> frozenset[str]:
 
 
 def _foldable_columns() -> list[tuple[type[Contract], str, Any]]:
-    """Every string column whose rule names a character class or a length."""
+    """String columns that can be filled by fitting character class and length."""
     chosen = []
     for model, name, column in _string_columns():
+        if (model, name) == _REASON_COLUMN:
+            continue
         pattern, minimum, maximum = column_bounds(column)
         if pattern in FOLDABLE_PATTERNS and (
             pattern is not None or minimum is not None or maximum is not None
@@ -157,13 +164,13 @@ def _self_folding_columns() -> list[tuple[type[Contract], str, Any]]:
 
 
 def test_every_string_column_says_which_kind_it_is() -> None:
-    """A column's rule is either a character class or an identity, and it says which.
+    """A column's pattern is either a character class or a minted identity.
 
     This is what makes the rest of this module a guarantee instead of a list
     somebody maintains. A new constrained string column passes only by declaring
     a pattern `contracts.base` already names - so it is either foldable, and the
-    cases below run against it automatically, or it is minted, and its producer
-    keeps the refusal it already had. A third kind fails here, naming itself.
+    cases below can fold to it, or it is minted, and its producer keeps the
+    refusal it already had. An unknown pattern fails here, naming itself.
     """
     minted = _minted_patterns()
     unclassified = [
@@ -300,9 +307,9 @@ def test_a_row_built_by_hand_still_refuses_a_crooked_identity() -> None:
 def test_a_folded_value_is_accepted_by_the_column_it_was_folded_for(case: str) -> None:
     """Whatever the producer had, the column takes what comes out of the fold.
 
-    Every constrained string column, against every case, in one assertion. The
-    columns come from the walk, so a column added later is covered without this
-    test being edited.
+    Every column that uses the shared fold runs against every case. The reason
+    keeps its independent writer check below because folding changes the text
+    that writer accepts or refuses.
     """
     refused: list[str] = []
     for model, name, column in _foldable_columns():
@@ -313,6 +320,21 @@ def test_a_folded_value_is_accepted_by_the_column_it_was_folded_for(case: str) -
             refused.append(f"{model.__name__}.{name} refused {fitted[:60]!r}")
 
     assert not refused, refused
+
+
+@pytest.mark.parametrize("case", sorted(HOSTILE))
+def test_the_reason_writer_keeps_the_original_text_or_writes_null(case: str) -> None:
+    raw = HOSTILE[case]
+    reply = parse_summarize_and_plan(json.dumps({
+        "summary": {"title": "Wind awards", "summary": "Countries announced wind awards."},
+        "visual": None,
+        "model_reason": raw,
+    }))
+    expected = None if case in {"newline", "very_long", "folds_to_nothing"} else raw
+    model, name = _REASON_COLUMN
+    column = field_column(model.model_fields[name])
+
+    assert TypeAdapter(column).validate_python(reply.model_reason) == expected
 
 
 @pytest.mark.parametrize("case", sorted(HOSTILE))
@@ -378,8 +400,8 @@ def test_the_fold_refuses_a_column_that_names_an_identity() -> None:
 
 
 #
-# The producers. The walk above proves the fold satisfies every column; these
-# prove the writers reach the fold.
+# The producers. The walk above proves what the fold can fill; these prove
+# the writers reach it.
 #
 
 

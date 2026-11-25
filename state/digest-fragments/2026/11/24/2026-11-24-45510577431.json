@@ -1,0 +1,19 @@
+{
+  "completed_at": "2026-11-24T23:39:05Z",
+  "date": "2026-11-24",
+  "embeddings": null,
+  "failed_item_ids": [],
+  "items": [],
+  "items_planned": 0,
+  "run_id": "2026-11-24-45510577431",
+  "version": "2026-11-15",
+  "verticals": [
+    {"below_feed_floor": false,"considered": 6920,"eligible_feeds": 53,"feed_floor": 35,"id": "ai","planned": 0,"too_old": 6838},
+    {"below_feed_floor": false,"considered": 704,"eligible_feeds": 23,"feed_floor": 21,"id": "energy","planned": 0,"too_old": 620},
+    {"below_feed_floor": false,"considered": 679,"eligible_feeds": 27,"feed_floor": 21,"id": "business-economy","planned": 0,"too_old": 530},
+    {"below_feed_floor": false,"considered": 623,"eligible_feeds": 27,"feed_floor": 21,"id": "world","planned": 0,"too_old": 328},
+    {"below_feed_floor": false,"considered": 1268,"eligible_feeds": 22,"feed_floor": 21,"id": "india","planned": 0,"too_old": 574},
+    {"below_feed_floor": false,"considered": 0,"eligible_feeds": 0,"feed_floor": null,"id": "science","planned": 0,"too_old": 0},
+    {"below_feed_floor": false,"considered": 0,"eligible_feeds": 0,"feed_floor": null,"id": "climate","planned": 0,"too_old": 0}
+  ]
+}

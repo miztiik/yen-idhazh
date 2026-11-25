@@ -1,6 +1,6 @@
 # What a visual plan may say, and what happens to one that is refused
 
-**Last Updated**: 2026-11-21
+**Last Updated**: 2026-11-25
 
 How a chart answer becomes a plan, the four things a plan may not carry, the
 deterministic checks it has to clear, and the ladder a refused plan may step
@@ -55,11 +55,16 @@ display text supplies a value to the renderer.
 ## A chart answer becomes a plan in code
 
 The [model proposes rows](../summarize/prompt.md#the-model-proposes-rows-code-binds-the-supplied-readings)
-and can decline with null. Preparation accepts only supplied reading pairs
-and assigns matching source occurrences in source order. Equal pairs use
-distinct occurrences; a proposal cannot use more copies than the list held.
-Dates on time axes must match dates in the article. Display names, titles and
-the choice of comparison are the model's, not independently verified facts.
+and can decline with null. Preparation binds each supplied quantity ID to
+that exact source occurrence, even when another occurrence states the same
+value. Date IDs are distinct and only fill time roles. Each quantity selects
+`as_stated` or `negative_magnitude`; conflicting interpretations of one
+occurrence are refused. The latter is carried as
+`negative_magnitude_element_ids`, default-empty for old plans, and the
+[arithmetic provenance](where-every-drawn-figure-came-from.md) retains its source.
+Bar, dot and slope proposals name a comparison basis. Display names, titles,
+direction, scope and comparison suitability are the model's decisions, not
+facts code can establish from matching prose.
 
 The role, unit, exhaustiveness and compiler checks still apply. An invalid
 chart leaves the summary intact. New plans do not invent a highlight or
@@ -149,8 +154,11 @@ names the abandoned forms. They remain readable in the complete native plan
 schema, not available as new production requests. The schema default remains
 false for older authored configurations; off still offers only the supported
 numeric chart types, never the full historical vocabulary. Defaults, effective
-selection and every request schema use that numeric capability set without an
-article-specific type shortlist. Effective selection enters the input fingerprint
+selection use that numeric capability set. Requests omit time forms when
+their bounded evidence cannot supply two distinct canonical dates at a common
+precision. Time roles offer only IDs in a qualifying precision group; slope
+also needs four quantities for its paired rows. These checks establish reachable
+roles, not editorial suitability. Effective selection enters the input fingerprint
 and the capabilities line of the request. Neither changes
 the shared system turn.
 

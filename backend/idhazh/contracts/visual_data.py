@@ -237,6 +237,7 @@ class VisualData(Contract):
         return records_json(self.model_dump(mode="json"), record_lists=frozenset({"marks"}))
 
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(version="2026-11-25", change="Record selected signs.", why="Keep sources."),
         ChangelogEntry(
             version="2026-11-22", change="Publish model labels and axis titles.",
             why="Display wording can reach the reader without a fabricated source span.",
@@ -250,11 +251,6 @@ class VisualData(Contract):
             version="2026-10-27T05:00",
             change="Record the unit used for histogram edges.",
             why="A reader can redraw normalized bins from their recorded provenance.",
-        ),
-        ChangelogEntry(
-            version="2026-10-27T04:00",
-            change="Publish pie slices as shares of a separately stated whole.",
-            why="A pie's denominator and exact source total must reach its reader.",
         ),
         ChangelogEntry(
             version="2026-10-27T02:00",

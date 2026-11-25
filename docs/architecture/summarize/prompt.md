@@ -1,6 +1,6 @@
 # The Summarizer Prompt
 
-**Last Updated**: 2026-11-21
+**Last Updated**: 2026-11-25
 
 What the model reads and writes, and what the pipeline validates. Prompt
 wording is not a security control: sanitization and validated output shapes
@@ -79,12 +79,13 @@ If extraction read only part of the article, state that limitation on the item. 
 Use grammar-constrained decoding derived from the declared reply model. Refuse unknown keys and validate the result after decoding. A well-shaped object still needs content checks.
 
 The chart grammar allows `visual: null` or a proposal for an enabled form
-the compiler supports. Each type has its own row shape. A reading is a decimal
-string and the stated unit and scale, or a null unit for a bare number. Names
-and dates are not chosen from lists. A summary-only request has neither chart
-instructions nor a chart field in its grammar.
+the compiler supports. Each type has its own row shape. A reading cites one
+finite quantity occurrence ID and chooses `as_stated` or `negative_magnitude`.
+Time roles cite a separate finite set of date IDs. No source strings enter
+schema literals. A summary-only request has neither chart
+instructions nor `visual` or `model_reason` fields in its grammar.
 
-## One call writes the summary and plans the visual, and the article is read once
+## One call writes the summary and plans the visual
 
 [classify/calls.py](../../../backend/idhazh/classify/calls.py) builds the one request
 each item makes, and [stages/summarize_one_item.py](../../../backend/idhazh/stages/summarize_one_item.py)
@@ -94,26 +95,37 @@ sends it:
   `plan-visual.txt` addendum for a chart-capable request. The addendum and the
   separate reply schema name exactly the same forms.
 - **The user turn** is one sanitized, fenced block containing the headline and
-  article body. A chart-capable request adds a separate fenced list of source
-  readings. The article is not annotated or repeated. No instruction follows it.
+  article body, unchanged and without markers. A chart-capable request adds
+  separate fenced verbatim source passages with short quantity and date IDs.
+  Only those bounded passages repeat source text; no instruction follows them.
 
 The prompt is rendered explicitly rather than by the model's chat template. The shared
 system text is a reusable prefix for items with the same request shape.
 
 The [text-analysis service](../text-analysis/text-analysis-api.md) still finds
-mentions and can rule out a matched number that is not a measurement. It does
+mentions and sentence offsets in that same analysis request, and can rule out a
+matched number that is not a measurement. Each span is checked independently
+against the sanitized article. Valid mentions survive unusable sentences. It does
 not have to find category names for a chart to be considered.
 
 ### The model proposes rows; code binds the supplied readings
 
-The reply is `summary`, then `visual`. The model chooses the chart type
+The reply is `summary`, then `visual`, then optional `model_reason`. The model chooses the chart type
 and the title, axis titles, category labels and series names. The native
-schema describes the rows and offers only complete value-and-unit pairs
-from the article's candidate list, not independent choices for each field.
+schema describes the rows and offers disjoint finite quantity and date IDs.
+The source carries units. Bar, dot and slope proposals also name the shared
+comparison basis in short wording. The model decides relevance, direction,
+scope and suitability; code does not infer those from the article or summary.
 
 [Chart preparation](../publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md#a-chart-answer-becomes-a-plan-in-code)
-binds a value to a source reading and keeps display wording separate. It
+binds an ID to the exact source occurrence and keeps display wording separate. It
 does not decide what a sentence means. A null proposal records a decline.
+The addendum asks for a reason for either choice: one plain-text line, at
+most 20 whitespace-separated words and within the untrusted-line character
+limit. Code drops a missing, invalid or unsafe reason independently of the
+summary and visual. The reason is untrusted text, not evidence or a validator
+verdict; only the visual decision handoff and
+[attempt ledger](../contracts/ledger-registry.md#visual-design-attempts) carry it.
 Replaying a known reply checks parsing and compilation; the
 [retained workflow](../../reference/retained-article-verification.md) shows
 what a live model selected.
@@ -125,13 +137,24 @@ not a second instruction or a copy of the reply schema.
 
 Fenced headline and article text remain untrusted data. Do not let either become a system instruction, shell argument, filename or fetch destination. Scope an instruction to the job it governs: a plan rule against inventing numbers must not forbid the summary from reporting a source figure.
 
-### The model is shown no sentence address
+### Evidence stays separate from the article
 
 The prompt contains the sanitized article and, where applicable, the
-readings block. It does not change stored `Article.text`. No sentence
-address, element id, offset, text-analysis annotation or tagged copy goes
-to the model. Both blocks count toward the context window; if the chart
-request exceeds it, send the plain summary request.
+evidence block. It does not change stored `Article.text`. Request-only IDs
+locate quantity and date occurrences inside complete verified sentences;
+published output retains original element references, not these IDs or
+passages. The [evidence bounds](../../concepts/config/run-limits.md) limit the
+entire rendered block. Passages are deduplicated and selected in source order;
+a sentence that cannot fit is omitted whole, never shortened.
+Surrounding separator whitespace is omitted and offsets shift to that exact
+source slice; every sentence word remains unchanged.
+Fewer than two offered quantities, unusable sentence spans or a combined
+request that cannot fit select the existing plain summary path. Line and
+slope are omitted from both instructions and grammar unless the offered
+dates include two distinct canonical values at a common precision. Only
+date IDs in such a precision group enter time roles. Slope also requires
+four offered quantities for its two paired rows. These checks establish
+reachable roles, not whether the story deserves that chart.
 
 Preparation re-slices the selected readings from the original element
 table over `Article.text`.
@@ -157,7 +180,7 @@ the current server and model; neither establishes semantic extraction quality.
 
 ### Summary before visual
 
-Decode the summary before the answer about a chart. If output ends during the answer, `recovered_completion` may recover a complete summary with the JSON decoder, normalize the repaired completion status, and pass it through the same content checks as a normal reply. Publish no picture when its answer is incomplete.
+Decode the summary before the answer about a chart. If output ends during the answer, `recovered_completion` may recover a complete summary with the JSON decoder, normalize the repaired completion status, and pass it through the same content checks as a normal reply. If the budget runs out after the top-level visual proposal or decline closes, keep it only if it passes the normal checks. A cut reason is null; a complete valid reply keeps its reason even if its last token used the budget. Publish no picture when its answer is incomplete.
 
 Never recover a partially written summary. A chart is built only from readings and
 labels code resolves against the article, never from a figure in the summary.

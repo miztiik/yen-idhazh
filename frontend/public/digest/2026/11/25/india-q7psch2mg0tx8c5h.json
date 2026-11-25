@@ -1,0 +1,70 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Fuel type",
+    "y": "Price (\u20b9 per litre)"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m6",
+      "m7",
+      "m8",
+      "m9",
+      "m10",
+      "m11"
+    ],
+    "quantity_x": [],
+    "series": [
+      "m12",
+      "m13",
+      "m14",
+      "m15",
+      "m16",
+      "m17"
+    ],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-q7psch2mg0tx8c5h",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "New Delhi","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Mumbai","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Chennai","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m3","source_text": null,"text": "Kolkata","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m4","source_text": null,"text": "Bengaluru","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m5","source_text": null,"text": "Hyderabad","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-527-534","mark_id": "m6","source_text": null,"text": null,"time": null,"unit": "\u20b9","value": "102.12"},
+    {"derived": null,"element_id": "quantity-774-780","mark_id": "m7","source_text": null,"text": null,"time": null,"unit": "\u20b9","value": "97.83"},
+    {"derived": null,"element_id": "quantity-833-840","mark_id": "m8","source_text": null,"text": null,"time": null,"unit": "\u20b9","value": "107.76"},
+    {"derived": null,"element_id": "quantity-917-924","mark_id": "m9","source_text": null,"text": null,"time": null,"unit": "\u20b9","value": "113.51"},
+    {"derived": null,"element_id": "quantity-1004-1011","mark_id": "m10","source_text": null,"text": null,"time": null,"unit": "\u20b9","value": "110.44"},
+    {"derived": null,"element_id": "quantity-1117-1124","mark_id": "m11","source_text": null,"text": null,"time": null,"unit": "\u20b9","value": "104.23"},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m12","source_text": null,"text": "Petrol","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m13","source_text": null,"text": "Diesel","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m14","source_text": null,"text": "Petrol","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m15","source_text": null,"text": "Petrol","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m16","source_text": null,"text": "Petrol","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m17","source_text": null,"text": "Diesel","time": null,"unit": null,"value": null}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Petrol and Diesel Prices in Major Indian Cities (\u20b9/litre), November 25",
+  "type": "bar",
+  "version": "2026-11-22"
+}

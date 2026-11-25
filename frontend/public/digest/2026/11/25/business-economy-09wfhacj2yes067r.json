@@ -1,0 +1,45 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Company",
+    "y": "Value ($B)"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "business-economy-09wfhacj2yes067r",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "SpaceX estimated valuation","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Tesla market value","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Combined merger valuation","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-1515-1518","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": null,"value": "1.7"},
+    {"derived": null,"element_id": "quantity-1571-1574","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": null,"value": "1.5"},
+    {"derived": null,"element_id": "quantity-226-229","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": null,"value": "3.2"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Estimated Valuations in the Tesla-SpaceX Merger (billions USD)",
+  "type": "bar",
+  "version": "2026-11-22"
+}

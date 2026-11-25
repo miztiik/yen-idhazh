@@ -58,7 +58,12 @@ Pre-staged files never ride along.
 | Gardener | Reapply exact operations only while every target matches its source; otherwise skip the whole shard, including its record. Never rerun tasks. |
 | Council | Reparent completed immutable bytes; refuse a different committed blob at the same UUID. Mutable tenant files need unchanged baselines. Never merge text or rerun judges. |
 | Digest PLAN/WORK | Preserve raw files and replay only named inventory changes through the existing inventory writer. Imported tip state is a baseline, not generated output. |
-| Digest ASSEMBLE | Preserve completed raw/fragments/items, retain an already-published asset for the same item, and regenerate the complete derived set against fresh named inputs. No model regeneration. |
+| Digest ASSEMBLE | Preserve completed raw/fragments/items and regenerate the complete derived set against fresh named inputs. No model regeneration. |
+
+The rebuilt day determines which chart files to publish. Assembly writes
+missing charts from saved decisions only for stories that still reference them,
+preserves referenced chart bytes already on `main`, and records the inventory
+afterward. The consistency check still refuses unreferenced files from `main`.
 
 ASSEMBLE rolls actual incoming completed corpus rows into the latest corpus with
 `corpus.roll`, deduplication, the configured row window and a checked census.

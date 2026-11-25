@@ -1,0 +1,49 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Household / Metric",
+    "y": "Amount (\u00a3)"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m4",
+      "m5",
+      "m6",
+      "m7"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "business-economy-fsxswxgkfzcqtkm1",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Kelly Anne Harvey monthly gas & electricity (Octopus) - \u00a3154/mo","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Direct debit annual saving - \u00a3138/yr","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Stacey expected energy cost this year (E.On Next) - \u00a31,800","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m3","source_text": null,"text": "Stacey increase vs last year - \u00a3400 up","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-758-762","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "\u00a3","value": "154"},
+    {"derived": null,"element_id": "quantity-1098-1102","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "\u00a3","value": "138"},
+    {"derived": null,"element_id": "quantity-1967-1973","mark_id": "m6","source_text": null,"text": null,"time": null,"unit": "\u00a3","value": "1800"},
+    {"derived": null,"element_id": "quantity-1999-2003","mark_id": "m7","source_text": null,"text": null,"time": null,"unit": "\u00a3","value": "400"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Energy Costs and Savings Reported by Three UK Households",
+  "type": "bar",
+  "version": "2026-11-22"
+}

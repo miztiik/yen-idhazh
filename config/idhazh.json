@@ -386,7 +386,7 @@
     "tagline": "Daily news summaries, with links to their sources.",
     "theme_default": "dark"
   },
-  "version": "2026-11-18",
+  "version": "2026-11-25",
   "visuals": {
     "asset_base_url": "",
     "downgrade_enabled": false,
@@ -410,6 +410,8 @@
       "pie",
       "histogram"
     ],
+    "evidence_max_chars": 3200,
+    "evidence_max_readings": 24,
     "histogram_bins": 3,
     "lead_words": 150,
     "max_chart_points": 8,
