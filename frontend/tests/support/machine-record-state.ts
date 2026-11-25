@@ -20,10 +20,13 @@ export async function machineRecordState(page: Page, state: MachineRecordState):
 			return;
 		}
 		const response = await route.fetch();
-		const index = await response.json();
+		const index: import('../../src/lib/data/compact-index').CompactIndex = await response.json();
+		const coverage = [...index.entries, ...index.coverage]
+			.map(({ covers }) => ({ covers, state: 'empty' }))
+			.sort((left, right) => left.covers.localeCompare(right.covers));
 		await route.fulfill({
 			response,
-			json: { ...index, entries: index.entries.map((entry: Record<string, unknown>) => ({ ...entry, state: 'empty', rows: 0, bytes: 0 })) }
+			json: { ...index, entries: [], coverage }
 		});
 	});
 }

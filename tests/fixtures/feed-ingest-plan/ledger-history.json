@@ -16,8 +16,8 @@
     "coverage_states": ["empty", "lost"],
     "compact_version": "2026-11-25",
     "periods": ["daily", "monthly", "yearly"],
-    "legacy_entry": { "covers": "2026-10-21", "rows": 0, "bytes": 128 },
-    "legacy_defaults": { "state": "packed", "lost_days": [], "set_aside": 0 },
+    "minimal_entry": { "covers": "2026-10-21", "rows": 0, "bytes": 128 },
+    "entry_defaults": { "state": "packed", "lost_days": [], "set_aside": 0 },
     "filename": "019a0000-0000-8000-8000-000000000000.parquet"
   }
 }

@@ -190,7 +190,7 @@ export async function readIndexFrom(keeper: PageKeeper, ledger: LedgerName, peri
 /** Why an index is not acted on, as the console says it. */
 export function explainRefusal(period: Period, refused: IndexRefusal): string {
 	return refused.reason === 'newer'
-		? `${period}.json is stamped ${refused.stamp} and this build reads ${COMPACT_INDEX_STAMP} or older`
+		? `${period}.json is stamped ${refused.stamp} but this build expects ${COMPACT_INDEX_STAMP}`
 		: `${period}.json cannot be read: ${refused.detail}`;
 }
 

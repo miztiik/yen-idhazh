@@ -6,7 +6,7 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { tableFromIPC } from "apache-arrow";
 import initialize, { readMetadata, readParquet } from "parquet-wasm/esm";
-import { COMPACT_INDEX_LEGACY_VERSION, COMPACT_INDEX_VERSION, CompactIndexSchema, compactPeriods } from "@idhazh/common-contracts";
+import { COMPACT_INDEX_VERSION, CompactIndexSchema, compactPeriods } from "@idhazh/common-contracts";
 import { persistLedger } from "../src";
 import { selectPlannerPublication } from "../src/planner-publication";
 import { plannerRecordings } from "./planner-recordings";
@@ -45,9 +45,7 @@ test("real old Parquet is retained while daily, monthly and yearly publication e
       originals.set(path, await readFile(join(root, path)));
       files.push({ ledger: "discovered-articles", path });
       indexes[`compact/feed-ingest-plan/discovered-articles/index/${period}.json`] = CompactIndexSchema.parse({
-        ...(period === "monthly" ? { version: COMPACT_INDEX_LEGACY_VERSION }
-          : { version: COMPACT_INDEX_VERSION, coverage: [] }),
-        ledger: "discovered-articles", period,
+        version: COMPACT_INDEX_VERSION, ledger: "discovered-articles", period, coverage: [],
         entries: [{ covers, rows: 1, bytes: bytes.length, state: "packed" }],
       });
     }
@@ -59,13 +57,8 @@ test("real old Parquet is retained while daily, monthly and yearly publication e
     for (const index of Object.values(result.indexes)) {
       const periods = compactPeriods(index);
       const entry = periods[0]!;
-      if (index.version === COMPACT_INDEX_VERSION) {
-        expect(index.entries).toEqual([]);
-        expect(index.coverage?.[0]).not.toHaveProperty("bytes");
-      } else {
-        expect(index.coverage).toBeUndefined();
-        expect(entry.file_sha256).toBeNull();
-      }
+      expect(index.entries).toEqual([]);
+      expect(index.coverage[0]).not.toHaveProperty("bytes");
       if (index.period === "daily") expect(entry).toMatchObject({ state: "lost", rows: 0, bytes: 0 });
       else {
         expect(entry).toMatchObject({ state: "empty", rows: 0, bytes: 0 });

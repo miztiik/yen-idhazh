@@ -1,6 +1,6 @@
 # Discovering native feed-health inputs
 
-**Last Updated**: 2026-10-23
+**Last Updated**: 2026-11-25
 
 How does the TypeScript planner find existing health observations without
 scanning directories or copying rows into another state file?
@@ -28,7 +28,7 @@ inventory write, receipt write or publisher change is part of discovery.
 
 For each day, the yearly index wins over the monthly index, which wins over
 the daily index. Raw files are selected only when none of those indexes
-serves the day. An `empty` or `lost` entry also serves its period and must
+serves the day. An `empty` or `lost` coverage record also serves its period and must
 not fall through to leftover raw files. The publication inventory can retain
 raw names after compaction has removed their files. Those names are not
 fetched when a compact index already serves their dates.

@@ -42,8 +42,6 @@ from idhazh.contracts.gardener_events import CompactionStep, PeriodRefused
 from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
 from idhazh.contracts.knobs.gardener import CompactionPolicy
 from idhazh.contracts.ledger_index import (
-    COMPACT_INDEX_LEGACY_VERSION,
-    COMPACT_INDEX_SPLIT_VERSION,
     CompactEntry,
     CompactIndex,
     EntryState,
@@ -153,7 +151,7 @@ def a_month_file(root: Path, scratch: Path, month: str) -> None:
 def index_entries(
     root: Path, period: Period, entries: list[CompactEntry], *, expired_through: str | None = None
 ) -> None:
-    """An index left by compaction before file membership and coverage were split."""
+    """An index recording this period's files and no-file coverage."""
     path = ledger.compact_index_path(state(root), VISUALS, period)
     path.parent.mkdir(parents=True, exist_ok=True)
     index = CompactIndex.from_period_entries(
@@ -161,7 +159,6 @@ def index_entries(
         period=period,
         entries=entries,
         expired_through=expired_through,
-        version=COMPACT_INDEX_LEGACY_VERSION,
     )
     path.write_bytes(index.to_json().encode("ascii"))
 
@@ -451,7 +448,7 @@ def test_a_month_with_no_row_adds_none_and_every_month_s_lost_days_carry_into_it
     assert pyarrow.parquet.read_metadata(year).num_row_groups == len(kept)
     yearly_index = ledger.compact_index_path(state(root), VISUALS, Period.YEARLY)
     payload = json.loads(yearly_index.read_bytes())
-    assert payload["version"] == COMPACT_INDEX_SPLIT_VERSION
+    assert payload["version"] == CompactIndex.schema_version()
     assert payload["entries"] == [{
         "covers": "2026",
         "rows": len(held),
@@ -479,7 +476,7 @@ def test_a_year_whose_months_hold_no_row_is_an_empty_entry_with_no_file(tmp_path
     assert outcome.stopped_because is StopReason.EXHAUSTED, outcome.resume_from
     yearly_index = ledger.compact_index_path(state(root), VISUALS, Period.YEARLY)
     payload = json.loads(yearly_index.read_bytes())
-    assert payload["version"] == COMPACT_INDEX_SPLIT_VERSION
+    assert payload["version"] == CompactIndex.schema_version()
     assert payload["entries"] == []
     assert payload["coverage"] == [{
         "covers": "2026", "state": "empty", "lost_days": ["2026-03-14"], "set_aside": 1,

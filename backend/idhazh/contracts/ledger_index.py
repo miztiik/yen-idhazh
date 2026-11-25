@@ -12,8 +12,8 @@ Each is written whole, never appended to. `CompactEntry` is one line of a
 `CompactIndex` and has no file of its own, so it is a `Model`.
 
 **A `packed` period has a file.** An `empty` period held no row and a `lost`
-day lost its rows. Older indexes mix these no-file periods into `entries`;
-split indexes put them in `coverage`. A lost day inside a closed month or year
+day lost its rows. These periods belong in `coverage`, not in `entries`.
+A lost day inside a closed month or year
 is listed on that period's record, whether or not it has a file.
 
 **A day, a month and a year are told apart by shape, and one function decides
@@ -51,10 +51,6 @@ from idhazh.contracts.base import (
 )
 from idhazh.contracts.file_envelope import Period, Tier, covers_fits
 from idhazh.contracts.ledger_name import LedgerName
-
-COMPACT_INDEX_LEGACY_VERSION: Final = "2026-10-25"
-COMPACT_INDEX_SPLIT_VERSION: Final = "2026-11-25"
-COMPACT_INDEX_WRITE_VERSION: Final = COMPACT_INDEX_SPLIT_VERSION
 
 #: What each period's stamp looks like, in the words a refusal prints.
 _SHAPE: Final[dict[Period, str]] = {
@@ -293,8 +289,7 @@ class CompactCoverage(Model):
 class CompactIndex(Contract):
     """Which compact files exist in one period of one ledger, and what has no file.
 
-    Read both layouts without changing a retained index's version or its layout.
-    `period_entries` gives the same period records to readers of either layout.
+    `period_entries` gives readers one ordered view of file entries and coverage.
     """
 
     __schema_stem__: ClassVar[str] = "compact-index"
@@ -334,18 +329,10 @@ class CompactIndex(Contract):
         )
     )
     entries: list[CompactEntry] = Field(
-        description=(
-            "Live files in ascending period order, none twice. Legacy indexes also list "
-            "no-file periods here."
-        )
+        description="Live files in ascending period order, none twice."
     )
-    coverage: list[CompactCoverage] | None = Field(
-        default=None,
-        exclude_if=lambda value: value is None,
-        description=(
-            "Checked periods with no file, ascending and disjoint from entries. "
-            "Required on split indexes, omitted on legacy indexes."
-        )
+    coverage: list[CompactCoverage] = Field(
+        description="Checked periods with no file, ascending and disjoint from entries."
     )
     expired_through: YearStamp | None = Field(
         default=None,
@@ -354,14 +341,6 @@ class CompactIndex(Contract):
             "The newest UTC year permanently expired, only on a yearly index; omitted when absent."
         ),
     )
-
-    @model_validator(mode="before")
-    @classmethod
-    def _stamp_current_version(cls, data: object) -> object:
-        """An unstamped compact index can only have the legacy layout."""
-        if isinstance(data, dict) and "version" not in data:
-            return {**data, "version": COMPACT_INDEX_LEGACY_VERSION}
-        return data
 
     @property
     def period_entries(self) -> list[CompactEntry]:
@@ -381,15 +360,8 @@ class CompactIndex(Contract):
         period: Period,
         entries: list[CompactEntry],
         expired_through: str | None = None,
-        version: str | None = None,
     ) -> Self:
-        """Build a wire index from sorted period records in the requested format."""
-        stamp = cls.schema_version() if version is None else version
-        if stamp < COMPACT_INDEX_SPLIT_VERSION:
-            return cls(
-                version=stamp, ledger=ledger, period=period, entries=entries,
-                expired_through=expired_through,
-            )
+        """Build the current wire index from sorted period records."""
         files: list[CompactEntry] = []
         coverage: list[CompactCoverage] = []
         for entry in entries:
@@ -409,40 +381,33 @@ class CompactIndex(Contract):
                 )
             )
         return cls(
-            version=stamp, ledger=ledger, period=period, expired_through=expired_through,
+            version=cls.schema_version(),
+            ledger=ledger,
+            period=period,
+            expired_through=expired_through,
             entries=files,
             coverage=coverage,
         )
 
     def to_json(self) -> str:
-        """One entry a line - see `records_json`.
-
-        A reader checks which days exist by scanning the list, and an entry's
-        fields mean nothing apart. The layout is not part of the shape, so
-        a file in the older layout is still read and is re-laid-out when written.
-        """
+        """One file or coverage record a line, without default file metadata."""
         payload = self.model_dump(mode="json")
-        if self.coverage is not None:
-            payload["entries"] = [
-                entry.model_dump(mode="json", exclude_defaults=True) for entry in self.entries
-            ]
+        payload["entries"] = [
+            entry.model_dump(mode="json", exclude_defaults=True) for entry in self.entries
+        ]
         return records_json(payload)
 
     @model_validator(mode="after")
     def _the_entries_ascend_once_each_at_the_period_s_grain(self) -> Self:
         """A daily index lists days, a monthly one months and a yearly one years, in order."""
         where = f"the {self.ledger.value} {self.period.value} index"
-        if self.version > self.schema_version():
-            raise ValueError(f"{where} has a newer version {self.version}")
-        if self.version >= COMPACT_INDEX_SPLIT_VERSION:
-            if self.coverage is None:
-                raise ValueError(f"{where} must list coverage")
-            if any(not entry.names_file for entry in self.entries):
-                raise ValueError(f"{where} may only list files in entries")
-        elif "coverage" in self.model_fields_set:
-            raise ValueError(f"{where} may not list coverage in a legacy index")
-        coverage = self.coverage or []
-        records: list[CompactEntry | CompactCoverage] = [*self.entries, *coverage]
+        if self.version != self.schema_version():
+            raise ValueError(
+                f"{where} uses unsupported version {self.version}; expected {self.schema_version()}"
+            )
+        if any(not entry.names_file for entry in self.entries):
+            raise ValueError(f"{where} may only list files in entries")
+        records: list[CompactEntry | CompactCoverage] = [*self.entries, *self.coverage]
         if self.expired_through is not None:
             if self.period is not Period.YEARLY:
                 raise ValueError(f"{where} may not set expired_through")
@@ -458,7 +423,7 @@ class CompactIndex(Contract):
         repeated = _repeated(covers)
         if repeated:
             raise ValueError(f"{where} lists {repeated} more than once")
-        for key, items in (("entries", self.entries), ("coverage", coverage)):
+        for key, items in (("entries", self.entries), ("coverage", self.coverage)):
             descent = _first_descent([entry.covers for entry in items])
             if descent is not None:
                 raise ValueError(
@@ -468,15 +433,11 @@ class CompactIndex(Contract):
         return self
 
     @model_validator(mode="after")
-    def _an_entry_with_no_file_counts_nothing_and_its_lost_days_are_its_own(self) -> Self:
-        """An entry with no file counts nothing, and a lost day is a day its own entry covers."""
+    def _lost_days_are_in_the_period_they_belong_to(self) -> Self:
+        """Only a day can be lost; coarser records list the days they lost."""
         where = f"the {self.ledger.value} {self.period.value} index"
-        for entry in self.period_entries:
-            if entry.state is not EntryState.PACKED and (entry.rows or entry.bytes):
-                raise ValueError(
-                    f"{where} marks {entry.covers!r} {entry.state.value} with rows {entry.rows} "
-                    f"and bytes {entry.bytes}, and an entry with no file counts neither"
-                )
+        records: list[CompactEntry | CompactCoverage] = [*self.entries, *self.coverage]
+        for entry in records:
             if entry.state == EntryState.LOST and self.period is not Period.DAILY:
                 raise ValueError(
                     f"{where} marks {entry.covers!r} lost, and only a day is lost: a month or a "

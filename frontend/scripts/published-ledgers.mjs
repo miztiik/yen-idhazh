@@ -35,7 +35,7 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { siteKeepsFrom } from '../src/lib/data/site-window.ts';
-import { namesFile, newestNamed } from '../src/lib/data/slice.ts';
+import { newestNamed } from '../src/lib/data/slice.ts';
 import { COMPACT_INDEX_STAMP, compactPeriods, readIndex } from '../src/lib/data/compact-index.ts';
 import { CONFIG_ROOT, ledgerCatalog, ledgerFolders, REGISTRY } from './ledger-prefixes.mjs';
 
@@ -147,26 +147,11 @@ function indexForCopy(text, ledger, period) {
 	} catch {
 		return 'is not JSON';
 	}
-	if (index === null || typeof index !== 'object') return 'is not an index';
-	const held = /** @type {{ledger?: unknown, period?: unknown, version?: unknown, entries?: unknown}} */ (index);
-	if (held.ledger !== ledger || held.period !== period) {
-		return `describes ${String(held.ledger)} ${String(held.period)}, not ${ledger} ${period}`;
-	}
-	if (!Array.isArray(held.entries)) return 'has no list of entries';
-	const unit = period === 'daily' ? 'day' : period === 'monthly' ? 'month' : 'year';
-	for (const entry of held.entries) {
-		const covers = entry !== null && typeof entry === 'object' ? entry.covers : undefined;
-		if (entryRange(period, covers) === null) {
-			return `names ${JSON.stringify(covers)}, which is not a UTC ${unit}`;
-		}
-	}
-	if ('coverage' in held || (typeof held.version === 'string' && held.version >= COMPACT_INDEX_STAMP)) {
-		const reading = readIndex(held, ledger, period);
-		if ('refused' in reading) return reading.refused.reason === 'newer'
-			? `is stamped ${reading.refused.stamp} and this build reads ${COMPACT_INDEX_STAMP} or older`
-			: reading.refused.detail;
-	}
-	return /** @type {import('../src/lib/data/compact-index.ts').CompactIndex} */ (held);
+	const reading = readIndex(index, ledger, period);
+	if ('refused' in reading) return reading.refused.reason === 'newer'
+		? `is stamped ${reading.refused.stamp} but this build expects ${COMPACT_INDEX_STAMP}`
+		: reading.refused.detail;
+	return reading.index;
 }
 
 /**
@@ -186,9 +171,8 @@ function filesNamedIn(text, ledger, folder, period, firstDay, lastDay) {
 		return range !== null && range.last >= firstDay && range.first <= lastDay;
 	};
 	const entries = index.entries.filter(kept);
-	const files = entries.filter(namesFile).map(entry => `compact/${folder}/${namedFile(period, entry.covers)}`);
-	const trimmed = { ...index, entries };
-	if (index.coverage) trimmed.coverage = index.coverage.filter(kept);
+	const files = entries.map(entry => `compact/${folder}/${namedFile(period, entry.covers)}`);
+	const trimmed = { ...index, entries, coverage: index.coverage.filter(kept) };
 	return { files, text: `${JSON.stringify(trimmed, null, 2)}\n` };
 }
 

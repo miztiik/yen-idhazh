@@ -38,9 +38,9 @@ export async function selectPlannerPublication(root: string, raw: unknown): Prom
     }
   }
   for (const index of Object.values(result.indexes)) {
-    index.entries = index.entries.flatMap(entry => {
-      if (entry.state !== "packed" || !refused.has(periodFile(index.ledger, index.period, entry.covers))) {
-        return [entry];
+    index.entries = index.entries.filter(entry => {
+      if (!refused.has(periodFile(index.ledger, index.period, entry.covers))) {
+        return true;
       }
       const daily = index.period === "daily";
       const coverage: CompactCoverage = {
@@ -48,11 +48,10 @@ export async function selectPlannerPublication(root: string, raw: unknown): Prom
         lost_days: daily ? [] : coveredDays(index.period, entry.covers),
         set_aside: entry.set_aside + (daily ? 0 : 1),
       };
-      if (index.coverage === undefined) return [{ ...coverage, rows: 0, bytes: 0, file_sha256: null }];
       index.coverage.push(coverage);
-      return [];
+      return false;
     });
-    index.coverage?.sort((left, right) => left.covers.localeCompare(right.covers));
+    index.coverage.sort((left, right) => left.covers.localeCompare(right.covers));
   }
   return PlannerPublicationResultSchema.parse(result);
 }

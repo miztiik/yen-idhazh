@@ -101,12 +101,7 @@ from idhazh.contracts.gardener_events import (
 )
 from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
 from idhazh.contracts.ledger_fault import LedgerFault
-from idhazh.contracts.ledger_index import (
-    COMPACT_INDEX_WRITE_VERSION,
-    CompactEntry,
-    CompactIndex,
-    EntryState,
-)
+from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, EntryState
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.gardener import error_cause, event_log, ledger_marks, named_trees
 from idhazh.gardener.error_cause import ErrorCause
@@ -851,7 +846,6 @@ class CompactTree:
         """Serialize one final index after all stages have decided its entries."""
         held = self.entries(period)
         index = CompactIndex.from_period_entries(
-            version=COMPACT_INDEX_WRITE_VERSION,
             ledger=self.ledger,
             period=period,
             entries=[held[covers] for covers in sorted(held)],

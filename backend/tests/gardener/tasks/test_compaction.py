@@ -53,8 +53,6 @@ from idhazh.contracts.gardener_events import (
 from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
 from idhazh.contracts.knobs.gardener import MonthsWindow
 from idhazh.contracts.ledger_index import (
-    COMPACT_INDEX_LEGACY_VERSION,
-    COMPACT_INDEX_SPLIT_VERSION,
     CompactEntry,
     CompactIndex,
     EntryState,
@@ -281,7 +279,7 @@ def test_a_first_pass_starts_at_its_oldest_raw_day_and_a_quiet_day_has_no_file(
     index = json.loads(index_of(root, Period.DAILY).read_bytes())
     packed = ledger.compact_file(state(root), VISUALS, Period.DAILY, "2026-09-20")
     assert packed is not None
-    assert index["version"] == COMPACT_INDEX_SPLIT_VERSION
+    assert index["version"] == CompactIndex.schema_version()
     assert index["entries"] == [{"covers": "2026-09-20", "rows": 1, "bytes": packed.stat().st_size}]
     assert index["coverage"] == [{"covers": "2026-09-21", "state": "empty"}]
     assert compact_rows(root, Period.DAILY, "2026-09-20") == [a_pass("2026-09-20")]
@@ -652,7 +650,7 @@ def test_a_day_the_daily_index_lost_with_its_file_is_recorded_lost_and_its_month
     compact(root, date(2026, 10, 20), max_periods_per_run=100)
     index = CompactIndex.read(index_of(root, Period.DAILY))
     kept = [entry for entry in index.period_entries if entry.covers != "2026-08-10"]
-    an_index(root, Period.DAILY, kept, version=index.version)
+    an_index(root, Period.DAILY, kept)
     lost = ledger.compact_file(state(root), VISUALS, Period.DAILY, "2026-08-10")
     assert lost is not None
     lost.unlink()
@@ -704,8 +702,6 @@ def test_a_day_file_that_cannot_be_read_when_its_month_closes_is_set_aside_and_i
     filed(root, a_pass("2026-08-05"))
     filed(root, a_pass("2026-08-20", run="2"))
     compact(root, date(2026, 10, 20), max_periods_per_run=100)
-    daily = CompactIndex.read(index_of(root, Period.DAILY))
-    an_index(root, Period.DAILY, daily.period_entries, version=COMPACT_INDEX_LEGACY_VERSION)
     broken = ledger.compact_file(state(root), VISUALS, Period.DAILY, "2026-08-05")
     assert broken is not None
     broken.write_bytes(b"not a ledger file\n")
@@ -716,7 +712,7 @@ def test_a_day_file_that_cannot_be_read_when_its_month_closes_is_set_aside_and_i
     august = ledger.compact_file(state(root), VISUALS, Period.MONTHLY, "2026-08")
     assert august is not None
     monthly = json.loads(index_of(root, Period.MONTHLY).read_bytes())
-    assert monthly["version"] == COMPACT_INDEX_SPLIT_VERSION
+    assert monthly["version"] == CompactIndex.schema_version()
     assert monthly["entries"] == [{
         "covers": "2026-08",
         "rows": 1,
@@ -726,7 +722,7 @@ def test_a_day_file_that_cannot_be_read_when_its_month_closes_is_set_aside_and_i
     }]
     assert monthly["coverage"] == []
     kept = json.loads(index_of(root, Period.DAILY).read_bytes())
-    assert kept["version"] == COMPACT_INDEX_SPLIT_VERSION
+    assert kept["version"] == CompactIndex.schema_version()
     assert all(
         not record["covers"].startswith("2026-08-")
         for records in (kept["entries"], kept["coverage"])
@@ -1033,7 +1029,7 @@ def test_a_pass_that_writes_the_daily_index_writes_the_other_two_empty_when_none
 
     for period in Period:
         held = CompactIndex.read(index_of(root, period))
-        assert held.version == COMPACT_INDEX_SPLIT_VERSION and held.coverage is not None
+        assert held.version == CompactIndex.schema_version()
         assert (held.ledger, held.period) == (VISUALS, period)
         assert index_of(root, period).relative_to(root).as_posix() in outcome.written
         if period in COARSER:
@@ -1075,13 +1071,9 @@ def test_a_pass_never_deletes_a_coarser_index_and_leaves_an_empty_one_as_it_is(
     assert daily_covers(root)[-1] == "2026-09-23"
 
 
-def an_index(
-    root: Path, period: Period, entries: list[CompactEntry], *, version: str | None = None
-) -> None:
-    """One period's index naming these periods, in the selected wire format."""
-    held = CompactIndex.from_period_entries(
-        ledger=VISUALS, period=period, entries=entries, version=version
-    )
+def an_index(root: Path, period: Period, entries: list[CompactEntry]) -> None:
+    """One period's index naming these periods, as compaction writes it."""
+    held = CompactIndex.from_period_entries(ledger=VISUALS, period=period, entries=entries)
     path = index_of(root, period)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(held.to_json().encode("ascii"))

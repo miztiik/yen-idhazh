@@ -5,11 +5,12 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ledgerCopy, publishedLedgers } from '../scripts/published-ledgers.mjs';
 import { siteKeepsFrom } from '../src/lib/data/site-window';
-import { COMPACT_INDEX_STAMP } from '../src/lib/data/compact-index';
+import { COMPACT_INDEX_STAMP, compactPeriods, type CompactIndex } from '../src/lib/data/compact-index';
 import { daysBetween } from '../src/lib/data/slice';
 import { backendPython } from './support/backend-python';
 import { sliceFromDisk } from '../src/lib/server/ledger-disk';
 import { buildFeedLedgers, FEED_LEDGERS, stageFeedLedgers } from './support/feed-ledgers';
+import { compactIndex } from './support/ledger-lifecycle';
 import { ledgerFolders } from '../scripts/ledger-prefixes.mjs';
 import { ledgerFolder } from '../src/lib/data/slice-reader';
 import { configuredCatalog } from '../src/lib/data/configured-catalog';
@@ -38,11 +39,12 @@ function aStateTree(files: Record<string, string>, name = 'state'): string {
 /** An index as the compaction writes one, naming these periods. */
 function anIndex(ledger: string, period: 'daily' | 'monthly' | 'yearly', covers: string[]): string {
 	const entries = covers.map((each) => ({ bytes: 4, covers: each, rows: 1 }));
-	return `${JSON.stringify({ entries, ledger, period, version: '2026-09-27' }, null, 2)}\n`;
+	return `${JSON.stringify(compactIndex(ledger, period, entries), null, 2)}\n`;
 }
 
 function coversIn(index: string): string[] {
-	return (JSON.parse(index).entries as { covers: string }[]).map((entry) => entry.covers);
+	const held: CompactIndex = JSON.parse(index);
+	return compactPeriods(held).map((record) => record.covers);
 }
 
 /** A whole ledger: all indexes, every file they name, and a stray file no index names. */
@@ -314,8 +316,7 @@ test('the copy is capped from the newest packed day and trims each index to the 
 
 /** A daily index naming every UTC day from `first` to `last`, each a day that held no row. */
 function quietDays(ledger: string, first: string, last: string): string {
-	const entries = daysBetween(first, last).map((covers) => ({ bytes: 0, covers, rows: 0, state: 'empty' }));
-	return `${JSON.stringify({ entries, ledger, period: 'daily', version: '2026-10-04' }, null, 2)}\n`;
+	return `${JSON.stringify(compactIndex(ledger, 'daily', daysBetween(first, last).map(empty)), null, 2)}\n`;
 }
 
 test('a 90-day copy keeps entries overlapping 18 Mar to 15 Jun 2030', () => {
@@ -386,7 +387,7 @@ function aLedgerHolding(ledger: string, indexes: Record<Period, Entry[]>): Recor
 	for (const period of ['daily', 'monthly', 'yearly'] as const) {
 		const entries = indexes[period];
 		tree[`compact/${ledger}/index/${period}.json`] =
-			`${JSON.stringify({ entries, ledger, period, version: '2026-10-04' }, null, 2)}\n`;
+			`${JSON.stringify(compactIndex(ledger, period, entries), null, 2)}\n`;
 		for (const entry of entries) {
 			if (entry.state === 'packed') tree[`compact/${ledger}/${fileOf(period, entry.covers)}`] = 'PAR1';
 		}
@@ -525,7 +526,7 @@ for (const each of STAGES) {
 		expect(copy.files.some((file) => file.startsWith('raw/'))).toBe(false);
 		for (const period of ['daily', 'monthly', 'yearly'] as const) {
 			const index = JSON.parse(copy.indexes[`compact/item-health/index/${period}.json`]);
-			expect(index.entries, period).toEqual(each.kept[period]);
+			expect(compactPeriods(index), period).toEqual(each.kept[period]);
 		}
 
 	});
@@ -635,11 +636,11 @@ test('an empty or a lost day stays in its index and names no file, so none is co
 	const tree = aWholeLedger('host-fingerprint');
 	const entries = [
 		{ bytes: 4, covers: '2026-09-01', rows: 1 },
-		{ bytes: 0, covers: '2026-09-02', rows: 0, state: 'empty' },
-		{ bytes: 0, covers: '2026-09-03', rows: 0, state: 'lost' }
+		empty('2026-09-02'),
+		lost('2026-09-03')
 	];
 	tree['compact/host-fingerprint/index/daily.json'] = `${JSON.stringify(
-		{ entries, ledger: 'host-fingerprint', period: 'daily', version: '2026-10-04' },
+		compactIndex('host-fingerprint', 'daily', entries),
 		null,
 		2
 	)}\n`;
@@ -688,9 +689,9 @@ test('an index that is not this ledger\'s, or names a path rather than a day, st
 	tree['compact/summary-quality-evals/index/yearly.json'] = anIndex('summary-quality-evals', 'yearly', ['../../escape']);
 	const copy = ledgerCopy(aStateTree(tree), ['summary-quality-evals']);
 	expect(copy.refused).toEqual([
-		'summary-quality-evals: state/compact/summary-quality-evals/index/daily.json describes item-health daily, not summary-quality-evals daily',
-		'summary-quality-evals: state/compact/summary-quality-evals/index/monthly.json names "../../../escape", which is not a UTC month',
-		'summary-quality-evals: state/compact/summary-quality-evals/index/yearly.json names "../../escape", which is not a UTC year'
+		'summary-quality-evals: state/compact/summary-quality-evals/index/daily.json it names the ledger "item-health"',
+		'summary-quality-evals: state/compact/summary-quality-evals/index/monthly.json entry 0 covers "../../../escape", which is not a monthly period',
+		'summary-quality-evals: state/compact/summary-quality-evals/index/yearly.json entry 0 covers "../../escape", which is not a yearly period'
 	]);
 	expect(copy.files).toEqual([]);
 });

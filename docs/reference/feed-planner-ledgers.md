@@ -279,7 +279,7 @@ recordable when a later stage fails.
 Compaction preserves row identity and recorded values. It does not recalculate
 scores, add saved lookback values, change evaluation clocks or turn missing
 evidence into complete data.
-Planner history accepts both [compact index layouts](../architecture/contracts/persistence.md#what-an-index-entry-says).
+Planner history reads the [current compact index](../architecture/contracts/persistence.md#what-an-index-entry-says).
 No-file coverage and expiry inform history selection without changing the
 planner's raw membership or Parquet format.
 
