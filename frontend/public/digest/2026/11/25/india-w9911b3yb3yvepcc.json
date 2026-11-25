@@ -1,0 +1,57 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Percentage change vs prior session",
+    "y": "Change (%)"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m6",
+      "m7",
+      "m8",
+      "m9",
+      "m10",
+      "m11"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-w9911b3yb3yvepcc",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Australian dollar (AUD)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "New Zealand dollar (NZD)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Euro (EUR)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m3","source_text": null,"text": "US dollar index (DXY)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m4","source_text": null,"text": "Bitcoin (BTC)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m5","source_text": null,"text": "Ether (ETH)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-1811-1816","mark_id": "m6","source_text": null,"text": null,"time": null,"unit": "%","value": "0.29"},
+    {"derived": null,"element_id": "quantity-1884-1889","mark_id": "m7","source_text": null,"text": null,"time": null,"unit": "%","value": "0.09"},
+    {"derived": null,"element_id": "quantity-922-927","mark_id": "m8","source_text": null,"text": null,"time": null,"unit": "%","value": "0.03"},
+    {"derived": null,"element_id": "quantity-870-875","mark_id": "m9","source_text": null,"text": null,"time": null,"unit": "%","value": "0.44"},
+    {"derived": null,"element_id": "quantity-1936-1941","mark_id": "m10","source_text": null,"text": null,"time": null,"unit": "%","value": "0.52"},
+    {"derived": null,"element_id": "quantity-1978-1983","mark_id": "m11","source_text": null,"text": null,"time": null,"unit": "%","value": "0.54"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Currency Movements on October Data Release Day",
+  "type": "bar",
+  "version": "2026-11-22"
+}
