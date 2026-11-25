@@ -5,9 +5,11 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Final
 
+import pytest
 from support.paths import CONFIG_DIR, FIXTURES_DIR, read_text
 
 from idhazh.contracts.app_config import AppConfig
+from idhazh.contracts.derived import DerivedFunction
 from idhazh.contracts.element import ElementTable
 from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.visual import VisualPlan, VisualType
@@ -68,6 +70,31 @@ def test_dot_compilation_keeps_the_source_order_and_each_stated_measure() -> Non
     assert [Decimal(by_id[mark_id].value or "0") for mark_id in quantities] == _quantities(table, plan)
     assert compiled.data.emphasized_mark_id == quantities[1]
     assert "Dot chart." in compiled.alt_text
+
+
+@pytest.mark.parametrize("kind", [VisualType.BAR, VisualType.DOT, VisualType.LINE])
+def test_selected_negative_magnitude_reaches_marks_alt_text_and_provenance(kind: VisualType) -> None:
+    table = ElementTable.read(LINE if kind is VisualType.LINE else WIND)
+    original = _line_plan() if kind is VisualType.LINE else VisualPlan.read(PLAN)
+    selected = original.encodings.quantity[0]
+    plan = VisualPlan.model_validate(original.model_dump() | {
+        "type": kind, "negative_magnitude_element_ids": [selected],
+    })
+    source = next(element for element in table.elements if element.element_id == selected)
+    before = table.to_json()
+    chart = compile_chart(plan, table, visuals=_visuals())
+    marks = {mark.mark_id: mark for mark in chart.data.marks}
+    mark = marks[chart.data.encoding.quantity[0]]
+    assert mark.element_id is None and mark.derived is not None
+    assert mark.derived.function is DerivedFunction.NEGATIVE_MAGNITUDE
+    assert mark.derived.inputs == [selected]
+    assert Decimal(mark.value or "") == Decimal(source.value or "").copy_abs().copy_negate()
+    assert mark.source_text == source.span_excerpt
+    assert mark.derived.source_unit is None and mark.derived.unit_table_version is None
+    assert "-" in chart.alt_text
+    assert chart.evidence.derived_values == 1
+    assert VisualData.from_json(chart.data.to_json()) == chart.data
+    assert table.to_json() == before
 
 
 def test_slope_compilation_pairs_two_source_values_for_each_named_entity() -> None:

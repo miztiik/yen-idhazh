@@ -103,6 +103,14 @@ class VisualsConfig(Model):
         description="Minimum supported numeric readings for a chart.",
     )
     max_chart_points: int = Field(default=8, ge=2)
+    evidence_max_chars: int = Field(
+        default=3200, ge=1,
+        description="Maximum characters in the complete untrusted chart evidence block.",
+    )
+    evidence_max_readings: int = Field(
+        default=24, ge=2,
+        description="Maximum quantity and date occurrences offered with verbatim passages.",
+    )
     max_pie_parts: int = Field(
         default=5,
         ge=2,

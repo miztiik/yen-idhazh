@@ -7,8 +7,9 @@ from typing import Any, Final
 
 from idhazh import config
 from idhazh.anchor_mentions import Mention
+from idhazh.ask_text_analysis import Sentence
 from idhazh.classify.calls import build_summary_request
-from idhazh.classify.chart_candidates import chart_candidates
+from idhazh.classify.chart_candidates import ChartCandidate, chart_candidates
 from idhazh.classify.plan_visual_request import chart_forms
 from idhazh.contracts.article import Article
 from idhazh.contracts.element import ElementTable
@@ -38,6 +39,19 @@ WIND_TEXT: Final = (
     "has made. Germany approved 900 MW on the same day, and Poland approved 640 MW. Ireland "
     "approved 410 MW, completing the round. None of the four regulators published the prices."
 )
+
+
+def sentences_of(text: str) -> tuple[Sentence, ...]:
+    """Finite authored analysis spans, split only at sentence-ending punctuation."""
+    return tuple(
+        Sentence(found.group(), found.start(), found.end())
+        for found in re.finditer(r"\S(?:.*?\S)?(?:[.!?](?=\s|$)|$)", text, re.DOTALL)
+    )
+
+
+def candidates_for(table: ElementTable, text: str) -> tuple[ChartCandidate, ...]:
+    """Offer the source's actual sentence offsets, not a value/unit matcher."""
+    return chart_candidates(table, text, sentences_of(text))
 
 
 def a_table(
@@ -104,7 +118,7 @@ def summary_payload(
         server=entry.server,
         sampling=entry.sampling,
         markers=a_markers(),
-        candidates=chart_candidates(table),
+        candidates=candidates_for(table, article.text or ""),
         prompt_files=settings.app.prompt_files,
         config_dir=settings.config_dir,
     )

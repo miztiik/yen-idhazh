@@ -256,6 +256,7 @@ def run_calls(
             settings,
             date=plan.date,
             mentions=analysis.mentions,
+            sentences=analysis.sentences,
             run_id=identity.run_id,
             recorder=recorder,
             capture_root=capture_root,

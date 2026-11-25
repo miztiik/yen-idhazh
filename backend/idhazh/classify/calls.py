@@ -13,13 +13,19 @@ from typing import Annotated, Any, NamedTuple
 from pydantic import BaseModel, Field, ValidationError, ValidatorFunctionWrapHandler, WrapValidator
 
 from idhazh import summarize
-from idhazh.classify.chart_candidates import ChartCandidate, candidate_block
-from idhazh.classify.chart_reply import ChartProposal, Reading
+from idhazh.classify.chart_candidates import (
+    ChartCandidate,
+    candidate_block,
+    evidence_forms,
+    time_candidates,
+)
+from idhazh.classify.chart_reply import ChartProposal
 from idhazh.classify.plan_visual_request import chart_capabilities
 from idhazh.config import DEFAULT_CONFIG_DIR
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import Model as ContractModel
 from idhazh.contracts.base import canonical_json
+from idhazh.contracts.element import ElementKind
 from idhazh.contracts.knobs.prompts import PromptFilesConfig
 from idhazh.contracts.knobs.summarize import SummarizeConfig
 from idhazh.contracts.knobs.visuals import VisualsConfig
@@ -84,12 +90,14 @@ def summarize_and_plan_schema(
     plan: bool = True,
     visuals: VisualsConfig | None = None,
     forms: tuple[VisualType, ...] | None = None,
-    readings: Sequence[Reading] = (),
+    readings: Sequence[ChartCandidate] = (),
 ) -> dict[str, Any]:
-    """Constrain form, shape and complete value/unit pairs independently of the prose."""
+    """Constrain occurrence IDs and roles, never put article strings in the grammar."""
     if not plan:
         return summarize_and_plan_model(plan=False).model_json_schema()
     offered = chart_capabilities(visuals or VisualsConfig()) if forms is None else forms
+    if readings:
+        offered = evidence_forms(offered, readings)
     if not offered:
         return summarize_and_plan_model(plan=False).model_json_schema()
     schema = summarize_and_plan_model().model_json_schema()
@@ -97,6 +105,10 @@ def summarize_and_plan_schema(
     tagged = schema["properties"]["visual"]["anyOf"][0]
     names = tagged["discriminator"]["mapping"]
     branches: list[dict[str, Any]] = [{"type": "null"}]
+    quantities = [
+        entry.evidence_id for entry in readings if entry.element.kind is ElementKind.QUANTITY
+    ]
+    dates = [entry.evidence_id for entry in time_candidates(readings)]
     for form in offered:
         shape = _inline_refs({"$ref": names[form.value]}, definitions, share_reading=bool(readings))
         fields = shape["properties"]
@@ -108,28 +120,57 @@ def summarize_and_plan_schema(
             shape["required"].append("axis_titles")
         shape["properties"] = {"type": {"const": form.value}, **fields}
         shape["required"] = ["type", *(name for name in shape["required"] if name != "type")]
+        if readings:
+            _bind_date_ids(shape)
+        if form is VisualType.HISTOGRAM:
+            if readings:
+                fields["rows"]["items"] = {"$ref": "#/$defs/AsStatedReading"}
+            else:
+                fields["rows"]["items"]["properties"]["interpretation"] = {"const": "as_stated"}
         branches.append(shape)
     schema["properties"]["visual"] = {"anyOf": branches}
     schema["properties"]["summary"] = _inline_refs(
         schema["properties"]["summary"], definitions, share_reading=False,
     )
     if readings:
-        pairs = dict.fromkeys((reading.value, reading.unit) for reading in readings)
         schema["$defs"] = {
-            "Reading": {"anyOf": [
-                {
-                    "type": "object",
-                    "properties": {
-                        "value": {"const": value},
-                        "unit": {"const": unit} if unit is not None else {"type": "null"},
+            "QuantityEvidenceId": {"type": "string", "enum": quantities},
+            "Reading": {
+                "type": "object",
+                "properties": {
+                    "evidence_id": {"$ref": "#/$defs/QuantityEvidenceId"},
+                    "interpretation": {
+                        "enum": ["as_stated", "negative_magnitude"], "type": "string",
                     },
-                    "required": ["value", "unit"],
-                    "additionalProperties": False,
-                }
-                for value, unit in pairs
-            ]}
+                },
+                "required": ["evidence_id", "interpretation"],
+                "additionalProperties": False,
+            },
         }
+        if len(dates) >= 2:
+            schema["$defs"]["DateEvidenceId"] = {"type": "string", "enum": dates}
+        if VisualType.HISTOGRAM in offered:
+            schema["$defs"]["AsStatedReading"] = {
+                **schema["$defs"]["Reading"],
+                "properties": {
+                    **schema["$defs"]["Reading"]["properties"],
+                    "interpretation": {"const": "as_stated"},
+                },
+            }
     return schema
+
+
+def _bind_date_ids(node: Any) -> None:
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if key == "properties":
+                for name in ("date", "start_date", "end_date"):
+                    if name in value:
+                        value[name] = {"$ref": "#/$defs/DateEvidenceId"}
+            _bind_date_ids(value)
+    elif isinstance(node, list):
+        for value in node:
+            _bind_date_ids(value)
 
 
 def chart_addendum(
@@ -183,8 +224,9 @@ def build_summary_request(
     config_dir: Path = DEFAULT_CONFIG_DIR,
 ) -> dict[str, Any]:
     """Use the declared model budget and the reply shape for this specific item."""
-    if forms and len(candidates) < 2:
+    if forms and sum(entry.element.kind is ElementKind.QUANTITY for entry in candidates) < 2:
         raise ValueError("a chart request needs at least two supplied readings")
+    forms = evidence_forms(forms, candidates)
     return completion_payload(
         model_id=model_id,
         system=summary_system_prompt(
@@ -194,7 +236,7 @@ def build_summary_request(
             candidate_block(candidates) if forms else ""
         ),
         output_schema=summarize_and_plan_schema(
-            forms=forms, readings=[candidate.reading for candidate in candidates],
+            forms=forms, readings=candidates,
         ),
         server=server,
         sampling=sampling,
@@ -230,9 +272,7 @@ def output_schema_text(visuals: VisualsConfig) -> str:
     """Fingerprint both reply variants, including the per-item reading shape."""
     schemas = [summarize_and_plan_schema(plan=False)]
     if chart_capabilities(visuals):
-        schemas.append(summarize_and_plan_schema(
-            visuals=visuals, readings=(Reading(value="0", unit=None), Reading(value="1", unit="%")),
-        ))
+        schemas.append(summarize_and_plan_schema(visuals=visuals))
     return canonical_json(schemas)
 
 

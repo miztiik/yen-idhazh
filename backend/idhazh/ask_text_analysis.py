@@ -1,4 +1,4 @@
-"""Which people and places does the text-analysis service find in one article?
+"""Which mention and sentence spans does the service find in one article?
 
 One synchronous POST of `Article.text` to the service the digest job started on this
 runner, answered by the labelled spans it found. The address is the committed
@@ -15,10 +15,11 @@ mention that does not point at the words it names is dropped, and every excerpt 
 pipeline later shows a model is re-sliced from the article itself. The label is a key
 into `elements.label_kinds` and reaches no prompt, path, URL or command.
 
-**The service failing costs the item its names and nothing else.** A closed port, a
-service that never answers, a refusal and a reply this build cannot read each return no
-mentions and name the reason. The caller logs each returned label and range with its
-validation result, keyed by the item's identity instead of the URL itself. A caller
+**The service failing leaves the summary-only path available.** A closed port,
+timeout or refusal names the reason. Features and spans are checked independently,
+so a malformed sentence never discards valid mentions. The caller logs each
+returned mention range with its validation result and rejected sentence ranges,
+keyed by the item's identity instead of the URL itself. A caller
 with a capture directory keeps the same record there. There is no retry: a second try
 against a hung service would double the time a bad runner can spend on one item.
 """
@@ -33,7 +34,7 @@ import urllib.error
 import urllib.request
 from enum import StrEnum
 from pathlib import Path
-from typing import Final, Literal, NamedTuple
+from typing import Any, Final, NamedTuple
 
 from pydantic import BaseModel, ConfigDict, StrictInt, StrictStr, ValidationError
 
@@ -51,8 +52,14 @@ LOG: Final = logging.getLogger("idhazh")
 #: declaration.
 ANALYZE_PATH: Final = "/api/2026-11-08/run-ner-spacy"
 
-#: The one feature asked for. Its result is the raw mention list this module reads.
-FEATURE: Final = "entities"
+#: Native feature names from the dated service protocol.
+FEATURES: Final = ("entities", "sentences")
+
+
+class Sentence(NamedTuple):
+    text: str
+    start_char: int
+    end_char: int
 
 
 class Outcome(StrEnum):
@@ -78,39 +85,29 @@ class Answer(NamedTuple):
     #: ended in a timeout. It is what `analyze_ms` records.
     elapsed_ms: int
     http_status: int | None = None
+    sentences: tuple[Sentence, ...] = ()
 
 
-class _Read(BaseModel):
+class _Span(BaseModel):
     """The only fields of a mention this module reads. The rest of the reply is ignored."""
 
     model_config = ConfigDict(extra="ignore", strict=True)
 
     text: StrictStr
-    label: StrictStr
     start_char: StrictInt
     end_char: StrictInt
 
 
-class _Mentions(BaseModel):
-    model_config = ConfigDict(extra="ignore", strict=True)
-
-    mentions: list[_Read]
-
-
-class _EntitiesFeature(BaseModel):
-    model_config = ConfigDict(extra="ignore", strict=True)
-
-    feature: Literal["entities"]
-    status: Literal["complete"]
-    data: _Mentions
+class _Read(_Span):
+    label: StrictStr
 
 
 class _Reply(BaseModel):
-    """A reply that carries exactly the one complete feature that was asked for."""
+    """Read each requested feature independently so valid siblings survive."""
 
     model_config = ConfigDict(extra="ignore", strict=True)
 
-    features: tuple[_EntitiesFeature]
+    features: list[dict[str, Any]]
 
 
 class _SpanStatus(StrEnum):
@@ -125,10 +122,12 @@ def _record_result(
     spans: tuple[tuple[Mention, _SpanStatus], ...],
     *,
     capture_root: Path | None,
+    sentence_spans: tuple[tuple[Sentence, _SpanStatus], ...] = (),
 ) -> None:
     dropped_mentions = len(spans) - len(answer.mentions)
+    dropped_sentences = len(sentence_spans) - len(answer.sentences)
     level = logging.INFO
-    if answer.outcome is not Outcome.OK or dropped_mentions:
+    if answer.outcome is not Outcome.OK or dropped_mentions or dropped_sentences:
         level = logging.WARNING
     if capture_root is None and not LOG.isEnabledFor(level):
         return
@@ -143,6 +142,14 @@ def _record_result(
             "returned_spans": [
                 mention._asdict() | {"status": status.value} for mention, status in spans
             ],
+            **({
+                "dropped_sentences": dropped_sentences,
+                "returned_sentences": [
+                    {"start_char": sentence.start_char, "end_char": sentence.end_char,
+                     "status": status.value}
+                    for sentence, status in sentence_spans
+                ],
+            } if dropped_sentences else {}),
         },
         separators=(",", ":"),
     )
@@ -158,7 +165,7 @@ def _record_result(
             )
 
 
-def _span_status(text: str, read: _Read) -> _SpanStatus:
+def _span_status(text: str, read: _Span) -> _SpanStatus:
     if not 0 <= read.start_char < read.end_char <= len(text):
         return _SpanStatus.INVALID_OFFSETS
     if text[read.start_char : read.end_char] != read.text:
@@ -168,10 +175,10 @@ def _span_status(text: str, read: _Read) -> _SpanStatus:
 
 def _read_mentions(
     text: str, config: TextAnalysisConfig
-) -> tuple[list[_Read], Outcome, int | None]:
+) -> tuple[list[_Read], list[_Span], Outcome, int | None]:
     request = urllib.request.Request(
         config.base_url + ANALYZE_PATH,
-        data=json.dumps({"text": text, "language": config.language, "features": [FEATURE]}).encode(
+        data=json.dumps({"text": text, "language": config.language, "features": FEATURES}).encode(
             "utf-8"
         ),
         headers={"Content-Type": "application/json", "Accept": "application/json"},
@@ -184,22 +191,50 @@ def _read_mentions(
         # Before URLError and OSError, which it subclasses: a service that answered
         # is not an unreachable one.
         with error:
-            return [], Outcome.REFUSED, error.code
+            return [], [], Outcome.REFUSED, error.code
     except TimeoutError:
-        return [], Outcome.TIMED_OUT, None
+        return [], [], Outcome.TIMED_OUT, None
     except urllib.error.URLError as error:
         timed_out = isinstance(error.reason, TimeoutError)
-        return [], Outcome.TIMED_OUT if timed_out else Outcome.UNREACHABLE, None
+        return [], [], Outcome.TIMED_OUT if timed_out else Outcome.UNREACHABLE, None
     except OSError:
-        return [], Outcome.UNREACHABLE, None
+        return [], [], Outcome.UNREACHABLE, None
     except http.client.HTTPException:
-        return [], Outcome.MALFORMED, None
+        return [], [], Outcome.MALFORMED, None
 
     try:
         reply = _Reply.model_validate_json(body)
     except ValidationError:
-        return [], Outcome.MALFORMED, None
-    return reply.features[0].data.mentions, Outcome.OK, None
+        return [], [], Outcome.MALFORMED, None
+    mentions: list[_Read] = []
+    sentences: list[_Span] = []
+    malformed = False
+    for name, field in (
+        ("entities", "mentions"),
+        ("sentences", "sentences"),
+    ):
+        matching = [feature for feature in reply.features if feature.get("feature") == name]
+        if len(matching) != 1:
+            malformed = True
+            continue
+        feature = matching[0]
+        data = feature.get("data")
+        if feature.get("status") != "complete" or not isinstance(data, dict):
+            malformed = True
+            continue
+        rows = data.get(field)
+        if not isinstance(rows, list):
+            malformed = True
+            continue
+        for row in rows:
+            try:
+                if name == "entities":
+                    mentions.append(_Read.model_validate(row))
+                else:
+                    sentences.append(_Span.model_validate(row))
+            except ValidationError:
+                malformed = True
+    return mentions, sentences, Outcome.MALFORMED if malformed else Outcome.OK, None
 
 
 def ask_for_mentions(
@@ -212,12 +247,24 @@ def ask_for_mentions(
     """
     text = article.text or ""
     started = time.monotonic()
-    reads, outcome, status = _read_mentions(text, config)
+    reads, sentence_reads, outcome, status = _read_mentions(text, config)
     spans = tuple(
         (Mention(read.label, read.start_char, read.end_char), _span_status(text, read))
         for read in reads
     )
     kept = tuple(mention for mention, check in spans if check is _SpanStatus.ACCEPTED)
-    answer = Answer(kept, outcome, int((time.monotonic() - started) * 1000), status)
-    _record_result(article, answer, spans, capture_root=capture_root)
+    sentence_spans = tuple(
+        (Sentence(read.text, read.start_char, read.end_char), _span_status(text, read))
+        for read in sentence_reads
+    )
+    sentences = tuple(
+        Sentence(
+            text[sentence.start_char:sentence.end_char], sentence.start_char, sentence.end_char,
+        )
+        for sentence, check in sentence_spans if check is _SpanStatus.ACCEPTED
+    )
+    answer = Answer(kept, outcome, int((time.monotonic() - started) * 1000), status, sentences)
+    _record_result(
+        article, answer, spans, capture_root=capture_root, sentence_spans=sentence_spans,
+    )
     return answer

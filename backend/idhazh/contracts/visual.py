@@ -199,6 +199,7 @@ class VisualPlan(Contract):
 
     __schema_stem__: ClassVar[str] = "visual-plan"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(version="2026-11-25", change="Select signed readings.", why="Keep sources."),
         ChangelogEntry(
             version="2026-11-22", change="Separate model wording from reading references.",
             why="A display label is not source evidence.",
@@ -212,11 +213,6 @@ class VisualPlan(Contract):
             version="2026-11-18",
             change="confidence became optional.",
             why="Code builds the plan from a table now: nothing reads it and none is asked.",
-        ),
-        ChangelogEntry(
-            version="2026-10-26T09:41",
-            change="Plans may name one independently declared whole for composition charts.",
-            why="A sum of parts is not evidence that the source declared those parts exhaustive.",
         ),
         ChangelogEntry(
             version="2026-09-09T03:11",
@@ -260,6 +256,14 @@ class VisualPlan(Contract):
         description=(
             "Every element this plan draws from, so the validator has one list to check "
             "existence against rather than nine."
+        ),
+    )
+    negative_magnitude_element_ids: list[_PlanElementId] = Field(
+        default_factory=list,
+        max_length=MAX_ELEMENT_IDS,
+        description=(
+            "Cited source quantities interpreted as negative magnitudes in every use. "
+            "Code applies exact -abs; the source element and wording stay unchanged."
         ),
     )
     labels: list[_PlanElementId] = Field(
@@ -342,6 +346,7 @@ class VisualPlan(Contract):
                     for role, ids in self.encodings.filled().items()
                 ),
                 ("element_ids", self.element_ids),
+                ("negative_magnitude_element_ids", self.negative_magnitude_element_ids),
                 ("labels", self.labels),
                 ("display_labels", self.display_labels),
                 ("annotations", self.annotations),
@@ -381,6 +386,7 @@ class VisualPlan(Contract):
         cited: dict[str, set[str]] = {
             "labels": set(self.labels),
             "annotations": set(self.annotations),
+            "negative_magnitude_element_ids": set(self.negative_magnitude_element_ids),
         }
         for role, role_ids in self.encodings.filled().items():
             cited[f"encodings.{role.value}"] = set(role_ids)
@@ -393,6 +399,11 @@ class VisualPlan(Contract):
                     "{field} cites an element the plan did not declare",
                     {"field": where},
                 )
+        negative = self.negative_magnitude_element_ids
+        if len(set(negative)) != len(negative) or any(
+            not element_id.startswith("quantity-") for element_id in negative
+        ):
+            raise ValueError("negative_magnitude_element_ids names distinct source quantities")
         label_ids = {
             element_id
             for role in (EncodingRole.CATEGORY, EncodingRole.ENTITY, EncodingRole.SERIES)

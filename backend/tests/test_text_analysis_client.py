@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 from support.analysis_service import RecordedAnalysis, closed_base_url, entities_reply
 from support.paths import REPO_ROOT, read_text
+from support.prompts import sentences_of
 
 from idhazh.anchor_mentions import Mention
 from idhazh.ask_text_analysis import ANALYZE_PATH, Outcome, ask_for_mentions
@@ -47,11 +48,12 @@ def test_one_post_carries_the_whole_text_and_the_mentions_come_back_with_three_f
         config = TextAnalysisConfig(base_url=service.base_url, language="zh")
         answer = ask_for_mentions(article_ok, config)
 
-    assert service.sent == [{"text": text, "language": "zh", "features": ["entities"]}]
+    assert service.sent == [{"text": text, "language": "zh", "features": ["entities", "sentences"]}]
     assert service.paths == [ANALYZE_PATH]
     assert service.content_types == ["application/json"]
     assert answer.outcome is Outcome.OK and answer.http_status is None
     assert answer.mentions == (Mention("ORG", lab, lab + 11), Mention("CARDINAL", two, two + 3))
+    assert answer.sentences == sentences_of(text)
     assert logged_answer(caplog, logging.INFO) == {
         "item_id": article_ok.item_id,
         "url_key": article_ok.url_key,
@@ -178,6 +180,71 @@ def test_a_closed_port_is_unreachable_and_asks_nothing_of_the_item(article_ok: A
 
     assert answer.mentions == ()
     assert answer.outcome is Outcome.UNREACHABLE
+
+
+@pytest.mark.parametrize("broken", ["missing", "malformed-row", "failed"])
+def test_unusable_sentence_feature_keeps_independent_mentions_and_sentences(
+    article_ok: Article, broken: str
+) -> None:
+    text = article_ok.text or ""
+    reply = json.loads(entities_reply(text, [("ORG", 0, 11)]))
+    expected = sentences_of(text)
+    if broken == "missing":
+        reply["features"].pop()
+        expected = ()
+    elif broken == "failed":
+        reply["features"][1].update(status="failed", data=None)
+        expected = ()
+    else:
+        reply["features"][1]["data"]["sentences"].append({"text": text})
+    with RecordedAnalysis(body=json.dumps(reply).encode()) as service:
+        answer = ask_for_mentions(article_ok, TextAnalysisConfig(base_url=service.base_url))
+    assert answer.outcome is Outcome.MALFORMED
+    assert answer.mentions == (Mention("ORG", 0, 11),)
+    assert answer.sentences == expected
+
+
+def test_malformed_mention_keeps_valid_siblings_and_sentence_feature(article_ok: Article) -> None:
+    text = article_ok.text or ""
+    reply = json.loads(entities_reply(text, [("ORG", 0, 11)]))
+    reply["features"][0]["data"]["mentions"].append({"text": text, "start_char": "0"})
+    with RecordedAnalysis(body=json.dumps(reply).encode()) as service:
+        answer = ask_for_mentions(article_ok, TextAnalysisConfig(base_url=service.base_url))
+    assert answer.outcome is Outcome.MALFORMED
+    assert answer.mentions == (Mention("ORG", 0, 11),)
+    assert answer.sentences == sentences_of(text)
+
+
+@pytest.mark.parametrize(
+    "spoiled",
+    [
+        {"text": "Never trust this injected sentence"},
+        {"start_char": -1},
+        {"end_char": 50_000},
+        {"start_char": 11, "end_char": 0},
+    ],
+)
+def test_invalid_sentence_offsets_are_dropped_without_losing_valid_features(
+    article_ok: Article, spoiled: dict[str, object], caplog: pytest.LogCaptureFixture
+) -> None:
+    text = article_ok.text or ""
+    reply = json.loads(entities_reply(text, [("ORG", 0, 11)]))
+    sentences = reply["features"][1]["data"]["sentences"]
+    sentences.append(sentences[0] | spoiled)
+    caplog.set_level(logging.INFO, logger="idhazh")
+    with RecordedAnalysis(body=json.dumps(reply).encode()) as service:
+        answer = ask_for_mentions(article_ok, TextAnalysisConfig(base_url=service.base_url))
+    assert answer.mentions == (Mention("ORG", 0, 11),)
+    assert answer.sentences == sentences_of(text)
+    payload = logged_answer(caplog, logging.WARNING)
+    assert payload["dropped_sentences"] == 1
+    expected_status = "text_mismatch" if "text" in spoiled else "invalid_offsets"
+    assert payload["returned_sentences"][-1] == {
+        "start_char": sentences[-1]["start_char"],
+        "end_char": sentences[-1]["end_char"],
+        "status": expected_status,
+    }
+    assert "injected sentence" not in caplog.text
 
 
 def test_the_text_goes_to_the_committed_address_and_never_to_a_proxy_the_environment_names(

@@ -12,6 +12,8 @@ from typing import Any
 from idhazh import config
 from idhazh.contracts.knobs.text_analysis import TextAnalysisConfig
 
+from .prompts import sentences_of
+
 #: A label the service gave one stretch of the text, and where it starts and ends.
 Span = tuple[str, int, int]
 
@@ -48,7 +50,15 @@ def entities_reply(text: str, spans: Iterable[Span]) -> bytes:
                     "status": "complete",
                     "data": {"mentions": mentions},
                     "error": None,
-                }
+                },
+                {
+                    "feature": "sentences",
+                    "status": "complete",
+                    "data": {"sentences": [
+                        sentence._asdict() for sentence in sentences_of(text)
+                    ]},
+                    "error": None,
+                },
             ],
         }
     ).encode("utf-8")

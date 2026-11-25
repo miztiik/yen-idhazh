@@ -1,6 +1,6 @@
 # How multilingual text analysis runs
 
-**Last Updated**: 2026-11-17
+**Last Updated**: 2026-11-25
 
 How one independently started local service turns validated English or Chinese
 text into selected linguistic evidence without persisting source text or
@@ -98,6 +98,14 @@ failure does.
 
 Every returned span carries exact source text and zero-based half-open Python
 code-point offsets.
+
+Digest work requests `entities` and `sentences` together, with no second
+analysis or model call. The client checks every range and returned string
+against the exact sanitized `Article.text`. Invalid spans are dropped
+independently; usable mentions survive missing, malformed or unusable
+sentence output. Only complete verified sentences supply the chart's
+[bounded evidence block](../summarize/prompt.md#evidence-stays-separate-from-the-article).
+Without enough usable evidence, the same summary-only path remains available.
 
 ## Compact English outputs reuse the document
 

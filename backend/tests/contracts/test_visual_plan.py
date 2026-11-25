@@ -48,6 +48,27 @@ def test_a_plan_of_references_and_closed_names_loads() -> None:
     assert drawn <= set(plan.element_ids), "everything drawn is an element the plan declared"
 
 
+def test_old_plans_default_to_as_stated_and_selected_signs_round_trip() -> None:
+    payload = _plan_payload()
+    assert VisualPlan.model_validate(payload).negative_magnitude_element_ids == []
+    selected = [payload["encodings"]["quantity"][0]]
+    plan = VisualPlan.model_validate(payload | {"negative_magnitude_element_ids": selected})
+    assert VisualPlan.from_json(plan.to_json()).negative_magnitude_element_ids == selected
+
+
+@pytest.mark.parametrize("case", ["missing", "label", "duplicate"])
+def test_negative_magnitudes_are_distinct_declared_quantities(case: str) -> None:
+    payload = _plan_payload()
+    quantity = payload["encodings"]["quantity"][0]
+    selection = {
+        "missing": ["quantity-9999-10000"],
+        "label": [payload["encodings"]["category"][0]],
+        "duplicate": [quantity, quantity],
+    }[case]
+    with pytest.raises(ValidationError, match="negative_magnitude_element_ids"):
+        VisualPlan.model_validate(payload | {"negative_magnitude_element_ids": selection})
+
+
 def test_a_plan_carrying_geometry_does_not_load() -> None:
     """Prohibition 1. A pixel binds the plan to one renderer, so there is nowhere
     to put one: geometry is a number, and the schema admits exactly one number."""
@@ -195,6 +216,7 @@ def test_confidence_decodes_after_the_type() -> None:
         ("element_ids", ["quantity-9001-9008"]),
         ("labels", ["quantity-9001-9008"]),
         ("annotations", ["quantity-9001-9008"]),
+        ("negative_magnitude_element_ids", ["quantity-9001-9008"]),
     ),
 )
 def test_a_plan_that_declines_draws_nothing(field: str, value: object) -> None:

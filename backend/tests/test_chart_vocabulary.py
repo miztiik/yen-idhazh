@@ -23,13 +23,12 @@ from pipeline._builders import (
 from support.ledger import COMPACTION
 from support.models import a_markers
 from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
-from support.prompts import WIND_TEXT, chart_data_over, chart_reply_fields
+from support.prompts import WIND_TEXT, candidates_for, chart_data_over, chart_reply_fields
 from support.server import RecordedEndpoint
 from support.visual_plans import current_plan
 
 from idhazh import config, ledger
 from idhazh.classify import calls
-from idhazh.classify.chart_candidates import chart_candidates
 from idhazh.classify.plan_visual_request import chart_capabilities
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.article import Article
@@ -121,7 +120,7 @@ def test_selection_controls_the_actual_request_grammar_and_the_stamp() -> None:
         server=entry.server,
         sampling=entry.sampling,
         markers=markers,
-        candidates=chart_candidates(table),
+        candidates=candidates_for(table, WIND_TEXT),
     )
     answer = chart_reply_fields(request["json_schema"])
     assert chart_capabilities(selected) == (VisualType.DOT,)
@@ -327,7 +326,8 @@ def test_real_shard_projects_outcomes_before_sealing(
         schema = server.sent[-1]["json_schema"]
         assert {"type": "null"} in schema["properties"]["visual"]["anyOf"]
         assert list(chart_reply_fields(schema)) == [
-            kind.value for kind in VisualType if can_compile(kind)
+            kind.value for kind in VisualType
+            if can_compile(kind) and kind not in (VisualType.LINE, VisualType.SLOPE)
         ]
     assert stage_record(run_plan, settings=knobs, commit_sha="a" * 40)[0] == len(run_plan.items)
     rows = ledger.load_days(

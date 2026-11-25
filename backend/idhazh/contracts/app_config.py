@@ -114,6 +114,7 @@ class AppConfig(Contract):
         json_schema_extra={
             "readCompatibility": (
                 "additive; absent archive controls use defaults; "
+                "absent visual evidence bounds use the declared defaults; "
                 "absent prompt_files uses the declared task paths; "
                 "absent text_analysis and elements.label_kinds use the declared defaults; "
                 "retired summarize.asks_for_a_visual_plan and prompt_files.generate_labels "
@@ -128,6 +129,11 @@ class AppConfig(Contract):
     )
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-11-25",
+            change="Bound chart evidence passages and selectable source occurrences.",
+            why="Absent evidence bounds use the declared defaults.",
+        ),
+        ChangelogEntry(
             version="2026-11-18",
             change="Refuse two retired knobs by name.",
             why="Neither does anything now, so a config that spells one is refused, not read.",
@@ -141,11 +147,6 @@ class AppConfig(Contract):
             version="2026-11-16",
             change="Standalone summaries default to the shared generation prompt.",
             why="Absent prompt selections use the same title/summary instructions as the API.",
-        ),
-        ChangelogEntry(
-            version="2026-11-15",
-            change="Retire diagnostic knobs and name the retained corpus compression ceiling.",
-            why="Historical config drops retired limits and preserves the corpus ratio cutoff.",
         ),
         ChangelogEntry(
             version="2026-09-28",

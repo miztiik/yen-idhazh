@@ -1,6 +1,6 @@
 # Guards, alarms and limits
 
-**Last Updated**: 2026-11-19
+**Last Updated**: 2026-11-25
 
 Some numbers in `config/` are not there to be tuned. They are there to stop a
 bug running for six hours, to say out loud that something has changed, or to
@@ -88,6 +88,17 @@ Authority: maintainer, 2026-10-07.
 **The `work` job's bound came down from 330 to `run.shard_timeout_minutes` on 2026-08-27, and the config number did not move.** Neither 330 nor 150 had a recorded basis, so the direction was decided by reading the wall-clock of all 106 `work` jobs the repository has: across 16 full days at four workers the slowest worker of a run took 83.5 to 117.5 minutes, and at the 40-item ceiling then in force the worst was 94.5. 150 was half again that; 330 was 3.5x it, and more than half the six-hour platform maximum. So the workflow's number was the wrong one and it now reads this one - the number lives in config and the job bound reads it, with the reason written in the workflow. A bound above about 165 minutes could not be honoured while the `visuals` job ran serially after the shard: the scheduled runs are four hours apart and share one concurrency group with `cancel-in-progress: false`, so at 330 a single hung worker delayed the next two digests ([../../reference/pipeline-cost.md](../../reference/pipeline-cost.md#what-a-work-shard-costs)). That job retired on 2026-09-13, which hands its 50 minutes back to the gap between runs rather than to this bound. Authority: Carmack.
 
 **Both numbers moved on 2026-09-05, and the ceiling's move is the editorial one.** `run.safety_ceiling_per_run` came down from 160 to 80: a day now publishes half as many stories on purpose, and the slots it gives up were going to a second copy of a story already chosen or to a feed that had been publishing badly, not to anything a reader would miss (maintainer, 2026-09-05; the source sweep is in [../../architecture/sources/discovery.md](../../architecture/sources/discovery.md)). `run.shard_timeout_minutes` went the other way, 150 to 200, and it is not a response to a slower worker - at 80 items a worker draws 20, half of the 40 it drew before, so the base work roughly halves and 150 alone would have been slack. The rise was headroom banked for a two-call summariser, whose second model call an item took the worst shard past 150; a killed worker uploads nothing, so the room was bought before that design landed rather than after it killed a run. The pipeline has made one call an item since 2026-11-17, and the value was not lowered with it. Sized from the worst measured shard, not the median - 135.4 minutes of the old 150 over 80 shard rows on 2026-09-02, against a 78.5-minute median - and 200 is 56 percent of the six-hour platform ceiling, which nobody may move (Guardrail #2). Authority: maintainer and Carmack.
+
+## Chart evidence bounds
+
+`visuals.evidence_max_chars` defaults to 3,200 characters for the complete
+rendered evidence block, including IDs and framing.
+`visuals.evidence_max_readings` defaults to 24 combined quantity and date
+occurrences. These bound repeated source input, not article length or the
+model's output. Passages are whole verified sentences selected in source order.
+A passage exceeding either limit is omitted rather than losing its qualifiers.
+The existing combined-request window check still applies; too little evidence
+or insufficient room selects summary-only without a retry or larger window.
 
 ## Rejected alternatives
 

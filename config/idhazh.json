@@ -386,7 +386,7 @@
     "tagline": "Daily news summaries, with links to their sources.",
     "theme_default": "dark"
   },
-  "version": "2026-11-18",
+  "version": "2026-11-25",
   "visuals": {
     "asset_base_url": "",
     "downgrade_enabled": false,
@@ -396,6 +396,8 @@
     ],
     "downgrade_lookback_days": 30,
     "downgrade_max_samples_per_type": 256,
+    "evidence_max_chars": 3200,
+    "evidence_max_readings": 24,
     "enabled_kinds": [
       "chart"
     ],

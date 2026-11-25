@@ -44,8 +44,21 @@ export interface VisualMark {
 	unit: string | null;
 	source_text: string | null;
 	element_id: string | null;
-	derived: unknown | null;
+	derived: DerivedValue | null;
 	label_source?: 'model' | null;
+}
+
+/** Closed arithmetic provenance over original source elements, never request evidence. */
+export interface DerivedValue {
+	function: 'count' | 'sum' | 'share_of_declared_whole' | 'convert' | 'negative_magnitude';
+	version: string;
+	inputs: string[];
+	value: string;
+	unit: string | null;
+	source_unit?: string | null;
+	unit_table_version?: string | null;
+	bin_lower: string | null;
+	bin_upper: string | null;
 }
 
 /** Which marks fill which channel. Every role a key, an unused one empty. */

@@ -1,11 +1,11 @@
 # Where every drawn figure came from
 
-**Last Updated**: 2026-11-18
+**Last Updated**: 2026-11-25
 
 Every number a reader reads off an axis has exactly one of two origins, and this
 page is the whole of that promise: it is characters the article itself wrote, or
 it is arithmetic code performed over those characters through a closed list of
-four functions, carrying a chain back to every one of them. There is no third
+five functions, carrying a chain back to every one of them. There is no third
 way. What a plan may say, and what refuses one, is
 [what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md](what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md);
 who decides a picture at all is [visuals.md](visuals.md).
@@ -20,7 +20,7 @@ who decides a picture at all is [visuals.md](visuals.md).
 | Anything at or below 2 with no unit | A list marker. `2 percent` keeps its unit and survives. |
 | A repeat of the same value **in the same unit** | One figure quoted in a lead and a body paragraph is one fact. Twelve percent and twelve people are two. |
 
-## A number the article did not write, and the four ways code may reach one
+## A number the article did not write, and the five ways code may reach one
 
 Every figure a reader reads off an axis resolves one of two ways. It is a **Tier 1 element** - the
 characters the article itself wrote, cut at a span anybody can re-slice - or it is a **derived
@@ -35,11 +35,11 @@ quantity and date references and re-slices labels from the article's own
 characters. `no_invented_values` proves a figure reads out of its element's
 characters; it does not prove a comparison is meaningful.
 
-**Four functions, and the list is closed.** Its shortness is the guarantee rather than a starting
+**Five functions, and the list is closed.** Its shortness is the guarantee rather than a starting
 point: the model picks a form and cites its evidence, but it cannot name a
 function or write a numeric operand, and has no numeric field in its reply -
 `contracts/visual.py` refuses to import if the plan grows one. So the worst a prompt injection can
-do stays "pick the wrong source readings or form". A fifth
+do stays "pick the wrong source readings, interpretation or form". A sixth
 function is a maintainer decision and `contracts/derived.py` raises at import if one appears, which is
 why the argument for the list being short is written beside the constant rather than only here.
 
@@ -49,6 +49,7 @@ why the argument for the list being short is written beside the constant rather 
 | `sum` | two or more elements stating one unit | their total, in that unit | nothing |
 | `share_of_declared_whole` | the part first, then the parts that make the whole | a percentage | nothing |
 | `convert` | one element | the same quantity against another unit of its dimension | the source unit and the unit table's date-stamp |
+| `negative_magnitude` | one selected quantity element | exact `-abs` of its value, optionally unit-normalized | source unit and unit-table stamp only when normalization moves the unit |
 
 `inputs` holds Tier 1 element ids and never another derived value. A chain that nests can be
 complete at each hop and still name no element at the bottom, and "every input element" is what the
@@ -82,6 +83,33 @@ rounded - the table holds no such pair today, so that fails closed on a table th
 
 Whether two units may be joined at all is the validator's `units_convertible` check, in
 [what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md](what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md#units-are-convertible-or-identical-not-merely-equal-strings).
+
+### Direction is selected, never inferred from wording
+
+`VisualPlan.negative_magnitude_element_ids` defaults to empty for old plans.
+Every entry is a distinct, declared source quantity ID, with one interpretation
+in every measured channel using that element. Code never infers direction from
+words such as "loss". Only a selected reading becomes exact Decimal `-abs`;
+an already-negative value stays negative and unselected readings stay as stated.
+
+The published mark has one `negative_magnitude` chain with the original element
+as its sole input. When the channel also needs exact unit normalization, that
+same chain carries `source_unit` and `unit_table_version`; otherwise both are
+null or absent. No intermediate derived input is introduced. Source elements
+and their excerpts are never overwritten, and the mark retains the source
+wording. Request evidence IDs and passages do not enter the published contract.
+
+Positivity is checked after resolving signed measures: negative bubble areas
+and stacked parts refuse compilation, while negative positions remain drawable.
+Pie shares and histogram counts cannot carry this single-reading chain; a
+selected negative magnitude on these aggregate forms refuses rather than
+silently discarding the interpretation. A source reading selected only as a
+label likewise cannot acquire a numeric interpretation.
+
+The browser accepts and validates this provenance without a renderer-version
+change. Older plans and compiled assets remain readable; no historical file is
+rewritten. The new operation has its own `NEGATIVE_MAGNITUDE_VERSION`, leaving
+unchanged arithmetic stamps intact.
 
 ### A histogram's marks are its bins, and the check counted its inputs
 
@@ -154,12 +182,12 @@ section 1a already refuses.
 **The two empty-bin causes carry different names, and the difference is what an operator acts on.**
 `enough_values_for_bins` says the article was thin; `values_have_spread` says
 `visuals.histogram_bins` is set higher than the article's figures can fill. Folded into one name,
-every empty bar reads as the knob. The four functions and the helpers under them still raise
+every empty bar reads as the knob. The functions and the helpers under them still raise
 `DerivedValueError`, which now carries the same check name - reaching `convert` with two units that
 do not measure the same thing is a bug rather than an article with a problem, and the boundary a
 stage calls is the one place that turns the raise into a refusal.
 
-## Three stamps, and none of them is a config key
+## Arithmetic stamps, and none of them is a config key
 
 The plan's file list proposed `visuals.unit_table_version`. It is refused. A stamp an operator can
 edit without editing the table it stamps is a stamp that lies, and every derived value that recorded
@@ -172,7 +200,8 @@ Python enum, so a JSON copy of it would be readable in a way a copy of the role 
 | --- | --- | --- | --- |
 | `PLAN_VOCABULARY_VERSION` | which roles a type may fill | `VisualPlan.plan_version` | `visual_vocabulary.py` |
 | `UNIT_TABLE_VERSION` | which units measure the same thing, and by what factor | a `convert` chain | `visual_vocabulary.py` |
-| `DERIVED_VALUE_VERSION` | the four functions and the binning rule | every chain | `derived_values.py` |
+| `DERIVED_VALUE_VERSION` | the original four functions and the binning rule | original arithmetic chains | `derived_values.py` |
+| `NEGATIVE_MAGNITUDE_VERSION` | selected negative magnitudes and their optional normalization | a `negative_magnitude` chain | `derived_values.py` |
 
 **Row 3 shipped one stamp over two tables and it is split here, because the two answer different
 questions to different readers.** `plan_version_current` compares a plan against

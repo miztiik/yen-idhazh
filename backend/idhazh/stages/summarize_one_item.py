@@ -27,8 +27,14 @@ from idhazh import (
     visual_planner,
 )
 from idhazh.anchor_mentions import Mention
+from idhazh.ask_text_analysis import Sentence
 from idhazh.classify import calls, dag
-from idhazh.classify.chart_candidates import ChartCandidate, candidate_block, chart_candidates
+from idhazh.classify.chart_candidates import (
+    ChartCandidate,
+    candidate_block,
+    chart_candidates,
+    evidence_forms,
+)
 from idhazh.classify.plan_visual_request import chart_forms
 from idhazh.classify.prepare_chart_plan import prepare_chart_plan
 from idhazh.contracts.article import Article
@@ -437,6 +443,7 @@ def summarize_one_item(
     *,
     date: str,
     mentions: Sequence[Mention] = (),
+    sentences: Sequence[Sentence] = (),
     endpoint: str | None = None,
     run_id: str | None = None,
     tracer: telemetry.Tracer | None = None,
@@ -528,8 +535,8 @@ def summarize_one_item(
                     article.token_count,
                 )
                 return failed(FailureCode.CONTEXT_EXCEEDED)
-            candidates = chart_candidates(table)
-            forms = chart_forms(table, visuals=visuals) if len(candidates) >= 2 else ()
+            candidates = chart_candidates(table, article.text or "", sentences, visuals=visuals)
+            forms = evidence_forms(chart_forms(table, visuals=visuals), candidates)
             chart_text = calls.chart_addendum(
                 forms, prompt_files=settings.app.prompt_files, config_dir=settings.config_dir,
             ) + (candidate_block(candidates) if forms else "")
