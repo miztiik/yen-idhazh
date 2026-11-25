@@ -1,62 +1,63 @@
 <script lang="ts">
-	import { statedComparisonRow, type BarDrawing, type DotDrawing } from './comparison';
+	import { statedComparisonRow, type BarDrawing, type ComparisonText, type DotDrawing } from './comparison';
 	import type { StoryChartGeometryConfig } from '$lib/server/config';
 
 	let { drawing, geometry }: { drawing: BarDrawing | DotDrawing; geometry: StoryChartGeometryConfig } = $props();
-	const tickEnd = $derived(drawing.baseline + geometry.axis_label_offset_px / 4);
 </script>
 
-{#snippet rowText(row: BarDrawing['bars'][number] | DotDrawing['dots'][number])}
-	<text class="name" x={drawing.inset} y={row.label}>
-		{#each row.lines as line, index (index)}
-			<tspan x={drawing.inset} y={row.label + index * drawing.leading}>{line}</tspan>
+{#snippet plotText(label: ComparisonText, style: string)}
+	<text class={style} x={label.x} y={label.y} text-anchor={label.anchor}>
+		{#each label.lines as line, index (index)}
+			<tspan x={label.x} y={label.y + index * drawing.leading}>{line}</tspan>
 		{/each}
 	</text>
-	<text class="figure" text-anchor="end" x={drawing.valueX} y={row.center}>{row.displayed}</text>
 {/snippet}
 
-{#snippet guides(top: number, bottom: number)}
+{#snippet rowText(row: BarDrawing['bars'][number] | DotDrawing['dots'][number])}
+	{@render plotText(row.label, 'name')}
+	{@render plotText(row.reading, 'figure')}
+{/snippet}
+
+<g data-comparison-orientation={drawing.orientation}>
 	{#each drawing.axis.ticks as tick (tick.value)}
-		<line class="guide" class:zero={drawing.type === 'bar' && tick.value === 0}
-			stroke-width={geometry.axis_line_width_px} x1={tick.x} x2={tick.x} y1={top} y2={bottom} />
+		{#each tick.guides as guide, index (index)}
+			<line class="guide" class:zero={drawing.type === 'bar' && tick.value === 0}
+				stroke-width={geometry.axis_line_width_px} {...guide} />
+		{/each}
 	{/each}
-{/snippet}
 
-{#if drawing.type === 'bar'}
-	{#each drawing.bars as bar (bar.center)}
-		<g>
-			{@render guides(bar.plotTop, bar.plotBottom)}
-			<rect class="bar" fill={`var(${bar.color})`} x={bar.x} y={bar.y} width={bar.width}
-				height={bar.height} rx={geometry.bar_corner_radius_px}>
-				<title>{statedComparisonRow(bar, drawing.unit)}</title>
-			</rect>
-			{@render rowText(bar)}
-		</g>
-	{/each}
-{:else}
-	{#each drawing.dots as dot (dot.center)}
-		<g>
-			{@render guides(dot.plotTop, dot.plotBottom)}
-			<circle class="dot" fill={`var(${dot.color})`} cx={dot.x} cy={dot.y} r={dot.radius}>
-				<title>{statedComparisonRow(dot, drawing.unit)}</title>
-			</circle>
-			{@render rowText(dot)}
-		</g>
-	{/each}
-{/if}
-
-<line class="axis" stroke-width={geometry.axis_line_width_px}
-	x1={drawing.axis.left} x2={drawing.axis.right} y1={drawing.baseline} y2={drawing.baseline} />
-{#each drawing.axis.ticks as tick (tick.value)}
-	<line class="axis" stroke-width={geometry.axis_line_width_px}
-		x1={tick.x} x2={tick.x} y1={drawing.baseline} y2={tickEnd} />
-	{#if tick.text}
-		<text class="tick" text-anchor={tick.anchor} x={tick.x} y={drawing.axis.tickY}>{tick.text}</text>
+	{#if drawing.type === 'bar'}
+		{#each drawing.bars as bar (bar.id)}
+			<g class="comparison-row">
+				<rect class="bar" fill={`var(${bar.color})`} x={bar.x} y={bar.y} width={bar.width}
+					height={bar.height} rx={geometry.bar_corner_radius_px}>
+					<title>{statedComparisonRow(bar)}</title>
+				</rect>
+				{@render rowText(bar)}
+			</g>
+		{/each}
+	{:else}
+		{#each drawing.dots as dot (dot.id)}
+			<g class="comparison-row">
+				<circle class="dot" fill={`var(${dot.color})`} cx={dot.x} cy={dot.y} r={dot.radius}>
+					<title>{statedComparisonRow(dot)}</title>
+				</circle>
+				{@render rowText(dot)}
+			</g>
+		{/each}
 	{/if}
-{/each}
-{#each drawing.axis.label as line, index (index)}
-	<text class="unit" x={drawing.inset} y={drawing.axis.labelY + index * drawing.leading}>{line}</text>
-{/each}
+
+	<line class="axis" stroke-width={geometry.axis_line_width_px} {...drawing.axis.line} />
+	{#each drawing.axis.ticks as tick (tick.value)}
+		<line class="axis" stroke-width={geometry.axis_line_width_px} {...tick.line} />
+		{#if tick.label}
+			{@render plotText(tick.label, 'tick')}
+		{/if}
+	{/each}
+	{#if drawing.axis.note.lines.length}
+		{@render plotText(drawing.axis.note, 'unit')}
+	{/if}
+</g>
 
 <style>
 	text {

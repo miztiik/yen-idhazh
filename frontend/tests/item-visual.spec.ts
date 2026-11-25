@@ -485,25 +485,29 @@ test.describe('what may not be drawn', () => {
             'B 40 MW (source: 0.04 GW); C 40 MW; A 20 MW; D 10 MW'
         );
     });
-    test('narrow and wide drawings keep every mark inside the measured width without changing their readings', () => {
-        const data = compiled();
+    test('bar orientation follows label fit and retains the signed zero baseline', () => {
+        const data = compiled([-10, 20, 30, 40]);
+        const short = drawBars(data, 360, formatNumber, geometry);
+        expect(short.orientation).toBe('vertical');
+        data.marks[0].text = 'Northern Atlantic offshore development';
         const narrow = drawBars(data, 360, formatNumber, geometry);
-        for (const room of [360, 1440]) {
-            const drawing = drawBars(data, room, formatNumber, geometry);
-            expect(drawing.width).toBe(room);
-            expect(drawing.height).toBe(narrow.height);
-            expect(statedBars(drawing)).toBe(statedBars(narrow));
-            expect(drawing.bars.map(({ name, stated, displayed, label, y, height }) =>
-                ({ name, stated, displayed, label, y, height })
-            )).toEqual(narrow.bars.map(({ name, stated, displayed, label, y, height }) =>
-                ({ name, stated, displayed, label, y, height })
-            ));
-            for (const bar of drawing.bars) {
-                expect(bar.width).toBeGreaterThanOrEqual(0);
-            }
-            const fractional = drawBars(data, room + 0.75, formatNumber, geometry);
-            expect(fractional).toEqual(drawing);
+        const wide = drawBars(data, 1440, formatNumber, geometry);
+        expect(narrow.orientation).toBe('horizontal');
+        expect(wide.orientation).toBe('vertical');
+        expect(statedBars(wide)).toBe(statedBars(narrow));
+
+        const xZero = narrow.axis.ticks.find((tick) => tick.value === 0)!.line.x1;
+        const yZero = wide.axis.ticks.find((tick) => tick.value === 0)!.line.y1;
+        for (const [index, bar] of narrow.bars.entries()) {
+            const column = wide.bars[index];
+            const negative = Number(bar.stated) < 0;
+            expect(column.displayed).toBe(bar.displayed);
+            expect(negative ? bar.x + bar.width : bar.x).toBeCloseTo(xZero);
+            expect(negative ? column.y : column.y + column.height).toBeCloseTo(yZero);
+            expect(bar.x + bar.width).toBeLessThanOrEqual(narrow.width);
+            expect(column.x + column.width).toBeLessThanOrEqual(wide.width);
         }
+        expect(drawBars(data, 360.75, formatNumber, geometry)).toEqual(narrow);
     });
     test('digest bars retain the article wording', () => {
         for (const value of [1_000, 12_345, 1_234_567, 2_400_000, 8_900_000_000, 7_800_000_000_000]) {
@@ -512,12 +516,27 @@ test.describe('what may not be drawn', () => {
             expect(statedBars(drawing)).toContain(`A ${value} MW`);
         }
     });
+    test('comparison readings keep exact decimals and their own reported unit even with scaled ticks', () => {
+        const data = compiled();
+        data.marks[1].value = '23000.0010';
+        data.marks[3].unit = null;
+        const drawing = drawBars(data, 600, formatNumber, geometry, {
+            numberFormat, tickDensity: 4
+        });
+        expect(drawing.bars.map(({ displayed }) => displayed)).toEqual([
+            '23000.0010 MW', '40 MW', '30 MW', '20'
+        ]);
+        expect(statedBars(drawing)).toContain('A 23000.0010 MW; D 40 MW; C 30 MW; B 20.');
+        expect(drawing.axis.description).not.toContain('thousand MW');
+    });
     test('dot positions rank source quantities on one common narrow and wide scale', () => {
         const data = sourceCompiledChart('dot-from-wind.json');
-        const narrow = drawDots(data, 360, formatNumber, geometry);
-        const wide = drawDots(data, 1440, formatNumber, geometry);
+        const options = { numberFormat, tickDensity: 6 };
+        const narrow = drawDots(data, 360, formatNumber, geometry, options);
+        const wide = drawDots(data, 1440, formatNumber, geometry, options);
         expect(refusedVisualData(data)).toBeNull();
-        expect(narrow.type).toBe('dot');
+        expect(narrow.orientation).toBe('horizontal');
+        expect(wide.orientation).toBe('vertical');
         const quantities = sourceQuantities(data);
         const ranked = quantities.map((value, index) => ({ value, index })).sort((a, b) => a.value - b.value);
         expect(ranked.map(({ index }) => narrow.dots[index].x)).toEqual(
@@ -525,11 +544,14 @@ test.describe('what may not be drawn', () => {
         );
         expect(narrow.dots.map(({ name, stated, displayed }) => ({ name, stated, displayed })))
             .toEqual(wide.dots.map(({ name, stated, displayed }) => ({ name, stated, displayed })));
-        expect(narrow.height).toBe(wide.height);
         expect(narrow.dots.map((dot) => dot.name)).toEqual(['Denmark', 'Germany', 'Norway', 'Ireland']);
-        expect(wide.dots[ranked[0].index].x).toBeLessThan(wide.dots[ranked.at(-1)!.index].x);
+        expect(ranked.map(({ index }) => wide.dots[index].y)).toEqual(
+            [...ranked.map(({ index }) => wide.dots[index].y)].sort((a, b) => b - a)
+        );
         expect(narrow.dots.every((dot) => dot.x - dot.radius >= 0)).toBe(true);
         expect(statedDots(narrow)).toContain('Germany 3400 mw');
+        expect(statedDots(narrow)).toContain('zero not shown');
+        expect(statedDots(wide)).toBe(statedDots(narrow));
     });
     test('slope lines preserve the paired source values between two named columns', () => {
         const data = sourceCompiledChart('slope-from-wind.json');

@@ -105,24 +105,20 @@
 		currentLoad && room > 0
 			? drawVisual(
 					currentLoad, room, formatNumber, numberFormat, fittedTicks, fittedGeometry,
-					chartRoom?.height ?? fittedGeometry.line_min_height_px,
-					comparison ? {
-						narrowBelow: __FRAME_CONFIG__.breakpoints_px[0],
-						labels: chartRoom?.comparisonLabels
-					} : undefined
+					chartRoom?.height ?? fittedGeometry.line_min_height_px, chartRoom?.comparisonLabels
 				)
 			: null
 	);
-	/** Every figure the bars are drawn at, in one sentence, for a reader who is
-	 * not looking at them. It is the whole of what the tab stop below announces. */
-	const axes = $derived(currentLoad?.axis_titles);
-	const axisLabels = $derived(axes ? [
-		{ name: 'Horizontal', text: axes.x },
-		{ name: 'Vertical', text: axes.y }
-	] : []);
+	const lineTitles = $derived(currentLoad?.type === 'line' ? currentLoad.axis_titles : null);
+	const relationshipTitles = $derived(
+		currentLoad?.type === 'scatter' || currentLoad?.type === 'bubble' ? currentLoad.axis_titles : null
+	);
+	/** Every visible reading, for a reader who is not looking at the drawing. */
 	const stated = $derived(drawing ? [
-		statedDrawing(drawing), ...axisLabels.map(({ name, text }) => `${name}: ${text}.`),
-		...(axes?.size ? [`Circle area represents ${axes.size}.`] : [])
+		statedDrawing(drawing),
+		...(lineTitles ? [`Time: ${lineTitles.x}.`, `Measure: ${lineTitles.y}.`] : []),
+		...(relationshipTitles ? [`x: ${relationshipTitles.x}.`, `y: ${relationshipTitles.y}.`] : []),
+		...(relationshipTitles?.size ? [`Circle area represents ${relationshipTitles.size}.`] : [])
 	].join(' ') : '');
 
 	/** Read one published path, refusing any document that is not current and valid.
@@ -231,6 +227,12 @@
 	}
 </script>
 
+{#snippet namedScale(axis: 'x' | 'y', label: string, unit: string | null)}
+	<p class="break-words px-3 text-xs leading-normal text-text-secondary" class:text-right={axis === 'x'} data-scale={axis}>
+		<span class="font-semibold">{axis}: {label}</span>{unit ? ` (${unit})` : ''}
+	</p>
+{/snippet}
+
 {#if currentLoad}
 	<!-- The figure takes the focus, not the marks inside it: `role="img"` replaces
 	     its whole subtree with one name, so a bar given its own tab stop would be
@@ -246,19 +248,21 @@
 		use:measured
 	>
 		{#if drawing}
-			{#if drawing.title || axisLabels.length}
+			{#if drawing.title || lineTitles}
 				<div class="chart-title px-3 pt-3">
 					{#if drawing.title}
 						<div class="text-sm font-semibold leading-snug text-text">{drawing.title}</div>
 					{/if}
-					{#if axisLabels.length}
+					{#if lineTitles}
 						<dl class="mt-1 flex flex-wrap gap-x-3 gap-y-1 break-words text-xs text-text-secondary">
-							{#each axisLabels as axis (axis.name)}
-								<div class="min-w-0 max-w-full">
-									<dt class="inline font-semibold">{axis.name}:</dt>{' '}
-									<dd class="inline">{axis.text}</dd>
-								</div>
-							{/each}
+							<div class="min-w-0 max-w-full">
+								<dt class="inline font-semibold">Time:</dt>{' '}
+								<dd class="inline">{lineTitles.x}</dd>
+							</div>
+							<div class="min-w-0 max-w-full">
+								<dt class="inline font-semibold">Measure:</dt>{' '}
+								<dd class="inline">{lineTitles.y}</dd>
+							</div>
 						</dl>
 					{/if}
 				</div>
@@ -280,6 +284,9 @@
 					/>
 				</div>
 			{:else}
+			{#if relationshipTitles && (drawing.type === 'scatter' || drawing.type === 'bubble')}
+				{@render namedScale('y', relationshipTitles.y, drawing.yUnit)}
+			{/if}
 			<svg
 				viewBox="0 0 {drawing.width} {drawing.height}"
 				width={drawing.width}
@@ -377,13 +384,15 @@
 								x={tick.at} y={drawing.frame.bottom + storyChartGeometry.axis_label_offset_px}>{tick.text}</text>
 						{/if}
 					{/each}
-					<text class="unit" x={drawing.frame.left} y={drawing.frame.top / 2}>
-						y{drawing.yUnit ? ` (${drawing.yUnit})` : ''}
-					</text>
-					<text class="unit" text-anchor="end" x={drawing.frame.right}
-						y={drawing.height - storyChartGeometry.value_gap_px}>
-						x{drawing.xUnit ? ` (${drawing.xUnit})` : ''}
-					</text>
+					{#if !relationshipTitles}
+						<text class="unit" x={drawing.frame.left} y={drawing.frame.top / 2}>
+							y{drawing.yUnit ? ` (${drawing.yUnit})` : ''}
+						</text>
+						<text class="unit" text-anchor="end" x={drawing.frame.right}
+							y={drawing.height - storyChartGeometry.value_gap_px}>
+							x{drawing.xUnit ? ` (${drawing.xUnit})` : ''}
+						</text>
+					{/if}
 					{#if drawing.type === 'bubble'}
 						{#each drawing.points as point (point.label)}
 							<circle class="bubble-point" class:emphasized={point.emphasized}
@@ -452,9 +461,12 @@
 					{/if}
 				{/if}
 			</svg>
+			{#if relationshipTitles && (drawing.type === 'scatter' || drawing.type === 'bubble')}
+				{@render namedScale('x', relationshipTitles.x, drawing.xUnit)}
+			{/if}
 			{#if drawing.type === 'bubble'}
 				<div class="bubble-size-key px-3" aria-hidden="true">
-					<span>Circle area represents {axes?.size ?? drawing.sizeUnit ?? 'size'}.</span>
+					<span>Circle area represents {relationshipTitles?.size ?? drawing.sizeUnit ?? 'size'}.</span>
 					<span class="bubble-key-entry">
 						<span class="bubble-key-mark"
 							style={`width: ${drawing.sizeRange.minRadius * 2}px; height: ${drawing.sizeRange.minRadius * 2}px`}></span>
