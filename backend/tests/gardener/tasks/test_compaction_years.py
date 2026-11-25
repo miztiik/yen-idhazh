@@ -25,6 +25,7 @@ Nothing here reads the committed `state/` or a clock the test did not set
 from __future__ import annotations
 
 import dataclasses
+import json
 import logging
 from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
@@ -40,7 +41,13 @@ from idhazh.contracts.file_envelope import Period, WriterIdentity
 from idhazh.contracts.gardener_events import CompactionStep, PeriodRefused
 from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
 from idhazh.contracts.knobs.gardener import CompactionPolicy
-from idhazh.contracts.ledger_index import CompactEntry, CompactIndex, EntryState
+from idhazh.contracts.ledger_index import (
+    COMPACT_INDEX_LEGACY_VERSION,
+    COMPACT_INDEX_SPLIT_VERSION,
+    CompactEntry,
+    CompactIndex,
+    EntryState,
+)
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.gardener import schedule
@@ -143,12 +150,18 @@ def a_month_file(root: Path, scratch: Path, month: str) -> None:
     )
 
 
-def index_entries(root: Path, period: Period, entries: list[CompactEntry]) -> None:
-    """One period's index, as a compaction writes it."""
+def index_entries(
+    root: Path, period: Period, entries: list[CompactEntry], *, expired_through: str | None = None
+) -> None:
+    """An index left by compaction before file membership and coverage were split."""
     path = ledger.compact_index_path(state(root), VISUALS, period)
     path.parent.mkdir(parents=True, exist_ok=True)
     index = CompactIndex.from_period_entries(
-        ledger=VISUALS, period=period, entries=entries
+        ledger=VISUALS,
+        period=period,
+        entries=entries,
+        expired_through=expired_through,
+        version=COMPACT_INDEX_LEGACY_VERSION,
     )
     path.write_bytes(index.to_json().encode("ascii"))
 
@@ -205,25 +218,30 @@ def compact(root: Path, today: date, **knobs: Any) -> Pass:
 
 def covers(root: Path, period: Period) -> list[str]:
     path = ledger.compact_index_path(state(root), VISUALS, period)
-    return [entry.covers for entry in CompactIndex.read(path).entries] if path.is_file() else []
+    return [entry.covers for entry in CompactIndex.read(path).period_entries] if path.is_file() else []
 
 
 def yearly(root: Path) -> list[CompactEntry]:
-    """The yearly index's entries, oldest first."""
-    return CompactIndex.read(ledger.compact_index_path(state(root), VISUALS, Period.YEARLY)).entries
+    """All periods in the yearly index, oldest first."""
+    path = ledger.compact_index_path(state(root), VISUALS, Period.YEARLY)
+    return CompactIndex.read(path).period_entries
 
 
 def recorded(
-    root: Path, *, quiet: tuple[str, ...] = (), lost: dict[str, list[str]] | None = None
+    root: Path,
+    *,
+    quiet: tuple[str, ...] = (),
+    lost: dict[str, list[str]] | None = None,
+    set_aside: dict[str, int] | None = None,
 ) -> None:
-    """Rewrite the monthly index the way the month step records a month since entries had a state.
+    """Record quiet months and the month's quality metadata in the legacy layout.
 
     Each `quiet` month held no row, so its entry is `empty` and its file goes.
     Each month `lost` names lists those days as recorded lost.
     """
     path = ledger.compact_index_path(state(root), VISUALS, Period.MONTHLY)
     entries = []
-    for entry in CompactIndex.read(path).entries:
+    for entry in CompactIndex.read(path).period_entries:
         month = entry.covers
         if month in quiet:
             month_file(root, month).unlink()
@@ -234,6 +252,7 @@ def recorded(
                 bytes=0 if month in quiet else entry.bytes,
                 state=EntryState.EMPTY if month in quiet else EntryState.PACKED,
                 lost_days=(lost or {}).get(month, []),
+                set_aside=(set_aside or {}).get(month, 0),
             )
         )
     index_entries(root, Period.MONTHLY, entries)
@@ -430,27 +449,41 @@ def test_a_month_with_no_row_adds_none_and_every_month_s_lost_days_carry_into_it
     assert year is not None
     assert ledger.load_stored([year], model=VisualPruneRow) == held
     assert pyarrow.parquet.read_metadata(year).num_row_groups == len(kept)
-    (entry,) = yearly(root)
-    assert (entry.state, entry.rows, entry.lost_days) == (
-        EntryState.PACKED,
-        len(held),
-        ["2026-02-10", "2026-09-03", "2026-09-30"],
-    )
-    assert covers(root, Period.MONTHLY) == ["2027-01"]
+    yearly_index = ledger.compact_index_path(state(root), VISUALS, Period.YEARLY)
+    payload = json.loads(yearly_index.read_bytes())
+    assert payload["version"] == COMPACT_INDEX_SPLIT_VERSION
+    assert payload["entries"] == [{
+        "covers": "2026",
+        "rows": len(held),
+        "bytes": year.stat().st_size,
+        "lost_days": ["2026-02-10", "2026-09-03", "2026-09-30"],
+    }]
+    assert payload["coverage"] == []
+    monthly_index = ledger.compact_index_path(state(root), VISUALS, Period.MONTHLY)
+    remaining = json.loads(monthly_index.read_bytes())
+    assert [entry["covers"] for entry in remaining["entries"]] == ["2027-01"]
+    assert remaining["coverage"] == []
 
 
 def test_a_year_whose_months_hold_no_row_is_an_empty_entry_with_no_file(tmp_path: Path) -> None:
     root = a_finished_year(tmp_path, today=READY)
-    recorded(root, quiet=tuple(MONTHS_OF_2026), lost={"2026-03": ["2026-03-14"]})
+    recorded(
+        root,
+        quiet=tuple(MONTHS_OF_2026),
+        lost={"2026-03": ["2026-03-14"]},
+        set_aside={"2026-03": 1},
+    )
 
     outcome = compact(root, READY, **SMALLEST)
 
     assert outcome.stopped_because is StopReason.EXHAUSTED, outcome.resume_from
-    assert yearly(root) == [
-        CompactEntry(
-            covers="2026", rows=0, bytes=0, state=EntryState.EMPTY, lost_days=["2026-03-14"]
-        )
-    ]
+    yearly_index = ledger.compact_index_path(state(root), VISUALS, Period.YEARLY)
+    payload = json.loads(yearly_index.read_bytes())
+    assert payload["version"] == COMPACT_INDEX_SPLIT_VERSION
+    assert payload["entries"] == []
+    assert payload["coverage"] == [{
+        "covers": "2026", "state": "empty", "lost_days": ["2026-03-14"], "set_aside": 1,
+    }]
     assert ledger.compact_file(state(root), VISUALS, Period.YEARLY, "2026") is None
     assert covers(root, Period.MONTHLY) == ["2027-01"]
     assert mark(root, Period.YEARLY) == "2026", "a year with no row moves the mark too"

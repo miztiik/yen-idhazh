@@ -767,8 +767,8 @@ def without(root: Path, day: str, *, keep_file: bool) -> None:
     """Take one day out of the daily index, and out of the tree unless its file is kept."""
     path = ledger.compact_index_path(state(root), VISUALS, Period.DAILY)
     index = CompactIndex.read(path)
-    kept = [entry for entry in index.entries if entry.covers != day]
-    path.write_bytes(index.model_copy(update={"entries": kept}).to_json().encode("ascii"))
+    kept = [entry for entry in index.period_entries if entry.covers != day]
+    an_index(root, VISUALS, Period.DAILY, kept)
     found = ledger.compact_file(state(root), VISUALS, Period.DAILY, day)
     if found is not None and not keep_file:
         found.unlink()
@@ -777,14 +777,14 @@ def without(root: Path, day: str, *, keep_file: bool) -> None:
 def september(root: Path) -> CompactEntry:
     """September's monthly entry, which the case has closed."""
     held = CompactIndex.read(ledger.compact_index_path(state(root), VISUALS, Period.MONTHLY))
-    (found,) = [entry for entry in held.entries if entry.covers == "2026-09"]
+    (found,) = [entry for entry in held.period_entries if entry.covers == "2026-09"]
     return found
 
 
 def daily_september(root: Path) -> list[str]:
     """The September days the daily index still names."""
     held = CompactIndex.read(ledger.compact_index_path(state(root), VISUALS, Period.DAILY))
-    return [entry.covers for entry in held.entries if entry.covers.startswith("2026-09-")]
+    return [entry.covers for entry in held.period_entries if entry.covers.startswith("2026-09-")]
 
 
 def month_rows(root: Path) -> list[str]:
@@ -998,7 +998,7 @@ def a_marked_ledger(root: Path, through: str) -> None:
 
 def daily_entries(root: Path) -> dict[str, CompactEntry]:
     held = CompactIndex.read(ledger.compact_index_path(state(root), VISUALS, Period.DAILY))
-    return {entry.covers: entry for entry in held.entries}
+    return {entry.covers: entry for entry in held.period_entries}
 
 
 def test_raw_days_after_the_mark_reach_the_newest_due_day_in_two_wakes(tmp_path: Path) -> None:

@@ -54,7 +54,7 @@ from idhazh.contracts.ledger_name import LedgerName
 
 COMPACT_INDEX_LEGACY_VERSION: Final = "2026-10-25"
 COMPACT_INDEX_SPLIT_VERSION: Final = "2026-11-25"
-COMPACT_INDEX_WRITE_VERSION: Final = COMPACT_INDEX_LEGACY_VERSION
+COMPACT_INDEX_WRITE_VERSION: Final = COMPACT_INDEX_SPLIT_VERSION
 
 #: What each period's stamp looks like, in the words a refusal prints.
 _SHAPE: Final[dict[Period, str]] = {

@@ -127,7 +127,8 @@ def named(root: Path, period: Period) -> list[Entry]:
     """Every entry of one of the ledger's indexes, oldest first."""
     index = CompactIndex.read(ledger.compact_index_path(state(root), LEDGER, period))
     return [
-        (entry.covers, entry.state, entry.rows, tuple(entry.lost_days)) for entry in index.entries
+        (entry.covers, entry.state, entry.rows, tuple(entry.lost_days))
+        for entry in index.period_entries
     ]
 
 
@@ -168,7 +169,7 @@ def unmatched_files(root: Path) -> list[str]:
     named_files: set[Path] = set()
     for period in Period:
         index = CompactIndex.read(ledger.compact_index_path(state(root), LEDGER, period))
-        for entry in index.entries:
+        for entry in index.period_entries:
             found = ledger.compact_file(state(root), LEDGER, period, entry.covers)
             where = f"{period.value} {entry.covers} ({entry.state.value})"
             if entry.state is not EntryState.PACKED:
