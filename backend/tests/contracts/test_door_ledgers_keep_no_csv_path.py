@@ -45,6 +45,7 @@ ENVELOPE_NAMED_FIELDS: Final[Mapping[LedgerName, frozenset[str]]] = {
     LedgerName.HOST_FINGERPRINT: frozenset(
         {"job", "pipeline_name", "task_name", "run_id", "shard"}
     ),
+    LedgerName.TASK_PERFORMANCE: frozenset({"pipeline_name", "task_name", "run_id", "shard"}),
     LedgerName.COUNTERFACTUAL_SCORES: frozenset({"run_id"}),
     LedgerName.FEED_HEALTH: frozenset({"run_id"}),
     LedgerName.SEEN: frozenset(),

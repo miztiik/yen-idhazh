@@ -119,6 +119,21 @@
       ]
     },
     {
+      "name": "task-performance",
+      "lifecycle_status": "active",
+      "description": "Task Performance records terminal outcomes and measured costs by pipeline task.",
+      "onboarded": "2026-11-25",
+      "ledgers": [
+        {
+          "name": "task-performance",
+          "publish_to_data_explorer": true,
+          "grain": "raw-and-compact",
+          "prefix": ["task-performance"],
+          "suffix": null
+        }
+      ]
+    },
+    {
       "name": "summary-quality-evals",
       "lifecycle_status": "active",
       "description": "How every published summary scored, one row per measurement.",

@@ -33,6 +33,7 @@ from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.run_shards import RunShards
 from idhazh.contracts.seen import PublishedRow, SeenRow
+from idhazh.contracts.task_performance import TaskPerformanceRow
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.contracts.visual_telemetry import VisualAttemptRow
 
@@ -290,6 +291,9 @@ _DOOR_SHAPES: Final[dict[LedgerName, _DoorShape]] = {
     LedgerName.ITEM_HEALTH_SUMMARY: _DoorShape(ITEM_HEALTH_SUMMARY_KEY, ItemHealthSummaryRow),
     LedgerName.SUMMARY_QUALITY_EVALS: _DoorShape(OBSERVATION_KEY, EvalRow),
     LedgerName.HOST_FINGERPRINT: _DoorShape(HOST_FINGERPRINT_KEY, HostFingerprintRow),
+    LedgerName.TASK_PERFORMANCE: _DoorShape(
+        ("date", "run_id", "pipeline_name", "task_name", "shard"), TaskPerformanceRow
+    ),
     LedgerName.COUNTERFACTUAL_SCORES: _DoorShape(COUNTERFACTUAL_SCORE_KEY, CounterfactualScoreRow),
     LedgerName.FEED_HEALTH: _DoorShape(FEED_HEALTH_KEY, FeedHealthRow),
     LedgerName.SEEN: _DoorShape(SEEN_KEY, SeenRow),

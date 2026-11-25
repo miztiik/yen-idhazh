@@ -258,6 +258,16 @@ PAIR_AND_THRESHOLD_LEDGERS: Final = (
 )
 
 
+def test_task_performance_files_under_its_own_prefix_and_opts_into_the_explorer() -> None:
+    member = LedgerName.TASK_PERFORMANCE
+    held = paths.entry(member)
+    registry = LedgersConfig.from_json(REGISTRY.read_text(encoding="utf-8"))
+
+    assert held.grain is Grain.RAW_AND_COMPACT
+    assert held.prefix == (member.value,)
+    assert member in registry.data_explorer_ledgers
+
+
 @pytest.mark.parametrize("member", PAIR_AND_THRESHOLD_LEDGERS, ids=lambda m: m.value)
 def test_a_judge_ledger_files_inside_its_family_and_offers_itself_to_the_explorer(
     member: LedgerName,
@@ -485,6 +495,7 @@ def test_the_claimed_roots_differ_from_the_base_only_by_the_names_given() -> Non
         "raw",
         "run-plan",
         "run-shards",
+        "task-performance",
         "compact",
     }
     assert CLAIMED_AT_THE_BASE - ledger.claimed_roots() == {

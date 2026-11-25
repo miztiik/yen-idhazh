@@ -139,6 +139,7 @@ FIXTURE_FILES: Final = (
     "summary/failed.json",
     "summary/ok.json",
     "summary/titled.json",
+    "task-performance-row/terminal-phase.json",
     "taxonomy/with-tombstones.json",
     "visual-aggregate-row/a-gate-that-refused.json",
     "visual-aggregate-row/a-group-nothing-measured.json",

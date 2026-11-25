@@ -42,6 +42,11 @@ test('native Node and browser-compatible imports validate the same committed cat
 	expect(JSON.parse(output)).toEqual(configuredCatalog.entries);
 });
 
+test('Task Performance is selectable through its consented standalone prefix', () => {
+	expect(consentedSelection(configuredCatalog, ['task-performance'])).toEqual({ names: ['task-performance'], notice: null });
+	expect(indexPath(configuredCatalog, 'task-performance', 'daily')).toBe('compact/task-performance/index/daily.json');
+});
+
 test('a safe new runtime name resolves from the supplied catalog without a compiled name list', () => {
 	const payload = registry();
 	payload.families[0].ledgers.push({

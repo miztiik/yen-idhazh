@@ -127,6 +127,23 @@ This rule concerns committed row storage. Scratch CSV passed between jobs of one
 
 **The local faithfulness label file is not a registered ledger.** `evals/labels.py` and `utilities/label_queue.py` can append to `state/labels.csv`, but no instance is committed. [Its retention rule](../../concepts/adaptive-pruning.md) keeps it forever. Before registering or committing it, obtain a retention decision: a new door ledger's yearly expiry would shorten that rule, and the no-CSV test refuses a committed CSV instance.
 
+### Task Performance
+
+`task-performance` is an active standalone raw-and-compact family. It opts
+into the Data explorer, with a budget for its compact indexes once they
+exist. The TypeScript Host Probes API is the designated producer through the
+shared writer. Until that API is wired, no digest job stages these records.
+`compact-task-performance` owns both roots and uses the
+[standard live retention chain](../publishing/ledger-compaction.md).
+
+The [row contract](schemas.md#task-performance) settles on
+`(date, run_id, pipeline_name, task_name, shard)`. The writer uses the matching
+generic pipeline and task identity, with a stable producer, so a higher attempt
+replaces only the same task. A late file can reopen a packed period without
+discarding tasks the retry did not run. Use a
+[named month range](../publishing/ledger-compaction.md#a-late-file) for
+historical arrivals outside the scheduled rerun window.
+
 ### The rule a judge ledger follows
 
 A judge ledger is one the council or the similarity judge's code writes: the council's own record of each step of its night, and the `content-similarity-judge` ledgers its code writes - `pair-verdicts` and `threshold-history`. All of them follow the rule below, so a reader who joins two of them meets one vocabulary.
