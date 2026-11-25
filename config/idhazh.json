@@ -396,8 +396,6 @@
     ],
     "downgrade_lookback_days": 30,
     "downgrade_max_samples_per_type": 256,
-    "evidence_max_chars": 3200,
-    "evidence_max_readings": 24,
     "enabled_kinds": [
       "chart"
     ],
@@ -412,6 +410,8 @@
       "pie",
       "histogram"
     ],
+    "evidence_max_chars": 3200,
+    "evidence_max_readings": 24,
     "histogram_bins": 3,
     "lead_words": 150,
     "max_chart_points": 8,

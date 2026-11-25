@@ -87,6 +87,7 @@ Whether two units may be joined at all is the validator's `units_convertible` ch
 ### Direction is selected, never inferred from wording
 
 `VisualPlan.negative_magnitude_element_ids` defaults to empty for old plans.
+Empty selections are omitted on serialization, preserving historical plan shapes.
 Every entry is a distinct, declared source quantity ID, with one interpretation
 in every measured channel using that element. Code never infers direction from
 words such as "loss". Only a selected reading becomes exact Decimal `-abs`;

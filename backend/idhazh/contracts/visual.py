@@ -261,6 +261,7 @@ class VisualPlan(Contract):
     negative_magnitude_element_ids: list[_PlanElementId] = Field(
         default_factory=list,
         max_length=MAX_ELEMENT_IDS,
+        exclude_if=lambda ids: not ids,
         description=(
             "Cited source quantities interpreted as negative magnitudes in every use. "
             "Code applies exact -abs; the source element and wording stay unchanged."
