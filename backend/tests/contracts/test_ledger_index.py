@@ -231,12 +231,13 @@ def test_split_indexes_refuse_missing_overlap_or_expired_coverage() -> None:
         "coverage": [{"covers": "2025", "state": "empty"}],
     }
     assert CompactIndex.model_validate(base).entries[0].names_file
-    for patch, reason in [
+    refusals: list[tuple[dict[str, Any], str]] = [
         ({"coverage": None}, "must list coverage"),
         ({"coverage": [{"covers": "2026", "state": "empty"}]}, "more than once"),
         ({"expired_through": "2025"}, "at or before expired_through"),
         ({"version": COMPACT_INDEX_LEGACY_VERSION}, "legacy index"),
-    ]:
+    ]
+    for patch, reason in refusals:
         with pytest.raises(ValidationError, match=reason):
             CompactIndex.model_validate(base | patch)
 
