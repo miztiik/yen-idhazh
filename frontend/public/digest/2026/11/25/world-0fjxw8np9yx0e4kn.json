@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Organization type",
+    "y": "Spending"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "world-0fjxw8np9yx0e4kn",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Everytown for Gun Safety","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Pro-second amendment and gun industry organizations","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-2240-2244","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "$","value": "53000000"},
+    {"derived": null,"element_id": "quantity-2377-2380","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "$","value": "3000000"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Gun control vs. gun rights spending in 2026 races (per Trace analysis)",
+  "type": "bar",
+  "version": "2026-11-22"
+}

@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Tariff Level (%)",
+    "y": "Number of Sources"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-zg4yrzr3009px1xr",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Proposed additional tariff","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Resulting second-term total on Chinese goods","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-1210-1214","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "%","value": "7.5"},
+    {"derived": null,"element_id": "quantity-1334-1337","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "20"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Reported US Tariff Levels on Chinese Imports (Bloomberg)",
+  "type": "dot",
+  "version": "2026-11-22"
+}
