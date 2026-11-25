@@ -1,6 +1,6 @@
 # The Summarizer Prompt
 
-**Last Updated**: 2026-11-21
+**Last Updated**: 2026-11-25
 
 What the model reads and writes, and what the pipeline validates. Prompt
 wording is not a security control: sanitization and validated output shapes
@@ -82,7 +82,7 @@ The chart grammar allows `visual: null` or a proposal for an enabled form
 the compiler supports. Each type has its own row shape. A reading is a decimal
 string and the stated unit and scale, or a null unit for a bare number. Names
 and dates are not chosen from lists. A summary-only request has neither chart
-instructions nor a chart field in its grammar.
+instructions nor `visual` or `model_reason` fields in its grammar.
 
 ## One call writes the summary and plans the visual, and the article is read once
 
@@ -106,7 +106,7 @@ not have to find category names for a chart to be considered.
 
 ### The model proposes rows; code binds the supplied readings
 
-The reply is `summary`, then `visual`. The model chooses the chart type
+The reply is `summary`, then `visual`, then optional `model_reason`. The model chooses the chart type
 and the title, axis titles, category labels and series names. The native
 schema describes the rows and offers only complete value-and-unit pairs
 from the article's candidate list, not independent choices for each field.
@@ -114,6 +114,12 @@ from the article's candidate list, not independent choices for each field.
 [Chart preparation](../publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md#a-chart-answer-becomes-a-plan-in-code)
 binds a value to a source reading and keeps display wording separate. It
 does not decide what a sentence means. A null proposal records a decline.
+The addendum asks for a reason for either choice: one plain-text line, at
+most 20 whitespace-separated words and within the untrusted-line character
+limit. Code drops a missing, invalid or unsafe reason independently of the
+summary and visual. The reason is untrusted text, not evidence or a validator
+verdict; only the visual decision handoff and
+[attempt ledger](../contracts/ledger-registry.md#visual-design-attempts) carry it.
 Replaying a known reply checks parsing and compilation; the
 [retained workflow](../../reference/retained-article-verification.md) shows
 what a live model selected.
@@ -157,7 +163,7 @@ the current server and model; neither establishes semantic extraction quality.
 
 ### Summary before visual
 
-Decode the summary before the answer about a chart. If output ends during the answer, `recovered_completion` may recover a complete summary with the JSON decoder, normalize the repaired completion status, and pass it through the same content checks as a normal reply. Publish no picture when its answer is incomplete.
+Decode the summary before the answer about a chart. If output ends during the answer, `recovered_completion` may recover a complete summary with the JSON decoder, normalize the repaired completion status, and pass it through the same content checks as a normal reply. If the budget runs out after the top-level visual proposal or decline closes, keep it only if it passes the normal checks. A cut reason is null; a complete valid reply keeps its reason even if its last token used the budget. Publish no picture when its answer is incomplete.
 
 Never recover a partially written summary. A chart is built only from readings and
 labels code resolves against the article, never from a figure in the summary.

@@ -10,7 +10,7 @@ from pathlib import Path
 from string import Template
 from typing import Annotated, Any, NamedTuple
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError, ValidatorFunctionWrapHandler, WrapValidator
 
 from idhazh import summarize
 from idhazh.classify.chart_candidates import ChartCandidate, candidate_block
@@ -24,17 +24,37 @@ from idhazh.contracts.knobs.prompts import PromptFilesConfig
 from idhazh.contracts.knobs.summarize import SummarizeConfig
 from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.visual import VisualType
+from idhazh.contracts.visual_decision import MODEL_REASON_MAX_WORDS, ModelReason
 from idhazh.llm.server import Completion, TurnMarkers, completion_payload, render_prompt
 from idhazh.load_prompt_text import load_prompt_text
-from idhazh.sanitize import untrusted_block
+from idhazh.sanitize import BLOB_PLACEHOLDER, LINK_PLACEHOLDER, sanitize, untrusted_block
 
 _FENCED_JSON = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL)
+_JSON_SPACE = " \t\r\n"
+_SUMMARY_FIRST = re.compile(r'\{[ \t\r\n]*"summary"[ \t\r\n]*:[ \t\r\n]*')
+_VISUAL_NEXT = re.compile(r'[ \t\r\n]*,[ \t\r\n]*"visual"[ \t\r\n]*:[ \t\r\n]*')
 
 
-# Decode the summary first so it is complete even if the visual reply gets cut.
+def _read_model_reason(value: object, check: ValidatorFunctionWrapHandler) -> str | None:
+    """Refuse this optional field, never the summary or chart beside it."""
+    try:
+        reason = check(value)
+    except ValidationError:
+        return None
+    if not isinstance(reason, str) or (
+        LINK_PLACEHOLDER in reason
+        or BLOB_PLACEHOLDER in reason
+        or sanitize(reason) != " ".join(reason.split())
+    ):
+        return None
+    return reason
+
+
+# Finish the summary and visual before spending any budget on the optional reason.
 class SummarizeAndPlanDraft(ContractModel):
     summary: summarize.SummaryDraft
     visual: Annotated[ChartProposal, Field(discriminator="type")] | None
+    model_reason: Annotated[ModelReason | None, WrapValidator(_read_model_reason)] = None
 
 
 def summarize_and_plan_model(*, plan: bool = True) -> type[BaseModel]:
@@ -123,6 +143,7 @@ def chart_addendum(
         return ""
     return "\n" + Template(load_prompt_text(config_dir, prompt_files.plan_visual)).substitute(
         chart_types=", ".join(form.value for form in forms),
+        model_reason_max_words=MODEL_REASON_MAX_WORDS,
     )
 
 
@@ -215,19 +236,67 @@ def output_schema_text(visuals: VisualsConfig) -> str:
     return canonical_json(schemas)
 
 
-def parse_summarize_and_plan(raw: str) -> SummarizeAndPlanDraft:
-    """Read the chart-bearing reply shape; the caller separately recovers the summary."""
+def _reply_content(raw: str) -> str:
     content = raw.strip()
     if fenced := _FENCED_JSON.match(content):
-        content = fenced.group(1)
-    return SummarizeAndPlanDraft.model_validate_json(content)
+        return fenced.group(1)
+    return content
+
+
+def parse_summarize_and_plan(raw: str) -> SummarizeAndPlanDraft:
+    """Read the chart-bearing reply shape; the caller separately recovers the summary."""
+    return SummarizeAndPlanDraft.model_validate_json(_reply_content(raw))
+
+
+def _reason_tail_was_cut(tail: str, decoder: json.JSONDecoder) -> bool:
+    """Recognize the final member, including a cut key, not an unknown member."""
+    tail = tail.lstrip(_JSON_SPACE)
+    if not tail.startswith(","):
+        return False
+    tail = tail[1:].lstrip(_JSON_SPACE)
+    name = '"model_reason"'
+    if name.startswith(tail):
+        return True
+    member, colon, tail = tail.partition(":")
+    if not colon or member.rstrip(_JSON_SPACE) != name:
+        return False
+    value = tail.lstrip(_JSON_SPACE)
+    if "null".startswith(value):
+        return True
+    if not value.startswith('"'):
+        return False
+    try:
+        _, end = decoder.raw_decode(value)
+    except json.JSONDecodeError:
+        return True
+    return not value[end:].strip(_JSON_SPACE)
+
+
+def recover_visual_before_reason_cut(raw: str) -> SummarizeAndPlanDraft | None:
+    """Read a length-stopped reply, repairing only a cut after its closed visual."""
+    content = _reply_content(raw)
+    if (first := _SUMMARY_FIRST.match(content)) is None:
+        return None
+    decoder = json.JSONDecoder()
+    try:
+        _, after_summary = decoder.raw_decode(content, first.end())
+        if (next_member := _VISUAL_NEXT.match(content, after_summary)) is None:
+            return None
+        _, after_visual = decoder.raw_decode(content, next_member.end())
+    except (ValueError, RecursionError):
+        return None
+    tail = content[after_visual:]
+    if not tail.strip(_JSON_SPACE) or _reason_tail_was_cut(tail, decoder):
+        content = content[:after_visual] + "}"
+    try:
+        return SummarizeAndPlanDraft.model_validate_json(content)
+    except ValidationError:
+        return None
 
 
 def _summary_bounds(raw: str) -> tuple[str, int, int] | None:
     """The decoded summary object and its bounds within the completion."""
-    content = raw.strip()
-    if fenced := _FENCED_JSON.match(content):
-        content = fenced.group(1)
+    content = _reply_content(raw)
     key = content.find('"summary"')
     if key < 0:
         return None

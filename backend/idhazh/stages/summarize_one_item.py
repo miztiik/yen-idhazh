@@ -466,12 +466,10 @@ def summarize_one_item(
     that reason can be written. An item that only fits without the chart
     instructions is asked for the summary alone.
 
-    **The reply is read whole, and the summary survives the plan.** The summary
-    is decoded first and closed before the plan starts, so a decode the output
-    budget cuts is cut in the plan and the summary behind it is recovered; the
-    picture is lost either way. A reply this build cannot read costs the item as
-    `bad_shape`, and one the budget cut inside the summary as `output_truncated`.
-    Both are a cell in the census rather than a silence.
+    **The reply is read in order.** A closed summary survives a cut in the plan.
+    A closed visual can also survive a cut in the optional explanation. A reply
+    this build cannot read costs the item as `bad_shape`, and one the budget cut
+    inside the summary as `output_truncated`.
 
     **No call is made for the names.** The first of the two calls this stage used
     to make read the article only to find them, and the service finds them in
@@ -614,9 +612,6 @@ def summarize_one_item(
         with trace.span(telemetry.SpanName.PARSE_REPLY) as span:
             half = calls.recovered_completion(reply)
             if reply.hit_the_budget and half is not None:
-                # The seatbelt the reply shape's field order buys, spent. The
-                # picture is gone either way; without this the summary went
-                # with it.
                 LOG.warning(
                     "the reply was cut and its summary recovered id=%s tokens=%s",
                     article.item_id,
@@ -674,6 +669,24 @@ def summarize_one_item(
     return _ItemResult(summary, decision, reply)
 
 
+def _cut_visual(
+    summary: Summary, completion: Completion, settings: config.Settings, stamp: Mapping[str, str],
+) -> VisualDecision:
+    """Distinguish a context-window stop from the model's response budget."""
+    n_ctx = window(settings.models.summarizer.server)
+    asked_for = response_limit(settings.models.summarizer.sampling)
+    if completion.prompt_tokens + asked_for > n_ctx:
+        LOG.warning(
+            "the window stopped the plan id=%s prompt=%s budget=%s n_ctx=%s",
+            summary.item_id,
+            completion.prompt_tokens,
+            asked_for,
+            n_ctx,
+        )
+        return visual_planner.plan_lost_to_the_window(summary, **stamp)
+    return visual_planner.plan_lost_to_the_budget(summary, **stamp)
+
+
 def _decide_the_visual(
     summary: Summary,
     completion: Completion,
@@ -690,42 +703,26 @@ def _decide_the_visual(
     render_root: Path | None = None,
     published_marks: Mapping[VisualType, Sequence[int]] | None = None,
 ) -> VisualDecision:
-    """Which of the routes to a picture, or to none, this reply took.
-
-    Six outcomes and five `none_reason` members, because the member names the
-    gate rather than the call site: an answer about a chart that breaks one of
-    its rules and a plan the compiler could not draw are one answer to an
-    operator - a chart was chosen and this build refuses it.
-
-    **A cut reply is two different findings and the server reports one.** Under
-    `--no-context-shift` a decode that runs into the end of the window stops
-    exactly as a decode that spends its output budget does, on an ordinary HTTP
-    200 with `finish_reason` of `length`. Only the arithmetic tells them apart,
-    and it needs nothing this function does not already hold: the server counted
-    the prompt, and the call's response limit is the model file's. Less room
-    left than that limit means the window was the wall.
-    """
+    """Settle a chart proposal or decline without treating the reason as evidence."""
     if not forms:
         return visual_planner.suppressed_by_the_gate(summary, **stamp)
-    if completion.hit_the_budget:
-        n_ctx = window(settings.models.summarizer.server)
-        asked_for = response_limit(settings.models.summarizer.sampling)
-        if completion.prompt_tokens + asked_for > n_ctx:
-            LOG.warning(
-                "the window stopped the plan id=%s prompt=%s budget=%s n_ctx=%s",
-                summary.item_id,
-                completion.prompt_tokens,
-                asked_for,
-                n_ctx,
-            )
-            return visual_planner.plan_lost_to_the_window(summary, **stamp)
-        return visual_planner.plan_lost_to_the_budget(summary, **stamp)
+    model_reason = None
     try:
-        choice = calls.parse_summarize_and_plan(completion.content).visual
-        if choice is None:
-            return visual_planner.declined_by_the_model(summary, **stamp)
-        plan = prepare_chart_plan(choice, forms, text, table, candidates)
+        draft = (
+            calls.recover_visual_before_reason_cut(completion.content)
+            if completion.hit_the_budget else calls.parse_summarize_and_plan(completion.content)
+        )
+        if draft is None:
+            return _cut_visual(summary, completion, settings, stamp)
+        model_reason = draft.model_reason
+        if draft.visual is None:
+            return visual_planner.declined_by_the_model(summary, **stamp).model_copy(
+                update={"model_reason": model_reason}
+            )
+        plan = prepare_chart_plan(draft.visual, forms, text, table, candidates)
     except (ValidationError, ValueError, json.JSONDecodeError) as error:
+        if completion.hit_the_budget:
+            return _cut_visual(summary, completion, settings, stamp)
         shape = _shape_cells(error)
         LOG.warning(
             "the plan half did not hold its shape id=%s reason=%s detail=%s",
@@ -741,8 +738,8 @@ def _decide_the_visual(
             summary,
             why=f"the plan half did not hold its shape: {shape['detail']}",
             **stamp,
-        )
+        ).model_copy(update={"model_reason": model_reason})
     return _drawn(
         summary, plan, table, settings=settings, date=date, stamp=stamp,
         run_id=run_id, render_root=render_root, published_marks=published_marks,
-    )
+    ).model_copy(update={"model_reason": model_reason})
