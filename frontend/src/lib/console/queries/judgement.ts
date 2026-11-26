@@ -1,6 +1,13 @@
 /** Which packed judge readings belong to the window and to its selected digest? */
 import type { PanelQuery } from './window';
 
+export const councilRunsQuery = {
+	name: 'councilRunsQuery',
+	ledger: 'council-run-records',
+	columns: ['date', 'run_id', 'attempt', 'job', 'judge_id', 'started_at', 'evaluation_step', 'work_part_index', 'work_part_count', 'outcome'],
+	span: 'window'
+} as const satisfies PanelQuery;
+
 export const judgeHistoryQuery = {
 	name: 'judgeHistoryQuery',
 	ledger: 'threshold-history',

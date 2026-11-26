@@ -210,7 +210,7 @@ matching, prior-run rule and warning readout.
 
 ## The surfaces that do not simply follow the span
 
-Each one says so on the page. Three are on Voices and one on Pipelines.
+Each one says so on the page.
 
 | Surface | Route | What it does | Why |
 | --- | --- | --- | --- |
@@ -222,6 +222,13 @@ Each one says so on the page. Three are on Voices and one on Pipelines.
 Source truncation and item-cost panels now derive their answers from declared
 native queries over the selected window. Their old per-preset telemetry copies
 are not a reason to retain an unused file reader or pan control.
+
+Gardener's [monthly finding](what-the-pipelines-route-draws.md#gardener-maintenance-shows-published-writes-not-a-workflow-verdict)
+uses the widest published monthly evidence even when the route is narrowed.
+Its grid uses the selected number of UTC write days; its daily evidence may
+use a shorter covered-day read under the file budget, which the panel names.
+The wake summary follows the selected preset against the Gardener ledger's
+own packed reach. Neither changes the publishing or article-timing window.
 
 **A panel that honours the control need not declare `data-windowed`.**
 Lower-tier query and render tests prove dates, denominators, gaps and snapshots

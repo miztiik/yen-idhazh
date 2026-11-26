@@ -137,8 +137,9 @@ Copy changes keep stable addresses. Summaries' retained section is
 
 ## Judgement draws the published merges and the holdout labels
 
-The tab separates **Published grouping** from **Judge: Content Similarity**. Published
-grouping has two full-width panels, in this order:
+The tab separates **Published grouping**, **Council activity** and
+**Judge: Content Similarity**. Published grouping has two full-width panels,
+in this order:
 
 - `merged-stories` counts the published `same_story_as` decisions. Daily columns
   count stories merged behind another; dots count the largest group, including
@@ -157,6 +158,13 @@ axis reaches `holdout_axis_below_line` score points below the merge line and
 `config/console/judgement.json` that must be above zero; a pair beyond either
 edge is drawn as a chip at that edge. The line is the current configuration,
 not a record of the floor that grouped an older digest.
+
+**LLM Council runs** reads the packed `council-run-records` ledger in the browser.
+The selected window bounds the judged digest dates; the strip groups distinct
+recorded attempts by UTC step start instead. Choose a day and attempt to see the
+judges, their digest dates and the reported parts. An absent report is not a
+failed or skipped workflow; a retry may replace an older report. The attempt
+link opens the recorded filing run without asking the workflow API.
 
 Both panels keep their build-time reads. The digest days are not published
 ledgers. The holdout labels are in a ledger, `holdout-pairs` in the Data explorer,

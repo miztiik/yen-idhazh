@@ -2,6 +2,12 @@
 import type { PanelQuery } from './window';
 export { failedRuleQuery } from './shared';
 
+export const gardenerWakeQuery = {
+	name: 'gardenerWakeQuery', ledger: 'gardener',
+	columns: ['date', 'run_id', 'attempt', 'job', 'shard', 'task', 'work_ended_at', 'dry_run', 'selected', 'deleted', 'bytes_freed', 'stopped_because', 'fault', 'resume_from'],
+	span: 'window'
+} as const satisfies PanelQuery;
+
 export const failureMixQuery = {
 	name: 'failureMixQuery', ledger: 'item-health',
 	columns: ['date', 'stage', 'outcome', 'code', 'failed_rule'],
