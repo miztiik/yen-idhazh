@@ -1,14 +1,18 @@
 """Does digest publication preserve immutable inputs and stop invalid work?"""
 
 import dataclasses
+import hashlib
 import json
+import shutil
+import subprocess
 from datetime import date, timedelta
 from pathlib import Path
+from uuid import UUID
 
 import pytest
 from gardener._garden import an_origin, git, quiet_git, write
 from retention._trees import health_row
-from support.paths import CONFIG_DIR
+from support.paths import CONFIG_DIR, REPO_ROOT
 
 from idhazh import assemble, completed_writes, config, ledger, publication, rank
 from idhazh.contracts.article import Article, ArticleStatus
@@ -22,14 +26,17 @@ from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.publication_inventory import PublicationInventory
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.summary import Summary, SummaryStatus
+from idhazh.contracts.task_performance import TaskPerformanceRow
 from idhazh.contracts.visual import EncodingRole
 from idhazh.contracts.visual_data import RENDERER_VERSION, VisualData
 from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX, VisualDecision, VisualKind, VisualState
 from idhazh.ledger import paths
+from idhazh.llm.serving_metrics import serving_measurement
 from idhazh.render.write import asset_relpath
 from idhazh.stages import common
 from idhazh.stages.assemble import stage_assemble
-from utilities import digest_assemble, digest_publish, publication_evidence
+from idhazh.telemetry import machine_api, silicon
+from utilities import digest_assemble, digest_performance, digest_publish, publication_evidence
 from utilities.publication_git import Repository
 from utilities.publication_request import IntegrityError, PublicationRequest, Write
 from utilities.publish_to_repo import Status, _verify_preparation
@@ -185,6 +192,151 @@ def test_work_adapter_lands_exact_completed_raw_not_pre_staged_state(
         entry = remote.entry("main", target.relative_to(repo).as_posix())
         assert entry is not None and entry.mode == "100644"
         assert remote.blob(entry.oid) == target.read_bytes()
+
+
+def test_native_digest_work_and_serving_land_together_without_widening_authority(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    quiet_git(tmp_path, monkeypatch)
+    origin, repo = an_origin(tmp_path, {
+        "config/push-retry.json": (CONFIG_DIR / "push-retry.json").read_text(encoding="utf-8"),
+    })
+    source = git(repo, "rev-parse", "HEAD").strip()
+    day = "2026-11-26"
+    job = WriterIdentity(
+        run_id=f"{day}-123", attempt=2, job=ServerJob.WORK, shard=3,
+        producer="utilities.digest_publish", git_sha=source,
+    )
+    settings = config.load(CONFIG_DIR)
+    settings.app.observability.host_fingerprint_bandwidth_jobs = ()
+    settings.app.observability.host_fingerprint = True
+    state = repo / "state"
+    private = tmp_path / "native"
+    with completed_writes.collect() as unscoped:
+        silicon.file_machine_row(
+            date=day, run_id=job.run_id, settings=settings, state_root=state,
+            commit_sha=source, shard=job.shard, job=ServerJob.WORK, attempt=job.attempt,
+            ask_placement=False,
+        )
+    publication_evidence.save(repo, job, "fingerprint", unscoped)
+    assert digest_performance.opening_capture(repo, job, day, private_state=private) is None
+    with completed_writes.collect() as capture:
+        silicon.file_machine_row(
+            date=day, run_id=job.run_id, settings=settings, state_root=state,
+            commit_sha=source, shard=job.shard, pipeline_name="digest", task_name="work",
+            attempt=job.attempt, ask_placement=False,
+        )
+    host = WriterIdentity.for_pipeline_task(
+        run_id=job.run_id, attempt=job.attempt, pipeline_name="digest", task_name="work",
+        shard=job.shard, producer=silicon.PRODUCER, git_sha=source,
+    )
+    publication_evidence.save(repo, host, "fingerprint", capture)
+    opening = digest_performance.opening_capture(repo, job, day, private_state=private)
+    assert opening is not None
+    host_unit, host_path = opening.unit_id, opening.path
+
+    raw_counters = "llamacpp:prompt_tokens_total 139\nllamacpp:prompt_seconds_total 2.25\n"
+    measurement = serving_measurement(raw_counters, subject_id="test-model", outcome="success")
+    assert measurement is not None
+    counters = tmp_path / "llama-metrics.prom"
+    counters.write_text(raw_counters, encoding="utf-8")
+    with completed_writes.collect() as clock:
+        legacy, _ = silicon.file_job_clock(
+            date=day, run_id=job.run_id, settings=settings, state_root=state,
+            commit_sha=source, shard=job.shard, job=ServerJob.WORK, attempt=job.attempt,
+            metrics_path=counters,
+        )
+    publication_evidence.save(repo, job, "job-clock", clock)
+    assert legacy is not None
+
+    bun = shutil.which("bun")
+    assert bun, "Install Bun to exercise the native record route"
+    commands = REPO_ROOT / "services" / "host-probes"
+    profile_reply = tmp_path / "native-stop.json"
+    run = subprocess.run(
+        [bun, "run", "--no-install", "test/write-digest-performance.ts"],
+        input=json.dumps({
+            "private_root": str(private), "execution": {
+                "run_id": job.run_id, "attempt": job.attempt, "pipeline_name": "digest",
+                "shard": job.shard, "git_sha": source, "accounting_days": [day],
+            },
+            "host_unit_id": host_unit,
+            "profile_reply": str(profile_reply),
+            "serving": measurement,
+        }), cwd=commands, check=False, capture_output=True, text=True, timeout=30,
+    )
+    assert run.returncode == 0, run.stderr
+    work, serving = [machine_api.Written.model_validate_json(line) for line in run.stdout.splitlines()]
+    stopped = profile_reply.read_bytes()
+    measured = machine_api.closed_measurement(
+        stopped, handle=UUID(json.loads(stopped)["handle"]), identity=machine_api.ProfileIdentity(
+            run_id=job.run_id, pipeline_name="digest", task_name="work",
+        ), outcome="success",
+    )
+    assert measured == work.row.model_dump(include=set(measured))
+    for reply in (work, serving):
+        digest_performance.retain(
+            repo, private, job=job, date=day, task=reply.row.task_name, response=reply,
+        )
+    with pytest.raises(IntegrityError, match="exact path or writer"):
+        digest_performance.retain(repo, private, job=job, date=day, task="work", response=serving)
+
+    serve_path = "state/" + serving.files[0].path
+    landed = repo / serve_path
+    original = landed.read_bytes()
+    landed.write_bytes(original + b"byte changed")
+    with pytest.raises(IntegrityError, match="completed write bytes changed"):
+        digest_publish.request_for(repo=repo, identity=job, date=day)
+    landed.write_bytes(original)
+    serve_writer = digest_performance.task_writer(job, "serve-summarizer")
+    serve_receipt = publication_evidence.receipt_path(
+        repo, serve_writer, digest_performance.RECORD,
+    )
+    exact_receipt = serve_receipt.read_bytes()
+    receipt = json.loads(exact_receipt)
+    receipt["identity"]["git_sha"] = "f" * 40
+    serve_receipt.write_text(json.dumps(receipt), encoding="utf-8")
+    with pytest.raises(IntegrityError, match="another executed identity"):
+        digest_publish.request_for(repo=repo, identity=job, date=day)
+
+    foreign = next(iter(unscoped))
+    publication_evidence.save(
+        repo, serve_writer, digest_performance.RECORD,
+        {foreign: hashlib.sha256(foreign.read_bytes()).hexdigest()},
+    )
+    with pytest.raises(IntegrityError, match="exceeds its declared raw day"):
+        digest_publish.request_for(repo=repo, identity=job, date=day)
+    serve_receipt.write_bytes(exact_receipt)
+    host_receipt = publication_evidence.receipt_path(repo, host, "fingerprint")
+    recorded_host = host_receipt.read_bytes()
+    host_receipt.unlink()
+    with pytest.raises(IntegrityError, match="lacks verified opening evidence"):
+        digest_publish.request_for(repo=repo, identity=job, date=day)
+    host_receipt.write_bytes(recorded_host)
+
+    result = digest_publish.land(repo=repo, identity=job, date=day)
+    assert result.status is Status.LANDED, result
+    remote = Repository(origin, git_dir=origin)
+    published_host = remote.entry("main", host_path)
+    assert published_host is not None
+    assert remote.blob(published_host.oid) == (repo / host_path).read_bytes()
+    for reply in (work, serving):
+        native = reply.files[0].path
+        entry = remote.entry("main", "state/" + native)
+        assert entry is not None and entry.mode == "100644"
+        published = remote.blob(entry.oid)
+        assert published == (private / native).read_bytes()
+        readback = tmp_path / (reply.row.task_name + ".parquet")
+        readback.write_bytes(published)
+        (stored,) = ledger.load_stored([readback], model=TaskPerformanceRow)
+        assert stored.row == reply.row
+        assert stored.identity.attempt == job.attempt
+        assert stored.row.host_unit_id == host_unit
+    assert work.row.elapsed_ms is not None
+    assert serving.row.elapsed_ms is None and serving.row.model_load_ms is None
+    assert (serving.row.server_prompt_tokens, serving.row.server_prompt_seconds) == (
+        legacy.server_prompt_tokens, legacy.server_prompt_seconds,
+    )
 
 
 def save_chart_worker_output(

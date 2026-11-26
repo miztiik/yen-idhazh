@@ -6,10 +6,13 @@ import argparse
 import dataclasses
 import hashlib
 import json
+import logging
 import os
 import shutil
+import subprocess
 import sys
 from collections.abc import Callable
+from contextlib import nullcontext
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
@@ -19,10 +22,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from idhazh import completed_writes, config, run_context, telemetry
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.file_envelope import WriterIdentity
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.publication_inventory import PublicationInventory
 from idhazh.contracts.run_plan import RunPlan
+from idhazh.contracts.task_performance import TaskPerformanceOutcome
 from idhazh.ledger import staging
-from utilities import publication_evidence
+from idhazh.telemetry.machine_api import MachineApi, MachineApiError
+from idhazh.telemetry.silicon import PRODUCER as HOST_PRODUCER
+from utilities import (
+    digest_performance,
+    memory_profiling_control,
+    model_runtime,
+    publication_evidence,
+)
 from utilities.publication_conflict import capture_publication_delta, replay_publication_delta
 from utilities.publication_git import Repository
 from utilities.publication_inputs import materialize, named_entries
@@ -31,6 +43,7 @@ from utilities.publish_to_repo import PublicationResult, publish
 from utilities.push_retry import DEFAULT_CONFIG, load_retry
 
 INVENTORY = "frontend/public/publication.json"
+LOG = logging.getLogger(__name__)
 VERBS = {
     "plan": ("plan", "fingerprint", "job-clock"),
     "work": ("fingerprint", "work", "record", "job-clock"),
@@ -45,6 +58,7 @@ def permissions(job: str, *, date: str) -> tuple[str, ...]:
         for name, held in staging.REGISTRY.items()
         if job in held.job_labels
     )
+    ledgers = (*ledgers, *digest_performance.approved_scope(job, date))
     if job == "assemble":
         from idhazh.path_classes import DERIVED
 
@@ -65,6 +79,33 @@ def permissions(job: str, *, date: str) -> tuple[str, ...]:
 
 def _flag(args: list[str], name: str, default: str = "") -> str:
     return args[args.index(name) + 1] if name in args else default
+
+
+def measure(command: list[str]) -> int:
+    """Start the existing owned machine listener around one trusted digest command."""
+    if not command:
+        raise ValueError("a digest command is required")
+    argv = command
+    if os.environ.get("IDHAZH_MACHINE_APIS_READY") != "true":
+        if os.environ.get("IDHAZH_HOST_TELEMETRY_MODE") == "python":
+            print(
+                "::warning title=Task Performance::Machine API runtime was not prepared",
+                file=sys.stderr,
+            )
+    else:
+        day = os.environ["IDHAZH_MACHINE_ACCOUNTING_DAY"]
+        memory = memory_profiling_control.resolve(
+            os.environ.get("MEMORY_PROFILING", "inherit"), config.REPO_ROOT / "config",
+        )
+        argv = [
+            "bun", "run", "--no-install", "services/host-probes/src/api/run-recording-task.ts",
+            day, f"{day}-{os.environ['GITHUB_RUN_ID']}", str(run_context.run_attempt()),
+            os.environ["IDHAZH_MACHINE_PIPELINE"], os.environ["IDHAZH_MACHINE_SHARD"],
+            os.environ["GITHUB_SHA"], "on" if memory else "off", *command,
+        ]
+    if os.name != "nt":
+        os.execvp(argv[0], argv)
+    return subprocess.run(argv, check=False).returncode
 
 
 def identify(args: list[str], *, job: str) -> WriterIdentity:
@@ -90,24 +131,79 @@ def run(args: list[str]) -> int:
     if job not in VERBS:
         job = "work" if verb in {"work", "record"} else "assemble" if verb == "harvest" else verb
     identity = identify(args, job=job)
+    date = _flag(args, "--date", os.environ.get("PUBLISH_DATE", ""))
     if identity.job is None:
         raise ValueError("digest publication requires a legacy workflow job identity")
     job = ServerJob(identity.job)
-    with completed_writes.collect() as writes:
+    if verb == "fingerprint" and (pipeline := _flag(args, "--pipeline-name")):
+        identity = WriterIdentity.for_pipeline_task(
+            run_id=identity.run_id, attempt=identity.attempt, shard=identity.shard,
+            git_sha=identity.git_sha, pipeline_name=pipeline,
+            task_name=_flag(args, "--task-name"), producer=HOST_PRODUCER,
+        )
+
+    writes: dict[Path, str] = {}
+    try:
+        profile = (
+            digest_performance.profile(config.REPO_ROOT, identity, date, verb)
+            if verb in ("plan", "work", "assemble")
+            else nullcontext()
+        )
+        with profile as completed, completed_writes.collect() as writes:
+            result = cli.main(args)
+            if completed is not None:
+                completed(result)
+            return result
+    finally:
+        if verb == "work":
+            trace = telemetry.committed_trace_path(
+                common.STATE_ROOT,
+                run_id=identity.run_id,
+                attempt=identity.attempt,
+                job=job,
+                shard=identity.shard,
+            )
+            if trace.is_file():
+                writes[trace.absolute()] = hashlib.sha256(trace.read_bytes()).hexdigest()
+        publication_evidence.save(config.REPO_ROOT, identity, verb, writes)
+
+
+def close_serving(args: list[str]) -> int:
+    """Close the launched model's serving observation and retain its exact receipt."""
+    parser = argparse.ArgumentParser(description=close_serving.__doc__)
+    parser.add_argument("--date", required=True)
+    parser.add_argument("--execution", required=True)
+    parser.add_argument("--shard", required=True)
+    parser.add_argument("--commit", required=True)
+    parser.add_argument(
+        "--runtime-outcome", required=True, choices=("success", "failure", "cancelled", "skipped"),
+    )
+    parsed = parser.parse_args(args)
+    outcome: TaskPerformanceOutcome = "error"
+    if parsed.runtime_outcome == "cancelled":
+        outcome = "cancelled"
+    elif parsed.runtime_outcome == "success":
+        outcome = "success"
+    repo = config.REPO_ROOT
+    identity = identify(args, job="work")
+    client = None
+    host = None
+    try:
+        client = MachineApi.for_job()
+        if client is not None:
+            host = digest_performance.import_opening_capture(repo, identity, parsed.date)
+    except MachineApiError as error:
+        LOG.warning("Task Performance serving listener unavailable: %s", error)
+    observation = model_runtime.close_serving_observation(repo / "config", "llama-server", outcome)
+    if observation is not None and client is not None:
         try:
-            return cli.main(args)
-        finally:
-            if verb == "work":
-                trace = telemetry.committed_trace_path(
-                    common.STATE_ROOT,
-                    run_id=identity.run_id,
-                    attempt=identity.attempt,
-                    job=job,
-                    shard=identity.shard,
-                )
-                if trace.is_file():
-                    completed_writes.record(trace, trace.read_bytes())
-            publication_evidence.save(config.REPO_ROOT, identity, verb, writes)
+            digest_performance.record_measurement(
+                client, repo, identity, parsed.date, digest_performance.SERVE,
+                observation, host=host,
+            )
+        except (OSError, ValueError, MachineApiError) as error:
+            LOG.warning("Task Performance serving receipt unavailable: %s", error)
+    return 0
 
 
 def inventory_preparation(
@@ -182,7 +278,13 @@ def request_for(
     if identity.job is None:
         raise ValueError("digest publication requires a legacy workflow job identity")
     job = ServerJob(identity.job)
-    hashes = publication_evidence.read(repo, identity, VERBS[job])
+    hashes = publication_evidence.read(
+        repo, identity, VERBS[job], excluded=(staging.staged_path(LedgerName.TASK_PERFORMANCE),),
+    )
+    for path, digest in digest_performance.evidence(repo, identity, date).items():
+        if path in hashes and hashes[path] != digest:
+            raise IntegrityError("completed receipts disagree about the same file", (path,))
+        hashes[path] = digest
     authority = permissions(job, date=date)
     mutable: tuple[str, ...] = (INVENTORY,)
     if job is ServerJob.ASSEMBLE:
@@ -372,6 +474,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args and args[0] == "run":
         return run(args[1:])
+    if args and args[0] == "measure":
+        return measure(args[1:])
+    if args and args[0] == "close-serving":
+        return close_serving(args[1:])
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("job", choices=tuple(VERBS))
     parser.add_argument("--date", required=True)

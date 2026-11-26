@@ -144,7 +144,7 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
         job_labels=frozenset({"plan", "work", "assemble"}),
     ),
     LedgerName.TASK_PERFORMANCE: LedgerStaging(
-        writer="TypeScript Host Probes API through the shared ledger writer; not yet writing rows",
+        writer="TypeScript Host Probes API; digest verifies named receipts for its raw day",
         symbol=None,
         job_labels=frozenset(),
     ),

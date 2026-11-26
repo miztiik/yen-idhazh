@@ -52,6 +52,16 @@ and verify the file and writer identity under the approved raw prefix.
 A recording retry uses the original root; it is not permission to re-create a
 lost file under a different identity or publish a receipt alone.
 
+The digest publisher admits only the current accounting day's raw Task
+Performance prefix, independently of the receipts, and only the tasks
+declared for its job. The work job can deliver `work` and `serve-summarizer`;
+the other jobs can deliver only their own task. Before delivery it checks
+the exact registered path, stored-row digest, file bytes and complete
+pipeline/task writer identity. A host reference must agree with the exact
+verified opening capture for the same execution; its named bytes are delivered
+under the job's existing host prefix so the reference can resolve. Legacy job
+receipts do not authorize native task files.
+
 The Python publisher checks worktree evidence, filtered Git blobs and candidate entries.
 Only mode `100644` is accepted. Literal paths, whole-segment permissions,
 symlink/junction parents, executable/submodule conversions, disjoint operations

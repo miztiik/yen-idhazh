@@ -1,0 +1,69 @@
+name: Machine APIs runtime
+description: Prepare the existing machine-only listener for this runner's measured commands.
+
+inputs:
+  mode:
+    description: The caller's resolved host telemetry mode.
+    required: false
+    default: 'python'
+  date:
+    description: The UTC accounting day admitted by this runner; omit to install only.
+    required: false
+  pipeline:
+    description: The workflow's declared pipeline name.
+    required: false
+  shard:
+    description: This runner's shard number.
+    required: false
+    default: '0'
+  publication_runtime_ready:
+    description: The caller already installed Bun and the shared publication packages.
+    required: false
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - uses: oven-sh/setup-bun@v2
+      if: inputs.mode != 'off' && inputs.publication_runtime_ready != 'true'
+      with:
+        bun-version: '1.3.13'
+
+    - name: Prepare the locked machine listener
+      if: inputs.mode != 'off'
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      env:
+        PUBLICATION_RUNTIME_READY: ${{ inputs.publication_runtime_ready }}
+      run: |
+        set -euo pipefail
+        packages=(services/serve-pipeline-apis services/host-fingerprints services/host-probes)
+        if [ "$PUBLICATION_RUNTIME_READY" != true ]; then
+          packages=(packages/common-contracts packages/ledger-file-writer "${packages[@]}")
+        fi
+        for package in "${packages[@]}"; do
+          bun install --frozen-lockfile --cwd "$package"
+        done
+        mkdir -p backend/var
+
+    - name: Declare the measured command's execution
+      if: inputs.date != ''
+      shell: bash
+      env:
+        MODE: ${{ inputs.mode }}
+        ACCOUNTING_DAY: ${{ inputs.date }}
+        PIPELINE: ${{ inputs.pipeline }}
+        TASK_SHARD: ${{ inputs.shard }}
+      run: |
+        set -euo pipefail
+        if [ "$MODE" = off ]; then
+          echo "IDHAZH_MACHINE_APIS_READY=false" >> "$GITHUB_ENV"
+        else
+          : "${PIPELINE:?A measured command requires a pipeline name}"
+          {
+            echo "IDHAZH_MACHINE_APIS_READY=true"
+            echo "IDHAZH_MACHINE_ACCOUNTING_DAY=$ACCOUNTING_DAY"
+            echo "IDHAZH_MACHINE_PIPELINE=$PIPELINE"
+            echo "IDHAZH_MACHINE_SHARD=$TASK_SHARD"
+          } >> "$GITHUB_ENV"
+        fi

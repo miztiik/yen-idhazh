@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
-from idhazh.contracts.file_envelope import FileEnvelope, WriterIdentity
+from idhazh import ledger
+from idhazh.atomic_write import write_atomic
+from idhazh.contracts.file_envelope import FileEnvelope, Format, Tier, WriterIdentity
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.publication_receipt import PublicationReceipt
 from utilities.publication_git import Repository
 from utilities.publication_request import IntegrityError, Write, contains, safe_file
@@ -23,26 +27,29 @@ def save(repo: Path, identity: WriterIdentity, verb: str, evidence: Mapping[Path
         relative = path.relative_to(repo).as_posix()
         if relative.startswith(("state/", "frontend/public/", "corpus/")):
             writes[relative] = digest
-    target = receipt_path(repo, identity, verb)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(
+    write_atomic(
+        receipt_path(repo, identity, verb),
         PublicationReceipt(
             version=PublicationReceipt.schema_version(), identity=identity, writes=writes
         ).to_json(),
-        encoding="utf-8",
-        newline="\n",
     )
 
 
-def read(repo: Path, identity: WriterIdentity, verbs: Sequence[str]) -> dict[str, str]:
+def read(
+    repo: Path, identity: WriterIdentity, verbs: Sequence[str], *,
+    excluded: tuple[str, ...] = (),
+) -> dict[str, str]:
     writes: dict[str, str] = {}
     for verb in verbs:
         path = receipt_path(repo, identity, verb)
         if not path.is_file():
             continue
-        receipt = PublicationReceipt.read(path)
-        if receipt.identity != identity:
-            raise IntegrityError("receipt belongs to another executed identity", (str(path),))
+        receipt = read_receipt(path, identity)
+        denied = tuple(
+            name for name in receipt.writes if any(contains(scope, name) for scope in excluded)
+        )
+        if denied:
+            raise IntegrityError("receipt used a raw prefix reserved for another writer", denied)
         identified(repo, identity, receipt.writes)
         # Verbs are in execution order: a later completed metadata write supersedes
         # this invocation's earlier bytes, but never another writer's identity.
@@ -50,24 +57,58 @@ def read(repo: Path, identity: WriterIdentity, verbs: Sequence[str]) -> dict[str
     return writes
 
 
+def read_receipt(path: Path, identity: WriterIdentity) -> PublicationReceipt:
+    receipt = PublicationReceipt.read(path)
+    if receipt.identity != identity:
+        raise IntegrityError("receipt belongs to another executed identity", (path.name,))
+    return receipt
+
+
 def identified(repo: Path, identity: WriterIdentity, hashes: Mapping[str, str]) -> None:
     """Raw envelopes must name the invocation that actually executed the producer."""
-    from idhazh.ledger import json_lines, parquet
-
-    fields = ("run_id", "attempt", "job", "shard", "git_sha")
+    fields = ("run_id", "attempt", "job", "pipeline_name", "task_name", "shard", "git_sha")
     for path in hashes:
         if not path.startswith("state/raw/"):
             continue
         target = safe_file(repo, path, exists=True)
         try:
-            metadata, _ = (parquet.read if target.suffix == ".parquet" else json_lines.read)(
-                target.read_bytes()
-            )
-            actual = FileEnvelope.from_metadata(metadata).identity
+            actual = ledger.read_envelope(target).identity
         except (ValueError, OSError) as error:
             raise IntegrityError(f"invalid completed raw envelope: {error}", (path,)) from error
         if any(getattr(actual, field) != getattr(identity, field) for field in fields):
             raise IntegrityError("completed raw file belongs to another invocation", (path,))
+
+
+def verified_raw(
+    root: Path, relative: str, data: bytes, *, name: LedgerName, date: str,
+    identity: WriterIdentity,
+) -> tuple[FileEnvelope, list[dict[str, object]]]:
+    """Verify the exact named Parquet's envelope, row digest and writer."""
+    from idhazh.ledger import json_lines, parquet
+    from idhazh.ledger.filenames import file_id, unit_id
+
+    meta, rows = parquet.read(data)
+    envelope = FileEnvelope.from_metadata(meta).validate_container(Format.PARQUET)
+    expected_unit = unit_id(
+        ledger=name, covers=date, run_id=identity.run_id, job=identity.job,
+        pipeline_name=identity.pipeline_name, task_name=identity.task_name,
+        shard=identity.shard, producer=identity.producer,
+    )
+    expected_file = file_id(
+        unit=expected_unit, attempt=identity.attempt, written_at_ms=envelope.written_at_ms,
+    )
+    want = ledger.raw_path(root, name, date, expected_file).relative_to(root).as_posix()
+    if (
+        relative != want or envelope.tier is not Tier.RAW or envelope.ledger != name
+        or envelope.covers != date or envelope.identity != identity
+        or envelope.unit_id != expected_unit or envelope.file_id != expected_file
+        or len(rows) != 1
+        or hashlib.sha256(json_lines.rows_bytes(rows)).hexdigest() != envelope.content_sha256
+    ):
+        raise IntegrityError(
+            "completed raw file does not match its exact path or writer", (relative,),
+        )
+    return envelope, rows
 
 
 def confirmed(

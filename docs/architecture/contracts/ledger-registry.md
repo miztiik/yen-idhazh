@@ -132,7 +132,8 @@ This rule concerns committed row storage. Scratch CSV passed between jobs of one
 `task-performance` is an active standalone raw-and-compact family. It opts
 into the Data explorer, with a budget for its compact indexes once they
 exist. The TypeScript Host Probes API is the designated producer through the
-shared writer. Until that API is wired, no digest job stages these records.
+shared writer. Digest delivers its declared tasks through the
+[ordinary publisher](../publishing/committing.md#evidence-is-not-permission).
 `compact-task-performance` owns both roots and uses the
 [standard live retention chain](../publishing/ledger-compaction.md).
 

@@ -1,6 +1,6 @@
 # The model boundary
 
-**Last Updated**: 2026-11-18
+**Last Updated**: 2026-11-26
 
 How the summarizer stays generic while the model behind it changes. This page
 owns the shape of the boundary - what crosses it, which side each fact lives
@@ -286,6 +286,20 @@ and every refusal names what was declared beside what was reported.
 `/apply-template` and `/tokenize` for the render, two `/completions` calls for
 the cache and the grammar, `/v1/models` for the trained length. Case 4 reads the
 weights file itself, because llama-server does not publish an architecture.
+
+The digest launcher pins the model process it started. After shard work and
+before teardown it reads that process's local `/metrics` once, with a bounded
+response and deadline. It keeps the exact verified response for the existing
+diagnostics and legacy host writer, even if a prompt series is missing. A
+complete, valid pair of cumulative prompt token and time counters from that
+same response supplies `serve-summarizer`. An exited process, missing series
+or invalid pair leaves no serving row when there is no other measurement;
+it does not change the digest outcome.
+The pinned runtime logs when tensor loading starts but does not log its finish
+as a distinct event. Its reported load timer after the first evaluation
+includes later work. Neither it nor the legacy startup markers or readiness
+time supplies an exact weights-load value. The serving row leaves
+`model_load_ms` null and the launcher reports why.
 `/props` carries the path, the alias, the file type, the build and the window;
 `/v1/models` adds the vocabulary, the embedding width, the parameter count and
 the trained length. Neither carries `general.architecture`, so the probe reads

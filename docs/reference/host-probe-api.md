@@ -159,7 +159,9 @@ admitted days and execution; omit it when no capture was available.
 
 When the launched job enables the master `observability.host_telemetry_enabled`
 switch, the existing task profiler is enabled and both profile memory settings
-follow `observability.memory_profiling_enabled`. Memory off refuses non-null RAM
+follow `observability.memory_profiling_enabled` unless the composed caller
+supplies its resolved workflow memory choice on the private startup pipe.
+Memory off refuses non-null RAM
 readings, not independently measured elapsed time or model counters. Request
 bodies cannot change these settings.
 

@@ -68,6 +68,11 @@ jobs:
       # Some backend tests call the native writer and contract bindings.
       - uses: ./.github/actions/publication-runtime
 
+      # The digest publication oracle exercises the real Host Probes handler.
+      - uses: ./.github/actions/machine-apis
+        with:
+          publication_runtime_ready: 'true'
+
       - name: Python checks and tests
         run: |
           pip install -e ".[dev]"
@@ -78,19 +83,25 @@ jobs:
       - name: TypeScript checks and tests
         if: needs.scope.outputs.bun == 'true'
         run: |
-          services=(
-            services/serve-pipeline-apis
-            services/host-fingerprints
-            services/host-probes
+          other_services=(
             services/feed-ingest-plan
             services/summary-generator
             tools/summary-generator-caller
             packages/feed-probe
           )
-          for package in "${services[@]}"; do
+          for package in "${other_services[@]}"; do
             bun install --frozen-lockfile --cwd "$package"
           done
-          for package in packages/common-contracts packages/data-delivery packages/ledger-file-writer "${services[@]}"; do
+          packages=(
+            packages/common-contracts
+            packages/data-delivery
+            packages/ledger-file-writer
+            services/serve-pipeline-apis
+            services/host-fingerprints
+            services/host-probes
+            "${other_services[@]}"
+          )
+          for package in "${packages[@]}"; do
             echo "::group::$package"
             (cd "$package" && bun run check && bun run test)
             echo "::endgroup::"

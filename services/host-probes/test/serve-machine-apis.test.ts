@@ -42,6 +42,7 @@ test("machine startup requires shared supervision without a legacy feed or top-l
   if (missing.success) throw new Error("Missing shared supervision must fail before child startup");
   expect(missing.error.issues.map(issue => issue.path)).toContainEqual(["server", "supervision"]);
   expect(MachineApiStartupSchema.safeParse({ ...startup, supervision }).success).toBe(false);
+  expect(MachineApiStartupSchema.safeParse({ ...startup, task_profile_memory_enabled: false }).success).toBe(false);
 });
 
 test("machine-only shutdown waits for its real profile worker and asynchronous report", async () => {
@@ -117,7 +118,7 @@ test.skipIf(process.platform !== "linux")("the real machine child writes fingerp
       pipeline_name: "recorded-work", task_name: "independent-machine", shard: 0, git_sha: "a".repeat(40) };
     const result = await superviseMachineApiTask({
       root: fixture.root, startup: {
-        ...fixture.startup, task_performance: {
+        ...fixture.startup, task_profile_memory_enabled: false, task_performance: {
           run_id: writer.run_id, attempt: writer.attempt, git_sha: writer.git_sha,
           pipeline_name: writer.pipeline_name, shard: writer.shard, accounting_days: [date],
         },
@@ -156,6 +157,8 @@ test.skipIf(process.platform !== "linux")("the real machine child writes fingerp
         const stopped = StopTaskProfileResponseSchema.parse(await response.json());
         if (stopped.status !== "stopped") throw new Error("Explicit stop must return the actual profile");
         expect(stopped.profile).toMatchObject({ traceId: first.traceId, spanId: first.spanId, outcome: "success", end_reason: "explicit_stop" });
+        expect(stopped.profile.machine_available_min_kb).toBeNull();
+        expect(stopped.profile.processes.worker.sampled_rss_max_kb).toBeNull();
         const filed = await fetch(origin + RECORD_TASK_PERFORMANCE_PATH, { ...json({
           date, writer, measurement: {
             task_kind: "workflow-task", ...summarizeClosedTaskProfile(stopped.profile), host_unit_id: hostUnitId,

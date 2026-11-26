@@ -26,7 +26,7 @@ export type MachineApiInputs = {
 
 export async function loadMachineApiInputs(
   root: string, outputRoot: string, registryPath = join(root, "config", "ledgers.json"),
-  execution?: TaskPerformanceExecution,
+  execution?: TaskPerformanceExecution, taskProfileMemoryEnabled?: boolean,
 ): Promise<MachineApiInputs> {
   const settingsPath = join(root, "config", "idhazh.json");
   const [config, settings, probes, recordingSettings] = await Promise.all([
@@ -39,7 +39,13 @@ export async function loadMachineApiInputs(
   return {
     fingerprint: { config, settings, options },
     probes: { config: probes, ...(execution === undefined || recordingSettings === undefined ? {} : {
-      recording: { ...options, execution, settings: recordingSettings },
+      recording: { ...options, execution, settings: {
+        ...recordingSettings,
+        observability: {
+          ...recordingSettings.observability,
+          memory_profiling_enabled: taskProfileMemoryEnabled ?? recordingSettings.observability.memory_profiling_enabled,
+        },
+      } },
     }) },
   };
 }

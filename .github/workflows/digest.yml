@@ -49,7 +49,7 @@ on:
           - 'on'
           - 'off'
       host_telemetry:
-        description: 'Python host collector, or off for all host telemetry'
+        description: 'Host telemetry, including task performance; off disables both'
         type: choice
         default: python
         options:
@@ -168,6 +168,26 @@ jobs:
       - name: Take the run state from the tip, not from the trigger commit
         run: python3 backend/utilities/take_state_from_the_tip.py state --date "${{ steps.decide.outputs.date }}"
 
+      - name: Prepare machine APIs
+        continue-on-error: true
+        uses: ./.github/actions/machine-apis
+        with:
+          mode: ${{ env.IDHAZH_HOST_TELEMETRY_MODE }}
+          date: ${{ steps.decide.outputs.date }}
+          pipeline: digest
+
+      # Take the one opening fingerprint before the measured work starts.
+      - name: What machine this job drew
+        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'python'
+        run: |
+          set -euo pipefail
+          python backend/utilities/digest_publish.py run fingerprint \
+            --date "${{ steps.decide.outputs.date }}" \
+            --execution "${{ github.run_id }}" \
+            --commit "${{ github.sha }}" \
+            --shard 0 \
+            --job plan
+
       # github.run_id gives every shard the same unique execution identity.
       # A blank article limit (every scheduled run) plans the full day.
       - name: Plan the day
@@ -194,28 +214,17 @@ jobs:
           if [ "$MEMORY_PROFILING" != "inherit" ]; then
             MEMORY_ARGS=(--memory-profiling "$MEMORY_PROFILING")
           fi
-          python backend/utilities/digest_publish.py run plan \
+          TASK=(python backend/utilities/digest_publish.py run plan \
             --date "${{ steps.decide.outputs.date }}" \
             --execution "${{ github.run_id }}" \
             --commit "${{ github.sha }}" \
             "${MEMORY_ARGS[@]}" \
             "${LIMIT[@]}" \
-            "${SHARD_ARGS[@]}"
+            "${SHARD_ARGS[@]}")
+          python backend/utilities/digest_publish.py measure "${TASK[@]}"
 
-      # The probe needs the plan's execution ID and an otherwise idle runner.
-      - name: What machine this job drew
-        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'python'
-        run: |
-          set -euo pipefail
-          python backend/utilities/digest_publish.py run fingerprint \
-            --date "${{ steps.decide.outputs.date }}" \
-            --execution "${{ github.run_id }}" \
-            --commit "${{ github.sha }}" \
-            --shard 0 \
-            --job plan
-
-          # Size workers after planning; a dispatch count overrides the configured size.
-          # Use the same count for the matrix and its concurrency cap.
+      # Size workers after planning; a dispatch count overrides the configured size.
+      # Use the same count for the matrix and its concurrency cap.
       - id: fanout
         run: |
           set -euo pipefail
@@ -315,6 +324,15 @@ jobs:
           name: plan
           path: ${{ needs.plan.outputs.plan_dir }}/
 
+      - name: Prepare machine APIs
+        continue-on-error: true
+        uses: ./.github/actions/machine-apis
+        with:
+          mode: ${{ env.IDHAZH_HOST_TELEMETRY_MODE }}
+          date: ${{ needs.plan.outputs.date }}
+          pipeline: digest
+          shard: ${{ matrix.shard }}
+
       # Probe before the model server consumes memory and bandwidth.
       - name: What machine this job drew
         if: env.IDHAZH_HOST_TELEMETRY_MODE == 'python'
@@ -342,11 +360,13 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           probe_url: ${{ env.MODEL_SERVER_PROBE }}
           llama_cpp_build: ${{ needs.plan.outputs.llama_cpp_build }}
+          observe_serving: ${{ env.IDHAZH_HOST_TELEMETRY_MODE != 'off' }}
 
       # Verify each server's template, prefix cache, grammar, architecture and window.
       # A healthy endpoint alone does not prove the configured model entry is correct.
       # Contract: docs/architecture/summarize/model-boundary.md.
       - name: The server proves the entry
+        id: prove_model
         run: |
           set -euo pipefail
           python3 backend/utilities/prove_the_entry.py --config-root config
@@ -403,7 +423,7 @@ jobs:
           if [ "$RESOLVED" = "on" ] && [ "$MODEL_SERVER_OUTCOME" = "success" ]; then
             SERVER_ARGS=(--server-pid "$(cat llama-server.pid)")
           fi
-          python backend/utilities/digest_publish.py run work \
+          TASK=(python backend/utilities/digest_publish.py run work \
             --date "${{ needs.plan.outputs.date }}" \
             --execution "${{ github.run_id }}" \
             --commit "${{ github.sha }}" \
@@ -411,7 +431,8 @@ jobs:
             --shards ${{ needs.plan.outputs.shards }} \
             "${MEMORY_ARGS[@]}" \
             "${SERVER_ARGS[@]}" \
-            ${{ needs.plan.outputs.faithfulness == 'false' && '--no-faithfulness' || '' }}
+            ${{ needs.plan.outputs.faithfulness == 'false' && '--no-faithfulness' || '' }})
+          python backend/utilities/digest_publish.py measure "${TASK[@]}"
 
       # Stop the service whatever the work step did.
       - name: Stop the text-analysis service
@@ -437,14 +458,23 @@ jobs:
             --shard ${{ matrix.shard }} \
             --shards ${{ needs.plan.outputs.shards }}
 
-      # Read cumulative counters once, before job-clock consumes them.
+      # Close the launcher-owned session; both writers consume this one scrape.
       - name: What the server counted
         if: always() && env.IDHAZH_HOST_TELEMETRY_MODE != 'off'
         continue-on-error: true
         env:
           MEMORY_PROFILING: ${{ inputs.memory_profiling || 'inherit' }}
+          MODEL_OUTCOME: ${{ steps.model_server.outcome }}
+          RUNTIME_OUTCOME: ${{ steps.model_server.outcome == 'success' && steps.prove_model.outcome || steps.model_server.outcome }}
         run: |
-          curl -sf --max-time 30 "${MODEL_SERVER_PROBE}/metrics" -o llama-metrics.prom || true
+          set -euo pipefail
+          if [ "$MODEL_OUTCOME" != skipped ] && [ -n "$MODEL_OUTCOME" ]; then
+            python backend/utilities/digest_publish.py measure \
+              python backend/utilities/digest_publish.py close-serving \
+                --date "${{ needs.plan.outputs.date }}" --execution "$GITHUB_RUN_ID" \
+                --shard "${{ matrix.shard }}" --commit "$GITHUB_SHA" \
+                --runtime-outcome "$RUNTIME_OUTCOME"
+          fi
           if [ -s llama-metrics.prom ]; then
             # Print all counters and name missing expected series after runtime changes.
             grep -E '^llamacpp:' llama-metrics.prom || true
@@ -628,6 +658,15 @@ jobs:
           name: plan
           path: ${{ needs.plan.outputs.plan_dir }}/
 
+      - name: Prepare machine APIs
+        continue-on-error: true
+        uses: ./.github/actions/machine-apis
+        with:
+          mode: ${{ env.IDHAZH_HOST_TELEMETRY_MODE }}
+          date: ${{ needs.plan.outputs.date }}
+          pipeline: digest
+          publication_runtime_ready: 'true'
+
       # Before the embeddings and the site build, which want the runner the
       # bandwidth reading wants.
       - name: What machine this job drew
@@ -657,12 +696,13 @@ jobs:
           if [ "$MEMORY_PROFILING" != "inherit" ]; then
             MEMORY_ARGS=(--memory-profiling "$MEMORY_PROFILING")
           fi
-          python backend/utilities/digest_publish.py run assemble \
+          TASK=(python backend/utilities/digest_publish.py run assemble \
             --date "${{ needs.plan.outputs.date }}" \
             --execution "${{ github.run_id }}" \
             --commit "${{ github.sha }}" \
             "${MEMORY_ARGS[@]}" \
-            --runner ubuntu-latest
+            --runner ubuntu-latest)
+          python backend/utilities/digest_publish.py measure "${TASK[@]}"
 
 
       - name: Harvest the training corpus
