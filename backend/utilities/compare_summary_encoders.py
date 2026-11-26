@@ -281,11 +281,14 @@ def stage_pairs(args: argparse.Namespace) -> None:
 
 
 def stage_score(args: argparse.Namespace) -> None:
+    from contextlib import nullcontext
+
     from idhazh import config
     from idhazh.contracts.base import ServerJob
     from idhazh.stages import common
     from idhazh.telemetry import machine_api, machine_evidence, task_probe, task_telemetry
     from idhazh.telemetry.host_control import memory_override, mode
+    from utilities.encoder_host_record import stage_local_host
 
     host_settings = config.with_memory_profiling_override(config.load(), memory_override())
     selected = mode(host_settings.app.observability)
@@ -305,29 +308,37 @@ def stage_score(args: argparse.Namespace) -> None:
     run_id = f"{date}-{execution}"
     pipeline = "encoder-comparison"
     task = "score"
+    bundle = args.host_record_dir if selected != "off" else None
+    if bundle is not None:
+        bundle.mkdir()
     if selected == "typescript" and machine_api.job_runtime_expected():
         writer = task_telemetry.native_writer(
             run_id, commit, pipeline=pipeline, task=task, shard=args.shard,
         )
         repo = config.REPO_ROOT
+        store = repo if bundle is None else bundle
         expected = machine_evidence.ExpectedFile(writer, date, native=True)
         opening = None
         if host_settings.app.observability.host_fingerprint:
             try:
-                opening = machine_evidence.capture_opening(repo, repo, expected)
+                opening = machine_evidence.capture_opening(repo, store, expected)
             except (OSError, ValueError, KeyError, machine_api.MachineApiError) as error:
                 machine_api.unavailable(task, "opening fingerprint", error)
         recording = task_probe.Recording.for_job(repo, opening)
         measurement = task_probe.task_file(writer, pipeline=pipeline, task=task, day=date)
-        with task_probe.profile(recording, measurement, repo) as closed:
+        with task_probe.profile(recording, measurement, store) as closed:
             if not score():
                 closed.outcome = "error"
         return
-    with task_telemetry.record(
+    state = (
+        nullcontext(common.state_root_of(host_settings, base=common.STATE_ROOT))
+        if bundle is None else stage_local_host(bundle, date)
+    )
+    with state as state_root, task_telemetry.record(
         date=date,
         run_id=run_id,
         settings=host_settings,
-        state_root=common.state_root_of(host_settings, base=common.STATE_ROOT),
+        state_root=state_root,
         commit_sha=commit,
         job=ServerJob.COLLECT,
         pipeline_name=pipeline if selected == "typescript" else None,
@@ -733,6 +744,9 @@ def main() -> None:
     one.add_argument("--execution")
     one.add_argument("--commit")
     one.add_argument("--shard", type=int, default=0)
+    one.add_argument(
+        "--host-record-dir", type=Path, help="new directory for this score's host evidence",
+    )
     one.set_defaults(run=stage_score)
 
     merge = stages.add_parser("collect", help="merge the readings")

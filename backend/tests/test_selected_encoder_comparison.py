@@ -6,16 +6,24 @@ import argparse
 import hashlib
 import json
 from copy import deepcopy
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
+from idhazh import completed_writes, config, ledger
+from idhazh.atomic_write import write_atomic
+from idhazh.contracts.base import ServerJob
+from idhazh.contracts.host_fingerprint import HostFingerprintRow
+from idhazh.telemetry import silicon, task_telemetry
+from idhazh.telemetry.host_control import MODE_ENV
 from utilities.compare_summary_encoders import (
     read_config,
     select_encoders,
     stage_collect,
     stage_render,
 )
+from utilities.encoder_host_record import stage_local_host
 from utilities.encoder_reading_table import render_readings
 
 CONFIG = Path(__file__).resolve().parents[2] / "config" / "encoder-comparison.json"
@@ -130,3 +138,42 @@ def test_render_saved_readings_leaves_the_measurement_and_manifest_unchanged(
     assert manifest.read_bytes() == original_manifest
     assert "| `unavailable-encoder` | | | unavailable 0/10 | | | | |" in output.read_text()
     assert "\r\n" not in output.read_bytes().decode("utf-8")
+
+
+def test_rollback_artifact_keeps_only_this_scores_completed_host_writes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(MODE_ENV, "python")
+    settings = config.load()
+    day = "2026-11-26"
+    revision = "a" * 40
+    archive = tmp_path / "state"
+    _, (unrelated,) = silicon.file_machine_row(
+        date=day, run_id=f"{day}-200", settings=settings, state_root=archive,
+        commit_sha=revision, job=ServerJob.COLLECT, ask_placement=False,
+    )
+    bundle = tmp_path / "host-record"
+    reading = tmp_path / "readings" / "minilm-l6.json"
+    run_id = f"{day}-201"
+    with completed_writes.collect() as artifact, pytest.raises(RuntimeError, match="score failed"):
+        with stage_local_host(bundle, day) as private:
+            old_path = unrelated.relative_to(archive)
+            stale = private / old_path
+            stale.parent.mkdir(parents=True)
+            stale.write_bytes(unrelated.read_bytes())
+            with task_telemetry.record(
+                date=day, run_id=run_id, settings=settings, state_root=private,
+                commit_sha=revision, job=ServerJob.COLLECT, ask_placement=False,
+                started_at=datetime(2026, 11, 26, tzinfo=UTC),
+                clock=lambda: datetime(2026, 11, 26, 0, 0, 2, tzinfo=UTC),
+            ) as completed:
+                write_atomic(reading, '{"state":"encoding"}')
+                raise RuntimeError("score failed")
+
+    staged = [bundle / "state" / path.relative_to(private) for path in completed]
+    assert staged and set(artifact) == set(staged)
+    rows = [ledger.load([path], model=HostFingerprintRow)[0] for path in staged]
+    assert all(row.run_id == run_id for row in rows)
+    assert rows[-1].job_seconds == 2
+    assert not (bundle / "state" / old_path).exists()
+    assert reading.is_file()
