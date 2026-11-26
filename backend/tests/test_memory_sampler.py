@@ -399,21 +399,30 @@ def test_the_pid_file_names_the_loop_and_not_the_process_that_launched_it(
     On the runner `python3` is the interpreter itself, and this program cannot
     run anywhere without a `/proc` in any case.
 
-    Nothing here waits on a clock. The target is a process that has already been
-    reaped, so the loop writes its first line and stops.
+    Keep the target alive through the first sample and PID check. Releasing it
+    through stdin then lets the sampler stop on its own.
     """
-    reaped = subprocess.Popen([sys.executable, "-c", ""])
-    reaped.wait()
+    log = tmp_path / "memory-sampler.log"
+    with subprocess.Popen(
+        [sys.executable, "-c", "import sys; sys.stdin.read()"], stdin=subprocess.PIPE,
+    ) as target:
+        try:
+            launcher = _ran_python_sampler(
+                tmp_path, "start-sampler", "--pid", str(target.pid), "--every", "0.1",
+            )
+            assert launcher.returncode == 0, launcher.stderr
+            said = _waited_for(log, "as pid ")
+            claimed = int(said.rsplit("as pid ", 1)[1].split()[0])
+            recorded = int((tmp_path / "memory-sampler.pid").read_text(encoding="utf-8"))
 
-    launcher = _ran_python_sampler(tmp_path, "start-sampler", "--pid", str(reaped.pid))
-    assert launcher.returncode == 0, launcher.stderr
+            assert recorded == claimed, "the pid file names a process that is not the sampling loop"
+            assert recorded != target.pid, "the pid file names the process being watched"
+            assert _waited_for(tmp_path / "rss-samples.jsonl", '"llama_vmrss_kb":')
+        finally:
+            target.communicate(timeout=PATIENCE_SECONDS)
 
-    said = _waited_for(tmp_path / "memory-sampler.log", "as pid ")
-    claimed = int(said.rsplit("as pid ", 1)[1].split()[0])
-    recorded = int((tmp_path / "memory-sampler.pid").read_text(encoding="utf-8"))
-
-    assert recorded == claimed, "the pid file names a process that is not the sampling loop"
-    assert recorded != reaped.pid, "the pid file names the process being watched"
+    stopped = _waited_for(log, f"pid {target.pid} is gone, after ")
+    assert int(stopped.rsplit("after ", 1)[1].split()[0]) > 0
 
 
 def test_a_loop_that_is_already_gone_is_refused_rather_than_recorded(tmp_path: Path) -> None:
