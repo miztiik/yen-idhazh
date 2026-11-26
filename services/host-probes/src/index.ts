@@ -7,6 +7,7 @@ import { loadConfig, loadTaskPerformanceSettings, TaskPerformanceExecutionSchema
 import { serveSamples } from "./api/server";
 import { sampleHost } from "./probe/sample-host";
 import { createProbeCompletionEvent, createProbeFailureEvent } from "./api/create-probe-event";
+import { runShardMemory } from "./diagnostics/shard-memory-cli";
 export { createSampleHandler } from "./api/server";
 export { loadConfig } from "./config";
 export { summarizeClosedTaskProfile } from "./task-profile/summarize-closed-profile";
@@ -20,9 +21,13 @@ const RecordingLaunchSchema = z.strictObject({
 
 async function main(context: OperationMetadata): Promise<void> {
   const [operation, flag, launchFile, ...extra] = Bun.argv.slice(2);
+  if ((operation === "--sample-shard-memory" || operation === "--finish-shard-memory") && flag === undefined) {
+    await runShardMemory(operation === "--sample-shard-memory" ? "sample" : "finish", await loadConfig());
+    return;
+  }
   if ((operation !== "--sample" && operation !== "--serve")
     || (flag !== undefined && (operation !== "--serve" || flag !== "--recording-context" || !launchFile || extra.length))) {
-    throw new Error("Usage: bun run src/index.ts --sample|--serve [--recording-context launch.json]");
+    throw new Error("Usage: bun run src/index.ts --sample|--serve [--recording-context launch.json]|--sample-shard-memory|--finish-shard-memory");
   }
   const config = await loadConfig();
   if (operation === "--sample") {

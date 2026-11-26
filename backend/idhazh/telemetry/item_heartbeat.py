@@ -1,4 +1,4 @@
-"""Keep waiting logs alive while host telemetry is explicitly disabled."""
+"""Keep item waiting logs independent of host collection."""
 
 from __future__ import annotations
 

@@ -311,6 +311,34 @@ def _refuse_a_sampler_that_died_at_startup(child: subprocess.Popen[bytes], log_p
     raise SystemExit(f"the sampler exited {child.returncode} before it took a sample\n{tail}")
 
 
+def _launch_sampler(argv: list[str], log_path: Path) -> subprocess.Popen[bytes]:
+    with log_path.open("wb") as log:
+        return subprocess.Popen(
+            argv, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
+            start_new_session=True, close_fds=True,
+        )
+
+
+def start_typescript_sampler() -> None:
+    """Supervise the native sampler's startup without taking Python host readings."""
+    log_path = Path(f"{DEFAULT_NAME}.log")
+    ready = Path("backend/var/shard-memory/ready")
+    if ready.parent.exists():
+        raise SystemExit("shard memory control already exists")
+    child = _launch_sampler(
+        [
+            "bun", "run", "--no-install", "services/host-probes/src/index.ts",
+            "--sample-shard-memory",
+        ],
+        log_path,
+    )
+    _refuse_a_sampler_that_died_at_startup(child, log_path)
+    if not ready.is_file():
+        child.terminate()
+        raise SystemExit("TypeScript shard memory sampler did not confirm its first sample")
+    LOG.info("TypeScript shard memory sampler started")
+
+
 def start_sampler(
     pid: int, name: str, every: float, *, config_root: Path = Path("config")
 ) -> None:
@@ -327,25 +355,10 @@ def start_sampler(
     naming a process that had never sampled anything, and a green step.
     """
     log_path = Path(f"{name}.log")
-    with log_path.open("wb") as log:
-        child = subprocess.Popen(
-            [
-                sys.executable,
-                str(Path(__file__).resolve()),
-                "sample",
-                "--pid",
-                str(pid),
-                "--every",
-                str(every),
-                "--config-root",
-                str(config_root),
-            ],
-            stdin=subprocess.DEVNULL,
-            stdout=log,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-            close_fds=True,
-        )
+    child = _launch_sampler([
+        sys.executable, str(Path(__file__).resolve()), "sample", "--pid", str(pid),
+        "--every", str(every), "--config-root", str(config_root),
+    ], log_path)
     pid_path = Path(f"{name}.pid")
     pid_path.write_text(str(child.pid), encoding="utf-8")
     _refuse_a_sampler_that_died_at_startup(child, log_path)
@@ -417,7 +430,7 @@ def summarize(
 
 def main(argv: Sequence[str] | None = None) -> int:
     from idhazh.contracts.app_config import AppConfig
-    from idhazh.telemetry.host_control import enabled, memory_override
+    from idhazh.telemetry.host_control import memory_override, mode
 
     parser = argparse.ArgumentParser(description=__doc__)
     verbs = parser.add_subparsers(dest="verb", required=True)
@@ -440,6 +453,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     start.add_argument(
         "--name", default=DEFAULT_NAME, help="The stem for <name>.log and <name>.pid."
     )
+    native = verbs.add_parser(
+        "start-typescript-sampler", help="Launch the native sampler and verify its first sample.",
+    )
+    native.set_defaults(config_root=Path("config"))
     watching("sample", "The loop itself, which start-sampler launches.")
     summary = verbs.add_parser("summarize", help="Print what the two files the loop wrote hold.")
     summary.add_argument("--config-root", type=Path, default=Path("config"))
@@ -458,9 +475,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     app = AppConfig.from_json((args.config_root / "idhazh.json").read_text(encoding="utf-8"))
     override = memory_override()
     memory = app.observability.memory_profiling_enabled if override is None else override
-    if not enabled(app.observability) or not memory:
+    selected = mode(app.observability)
+    if selected == "off" or not memory:
         LOG.info("host memory profiling off; no sampler or memory artifact opened")
         return 0
+    if (args.verb == "start-typescript-sampler") != (selected == "typescript"):
+        parser.error("select the shard memory command for the resolved host telemetry mode")
 
     ran: dict[str, Callable[[], object]] = {
         "start-sampler": lambda: start_sampler(
@@ -468,6 +488,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         ),
         "sample": lambda: sample(args.pid, every=args.every),
         "summarize": lambda: summarize(args.sample_file, args.process_file),
+        "start-typescript-sampler": start_typescript_sampler,
     }
     ran[args.verb]()
     return 0

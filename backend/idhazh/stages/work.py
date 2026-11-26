@@ -71,8 +71,10 @@ from idhazh.stages.common import (
 )
 from idhazh.stages.summarize_one_item import summarize_one_item
 from idhazh.telemetry import census, host, visual_attempts
-from idhazh.telemetry.host_control import enabled as host_telemetry_enabled
+from idhazh.telemetry.host_control import mode as host_telemetry_mode
 from idhazh.telemetry.item_heartbeat import ItemHeartbeat
+from idhazh.telemetry.item_window import ItemWindow, item_listener, item_server_pin
+from idhazh.telemetry.machine_api import ProfileIdentity
 from idhazh.telemetry.record import Flags, ItemRecorder, persist, shard_done
 from idhazh.visual_outcomes import count_visual_outcomes, project_visual_outcome
 from idhazh.visual_population import load_visual_population
@@ -328,7 +330,8 @@ def stage_work(
     if shards < 1 or not 0 <= shard < shards:
         raise ValueError("work shard must be inside the selected fanout")
     mine = shard_of(plan, shard=shard, shards=shards)
-    collect_host = host_telemetry_enabled(settings.app.observability)
+    host_mode = host_telemetry_mode(settings.app.observability)
+    collect_host = host_mode != "off"
     if not mine:
         LOG.info("working shard=%s/%s items=0", shard, shards)
         return
@@ -336,6 +339,15 @@ def stage_work(
         LOG.warning(
             "model-server PID not supplied; process memory and page faults are unrecorded"
         )
+    item_probe = item_listener() if host_mode == "typescript" else None
+    item_probe_identity = ProfileIdentity(
+        run_id=plan.run_id, pipeline_name="digest", task_name="work-item",
+    )
+    server_pin = (
+        item_server_pin(server_pid)
+        if item_probe is not None and settings.app.observability.memory_profiling_enabled
+        and server_pid is not None else None
+    )
     published_marks = load_visual_population(
         common.STATE_ROOT, on=plan.date, visuals=settings.app.visuals
     )
@@ -407,7 +419,7 @@ def stage_work(
         len(mine),
         model.id,
     )
-    flags = Flags.of(settings.app.logging    )
+    flags = Flags.of(settings.app.logging)
     # The workflow passes the PID written by the model-server maintainer. Looking
     # through the process table could select an unrelated server.
     shard_facts = (
@@ -552,8 +564,14 @@ def stage_work(
         )
         recorder.note(queue_wait_ms=queue_wait_ms)
         recorder.parked(queue_wait_ms)
-        watch_context: Any
-        if not collect_host:
+        watch_context: ItemHeartbeat | ItemWindow | host.Watch
+        if item_probe is not None:
+            watch_context = ItemWindow(
+                item_probe, item_probe_identity, interval_s=flags.waiting_heartbeat_seconds,
+                on_tick=_heartbeat(recorder), server=server_pin,
+                memory_profiling_enabled=settings.app.observability.memory_profiling_enabled,
+            )
+        elif host_mode != "python":
             watch_context = ItemHeartbeat(
                 interval_s=flags.waiting_heartbeat_seconds, on_tick=_heartbeat(recorder)
             )

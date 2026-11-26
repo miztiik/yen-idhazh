@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from idhazh import config, run_context
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.telemetry import machine_api
+from idhazh.telemetry.host_control import MODE_ENV
 from utilities import memory_profiling_control
 
 
@@ -41,7 +42,7 @@ def run(
             env["IDHAZH_MACHINE_PIPELINE"], env["IDHAZH_MACHINE_SHARD"],
             env["GITHUB_SHA"], "on" if memory else "off", *command,
         ]
-    elif instrument and env.get("IDHAZH_HOST_TELEMETRY_MODE") == "python":
+    elif instrument and env.get(MODE_ENV) in ("python", "typescript"):
         print(
             "::warning title=Task Performance::Machine API runtime was not prepared",
             file=sys.stderr,

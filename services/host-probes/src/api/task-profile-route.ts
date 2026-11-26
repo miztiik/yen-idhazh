@@ -5,9 +5,9 @@ import type { OperationMetadata } from "@idhazh/common-contracts";
 import { CommandBodyError, readCommandBody } from "./command-body";
 import type { ProbeRequestDiagnostics } from "./command-body";
 import { createProbeCompletionEvent } from "./create-probe-event";
-import { StartTaskProfileSchema, StopTaskProfileSchema } from "./task-command-schema";
+import { StartItemWindowSchema, StartTaskProfileSchema, StopTaskProfileSchema } from "./task-command-schema";
 import { TaskProfileCommandError } from "./task-profile-manager";
-import type { TaskProfileManager } from "./task-profile-manager";
+import type { ProfileMode, TaskProfileManager } from "./task-profile-manager";
 
 function profileOperation(value: OperationMetadata): OperationMetadata {
   return OperationMetadataSchema.parse({
@@ -19,19 +19,19 @@ function profileOperation(value: OperationMetadata): OperationMetadata {
 
 export async function postTaskProfile(
   command: "start" | "stop", request: Request, manager: TaskProfileManager, maxBytes: number,
-  diagnostics: ProbeRequestDiagnostics, bodyTimeoutMs?: number,
+  diagnostics: ProbeRequestDiagnostics, mode: ProfileMode, bodyTimeoutMs?: number,
 ): Promise<Response> {
   const raw = await readCommandBody(request, maxBytes, diagnostics, bodyTimeoutMs);
   const result = command === "start"
-    ? await manager.start(StartTaskProfileSchema.parse(raw), request.signal, readTraceContext({
+    ? await manager.start((mode === "item" ? StartItemWindowSchema : StartTaskProfileSchema).parse(raw), request.signal, readTraceContext({
       traceparent: request.headers.get("traceparent") ?? undefined,
       tracestate: request.headers.get("tracestate") ?? undefined,
     }))
-    : await manager.stop(StopTaskProfileSchema.parse(raw));
+    : await manager.stop(StopTaskProfileSchema.parse(raw), mode);
   const context = result.status === "started" ? profileOperation(result)
     : result.status === "stopped" ? profileOperation(result.profile) : diagnostics.context;
   diagnostics.writeEvent(createProbeCompletionEvent({
-    context, operation: command === "start" ? "start-task-profile" : "stop-task-profile",
+    context, operation: `${command}-${mode}-profile`,
     outcome: result.status === "disabled" ? "disabled" : "handled",
   }));
   return Response.json(result, { headers: { "Cache-Control": "no-store" } });

@@ -3,6 +3,14 @@ import type { Observation, UnavailableReason } from "./proc-reader";
 
 // These are Linux field names and units, not application tuning controls.
 const MEMORY_FIELDS = { total: "MemTotal", free: "MemFree", available: "MemAvailable" } as const;
+const ITEM_MEMORY_FIELDS = {
+  total: MEMORY_FIELDS.total, available: MEMORY_FIELDS.available,
+  cached: "Cached", swap_free: "SwapFree", swap_total: "SwapTotal",
+} as const;
+const SHARD_MEMORY_FIELDS = {
+  mem_total_kb: MEMORY_FIELDS.total, mem_available_kb: MEMORY_FIELDS.available, committed_as_kb: "Committed_AS",
+} as const;
+export const KIB_BYTES = 1024; // Linux proc kB are units of 1024 bytes.
 const VMSTAT_FIELDS = ["pgfault", "pgmajfault", "pswpin", "pswpout"] as const;
 type MemoryName = keyof typeof MEMORY_FIELDS;
 export type MemoryKb = Record<MemoryName, number | null>;
@@ -14,6 +22,9 @@ export function parseMemoryInfo(text: string): {
 } {
   return parseMemoryFields(text, MEMORY_FIELDS);
 }
+
+export const parseItemMemory = (text: string) => parseMemoryFields(text, ITEM_MEMORY_FIELDS).value;
+export const parseShardMemory = (text: string) => parseMemoryFields(text, SHARD_MEMORY_FIELDS).value;
 
 export function parseMemoryFields<Name extends string>(text: string, fields: Record<Name, string>) {
   const value = {} as Record<Name, number | null>;
