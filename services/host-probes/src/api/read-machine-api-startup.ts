@@ -1,15 +1,20 @@
 /** Which private controls start a machine-only child without any feed configuration? */
 import { z } from "zod";
 import { ApiHostStartupSchema, ApiReadySchema, enabledModules, PrivatePathSchema } from "@idhazh/serve-pipeline-apis/startup";
+import { TaskPerformanceExecutionSchema } from "../config";
 
 export const MachineApiStartupSchema = z.strictObject({
   ...ApiHostStartupSchema.shape,
   group: z.literal("machine"), nonce: z.uuid(), state_root: PrivatePathSchema,
   registry_path: PrivatePathSchema.optional(),
+  task_performance: TaskPerformanceExecutionSchema.optional(),
 }).meta({
-  version: "2026-11-07",
-  readCompatibility: "current_only; omitted registry uses the existing named committed registry",
-  changelog: [{ version: "2026-11-07", change: "Capture the caller's selected registry without feed configuration." }],
+  version: "2026-11-26",
+  readCompatibility: "An omitted registry uses the committed registry; omitted task execution leaves legacy probes unchanged.",
+  changelog: [
+    { version: "2026-11-26", change: "Admit one trusted execution and its accounting days for Task Performance." },
+    { version: "2026-11-07", change: "Capture the caller's selected registry without feed configuration." },
+  ],
 });
 export type MachineApiStartup = z.infer<typeof MachineApiStartupSchema>;
 export const MachineApiStartupFailureSchema = z.strictObject({

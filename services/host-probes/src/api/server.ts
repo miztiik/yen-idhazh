@@ -1,7 +1,10 @@
-/** Which versioned command exposes a host sample or owns a task profile? */
+/** Which versioned command samples, profiles or records a completed task? */
 import { createChildContext, createRootContext, OperationMetadataSchema, readTraceContext } from "@idhazh/common-contracts";
 import type { OperationMetadata } from "@idhazh/common-contracts";
 import type { ProbeConfig } from "../config";
+import { configureJobProfiles } from "../config";
+import { createTaskPerformanceRecorder } from "../persist-task-performance";
+import type { TaskPerformanceRecordingOptions } from "../persist-task-performance";
 import { sampleHost } from "../probe/sample-host";
 import type { ProbeContext } from "../probe/proc-reader";
 import type { TaskProfiling } from "../task-profile/task-profiler";
@@ -11,6 +14,8 @@ import { postTaskProfile, probeErrorResponse } from "./task-profile-route";
 import { postCacheLatency } from "./cache-latency-route";
 import { createProbeCompletionEvent, createProbeFailureEvent } from "./create-probe-event";
 import type { ProbeEventOutput } from "./create-probe-event";
+import { postRecordTaskPerformance, RECORD_TASK_PERFORMANCE_PATH } from "./record-task-performance-route";
+export { RECORD_TASK_PERFORMANCE_PATH, RecordTaskPerformanceRequestSchema, RecordTaskPerformanceResponseSchema } from "./record-task-performance-route";
 
 export type ProbeDiagnosticOptions = { writeEvent?: ProbeEventOutput; lifetimeContext?: OperationMetadata };
 
@@ -26,11 +31,14 @@ export function createSampleHandler(
   config: ProbeConfig, context: ProbeContext = {},
   report: TaskProfiling["report"] = profile => { console.error(JSON.stringify({ event: "task_profile", profile })); },
   diagnostics: ProbeDiagnosticOptions = {},
+  recording?: TaskPerformanceRecordingOptions,
 ) {
   const lifetime = OperationMetadataSchema.parse(diagnostics.lifetimeContext ?? createRootContext());
   const writeEvent: ProbeEventOutput = diagnostics.writeEvent ?? (event => { console.error(JSON.stringify(event)); });
   const cache = new CacheProbeController(config.cache_probe, config.max_proc_bytes, context);
-  const profiles = new TaskProfileManager({ config, context, report, cache, writeEvent });
+  const recorder = recording === undefined ? undefined : createTaskPerformanceRecorder(recording);
+  const profileConfig = recording === undefined ? config : configureJobProfiles(config, recording.settings);
+  const profiles = new TaskProfileManager({ config: profileConfig, context, report, cache, writeEvent });
   const handler = async (request: Request): Promise<Response> => {
     const parent = readTraceContext({
       traceparent: request.headers.get("traceparent") ?? undefined,
@@ -41,7 +49,7 @@ export function createSampleHandler(
     try {
       const path = new URL(request.url).pathname;
       const method = path === SAMPLE_PATH ? "GET"
-        : [START_TASK_PROFILE_PATH, STOP_TASK_PROFILE_PATH, CACHE_LATENCY_PATH].includes(path) ? "POST" : null;
+        : [START_TASK_PROFILE_PATH, STOP_TASK_PROFILE_PATH, CACHE_LATENCY_PATH, RECORD_TASK_PERFORMANCE_PATH].includes(path) ? "POST" : null;
       if (method === null) return Response.json({ error: "Not found" }, { status: 404, headers: { "Cache-Control": "no-store" } });
       if (request.method !== method) {
         return Response.json({ error: "Method not allowed" }, { status: 405, headers: { Allow: method, "Cache-Control": "no-store" } });
@@ -55,6 +63,9 @@ export function createSampleHandler(
         return await postCacheLatency(request, cache, config.max_request_body_bytes,
           config.cache_probe.lifecycle_timeout_ms, requestDiagnostics);
       }
+      if (path === RECORD_TASK_PERFORMANCE_PATH) {
+        return await postRecordTaskPerformance(request, recorder, config.max_request_body_bytes, requestDiagnostics);
+      }
       return await postTaskProfile(path === START_TASK_PROFILE_PATH ? "start" : "stop", request, profiles,
         config.max_request_body_bytes, requestDiagnostics,
         config.cache_probe.counters.enabled ? config.cache_probe.lifecycle_timeout_ms : undefined);
@@ -66,7 +77,7 @@ export function createSampleHandler(
   let closing: Promise<void> | undefined;
   handler.close = (): Promise<void> => {
     closing ??= (async () => {
-      const results = await Promise.allSettled([profiles.shutdown(), cache.shutdown()]);
+      const results = await Promise.allSettled([profiles.shutdown(), cache.shutdown(), recorder?.close()]);
       const errors = results.filter(result => result.status === "rejected").map(result => result.reason);
       if (errors.length) {
         writeEvent(createProbeFailureEvent({ context: lifetime, type: "host_probe_cleanup_failed" }));
@@ -78,10 +89,12 @@ export function createSampleHandler(
   return handler;
 }
 
-export function serveSamples(config: ProbeConfig, diagnostics: ProbeDiagnosticOptions = {}) {
+export function serveSamples(
+  config: ProbeConfig, diagnostics: ProbeDiagnosticOptions = {}, recording?: TaskPerformanceRecordingOptions,
+) {
   const lifetime = OperationMetadataSchema.parse(diagnostics.lifetimeContext ?? createRootContext());
   const writeEvent: ProbeEventOutput = diagnostics.writeEvent ?? (event => { console.error(JSON.stringify(event)); });
-  const handler = createSampleHandler(config, {}, undefined, { lifetimeContext: lifetime, writeEvent });
+  const handler = createSampleHandler(config, {}, undefined, { lifetimeContext: lifetime, writeEvent }, recording);
   const server = Bun.serve({
     hostname: config.listen_host,
     port: config.listen_port,

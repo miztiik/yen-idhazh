@@ -4,19 +4,26 @@ import { CloudEventSchema, createCloudEvent, readCloudEvent } from "@idhazh/comm
 import type { OperationMetadata } from "@idhazh/common-contracts";
 import { HOST_PROBE_EVENT_SOURCE } from "../declare-event-source";
 
-export const HOST_PROBE_EVENT_VERSION = "2026-11-05";
+export const HOST_PROBE_EVENT_VERSION = "2026-11-26";
 const diagnosticContract = {
   version: HOST_PROBE_EVENT_VERSION,
   readCompatibility: "current_only; diagnostic readers and writers change together",
   changelog: [
-    { version: HOST_PROBE_EVENT_VERSION, change: "Declare safe native probe command outcomes and failures." },
+    { version: HOST_PROBE_EVENT_VERSION, change: "Report the actual Task Performance recording outcome." },
+    { version: "2026-11-05", change: "Declare safe native probe command outcomes and failures." },
   ],
 };
 const NativeEnvelopeSchema = CloudEventSchema.safeExtend({ source: z.literal(HOST_PROBE_EVENT_SOURCE) });
-const CompletionDataSchema = z.strictObject({
-  operation: z.enum(["sample", "start-task-profile", "stop-task-profile", "cache-latency"]),
-  outcome: z.enum(["handled", "disabled"]),
-}).meta(diagnosticContract);
+const CompletionDataSchema = z.discriminatedUnion("operation", [
+  z.strictObject({
+    operation: z.enum(["sample", "start-task-profile", "stop-task-profile", "cache-latency"]),
+    outcome: z.enum(["handled", "disabled"]),
+  }),
+  z.strictObject({
+    operation: z.literal("record-task-performance"),
+    outcome: z.enum(["written", "disabled", "skipped"]),
+  }),
+]).meta(diagnosticContract);
 const CompletionEventSchema = NativeEnvelopeSchema.safeExtend({
   type: z.literal("host_probe_completed"), data: CompletionDataSchema,
 });
@@ -53,9 +60,7 @@ export type ProbeDiagnosticData = ProbeEvent["data"];
 export type ProbeEventOutput = (event: ProbeEvent) => void;
 export type ProbeOperation = z.infer<typeof CompletionDataSchema>["operation"];
 
-export function createProbeCompletionEvent(input: {
-  context: OperationMetadata; operation: ProbeOperation; outcome: z.infer<typeof CompletionDataSchema>["outcome"];
-}) {
+export function createProbeCompletionEvent(input: { context: OperationMetadata } & z.infer<typeof CompletionDataSchema>) {
   return CompletionEventSchema.parse(createCloudEvent({
     source: HOST_PROBE_EVENT_SOURCE, type: "host_probe_completed", context: input.context,
     data: { operation: input.operation, outcome: input.outcome },

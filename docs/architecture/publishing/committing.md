@@ -1,6 +1,6 @@
 # How completed output reaches the repository
 
-**Last Updated**: 2026-11-20
+**Last Updated**: 2026-11-26
 
 Start here when a workflow delivers generated files. Python jobs use
 [`backend/utilities/publish_to_repo.py`](../../../backend/utilities/publish_to_repo.py)
@@ -44,6 +44,13 @@ The version `2026-10-09` `PublicationReceipt` holds only identity and exact
 `relative-path -> SHA256` writes. It is an invocation artifact under `backend/var`,
 not a publication ledger or authority to stage anything. Raw envelopes must
 identify the run, attempt, job, shard and code revision that actually executed.
+
+The [Host Probes recorder](../../reference/host-probe-api.md#record) returns
+the exact completed Task Performance file in its job-local state root. It does
+not stage or commit that file. For delivery or recovery, retain those bytes
+and verify the file and writer identity under the approved raw prefix.
+A recording retry uses the original root; it is not permission to re-create a
+lost file under a different identity or publish a receipt alone.
 
 The Python publisher checks worktree evidence, filtered Git blobs and candidate entries.
 Only mode `100644` is accepted. Literal paths, whole-segment permissions,

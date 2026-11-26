@@ -23,6 +23,7 @@ export { digestRows } from "./parquet/row-digest";
 export type { LogicalField, LogicalType } from "./parquet/row-digest";
 export { describeObjectSchema, appendIdentityColumns } from "./row-schema";
 export { PlannerLedgerFileError, PlannerUnsupportedFormatError, readPlannerParquet, readStoredPlannerParquet } from "./read-planner-file";
+export { readPrivateRawDay } from "./read-private-raw-day";
 export { maintainPlannerPeriod } from "./planner-maintenance";
 export {
   rawDayDirectory, compactPeriodFile, regularPlannerPath, readPlannerDayFiles, readPlannerCompactFile,
