@@ -208,7 +208,7 @@ def test_native_digest_work_and_serving_land_together_without_widening_authority
         producer="utilities.digest_publish", git_sha=source,
     )
     settings = config.load(CONFIG_DIR)
-    settings.app.observability.host_fingerprint_bandwidth_jobs = []
+    settings.app.observability.host_fingerprint_bandwidth_jobs = ()
     settings.app.observability.host_fingerprint = True
     state = repo / "state"
     private = tmp_path / "native"
