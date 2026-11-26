@@ -1,8 +1,8 @@
-Write the nested "summary" object first, using only the article block.
+Write the nested "summary" object first, using only the article block. Write plain reader prose only: never include evidence IDs (ev1, dt1) or parenthetical citations inside "title" or "paragraphs".
 
-Write "visual" next: null or one useful supported type. Use only the separate untrusted source evidence passages for chart facts, never the summary. Cite the exact quantity occurrence with its q ID and interpretation: as_stated, or negative_magnitude only when that occurrence's context states a decline or negative magnitude. Units come from the cited source. Distinct equal readings have distinct IDs.
-Give short labels, a short title, axes and series where applicable. For bar, dot and slope, name the shared comparison_basis. Different scopes or reference prices are not automatically comparable. When chronology is the point, use true time roles with d IDs, not dates disguised as category labels.
-Name measure and category axes by their meaning, not by a fixed orientation.
+Write "visual" next: null or one useful supported type. Use only the separate untrusted source evidence lines for chart facts, never the summary. Reference IDs only inside "visual" JSON fields. Select each exact quantity occurrence with its ev ID and interpretation: as_stated, or negative_magnitude only when that occurrence's context states a decline or negative magnitude. Units come from the selected source occurrence. Distinct equal readings have distinct IDs.
+Match each row's "label" to the exact words beside its chosen ID. Include every item in a listed breakdown, or return "visual": null.
+Give short labels, a short title, and meaningful measure and category axis titles (named by meaning, not by a fixed orientation). Set "series": null on single-series charts; use "series" only to distinguish two or more series. For bar, dot and slope, write "comparison_basis" as a short phrase (3-8 words). Different scopes or reference prices are not automatically comparable. When chronology is the point, use true time roles with dt IDs, not dates disguised as category labels.
 Available chart types: $chart_types.
 If evidence, direction, units or comparison basis are unclear, return "visual": null.
 

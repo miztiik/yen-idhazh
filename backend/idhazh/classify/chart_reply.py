@@ -14,10 +14,10 @@ from idhazh.contracts.visual import MAX_IDS_PER_ROLE, TITLE_MAX_LENGTH, AxisTitl
 # bound the decode: the native grammar ignores maxLength when a pattern exists.
 ChartWords = Annotated[str, StringConstraints(pattern=rf'^[^"\\\r\n<>]{{1,{TITLE_MAX_LENGTH}}}$')]
 QuantityId = Annotated[
-    str, StringConstraints(pattern=rf"^q[0-9]{{1,{ELEMENT_ID_OFFSET_DIGITS}}}$"),
+    str, StringConstraints(pattern=rf"^ev[0-9]{{1,{ELEMENT_ID_OFFSET_DIGITS}}}$"),
 ]
 DateId = Annotated[
-    str, StringConstraints(pattern=rf"^d[0-9]{{1,{ELEMENT_ID_OFFSET_DIGITS}}}$"),
+    str, StringConstraints(pattern=rf"^dt[0-9]{{1,{ELEMENT_ID_OFFSET_DIGITS}}}$"),
 ]
 
 
@@ -27,8 +27,8 @@ class Reading(Model):
 
 
 class NamedReading(Model):
-    label: ChartWords
     reading: Reading
+    label: ChartWords
 
 
 class CategoryReading(NamedReading):
@@ -42,20 +42,24 @@ class DatedReading(Model):
 
 
 class Change(Model):
-    label: ChartWords
     start: Reading
     end: Reading
+    label: ChartWords
 
 
 class Point(Model):
-    label: ChartWords
     x: Reading
     y: Reading
+    label: ChartWords
     series: ChartWords | None = None
 
 
-class SizedPoint(Point):
+class SizedPoint(Model):
+    x: Reading
+    y: Reading
     size: Reading
+    label: ChartWords
+    series: ChartWords | None = None
 
 
 class _Proposal(Model):

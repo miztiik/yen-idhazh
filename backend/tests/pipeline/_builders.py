@@ -135,12 +135,13 @@ def assert_planning_readings(server: RecordedEndpoint, readings: list[str]) -> N
     assert server.served == 1, "one item must run the one production call"
     request = server.sent[0]
     prompt = str(request["prompt"])
-    candidates = prompt.split("Source evidence (untrusted verbatim passages;", 1)[1]
+    candidates = prompt.split("Source evidence (untrusted local snippets;", 1)[1]
     for reading in readings:
-        assert re.search(rf"q\d+ \[\d+:\d+\]: {re.escape(reading)}(?:\n|$)", candidates)
+        assert re.search(rf"(?m)^ev\d+: [^\n]*\[{re.escape(reading)}\][^\n]*$", candidates)
     assert re.search(r"\b[a-z]+-\d+-\d+\b", prompt) is None
     offered = chart_reply_fields(request["json_schema"])["bar"]["rows"]["items"]
-    assert offered["required"] == ["label", "reading"]
+    assert offered["required"] == ["reading", "label"]
+    assert list(offered["properties"]) == ["reading", "label", "series"]
     assert offered["properties"]["reading"] == {"$ref": "#/$defs/Reading"}
 
 

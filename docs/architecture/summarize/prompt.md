@@ -93,11 +93,15 @@ If extraction read only part of the article, state that limitation on the item. 
 Use grammar-constrained decoding derived from the declared reply model. Refuse unknown keys and validate the result after decoding. A well-shaped object still needs content checks.
 
 The chart grammar allows `visual: null` or a proposal for an enabled form
-the compiler supports. Each type has its own row shape. A reading cites one
-finite quantity occurrence ID and chooses `as_stated` or `negative_magnitude`.
-Time roles cite a separate finite set of date IDs. No source strings enter
-schema literals. A summary-only request has neither chart
-instructions nor `visual` or `model_reason` fields in its grammar.
+the compiler supports. Each type has its own row shape. Every label-bearing
+row shape decodes its reading ID field(s) (`reading`, `start`/`end`, or
+`x`/`y`/`size`) before `label` (and optional `series`) so the decoder locks
+onto the selected evidence line before writing the model label. A reading
+references one finite quantity occurrence ID (`ev<n>`) and chooses `as_stated`
+or `negative_magnitude`. Time roles reference a separate finite set of date
+IDs (`dt<n>`). No source strings enter schema literals. A summary-only request
+has neither chart instructions nor `visual` or `model_reason` fields in its
+grammar.
 
 ## One call writes the summary and plans the visual
 
@@ -106,12 +110,14 @@ each item makes, and [stages/summarize_one_item.py](../../../backend/idhazh/stag
 sends it:
 
 - **The system turn** is `write-digest-summary.txt`, unchanged, with a short
-  `plan-visual.txt` addendum for a chart-capable request. The addendum and the
-  separate reply schema name exactly the same forms.
+  `plan-visual.txt` addendum for a chart-capable request. The addendum forbids
+  evidence IDs or parenthetical citations inside `title` and `paragraphs`, and
+  names the exact same forms as the reply schema.
 - **The user turn** is one sanitized, fenced block containing the headline and
   article body, unchanged and without markers. A chart-capable request adds
-  separate fenced verbatim source passages with short quantity and date IDs.
-  Only those bounded passages repeat source text; no instruction follows them.
+  separate fenced one-line local snippets with non-prose `ev` quantity IDs and
+  `dt` date IDs, bracketing each reading inside its local context. Only those
+  bounded snippets repeat source words; no instruction follows them.
 
 The prompt is rendered explicitly rather than by the model's chat template. The shared
 system text is a reusable prefix for items with the same request shape.
@@ -126,9 +132,14 @@ not have to find category names for a chart to be considered.
 
 The reply is `summary`, then `visual`, then optional `model_reason`. The model chooses the chart type
 and the title, axis titles, category labels and series names. The native
-schema describes the rows and offers disjoint finite quantity and date IDs.
+schema describes the rows, decodes reading IDs before `label`, and offers
+disjoint finite `ev` quantity IDs and `dt` date IDs.
 The source carries units. Bar, dot and slope proposals also name the shared
-comparison basis in short wording. The model decides relevance, direction,
+comparison basis in a short phrase (3-8 words so it stays well within the
+80-character field ceiling). Single-series charts set `series: null`; `series`
+is reserved for distinguishing two or more series. Each row's `label` matches
+the words beside its chosen ID, and listed breakdowns include every item or
+return `visual: null`. The model decides relevance, direction,
 scope and suitability; code does not infer those from the article or summary.
 
 [Chart preparation](../publishing/what-a-visual-plan-may-say-and-what-happens-to-one-that-is-refused.md#a-chart-answer-becomes-a-plan-in-code)
@@ -154,14 +165,18 @@ Fenced headline and article text remain untrusted data. Do not let either become
 ### Evidence stays separate from the article
 
 The prompt contains the sanitized article and, where applicable, the
-evidence block. It does not change stored `Article.text`. Request-only IDs
-locate quantity and date occurrences inside complete verified sentences;
-published output retains original element references, not these IDs or
-passages. The [evidence bounds](../../concepts/config/run-limits.md) limit the
-entire rendered block. Passages are deduplicated and selected in source order;
-a sentence that cannot fit is omitted whole, never shortened.
-Surrounding separator whitespace is omitted and offsets shift to that exact
-source slice; every sentence word remains unchanged.
+evidence block. It does not change stored `Article.text`. Request-only `ev`
+and `dt` IDs locate quantity and date occurrences as one-line local snippets
+inside complete verified sentences (up to five surrounding words on each side,
+trimmed with `...` inside the sentence and isolated to the reading's line when
+a sentence spans bullet lines, with the reading itself bracketed and no
+character offsets). Published output retains original canonical element
+references (`quantity-start-end`, `date-start-end`), never these transient IDs
+or snippets. The [evidence bounds](../../concepts/config/run-limits.md) limit
+the entire rendered block. Sentences are deduplicated and selected in source
+order; a sentence whose readings cannot fit is omitted whole, never partially
+dropped. Surrounding separator whitespace on each verified sentence is trimmed
+before slicing so snippets never bleed across sentence boundaries.
 Fewer than two offered quantities, unusable sentence spans or a combined
 request that cannot fit select the existing plain summary path. Line and
 slope are omitted from both instructions and grammar unless the offered
@@ -328,6 +343,18 @@ decoding also encourages walls of text. Moving paragraph breaks into the
 transient `SummaryDraft.paragraphs` array and instructing the model to
 paraphrase or use single quotes fixes both failure modes at the decode boundary
 while keeping `Summary.summary`, persisted digests, and the frontend unchanged.
+
+**Why non-prose `ev`/`dt` IDs, one-line local snippets, and `reading`-before-`label` decode order.**
+Prose-like `q`/`d` IDs combined with the verb "Cite" caused models to leak
+markers such as `(q1)` into published summaries. Full repeated `Passage:`
+blocks with `[start:end]` character offsets forced the model to cross-index
+dense lists across separate paragraphs, causing row/label slips when a chart
+label decoded before its reading ID. Replacing passages and offsets with
+one-line local snippets (`ev5: - Firebaugh, CA: +[10 stalls]`), renaming
+transient IDs to `ev`/`dt`, forbidding evidence IDs in summary prose, and
+decoding reading IDs before `label` keeps transient planning aligned with the
+chosen occurrence while leaving persisted `VisualPlan` and `VisualData`
+contracts unchanged.
 
 ## See also
 

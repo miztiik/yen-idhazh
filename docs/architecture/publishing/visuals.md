@@ -1,6 +1,6 @@
 # Visual planning and rendering
 
-**Last Updated**: 2026-11-24
+**Last Updated**: 2026-11-26
 
 How an item gets a numeric chart or - most of the time - nothing at
 all: which pass decides, which gate refuses, and what every refusal is called.
@@ -120,9 +120,13 @@ This is the whole safety design, and it is structural rather than instructed.
 
 1. Code cuts quantity and date spans, then anchors the mentions the text-analysis
    service returned against the same article text.
-2. The model chooses a form and cites numeric readings, dates and short label
-   phrases as needed. Numerals in a title or caption must match cited elements.
-3. Code checks the references, re-slices labels, and builds and validates the
+2. The model chooses a form and references numeric readings (`ev` IDs), dates
+   (`dt` IDs) and short label phrases inside `visual` JSON fields only, never
+   in summary prose. Row shapes decode reading IDs before `label` against
+   one-line local snippets so each label stays anchored to its occurrence.
+   Numerals in a title or caption must match referenced elements.
+3. Code checks the references, maps transient IDs to canonical `element_id`
+   references, re-slices labels, and builds and validates the
    plan before compiling the chart. Any derived value
    is arithmetic over source-backed elements through the closed, provenance-
    carrying rules in [where every drawn figure came from](where-every-drawn-figure-came-from.md).
@@ -322,8 +326,8 @@ flowchart TD
 |---|---|
 | `CP` | Code extracts quantities and dates, with the characters and offsets recording their source. |
 | `TA` | A local process the run starts, asked once per article before the model reads it. The pipeline reads a label and two offsets of each mention and nothing else; the words it returns are compared with the characters those offsets cut from `Article.text`, and a mention whose words differ is dropped. No word it returns reaches a prompt, path, URL or command |
-| `TB` | One fenced article and a separate data-only list of [candidate readings](../summarize/prompt.md#the-model-proposes-rows-code-binds-the-supplied-readings). |
-| `C2` | Decides from the article and cites the readings and label text for the chosen form; cannot author a measured value. |
+| `TB` | One fenced article and a separate data-only list of one-line local [candidate reading snippets](../summarize/prompt.md#the-model-proposes-rows-code-binds-the-supplied-readings) with `ev`/`dt` IDs and no character offsets. |
+| `C2` | Decides from the article and references reading IDs (before `label`) and display text inside `visual` JSON fields only; cannot author a measured value. |
 | `VP` | Resolves source references into the existing typed plan; no geometry, literal value, authored labels or alt text. |
 | `VV` | Ten checks: elements exist; semantically compatible; units convertible; roles valid for the type; enough data; no duplicate in a role; no invented values; numerals matched; plan version current; stacked parts equal a separate declared whole |
 | `VC` | The chart compiler: the one place chart numbers come into being, each arithmetic result resolved over Tier 1 elements through the closed four-function allow-list - `count`, `sum`, `share_of_declared_whole`, `convert` |

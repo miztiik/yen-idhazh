@@ -193,8 +193,8 @@ def test_later_duplicate_selected_as_negative_survives_fresh_publisher_handoff(
         title="Net capacity change",
         comparison_basis="Net installed generating capacity change over the reporting period",
         rows=[
-            {"label": "Birch", "reading": reading("q2", "negative_magnitude")},
-            named("Cedar", "q3"),
+            {"reading": reading("ev2", "negative_magnitude"), "label": "Birch"},
+            named("Cedar", "ev3"),
         ],
     )
     response = json.dumps({"content": content, "stop": True}).encode()
@@ -225,7 +225,7 @@ def test_later_duplicate_selected_as_negative_survives_fresh_publisher_handoff(
     assert signed.derived.source_unit is None and signed.derived.unit_table_version is None
     assert positive.value == "30"
     assert server.served == 1
-    assert "q2" in server.sent[0]["json_schema"]["$defs"]["QuantityEvidenceId"]["enum"]
+    assert "ev2" in server.sent[0]["json_schema"]["$defs"]["QuantityEvidenceId"]["enum"]
 
     publisher = tmp_path / "publisher"
     day = publish_worker_items(run_plan, items, publisher, monkeypatch)
