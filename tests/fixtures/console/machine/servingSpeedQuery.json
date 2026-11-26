@@ -1,0 +1,49 @@
+{
+  "state": "ok",
+  "rows": [
+    {
+      "host_unit_id": "888f06c3-a303-554e-92ec-eab16bde2810",
+      "run_id": "2026-08-20-1",
+      "attempt": 2,
+      "pipeline_name": "digest",
+      "task_name": "serve-summarizer",
+      "task_kind": "model-serving",
+      "server_prompt_tokens": 7000,
+      "server_prompt_seconds": 10
+    },
+    {
+      "host_unit_id": "96ee2c3c-0aca-54e9-b75b-05441f1a04a6",
+      "run_id": "2026-08-20-2",
+      "attempt": 1,
+      "pipeline_name": "digest",
+      "task_name": "serve-summarizer",
+      "task_kind": "model-serving",
+      "server_prompt_tokens": 2400,
+      "server_prompt_seconds": 80
+    },
+    {
+      "host_unit_id": "b6cc8351-2f46-52cb-b851-1b4f69fce812",
+      "run_id": "2026-08-20-1",
+      "attempt": 1,
+      "pipeline_name": "digest",
+      "task_name": "serve-summarizer",
+      "task_kind": "model-serving",
+      "server_prompt_tokens": 9000,
+      "server_prompt_seconds": null
+    },
+    {
+      "host_unit_id": null,
+      "run_id": "2026-08-19-1",
+      "attempt": 1,
+      "pipeline_name": "digest",
+      "task_name": "serve-summarizer",
+      "task_kind": "model-serving",
+      "server_prompt_tokens": 8000,
+      "server_prompt_seconds": 10
+    }
+  ],
+  "first": "2026-08-19",
+  "through": "2026-08-20",
+  "lostDays": [],
+  "setAside": {}
+}

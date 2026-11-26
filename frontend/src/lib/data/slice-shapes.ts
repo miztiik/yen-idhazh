@@ -187,6 +187,8 @@ export type SpanCost = {
 };
 
 export type AskOptions = {
+	/** The built-in throughput question can use legacy host pairs before task packing starts. */
+	allowUnpackedServing?: boolean;
 	ledgers: readonly LedgerName[];
 	from: DateStamp;
 	to: DateStamp;

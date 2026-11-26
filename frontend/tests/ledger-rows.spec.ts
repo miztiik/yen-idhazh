@@ -641,7 +641,7 @@ test.describe('THE ORACLE: a started line names a start the open window shows, a
 				[7, null],
 				[14, null],
 				[30, null],
-				[90, 'Server figures started on 16 Apr 2030. Earlier in this window, 29 days had a run but no server figures.']
+				[90, 'The earliest available server prompt-speed reading is on 16 Apr 2030. Earlier in this window, 29 days had a run but no usable server reading.']
 			]);
 		});
 	}
@@ -650,10 +650,10 @@ test.describe('THE ORACLE: a started line names a start the open window shows, a
 		// One row a day from 10 to 14 Jun 2030. The 1-day window, 15 Jun, does not show the 10th.
 		expect(await startedOver(everyDay(5, 1), 'read')).toEqual([
 			[1, null],
-			[7, 'Server figures started on 10 Jun 2030. Earlier in this window, 1 day had a run but no server figures.'],
-			[14, 'Server figures started on 10 Jun 2030. Earlier in this window, 8 days had a run but no server figures.'],
-			[30, 'Server figures started on 10 Jun 2030. Earlier in this window, 24 days had a run but no server figures.'],
-			[90, 'Server figures started on 10 Jun 2030. Earlier in this window, 84 days had a run but no server figures.']
+			[7, 'The earliest available server prompt-speed reading is on 10 Jun 2030. Earlier in this window, 1 day had a run but no usable server reading.'],
+			[14, 'The earliest available server prompt-speed reading is on 10 Jun 2030. Earlier in this window, 8 days had a run but no usable server reading.'],
+			[30, 'The earliest available server prompt-speed reading is on 10 Jun 2030. Earlier in this window, 24 days had a run but no usable server reading.'],
+			[90, 'The earliest available server prompt-speed reading is on 10 Jun 2030. Earlier in this window, 84 days had a run but no usable server reading.']
 		]);
 	});
 
@@ -664,8 +664,8 @@ test.describe('THE ORACLE: a started line names a start the open window shows, a
 			[1, null],
 			[7, null],
 			[14, null],
-			[30, 'Server figures started on 26 May 2030. Earlier in this window, 9 days had a run but no server figures.'],
-			[90, 'Server figures started on 26 May 2030. Earlier in this window, 69 days had a run but no server figures.']
+			[30, 'The earliest available server prompt-speed reading is on 26 May 2030. Earlier in this window, 9 days had a run but no usable server reading.'],
+			[90, 'The earliest available server prompt-speed reading is on 26 May 2030. Earlier in this window, 69 days had a run but no usable server reading.']
 		]);
 	});
 });

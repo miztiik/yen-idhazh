@@ -53,8 +53,6 @@ export const CORRECTED_HOST_COLUMNS = [
 	'vm_fault_domain',
 	'runner_name',
 	'measured_at',
-	'model_load_ms',
-	'job_seconds',
 	'server_prompt_tokens',
 	'server_prompt_seconds'
 ] as const;

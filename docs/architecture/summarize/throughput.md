@@ -231,10 +231,12 @@ failure modes. Until 2026-08-27 those counters reached only a job log that keeps
 them for two days, so this page published a rate nothing committed could check -
 and under Guardrail #10 a number that cannot be reconciled cannot justify a design.
 
-Each `work` shard now commits its server's counters onto its own row of
-the host-fingerprint ledger, and
-`backend/utilities/reconcile_prefill.py` pools both sides of one run and prints
-the gap. **Measured on run `2026-08-26-5`: the ledger says 11.1755 tok/s and the
+Each `work` shard can file its server counters as a `serve-summarizer` row in
+Task Performance. `backend/utilities/reconcile_prefill.py` uses the
+[Hardware attribution rule](../publishing/console-machine.md#what-may-not-be-pooled):
+an exact packed host/run/attempt match takes precedence over a historical
+same-row pair. It pools complete pairs only and reports no comparison when no
+shard has usable totals. **Measured on run `2026-08-26-5`: the ledger says 11.1755 tok/s and the
 server says 11.1796, which is 0.037 percent apart against a 5 percent bound
 written down before either side was read.** Tokens read, tokens reused and
 tokens written match to the token on both sides. The full figures are under

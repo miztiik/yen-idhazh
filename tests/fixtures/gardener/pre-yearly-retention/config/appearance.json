@@ -71,15 +71,6 @@
     ],
     "explorer_examples": [
       {
-        "id": "p99-by-machine",
-        "title": "p99 job time by machine kind",
-        "ledgers": [
-          "host-fingerprint"
-        ],
-        "days": 14,
-        "sql": "SELECT cpu_model, quantile_cont(job_seconds, 0.99) AS p99_job_seconds, count(job_seconds) AS jobs FROM \"host-fingerprint\" WHERE job_seconds IS NOT NULL GROUP BY cpu_model ORDER BY p99_job_seconds DESC"
-      },
-      {
         "id": "throughput-by-machine",
         "title": "Prompt throughput by machine kind",
         "ledgers": [

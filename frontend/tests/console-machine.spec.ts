@@ -391,9 +391,9 @@ test.describe('a run the counters refuse, handed to every figure built from arti
 	const ACCEPTED = '2026-09-04-2';
 	const hosts = [
 		hostRow({ date: '2026-09-04', runId: REFUSED, shard: 0, serverPromptTokens: 8000, serverPromptSeconds: 200 }),
-		hostRow({ date: '2026-09-04', runId: REFUSED, shard: 1, serverPromptTokens: 2000, serverPromptSeconds: 200 }),
-		// Shard 1 again, naming other figures: two servers answered for one shard.
-		hostRow({ date: '2026-09-04', runId: REFUSED, shard: 1, serverPromptTokens: 1, serverPromptSeconds: 1 }),
+		hostRow({ date: '2026-09-04', runId: REFUSED, shard: 1, cpuModel: 'Original CPU' }),
+		// Shard 1 again, naming a different machine.
+		hostRow({ date: '2026-09-04', runId: REFUSED, shard: 1, cpuModel: 'Different CPU' }),
 		hostRow({ date: '2026-09-04', runId: ACCEPTED, shard: 0, serverPromptTokens: 3000, serverPromptSeconds: 100 })
 	];
 	/** One article on shard 0, carrying every cell the six figures read. */
@@ -685,12 +685,11 @@ test.describe('the Hardware browser redraws, from stated readings', () => {
 		expect(measured.segments?.reduce((sum, segment) => sum + segment.value, 0)).toBe(measured.value);
 	});
 
-	test('native host logical, algorithm and model load conflicts preserve whole-run refusal in both orders', () => {
+	test('native host logical and algorithm conflicts preserve whole-run refusal in both orders', () => {
 		const host = { version: '2026-10-10', date: '2026-09-01', run_id: '2026-09-01-1', job: 'work', shard: 0,
 			fingerprint: '0123456789abcdef', fingerprint_version: 2,
-			cpu_model: 'A', cpu_logical_processors: 8, model_load_ms: 1000 };
-		for (const conflicting of [{ ...host, cpu_logical_processors: 16 }, { ...host, model_load_ms: 2000 },
-			{ ...host, fingerprint_version: 1 }]) {
+			cpu_model: 'A', cpu_logical_processors: 8 };
+		for (const conflicting of [{ ...host, cpu_logical_processors: 16 }, { ...host, fingerprint_version: 1 }]) {
 			for (const hosts of [[host, conflicting], [conflicting, host]]) {
 			const result = countersFrom(hosts, [], [{ run_id: host.run_id, shards: 1 }]);
 			expect(result.runs).toEqual([]);
@@ -720,7 +719,7 @@ test.describe('the Hardware browser redraws, from stated readings', () => {
 			cpu_physical_cores: 4, cpu_logical_processors: 8, cpu_allowed_processors: 2,
 			cpu_quota_cores: 0.5, cpu_quota_state: 'finite', cpu_target_measured_at: '2026-09-01T01:02:03Z',
 			cpu_observed_mhz: 2800, cpu_reported_max_mhz: 3200, flags: 'avx2',
-			model_load_ms: 1000, job_seconds: 10, server_prompt_tokens: 0, server_prompt_seconds: 2
+			server_prompt_tokens: 0, server_prompt_seconds: 2
 		};
 		const busy = { date: modern.date, run_id: modern.run_id, machine_shard: 0,
 			cpu_busy_pct: 50, item_total_ms: 2000 };
@@ -764,20 +763,15 @@ test.describe('the Hardware browser redraws, from stated readings', () => {
 			}
 		});
 		test('complementary current half-rows and equal duplicates merge without a conflict in either order', () => {
-			const identity = { ...modern, model_load_ms: null, job_seconds: null, server_prompt_tokens: null, server_prompt_seconds: null };
-			const clocks = { ...modern, fingerprint: null, fingerprint_version: null, cpu_model: null, cpu_logical_processors: null,
-				model_load_ms: 0, job_seconds: 0, server_prompt_tokens: 0, server_prompt_seconds: 2 };
-			for (const rows of [[identity, clocks, identity], [clocks, identity, clocks]]) {
+			const identity = { ...modern, server_prompt_tokens: null, server_prompt_seconds: null };
+			const serving = { ...modern, fingerprint: null, fingerprint_version: null, cpu_model: null, cpu_logical_processors: null };
+			for (const rows of [[identity, serving, identity], [serving, identity, serving]]) {
 				const held = countersFrom(rows, [], [{ run_id: 'one', shards: 1 }]);
 				expect(held.refused).toEqual([]);
 				expect(held.runs).toHaveLength(1);
 			}
 		});
-		test('run-level model-clock refusal does not disqualify independent article cost or hide ambiguous logical coverage', () => {
-			const badClock = { ...modern, model_load_ms: 2000 };
-			expect(countersFrom([modern, badClock], [], [{ run_id: 'one', shards: 1 }]).refused).toHaveLength(1);
-			expect(articleCost(textRows([busy]), processors([modern, badClock])).processorSeconds)
-				.toMatchObject({ from: 1, outOf: 1, mid: 8 });
+		test('conflicting logical coverage is not assigned processor cost', () => {
 			const badCount = { ...modern, cpu_logical_processors: 16 };
 			for (const rows of [[modern, badCount], [badCount, modern]]) {
 				expect(countersFrom(rows, [], [{ run_id: 'one', shards: 1 }]).refused).toHaveLength(1);

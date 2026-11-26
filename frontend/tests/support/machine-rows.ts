@@ -24,13 +24,11 @@ export interface ShardReading {
 	/** What the model server itself counted reading prompts. */
 	serverPromptTokens?: number | '';
 	serverPromptSeconds?: number | '';
-	jobSeconds?: number | '';
 	cpuModel?: string;
 	/** The machine record's digest of the host. Empty where the probe missed it. */
 	fingerprint?: string;
 	/** Validated online logical processors. */
 	logicalProcessors?: number | '';
-	modelLoadMs?: number | '';
 }
 
 const DATE = '2026-09-02';
@@ -52,8 +50,6 @@ export function hostRow(reading: ShardReading): Record<string, string> {
 		fingerprint_version: reading.fingerprint ? '2' : '',
 		cpu_model: cell(reading.cpuModel),
 		cpu_logical_processors: cell(reading.logicalProcessors),
-		model_load_ms: cell(reading.modelLoadMs),
-		job_seconds: cell(reading.jobSeconds),
 		server_prompt_tokens: cell(reading.serverPromptTokens),
 		server_prompt_seconds: cell(reading.serverPromptSeconds)
 	};

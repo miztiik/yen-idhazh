@@ -51,7 +51,7 @@ export function fleetCacheView(jobs: readonly FleetJob[], options: FleetOptions)
 		lines[dayOf.get(job.date)!].push({
 			runId: job.runId, job: job.job, pipelineName: job.pipelineName, taskName: job.taskName,
 			shard: job.shard, machine: identity.label, swatch: row.colour,
-			l3Cache: row.label, seconds: job.seconds, rate: job.rate, row: row.key
+			l3Cache: row.label, rate: job.rate, row: row.key
 		});
 	}
 	for (const day of lines) day.sort((a, b) =>

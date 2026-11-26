@@ -1,6 +1,6 @@
 # What the Hardware route draws
 
-**Last Updated**: 2026-11-22
+**Last Updated**: 2026-11-26
 
 `/console/machine/` asks what machine the work actually got and how much
 resource headroom that work left.
@@ -126,13 +126,24 @@ one model-rule declaration and a plot on the panel's own ground.
 
 Refusal is the `hostHalvesConflict`/`machineCounters` rule: disagreeing
 dates, missing or invalid shard identities, unreadable host versions, conflicting
-host cells, too many reported shards, and an index outside the recorded count
-refuse the run rather than publish half of it. The bounded widest host question
-includes measured `cpu_logical_processors` and `model_load_ms` for exact refusal
-parity, alongside versioned identity and independent server counters. Its four
-legacy columns are finite migration inputs only. No private manifest inputs are
-added. A conflicting count file is a visible unreachable record, never a
-reactive page crash.
+hardware cells, too many reported shards, and an index outside the recorded
+count refuse the run rather than publish half of it. The bounded widest host
+question includes measured logical processors and versioned identity. Its four
+legacy CPU columns are finite migration inputs only. Serving evidence does not
+participate in hardware conflicts or run counts. A conflicting count file is a
+visible unreachable record, never a reactive page crash.
+
+The job list shows **Speed**, independently measured prompt tokens per second.
+The Task Performance writer files the digest model server's final totals under
+`serve-summarizer`. The panel joins packed observations to `host-fingerprint`
+by host unit, run and attempt, never by CPU or a missing host reference. A
+matching new row replaces the historical pair entirely, even if it is incomplete.
+Without a match, only a complete pair on the same stamped host row can supply
+speed. A pair needs both totals and positive prompt seconds. The console band
+and [prompt audit](../summarize/throughput.md#the-read-rate-is-checked-against-the-server-and-it-holds)
+use the same rule. Missing or later-packed serving data does not move the
+Hardware window or remove a job, an article panel or a count. The job list
+does not display whole-CI duration.
 
 That same bounded query selects `l3_cache_bytes` for placement aggregation.
 `charts/fleet-cache.ts` groups normalized job rows by the exact byte value,

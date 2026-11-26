@@ -170,6 +170,48 @@ test('a reader loads real ledgers, queries them, and draws the answer', async ({
 	expect(requests.filter((url) => url === `${origin}/config/ledgers.json`)).toHaveLength(2);
 });
 
+test('the throughput example uses the staged rows and still reads legacy pairs before task packing', async ({ page, context }) => {
+	const origin = ledgerArchiveBaseUrl();
+	let packed = false;
+	await context.route(`${origin}/**`, (route) => {
+		const relative = route.request().url().slice(origin.length + 1).split('?')[0];
+		if (!/^(?:config\/ledgers\.json|state\/compact\/[\w/.-]+)$/.test(relative)) {
+			return route.abort('blockedbyclient');
+		}
+		const file = resolve('build', ...relative.split('/'));
+		if (!packed && relative.startsWith('state/compact/task-performance/index/')) {
+			const index = JSON.parse(readFileSync(file, 'utf8'));
+			return route.fulfill({ json: { ...index, entries: [], coverage: [] } });
+		}
+		return existsSync(file) ? route.fulfill({ path: file }) : route.fulfill({ status: 404 });
+	});
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await openExplorer(page, '2026-08-20', { ready: false });
+	const example = page.getByRole('button', { name: 'Prompt throughput by machine kind', exact: true });
+	const pickThroughput = async () => {
+		if (!(await example.isVisible())) await page.locator('.question-strip summary').click();
+		await example.click();
+	};
+	await pickThroughput();
+	await runExplorer(page);
+	await expectAnswer(page, 'table');
+	const counts = async () => Object.fromEntries((await tableRows(page)).map(([cpu, rate, jobs]) =>
+		[cpu, { rate: Number(rate), jobs }]));
+	const legacy = await counts();
+	const primary = Object.keys(legacy).find((cpu) => legacy[cpu].jobs === '3')!;
+	expect(legacy[primary].rate).toBeCloseTo((1700 + 1300 + 860) / (73.72 + 117.74 + 78.18), 3);
+	expect(Object.values(legacy).map((reading) => reading.jobs).sort()).toEqual(['1', '1', '3']);
+
+	packed = true;
+	await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+	await runExplorer(page);
+	await expectAnswer(page, 'table');
+	const mixed = await counts();
+	expect(mixed[primary].rate).toBeCloseTo((2400 + 1300 + 860) / (80 + 117.74 + 78.18), 3);
+	expect(Object.values(mixed).map((reading) => reading.jobs).sort()).toEqual(['1', '3']);
+	await expect(page.getByRole('button', { name: 'p99 job time by machine kind' })).toHaveCount(0);
+});
+
 /** The File API is a distinct boundary: real bytes enter this tab, not a remote source. */
 test('local Parquet stays on the page, works without a registry and is forgotten on Refresh', async ({ page, context }) => {
 	const origin = ledgerArchiveBaseUrl();

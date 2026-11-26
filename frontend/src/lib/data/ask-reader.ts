@@ -46,8 +46,17 @@ export async function dropOwnedViews(engine: QueryEngine): Promise<void> {
 	}
 }
 
+// Only the serving cells the built-in throughput question reads; no fabricated task rows.
+const EMPTY_SERVING = `SELECT NULL::VARCHAR AS host_unit_id, NULL::VARCHAR AS run_id,
+	NULL::BIGINT AS attempt, NULL::VARCHAR AS pipeline_name, NULL::VARCHAR AS task_name,
+	NULL::VARCHAR AS task_kind, NULL::BIGINT AS server_prompt_tokens,
+	NULL::DOUBLE AS server_prompt_seconds WHERE FALSE`;
+
 export async function createOwnedView(engine: QueryEngine, ledger: LedgerName, sources: readonly HeldSource[], empty: boolean): Promise<void> {
-	await engine.rows(viewStatement(ledger, sources, empty), []);
+	const statement = empty && sources.length === 0 && ledger === 'task-performance'
+		? `CREATE OR REPLACE VIEW ${quoteIdent(ledger)} AS ${EMPTY_SERVING}`
+		: viewStatement(ledger, sources, empty);
+	await engine.rows(statement, []);
 	let owned = ownedViews.get(engine);
 	if (owned === undefined) {
 		owned = new Set();
@@ -86,14 +95,17 @@ export function viewSource(keeper: PageKeeper, ledger: LedgerName, indexes: Inde
 	return newest === null ? [] : [{ file: wanted(keeper, ledger, newest.period, newest.entry), ledger, day: newest.firstDay, window: null }];
 }
 
-async function planLedger(keeper: PageKeeper, ledger: LedgerName, from: DateStamp, to: DateStamp): Promise<LedgerPlan | AskResult> {
+async function planLedger(keeper: PageKeeper, ledger: LedgerName, from: DateStamp, to: DateStamp, unpacked: boolean): Promise<LedgerPlan | AskResult> {
+	const noData = (): LedgerPlan | AskResult => unpacked
+		? { ledger, through: null, files: [], emptySource: [], cutBefore: null, lostDays: [], setAside: {} }
+		: { state: 'missing', ledger };
 	const indexed = await readIndexes(keeper, ledger);
 	if ('failed' in indexed) {
 		keeper.warn(`${LOG_PREFIX} ${ledger}: ${indexed.refusal}; ${indexed.absent ? 'not packed yet' : 'the question did not run'}`);
-		return indexed.absent ? { state: 'missing', ledger } : { state: 'unreachable', ledger, at: from, fault: 'index-missing' };
+		return indexed.absent ? noData() : { state: 'unreachable', ledger, at: from, fault: 'index-missing' };
 	}
 	const through = newestNamed(indexed.daily, indexed.monthly, indexed.yearly);
-	if (through === null) return { state: 'missing', ledger };
+	if (through === null) return noData();
 	const first = firstNamed(indexed.daily, indexed.monthly, indexed.yearly);
 	const start = first !== null && from < first ? first : from;
 	const until = through !== null && through < to ? through : to;
@@ -114,14 +126,15 @@ async function planLedger(keeper: PageKeeper, ledger: LedgerName, from: DateStam
 }
 
 /** One shared selection prices query files and automatic column reads before either fetches. */
-export async function planQuestion(keeper: PageKeeper, ledgers: readonly LedgerName[], from: DateStamp, to: DateStamp): Promise<QuestionPlan | AskResult> {
+export async function planQuestion(keeper: PageKeeper, ledgers: readonly LedgerName[], from: DateStamp, to: DateStamp, allowUnpackedServing = false): Promise<QuestionPlan | AskResult> {
 	for (const ledger of new Set(ledgers)) {
 		const entry = keeper.catalog.get(ledger);
 		if (entry === undefined) return { state: 'missing', ledger };
 		if (!entry.publish_to_data_explorer) return { state: 'refused', because: { kind: 'ledger-not-enabled', ledger } };
 	}
 	if (!isDay(from) || !isDay(to) || from > to) throw new Error('A question needs ordered UTC dates.');
-	const planned = await Promise.all([...new Set(ledgers)].map((ledger) => planLedger(keeper, ledger, from, to)));
+	const planned = await Promise.all([...new Set(ledgers)].map((ledger) =>
+		planLedger(keeper, ledger, from, to, allowUnpackedServing && ledger === 'task-performance')));
 	const failed = planned.find((one): one is AskResult => 'state' in one);
 	if (failed !== undefined) return failed;
 	const plans = planned.filter((one): one is LedgerPlan => !('state' in one));
@@ -150,8 +163,8 @@ export function preflight(cost: SpanCost, maxFiles: number, maxFetchBytes: numbe
 	return cost.bytes > maxFetchBytes ? { kind: 'over-ceiling', bytes: cost.bytes, files: cost.files, max: maxFetchBytes } : null;
 }
 
-export async function readAskCost(keeper: PageKeeper, ledgers: readonly LedgerName[], from: DateStamp, to: DateStamp): Promise<SpanCost> {
-	const planned = await planQuestion(keeper, ledgers, from, to);
+export async function readAskCost(keeper: PageKeeper, ledgers: readonly LedgerName[], from: DateStamp, to: DateStamp, allowUnpackedServing = false): Promise<SpanCost> {
+	const planned = await planQuestion(keeper, ledgers, from, to, allowUnpackedServing);
 	return 'state' in planned ? { files: 0, bytes: 0, readFrom: null, readTo: null, cut: [], through: {}, failure: planned } : planned.cost;
 }
 
@@ -198,7 +211,7 @@ export async function readAsk(keeper: PageKeeper, opts: AskOptions): Promise<Ask
 export async function readPreparedAsk(keeper: PageKeeper, opts: AskOptions, executeWithoutRows = false): Promise<AskResult> {
 	const checked = { sql: opts.sql };
 		const started = Date.now();
-		const planned = await planQuestion(keeper, opts.ledgers, opts.from, opts.to);
+		const planned = await planQuestion(keeper, opts.ledgers, opts.from, opts.to, opts.allowUnpackedServing);
 		if ('state' in planned) return planned;
 		const refusal = preflight(planned.cost, opts.maxFiles, opts.maxFetchBytes);
 		if (refusal !== null) return { state: 'refused', because: refusal };
@@ -207,7 +220,8 @@ export async function readPreparedAsk(keeper: PageKeeper, opts: AskOptions, exec
 		if (!executeWithoutRows && planned.ledgers.every((one) => one.files.length === 0)) {
 			return { state: 'quiet', columns: [], read: { files: 0, bytes: 0, alreadyHeld: 0, ms: Date.now() - started }, ...named };
 		}
-		const sourceless = planned.ledgers.find((one) => one.files.length === 0 && one.emptySource.length === 0);
+		const sourceless = planned.ledgers.find((one) => one.files.length === 0 && one.emptySource.length === 0 &&
+			!(opts.allowUnpackedServing && one.ledger === 'task-performance'));
 		if (sourceless !== undefined) return { state: 'missing', ledger: sourceless.ledger };
 		const sources = planned.ledgers.map((one) => one.files.length > 0 ? one.files : one.emptySource);
 		const files = [...new Map(sources.flat().map((one) => [one.file.path, one])).values()];

@@ -4,7 +4,7 @@ The page offers an example only when every ledger it names is published, and the
 suite runs only the examples whose ledgers the canary build publishes. So an example over
 any other ledger could name a column its ledger never had, or compute something its title
 does not say, and nothing would notice until a reader pressed it. Here each ledger an
-example names becomes an empty DuckDB table with its row contract's columns and types, and
+example names becomes an empty DuckDB table with its payload and writer identity columns, and
 the statement runs against those tables: a column, a function or a type the contract does
 not carry fails the bind before any reader sees it.
 """
@@ -18,6 +18,7 @@ import pytest
 from support.paths import REPO_ROOT
 
 from idhazh import config
+from idhazh.contracts.file_envelope import RowIdentity
 from idhazh.contracts.knobs.console import ConsoleConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.ledger.keys import door_contract
@@ -40,12 +41,15 @@ def _column_type(prop: dict[str, Any], defs: dict[str, Any]) -> str:
 
 
 def _empty_ledger(con: duckdb.DuckDBPyConnection, ledger: LedgerName) -> None:
-    schema = door_contract(ledger).model_json_schema()
-    defs = schema.get("$defs", {})
-    columns = ", ".join(
-        f'"{name}" {_column_type(prop, defs)}' for name, prop in schema["properties"].items()
-    )
-    con.execute(f'CREATE TABLE "{ledger.value}" ({columns})')
+    columns: dict[str, str] = {}
+    for model in (RowIdentity, door_contract(ledger)):
+        schema = model.model_json_schema()
+        defs = schema.get("$defs", {})
+        columns.update(
+            (name, _column_type(prop, defs)) for name, prop in schema["properties"].items()
+        )
+    fields = ", ".join(f'"{name}" {type_}' for name, type_ in columns.items())
+    con.execute(f'CREATE TABLE "{ledger.value}" ({fields})')
 
 
 def _examples() -> list[tuple[str, dict[str, Any]]]:

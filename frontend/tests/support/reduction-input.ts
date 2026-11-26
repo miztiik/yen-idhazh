@@ -67,9 +67,7 @@ export function machineRows(sizes: Sizes): Record<string, string>[] {
 				fingerprint_version: '2',
 				server_prompt_tokens: String(promptTokens),
 				server_prompt_seconds: String(readSeconds),
-				job_seconds: String(2_400 + Math.round(next() * 1_200)),
 				cpu_model: shard % 2 === 0 ? 'AMD EPYC 9V45' : 'AMD EPYC 9V74',
-				model_load_ms: String(3_500 + Math.round(next() * 800))
 			});
 		}
 	}

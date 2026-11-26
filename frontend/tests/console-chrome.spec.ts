@@ -162,17 +162,17 @@ test.describe('what the recording was doing, in fixed words', () => {
             coveredElsewhere: ['2026-08-28', '2026-08-29']
         };
         expect(recordingNotes({ ...facts, missing: 'scores' }).coveredElsewhere).toBe('There are no quality figures for 28 Aug 2026. The machine ran and we timed it, but nothing scored the summaries.');
-        expect(recordingNotes({ ...facts, missing: 'server-counters' }).coveredElsewhere).toBe('No server figures were written down for 28 Aug 2026. The speed figures for that day come from the summariser, not the server.');
+        expect(recordingNotes({ ...facts, missing: 'server-counters' }).coveredElsewhere).toBe("No usable server prompt-speed readings are available for 28 Aug 2026. Article timings come from the summariser's replies.");
     });
     test('a start inside the window counts the days before it that had a run, in Reader\'s words', () => {
-        expect(recordingStarted('2026-08-27', 5)).toBe('Server figures started on 27 Aug 2026. Earlier in this window, 5 days had a run but no server figures.');
+        expect(recordingStarted('2026-08-27', 5)).toBe('The earliest available server prompt-speed reading is on 27 Aug 2026. Earlier in this window, 5 days had a run but no usable server reading.');
         // Each instrument names what started and what it lacks: the summary checker's figures are
         // quality figures, and the machine record is one record, so its line opens on "The".
         expect(recordingStarted('2026-08-27', 5, 'quality figures')).toBe('Quality figures started on 27 Aug 2026. Earlier in this window, 5 days had a run but no quality figures.');
         expect(recordingStarted('2026-08-27', 5, 'machine record')).toBe('The machine record started on 27 Aug 2026. Earlier in this window, 5 days had a run but no machine record.');
     });
     test('one day reads as one day, and no gap reads as nothing at all', () => {
-        expect(recordingStarted('2026-08-27', 1)).toBe('Server figures started on 27 Aug 2026. Earlier in this window, 1 day had a run but no server figures.');
+        expect(recordingStarted('2026-08-27', 1)).toBe('The earliest available server prompt-speed reading is on 27 Aug 2026. Earlier in this window, 1 day had a run but no usable server reading.');
         expect(recordingStarted('2026-08-27', 0)).toBeNull();
         expect(recordingStarted(null, 4)).toBeNull();
     });
@@ -187,7 +187,7 @@ test.describe('what the recording was doing, in fixed words', () => {
             open: over('2026-08-25', '2026-08-28')
         });
         expect(notes.sampled).toBeNull();
-        expect(notes.startedMidWindow).toBe('Server figures started on 27 Aug 2026. Earlier in this window, 2 days had a run but no server figures.');
+        expect(notes.startedMidWindow).toBe('The earliest available server prompt-speed reading is on 27 Aug 2026. Earlier in this window, 2 days had a run but no usable server reading.');
     });
     test('a record that began before the days it is handed is never said to start in the window, though the window starts with days it missed', () => {
         // The counters' first day in the window is 27 Aug 2026. Only the window's days are
@@ -202,7 +202,7 @@ test.describe('what the recording was doing, in fixed words', () => {
         };
         expect(recordingNotes({ ...facts, reads: [begun('2026-08-01', '2026-08-28')] }).startedMidWindow).toBeNull();
         // Begun on the first day handed: the record's whole history is in hand.
-        expect(recordingNotes({ ...facts, reads: [begun('2026-08-25', '2026-08-28')] }).startedMidWindow).toBe('Server figures started on 27 Aug 2026. Earlier in this window, 2 days had a run but no server figures.');
+        expect(recordingNotes({ ...facts, reads: [begun('2026-08-25', '2026-08-28')] }).startedMidWindow).toBe('The earliest available server prompt-speed reading is on 27 Aug 2026. Earlier in this window, 2 days had a run but no usable server reading.');
     });
     test('an instrument that began after its record did names its own first day in every window that shows it', () => {
         // The record's indexes begin on 1 Aug 2026, the route read from 25 Jul, and this
@@ -215,7 +215,7 @@ test.describe('what the recording was doing, in fixed words', () => {
             reads: [begun('2026-08-01', '2026-08-20')],
             from: '2026-07-25'
         };
-        expect(recordingNotes({ ...facts, open: over('2026-08-05', '2026-08-20') }).startedMidWindow).toBe('Server figures started on 10 Aug 2026. Earlier in this window, 5 days had a run but no server figures.');
+        expect(recordingNotes({ ...facts, open: over('2026-08-05', '2026-08-20') }).startedMidWindow).toBe('The earliest available server prompt-speed reading is on 10 Aug 2026. Earlier in this window, 5 days had a run but no usable server reading.');
         // A window that does not show the 10th says nothing of it.
         expect(recordingNotes({ ...facts, open: over('2026-08-12', '2026-08-20') }).startedMidWindow).toBeNull();
         // Handed only the window's days, the start is not known, so it is not said.
@@ -233,12 +233,12 @@ test.describe('what the recording was doing, in fixed words', () => {
             open: over('2026-08-25', '2026-09-10')
         };
         const later = begun('2026-09-01', '2026-09-10');
-        expect(recordingNotes({ ...facts, reads: [later, begun('2026-08-25', '2026-09-10')] }).startedMidWindow).toBe('Server figures started on 30 Aug 2026. Earlier in this window, 5 days had a run but no server figures.');
+        expect(recordingNotes({ ...facts, reads: [later, begun('2026-08-25', '2026-09-10')] }).startedMidWindow).toBe('The earliest available server prompt-speed reading is on 30 Aug 2026. Earlier in this window, 5 days had a run but no usable server reading.');
         // The other record began on 1 Aug, before the read, so it may hold a day the instrument ran
         // before anything the read holds.
         expect(recordingNotes({ ...facts, reads: [later, begun('2026-08-01', '2026-09-10')] }).startedMidWindow).toBeNull();
         // A day either record lost is a day the instrument ran.
-        expect(recordingNotes({ ...facts, reads: [later, begun('2026-08-25', '2026-09-10', ['2026-08-28'])] }).startedMidWindow).toBe('Server figures started on 28 Aug 2026. Earlier in this window, 3 days had a run but no server figures.');
+        expect(recordingNotes({ ...facts, reads: [later, begun('2026-08-25', '2026-09-10', ['2026-08-28'])] }).startedMidWindow).toBe('The earliest available server prompt-speed reading is on 28 Aug 2026. Earlier in this window, 3 days had a run but no usable server reading.');
     });
     test('a window\'s lines name only what it shows, though the route hands it every day it read', () => {
         // The route read 29 days, 31 Jul to 28 Aug 2026, and hands every window all of them. The
@@ -253,7 +253,7 @@ test.describe('what the recording was doing, in fixed words', () => {
             open
         });
         expect(lines(over('2026-08-22', '2026-08-28')).startedMidWindow).toBeNull();
-        expect(lines(over('2026-07-31', '2026-08-28')).startedMidWindow).toBe('Server figures started on 3 Aug 2026. Earlier in this window, 3 days had a run but no server figures.');
+        expect(lines(over('2026-07-31', '2026-08-28')).startedMidWindow).toBe('The earliest available server prompt-speed reading is on 3 Aug 2026. Earlier in this window, 3 days had a run but no usable server reading.');
     });
     test('a switched-off instrument owes no sampling caveat as well', () => {
         const notes = recordingNotes({
@@ -281,7 +281,7 @@ test.describe('what the recording was doing, in fixed words', () => {
             coveredElsewhere: ['2026-08-28', '2026-08-29'],
             missing: 'server-counters' as const
         };
-        expect(recordingNotes({ ...facts, open: over('2026-08-28', '2026-08-29') }).coveredElsewhere).toBe('No server figures were written down for 28 Aug 2026. The speed figures for that day come from the summariser, not the server.');
+        expect(recordingNotes({ ...facts, open: over('2026-08-28', '2026-08-29') }).coveredElsewhere).toBe("No usable server prompt-speed readings are available for 28 Aug 2026. Article timings come from the summariser's replies.");
         // A day another instrument covered outside the window is not this window's to name.
         expect(recordingNotes({ ...facts, open: over('2026-08-29', '2026-08-29') }).coveredElsewhere).toBeNull();
     });
@@ -437,7 +437,7 @@ test.describe('what the recording was doing, in fixed words', () => {
             // and Hardware reads no score row for its line at all.
             const lines = printed(counters(except('2026-10-02')));
             expect(lines).toEqual([
-                'No server figures were written down for 2 Oct 2026. The speed figures for that day come from the summariser, not the server.'
+                "No usable server prompt-speed readings are available for 2 Oct 2026. Article timings come from the summariser's replies."
             ]);
             expect(lines.join(' ')).not.toContain('scored');
         });
@@ -494,14 +494,14 @@ test.describe('what the recording was doing, in fixed words', () => {
                 'There are no quality figures for this one day. The machine ran and we timed it, but nothing scored the summaries.'
             ]);
             expect(printed(counters(except('2026-10-06'), lastDay))).toEqual([
-                'No server figures were written down for this one day. The speed figures here come from the summariser, not the server.'
+                "No usable server prompt-speed readings are available for this one day. Article timings come from the summariser's replies."
             ]);
             // No counters on any of the 7 days from 30 Sep 2026.
             expect(printed(counters(daysBetween('2026-09-23', '2026-09-29'), over('2026-09-30', '2026-10-06')))).toEqual([
-                'No server figures were written down for these 7 days. The speed figures here come from the summariser, not the server.'
+                "No usable server prompt-speed readings are available for these 7 days. Article timings come from the summariser's replies."
             ]);
             expect(printed(counters(except('2026-10-01', '2026-10-03')))).toEqual([
-                'No server figures were written down for 1 Oct and 3 Oct 2026. The speed figures for those days come from the summariser, not the server.'
+                "No usable server prompt-speed readings are available for 1 Oct and 3 Oct 2026. Article timings come from the summariser's replies."
             ]);
             // Consecutive days are one run of dates.
             expect(printed(scorer(except('2026-09-24', '2026-09-25', '2026-09-26'), begun('2026-08-01', '2026-10-06')))).toEqual([
@@ -510,8 +510,7 @@ test.describe('what the recording was doing, in fixed words', () => {
         });
     });
     test.describe("THE ORACLE: Hardware's lines say only what its records hold", () => {
-        /** Shard 0 of run `run` on `date`, as the machine record files it from the work job: the probe
-         *  and the clocks, and the two cells the server itself wrote where `server` is true. */
+        /** Shard 0 of a historical work job, with a legacy prompt pair when measured. */
         const machineRow = (date: string, server: boolean, run = 1): Record<string, string> => ({
             version: '2026-10-10',
             date,
@@ -521,8 +520,6 @@ test.describe('what the recording was doing, in fixed words', () => {
             fingerprint: 'f00d',
             fingerprint_version: '2',
             cpu_model: 'Test CPU',
-            job_seconds: '600',
-            model_load_ms: '2000',
             server_prompt_tokens: server ? '900' : '',
             server_prompt_seconds: server ? '9' : ''
         });
@@ -575,13 +572,13 @@ test.describe('what the recording was doing, in fixed words', () => {
             }).startedMidWindow])).toEqual([
                 [1, null],
                 [7, null],
-                [14, 'Server figures started on 6 Jun 2030. Earlier in this window, 4 days had a run but no server figures.'],
-                [30, 'Server figures started on 6 Jun 2030. Earlier in this window, 17 days had a run but no server figures.'],
-                [90, 'Server figures started on 6 Jun 2030. Earlier in this window, 17 days had a run but no server figures.']
+                [14, 'The earliest available server prompt-speed reading is on 6 Jun 2030. Earlier in this window, 4 days had a run but no usable server reading.'],
+                [30, 'The earliest available server prompt-speed reading is on 6 Jun 2030. Earlier in this window, 17 days had a run but no usable server reading.'],
+                [90, 'The earliest available server prompt-speed reading is on 6 Jun 2030. Earlier in this window, 17 days had a run but no usable server reading.']
             ]);
         });
         test('a day of article rows alone, after the server figures started, is named as a day without them', () => {
-            const line = 'No server figures were written down for 12 Jun 2030. The speed figures for that day come from the summariser, not the server.';
+            const line = "No usable server prompt-speed readings are available for 12 Jun 2030. Article timings come from the summariser's replies.";
             const facts = {
                 enabled: true, recorded: SERVER_DAYS,
                 window: ARTICLE_DAYS, reads: [begun('2030-06-01', '2030-06-14')],
@@ -590,7 +587,7 @@ test.describe('what the recording was doing, in fixed words', () => {
             };
             expect(printed(recordingNotes({ ...facts, open: offered(7) }))).toEqual([line]);
             expect(printed(recordingNotes({ ...facts, open: offered(14) }))).toEqual([
-                'Server figures started on 6 Jun 2030. Earlier in this window, 4 days had a run but no server figures.',
+                'The earliest available server prompt-speed reading is on 6 Jun 2030. Earlier in this window, 4 days had a run but no usable server reading.',
                 line
             ]);
         });

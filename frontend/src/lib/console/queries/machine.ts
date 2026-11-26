@@ -1,4 +1,5 @@
 /** What does each Hardware panel ask the published ledgers? */
+import { DIGEST_PIPELINE, MODEL_SERVING, SERVE_SUMMARIZER } from '../machine/serving-speed';
 import type { PanelQuery } from './window';
 
 export const runShardsQuery = {
@@ -18,9 +19,21 @@ export const platformMixQuery = {
 	name: 'platformMixQuery', ledger: 'host-fingerprint',
 	columns: [
 		'version', 'date', 'run_id', 'job', 'pipeline_name', 'task_name', 'shard', 'fingerprint', 'fingerprint_version',
-		'cpu_model', 'l3_cache_bytes', 'cpu_logical_processors', 'model_load_ms', 'job_seconds',
+		'unit_id', 'attempt', 'cpu_model', 'l3_cache_bytes', 'cpu_logical_processors',
 		'server_prompt_tokens', 'server_prompt_seconds',
 		'cores', 'threads', 'mhz_max', 'mhz_at_probe'
+	],
+	span: 'widest'
+} as const satisfies PanelQuery;
+
+export const servingSpeedQuery = {
+	name: 'servingSpeedQuery', ledger: 'task-performance',
+	columns: ['host_unit_id', 'run_id', 'attempt', 'pipeline_name', 'task_name', 'task_kind',
+		'server_prompt_tokens', 'server_prompt_seconds'],
+	where: [
+		{ column: 'pipeline_name', op: '=', value: DIGEST_PIPELINE },
+		{ column: 'task_name', op: '=', value: SERVE_SUMMARIZER },
+		{ column: 'task_kind', op: '=', value: MODEL_SERVING }
 	],
 	span: 'widest'
 } as const satisfies PanelQuery;

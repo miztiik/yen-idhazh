@@ -13,6 +13,7 @@ import {
 } from '../src/lib/console/queries/window';
 import { joinItemHosts } from '../src/lib/console/queries/shared';
 import type { SliceResult } from '../src/lib/data/slice-shapes';
+import { fleetJobs, type FleetJob } from '../src/lib/charts/fleet';
 import { consoleConfig } from '../src/lib/server/config';
 import { reachFromDisk, sliceFromDisk } from '../src/lib/server/ledger-disk';
 import { backendPython } from './support/backend-python';
@@ -157,20 +158,22 @@ test('the packed canary retains length, inferred time, watchlist, negative gap a
 	expect(rows.some((row) => row.stage === 'publish' && row.outcome === 'ok' && !hostDays.has(row.date))).toBe(true);
 });
 
-test('real packed Hardware projections carry corrected CPU identity and model clocks into the native adapters', async () => {
+test('real packed Hardware keeps CPU identity and counts while exact serving evidence replaces legacy speed', async () => {
 	const reader = createQueryWindow({
 		reach: (ledger) => reachFromDisk(state, ledger),
 		rows: (ledger, options) => sliceFromDisk(state, ledger, options)
 	});
 	const span = { from: '2026-08-19', to: '2026-08-20', days: 2, asked: 2 };
-	const [platform, hosts, counts] = await Promise.all([
+	const [platform, hosts, counts, serving] = await Promise.all([
 		reader.sliceOnce(machine.platformMixQuery, span),
 		reader.sliceOnce(machine.articleCostHostsQuery, span),
-		reader.sliceOnce(machine.runShardsQuery, span)
+		reader.sliceOnce(machine.runShardsQuery, span),
+		reader.sliceOnce(machine.servingSpeedQuery, span)
 	]);
 	expect(platform.state).toBe('ok');
 	expect(hosts.state).toBe('ok');
 	expect(counts.state).toBe('ok');
+	expect(serving.state).toBe('ok');
 	expect([platform.rows.length, hosts.rows.length]).toEqual([11, 11]);
 	for (const [answer, query] of [[platform, machine.platformMixQuery],
 		[hosts, machine.articleCostHostsQuery]] as const) {
@@ -180,12 +183,29 @@ test('real packed Hardware projections carry corrected CPU identity and model cl
 		}
 		expect(answer.rows.some((row) => row.cpu_logical_processors === 4)).toBe(true);
 	}
-	expect(platform.rows.every((row) => Object.hasOwn(row, 'model_load_ms'))).toBe(true);
 	const held = countersFrom(platform.rows, [], counts.rows);
 	expect(held.refused).toEqual([]);
 	expect(held.runs.length).toBeGreaterThan(0);
-	expect(platform.rows.some((row) => Number(row.cpu_logical_processors) === 4 &&
-		Number(row.fingerprint_version) === 2 && Number(row.model_load_ms) === 2470.828)).toBe(true);
+	const captured = platform.rows.find((row) =>
+		row.run_id === '2026-08-20-2' && row.pipeline_name === 'digest' &&
+		row.task_name === 'work' && row.shard === 0);
+	if (captured === undefined) throw new Error('The serving work host was not packed.');
+	expect(captured).toMatchObject({
+		cpu_logical_processors: 4, fingerprint_version: 2, attempt: 1
+	});
+	expect(typeof captured.unit_id).toBe('string');
+	expect(serving.rows).toContainEqual(expect.objectContaining({
+		host_unit_id: captured.unit_id, run_id: captured.run_id, attempt: captured.attempt,
+		task_name: 'serve-summarizer', server_prompt_tokens: 2400, server_prompt_seconds: 80
+	}));
+	const isCaptured = (job: FleetJob) => job.runId === captured.run_id &&
+		job.pipelineName === captured.pipeline_name && job.taskName === captured.task_name &&
+		job.shard === captured.shard;
+	const legacy = fleetJobs(platform.rows);
+	const joined = fleetJobs(platform.rows, serving.rows);
+	expect(joined).toHaveLength(legacy.length);
+	expect(legacy.find(isCaptured)?.rate).toBeCloseTo(1700 / 73.72, 10);
+	expect(joined.filter(isCaptured).map((job) => job.rate)).toEqual([30]);
 	expect(processors(hosts.rows)).toHaveLength(11);
 	expect(processors(hosts.rows).some((row) => row.cpu_logical_processors === null)).toBe(true);
 });

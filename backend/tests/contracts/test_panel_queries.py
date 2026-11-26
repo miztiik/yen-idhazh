@@ -42,6 +42,7 @@ from idhazh.contracts.story_similarity_pair_verdict import (
 from idhazh.contracts.story_similarity_threshold_history_row import (
     StorySimilarityThresholdHistoryRow,
 )
+from idhazh.contracts.task_performance import TaskPerformanceRow
 
 pytestmark = pytest.mark.contract
 LEGACY_HOST_INPUT_COLUMNS: Final = ("cores", "threads", "mhz_max", "mhz_at_probe")
@@ -63,7 +64,7 @@ EXPECTED_NAMES: Final = {
     ),
     "machine": (
         "runShardsQuery",
-        "slowerMachinesQuery", "platformMixQuery",
+        "slowerMachinesQuery", "platformMixQuery", "servingSpeedQuery",
         "slowerOnSameWorkQuery", "closestToMemoryQuery", "memoryHeldQuery",
         "contextHeadroomQuery", "articleCostQuery", "articleCostHostsQuery",
         "promptReuseQuery", "readAgainstWrittenQuery",
@@ -103,9 +104,13 @@ EXPECTED_COLUMNS: Final[Mapping[str, tuple[str, ...]]] = {
     ),
     "platformMixQuery": (
         "version", "date", "run_id", "job", "pipeline_name", "task_name", "shard", "fingerprint", "fingerprint_version",
-        "cpu_model", "l3_cache_bytes", "cpu_logical_processors", "model_load_ms", "job_seconds",
+        "unit_id", "attempt", "cpu_model", "l3_cache_bytes", "cpu_logical_processors",
         "server_prompt_tokens", "server_prompt_seconds",
         *LEGACY_HOST_INPUT_COLUMNS,
+    ),
+    "servingSpeedQuery": (
+        "host_unit_id", "run_id", "attempt", "pipeline_name", "task_name", "task_kind",
+        "server_prompt_tokens", "server_prompt_seconds",
     ),
     "slowestArticlesQuery": ("run_id", "item_id", "source_id", "machine_shard", "item_total_ms", "fetch_ms", "extract_ms", "analyze_ms", "summarize_ms", "faithfulness_ms", "stage_gap_ms", "queue_wait_ms"),
     "tailTrendQuery": ("date", "run_id", "summarize_ms"),
@@ -237,7 +242,8 @@ def row_columns() -> dict[str, tuple[str, ...]]:
         "gardener": tuple(CollectionPruneRow.model_fields),
         "run-shards": tuple(RunShards.model_fields),
         "item-health": ItemHealthRow.csv_columns(),
-        "host-fingerprint": HostFingerprintRow.csv_columns(),
+        "host-fingerprint": (*HostFingerprintRow.csv_columns(), "attempt", "unit_id"),
+        "task-performance": (*TaskPerformanceRow.model_fields, "attempt"),
         "summary-quality-evals": EvalRow.csv_columns(),
         # The compact ledger keeps the winning writer's envelope attempt next to the row.
         "threshold-history": (*StorySimilarityThresholdHistoryRow.model_fields, "attempt"),
@@ -355,7 +361,10 @@ def test_each_declared_item_and_host_column_has_exactly_the_first_query_owner() 
         if query.ledger not in readers_by_ledger:
             continue
         for column in query.columns:
-            if query.ledger == "host-fingerprint" and column in LEGACY_HOST_INPUT_COLUMNS:
+            if query.ledger == "host-fingerprint" and (
+                column in LEGACY_HOST_INPUT_COLUMNS
+                or (column in RowIdentity.model_fields and column not in HostFingerprintRow.model_fields)
+            ):
                 continue
             key = (query.ledger, column)
             if key in seen:
@@ -405,7 +414,7 @@ def test_platform_mix_names_exactly_the_shipped_fleet_columns() -> None:
     assert match is not None
     expected = tuple(re.findall(r"'([^']+)'", match[1]))
     query = next(query for query in load_queries() if query.name == "platformMixQuery")
-    assert set(query.columns) == {*expected, "cpu_logical_processors", "model_load_ms"}
+    assert set(query.columns) == {*expected, "cpu_logical_processors"}
     assert query.ledger == "host-fingerprint"
 
 
@@ -427,7 +436,7 @@ def test_word_and_machine_renames_are_the_actual_contract_mappings() -> None:
 def test_query_span_and_fetch_predicate_match_the_panel_contracts() -> None:
     queries = load_queries()
     assert {query.name for query in queries if query.span == "widest"} == {
-        "runShardsQuery", "platformMixQuery"
+        "runShardsQuery", "platformMixQuery", "servingSpeedQuery"
     }
     assert {query.name for query in queries if query.span == "newest-day"} == {
         "runTimelineQuery",

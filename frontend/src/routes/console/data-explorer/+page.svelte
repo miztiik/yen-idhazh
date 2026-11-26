@@ -578,7 +578,9 @@
 		if (readingSession === session && version === describing) ledgerColumns = columns;
 	}
 	function questionOptions(statement: string) {
-		return { ledgers: [], from: fromDay, to: toDay, sql: statement, maxChars: config.query_max_chars, maxRows: config.max_rows, maxFetchBytes: config.max_fetch_bytes, maxFiles: config.max_files };
+		const allowUnpackedServing = config.examples.some((example) =>
+			example.id === 'throughput-by-machine' && example.sql.trim() === statement.trim());
+		return { ledgers: [], from: fromDay, to: toDay, sql: statement, maxChars: config.query_max_chars, maxRows: config.max_rows, maxFetchBytes: config.max_fetch_bytes, maxFiles: config.max_files, allowUnpackedServing };
 	}
 
 	async function run() {

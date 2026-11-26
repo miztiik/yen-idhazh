@@ -515,6 +515,24 @@ def load_days[C: LedgerContract](
     key: tuple[str, ...] | None = None,
     read_status: LedgerReadStatus | None = None,
 ) -> list[C]:
+    """Read the settled payloads of named days, without their writer identity."""
+    rows = load_stored_days(
+        state_dir, ledger, days, model=model, registry=registry, key=key, read_status=read_status
+    )
+    return rows_for_model(rows, model=model)
+
+
+def load_stored_days[C: LedgerContract](
+    state_dir: Path,
+    ledger: LedgerName,
+    days: Collection[str],
+    *,
+    model: type[C],
+    registry: paths.DoorRegistry | None = None,
+    key: tuple[str, ...] | None = None,
+    read_status: LedgerReadStatus | None = None,
+    packed_only: bool = False,
+) -> list[LedgerStoredRow]:
     """These UTC days' current rows, each day settled on its own, oldest day first.
 
     The bounded read a caller asking about named days takes (Guardrail #12): the
@@ -528,6 +546,7 @@ def load_days[C: LedgerContract](
     ledger's - is one measurement within a day, so the same words filed on two
     days are kept under each.
     `load_ledger_rows` settles once across every day and keeps the first.
+    `packed_only` keeps the same published evidence as a compact-data reader.
     """
     if paths.is_planner_ledger(ledger):
         raise ValueError(f"{ledger.value} history is read by the TypeScript planner")
@@ -552,7 +571,7 @@ def load_days[C: LedgerContract](
     months = {entry.covers: entry for entry in monthly.period_entries} if monthly else {}
     compact_days = {entry.covers: entry for entry in daily.period_entries} if daily else {}
     wanted = sorted(set(days))
-    raw_wanted = {
+    raw_wanted = set() if packed_only else {
         day
         for day in wanted
         if day[:4] not in years and day[:7] not in months and day not in compact_days
@@ -617,4 +636,4 @@ def load_days[C: LedgerContract](
         files = [[held for held in rows_of(period, entry) if held.day == day]]
         rows.extend(raw_files.settle_registered_rows(files, key, ledger=ledger))
     _report_lost(ledger, lost)
-    return rows_for_model(rows, model=model)
+    return rows

@@ -8,10 +8,10 @@
 	import {
 		fleetDots,
 		fleetHover,
-		fleetJobs,
 		fleetReadout,
 		fleetSummary,
-		fleetSeries
+		fleetSeries,
+		type FleetJob
 	} from '$lib/charts/fleet';
 	import { fleetCacheView } from '$lib/charts/fleet-cache';
 	import { chartWidth, labelWidth, observeWidth } from '$lib/charts/frame';
@@ -20,7 +20,6 @@
 	import FleetDots from '$lib/console/machine/FleetDots.svelte';
 	import type { LostDay } from '$lib/console/recording';
 	import { nameSpan } from '$lib/console/span-words';
-	import type { Row } from '$lib/data/ledger';
 	import { longDate } from '$lib/format';
 	import type { ChartConfig, ConsoleConfig } from '$lib/server/config';
 	import { tick } from 'svelte';
@@ -34,7 +33,7 @@
 		recording,
 		chart,
 		knobs,
-		recordRows
+		jobs
 	}: {
 		/** The widest host universe keeps ordering and identity stable across presets. */
 		ramp: MachineRamp;
@@ -47,7 +46,7 @@
 		/** False where the machine record is switched off. */
 		recording: boolean;
 		chart: ChartConfig;
-		recordRows: readonly Row[];
+		jobs: readonly FleetJob[];
 		knobs: Pick<
 			ConsoleConfig,
 			'fleet_min_rows' | 'fleet_top_kinds' | 'fleet_dot_max_px'
@@ -69,7 +68,6 @@
 		void end;
 		openDay = null;
 	});
-	const jobs = $derived(fleetJobs(recordRows));
 	const view = $derived(
 		fleetCacheView(jobs, {
 			ramp,
@@ -259,15 +257,11 @@
 									<th scope="col">Job or pipeline/task</th>
 									<th scope="col" class="number">Shard</th>
 									<th scope="col">Machine and L3</th>
-									<th scope="col" class="number">Seconds</th>
 									<th scope="col" class="number">Speed</th>
 								</tr>
 							</thead>
 							<tbody>
-								{#each view.lines[open] as line, at (at)}
-									<!-- Below the console's stacking width a job takes two lines, run, job
-									     and shard over machine, seconds and speed, and the two numbers
-									     carry their own words because the heading row is not shown. -->
+								{#each view.lines[open] as line}
 									<tr data-fleet-job={line.row}>
 										<td class="run">{line.runId}</td>
 										<td class="job">{line.pipelineName !== null && line.taskName !== null
@@ -275,11 +269,6 @@
 											: line.job ?? 'not recorded'}</td>
 										<td class="number shard"><span class="narrow-word" aria-hidden="true">{'shard '}</span>{line.shard ?? 'not recorded'}</td>
 										<td class="machine"><span class="chip" style:background={line.swatch}></span> {line.machine}; {line.l3Cache}</td>
-										{#if line.seconds === null}
-											<td class="number seconds"><span class="narrow-word" aria-hidden="true">{'seconds '}</span>not recorded</td>
-										{:else}
-											<td class="number seconds">{Math.round(line.seconds)}<span class="narrow-word" aria-hidden="true">{' seconds'}</span></td>
-										{/if}
 										<td class="number speed">{line.rate === null ? 'Speed not recorded' : rateWords(line.rate, chart.number_format)}</td>
 									</tr>
 								{/each}
@@ -386,9 +375,9 @@
 		display: none;
 	}
 
-	/* The console's stacking width. Six columns do not fit a phone, and a list
-	   that scrolls sideways hides the speed that ties a job to its colour, so a
-	   job takes two lines: run, job and shard, then machine, seconds and speed.
+	/* The console's stacking width. The full table does not fit a phone, and a list
+	   that scrolls sideways hides the job's speed, so a
+	   job takes two lines: run, job and shard, then machine and speed.
 	   The heading row stays for a screen reader and leaves the page. */
 	@media (max-width: 48rem) {
 		.jobs {
@@ -445,12 +434,8 @@
 			order: 5;
 		}
 
-		.seconds {
-			order: 6;
-		}
-
 		.speed {
-			order: 7;
+			order: 6;
 		}
 
 		.narrow-word {

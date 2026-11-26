@@ -32,7 +32,7 @@ export function questionReader(keeper: () => PageKeeper, openEngine: EngineOpene
 		return { ledgers, locals };
 	}
 	async function costFor(ledgers: string[], locals: string[], opts: AskOptions): Promise<SpanCost> {
-		const cost = await readAskCost(keeper(), ledgers, opts.from, opts.to);
+		const cost = await readAskCost(keeper(), ledgers, opts.from, opts.to, opts.allowUnpackedServing);
 		const tables = imports.list().filter((table) => locals.includes(table.alias));
 		return { ...cost, ledgers, locals, files: cost.files + tables.length, bytes: cost.bytes + tables.reduce((sum, table) => sum + table.bytes, 0) };
 	}

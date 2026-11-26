@@ -37,7 +37,7 @@ Table C - Implementation sequence.
 | C2 | 2 | Record one completed task through TypeScript Host Probes | 1 | B | DONE | task-performance-recording | - | Task Performance recording |
 | C3 | 3 | Record digest tasks and model-server sessions | 2 | C | DONE | digest-task-performance | - | Digest Task Performance |
 | C4 | 4 | Record Council and gardener tasks | 3 | D | DONE | council-and-gardener-performance | - | Council and gardener performance |
-| C5 | 5 | Migrate console and audit readers and retire the live CI clock | 4 | E | PENDING | - | - | - |
+| C5 | 5 | Migrate console and audit readers and retire the live CI clock | 4 | E | DONE | task-performance-readers | - | Task Performance readers |
 | C6 | 6 | Build TypeScript parity for item and shard probes | 4 | F | DONE | typescript-probe-parity | - | TypeScript probe parity |
 | C7 | 7 | Switch host collection to TypeScript and narrow fingerprints | 5, 6 | G | PENDING | - | - | - |
 | C8 | 8 | Remove Python host collection and its rollout option | 7 | H | PENDING | - | - | - |

@@ -741,13 +741,9 @@ that reports nothing leaves them null and the item still publishes. Nothing on
 this row is our arithmetic, which is the point - see
 [../summarize/throughput.md](../summarize/throughput.md).
 
-**A copied field is one instrument, and there is now a second.** Each `work`
-shard also commits what its server counted for the whole shard, onto its own row
-of the host-fingerprint ledger. `backend/utilities/reconcile_prefill.py` pools both
-sides of a run and prints the gap, which is how a rate quoted off this file stops
-being an assertion. Measured on run `2026-08-26-5`: 11.1755 tok/s from this
-ledger against 11.1796 from the server, 0.037 percent apart
-([../../reference/pipeline-cost.md](../../reference/pipeline-cost.md)).
+**A copied field is one instrument, and the server is a second.** The
+[prompt audit](../summarize/throughput.md#the-read-rate-is-checked-against-the-server-and-it-holds)
+compares these item timings with independent serving totals for the run.
 
 **Visual planning and rendering are not here.** An item that got a chart and an item that got
 nothing write the same row. A render failure degrades an item and never fails

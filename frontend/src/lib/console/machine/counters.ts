@@ -1,9 +1,8 @@
 /** Which runs the Hardware route counts, and which it refuses.
  *
  * Two ledgers meet here and neither is derived from the other. The machine
- * record carries one row per job, filed in two halves at one key: the probe
- * before the work, and the clock and the model server's counters after it. The
- * article record carries one row per item and says which machine shard took it.
+ * record carries one row per job. The article record carries one row per item
+ * and says which machine shard took it. Serving evidence does not count jobs.
  * A run is the rows of both ledgers that share a run id. Both are read from
  * their packed files through the query door.
  *
@@ -28,6 +27,7 @@
 
 // Relative, not `$lib`, for the reason in the module docstring.
 import { normalizeHostRow } from '../../data/host-fingerprint';
+import { DIGEST_PIPELINE } from './serving-speed';
 
 /** One counted run, on the day the page counts it under. */
 export interface MachineRun {
@@ -65,22 +65,12 @@ function measured(value: string | undefined): number | null {
 	return Number.isFinite(parsed) ? parsed : null;
 }
 
-/** Every cell of the machine record that must agree between a shard's halves.
- *
- * A job files its row in two halves at one key - the probe before the work, the
- * clock and the server's counters after it - so two rows for one shard are one
- * record when no cell disagrees. A cell filled differently twice is two servers
- * answering for one shard, and the run is refused.
- */
+/** Hardware cells that must agree between a shard's historical halves. */
 const HOST_CELLS = [
 	'fingerprint',
 	'fingerprint_version',
 	'cpu_model',
-	'cpu_logical_processors',
-	'job_seconds',
-	'model_load_ms',
-	'server_prompt_tokens',
-	'server_prompt_seconds'
+	'cpu_logical_processors'
 ] as const;
 
 /** Whether the machine record's halves for one shard fill a cell differently. */
@@ -197,7 +187,9 @@ export function machineCounters(
 	for (const row of hosts) {
 		const runId = row.run_id ?? '';
 		if (!runId) continue;
-		if ((row.job ?? '') !== '' && row.job !== READ_JOB) continue;
+		if (row.pipeline_name
+			? row.pipeline_name !== DIGEST_PIPELINE || row.task_name !== READ_JOB
+			: !!row.job && row.job !== READ_JOB) continue;
 		const held = byRun.get(runId);
 		if (held === undefined) byRun.set(runId, [row]);
 		else held.push(row);

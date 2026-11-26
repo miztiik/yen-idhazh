@@ -15,17 +15,13 @@ const FULL: ShardReading[] = [
         shard: 0,
         serverPromptTokens: 1000,
         serverPromptSeconds: 100,
-        jobSeconds: 600,
-        cpuModel: 'AMD EPYC 7763 64-Core Processor',
-        modelLoadMs: 12000
+        cpuModel: 'AMD EPYC 7763 64-Core Processor'
     }),
     row({
         shard: 1,
         serverPromptTokens: 3000,
         serverPromptSeconds: 100,
-        jobSeconds: 900,
-        cpuModel: 'INTEL(R) XEON(R) PLATINUM 8573C',
-        modelLoadMs: 9000
+        cpuModel: 'INTEL(R) XEON(R) PLATINUM 8573C'
     })
 ];
 function readerInput(readings: ShardReading[], planned?: [
@@ -60,14 +56,11 @@ test.describe('a shard is a set and never a count', () => {
         expect(refused).toEqual([]);
         expect(runs).toHaveLength(1);
     });
-    test('two servers answering for one shard refuse the run rather than sum it', () => {
+    test('different server counters do not remove a hardware run from the count', () => {
         const disagree = [twice[0], { ...twice[1], serverPromptSeconds: 250 }, twice[2]];
         const { runs, refused } = read(disagree, { planned: [['2026-09-02-3', 2]] });
-        expect(runs).toEqual([]);
-        expect(refused).toHaveLength(1);
-        expect(refused[0].runId).toBe('2026-09-02-3');
-        expect(refused[0].rows).toBe(6);
-        expect(refused[0].why).toContain('shard 0');
+        expect(runs).toHaveLength(1);
+        expect(refused).toEqual([]);
     });
     test('more shards than the run says it had is refused', () => {
         const impossible = [
@@ -102,8 +95,7 @@ test.describe('two machine records for one shard', () => {
         const { hosts, health } = ledgers([SHARD]);
         const second = {
             ...hosts[0],
-            cpu_model: 'INTEL(R) XEON(R) PLATINUM 8573C',
-            job_seconds: '720'
+            cpu_model: 'INTEL(R) XEON(R) PLATINUM 8573C'
         };
         const { runs, refused } = machineCounters([...hosts, second], health, plan([RUN_ID, 1]));
         expect(runs).toEqual([]);

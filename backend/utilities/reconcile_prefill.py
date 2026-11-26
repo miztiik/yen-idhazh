@@ -2,8 +2,8 @@
 
 Two instruments measure the same thing and neither knows about the other. The
 item-health ledger sums a field the summarize stage copied out of each model
-reply; the host-fingerprint ledger carries what llama-server itself counted for
-the whole shard, on the same row that says which machine the shard drew.
+reply; Task Performance carries what the model server itself counted, linked to
+the exact work host and attempt. Older hosts can carry the paired totals directly.
 `docs/architecture/summarize/throughput.md` and the console both publish rates
 derived from the first one, so the second one is what makes those rates
 checkable rather than merely reported (Guardrail #10).
@@ -31,10 +31,9 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import ledger
-from idhazh.contracts.base import WORK_JOB
-from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.telemetry.host_prompt_totals import HostPromptReading, read_host_prompt_totals
 
 #: How far apart the two instruments may be before one of them is wrong.
 #:
@@ -75,13 +74,13 @@ class Pooled:
         return self.tokens / self.seconds if self.seconds > 0 else 0.0
 
 
-def pool_counters(rows: list[HostFingerprintRow]) -> Pooled:
-    """One run's shards, summed. A shard whose scrape came back empty is counted
-    as a part and contributes nothing, so a caller can see it was there."""
+def pool_counters(rows: Sequence[HostPromptReading]) -> Pooled:
+    """Pool only complete server pairs, never a numerator from a different row."""
+    pairs = [row.totals for row in rows if row.totals is not None]
     return Pooled(
-        tokens=sum(row.server_prompt_tokens or 0 for row in rows),
-        seconds=sum(row.server_prompt_seconds or 0.0 for row in rows),
-        parts=len(rows),
+        tokens=sum(pair.tokens for pair in pairs),
+        seconds=sum(pair.seconds for pair in pairs),
+        parts=len(pairs),
     )
 
 
@@ -127,13 +126,13 @@ class Reconciliation:
 
     @property
     def agrees(self) -> bool:
-        return self.gap <= TOLERANCE
+        return self.server.parts > 0 and self.ledger.parts > 0 and self.gap <= TOLERANCE
 
     @property
     def verdict(self) -> str:
         """Plain words, and when they disagree, which side to doubt first."""
         if self.server.parts == 0:
-            return "no shard committed a counter snapshot for this run - nothing to check against"
+            return "no shard has a usable server prompt pair - nothing to check against"
         if self.ledger.parts == 0:
             return "no item-health row for this run carries timings - nothing to check"
         if self.agrees:
@@ -149,15 +148,20 @@ class Reconciliation:
         )
 
     def report(self) -> str:
+        server = (
+            f"{self.server.rate:8.4f} tok/s  "
+            f"({self.server.tokens} tokens read over {self.server.seconds:.2f} s, "
+            f"{self.server.parts} shards)"
+            if self.server.parts > 0
+            else "unavailable"
+        )
         return "\n".join(
             (
                 f"run {self.run_id}",
                 f"  ledger  {self.ledger.rate:8.4f} tok/s  "
                 f"({self.ledger.tokens} tokens read over {self.ledger.seconds:.2f} s, "
                 f"{self.ledger.parts} items)",
-                f"  server  {self.server.rate:8.4f} tok/s  "
-                f"({self.server.tokens} tokens read over {self.server.seconds:.2f} s, "
-                f"{self.server.parts} shards)",
+                f"  server  {server}",
                 f"  {self.verdict}",
             )
         )
@@ -187,15 +191,7 @@ def reconcile(state_dir: Path, *, run_id: str) -> Reconciliation:
             ],
             run_id=run_id,
         ),
-        server=pool_counters(
-            [
-                row
-                for row in ledger.load_days(
-                    state_dir, LedgerName.HOST_FINGERPRINT, [date], model=HostFingerprintRow
-                )
-                if row.run_id == run_id and row.job == WORK_JOB
-            ]
-        ),
+        server=pool_counters(read_host_prompt_totals(state_dir, [date], run_id=run_id)),
     )
 
 
