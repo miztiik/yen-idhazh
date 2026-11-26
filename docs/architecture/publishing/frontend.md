@@ -35,7 +35,14 @@ their unavailable coverage, not historical repository files or other families.
 
 ## Seven documents, and an eighth that answers every dated address
 
-Seven routes are generated at build time - `/`, `/archive/`, `/console/` and its four tabs - and `adapter-static`'s fallback, `404.html`, answers everything else, including Data explorer. SvelteKit uses `adapter-static` with no `entries` reading the digest tree. Console route shells remain prerendered. Their published-ledger panels fetch native Parquet at view time; private build-time exceptions are named in [console.md](console.md#rendering-direction). `/archive/` and `/404` inline their content; `/` inlines a seed of the newest day and fetches the rest; a dated URL is the fallback document, and the page fetches the served day for the whole of it.
+The home page, archive and existing Console route shells render at build time.
+Operations gets a generated app entry document with no rendered content, so its
+known address does not give the Pages fallback a 404 status. The fallback
+`404.html` still answers Data explorer and dated reading addresses. SvelteKit
+uses `adapter-static` with no `entries` reading the digest tree. Published-ledger
+panels fetch native Parquet at view time; private build-time exceptions are
+named in [console.md](console.md#rendering-direction). `/archive/` and `/404`
+inline their content; `/` inlines a seed of the newest day and fetches the rest.
 
 **Until 2026-09-09 every route was prerendered, and that cost six documents a published day.** 20 dated pages and 96 topic pages, each with a `__data.json` twin, all rebuilt on every run because a document holding a seed of a day changes when the day does. Measured on a real build, a developer machine, 2026-09-09, `BUILD_VERSION` pinned across both cases: 796 files and 116,050,183 bytes before, **572 files and 101,880,352 after** - 224 files and 14,169,831 bytes, 12.2 percent of the built site. On that build 123 documents became 7 and 121 `__data.json` files became 5; the documents are 8 today and the twins are 7, because each of the two console tabs added on 2026-09-12 has since grown a server load of its own - `/console/voices/` on 2026-09-14 and `/console/judgement/` on 2026-09-17. **The document count no longer moves when a day is added**, which is the whole of it - it moves when somebody adds a route, which is a line in a commit rather than a run of the pipeline.
 

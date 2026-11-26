@@ -56,7 +56,17 @@ const version = process.env.BUILD_VERSION ? { name: process.env.BUILD_VERSION } 
 // docs/architecture/publishing/frontend.md, rather than restated here.
 export default {
 	kit: {
-		adapter: adapter({ fallback: '404.html', strict: false }),
+		adapter: {
+			name: 'static-client-entry',
+			async adapt(builder) {
+				await adapter({ fallback: '404.html', strict: false }).adapt(builder);
+				// A known browser-only route must not enter through the host's 404.
+				// Generate the same empty app shell so the browser still reads all evidence.
+				const entry = 'build/console/operations/index.html';
+				builder.mkdirp(dirname(entry));
+				await builder.generateFallback(entry);
+			}
+		},
 		paths: { base: process.env.BASE_PATH ?? '' },
 		...(version ? { version } : {}),
 		// `src/service-worker.ts` is built and shipped; registering it is ours.
