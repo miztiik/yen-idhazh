@@ -138,6 +138,12 @@ the whole stale comparison with exit 1. Artifacts remain available on refusal.
 The publisher uses the caller's commit message unchanged, with no added
 attribution tags.
 
+Each score invocation keeps machine evidence separate from its reading and
+vectors. Its `host-record-<encoder>` artifact includes only its completed native
+fingerprint and Task Performance writes and receipts. Python rollback retains
+only its own completed fingerprint writes. Telemetry off produces no host
+artifact. No checkout ledger directory is used as artifact input.
+
 ## The deadline bounds retries
 
 `config/push-retry.json` supplies monotonic job deadlines and configured backoff.

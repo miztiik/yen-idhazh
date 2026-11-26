@@ -209,6 +209,7 @@ jobs:
           pip freeze > runtime.txt
 
       - name: Score it
+        id: score
         env:
           ENCODER: ${{ matrix.encoder }}
           # Every shard reads the same weights, so the cache earns its keep.
@@ -243,6 +244,12 @@ jobs:
             --execution "$GITHUB_RUN_ID" \
             --commit "$GITHUB_SHA" \
             --shard "$ENCODER_SHARD")
+          if [ "$IDHAZH_HOST_TELEMETRY_MODE" != off ]; then
+            mkdir -p backend/var
+            HOST_RECORD="$(mktemp -d backend/var/encoder-host-record.XXXXXX)/record"
+            printf 'host_record=%s\n' "$HOST_RECORD" >> "$GITHUB_OUTPUT"
+            COMMAND+=(--host-record-dir "$HOST_RECORD")
+          fi
           if [ "$IDHAZH_HOST_TELEMETRY_MODE" = typescript ]; then
             export IDHAZH_MACHINE_ACCOUNTING_DAY="$DATE"
             python3 backend/utilities/machine_task.py --run-id "$DATE-$GITHUB_RUN_ID" -- \
@@ -270,14 +277,14 @@ jobs:
           if-no-files-found: warn
 
       - name: Upload the encoder host record
-        if: always() && env.IDHAZH_HOST_TELEMETRY_MODE != 'off'
+        if: always() && steps.score.outputs.host_record != ''
         uses: actions/upload-artifact@v4
         with:
           name: host-record-${{ matrix.encoder }}
+          # Do not upload unfinished atomic-write temporary files.
           path: |
-            state/raw/host-fingerprint
-            state/raw/task-performance
-            machine-receipts
+            ${{ steps.score.outputs.host_record }}/**/*.parquet
+            ${{ steps.score.outputs.host_record }}/**/*.json
           retention-days: 7
           if-no-files-found: ignore
 
