@@ -30,8 +30,8 @@ waits come from `config/hono-server.json`. The standalone command above retains
 its own listener controls.
 
 Task commands require UTF-8 JSON and `Content-Type: application/json`.
-Unknown fields fail. No command accepts a path, executable, URL, proc root,
-configuration override or process name to search. Task names, identity and
+Unknown fields fail. No command accepts a path, executable, URL, proc root
+or process name to search. Task names, identity and
 PID pins must come from the operator, never fetched article text.
 Linux writes process identity and counters to `/proc/<pid>/stat`.
 The operator supplies both the requested PID and its kernel start ticks,
@@ -129,6 +129,28 @@ The transient command's completed handles exist only in this service process.
 A restart loses its handles. CPU/RAM metadata may be returned by this API,
 reported through the existing TypeScript callback or written to structured
 stderr; recording the evidence is a separate command.
+
+## Item windows
+
+The digest selects the item-only mode with
+`POST /api/2026-11-26/start-item-profile` and
+`POST /api/2026-11-26/stop-item-profile`. Start takes the same identity and
+process pins as the generic task command, plus the digest's configured
+`waiting_heartbeat_seconds`. Zero means endpoints only. The optional
+`memory_profiling_enabled: false` can narrow the listener's job selection;
+the request cannot enable memory or turn on the instrument. The model
+server's pin comes from its launcher, not a search for a running model.
+
+Start returns its operation, `status`, `handle`, UTC `expires_at` and
+`version: "2026-11-26"`, without process details. Stop takes the same
+`{handle, outcome}` as the generic command. It returns a versioned `profile`
+with the original operation and identity, outcome, end reason and flat
+`cells` for the unchanged [item-health row](../architecture/sources/item-health.md).
+An item handle cannot be closed through the generic route, or vice versa.
+The same capacity, expiry, process pinning and repeated-stop rules apply.
+This mode returns no raw samples, starts no cache counter, and does not
+report a generic profile or write Task Performance. Shard memory diagnostics
+have no HTTP command.
 
 ## Record
 
@@ -251,7 +273,7 @@ Table B - native probe event payloads
 
 | ID | Event type | Strict data |
 | --- | --- | --- |
-| B1 | `host_probe_completed` | `operation`: `sample`, `start-task-profile`, `stop-task-profile` or `cache-latency`; `outcome`: `handled` or `disabled`. |
+| B1 | `host_probe_completed` | `operation`: `sample`, `start-task-profile`, `stop-task-profile`, `start-item-profile`, `stop-item-profile` or `cache-latency`; `outcome`: `handled` or `disabled`. |
 | B2 | `host_probe_failed` | `code: "HOST_PROBE_FAILED"` |
 | B3 | `host_probe_cleanup_failed` | `code: "HOST_PROBE_CLEANUP_FAILED"` |
 | B4 | `host_probe_body_cleanup_failed` | `code: "HOST_PROBE_BODY_CLEANUP_FAILED"` |
@@ -292,6 +314,8 @@ oversubscribing capacity, retains idempotent stops and owns cleanup.
 Explicit pins prevent process-name discovery and PID reuse from changing
 what a profile measures. Expiry bounds abandoned handles without presenting
 an incomplete task as a successful full-task observation.
+Item mode shares that lifecycle but keeps only the two endpoints and the
+running extrema; generic rolling samples answer a different question.
 The resource handle and the profile operation remain separate: the handle
 addresses retained control state, while the operation identifies the measurement.
 The existing common-contracts package supplies validation and the W3C codec.

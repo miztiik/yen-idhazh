@@ -13,22 +13,34 @@ const deadline = input.expires_after_ms === null ? null : openedAt + input.expir
 const expires_at = input.expires_after_ms === null ? null : new Date(Date.now() + input.expires_after_ms).toISOString();
 
 try {
-  const collector = new TaskCollector(input);
+  const collector = input.item_poll_ms === undefined ? new TaskCollector(input)
+    : new (await import("./item-window-collector")).ItemWindowCollector(input);
   let closed = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   let expiry: ReturnType<typeof setTimeout> | undefined;
   const close = (outcome: TaskOutcome, reason: TaskEndReason) => {
     if (closed) return;
     closed = true;
-    clearInterval(timer);
+    if (input.item_poll_ms === undefined) clearInterval(timer);
+    else clearTimeout(timer);
     clearTimeout(expiry);
     try { port.postMessage({ type: "complete", profile: collector.close(outcome, reason) }); }
     finally { port.close(); }
   };
-  const timer = setInterval(() => {
+  const poll = () => {
     collector.poll();
     if (collector.ownerEndReason !== null) close("cancelled", collector.ownerEndReason);
     else if (deadline !== null && performance.now() >= deadline) close("cancelled", "expired");
-  }, input.config.poll_interval_ms);
+  };
+  if (input.item_poll_ms === undefined) timer = setInterval(poll, input.config.poll_interval_ms);
+  else if (input.item_poll_ms > 0) {
+    const interval = input.item_poll_ms;
+    const tick = () => {
+      poll();
+      if (!closed) timer = setTimeout(tick, interval);
+    };
+    timer = setTimeout(tick, interval);
+  }
   if (deadline !== null) {
     const expire = () => {
       const remaining = deadline - performance.now();

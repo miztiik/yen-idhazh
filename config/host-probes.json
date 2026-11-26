@@ -11,6 +11,11 @@
     "max_profile_handles": 16,
     "profile_handle_ttl_ms": 21600000
   },
+  "shard_memory": {
+    "poll_interval_ms": 15000,
+    "max_proc_entries": 8192,
+    "max_artifact_bytes": 16777216
+  },
   "cache_probe": {
     "max_output_bytes": 65536,
     "lifecycle_timeout_ms": 3000,

@@ -17,38 +17,39 @@ from idhazh.contracts.base import ServerJob
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.telemetry import silicon, task_telemetry
-from idhazh.telemetry.host_control import enabled
+from idhazh.telemetry.host_control import enabled, mode
 from idhazh.telemetry.item_heartbeat import ItemHeartbeat
 from utilities.host_telemetry_control import resolve
 
 
-def test_master_switch_overrides_python_collection(tmp_path: Path) -> None:
+def test_master_switch_overrides_either_collector(tmp_path: Path) -> None:
     app = config.load(CONFIG_DIR).app
     app.observability.host_telemetry_enabled = True
     root = tmp_path / "config"
     root.mkdir()
     path = root / "idhazh.json"
     path.write_text(app.to_json(), encoding="ascii")
-    for mode in ("python", "off"):
-        assert resolve(mode, root) == mode
+    for selected in ("python", "typescript", "off"):
+        assert resolve(selected, root) == selected
+        assert mode(app.observability, {"IDHAZH_HOST_TELEMETRY_MODE": selected}) == selected
     app.observability.host_telemetry_enabled = False
     path.write_text(app.to_json(), encoding="ascii")
-    for mode in ("python", "off"):
-        assert resolve(mode, root) == "off"
-        assert not enabled(app.observability, {"IDHAZH_HOST_TELEMETRY_MODE": mode})
-    with pytest.raises(ValueError, match="python or off"):
+    for selected in ("python", "typescript", "off"):
+        assert resolve(selected, root) == "off"
+        assert not enabled(app.observability, {"IDHAZH_HOST_TELEMETRY_MODE": selected})
+    with pytest.raises(ValueError, match="python, typescript or off"):
         resolve("false", root)
     with pytest.raises(ValidationError):
         ObservabilityConfig.model_validate({"host_telemetry_enabled": "false"})
 
 
 @pytest.mark.parametrize("choice", ["rust", "legacy", "native", "shadow", "false"])
-def test_only_python_and_off_are_valid_even_when_master_is_off(
+def test_invalid_modes_are_refused_even_when_master_is_off(
     tmp_path: Path, choice: str
 ) -> None:
-    with pytest.raises(ValueError, match="python or off"):
+    with pytest.raises(ValueError, match="python, typescript or off"):
         resolve(choice, tmp_path)
-    with pytest.raises(ValueError, match="python or off"):
+    with pytest.raises(ValueError, match="python, typescript or off"):
         enabled(ObservabilityConfig(host_telemetry_enabled=False),
                 {"IDHAZH_HOST_TELEMETRY_MODE": choice})
 

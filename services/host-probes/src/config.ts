@@ -8,7 +8,7 @@ import { CacheProbeConfigSchema } from "./cache-probe/cache-config";
 export const MAX_TIMER_DELAY_MS = 2 ** 31 - 1;
 
 export const TaskProfileConfigSchema = z.strictObject({
-  enabled: z.boolean().default(false).describe("Opt into transient whole-task profiles only; remove when this profiler is retired."),
+  enabled: z.boolean().default(false).describe("Opt into transient task and item profiles; remove when this profiler is retired."),
   memory_enabled: z.boolean().default(false).describe("Opt into PID RAM in enabled task profiles; remove when process RAM collection is retired."),
   machine_memory_enabled: z.boolean().default(false).describe("Opt into whole-machine RAM and vmstat in enabled task profiles independently of PID RAM; remove when machine RAM collection is retired."),
   cpu_window_ms: z.int().positive().max(MAX_TIMER_DELAY_MS),
@@ -22,9 +22,18 @@ export const TaskProfileConfigSchema = z.strictObject({
   path: ["max_retained_samples"], message: "must hold the CPU window plus its two endpoints",
 });
 
+const ShardMemoryConfigSchema = z.strictObject({
+  poll_interval_ms: z.int().positive().max(MAX_TIMER_DELAY_MS),
+  max_proc_entries: z.int().positive(),
+  max_artifact_bytes: z.int().positive(),
+});
+
 export const ProbeConfigSchema = z.object({
   sample_interval_ms: z.number().int().positive().max(MAX_TIMER_DELAY_MS),
   task_profile: TaskProfileConfigSchema,
+  shard_memory: ShardMemoryConfigSchema.default({
+    poll_interval_ms: 15_000, max_proc_entries: 8_192, max_artifact_bytes: 16_777_216,
+  }),
   cache_probe: CacheProbeConfigSchema,
   listen_host: z.enum(["127.0.0.1", "::1"]),
   listen_port: z.number().int().min(1).max(65535),

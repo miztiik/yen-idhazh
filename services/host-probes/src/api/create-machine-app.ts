@@ -8,7 +8,7 @@ import { loadConfig, loadTaskPerformanceSettings } from "../config";
 import type { TaskPerformanceExecution } from "../config";
 import {
   CACHE_LATENCY_PATH, createSampleHandler, RECORD_TASK_PERFORMANCE_PATH,
-  SAMPLE_PATH, START_TASK_PROFILE_PATH, STOP_TASK_PROFILE_PATH,
+  SAMPLE_PATH, START_ITEM_WINDOW_PATH, START_TASK_PROFILE_PATH, STOP_ITEM_WINDOW_PATH, STOP_TASK_PROFILE_PATH,
 } from "./server";
 
 type FingerprintOptions = Parameters<typeof createFingerprintHandler>;
@@ -58,7 +58,8 @@ export function createMachineApp(input: MachineApiInputs): ApiApplication {
     input.probes.diagnostics, input.probes.recording);
   app.all(FINGERPRINT_PATH, c => fingerprint(c.req.raw));
   app.all(HEALTH_PATH, c => fingerprint(c.req.raw));
-  for (const path of [SAMPLE_PATH, START_TASK_PROFILE_PATH, STOP_TASK_PROFILE_PATH, CACHE_LATENCY_PATH, RECORD_TASK_PERFORMANCE_PATH]) {
+  for (const path of [SAMPLE_PATH, START_TASK_PROFILE_PATH, STOP_TASK_PROFILE_PATH, START_ITEM_WINDOW_PATH,
+    STOP_ITEM_WINDOW_PATH, CACHE_LATENCY_PATH, RECORD_TASK_PERFORMANCE_PATH]) {
     app.all(path, c => probe(c.req.raw));
   }
   app.notFound(c => c.json({ code: "NOT_FOUND" }, 404));

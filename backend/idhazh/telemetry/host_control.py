@@ -4,18 +4,31 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
+from typing import Literal
 
 from idhazh.contracts.knobs.observability import ObservabilityConfig
+
+HostTelemetryMode = Literal["python", "typescript", "off"]
+MODE_ENV = "IDHAZH_HOST_TELEMETRY_MODE"
+HOST_TELEMETRY_MODES = ("python", "typescript", "off")
+
+
+def mode(
+    observability: ObservabilityConfig, environ: Mapping[str, str] | None = None
+) -> HostTelemetryMode:
+    environment = os.environ if environ is None else environ
+    requested = environment.get(MODE_ENV) or "python"
+    if requested not in HOST_TELEMETRY_MODES:
+        raise ValueError(f"{MODE_ENV} must be python, typescript or off")
+    if not observability.host_telemetry_enabled or requested == "off":
+        return "off"
+    return "typescript" if requested == "typescript" else "python"
 
 
 def enabled(
     observability: ObservabilityConfig, environ: Mapping[str, str] | None = None
 ) -> bool:
-    environment = os.environ if environ is None else environ
-    mode = environment.get("IDHAZH_HOST_TELEMETRY_MODE")
-    if mode not in (None, "", "python", "off"):
-        raise ValueError("IDHAZH_HOST_TELEMETRY_MODE must be python or off")
-    return observability.host_telemetry_enabled and mode != "off"
+    return mode(observability, environ) != "off"
 
 
 def memory_override(environ: Mapping[str, str] | None = None) -> bool | None:

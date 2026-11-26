@@ -15,6 +15,7 @@ import { postCacheLatency } from "./cache-latency-route";
 import { createProbeCompletionEvent, createProbeFailureEvent } from "./create-probe-event";
 import type { ProbeEventOutput } from "./create-probe-event";
 import { postRecordTaskPerformance, RECORD_TASK_PERFORMANCE_PATH } from "./record-task-performance-route";
+import { ITEM_WINDOW_VERSION } from "../task-profile/item-window-schema";
 export { RECORD_TASK_PERFORMANCE_PATH, RecordTaskPerformanceRequestSchema, RecordTaskPerformanceResponseSchema } from "./record-task-performance-route";
 
 export type ProbeDiagnosticOptions = { writeEvent?: ProbeEventOutput; lifetimeContext?: OperationMetadata };
@@ -23,6 +24,8 @@ export type ProbeDiagnosticOptions = { writeEvent?: ProbeEventOutput; lifetimeCo
 export const SAMPLE_PATH = "/api/2026-11-05/sample-host";
 export const START_TASK_PROFILE_PATH = "/api/2026-11-05/start-task-profile";
 export const STOP_TASK_PROFILE_PATH = "/api/2026-11-05/stop-task-profile";
+export const START_ITEM_WINDOW_PATH = `/api/${ITEM_WINDOW_VERSION}/start-item-profile`;
+export const STOP_ITEM_WINDOW_PATH = `/api/${ITEM_WINDOW_VERSION}/stop-item-profile`;
 export const CACHE_LATENCY_PATH = "/api/2026-11-05/measure-cache-latency";
 // Bun's zero disables its idle timer; only the configured sampling delay applies.
 const DISABLED_IDLE_TIMEOUT = 0;
@@ -49,7 +52,8 @@ export function createSampleHandler(
     try {
       const path = new URL(request.url).pathname;
       const method = path === SAMPLE_PATH ? "GET"
-        : [START_TASK_PROFILE_PATH, STOP_TASK_PROFILE_PATH, CACHE_LATENCY_PATH, RECORD_TASK_PERFORMANCE_PATH].includes(path) ? "POST" : null;
+        : [START_TASK_PROFILE_PATH, STOP_TASK_PROFILE_PATH, START_ITEM_WINDOW_PATH, STOP_ITEM_WINDOW_PATH,
+          CACHE_LATENCY_PATH, RECORD_TASK_PERFORMANCE_PATH].includes(path) ? "POST" : null;
       if (method === null) return Response.json({ error: "Not found" }, { status: 404, headers: { "Cache-Control": "no-store" } });
       if (request.method !== method) {
         return Response.json({ error: "Method not allowed" }, { status: 405, headers: { Allow: method, "Cache-Control": "no-store" } });
@@ -66,8 +70,9 @@ export function createSampleHandler(
       if (path === RECORD_TASK_PERFORMANCE_PATH) {
         return await postRecordTaskPerformance(request, recorder, config.max_request_body_bytes, requestDiagnostics);
       }
-      return await postTaskProfile(path === START_TASK_PROFILE_PATH ? "start" : "stop", request, profiles,
-        config.max_request_body_bytes, requestDiagnostics,
+      return await postTaskProfile(path === START_TASK_PROFILE_PATH || path === START_ITEM_WINDOW_PATH ? "start" : "stop",
+        request, profiles, config.max_request_body_bytes, requestDiagnostics,
+        path === START_ITEM_WINDOW_PATH || path === STOP_ITEM_WINDOW_PATH ? "item" : "task",
         config.cache_probe.counters.enabled ? config.cache_probe.lifecycle_timeout_ms : undefined);
     } catch (error) {
       writeEvent(createProbeFailureEvent({ context: operation, type: "host_probe_failed" }));

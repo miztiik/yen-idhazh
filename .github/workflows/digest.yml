@@ -49,11 +49,12 @@ on:
           - 'on'
           - 'off'
       host_telemetry:
-        description: 'Host telemetry, including task performance; off disables both'
+        description: 'Item and shard probe selection; off disables all host telemetry'
         type: choice
         default: python
         options:
           - python
+          - typescript
           - 'off'
 
 permissions:
@@ -178,7 +179,7 @@ jobs:
 
       # Take the one opening fingerprint before the measured work starts.
       - name: What machine this job drew
-        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'python'
+        if: env.IDHAZH_HOST_TELEMETRY_MODE != 'off'
         run: |
           set -euo pipefail
           python backend/utilities/digest_publish.py run fingerprint \
@@ -239,7 +240,7 @@ jobs:
 
       # Record elapsed time before committing; commit and upload time are excluded.
       - name: What this job cost
-        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'python'
+        if: env.IDHAZH_HOST_TELEMETRY_MODE != 'off'
         run: |
           set -euo pipefail
           python backend/utilities/digest_publish.py run job-clock \
@@ -335,7 +336,7 @@ jobs:
 
       # Probe before the model server consumes memory and bandwidth.
       - name: What machine this job drew
-        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'python'
+        if: env.IDHAZH_HOST_TELEMETRY_MODE != 'off'
         run: |
           set -euo pipefail
           python backend/utilities/digest_publish.py run fingerprint \
@@ -405,6 +406,11 @@ jobs:
           fi
           python3 backend/utilities/memory_sampler.py start-sampler \
             --pid "$(cat llama-server.pid)"
+
+      - name: Start TypeScript shard memory
+        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'typescript'
+        continue-on-error: true
+        run: python3 backend/utilities/memory_sampler.py start-typescript-sampler
 
       # Stamp the same runtime build that the model-server action installed.
       - name: Work the shard
@@ -486,7 +492,10 @@ jobs:
           else
             echo "no metrics: llama-server was already gone, or the role's inference.metrics is off"
           fi
-          # Capture the runner's cgroup peak here; the portable stage reads this file.
+          # Keep the legacy cgroup reading only for the Python path.
+          if [ "$IDHAZH_HOST_TELEMETRY_MODE" != "python" ]; then
+            exit 0
+          fi
           RESOLVED=$(python3 backend/utilities/memory_profiling_control.py \
             "$MEMORY_PROFILING")
           if [ "$RESOLVED" = "off" ]; then
@@ -497,10 +506,17 @@ jobs:
             echo "cgroup_memory_peak_bytes=unavailable" > memory-peak.txt
           fi
 
+      - name: Finish TypeScript shard memory
+        if: always() && env.IDHAZH_HOST_TELEMETRY_MODE == 'typescript'
+        continue-on-error: true
+        run: |
+          bun run --no-install services/host-probes/src/index.ts --finish-shard-memory
+          if [ -f memory-peak.txt ]; then cat memory-peak.txt; fi
+
       # Combine startup timing, the server log and counters in the host record.
       # An absent start stamp leaves a missing reading, not a failed shard.
       - name: What this job cost
-        if: always() && env.IDHAZH_HOST_TELEMETRY_MODE == 'python'
+        if: always() && env.IDHAZH_HOST_TELEMETRY_MODE != 'off'
         continue-on-error: true
         run: |
           set -euo pipefail
@@ -575,7 +591,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Upload host measurements
-        if: always() && env.IDHAZH_HOST_TELEMETRY_MODE == 'python'
+        if: always() && env.IDHAZH_HOST_TELEMETRY_MODE != 'off'
         uses: actions/upload-artifact@v7
         with:
           name: host-measurements-${{ matrix.shard }}
@@ -670,7 +686,7 @@ jobs:
       # Before the embeddings and the site build, which want the runner the
       # bandwidth reading wants.
       - name: What machine this job drew
-        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'python'
+        if: env.IDHAZH_HOST_TELEMETRY_MODE != 'off'
         continue-on-error: true
         run: |
           set -euo pipefail
@@ -745,7 +761,7 @@ jobs:
       # as they are for plan and work. No server log or counters: assemble stands
       # no model server up, so those two readings are not its to take.
       - name: What this job cost
-        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'python'
+        if: env.IDHAZH_HOST_TELEMETRY_MODE != 'off'
         continue-on-error: true
         run: |
           set -euo pipefail

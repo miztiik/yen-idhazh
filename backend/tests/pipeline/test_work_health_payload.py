@@ -19,6 +19,12 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import shutil
+import subprocess
+import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import replace
 from itertools import count
 from pathlib import Path
@@ -26,11 +32,12 @@ from typing import Any, Final
 
 import pytest
 from pytest import LogCaptureFixture, MonkeyPatch
-from support.paths import CONFIG_DIR, FIXTURES_DIR, read_text
+from support.paths import CONFIG_DIR, FIXTURES_DIR, REPO_ROOT, read_text
 
 from idhazh import config
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow
+from idhazh.contracts.model_server_pin import MODEL_SERVER_PIN_VERSION, ModelServerPin
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.stages import common
 from idhazh.stages.work import stage_work
@@ -434,3 +441,109 @@ def test_controller_identity_reaches_process_fields_only_when_collection_is_enab
     actual = (row.llama_rss_bytes, row.llama_rss_anon_bytes, row.llama_rss_peak_bytes, row.llama_major_faults)
     assert actual == ((4096 * 1024, 2048 * 1024, 8192 * 1024, 0) if collection == "on" else (None,) * 4)
     assert ("model-server PID not supplied" in caplog.text) is (collection == "no-pid")
+
+
+@contextmanager
+def native_item_listener(proc: Path, monkeypatch: MonkeyPatch) -> Iterator[None]:
+    bun = shutil.which("bun")
+    assert bun is not None
+    ready = proc / "origin"
+    with (
+        (proc / "listener.log").open("w+", encoding="utf-8") as log,
+        subprocess.Popen(
+            [bun, "run", "--no-install", "test/serve-item-window-oracle.ts", str(proc)],
+            cwd=REPO_ROOT / "services" / "host-probes", stdin=subprocess.PIPE, stderr=log,
+        ) as child,
+    ):
+        try:
+            deadline = time.monotonic() + 15
+            while not ready.is_file() and child.poll() is None and time.monotonic() < deadline:
+                time.sleep(0.025)
+            log.seek(0)
+            assert ready.is_file(), log.read()
+            monkeypatch.setenv("IDHAZH_MACHINE_API_ORIGIN", read_text(ready))
+            monkeypatch.setenv("IDHAZH_MACHINE_API_TIMEOUT_MS", "15000")
+            monkeypatch.setenv("IDHAZH_MACHINE_API_MAX_RESPONSE_BYTES", "16384")
+            yield
+        finally:
+            if child.stdin is not None:
+                child.stdin.close()
+            try:
+                child.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                child.kill()
+                child.wait()
+                raise
+        log.seek(0)
+        assert child.returncode == 0, log.read()
+
+
+@pytest.mark.parametrize("memory", [True, False], ids=["memory-on", "memory-off"])
+def test_native_window_files_the_same_item_health_cells_as_python(
+    tmp_path: Path, monkeypatch: MonkeyPatch, memory: bool,
+) -> None:
+    """Use the same concrete kernel snapshots via Watch and the real native HTTP route."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("IDHAZH_HOST_TELEMETRY_MODE", "typescript")
+    monkeypatch.setenv("MEMORY_PROFILING", "inherit")
+    settings = config.load(CONFIG_DIR)
+    settings.app.observability.memory_profiling_enabled = memory
+    settings.app.logging.waiting_heartbeat_seconds = 0
+    proc = tmp_path / "proc"
+    worker = os.getpid()
+    server = worker + 1
+    for pid in (worker, server):
+        (proc / str(pid)).mkdir(parents=True)
+
+    def stat(pid: int, faults: int) -> str:
+        return f"{pid} (recorded) S 1 1 1 0 -1 0 0 0 {faults} 0 100 200 0 0 20 0 1 0 12\n"
+
+    def write(reading: dict[str, str]) -> None:
+        for name, value in reading.items():
+            (proc / name).write_text(value, encoding="ascii")
+
+    opening = {
+        "stat": "cpu 10 0 0 20\n",
+        "meminfo": "MemAvailable: 6000 kB\n",
+        "loadavg": "0.25 0.1 0.1 1/5 42\n",
+        f"{worker}/stat": stat(worker, 3),
+        f"{server}/stat": stat(server, 10),
+        f"{server}/status": "VmRSS: 512 kB\nVmHWM: 8192 kB\nRssAnon: 256 kB\n",
+    }
+    settled = {
+        "stat": "cpu 117 0 0 3913 0 0 0 0 4 0\n",
+        "meminfo": "MemTotal: 16000 kB\nMemAvailable: 7000 kB\nCached: 3000 kB\n"
+                   "SwapFree: 0 kB\nSwapTotal: 1024 kB\n",
+        "loadavg": "1.25 0.1 0.1 1/5 42\n",
+        f"{worker}/status": "VmRSS: 512 kB\nRssAnon: 256 kB\n",
+        f"{server}/status": "VmRSS: 4096 kB\nVmHWM: 6144 kB\nRssAnon: 2048 kB\n",
+        f"{server}/stat": stat(server, 15),
+    }
+    for name in ("PROC", "PROC_STAT", "MEMINFO", "LOADAVG"):
+        monkeypatch.setattr(host, name, proc if name == "PROC" else proc / name.split("_")[-1].lower())
+    write(opening)
+    watch = host.Watch(interval_s=0, server_pid=server, memory_profiling_enabled=memory)
+    write(settled)
+    expected = watch.close().cells()
+    assert expected["cpu_busy_pct"] == 2.67 and expected["cpu_steal_pct"] is None
+    if memory:
+        assert expected["llama_rss_peak_bytes"] == 8192 * 1024
+        assert expected["llama_major_faults"] == 5
+        assert expected["os_mem_available_min_bytes"] == 6000 * 1024
+    write(opening)
+    (proc / "settled.json").write_text(json.dumps(settled), encoding="ascii")
+    Path("llama-server.pin.json").write_text(ModelServerPin(
+        version=MODEL_SERVER_PIN_VERSION, pid=server, start_ticks=12,
+        started_at="2026-11-26T00:00:00Z",
+    ).to_json(), encoding="ascii")
+    full_plan = headless_plan()
+    run_plan = full_plan.model_copy(update={"items": full_plan.items[:1]})
+    with native_item_listener(proc, monkeypatch), with_an_analysis_service(settings) as selected:
+        _, items_dir, _ = _work_stage(
+            tmp_path, monkeypatch, run_plan=run_plan, settings=selected, fetcher=headless_page_fetch,
+            replies=(SUMMARIZE_AND_PLAN_REPLY.read_bytes(),), server_pid=server,
+        )
+    item = run_plan.items[0]
+    row = ItemHealthRow.from_json(read_text(items_dir / f"{item.item_id}{HEALTH_SUFFIX}"))
+    assert row.summarize_ms is not None
+    assert {name: getattr(row, name) for name in expected} == expected
