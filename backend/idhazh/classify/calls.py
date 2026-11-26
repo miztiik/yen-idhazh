@@ -337,15 +337,9 @@ def recover_visual_before_reason_cut(raw: str) -> SummarizeAndPlanDraft | None:
 def _summary_bounds(raw: str) -> tuple[str, int, int] | None:
     """The decoded summary object and its bounds within the completion."""
     content = _reply_content(raw)
-    key = content.find('"summary"')
-    if key < 0:
+    if (first := _SUMMARY_FIRST.match(content)) is None:
         return None
-    colon = content.find(":", key + len('"summary"'))
-    if colon < 0:
-        return None
-    start = colon + 1
-    while start < len(content) and content[start].isspace():
-        start += 1
+    start = first.end()
     try:
         body, end = json.JSONDecoder().raw_decode(content, start)
     except json.JSONDecodeError:

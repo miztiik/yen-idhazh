@@ -113,7 +113,7 @@ def body(**overrides: object) -> str:
     """A publishable reply, so a test can vary the one field it is about."""
     payload: dict[str, object] = {
         "title": TITLE,
-        "summary": "word " * 100,
+        "paragraphs": ["word " * 100],
     }
     payload.update(overrides)
     return json.dumps(payload)
@@ -882,10 +882,18 @@ def test_the_title_decodes_before_the_summary() -> None:
     order is asserted rather than trusted.
 
     A list of key points sat between the two until 2026-09-24 and was the
-    facts-first step. With it gone the title is, and the summary still comes
-    last.
+    facts-first step. With it gone the title is, and the paragraphs array still
+    comes last.
     """
-    assert list(output_schema()["properties"]) == ["title", "summary"]
+    schema = output_schema()
+    assert list(schema["properties"]) == ["title", "paragraphs"]
+    assert schema["required"] == ["title", "paragraphs"]
+    assert schema["additionalProperties"] is False
+    assert "description" not in schema
+    paragraphs = schema["properties"]["paragraphs"]
+    assert paragraphs["type"] == "array"
+    assert paragraphs["minItems"] == 1
+    assert paragraphs["items"] == {"minLength": 1, "type": "string"}
 
 
 # --- The title is ours, and the source's is only a fallback ------------------
@@ -1449,7 +1457,7 @@ def refused(case: str) -> tuple[Completion, str]:
         case "unparseable":
             return replace(recorded, content=completion("obeyed-the-injection").content), "ok"
         case "blank":
-            return replace(recorded, content=body(summary=" ")), "ok"
+            return replace(recorded, content=body(paragraphs=[" "])), "ok"
         case "leaked":
             return replace(recorded, content=completion("leaked-the-address").content), "ok"
         case _:
@@ -1603,8 +1611,31 @@ def test_draft_parsing_preserves_every_paragraph_and_normalizes_separators() -> 
     first = "The company reported revenue growth and described its expansion plans."
     second = "Its filing attributed the increase to new orders and repeat customers."
     third = "The company cautioned that demand could weaken later in the year."
-    raw = f"{first}\n\n\n{second}\r\n\r\n{third}"
-    assert parse_draft(body(summary=raw)).summary == f"{first}\n\n{second}\n\n{third}"
+    draft = parse_draft(
+        body(paragraphs=[f"{first}\nwrapped.", "  \t  ", f"{second}\r\n\r\n{third}"])
+    )
+    assert draft.paragraphs == [f"{first} wrapped.", second, third]
+    assert draft.summary == f"{first} wrapped.\n\n{second}\n\n{third}"
+
+    legacy = json.dumps({"title": TITLE, "summary": f"{first}\n\n\n{second}\r\n\r\n{third}"})
+    legacy_draft = parse_draft(legacy)
+    assert legacy_draft.paragraphs == [first, second, third]
+    assert legacy_draft.summary == f"{first}\n\n{second}\n\n{third}"
+
+
+def test_draft_validation_requires_non_empty_paragraphs_and_forbids_mixed_keys() -> None:
+    for invalid in (
+        body(paragraphs=[]),
+        body(paragraphs=[""]),
+        json.dumps({"title": TITLE, "paragraphs": ["One."], "summary": "Two."}),
+        json.dumps({"title": TITLE, "summary": ""}),
+        json.dumps({"title": TITLE, "summary": "One.", "extra": True}),
+    ):
+        with pytest.raises(ValidationError):
+            parse_draft(invalid)
+
+    with pytest.raises(ValueError, match="holds nothing"):
+        parse_draft(body(paragraphs=["  ", "\t"]))
 
 
 def test_a_long_multi_paragraph_summary_publishes_exactly_as_written() -> None:
@@ -1618,7 +1649,7 @@ def test_a_long_multi_paragraph_summary_publishes_exactly_as_written() -> None:
     paragraph = " ".join([sentence] * 24)
     text = "\n\n".join([paragraph] * 4)
 
-    result = replied(body(summary=text))
+    result = replied(body(paragraphs=[paragraph] * 4))
 
     assert result.status is SummaryStatus.OK
     assert result.summary == text
@@ -1686,11 +1717,12 @@ def test_the_exfiltration_canarys_address_cannot_reach_a_payload() -> None:
 def test_every_address_shape_the_sanitizer_knows_is_refused_on_the_way_out(address: str) -> None:
     """One definition of an address, read from the sanitizer, used in both directions."""
     leaked = body(
-        summary=(
+        paragraphs=[
             "The ministry published its industrial strategy on Tuesday and said the "
-            f"consultation will run for eight weeks. The full notice sits at {address} "
-            "for anyone who wants to read the original documents."
-        )
+            "consultation will run for eight weeks.",
+            f"The full notice sits at {address} "
+            "for anyone who wants to read the original documents.",
+        ]
     )
     assert replied(leaked).failure_code is FailureCode.LEAKED_ADDRESS
 
@@ -1704,11 +1736,11 @@ def test_the_marker_the_sanitizer_leaves_behind_is_refused_as_well() -> None:
     """
     result = replied(
         body(
-            summary=(
+            paragraphs=[
                 "The ministry published its industrial strategy on Tuesday and the "
                 f"consultation runs for eight weeks. The notice is at {LINK_PLACEHOLDER} "
                 "and it closes at the end of the quarter."
-            )
+            ]
         )
     )
     assert result.failure_code is FailureCode.LEAKED_ADDRESS

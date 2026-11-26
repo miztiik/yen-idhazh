@@ -26,23 +26,28 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Mapping
 from pathlib import Path
 from string import Template
-from typing import Any, Final
+from typing import Annotated, Any, Final
 
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    StringConstraints,
     ValidationError,
+    model_validator,
 )
 
 from idhazh.config import DEFAULT_CONFIG_DIR
 from idhazh.contracts.article import UNTRUSTED_LINE_MAX, Article, ArticleStatus
 from idhazh.contracts.base import (
+    PARAGRAPH_BREAK,
     canonical_json,
     derive_output_digest,
     normalize_prose,
+    paragraphs_of,
 )
 from idhazh.contracts.call_cost import CallCost, CallKind
 from idhazh.contracts.item_health import FailureCode
@@ -99,6 +104,9 @@ _NO_REPLY_DETAIL: Final[dict[FailureCode, str]] = {
 # The class has no docstring on purpose: pydantic copies one into the JSON
 # schema, and this schema is the grammar the server is sent and the bytes the
 # fingerprint hashes.
+NonEmptyParagraph = Annotated[str, StringConstraints(min_length=1)]
+
+
 class SummaryDraft(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -106,9 +114,27 @@ class SummaryDraft(BaseModel):
     # summary until 2026-09-24, so the model found the facts first and then
     # wrote prose connecting them. Nothing read the points afterwards and the
     # extra decode cost about 21 seconds an item, so the scaffold went with
-    # them: the title is now the facts-first step and the summary follows it.
+    # them: the title is now the facts-first step and the paragraphs follow it.
     title: str = Field(min_length=1)
-    summary: str = Field(min_length=1)
+    paragraphs: list[NonEmptyParagraph] = Field(min_length=1)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _accept_legacy_summary(cls, data: Any) -> Any:
+        if (
+            isinstance(data, Mapping)
+            and "paragraphs" not in data
+            and isinstance(data.get("summary"), str)
+        ):
+            translated = dict(data)
+            raw = translated.pop("summary")
+            translated["paragraphs"] = [raw] if raw else []
+            return translated
+        return data
+
+    @property
+    def summary(self) -> str:
+        return normalize_prose(PARAGRAPH_BREAK.join(self.paragraphs))
 
 
 def _template(
@@ -194,9 +220,10 @@ def parse_draft(raw: str, *, thinking: bool = False) -> SummaryDraft:
         content = fenced.group(1)
     draft = SummaryDraft.model_validate_json(content)
     # Normalize paragraph separators and remove control characters before publication.
-    draft.summary = normalize_prose(draft.summary)
-    if not draft.summary:
+    normalized = draft.summary
+    if not normalized:
         raise ValueError("the summary holds nothing once its whitespace and controls are folded")
+    draft.paragraphs = paragraphs_of(normalized)
     return draft
 
 

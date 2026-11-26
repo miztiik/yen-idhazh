@@ -53,7 +53,12 @@ from pydantic import ValidationError
 from idhazh import atomic_write, summarize
 from idhazh.config import DEFAULT_CONFIG_DIR
 from idhazh.contracts.article import Article, ArticleStatus
-from idhazh.contracts.base import compact_json, derive_output_digest, derive_text_digest
+from idhazh.contracts.base import (
+    compact_json,
+    derive_output_digest,
+    derive_text_digest,
+    paragraphs_of,
+)
 from idhazh.contracts.corpus import ChatRole, ChatTurn, CorpusMeta, CorpusRow
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
@@ -342,7 +347,7 @@ def _target(summary: Summary) -> str | None:
     try:
         draft = summarize.SummaryDraft(
             title=summary.title,
-            summary=summary.summary,
+            paragraphs=paragraphs_of(summary.summary),
         )
     except ValidationError:
         return None
