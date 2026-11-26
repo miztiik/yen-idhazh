@@ -28,7 +28,7 @@ def reply(
     first - which is the whole reason the split is possible.
     """
     body = {
-        "summary": {"title": "t", "summary": "s" * max(summary_chars, 1)},
+        "summary": {"title": "t", "paragraphs": ["s" * max(summary_chars, 1)]},
         "visual": {"decision": "visual", "why": "w" * max(plan_chars, 1)},
     }
     return Completion(
@@ -81,7 +81,7 @@ def test_the_split_says_it_is_an_estimate_on_every_reply() -> None:
 def test_a_suppressed_reply_has_no_boundary_and_reports_none() -> None:
     """The reachability gate narrows the grammar to the summary alone."""
     suppressed = Completion(
-        content=json.dumps({"title": "t", "summary": "s"}),
+        content=json.dumps({"title": "t", "paragraphs": ["s"]}),
         completion_tokens=200,
         decode_ms=60000,
     )
@@ -104,7 +104,7 @@ def test_a_cut_reply_that_never_closed_its_plan_still_splits() -> None:
     whether or not the plan ever finished.
     """
     cut = Completion(
-        content='{"summary":{"title":"t","summary":"sssss"},"visual":{"decision":"vis',
+        content='{"summary":{"title":"t","paragraphs":["sssss"]},"visual":{"decision":"vis',
         completion_tokens=100,
         decode_ms=30000,
         finish_reason="length",

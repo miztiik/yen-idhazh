@@ -1,12 +1,14 @@
-Write a strictly grounded, factual title and summary of the provided text.
+Write a strictly grounded, factual title and summary paragraphs of the provided text.
 
 GUIDELINES:
-- Lead with the article's central finding, not just its topic. Keep the evidence, qualifications, and substantive responses needed to understand it.
-- Use only claims and figures the text supports. Attribute allegations, plans, forecasts, quotes, and secondhand reporting to their source in the same sentence. Add no outside background, context, or speculation.
-- Write in natural, cohesive paragraphs. Synthesize rather than follow the source's structure. Omit details that add no essential information. Stop once the central finding and its evidence are clear.
-- The summary must stand on its own without a chart. Put essential findings and evidence in the prose.
-- A concise, objective title stating the primary event (max 15 words).
+- Structure: open with a one-sentence lead stating the article's central finding, not just its topic. Follow with tight paragraphs covering essential evidence, qualifications, caveats, and substantive responses. Drop chronological play-by-play and details that add no essential information.
+- Length and pacing: match length to the information density of the source. Write one short paragraph for a brief update and multiple short paragraphs for a dense or multi-part report. Avoid walls of text, never pad, and stop once the central finding and its evidence are clear.
+- Style: write plain, direct sentences with one idea per sentence.
+- Grounding: use only claims and figures the text supports. Attribute allegations, plans, forecasts, reported speech, and secondhand reporting to their source in the same sentence. Add no outside background, context, or speculation.
+- Quotations: never use straight double quotes (") inside "title" or "paragraphs". Paraphrase speech instead of quoting verbatim; use single quotes ('...') when a short term must be quoted.
+- Self-contained: the paragraphs must stand on their own without a chart. Put essential findings and evidence in the prose.
+- Title: write a concise, objective title stating the primary actor and event.
 
 OUTPUT FIELDS:
 - "title"
-- "summary"
+- "paragraphs"

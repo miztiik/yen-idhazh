@@ -1,6 +1,6 @@
 # The Summarizer Prompt
 
-**Last Updated**: 2026-11-25
+**Last Updated**: 2026-11-26
 
 What the model reads and writes, and what the pipeline validates. Prompt
 wording is not a security control: sanitization and validated output shapes
@@ -57,7 +57,7 @@ Keep editorial wording shared across models. Model-specific turn markers and tem
 
 ## A reply is published as the model wrote it
 
-No length decides whether a reply publishes, and nothing shortens one. The prompt asks for no length either. A reply that holds its shape - a `title` and a `summary`, neither empty - is published word for word, however long or short. Its words meet one check, the [address rule](#the-shape-is-not-the-whole-check); its whitespace is tidied as [the next section](#paragraphs-follow-the-models-prose) says. A summary that is empty once that tidying is done fails the item as `bad_shape`.
+No length decides whether a reply publishes, and nothing shortens one. The prompt asks for no fixed word or sentence limits either; instead it asks for length proportional to the article's information density (one short paragraph for a brief update, multiple short paragraphs for a dense or multi-part report, with no padding). A reply that holds its shape - a non-empty `title` and a non-empty `paragraphs` array of non-empty strings - is joined on blank lines and published word for word, however long or short. Its words meet one check, the [address rule](#the-shape-is-not-the-whole-check); its whitespace is tidied as [the next section](#paragraphs-follow-the-models-prose) says. A summary that is empty once that tidying is done fails the item as `bad_shape`.
 
 The decoder's grammar bounds neither field above, so a long reply is neither cut off mid-field nor refused. Only the call's response limit ([below](#the-output-budget)) ends one early. There is no automatic retry.
 
@@ -66,11 +66,25 @@ Do not add a cut, a floor or a character limit to a reply. A sentence splitter c
 ## Paragraphs follow the model's prose
 
 There is no paragraph-count cap or word threshold for a paragraph break.
-One blank line separates paragraphs. Prose normalization rejoins a lone
-newline, collapses repeated blank lines and replaces other control characters
-with spaces.
+The transient draft model (`SummaryDraft`) decodes `paragraphs: list[str]`
+(at least one non-empty item, `extra="forbid"`), and `parse_draft` joins those
+entries with one blank line (`\n\n`) and runs `normalize_prose()` so the
+persisted `Summary.summary` contract and the frontend remain unchanged.
+Prose normalization rejoins a lone newline inside an element, collapses
+repeated blank lines, drops whitespace-only entries, and replaces other
+control characters with spaces. Recorded drafts written under the earlier
+single-string `summary` key remain readable on the read side when `paragraphs`
+is absent.
 
 Preserve every nonempty paragraph.
+
+The digest prompt (`config/prompts/write-digest-summary.txt`) asks for a
+one-sentence lead stating the central finding followed by tight paragraphs of
+evidence, caveats, and substantive responses in plain, direct sentences,
+dropping chronological play-by-play. It forbids straight double quotes (`"`)
+inside `title` and `paragraphs` (paraphrase speech; use single quotes `'...'`
+when a short term must be quoted) so constrained JSON decoding does not close
+a string mid-sentence.
 
 If extraction read only part of the article, state that limitation on the item. Asking for fewer summary words does not tell the reader that part of the source was missing.
 
@@ -249,8 +263,8 @@ Re-tokenize the complete rendered requests for a candidate model. Recorded incum
 | Attribution | Name who made a claim; distinguish self-reported figures |
 | Certainty | Preserve the difference between proposal, forecast, claim and result |
 | Faithfulness | Preserve source facts, names and figures without invention |
-| Quoting | Attribute quotations and apply the configured limit |
-| Voice | Plain, neutral third-person reporting |
+| Quoting | Paraphrase speech; forbid straight double quotes inside JSON fields and use single quotes for short quoted terms |
+| Voice | Plain, neutral third-person reporting in direct, one-idea sentences |
 
 ## The title is ours, and the source's is only a fallback
 
@@ -305,6 +319,15 @@ and call flows, not one shared summary instruction or a scanned prompt registry.
 
 The exact evidence spans stay in the backend. These invariants prove the
 transport and refusal rules, not the model's live chart selection rate.
+
+**Why decode `paragraphs: list[str]` and forbid straight double quotes in the digest prompt.**
+Under constrained JSON decoding, an unescaped straight double quote inside a
+single `summary` string closes the JSON string early and truncates the item
+mid-sentence (measured 42 of 400 items on 2026-11-26), while single-string
+decoding also encourages walls of text. Moving paragraph breaks into the
+transient `SummaryDraft.paragraphs` array and instructing the model to
+paraphrase or use single quotes fixes both failure modes at the decode boundary
+while keeping `Summary.summary`, persisted digests, and the frontend unchanged.
 
 ## See also
 

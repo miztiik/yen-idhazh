@@ -155,7 +155,7 @@ def test_retired_measurements_do_not_reject_a_training_target(
         evaluation=app.evaluation,
     )
     assert len(harvested) == 1
-    assert json.loads(harvested[0].messages[-1].content)["summary"] == copied
+    assert "\n\n".join(json.loads(harvested[0].messages[-1].content)["paragraphs"]) == copied
 
 
 def test_corpus_selection_retains_the_exact_compression_cutoff_without_a_model_gate(
