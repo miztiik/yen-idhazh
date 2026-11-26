@@ -62,6 +62,11 @@ verified opening capture for the same execution; its named bytes are delivered
 under the job's existing host prefix so the reference can resolve. Legacy job
 receipts do not authorize native task files.
 
+The [gardener control append](idhazh-gardener.md#control-runner-evidence) admits
+only named control receipts in the run's UTC day for the declared producer
+attempts. Its raw host and Task Performance scopes do not grant any task-owned
+write, delete or rewrite authority.
+
 The Python publisher checks worktree evidence, filtered Git blobs and candidate entries.
 Only mode `100644` is accepted. Literal paths, whole-segment permissions,
 symlink/junction parents, executable/submodule conversions, disjoint operations

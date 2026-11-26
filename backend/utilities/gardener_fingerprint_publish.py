@@ -1,9 +1,10 @@
-"""How do only the named gardener opening captures append after history ends?"""
+"""How does the final gardener job append only verified control readings?"""
 
 from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import sys
 from collections.abc import Iterator
@@ -13,8 +14,17 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from idhazh import config, run_context
-from idhazh.gardener.control_fingerprints import Job, artifact, expected
-from idhazh.telemetry import machine_api, machine_evidence
+from idhazh.contracts.task_performance import TaskPerformanceRow
+from idhazh.gardener.control_fingerprints import (
+    OPERATIONS,
+    Job,
+    Operation,
+    artifact,
+    expected,
+    recording,
+    task_file,
+)
+from idhazh.telemetry import machine_api, machine_evidence, task_probe
 from utilities.publication_evidence import confirmed
 from utilities.publication_git import Repository
 from utilities.publication_request import IntegrityError, PublicationRequest, safe_file
@@ -25,36 +35,49 @@ CONTROL_JOBS = (Job.PLAN, Job.HISTORY)
 
 
 def _readings(
-    incoming: Path, local: Path, *, run_id: str, attempt: int, revision: str,
+    incoming: Path, *, run_id: str, attempt: int, revision: str,
     plan_attempt: int | None, history_attempt: int | None,
 ) -> Iterator[machine_evidence.VerifiedFile]:
-    # A missing output is not evidence that a job started and captured.
-    named: list[tuple[str, machine_evidence.ExpectedFile]] = []
+    named: list[tuple[Job, int]] = []
     for job, actual_attempt in zip(CONTROL_JOBS, (plan_attempt, history_attempt), strict=True):
         if actual_attempt is None:
-            machine_api.warn(f"Gardener {job} supplied no opening fingerprint")
+            machine_api.warn(f"Gardener {job} supplied no control evidence")
             continue
         if not 1 <= actual_attempt <= attempt:
             raise IntegrityError("gardener producing attempt is outside the workflow run")
+        named.append((job, actual_attempt))
+    for job, actual_attempt in named:
         name = artifact(job, run_id, actual_attempt)
         wanted = expected(job, run_id=run_id, attempt=actual_attempt, revision=revision)
-        named.append((name, wanted))
-    for name, wanted in named:
+        tasks = tuple(task_file(wanted, operation) for operation in OPERATIONS[job])
         root = incoming / name
         # A singleton download may not retain its artifact-directory level.
-        if safe_file(incoming, wanted.receipt, exists=False).exists():
+        if any(
+            safe_file(incoming, item.receipt, exists=False).exists() for item in (wanted, *tasks)
+        ):
             if len(named) != 1 or root.exists() or root.is_symlink() or root.is_junction():
-                raise IntegrityError("mixed gardener fingerprint download layout")
+                raise IntegrityError("mixed gardener control evidence download layout")
             root = incoming
-        proof = machine_evidence.read_receipt(root, wanted)
-        if proof is None:
-            raise IntegrityError("gardener artifact did not contain its declared reading", (name,))
-        yield proof
-    own = expected(Job.APPEND, run_id=run_id, attempt=attempt, revision=revision)
-    proof = machine_evidence.read_receipt(local, own)
-    if proof is None:
-        raise IntegrityError("gardener publisher did not produce its opening fingerprint")
-    yield proof
+        opening = machine_evidence.read_receipt(root, wanted)
+        proofs = [] if opening is None else [opening]
+        for task in tasks:
+            proof = machine_evidence.read_receipt(root, task)
+            if proof is not None:
+                machine_evidence.verify_host_link(proof, opening)
+                proofs.append(proof)
+        if not proofs:
+            raise IntegrityError("gardener artifact did not contain its named evidence", (name,))
+        yield from proofs
+
+
+def _place(
+    reading: machine_evidence.VerifiedFile, repo: Path, cleanup: ExitStack, hashes: dict[str, str],
+) -> None:
+    if reading.path in hashes:
+        raise IntegrityError("duplicate gardener control evidence path", (reading.path,))
+    if (created := reading.place(repo)) is not None:
+        cleanup.callback(created.unlink, missing_ok=True)
+    hashes[reading.path] = reading.sha256
 
 
 def land(
@@ -62,29 +85,45 @@ def land(
     plan_attempt: int | None, history_attempt: int | None,
 ) -> PublicationResult:
     own = expected(Job.APPEND, run_id=run_id, attempt=attempt, revision=revision)
-    scopes = (machine_evidence.raw_scope(machine_evidence.HOST, own.date),)
-    readings = tuple(_readings(
-        incoming, local, run_id=run_id, attempt=attempt, revision=revision,
-        plan_attempt=plan_attempt, history_attempt=history_attempt,
-    ))
-    git = Repository(repo)
-    source = git.git("rev-parse", "HEAD").strip()
+    preparation = task_file(own, Operation.PREPARE_APPEND)
+    scopes = tuple(
+        machine_evidence.raw_scope(ledger, own.date)
+        for ledger in (machine_evidence.HOST, machine_evidence.TASK)
+    )
     with ExitStack() as cleanup:
-        hashes: dict[str, str] = {}
-        for reading in readings:
-            if reading.path in hashes:
-                raise IntegrityError("duplicate gardener fingerprint path", (reading.path,))
-            created = reading.place(repo)
-            if created is not None:
-                cleanup.callback(created.unlink, missing_ok=True)
-            hashes[reading.path] = reading.sha256
-        writes = confirmed(git, hashes, source=source, permissions=scopes)
-        return publish(
-            PublicationRequest(
-                own.writer, f"gardener fingerprints: {own.date}", source, scopes, (), writes,
-            ),
-            repo=repo, retry=load_retry(repo / DEFAULT_CONFIG),
-        )
+        with task_probe.profile(recording(repo, local, own), preparation, local):
+            git = Repository(repo)
+            source = git.git("rev-parse", "HEAD").strip()
+            if source != revision:
+                raise IntegrityError("gardener publisher is not on the workflow revision")
+            hashes: dict[str, str] = {}
+            for reading in _readings(
+                incoming, run_id=run_id, attempt=attempt, revision=revision,
+                plan_attempt=plan_attempt, history_attempt=history_attempt,
+            ):
+                _place(reading, repo, cleanup, hashes)
+            opening = machine_evidence.read_receipt(local, own)
+            if opening is None:
+                machine_api.warn("Gardener publisher supplied no opening fingerprint")
+            else:
+                _place(opening, repo, cleanup, hashes)
+            retry = load_retry(repo / DEFAULT_CONFIG)
+            writes = confirmed(git, hashes, source=source, permissions=scopes)
+            request = PublicationRequest(
+                own.writer, f"gardener control evidence: {own.date}", source, scopes, (), writes,
+            )
+            request.validate(repo)
+        # The closed preparation can join the request, but cannot measure its own push.
+        proof = machine_evidence.read_receipt(local, preparation)
+        if proof is not None:
+            machine_evidence.verify_host_link(proof, opening)
+            if not isinstance(proof.row, TaskPerformanceRow) or proof.row.outcome != "success":
+                raise IntegrityError("only completed gardener append preparation may land")
+            _place(proof, repo, cleanup, hashes)
+            writes.update(confirmed(
+                git, {proof.path: proof.sha256}, source=source, permissions=scopes,
+            ))
+        return publish(request, repo=repo, retry=retry)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -105,7 +144,7 @@ def main(argv: list[str] | None = None) -> int:
             plan_attempt=args.plan_attempt, history_attempt=args.history_attempt,
         )
     except (OSError, ValueError, RuntimeError) as error:
-        print(f"gardener fingerprints refused: {error}", file=sys.stderr)
+        print(f"gardener control evidence refused: {error}", file=sys.stderr)
         return 2
     print(json.dumps({
         "landing": result.status, "detail": result.detail, "paths": result.refusal_paths,
@@ -114,4 +153,5 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     raise SystemExit(main())
