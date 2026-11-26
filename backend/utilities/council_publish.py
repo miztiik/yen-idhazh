@@ -302,10 +302,10 @@ def settle_and_publish(
                     continue
                 for day in judge.dates:
                     expected = settlement.task(day, CouncilTask.SETTLE, judge.tenant)
-                    proof = machine_evidence.read_receipt(settlement.bundle, expected)
-                    if proof is not None:
-                        machine_evidence.verify_host_link(proof, opening)
-                        include_machine(proof)
+                    settled_proof = machine_evidence.read_receipt(settlement.bundle, expected)
+                    if settled_proof is not None:
+                        machine_evidence.verify_host_link(settled_proof, opening)
+                        include_machine(settled_proof)
             machine_completed = dict(legacy_evidence)
             for path in machine_paths:
                 if path not in machine_completed:

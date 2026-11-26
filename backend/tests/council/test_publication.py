@@ -26,6 +26,7 @@ from idhazh.ledger.keys import HOST_FINGERPRINT_KEY
 from idhazh.ledger.raw_files import load_current_rows
 from idhazh.llm.serving_metrics import serving_measurement
 from idhazh.telemetry import machine_evidence
+from idhazh.telemetry.machine_evidence import VerifiedFile
 from utilities import council_machine_delivery
 from utilities.council_publish import settle_and_publish
 from utilities.publication_git import Repository
@@ -309,7 +310,8 @@ def test_council_lands_original_runner_bytes_and_keeps_trials_private(
     )
     session.prepare(settings.council, run_id=selected.run_id, selection=selected)
     bundles = council_machine_delivery.incoming(root, selected, cells)
-    captures, batches = [], []
+    captures: list[tuple[VerifiedFile, bool]] = []
+    batches: list[Batch] = []
     direct = performance.selected_runner(collector, performance.Phase.SETTLE, selected)
     with refuse_external_placement():
         for bundle, cell in zip(bundles, [None, None, *cells], strict=True):
@@ -323,13 +325,15 @@ def test_council_lands_original_runner_bytes_and_keeps_trials_private(
                 )
                 with monkeypatch.context() as scoped:
                     scoped.setenv("COUNCIL_EVENT_FILE", str(events))
-                    def judge_cell(cell: Cell = cell) -> int:
-                        return outcome.of_results((session.run_shard(
-                            settings.council, slug=cell.tenant, date=cell.date, run_id=selected.run_id,
-                            shard=cell.shard, shards=cell.shards, started=time.monotonic(),
-                            selection=selected,
-                        ),))
-                    assert outcome.run(CouncilProgram.SHARD, judge_cell) == 0
+                    judge_cell = partial(
+                        session.run_shard,
+                        settings.council, slug=cell.tenant, date=cell.date, run_id=selected.run_id,
+                        shard=cell.shard, shards=cell.shards, started=time.monotonic(),
+                        selection=selected,
+                    )
+                    assert outcome.run(
+                        CouncilProgram.SHARD, lambda job=judge_cell: outcome.of_results((job(),)),
+                    ) == 0
             host.capture(settings)
             opening = machine_evidence.read_receipt(host.bundle, host.opening)
             assert opening is not None
