@@ -52,6 +52,7 @@ async function run() {
     const task_performance = TaskPerformanceExecutionSchema.parse({
       run_id: runId, attempt: Number(attempt), pipeline_name: pipeline, shard: Number(shard),
       git_sha: gitSha, accounting_days: days?.split(","),
+      ...(env.GITHUB_JOB === undefined ? {} : { runner_job: env.GITHUB_JOB }),
       ...(legacy === undefined ? {} : { legacy_opening_writer: JSON.parse(legacy) }),
     });
     if (memory !== "on" && memory !== "off") throw new Error("Invalid resolved memory selection");

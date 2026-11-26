@@ -5,11 +5,11 @@
 Every host-fingerprint field, what it means and which readings are optional.
 The hardware fingerprint is reusable by any pipeline. Callers name their
 pipeline, task and shard; no workflow enum or digest-specific identity is needed.
-Python collects the production host fingerprint. The independent Bun fingerprint
-service writes the same existing host row through the shared TypeScript writer;
-it does not replace the production collector. Host Probes collects transient CPU
-and memory profiles and can file the closed summary in Task Performance. Item
+The TypeScript fingerprint service writes one hardware-only opening capture per
+instrumented runner job. Host Probes collects transient CPU and memory profiles
+and files closed work or model-serving observations in Task Performance. Item
 resource readings and diagnostic memory files are separate optional instruments.
+Explicit Python rollback still uses its previous row format.
 
 Read this when a number surprises you and you want to know which machine
 produced it. Runner hardware varies between jobs, so compare measurements only
@@ -32,12 +32,12 @@ operator console, not on the news-reading pages.
 | | |
 | --- | --- |
 | Contract | [`backend/idhazh/contracts/host_fingerprint.py`](../../backend/idhazh/contracts/host_fingerprint.py) |
-| Schema | `HostFingerprintRow.json_schema()` from the contract above |
+| Schema | `HostHardwareRow` for new native writes; `HostFingerprintRow` for compatibility and explicit rollback |
 | Ledger | The caller's state root, then `raw/host-fingerprint/<YYYY>/<MM>/<DD>/`; compaction uses the matching `compact/host-fingerprint/` path |
 | Files | one immutable `<file_id>.parquet` per completed write in the day directory. The reader settles the later whole row of the same work unit; neither file is edited. |
-| Producer | [`silicon.py`](../../backend/idhazh/telemetry/silicon.py), through [`task_telemetry.record`](../../backend/idhazh/telemetry/task_telemetry.py), or the independent [`host-fingerprints`](../../services/host-fingerprints/src/index.ts) API/CLI. Both use the existing host ledger and separate pipeline/task identity. |
+| Producer | [`host-fingerprints`](../../services/host-fingerprints/src/index.ts) API/CLI. Python callers retain verified original files rather than collecting or rewriting them. [`silicon.py`](../../backend/idhazh/telemetry/silicon.py) remains the explicit rollback collector. |
 | Read by | `/console/machine/`, through the browser questions in `frontend/src/lib/console/queries/machine.ts` and shared helpers in `frontend/src/lib/console/machine/records.ts` |
-| Key | `date`, `run_id`, `pipeline_name`, `task_name`, `shard`; legacy rows use `job` instead |
+| Key | `date`, `run_id`, `pipeline_name`, `task_name`, `shard`; legacy rows use `job` instead. The current `job` is the actual workflow job, not a substitute for a pipeline task. |
 | Switch | `observability.host_telemetry_enabled` for the whole instrument; `host_fingerprint` for host-row writes; `host_fingerprint_placement_enabled` for placement metadata in either collector; `memory_profiling_enabled` for memory/page-fault observations only |
 | Committed | The caller owns publication of the files returned by the recorder |
 | Shown on news-reading pages | **no.** Operator surface only |
@@ -54,14 +54,14 @@ acquisition choice and refuse entry to the real placement reader, so a missing
 forwarding step fails before any network access.
 
 The default-on `observability.host_fingerprint_placement_enabled` setting also
-stops placement reads in both collectors when false. A Python caller's
-`ask_placement=False` remains a narrower opt-out; neither choice stops local
+stops placement reads in both collectors when false. A caller's
+`ask_placement=False` is a narrower opt-out; neither choice stops local
 fingerprint collection or its ledger write.
 
 The manual feed planner workflow starts the
 [independent machine API server](serve-pipeline-apis.md) on the same
-runner, verifies that exact child through HTTP, and posts only date and
-writer identity to its fingerprint route before planning. The caller is pipeline `feed-ingest-plan`, task
+runner, verifies that exact child through HTTP, and submits the date, writer
+identity and an optional process pin before planning. The caller is pipeline `feed-ingest-plan`, task
 `isolated-plan`, shard 0. It uses the committed instrument, placement and
 task-selected copy controls without overriding the copy-task list. A
 disabled instrument is an explicit skip with no host write or machine listener.
@@ -69,7 +69,7 @@ The finite machine task stops after success or failure; the planning task
 uses its own server and retains its independently completed output.
 
 The API writes its raw Parquet under the caller's run state root.
-`host-fingerprint.json` retains the exact request, validated row, unavailable
+`host-fingerprint.json` retains the request identity, validated row, unavailable
 reasons and completed file receipts. The caller checks those receipts against
 actual Parquet before adding the host file to the planner metadata commit and
 recovery path. Host persistence or validation failure remains failed evidence,
@@ -92,9 +92,9 @@ serial number. Its pipeline/task/run/shard identity says which execution produce
 Per-item resource readings live on the item-health row, not in a second copy of
 the job fingerprint.
 
-New Python rows use fingerprint algorithm 2. Logical counts come from the online
+Both writers use fingerprint algorithm 2. Logical counts come from the online
 CPU list, physical counts require complete package/core topology, and target
-capacity uses the Python process taking the reading. Missing or contradictory
+capacity uses a verified target process, not the listener. Missing or contradictory
 inputs stay null. A missing frequency entry does not reduce the CPU count.
 Item CPU shares are unknown when the aggregate line lacks its four required
 counters, any counter resets, or the resulting shares are impossible.
@@ -111,7 +111,7 @@ Table A - collected measurements
 | A1 | Hardware identity | Core | CPU model/vendor/family/stepping, microcode, watched flags, L3 and versioned fingerprint. A fingerprint groups reported characteristics; it is not a machine serial number. |
 | A2 | CPU topology | Core | Visible logical processors and fully validated physical cores. Unknown or contradictory source data stays null. See [CPU capability fields](#what-the-processor-can-do). |
 | A3 | CPU capacity and frequency | Optional | Affinity/cpuset, quota and frequency observations. Frequency reads are off by default. |
-| A4 | Task timing and model counters | Optional | Elapsed task time, model-load time and server prompt counters when the caller has those inputs. |
+| A4 | Task timing and model counters | Optional, separate ledger | Task Performance keeps measured task duration, model load and server prompt counters where observed. |
 | A5 | CPU and load over an item window | Optional | Whole-window busy/steal share, busy extrema and closing one-minute load. |
 | A6 | Memory and page faults | Optional | Selected process RAM, machine RAM/swap, available-memory minimum and major page-fault delta. |
 | A7 | Memory artifacts and copy speed | Optional | Process/sample files, server RSS, cgroup peak and an opt-in copy benchmark. The copy probe allocates two buffers and competes for memory bandwidth. |
@@ -126,9 +126,9 @@ Memory diagnostics are separate from the persisted hardware fingerprint.
 ## Independent fingerprint API and CLI
 
 `services/host-fingerprints` collects hardware, capacity, optional frequency,
-uptime, placement and the runner label into `HostFingerprintRow`. Its HTTP API
-does not accept task timing or model counters. The CLI retains those optional
-caller inputs, and the shared ledger retains their fields for other producers.
+uptime, placement and the runner label into `HostHardwareRow`. Neither HTTP
+nor CLI accepts task timing or model counters in a hardware capture. The
+historical schema and mixed packs can still read and keep their old values.
 The service is build-time operator tooling, not a backend for the published site.
 
 Fingerprint HTTP and CLI follow the
@@ -166,33 +166,32 @@ bun run src/index.ts --serve --state-root generated-state
   "writer": {
     "run_id": "2026-10-21-123",
     "attempt": 1,
-    "job": null,
+    "job": "inspect",
     "pipeline_name": "fixture-pipeline",
     "task_name": "inspect-host",
     "shard": 0,
     "producer": "telemetry.silicon",
     "git_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-  },
-  "model_load_ms": null,
-  "job_seconds": null,
-  "server_prompt_tokens": null,
-  "server_prompt_seconds": null
+  }
 }
 ```
 
-The four trailing cells default to null: the collector does not invent task
-timing or model counters. `job` is null or matches `task_name` for a generic
-caller. A legacy job-only identity remains valid. Producer `telemetry.silicon`
-preserves the existing host work-unit identity; attempts remain separate
-immutable writes and normal ledger settlement chooses the later whole row.
+`job` identifies the actual workflow job, or is null when there is none.
+`pipeline_name` and `task_name` identify the work independently. Producer
+`telemetry.silicon` preserves the existing host work-unit identity; attempts
+remain separate immutable writes and normal settlement chooses the later whole row.
 Dates and timestamps are UTC. Integer inputs must be exactly representable
 JavaScript safe integers; values outside that range fail rather than round.
 
-`POST /api/2026-11-05/capture-host-fingerprint` takes only `date` and `writer` from that
-example. The four timing/model keys are refused with 400 even when null:
+`POST /api/2026-11-26/capture-host-fingerprint` takes `date`, `writer` and an
+optional `target` with `pid` and Linux `start_ticks`. Unverified or absent
+targets leave affinity and quota unavailable; quotas also require a shared
+view of the target's cgroups and mount namespace. The CLI can measure itself
+when no target is supplied; an explicit null asks for no target measurements.
+Either caller can opt out of placement with `ask_placement: false`.
+The four historical timing/model keys are refused even when null:
 `model_load_ms`, `job_seconds`, `server_prompt_tokens` and
-`server_prompt_seconds`. API-generated rows leave those existing ledger cells
-null; the API neither accepts nor collects them. Success returns
+`server_prompt_seconds`. None is a column in the new raw file. Success returns
 `status: "written"`, the validated `row`, an `unavailable` reason map, and the
 shared writer's `files`. Each file's `path` is relative to the caller's state
 root, with POSIX separators; no absolute local path is returned. The caller
@@ -453,10 +452,11 @@ it does not report process or machine RAM samples.
 
 ## Digest item windows and shard memory
 
-The digest's `host_telemetry` input defaults to `python`. The explicit
-`typescript` choice replaces only the item watch and private shard memory
-sampler. It does not replace the job's fingerprint, its legacy CI clock, or
-the whole-workflow-task profile: those describe different intervals or facts.
+Digest, Council, gardener and encoder comparison default to `typescript`.
+`python` is an explicit rollback and `off` disables collection. In native
+mode the digest writes an opening fingerprint once; the model close writes
+only Task Performance. Its item watch and private shard memory sampler also
+use TypeScript. None of these observations is a whole-job clock.
 The enabled paths never run two item watches or two shard memory samplers.
 If the native item listener is unavailable, the item still runs and logs
 progress; it does not fall back to Python collection.

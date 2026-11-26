@@ -91,7 +91,8 @@ def settings_or_none(config_dir: Path, *, github: bool = False) -> GardenerSetti
 
 
 def chosen(
-    settings: GardenerSettings, args: argparse.Namespace, parser: argparse.ArgumentParser
+    settings: GardenerSettings, args: argparse.Namespace, parser: argparse.ArgumentParser,
+    *, allowed_tasks: frozenset[str] | None = None,
 ) -> tuple[tuple[str, ...], int]:
     """The tasks this line runs and the shard it runs them as, or the parser's refusal."""
     if not re.fullmatch(RUN_ID_PATTERN, args.run_id):
@@ -101,7 +102,7 @@ def chosen(
     try:
         if args.name is not None:
             return (runner.runnable(settings, args.name),), 0
-        return runner.tasks_of_shard(settings, args.shard), args.shard
+        return runner.tasks_of_shard(settings, args.shard, allowed_tasks=allowed_tasks), args.shard
     except ValueError as refusal:
         parser.error(str(refusal))
 
@@ -190,8 +191,7 @@ def main(argv: Sequence[str] | None) -> int:
         parser.error(f"--git-sha takes the forty hex digits of a commit, not {args.git_sha!r}")
     names, shard = chosen(settings, args, parser)
     selected_range = period_range(settings, args, parser)
-    # No commit listing: this package starts no process, so a task lists its
-    # configured period paths as the checkout holds them.
+    # Standalone tasks list named periods from the checkout, not from Git.
     outcome = runner.run(
         names,
         settings=settings,
@@ -204,6 +204,7 @@ def main(argv: Sequence[str] | None) -> int:
         cone_bytes=None,
         listing=None,
         period_range=selected_range,
+        standalone=True,
     )
     if outcome.record is not None:
         written = outcome.record.relative_to(args.repo_root).as_posix()

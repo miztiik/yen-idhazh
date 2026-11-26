@@ -4,9 +4,10 @@ import type { PersistenceOptions } from "../persist-fingerprint";
 import { postFingerprint } from "./routes/fingerprint.route";
 import { FingerprintHealthSchema } from "./fingerprint-response";
 import type { FingerprintEventOutput } from "./create-fingerprint-event";
+import { HOST_HARDWARE_VERSION } from "@idhazh/common-contracts";
 
 // Calendar-versioned routes identify the API protocol, not operator controls.
-export const FINGERPRINT_PATH = "/api/2026-11-05/capture-host-fingerprint";
+export const FINGERPRINT_PATH = `/api/${HOST_HARDWARE_VERSION}/capture-host-fingerprint`;
 export const HEALTH_PATH = "/api/2026-11-05/get-host-fingerprint-health";
 export function createFingerprintHandler(
   config: ServiceConfig, settings: SelectedSettings, options: PersistenceOptions,

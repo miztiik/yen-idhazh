@@ -108,7 +108,6 @@ from idhazh.contracts.gardener_events import (
 from idhazh.contracts.knobs.gardener import GardenerConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.shard_landing import ShardLanding
-from idhazh.contracts.task_performance import TaskPerformanceRow
 from idhazh.gardener import cli as gardener_cli
 from idhazh.gardener import (
     event_log,
@@ -140,8 +139,9 @@ from idhazh.gardener.period_inputs import paths_for_task, scheduled_range
 from idhazh.ledger import paths as ledger_paths
 from idhazh.ledger import staging
 from idhazh.site_weight import BYTES_PER_MB
-from idhazh.telemetry import machine_api
-from idhazh.telemetry.host_control import enabled as telemetry_enabled
+from idhazh.telemetry import machine_api, machine_evidence
+from idhazh.telemetry.host_control import mode as host_mode
+from utilities import gardener_shards
 from utilities.publication_git import Repository
 from utilities.publication_request import (
     Delete,
@@ -330,6 +330,7 @@ def publish(
     delete_permissions: tuple[str, ...],
     say: Callable[[str], None] = print,
     performance_root: Path | None = None,
+    native_opening: bool = True,
 ) -> PushOutcome:
     """Apply independently declared ownership through the shared publisher."""
     outside = sorted(
@@ -345,7 +346,8 @@ def publish(
         with ExitStack() as cleanup:
             result = _publish_operations(
                 shard, git, identity, write_permissions, delete_permissions,
-                performance_root=performance_root, attempts=attempts, cleanup=cleanup,
+                performance_root=performance_root, native_opening=native_opening,
+                attempts=attempts, cleanup=cleanup,
             )
     except (OSError, ValueError, RuntimeError) as error:
         say(f"shard {shard.index}: {error}")
@@ -378,7 +380,7 @@ def publish(
 def _publish_operations(
     shard: Shard, git: Repository, identity: WriterIdentity,
     write_permissions: tuple[str, ...], delete_permissions: tuple[str, ...], *,
-    performance_root: Path | None, attempts: int, cleanup: ExitStack,
+    performance_root: Path | None, native_opening: bool, attempts: int, cleanup: ExitStack,
 ) -> PublicationResult:
     repo = git.repo
     refused = _refuse_a_directory(shard, repo)
@@ -393,27 +395,30 @@ def _publish_operations(
     if performance_root is not None:
         if identity.job != ServerJob.RUN_TASKS or identity.shard != shard.index:
             raise IntegrityError("Task Performance does not belong to this gardener shard")
-        scope = performance.append_scope(identity)
-        opening, proofs = performance.append_evidence(performance_root, identity, shard.task_names)
-        if any(
-            isinstance(proof.row, TaskPerformanceRow) and proof.row.host_unit_id is not None
-            for proof in proofs
-        ):
-            if opening is None or opening.path not in shard.written_paths:
+        task_scope = performance.append_scope(identity)
+        host_scope = machine_evidence.raw_scope(machine_evidence.HOST, identity.run_id[:10])
+        opening, proofs = performance.append_evidence(
+            performance_root, identity, shard.task_names, native=native_opening,
+        )
+        if opening is not None and not native_opening:
+            if opening.path not in shard.written_paths:
                 raise IntegrityError("Task Performance opening is not a shard write")
             if safe_file(repo, opening.path, exists=True).read_bytes() != opening.data:
                 raise IntegrityError("gardener opening fingerprint bytes changed", (opening.path,))
+        elif opening is not None:
+            proofs = (opening, *proofs)
         for proof in proofs:
+            scope = host_scope if proof is opening else task_scope
             if proof.path in operations or proof.path in extra or not contains(scope, proof.path):
                 raise IntegrityError(
-                    "Task Performance overlaps or exceeds its append scope", (proof.path,),
+                    "machine evidence overlaps or exceeds its append scope", (proof.path,),
                 )
             created = proof.place(repo)
             if created is not None:
                 cleanup.callback(created.unlink, missing_ok=True)
             extra[proof.path] = proof.sha256
-        if extra:
-            write_permissions = (*write_permissions, scope)
+            if scope not in write_permissions:
+                write_permissions = (*write_permissions, scope)
     git.prime(source, set(operations) | set(extra))
     writes = {
         path: Write(
@@ -790,8 +795,9 @@ def _run_and_land(
         started_at=started_at,
         say=say,
     )
+    collector = host_mode(settings.app.observability)
     if ran.landing is None:
-        if telemetry_enabled(settings.app.observability):
+        if collector != "off":
             machine_api.warn(f"gardener shard {shard} refused before any measurement could land")
         return ran, run.published(ran.exit_code, ran=ran, stopped=ShardStop.CHECK_REFUSED)
     unlisted_deletions = sorted(ran.landing.deleted_paths - listing.listed())
@@ -822,7 +828,10 @@ def _run_and_land(
                 {
                     *owned,
                     staging.staged_path(LedgerName.GARDENER),
-                    staging.staged_path(LedgerName.HOST_FINGERPRINT),
+                    *(
+                        (staging.staged_path(LedgerName.HOST_FINGERPRINT),)
+                        if collector == "python" else ()
+                    ),
                     *(
                         staging.staged_path(which)
                         for name in names
@@ -833,6 +842,7 @@ def _run_and_land(
         ),
         delete_permissions=tuple(owned),
         performance_root=ran.performance_root,
+        native_opening=collector == "typescript",
     )
     code = worst(ran.exit_code, pushed.exit_code)
     stopped = None if pushed.landing is not None else ShardStop.CHECK_REFUSED
@@ -886,6 +896,19 @@ def _said_how_it_ended(
         )
 
 
+def chosen_tasks(
+    settings: GardenerSettings, args: argparse.Namespace, parser: argparse.ArgumentParser,
+) -> tuple[tuple[str, ...], int]:
+    """Resolve the numbered shard under the same dispatch filter as the plan job."""
+    try:
+        allowed_tasks = gardener_shards.dispatch_task_filter(os.environ)
+    except ValueError as refusal:
+        parser.error(str(refusal))
+    if allowed_tasks is not None and args.shard is None:
+        parser.error("telemetry_proof requires a planned --shard")
+    return gardener_cli.chosen(settings, args, parser, allowed_tasks=allowed_tasks)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="gardener_publish.py",
@@ -901,7 +924,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     settings = gardener_cli.settings_or_none(args.config, github=on_github)
     if settings is None:
         return EXIT_INTEGRITY
-    names, shard = gardener_cli.chosen(settings, args, parser)
+    names, shard = chosen_tasks(settings, args, parser)
     selected_range = gardener_cli.period_range(settings, args, parser)
     outcome = run_and_land(
         names,

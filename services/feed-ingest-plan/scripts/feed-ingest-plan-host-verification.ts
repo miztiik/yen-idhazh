@@ -1,13 +1,19 @@
 /** Do the host API row and receipts match the caller's actual completed Parquet? */
 import { isDeepStrictEqual } from "node:util";
+import { HostFingerprintRowSchema } from "@idhazh/common-contracts";
+import { z } from "zod";
 import { FingerprintWrittenSchema } from "../../host-fingerprints/src/api/fingerprint-response";
 import { verifyMetadataFile } from "./feed-ingest-plan-metadata";
 import type { ExecutionIdentity, MetadataRegistrations } from "./feed-ingest-plan-metadata";
 
+export const ReadableFingerprintWrittenSchema = FingerprintWrittenSchema.extend({
+  row: z.union([FingerprintWrittenSchema.shape.row, HostFingerprintRowSchema]),
+});
+
 export async function verifyHostFingerprint(
   root: string, input: unknown, registrations: MetadataRegistrations, identity: ExecutionIdentity,
 ) {
-  const response = FingerprintWrittenSchema.parse(input);
+  const response = ReadableFingerprintWrittenSchema.parse(input);
   const paths: string[] = [];
   for (const file of response.files) {
     const actual = await verifyMetadataFile(root, file.path, registrations, identity);

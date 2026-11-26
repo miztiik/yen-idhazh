@@ -15,6 +15,7 @@ the standard library fails here first.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -23,7 +24,7 @@ from pathlib import Path
 import pytest
 from gardener._garden import GARDENER_FIXTURES, a_config
 from pydantic import ValidationError
-from support.paths import REPO_ROOT
+from support.paths import CONFIG_DIR, REPO_ROOT
 
 from idhazh import config
 from idhazh.contracts.gardener_plan import GardenerPlan, MatrixLeg
@@ -43,14 +44,14 @@ def a_fixture_config(root: Path, garden: str | None) -> Path:
     return config_dir
 
 
-def a_bare_script(root: Path) -> tuple[Path, Path]:
+def a_bare_script(root: Path, *declarations: Path) -> tuple[Path, Path]:
     """A bare folder holding `config/`, the script and what it imports to start.
 
     The same layout the plan job's checkout holds: the script, and the package's
     `__init__.py`, crash printer and shared event writer, with nothing installed.
     """
     bare = root / "bare"
-    config_dir = a_fixture_config(bare, "garden")
+    config_dir = a_config(bare, *(declarations or (GARDENER_FIXTURES / "garden",)))
     script = bare / "backend" / "utilities" / SCRIPT.name
     printer = bare / "backend" / PACKAGE.name
     script.parent.mkdir(parents=True)
@@ -61,11 +62,19 @@ def a_bare_script(root: Path) -> tuple[Path, Path]:
     return bare, config_dir
 
 
-def run_bare_script(bare: Path, *flags: str) -> subprocess.CompletedProcess[str]:
+def run_bare_script(
+    bare: Path, *flags: str, inputs: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
     script = bare / "backend" / "utilities" / SCRIPT.name
+    env = os.environ | {"GITHUB_EVENT_NAME": "schedule"}
+    if inputs is not None:
+        event_path = bare / "dispatch.json"
+        event_path.write_text(json.dumps({"inputs": inputs}), encoding="ascii")
+        env.update(GITHUB_EVENT_NAME="workflow_dispatch", GITHUB_EVENT_PATH=str(event_path))
     return subprocess.run(
         [sys.executable, "-I", "-S", str(script), *flags],
         cwd=bare,
+        env=env,
         capture_output=True,
         text=True,
         check=False,
@@ -105,6 +114,69 @@ def test_the_script_runs_with_the_standard_library_alone(tmp_path: Path) -> None
     assert outputs["any_active_task"] == "true"
     assert outputs["shard_count"] == "5"
     assert json.loads(outputs["matrix"]) == json.loads(expected)["matrix"]
+    assert outputs["history_allowed"] == "true"
+
+
+@pytest.mark.parametrize(
+    ("inputs", "names", "history_allowed"),
+    [
+        ({}, ["compact-feed-health", "compact-host-fingerprint"], "true"),
+        ({"force": "true"}, ["compact-feed-health", "compact-host-fingerprint"], "true"),
+        ({"telemetry_proof": "true", "force": "false"}, ["compact-host-fingerprint"], "false"),
+    ],
+)
+def test_manual_dispatch_filters_active_tasks_and_gates_history_independently_of_due(
+    tmp_path: Path, inputs: dict[str, str], names: list[str], history_allowed: str,
+) -> None:
+    bare, config_dir = a_bare_script(
+        tmp_path, *(CONFIG_DIR / "gardener" / f"{name}.json" for name in (
+            "compact-feed-health", "compact-host-fingerprint", "compact-task-performance",
+            "corpus-squash",
+        )),
+    )
+    paused = config_dir / "gardener" / "compact-task-performance.json"
+    declaration = json.loads(paused.read_text(encoding="ascii"))
+    declaration["lifecycle_status"] = "paused"
+    paused.write_text(json.dumps(declaration), encoding="ascii")
+
+    done = run_bare_script(bare, inputs=inputs)
+
+    assert done.returncode == 0, done.stderr
+    outputs = dict(line.split("=", 1) for line in done.stdout.splitlines())
+    assert json.loads(outputs["matrix"])["include"] == [
+        {"shard": number, "task_names": [name]} for number, name in enumerate(names)
+    ]
+    assert outputs["history_allowed"] == history_allowed
+
+
+def test_a_forced_telemetry_proof_is_refused_before_planning(tmp_path: Path) -> None:
+    bare, _ = a_bare_script(tmp_path)
+
+    done = run_bare_script(
+        bare, "--config-root", "absent", inputs={"telemetry_proof": "true", "force": "true"},
+    )
+
+    assert done.returncode == 2
+    assert "telemetry_proof cannot be combined with force" in done.stderr
+    assert done.stdout == ""
+
+
+def test_proof_does_not_admit_a_named_task_of_the_wrong_kind(tmp_path: Path) -> None:
+    name = "compact-host-fingerprint"
+    bare, config_dir = a_bare_script(
+        tmp_path, CONFIG_DIR / "gardener" / f"{name}.json",
+    )
+    path = config_dir / "gardener" / f"{name}.json"
+    declaration = json.loads(path.read_text(encoding="ascii"))
+    declaration["kind"] = "traces"
+    path.write_text(json.dumps(declaration), encoding="ascii")
+
+    done = run_bare_script(bare, inputs={"telemetry_proof": "true"})
+
+    assert done.returncode == 0, done.stderr
+    outputs = dict(line.split("=", 1) for line in done.stdout.splitlines())
+    assert outputs["history_allowed"] == "false"
+    assert json.loads(outputs["matrix"]) == {"include": []}
 
 
 @pytest.mark.parametrize(
@@ -151,6 +223,7 @@ def test_an_empty_garden_is_one_line_from_both_writers(tmp_path: Path) -> None:
         "any_active_task=false",
         "shard_count=0",
         'matrix={"include":[]}',
+        "history_allowed=true",
     ]
 
 

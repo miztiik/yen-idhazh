@@ -33,14 +33,14 @@ export const WATCHED_FLAG = [
 
 export type WatchedFlag = (typeof WATCHED_FLAG)[number];
 
-/** Hand-written HostFingerprintRow, held to the producer by the field-set test. */
+/** Current hardware projection, held to HostHardwareRow by the field-set test. */
 export interface HostFingerprintRow {
-	version?: string;
+	version: string;
 	date: string;
 	run_id: string;
-	job?: ServerJob | string | null;
-	pipeline_name?: string | null;
-	task_name?: string | null;
+	job: string | null;
+	pipeline_name: string;
+	task_name: string;
 	shard: number;
 	fingerprint?: string | null;
 	fingerprint_version?: number | null;
@@ -70,10 +70,6 @@ export interface HostFingerprintRow {
 	vm_fault_domain?: string | null;
 	runner_name?: string | null;
 	measured_at?: string | null;
-	model_load_ms?: number | null;
-	job_seconds?: number | null;
-	server_prompt_tokens?: number | null;
-	server_prompt_seconds?: number | null;
 }
 
 export type HostFingerprint = Required<HostFingerprintRow> & { fingerprint: string };

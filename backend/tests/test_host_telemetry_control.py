@@ -14,6 +14,7 @@ from support.paths import CONFIG_DIR
 
 from idhazh import config, ledger
 from idhazh.contracts.base import ServerJob
+from idhazh.contracts.host_fingerprint import HostHardwareRow
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.telemetry import silicon, task_telemetry
@@ -54,9 +55,37 @@ def test_invalid_modes_are_refused_even_when_master_is_off(
                 {"IDHAZH_HOST_TELEMETRY_MODE": choice})
 
 
-def test_missing_mode_defaults_to_python() -> None:
-    assert enabled(ObservabilityConfig(), {})
+def test_missing_mode_defaults_to_typescript_without_disabling_rollback() -> None:
+    assert mode(ObservabilityConfig(), {}) == "typescript"
     assert enabled(ObservabilityConfig(), {"IDHAZH_HOST_TELEMETRY_MODE": "python"})
+
+
+def test_local_default_writes_one_native_opening_without_a_clock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("IDHAZH_HOST_TELEMETRY_MODE", raising=False)
+    monkeypatch.delenv("IDHAZH_MACHINE_API_ORIGIN", raising=False)
+    monkeypatch.delenv("IDHAZH_MACHINE_APIS_READY", raising=False)
+    monkeypatch.setenv("GITHUB_JOB", "encoder-job")
+    settings = config.load(CONFIG_DIR)
+    with task_telemetry.record(
+        date="2026-11-26", run_id="2026-11-26-17", settings=settings,
+        state_root=tmp_path / "state", commit_sha=SEED_COMMIT,
+        pipeline_name="encoder-evaluation", task_name="score-vectors", shard=2,
+        ask_placement=False,
+    ) as paths:
+        (path,) = paths
+        opening = path.read_bytes()
+    assert paths == [path] and opening == path.read_bytes()
+    (stored,) = ledger.load_stored(paths, model=HostHardwareRow)
+    assert (stored.identity.job, stored.identity.pipeline_name,
+            stored.identity.task_name, stored.identity.shard) == (
+        "encoder-job", "encoder-evaluation", "score-vectors", 2,
+    )
+    assert ledger.read_envelope(path).writer == "idhazh_typescript.ledger.parquet"
+    assert set(stored.row.model_dump()).isdisjoint(
+        {"job_seconds", "model_load_ms", "server_prompt_tokens", "server_prompt_seconds"}
+    )
 
 
 @pytest.mark.parametrize("via_config", [False, True], ids=["dispatch-off", "config-off"])

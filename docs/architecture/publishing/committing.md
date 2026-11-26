@@ -58,9 +58,11 @@ declared for its job. The work job can deliver `work` and `serve-summarizer`;
 the other jobs can deliver only their own task. Before delivery it checks
 the exact registered path, stored-row digest, file bytes and complete
 pipeline/task writer identity. A host reference must agree with the exact
-verified opening capture for the same execution; its named bytes are delivered
-under the job's existing host prefix so the reference can resolve. Legacy job
-receipts do not authorize native task files.
+verified opening capture for the same execution. The opening can land by
+itself, even if the job produced no plan or closed task. The default TypeScript
+path never rewrites it: the model's serving measurements go to Task Performance.
+Explicit Python rollback retains the old host clock; legacy publication
+receipts alone do not authorize native task files.
 
 The [gardener control append](idhazh-gardener.md#control-runner-evidence) admits
 only named control receipts in the run's UTC day for the declared producer

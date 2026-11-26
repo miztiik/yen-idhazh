@@ -53,7 +53,8 @@ async function findPrivateDay(root: string, relativeDay: string): Promise<string
 }
 
 export async function* readPrivateRawDay<T extends object>(
-  root: string, registration: LedgerRegistration, covers: string, contract: LedgerRowContract<T>,
+  root: string, registration: LedgerRegistration, covers: string,
+  contract: LedgerRowContract<T> | LedgerRowContract<T>[],
 ): AsyncGenerator<{ envelope: FileEnvelope; rows: StoredLedgerRow<T>[]; receipt: PersistedLedgerFile }> {
   const ledger = registration.name;
   validateRegistration(ledger, registration);
@@ -61,7 +62,7 @@ export async function* readPrivateRawDay<T extends object>(
   const relativeDay = toRelativePath(root, buildRawDayPath(root, registration.prefix, covers));
   const directory = await findPrivateDay(root, relativeDay);
   if (directory === null) return;
-  const business = describeObjectSchema(contract.schema).fields;
+  const contracts = Array.isArray(contract) ? contract : [contract];
   const identityNames = Object.keys(RowIdentitySchema.shape);
   await initializeParquetWasm();
   for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -72,17 +73,19 @@ export async function* readPrivateRawDay<T extends object>(
     }
     const bytes = await readFile(join(directory, entry.name));
     const envelope = readEnvelope(bytes);
+    const version = contracts.find(known => known.schemaVersion === envelope.row_schema_version);
     const writer = envelope.identity;
     const unit_id = createUnitId({
       ledger, covers, runId: writer.run_id, job: writer.job, pipelineName: writer.pipeline_name,
       taskName: writer.task_name, shard: writer.shard, producer: writer.producer,
     });
     if (envelope.tier !== "raw" || envelope.ledger !== ledger || envelope.covers !== covers
-      || envelope.row_schema_version !== contract.schemaVersion || envelope.unit_id !== unit_id
+      || version === undefined || envelope.unit_id !== unit_id
       || envelope.file_id !== file_id
       || createFileId({ unit: unit_id, attempt: writer.attempt, writtenAtMs: envelope.written_at_ms }) !== file_id) {
       throw rawFailure("file does not match its declared identity, day and schema");
     }
+    const business = describeObjectSchema(version.schema).fields;
     const decoded = readVerifiedParquetRows(bytes, envelope.content_sha256, rawFailure);
     checkParquetFields(decoded.fields, appendIdentityColumns(business, envelope.version), rawFailure);
     const stamped = buildIdentityCells(ledger, covers, writer, unit_id);
@@ -91,7 +94,10 @@ export async function* readPrivateRawDay<T extends object>(
       if (Object.entries(stamped).some(([name, value]) => cells[name] !== value)) {
         throw rawFailure("row identity differs from its footer");
       }
-      const row = contract.schema.parse(Object.fromEntries(business.map(({ name }) => [name, cells[name]])));
+      const row = version.schema.parse(Object.fromEntries(business.map(({ name }) => [name, cells[name]])));
+      if ("version" in row && row.version !== envelope.row_schema_version) {
+        throw rawFailure("row schema stamp differs from its footer");
+      }
       return { identity, row };
     });
     yield { envelope, rows, receipt: PersistedLedgerFileSchema.parse({

@@ -617,8 +617,13 @@ class CompactTree:
         relies on, and the rest wait in its folder: the next wake takes them as
         it takes a re-run. An entry of the folder that is not a file at all is
         refused for manual action, because there is no file to move aside.
+        Host packing refuses unknown or unverifiable evidence instead of
+        moving it away from its original path.
         """
         folder = ledger.read_registered_day_folder(self.state_dir, self.ledger, day)
+        if self.ledger is LedgerName.HOST_FINGERPRINT and folder.unreadable:
+            path, _why = folder.unreadable[0]
+            raise error_cause.ManualActionError(f"{path.name} is not a verifiable raw host file")
         for path, _why in folder.unreadable:
             if not path.is_file():
                 raise error_cause.ManualActionError(
@@ -630,7 +635,11 @@ class CompactTree:
         for held in folder.files[:most]:
             try:
                 taken.append((held.path, self.load(held.path, model=model)))
-            except ValueError:
+            except ValueError as refusal:
+                if self.ledger is LedgerName.HOST_FINGERPRINT:
+                    raise error_cause.ManualActionError(
+                        f"{held.path.name} is not a verifiable raw host file"
+                    ) from refusal
                 unreadable.append(held.path)
         return RawDay(taken=taken, unreadable=unreadable, carried=len(folder.files[most:]))
 

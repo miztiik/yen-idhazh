@@ -149,7 +149,7 @@ def render_groups(
     return bytes(sink.getvalue().to_pybytes())
 
 
-def _envelope_of(metadata: Mapping[bytes, bytes] | None) -> dict[bytes, bytes]:
+def envelope_metadata(metadata: Mapping[bytes, bytes] | None) -> dict[bytes, bytes]:
     """Our keys out of a file's metadata, without the engine's own."""
     return {
         key: value
@@ -180,9 +180,17 @@ def open_bytes(
 
 def read(data: bytes) -> tuple[dict[bytes, bytes], list[dict[str, Any]]]:
     """Decode rows on this thread so no worker holds the caller's bytes at shutdown."""
+    envelope, rows, _schema = read_with_schema(data)
+    return envelope, rows
+
+
+def read_with_schema(data: bytes) -> tuple[dict[bytes, bytes], list[dict[str, Any]], Any]:
+    """Return the physical column declarations alongside the unprojected rows."""
     with open_bytes(data) as opened:
-        return _envelope_of(opened.metadata.metadata), list(
-            opened.read(use_threads=False).to_pylist()
+        return (
+            envelope_metadata(opened.metadata.metadata),
+            list(opened.read(use_threads=False).to_pylist()),
+            opened.schema_arrow,
         )
 
 
@@ -194,10 +202,16 @@ def decompress_zstd_page(body: memoryview, size: int) -> memoryview:
 def read_footer(path: Path) -> tuple[dict[bytes, bytes], int]:
     """The envelope and how many rows the file holds, both read from its footer, not a row."""
     footer = pyarrow.parquet.read_metadata(path)
-    return _envelope_of(footer.metadata), int(footer.num_rows)
+    return envelope_metadata(footer.metadata), int(footer.num_rows)
 
 
 def read_footer_schema(path: Path) -> tuple[dict[bytes, bytes], Any]:
     """The envelope and arrow schema read from a parquet footer, with no row read."""
+    envelope, schema, _count = read_footer_layout(path)
+    return envelope, schema
+
+
+def read_footer_layout(path: Path) -> tuple[dict[bytes, bytes], Any, int]:
+    """The column declarations and row count without opening any row groups."""
     footer = pyarrow.parquet.read_metadata(path)
-    return _envelope_of(footer.metadata), footer.schema.to_arrow_schema()
+    return envelope_metadata(footer.metadata), footer.schema.to_arrow_schema(), int(footer.num_rows)

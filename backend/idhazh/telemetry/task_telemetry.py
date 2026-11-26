@@ -1,17 +1,20 @@
-"""Record a task's machine before its work and its elapsed time afterwards."""
+"""Select native hardware capture, explicit rollback or no host recording."""
 
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from idhazh import run_context
 from idhazh.contracts.base import WORK_JOB, PipelineName, ServerJob, TaskName
-from idhazh.telemetry import silicon
-from idhazh.telemetry.host_control import enabled as host_telemetry_enabled
+from idhazh.contracts.file_envelope import HOST_FINGERPRINT_PRODUCER, WriterIdentity
+from idhazh.telemetry import native_capture, silicon
+from idhazh.telemetry.host_control import mode
 
 if TYPE_CHECKING:
     from idhazh import config
@@ -21,6 +24,18 @@ _LOG = logging.getLogger("idhazh")
 
 def utc_now() -> datetime:
     return datetime.now(UTC)
+
+
+def native_writer(
+    run_id: str, commit_sha: str, *, pipeline: PipelineName, task: TaskName,
+    shard: int = 0, attempt: int | None = None, job: ServerJob | TaskName | None = None,
+) -> WriterIdentity:
+    return WriterIdentity(
+        run_id=run_id, git_sha=commit_sha, shard=shard,
+        job=os.environ.get("GITHUB_JOB") or job, pipeline_name=pipeline,
+        task_name=task, producer=HOST_FINGERPRINT_PRODUCER,
+        attempt=run_context.run_attempt() if attempt is None else attempt,
+    )
 
 
 @contextmanager
@@ -41,14 +56,30 @@ def record(
     ask_placement: bool = True,
     capture_opening: bool = True,
 ) -> Iterator[list[Path]]:
-    """Yield exact files for a generic task, including its clock on work failure."""
+    """Yield opening files; only the explicit rollback adds the old closing clock."""
     if (pipeline_name is None) != (task_name is None):
         raise ValueError("pipeline_name and task_name must be present together")
     effective_task = task_name if task_name is not None else job or WORK_JOB
     writer_job = None if pipeline_name is not None else effective_task
-    if not host_telemetry_enabled(settings.app.observability):
+    selected = mode(settings.app.observability)
+    if selected == "off":
         _LOG.info("host telemetry off run=%s task=%s", run_id, effective_task)
         yield []
+        return
+    if selected == "typescript":
+        paths: list[Path] = []
+        if capture_opening and settings.app.observability.host_fingerprint:
+            if pipeline_name is None or task_name is None:
+                raise ValueError("native recording requires a declared pipeline and task")
+            writer = native_writer(
+                run_id, commit_sha, pipeline=pipeline_name, task=task_name,
+                shard=shard, attempt=attempt, job=job,
+            )
+            _, paths = native_capture.file_opening(
+                date=date, writer=writer, state=state_root,
+                settings=settings, ask_placement=ask_placement,
+            )
+        yield paths
         return
     started = started_at if started_at is not None else clock()
     written: list[Path] = []

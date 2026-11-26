@@ -32,7 +32,7 @@ from idhazh.council.selection import Selection, from_environment
 from idhazh.council.tenancy import Tenant
 from idhazh.ledger.staging import staged_path
 from idhazh.telemetry import machine_api, machine_evidence, task_telemetry
-from idhazh.telemetry.host_control import enabled as telemetry_enabled
+from idhazh.telemetry.host_control import mode as host_mode
 from utilities import council_machine_delivery
 from utilities.council_matrix import VENUE_LEDGERS
 from utilities.publication_evidence import identified
@@ -70,7 +70,8 @@ def settle_and_publish(
         raise SystemExit(CouncilExit.REFUSED)
     dates = selection.dates
     active = selected.names(publish=True)
-    instrumented = telemetry_enabled(settings.app.observability)
+    collector = host_mode(settings.app.observability)
+    instrumented = collector != "off"
     warn_opening = (
         opening_attempted and instrumented and settings.app.observability.host_fingerprint
     )
@@ -238,7 +239,6 @@ def settle_and_publish(
         try:
             for proof in received:
                 include_machine(proof)
-            # The legacy clock still reads the one opening written by its own writer.
             opening = machine_evidence.read_receipt(settlement.bundle, settlement.opening)
             if opening is not None:
                 include_machine(opening)
@@ -267,7 +267,7 @@ def settle_and_publish(
                 clock=clock,
                 capture_opening=not opening_attempted and opening is None,
             )
-            if active
+            if active and collector == "python"
             else nullcontext(machine_paths)
         )
         with machine as machine_paths:
@@ -311,7 +311,8 @@ def settle_and_publish(
                 if path not in machine_completed:
                     relative = path.relative_to(repo).as_posix()
                     raise IntegrityError("machine output has no completed evidence", (relative,))
-            completed(None, {path: machine_completed[path] for path in machine_paths})
+            if machine_paths:
+                completed(None, {path: machine_completed[path] for path in machine_paths})
         except (ValueError, OSError) as error:
             integrity_failed = (
                 error if isinstance(error, IntegrityError) else IntegrityError(str(error))

@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-11-25
+**Last Updated**: 2026-11-26
 
 The persisted-shape subsystem: where the models live, how a schema is obtained from one, the small hand copy the frontend carries, and the tests that stop the two drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 10.
 
@@ -201,7 +201,18 @@ The published-column gate compares current files exactly. For older file
 stamps, its recursive type check permits missing nullable struct fields,
 including structs inside lists. Existing nested field order, types, nullability
 and list element types must still agree; missing required nested fields fail.
-This is a metadata check, not a row migration or a reason to rewrite old files.
+This is normally a metadata check, not a row migration or a reason to rewrite
+old files. The current host fingerprint stamp also checks the original rows
+to tell a hardware-only file from a declared mixed pack.
+
+`HostHardwareRow` requires the dated `2026-11-26` stamp and generic pipeline and
+task. An actual workflow job may differ from its task, or be null when unknown.
+The original-envelope protocol permits that distinction only for the host
+fingerprint producer and ledger. `HostFingerprintRow` is the normalized reader
+and keeps its previous write shape for explicit Python rollback. It can expose
+historical timing values without giving new hardware writes those fields.
+The [compaction rules](../publishing/ledger-compaction.md#host-fingerprint-packing)
+own how the two generations share a physical file without rewriting row stamps.
 
 ## What the frontend carries
 

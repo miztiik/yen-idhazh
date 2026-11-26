@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Final, NamedTuple
 
 from idhazh.contracts.base import RUN_ID_PATTERN, ServerJob
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.ledger.paths import STATE_DIRNAME
 
 #: The namespace every `unit_id` is minted under. A protocol constant rather
@@ -155,11 +156,16 @@ def unit_id(
     the union keeps only its newest attempt. New telemetry identity uses the
     pipeline and task columns; the legacy job spelling keeps its original UUID.
     """
-    if (pipeline_name is None) != (task_name is None) or (job is None) == (
-        pipeline_name is None
-    ):
+    if (pipeline_name is None) != (task_name is None):
+        raise ValueError("unit identity requires both pipeline_name and task_name")
+    if pipeline_name is None and job is None:
         raise ValueError("unit identity requires legacy job or pipeline and task")
-    label = job if job is not None else f"{pipeline_name}|{task_name}"
+    if (
+        pipeline_name is not None and job not in (None, task_name)
+        and ledger != LedgerName.HOST_FINGERPRINT
+    ):
+        raise ValueError("generic job must be absent or match its task")
+    label = f"{pipeline_name}|{task_name}" if pipeline_name is not None else job
     return uuid.uuid5(NAMESPACE, f"{ledger}|{covers}|{run_id}|{label}|{shard}|{producer}")
 
 

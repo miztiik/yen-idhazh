@@ -1,9 +1,9 @@
 /** When permitted, how does one captured row become a completed shared ledger write? */
 import { z } from "zod";
-import { HostFingerprintRowSchema, HOST_FINGERPRINT_VERSION } from "@idhazh/common-contracts";
+import { HostHardwareRowSchema, HOST_HARDWARE_VERSION } from "@idhazh/common-contracts";
 import { persistLedger } from "@idhazh/ledger-file-writer";
 import { CaptureContextSchema, REPOSITORY_ROOT } from "./config";
-import type { SelectedSettings, ServiceConfig } from "./config";
+import type { CaptureContext, SelectedSettings, ServiceConfig } from "./config";
 import type { Inspection } from "./inspect/bounded-input";
 import { collectFingerprint } from "./collect-fingerprint";
 
@@ -20,6 +20,8 @@ export type PersistenceOptions = {
   outputRoot: string;
   registryPath?: string | URL;
   inspection?: Inspection;
+  cliSelf?: boolean;
+  admit?: (input: CaptureContext) => boolean;
 };
 export async function persistFingerprint(input: unknown, config: ServiceConfig, settings: SelectedSettings, options: PersistenceOptions) {
   const capture = CaptureContextSchema.parse(input);
@@ -30,10 +32,10 @@ export async function persistFingerprint(input: unknown, config: ServiceConfig, 
   const family = registry.families.find((entry) => entry.ledgers.some((ledger) => ledger.name === "host-fingerprint"));
   const ledger = family?.ledgers.find((entry) => entry.name === "host-fingerprint");
   if (!family || !ledger || ledger.grain !== "raw-and-compact" || !ledger.prefix) throw new Error("host-fingerprint requires its registered raw-and-compact prefix");
-  const captured = await collectFingerprint(capture, config, settings, options.inspection);
+  const captured = await collectFingerprint(capture, config, settings, options.inspection, options.cliSelf === true);
   const result = await persistLedger({
     ledger: "host-fingerprint",
-    rowContract: { schema: HostFingerprintRowSchema, schemaVersion: HOST_FINGERPRINT_VERSION },
+    rowContract: { schema: HostHardwareRowSchema, schemaVersion: HOST_HARDWARE_VERSION },
     outputRoot: options.outputRoot, writerContext: capture.writer,
     registryEntry: {
       name: ledger.name, family: family.name, grain: "raw-and-compact",

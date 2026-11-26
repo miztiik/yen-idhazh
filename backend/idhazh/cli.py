@@ -59,6 +59,7 @@ from idhazh import (
 )
 from idhazh.command_logging import configure_command_logging
 from idhazh.contracts.base import WORK_JOB, ServerJob
+from idhazh.contracts.host_fingerprint import HostHardwareRow
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.council import run_identity as council_identity
@@ -94,6 +95,7 @@ from idhazh.telemetry import (
     task_telemetry,
 )
 from idhazh.telemetry.host_control import enabled as host_telemetry_enabled
+from idhazh.telemetry.host_control import mode as host_telemetry_mode
 
 
 def _today() -> str:
@@ -273,7 +275,9 @@ def _planned(date: str, execution: int | None, *, run_id: str | None = None) -> 
     return common._load_plan(date, expected)
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def main(
+    argv: Sequence[str] | None = None, *, native_host: HostHardwareRow | None = None,
+) -> int:
     crash_trace.install()
     words = list(sys.argv[1:]) if argv is None else list(argv)
     if words and words[0] in ("council-prepare", "council-shard", "council-settle"):
@@ -286,10 +290,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             else CouncilProgram(words[0].removeprefix("council-"))
         )
         return outcome.run(program, lambda: _main(words))
-    return _main(words)
+    return _main(words, native_host=native_host)
 
 
-def _main(argv: Sequence[str] | None = None) -> int:
+def _main(
+    argv: Sequence[str] | None = None, *, native_host: HostHardwareRow | None = None,
+) -> int:
     crash_trace.install()
     words = list(sys.argv[1:]) if argv is None else list(argv)
     if words and words[0] == telemetry_cli.VERB:
@@ -563,11 +569,12 @@ def _main(argv: Sequence[str] | None = None) -> int:
                 "trial run: every ledger goes to state/<tier>/%s and no published series reads it",
                 Path(*trial_segments).as_posix(),
             )
-        return _dispatch(parser, args, settings)
+        return _dispatch(parser, args, settings, native_host=native_host)
 
 
 def _dispatch(
-    parser: argparse.ArgumentParser, args: argparse.Namespace, settings: config.Settings
+    parser: argparse.ArgumentParser, args: argparse.Namespace, settings: config.Settings,
+    *, native_host: HostHardwareRow | None = None,
 ) -> int:
     if args.stage.startswith("council-"):
         from idhazh import run_context
@@ -798,6 +805,7 @@ def _dispatch(
             shards=args.shards,
             fetcher=read_url,
             server_pid=args.server_pid,
+            native_host=native_host,
         )
 
     if args.stage == "record":
@@ -810,24 +818,31 @@ def _dispatch(
         )
         return 0
 
-    # The two telemetry verbs take the run address rather than the run's plan:
-    # a machine reading is about the job and not about the work, so a job that
-    # plans nothing can still take one (`idhazh.telemetry.silicon`).
+    # An opening capture belongs to the runner even when there is no work plan.
     if args.stage == "fingerprint":
-        silicon.stage_fingerprint(
-            date=date,
-            run_id=_machine_run(parser, date=date, given=args.run_id, execution=args.execution),
-            settings=settings,
-            state_root=common.STATE_ROOT,
-            commit_sha=args.commit,
-            shard=args.shard,
-            job=None if args.pipeline_name is not None else args.job,
-            pipeline_name=args.pipeline_name,
-            task_name=args.task_name,
-        )
+        selected = host_telemetry_mode(settings.app.observability)
+        run_id = _machine_run(parser, date=date, given=args.run_id, execution=args.execution)
+        if selected == "python":
+            silicon.stage_fingerprint(
+                date=date, run_id=run_id, settings=settings, state_root=common.STATE_ROOT,
+                commit_sha=args.commit, shard=args.shard,
+                job=None if args.pipeline_name is not None else args.job,
+                pipeline_name=args.pipeline_name, task_name=args.task_name,
+            )
+        elif selected == "typescript":
+            with task_telemetry.record(
+                date=date, run_id=run_id, settings=settings, state_root=common.STATE_ROOT,
+                commit_sha=args.commit, shard=args.shard, job=args.job,
+                pipeline_name=args.pipeline_name or "operator",
+                task_name=args.task_name or args.job,
+            ):
+                pass
         return 0
 
     if args.stage == "job-clock":
+        if host_telemetry_mode(settings.app.observability) != "python":
+            common.LOG.info("legacy host clock not recorded outside Python rollback")
+            return 0
         silicon.stage_job_clock(
             date=date,
             run_id=_machine_run(parser, date=date, given=args.run_id, execution=args.execution),

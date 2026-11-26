@@ -62,7 +62,8 @@ from idhazh.llm.server import (
     token_pieces,
 )
 from idhazh.similarity import judge, prompt
-from idhazh.telemetry import silicon
+from idhazh.telemetry import native_diagnostics, silicon
+from idhazh.telemetry.host_control import mode as host_telemetry_mode
 
 #: How many calls one run takes: 50 pairs, each read twice. Twenty would give a
 #: median and nothing about the tail, and a shard bound has to be sized off the
@@ -725,8 +726,13 @@ def conditions_of(
     prompt_digest = prompt.prompt_digest(
         prompt_files=settings.app.prompt_files, config_dir=settings.config_dir
     )
+    selection = host_telemetry_mode(settings.app.observability)
+    processor = (
+        native_diagnostics.cpu_model() if selection == "typescript"
+        else silicon.host_cpu_model() if selection == "python" else None
+    )
     return {
-        "Processor": silicon.host_cpu_model() or "not reported by this host",
+        "Processor": processor or "not reported by this host",
         "Runner": args.runner,
         "Weights": f"`{entry.file}`, id `{entry.id}`",
         "Declared for": entry.declared_for or "unset",

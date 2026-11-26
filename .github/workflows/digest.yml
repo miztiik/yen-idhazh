@@ -49,12 +49,12 @@ on:
           - 'on'
           - 'off'
       host_telemetry:
-        description: 'Item and shard probe selection; off disables all host telemetry'
+        description: 'TypeScript host telemetry, Python rollback, or off'
         type: choice
-        default: python
+        default: typescript
         options:
-          - python
           - typescript
+          - python
           - 'off'
 
 permissions:
@@ -66,7 +66,7 @@ permissions:
 env:
   # Runner-local health probe; inference uses model_server.base_url from config.
   MODEL_SERVER_PROBE: 'http://127.0.0.1:8080'
-  IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry || 'python' }}
+  IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry || 'typescript' }}
   MEMORY_PROFILING: ${{ inputs.memory_profiling || 'inherit' }}
 
 jobs:
@@ -86,6 +86,7 @@ jobs:
     steps:
       # Start before checkout so elapsed time includes setup.
       - name: Stamp the plan clock
+        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'python'
         run: |
           set -euo pipefail
           echo "JOB_STARTED_AT=$(date -u +%s)" >> "$GITHUB_ENV"
@@ -103,7 +104,7 @@ jobs:
       - name: Resolve host telemetry
         id: host_telemetry
         env:
-          REQUESTED: ${{ inputs.host_telemetry || 'python' }}
+          REQUESTED: ${{ env.IDHAZH_HOST_TELEMETRY_MODE }}
         run: |
           set -euo pipefail
           MODE=$(python backend/utilities/host_telemetry_control.py "$REQUESTED" --config-root config)
@@ -180,9 +181,11 @@ jobs:
       # Take the one opening fingerprint before the measured work starts.
       - name: What machine this job drew
         if: env.IDHAZH_HOST_TELEMETRY_MODE != 'off'
+        continue-on-error: true
         run: |
           set -euo pipefail
-          python backend/utilities/digest_publish.py run fingerprint \
+          python backend/utilities/digest_publish.py measure \
+            python backend/utilities/digest_publish.py run fingerprint \
             --date "${{ steps.decide.outputs.date }}" \
             --execution "${{ github.run_id }}" \
             --commit "${{ github.sha }}" \
@@ -240,7 +243,7 @@ jobs:
 
       # Record elapsed time before committing; commit and upload time are excluded.
       - name: What this job cost
-        if: env.IDHAZH_HOST_TELEMETRY_MODE != 'off'
+        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'python'
         run: |
           set -euo pipefail
           python backend/utilities/digest_publish.py run job-clock \
@@ -288,6 +291,7 @@ jobs:
     steps:
       # Include checkout, installation, cache restore and model startup in timing.
       - name: Stamp the shard clock
+        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'python'
         run: |
           set -euo pipefail
           echo "JOB_STARTED_AT=$(date -u +%s)" >> "$GITHUB_ENV"
@@ -337,9 +341,11 @@ jobs:
       # Probe before the model server consumes memory and bandwidth.
       - name: What machine this job drew
         if: env.IDHAZH_HOST_TELEMETRY_MODE != 'off'
+        continue-on-error: true
         run: |
           set -euo pipefail
-          python backend/utilities/digest_publish.py run fingerprint \
+          python backend/utilities/digest_publish.py measure \
+            python backend/utilities/digest_publish.py run fingerprint \
             --date "${{ needs.plan.outputs.date }}" \
             --execution "${{ github.run_id }}" \
             --commit "${{ github.sha }}" \
@@ -464,7 +470,7 @@ jobs:
             --shard ${{ matrix.shard }} \
             --shards ${{ needs.plan.outputs.shards }}
 
-      # Close the launcher-owned session; both writers consume this one scrape.
+      # Only Python rollback also uses the serving scrape in the legacy host clock.
       - name: What the server counted
         if: always() && env.IDHAZH_HOST_TELEMETRY_MODE != 'off'
         continue-on-error: true
@@ -516,7 +522,7 @@ jobs:
       # Combine startup timing, the server log and counters in the host record.
       # An absent start stamp leaves a missing reading, not a failed shard.
       - name: What this job cost
-        if: always() && env.IDHAZH_HOST_TELEMETRY_MODE != 'off'
+        if: always() && env.IDHAZH_HOST_TELEMETRY_MODE == 'python'
         continue-on-error: true
         run: |
           set -euo pipefail
@@ -643,6 +649,7 @@ jobs:
     steps:
       # Start before checkout so elapsed time includes setup, as plan and work do.
       - name: Stamp the assemble clock
+        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'python'
         run: |
           set -euo pipefail
           echo "JOB_STARTED_AT=$(date -u +%s)" >> "$GITHUB_ENV"
@@ -690,7 +697,8 @@ jobs:
         continue-on-error: true
         run: |
           set -euo pipefail
-          python backend/utilities/digest_publish.py run fingerprint \
+          python backend/utilities/digest_publish.py measure \
+            python backend/utilities/digest_publish.py run fingerprint \
             --date "${{ needs.plan.outputs.date }}" \
             --execution "${{ github.run_id }}" \
             --commit "${{ github.sha }}" \
@@ -761,7 +769,7 @@ jobs:
       # as they are for plan and work. No server log or counters: assemble stands
       # no model server up, so those two readings are not its to take.
       - name: What this job cost
-        if: env.IDHAZH_HOST_TELEMETRY_MODE != 'off'
+        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'python'
         continue-on-error: true
         run: |
           set -euo pipefail

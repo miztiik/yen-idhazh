@@ -55,6 +55,8 @@ from idhazh.contracts.base import (
 )
 from idhazh.contracts.ledger_name import LedgerName
 
+HOST_FINGERPRINT_PRODUCER: Final = "telemetry.silicon"
+
 
 class Tier(StrEnum):
     """Which of the two roots under `state/` a file sits in."""
@@ -183,7 +185,7 @@ class WriterIdentity(Model):
         ),
     )
     job: ServerJob | JobName | None = Field(
-        description="The legacy workflow job name, absent for a generic pipeline/task identity."
+        description="The workflow job, if known; pipeline and task identify generic host work."
     )
     pipeline_name: PipelineName | None = Field(
         default=None, description="The pipeline that wrote a generic telemetry record."
@@ -211,14 +213,19 @@ class WriterIdentity(Model):
             raise ValueError("writer identity requires both pipeline_name and task_name")
         if self.task_name is None and self.job is None:
             raise ValueError("writer identity requires a legacy job or pipeline and task")
-        if self.task_name is not None and self.job not in (None, self.task_name):
+        if self.has_distinct_job and self.producer != HOST_FINGERPRINT_PRODUCER:
             raise ValueError("generic writer job must be absent or match its task")
         return self
 
     @property
+    def has_distinct_job(self) -> bool:
+        return self.task_name is not None and self.job not in (None, self.task_name)
+
+    @property
     def task_key(self) -> str:
         """A string key for callers that need one name for either identity form."""
-        if self.job is not None:
+        if self.job is not None and not self.has_distinct_job:
+            # Keep existing receipts whose generic task was also their job alias.
             return str(self.job)
         if self.pipeline_name is None or self.task_name is None:
             raise ValueError("writer identity has no task key")
@@ -235,12 +242,13 @@ class WriterIdentity(Model):
         shard: int,
         producer: str,
         git_sha: CommitSha,
+        job: ServerJob | JobName | None = None,
     ) -> Self:
         """Build a reusable identity without requiring a workflow-job enum."""
         return cls(
             run_id=run_id,
             attempt=attempt,
-            job=None,
+            job=job,
             pipeline_name=pipeline_name,
             task_name=task_name,
             shard=shard,
@@ -293,7 +301,7 @@ class RowIdentity(Model):
         ge=1, description="Which try at that run filed it. The union keeps the highest."
     )
     job: ServerJob | JobName | None = Field(
-        description="The legacy workflow job name, absent for a generic pipeline/task identity."
+        description="The workflow job, if known; pipeline and task identify generic host work."
     )
     pipeline_name: PipelineName | None = Field(default=None)
     task_name: TaskName | None = Field(default=None)
@@ -311,7 +319,11 @@ class RowIdentity(Model):
             raise ValueError("row identity requires both pipeline_name and task_name")
         if self.task_name is None and self.job is None:
             raise ValueError("row identity requires a legacy job or pipeline and task")
-        if self.task_name is not None and self.job not in (None, self.task_name):
+        if (
+            self.ledger is not LedgerName.HOST_FINGERPRINT
+            and self.task_name is not None
+            and self.job not in (None, self.task_name)
+        ):
             raise ValueError("generic row job must be absent or match its task")
         return self
 
@@ -474,6 +486,11 @@ class FileEnvelope(Contract):
     def _writer_scope_is_finite(self) -> Self:
         if self.version not in _ENVELOPE_VERSIONS:
             raise ValueError("unrecognized file envelope version")
+        if self.identity.has_distinct_job and (
+            self.ledger is not LedgerName.HOST_FINGERPRINT
+            or self.identity.producer != HOST_FINGERPRINT_PRODUCER
+        ):
+            raise ValueError("a distinct workflow job requires the fingerprint ledger writer")
         if self.writer == "idhazh_typescript.ledger.parquet" and self.version < "2026-10-20":
             raise ValueError("TypeScript writer requires envelope version 2026-10-20 or later")
         if self.writer.startswith("idhazh_rust.") and (
@@ -481,7 +498,7 @@ class FileEnvelope(Contract):
             or self.row_schema_version != "2026-10-10"
             or self.ledger is not LedgerName.HOST_FINGERPRINT
             or self.tier is not Tier.RAW
-            or self.identity.producer != "telemetry.silicon"
+            or self.identity.producer != HOST_FINGERPRINT_PRODUCER
         ):
             raise ValueError("historical host writer requires its recorded raw host contract")
         if self.writer.endswith(".json_lines") and self.compression is not Compression.NONE:

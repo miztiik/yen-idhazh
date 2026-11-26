@@ -15,7 +15,9 @@ from idhazh.contracts.knobs.council import CouncilTask
 from idhazh.contracts.task_performance import TaskPerformanceOutcome
 from idhazh.council import performance, session
 from idhazh.council.selection import from_environment
+from idhazh.publication_paths import IntegrityError
 from idhazh.telemetry import machine_api, task_probe
+from idhazh.telemetry.host_control import mode
 from utilities import machine_task, model_runtime, shard_bound
 
 _BOUNDS_CONFIG = "llm_council_job_timeouts.json"
@@ -63,6 +65,12 @@ def main(argv: list[str] | None = None) -> int:
     revision, attempt = os.environ["GITHUB_SHA"], run_context.run_attempt()
     if args.verb == "measure" and not marker:
         parser.error("measure requires a trusted command after --")
+    if (job := os.environ.get("GITHUB_JOB")) and job != phase:
+        raise IntegrityError("Council machine evidence does not name this workflow job")
+    settings = config.load(args.config_root)
+    selected = mode(settings.app.observability)
+    if args.verb == "measure" and selected == "off":
+        return machine_task.run(command, instrument=False)
     if phase is performance.Phase.JUDGE or (
         args.verb == "measure" and phase in (performance.Phase.DRAW, performance.Phase.SETTLE)
     ):
@@ -89,10 +97,12 @@ def main(argv: list[str] | None = None) -> int:
         git_sha=revision, cell=cell, selection=selection,
     )
     if args.verb == "open":
-        host.capture(config.load(args.config_root))
+        host.capture(settings)
     elif args.verb == "bounds":
         bounds(host, config.REPO_ROOT, args.config_root)
     elif args.verb == "close-server":
+        if selected == "off":
+            return 0
         assert cell is not None
         result = args.runtime_outcome
         close_server(
@@ -106,7 +116,7 @@ def main(argv: list[str] | None = None) -> int:
             days.extend(selection.dates)
         return machine_task.run(
             command, run_id=host.opening.writer.run_id, days=tuple(dict.fromkeys(days)),
-            legacy_opening=host.opening.writer,
+            legacy_opening=host.opening.writer if selected == "python" else None,
         )
     return 0
 

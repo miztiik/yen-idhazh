@@ -1,6 +1,7 @@
 /** Which rule refused a reply, and how do the panels identify the same record? */
 import type { Row } from '../../data/ledger';
 import { isDay } from '../../data/slice-shapes';
+import { shardKey } from '../machine/shard-key';
 import type { PanelQuery } from './window';
 
 export const failedRuleQuery = {
@@ -40,6 +41,9 @@ export function hostKey(row: Row, item = false): string {
 	const jobCell = item ? row.machine_job : row.job;
 	const job = jobCell === null || jobCell === undefined || jobCell === '' ? 'work' : jobCell;
 	const shard = item ? row.machine_shard : row.shard;
+	const pipeline = item ? row.machine_pipeline_name : row.pipeline_name;
+	const task = item ? row.machine_task_name : row.task_name;
+	const attempt = row.attempt;
 	if (typeof row.date !== 'string' || !isDay(row.date)) throw new Error('host key names no UTC date');
 	runParts(row.run_id);
 	if (typeof job !== 'string') throw new Error('host key names no job');
@@ -47,14 +51,24 @@ export function hostKey(row: Row, item = false): string {
 		!Number.isSafeInteger(Number(shard)) || Number(shard) < 0) {
 		throw new Error('host key names no shard');
 	}
-	return JSON.stringify([row.date, row.run_id, job, Number(shard)]);
+	if (typeof pipeline === 'boolean' || typeof pipeline === 'number' ||
+		typeof task === 'boolean' || typeof task === 'number' || typeof attempt === 'boolean') {
+		throw new Error('host key has invalid pipeline, task or attempt');
+	}
+	const key = shardKey(row.date, String(row.run_id), job, shard, pipeline, task, attempt);
+	if (key === null) throw new Error('host key has incomplete pipeline/task or invalid attempt');
+	return key;
 }
 
 export function joinItemHosts(items: readonly Row[], hosts: readonly Row[]): {
 	readonly rows: readonly { readonly item: Row; readonly host: Row | null }[];
 	readonly unmatched: number;
 } {
-	const byKey = new Map(hosts.map((host) => [hostKey(host), host]));
+	const byKey = new Map<string, Row | null>();
+	for (const host of hosts) {
+		const key = hostKey(host);
+		byKey.set(key, byKey.has(key) ? null : host);
+	}
 	const rows = items.map((item) => ({
 		item,
 		// An unrecorded machine shard remains an unmatched item, not shard zero.

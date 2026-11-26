@@ -12,12 +12,14 @@ from typing import Any, Final
 from idhazh.contracts.base import LedgerContract
 from idhazh.contracts.file_envelope import (
     FileEnvelope,
+    Tier,
     envelope_from_metadata,
 )
+from idhazh.contracts.host_fingerprint import HOST_HARDWARE_VERSION, HostFingerprintRow
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.ledger import keys, paths
+from idhazh.ledger import host_storage, keys, paths
 from idhazh.ledger.arrow_schema import ColumnType, LogicalType
-from idhazh.ledger.persist import file_columns
+from idhazh.ledger.persist import file_columns, load_stored
 
 _STATE_DIR: Final = "state"
 _PARQUET_SUFFIX: Final = ".parquet"
@@ -189,14 +191,16 @@ def _check_file(
     expected, logical_types = _contract_schema(model, envelope_version=envelope.version)
     faults: list[_Fault] = []
     file_stamp = envelope.row_schema_version
-    if file_stamp > contract_stamp:
+    host = ledger is LedgerName.HOST_FINGERPRINT
+    current_host = host and file_stamp == HOST_HARDWARE_VERSION
+    if file_stamp > contract_stamp and not current_host:
         faults.append(
             _Fault(
                 kind="F3",
                 ledger=ledger,
                 path=path,
                 file_stamp=file_stamp,
-                contract_stamp=contract_stamp,
+                contract_stamp=HOST_HARDWARE_VERSION if host else contract_stamp,
                 column=_NO_COLUMN,
                 file_type=_NO_COLUMN,
                 contract_type=_NO_COLUMN,
@@ -205,6 +209,14 @@ def _check_file(
         )
         return envelope, actual, faults
 
+    if host:
+        layout = host_storage.layout_for_footer(envelope, actual.names)
+        if current_host or (envelope.tier is Tier.COMPACT and layout.legacy_cpu):
+            columns = host_storage.columns_for(layout)
+            expected = parquet.schema_of(columns)
+            logical_types = {column.name: column.type for column in columns}
+        if current_host:
+            contract_stamp = HOST_HARDWARE_VERSION
     expected_names = set(expected.names)
     actual_names = set(actual.names)
     missing = sorted(expected_names - actual_names)
@@ -257,6 +269,18 @@ def _check_file(
                     file_type=str(actual.field(name).type),
                     contract_type=str(expected.field(name).type),
                     fix=_REPACK_FIX,
+                )
+            )
+    if current_host and not faults:
+        try:
+            load_stored([path], model=HostFingerprintRow)
+        except ValueError:
+            faults.append(
+                _Fault(
+                    kind="F1", ledger=ledger, path=path, file_stamp=file_stamp,
+                    contract_stamp=contract_stamp, column="<host row layout>",
+                    file_type="<invalid>", contract_type="verified host rows",
+                    fix="restore the original file or repack verified source rows",
                 )
             )
     return envelope, actual, faults
@@ -389,7 +413,16 @@ def check(site_tree: Path, published: Sequence[LedgerName]) -> int:
             faults.extend(file_faults)
             missing = sorted(set(expected.names) - set(actual.names))
             extra = sorted(set(actual.names) - set(expected.names))
-            if envelope.row_schema_version == contract_stamp and not missing and not extra:
+            if ledger is LedgerName.HOST_FINGERPRINT and not file_faults and (
+                envelope.row_schema_version == HOST_HARDWARE_VERSION
+                or (
+                    envelope.row_schema_version == contract_stamp
+                    and envelope.tier is Tier.COMPACT
+                    and host_storage.layout_for_footer(envelope, actual.names).legacy_cpu
+                )
+            ):
+                current += 1
+            elif envelope.row_schema_version == contract_stamp and not missing and not extra:
                 current += 1
             elif envelope.row_schema_version < contract_stamp or (
                 envelope.version < FileEnvelope.schema_version() and (missing or extra)

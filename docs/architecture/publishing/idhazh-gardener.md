@@ -36,14 +36,14 @@ cannot change which tasks a wake plans.
 
 | Step | Job | Who | What it does |
 | --- | --- | --- | --- |
-| 1 | `plan` | `backend/utilities/gardener_shards.py` | Splits the active tasks into shards and prints the plan. Standard library only, reads `config/` alone |
+| 1 | `plan` | `backend/utilities/gardener_shards.py` | Splits the admitted active tasks into shards and prints the plan. Standard library only, reads `config/` and the manual dispatch event, if any |
 | 2 | `run-tasks`, one job a shard | `backend/utilities/gardener_publish.py --shard N` | Loads the named declarations and selects fixed UTC periods and compact indexes. Planner paths are listed locally; other families are listed from the commit. It then finds the modules and runs the pre-flight |
 | 3 | `run-tasks` | the runner | Runs every task of the shard, one after another, timing each. Planner input is already local; other families fetch the named periods they read |
 | 4 | `run-tasks` | the runner | Holds every path each task touched to what that task owns |
 | 5 | `run-tasks` | the runner | Writes the shard's one record through `ledger.persist`, and hands back what to land |
 | 6 | `run-tasks` | `gardener_publish.publish` | Builds one commit of exactly what the shard wrote and deleted, pushes it, and tries again on a newer tip if the push failed. Lands nothing when `main` changed one of those paths after the commit the shard ran on |
-| 7 | `history` | `backend/utilities/corpus_squash_due.py`, then `backend/utilities/corpus_history.py` | Once every shard has ended, unless the run was cancelled: reads whether the corpus squash is due and, on a due day, squashes the old history and force-pushes `main` with a lease on the tip it read, squashing again on a new tip when the push is refused |
-| 8 | `publish-fingerprints` | `backend/utilities/gardener_fingerprint_publish.py` | After `history` ends, verifies and appends the control-runner openings and closed operations, even when no task shard ran and no squash was due |
+| 7 | `history` | `backend/utilities/corpus_squash_due.py`, then `backend/utilities/corpus_history.py` | Once every shard has ended, unless cancelled or dispatched for telemetry proof: checks whether the corpus squash is due and, on a due day, squashes the old history and force-pushes `main` with a lease on the tip it read, squashing again on a new tip when the push is refused |
+| 8 | `publish-fingerprints` | `backend/utilities/gardener_fingerprint_publish.py` | After `history` ends or is skipped, verifies and appends the control-runner openings and closed operations, even when no task shard ran and no squash was due |
 
 **The split is round-robin over sorted names.** Every task the matrix runs - an
 active one whose kind is not `history`, which has a job of its own - is sorted by
@@ -113,17 +113,18 @@ and `backend/tests/contracts/test_gardener_plan.py` holds them to it and to the
 shape, on one line:
 `{"any_active_task":false,"matrix":{"include":[]},"shard_count":0,"shards":[]}`.
 The workflow reads three of those keys - `any_active_task`, `shard_count` and
-`matrix`. Each leg of `matrix` carries its
+`matrix` - plus a separate `history_allowed` step output for dispatch policy.
+Each leg of `matrix` carries its
 shard's number and task names, and the `run-tasks` job's name lists them, for
 example `shard 0: compact-feed-health, traces`, so a run's page shows what every
 shard ran without opening a job; the workflow holds that format and never a
 list of tasks.
 
 **The job graph.** `plan` prints the shards, one
-`run-tasks` job runs each shard - all of them at once - and `history` runs the
-corpus squash after them. The squash is not in the matrix: it rewrites `main`,
-so it runs alone, once every shard has ended. `publish-fingerprints` runs after
-history, and only appends evidence.
+`run-tasks` job runs each shard - all of them at once - and `history` checks
+whether it can squash after them. The squash is not in the matrix: it rewrites
+`main`, so it runs alone, once every shard has ended. `publish-fingerprints`
+waits for the history job, and only appends evidence.
 
 ```mermaid
 %%{init: {"theme": "base", "htmlLabels": false, "themeVariables": {"background": "#ffffff", "primaryColor": "#f8fafc", "primaryTextColor": "#1f2937", "primaryBorderColor": "#64748b", "lineColor": "#64748b", "textColor": "#1f2937", "clusterBkg": "#f1f5f9", "clusterBorder": "#64748b", "titleColor": "#1f2937", "edgeLabelBackground": "#f8fafc", "fontSize": "14px"}}}%%
@@ -131,7 +132,7 @@ flowchart TB
   WAKE["a wake: 00:40 UTC every day,<br/>or a person's dispatch"]
 
   subgraph OPS["Idhazh Gardener - idhazh-gardener.yml"]
-    PLAN["plan job: gardener_shards.py<br/>standard library only;<br/>reads the config alone"]
+    PLAN["plan job: gardener_shards.py<br/>standard library only;<br/>reads config and manual dispatch"]
     ANY{"any active task<br/>for the matrix?"}
     IDLE["no shard runs"]
     TEND["run-tasks job, one a shard:<br/>gardener_publish.py --shard N<br/>reads named planner paths locally;<br/>other families from the commit"]
@@ -149,7 +150,7 @@ flowchart TB
     OK["exit 0"]
     ALARM["exit 1<br/>naming the failed task<br/>or what it downloaded"]
     REFUSED["exit 3<br/>refused: main did not<br/>move, nothing landed"]
-    HIST["history job, once every shard<br/>has ended, unless the run was cancelled:<br/>corpus_squash_due.py, then,<br/>on a due day, corpus_history.py<br/>squashes and force-pushes main<br/>with a lease on the tip it read"]
+    HIST["history job, once every shard<br/>has ended, unless cancelled or a telemetry proof:<br/>corpus_squash_due.py, then,<br/>on a due day, corpus_history.py<br/>squashes and force-pushes main<br/>with a lease on the tip it read"]
     OPENINGS["publish-fingerprints job:<br/>append the exact native control evidence"]
   end
 
@@ -210,12 +211,13 @@ flowchart TB
   class TREE sysPublish;
 ```
 
-**The squash runs unless the run was cancelled.** The history job waits for
-every `run-tasks` shard to end, so no shard push races the rewrite, and then runs
-on `if: ${{ !cancelled() }}`. A red shard does not hold it off: that shard's push
-has already ended, and its work is tried again at the next wake either way. A
-failed `plan` job, which skips every shard, does not hold it off either, and a
-person's cancel still stops it. The person's ruling, 2026-09-29. It replaced
+**Ordinary wakes check history unless the run was cancelled.** The history job
+waits for every `run-tasks` shard to end, so no shard push races the rewrite,
+and then runs even if a dependency failed. A red shard does not hold it off:
+that shard's push has already ended, and its work is tried again at the next
+wake either way. A failed `plan` job, which skips every shard, does not hold it
+off either, and a person's cancel still stops it. The person's ruling,
+2026-09-29. It replaced
 `always() && (needs.run-tasks.result == 'success' || needs.run-tasks.result == 'skipped')`,
 under which a task that failed at every wake - a compaction that meets a hole, a
 shard over its ceiling - held off every squash until a person acted.
@@ -255,6 +257,27 @@ today's rows, and every day the gardener acts on ended at least a whole day
 before, so a digest run and a gardener wake never want one file. A re-run is the
 one writer into an older day, and a compaction takes its file at the next wake
 ([A day](ledger-compaction.md#a-day)).
+
+### Telemetry proof dispatch
+
+After the writer run lands, dispatch **Idhazh Gardener** with
+`telemetry_proof=true` and `force=false`. For TypeScript capture, set
+`host_telemetry=typescript` and `memory_profiling=inherit`. The selector
+defaults off and admits only the active `compact-host-fingerprint` and
+`compact-task-performance` declarations. The standard-library planner and
+numbered shard runner read the same GitHub dispatch event, so the displayed
+matrix matches the tasks that run. Combining the selector with `force` is
+refused before planning. History is skipped even if its cadence is due or the
+plan fails: leaving `force` off alone would still allow a due rewrite.
+
+This selects tasks, not dates. Compaction uses the existing age, retention
+and per-run limits. For packed proof, pick an accounting day that is already
+eligible under [the compaction rules](ledger-compaction.md#a-day). For each
+ledger, check `state/compact/<ledger>/daily/YYYY/MM/DD.parquet` and its
+`index/daily.json` entry on `main`. Verify the current UTC day's new receipts
+at their named raw paths instead. A green shard can leave a day pending and
+does not prove the rows landed. Once the committed files match, dispatch
+**Pages publication** if it has not run, then check the deployed reader.
 
 ## What stops a shard
 

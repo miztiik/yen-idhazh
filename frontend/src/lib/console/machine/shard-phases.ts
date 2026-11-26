@@ -15,7 +15,8 @@ function identity(row: Row, item: boolean): string | null {
 	const task = item ? row.machine_task_name : row.task_name;
 	return shardKey(row.date, row.run_id, typeof job === 'string' ? job : null,
 		finiteCell(item ? row.machine_shard : row.shard),
-		typeof pipeline === 'string' ? pipeline : null, typeof task === 'string' ? task : null);
+		typeof pipeline === 'string' ? pipeline : null, typeof task === 'string' ? task : null,
+		finiteCell(row.attempt));
 }
 
 export function shardPhases(rows: readonly Row[], hosts: readonly Row[]) {

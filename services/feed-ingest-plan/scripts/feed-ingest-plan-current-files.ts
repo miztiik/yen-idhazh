@@ -18,10 +18,11 @@ export async function readWorkflowDeliveryContext(input: {
     .parse(await Bun.file(join(input.directory, "host-fingerprint.json")).json());
   const { run_id, attempt, git_sha } = host.host_request.writer;
   const identity = ExecutionIdentitySchema.parse({ run_id, attempt, git_sha });
+  const writer = JSON.stringify(host.host_request.writer);
   z.string().regex(/^\d+$/).parse(input.runNumber);
   if (expectedSha !== identity.git_sha || input.attempt !== identity.attempt
     || identity.run_id !== `${host.host_request.date}-${input.runNumber}`
-    || JSON.stringify(host.host_request.writer) !== JSON.stringify(hostWriter(identity))) {
+    || ![hostWriter(identity), hostWriter(identity, true)].some(value => writer === JSON.stringify(value))) {
     throw new Error("Workflow metadata differs from the executed revision, run or attempt");
   }
   const settings = ServiceSettingsSchema.parse(await Bun.file(join(input.root, "config", "feed-ingest-plan-service.json")).json());

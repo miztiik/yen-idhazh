@@ -52,9 +52,11 @@ export function processors(rows: readonly Row[]): MachineProcessors[] {
 			shard === null || !Number.isSafeInteger(shard) || shard < 0) return [];
 		const normalized = normalizeHostRow(row);
 		if (normalized === null) return [];
+		const attempt = finiteCell(row.attempt);
 		return [{ date: row.date, run_id: row.run_id, job: typeof row.job === 'string' ? row.job : undefined,
 			pipeline_name: typeof row.pipeline_name === 'string' ? row.pipeline_name : undefined,
 			task_name: typeof row.task_name === 'string' ? row.task_name : undefined, shard,
+			...(attempt === null ? {} : { attempt }),
 			cpu_logical_processors: finiteCell(normalized.cpu_logical_processors) }];
 	});
 }

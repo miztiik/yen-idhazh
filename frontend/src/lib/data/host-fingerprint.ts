@@ -1,11 +1,12 @@
 /** Finite host-row read migration shared by disk and direct slice consumers. */
 
-export const HOST_SCHEMA_VERSION = '2026-10-26';
+export const HOST_SCHEMA_VERSION = '2026-11-26';
 
 const CORRECTED_VERSIONS = new Set([
 	'2026-10-10',
 	'2026-10-12',
 	'2026-10-14',
+	'2026-10-26',
 	HOST_SCHEMA_VERSION
 ]);
 
@@ -52,9 +53,7 @@ export const CORRECTED_HOST_COLUMNS = [
 	'vm_zone',
 	'vm_fault_domain',
 	'runner_name',
-	'measured_at',
-	'server_prompt_tokens',
-	'server_prompt_seconds'
+	'measured_at'
 ] as const;
 
 export const LEGACY_HOST_COLUMNS = ['cores', 'threads', 'mhz_max', 'mhz_at_probe'] as const;
@@ -80,6 +79,8 @@ export function normalizeHostRow(row: InputRow): Record<string, string> | null {
 	const sourceVersion = text(row.version);
 	if (!CORRECTED_VERSIONS.has(sourceVersion) && !LEGACY_VERSIONS.has(sourceVersion)) return null;
 	const corrected = CORRECTED_VERSIONS.has(sourceVersion);
+	if (sourceVersion === HOST_SCHEMA_VERSION &&
+		(text(row.pipeline_name) === '' || text(row.task_name) === '')) return null;
 	const fingerprint = text(row.fingerprint);
 	const fingerprintVersion = corrected
 		? text(row.fingerprint_version)

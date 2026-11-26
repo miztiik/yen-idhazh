@@ -49,10 +49,11 @@ on:
         required: true
         type: string
       host_telemetry:
-        description: 'Python host collector, or off for all host telemetry'
+        description: 'TypeScript host telemetry, Python rollback, or off'
         type: choice
-        default: python
+        default: typescript
         options:
+          - typescript
           - python
           - 'off'
       memory_profiling:
@@ -72,7 +73,7 @@ env:
   # Where this job's own probes ask, for the reason `digest.yml` gives: the
   # server is on this runner, and where a unit posts is `model_server.base_url`.
   MODEL_SERVER_PROBE: 'http://127.0.0.1:8080'
-  IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry || 'python' }}
+  IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry || 'typescript' }}
   MEMORY_PROFILING: ${{ inputs.memory_profiling || 'inherit' }}
 
 jobs:
@@ -109,18 +110,21 @@ jobs:
           echo "IDHAZH_HOST_TELEMETRY_MODE=$MODE" >> "$GITHUB_ENV"
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
 
-      - name: Capture the bounds runner
-        continue-on-error: true
-        env:
-          COUNCIL_RUN_ID: ${{ steps.identity.outputs.run_id }}
-        run: python backend/utilities/council_machine.py open --phase job_bounds --run-id "$COUNCIL_RUN_ID"
-
       - name: Prepare machine APIs
         continue-on-error: true
         uses: ./.github/actions/machine-apis
         with:
           mode: ${{ steps.host_telemetry.outputs.mode }}
           pipeline: council
+
+      - name: Capture the bounds runner
+        if: env.IDHAZH_HOST_TELEMETRY_MODE != 'off'
+        continue-on-error: true
+        env:
+          COUNCIL_RUN_ID: ${{ steps.identity.outputs.run_id }}
+        run: |
+          python backend/utilities/machine_task.py --run-id "$COUNCIL_RUN_ID" -- \
+            python backend/utilities/council_machine.py open --phase job_bounds --run-id "$COUNCIL_RUN_ID"
 
       - id: bounds
         name: Read the planning and collection bounds
@@ -132,7 +136,7 @@ jobs:
             python backend/utilities/council_machine.py bounds --phase job_bounds --run-id "$COUNCIL_RUN_ID" \
             >> "$GITHUB_OUTPUT"
 
-      - if: always() && steps.host_telemetry.outputs.mode == 'python'
+      - if: always() && steps.host_telemetry.outputs.mode != '' && steps.host_telemetry.outputs.mode != 'off'
         uses: actions/upload-artifact@v7
         with:
           name: council-bounds-${{ steps.identity.outputs.run_id }}-${{ github.run_attempt }}
@@ -173,9 +177,19 @@ jobs:
       - name: Install
         run: pip install -e .
 
-      - name: Capture the draw runner
+      - name: Prepare machine APIs
         continue-on-error: true
-        run: python backend/utilities/council_machine.py open --phase draw --run-id "$COUNCIL_RUN_ID"
+        uses: ./.github/actions/machine-apis
+        with:
+          mode: ${{ env.IDHAZH_HOST_TELEMETRY_MODE }}
+          pipeline: council
+
+      - name: Capture the draw runner
+        if: env.IDHAZH_HOST_TELEMETRY_MODE != 'off'
+        continue-on-error: true
+        run: |
+          python backend/utilities/machine_task.py --run-id "$COUNCIL_RUN_ID" -- \
+            python backend/utilities/council_machine.py open --phase draw --run-id "$COUNCIL_RUN_ID"
 
       # The identity binds the selection before any preparation is authorized.
       # Scheduled judges choose dates inside the offered window and budgets.
@@ -229,13 +243,6 @@ jobs:
           set -euo pipefail
           python3 backend/utilities/shard_bound.py --key shard_timeout_minutes --config-file llm_council.json \
             >> "$GITHUB_OUTPUT"
-
-      - name: Prepare machine APIs
-        continue-on-error: true
-        uses: ./.github/actions/machine-apis
-        with:
-          mode: ${{ env.IDHAZH_HOST_TELEMETRY_MODE }}
-          pipeline: council
 
       # Python visits the entire selection, retaining independent preparations
       # after ordinary failures. Only a fully visited batch emits the marker.
@@ -326,9 +333,21 @@ jobs:
       - name: Install
         run: pip install -e .
 
-      - name: Capture this judging runner
+      - name: Prepare machine APIs
         continue-on-error: true
-        run: python backend/utilities/council_machine.py open --phase judge --run-id "$COUNCIL_RUN_ID"
+        uses: ./.github/actions/machine-apis
+        with:
+          mode: ${{ env.IDHAZH_HOST_TELEMETRY_MODE }}
+          date: ${{ matrix.date }}
+          pipeline: council
+          shard: ${{ matrix.shard }}
+
+      - name: Capture this judging runner
+        if: env.IDHAZH_HOST_TELEMETRY_MODE != 'off'
+        continue-on-error: true
+        run: |
+          python backend/utilities/machine_task.py --run-id "$COUNCIL_RUN_ID" -- \
+            python backend/utilities/council_machine.py open --phase judge --run-id "$COUNCIL_RUN_ID"
 
       # Preserve each artifact directory until its identity, ownership and
       # declared bytes have been checked, before paying for model setup.
@@ -365,14 +384,6 @@ jobs:
       #
       # The probe address is handed over rather than inherited: it has one home,
       # the workflow `env` above, and this is the line that carries it in.
-      - name: Prepare machine APIs
-        continue-on-error: true
-        uses: ./.github/actions/machine-apis
-        with:
-          mode: ${{ env.IDHAZH_HOST_TELEMETRY_MODE }}
-          pipeline: council
-          shard: ${{ matrix.shard }}
-
       - id: model
         uses: ./.github/actions/model-server
         if: matrix.runs_model
@@ -478,16 +489,19 @@ jobs:
       - name: Install
         run: pip install -e .
 
-      - name: Capture the settlement runner
-        continue-on-error: true
-        run: python backend/utilities/council_machine.py open --phase save_council_results --run-id "$COUNCIL_RUN_ID"
-
       - name: Prepare machine APIs
         continue-on-error: true
         uses: ./.github/actions/machine-apis
         with:
           mode: ${{ env.IDHAZH_HOST_TELEMETRY_MODE }}
           pipeline: council
+
+      - name: Capture the settlement runner
+        if: env.IDHAZH_HOST_TELEMETRY_MODE != 'off'
+        continue-on-error: true
+        run: |
+          python backend/utilities/machine_task.py --run-id "$COUNCIL_RUN_ID" -- \
+            python backend/utilities/council_machine.py open --phase save_council_results --run-id "$COUNCIL_RUN_ID"
 
       # Keep unvalidated artifacts separate. The collector imports only named
       # expected bundles, including planner records and no-work bookkeeping.

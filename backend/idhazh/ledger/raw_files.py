@@ -47,10 +47,18 @@ from typing import NamedTuple, cast
 from idhazh import day_partition
 from idhazh.contracts.base import Contract
 from idhazh.contracts.file_envelope import FileEnvelope, Tier
+from idhazh.contracts.host_fingerprint import (
+    HOST_CLOCK_FIELDS,
+    HOST_HARDWARE_VERSION,
+    LEGACY_CPU_FIELDS,
+    HostFingerprintRow,
+    HostHardwareRow,
+)
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_shards import RunShards
 from idhazh.ledger import paths
-from idhazh.ledger.keys import preference_for
+from idhazh.ledger.host_storage import HostStorageError
+from idhazh.ledger.keys import host_record_key, preference_for
 from idhazh.ledger.persist import (
     LedgerStoredRow,
     StoredRow,
@@ -288,7 +296,8 @@ def _say_what_was_dropped(
 
 
 def settle_rows[C: Contract](
-    files: Sequence[Sequence[StoredRow[C]]], key: tuple[str, ...]
+    files: Sequence[Sequence[StoredRow[C]]], key: tuple[str, ...], *,
+    preserve_host_history: bool = False,
 ) -> list[StoredRow[C]]:
     """The current rows of a union of files, in the order given: one file per unit, then key.
 
@@ -317,6 +326,10 @@ def settle_rows[C: Contract](
         if ledgers != {LedgerName.RUN_SHARDS}:
             raise ValueError("count settlement requires only run-shards rows")
         return list(_settle_run_shards(files, key))
+    if LedgerName.HOST_FINGERPRINT in ledgers:
+        if ledgers != {LedgerName.HOST_FINGERPRINT}:
+            raise ValueError("host settlement requires only host-fingerprint rows")
+        return _settle_host_rows(files, preserve_history=preserve_host_history)
     prefers = preference_for(key)
     current: dict[str, tuple[int, int]] = {}
     for position, rows in enumerate(files):
@@ -337,6 +350,48 @@ def settle_rows[C: Contract](
             winner, loser = (held, incumbent) if later_wins else (incumbent, held)
             kept[record] = winner
             _say_what_was_dropped(record, winner.row, loser.row)
+    return list(kept.values())
+
+
+def _settle_host_rows[C: Contract](
+    files: Sequence[Sequence[StoredRow[C]]], *, preserve_history: bool
+) -> list[StoredRow[C]]:
+    # A keyed row from another task cannot supersede this one, even if an old
+    # file used a writer label that no longer suffices as a task key.
+    ranked: list[tuple[tuple[str, ...], tuple[int, int], StoredRow[C]]] = []
+    current: dict[tuple[str, ...], tuple[int, int]] = {}
+    for position, rows in enumerate(files):
+        for held in rows:
+            if not isinstance(held.row, (HostFingerprintRow, HostHardwareRow)):
+                raise ValueError("host settlement requires a declared host row")
+            record = host_record_key(held.row)
+            unit = (*record, held.identity.unit_id)
+            rank = (held.identity.attempt, position)
+            current[unit] = max(current.get(unit, rank), rank)
+            ranked.append((record, rank, held))
+    kept: dict[tuple[str, ...], StoredRow[C]] = {}
+    for record, rank, held in ranked:
+        if current[(*record, held.identity.unit_id)] == rank:
+            kept.setdefault(record, held)
+    for record, _rank, dropped in ranked:
+        winner = kept[record]
+        if winner is dropped:
+            continue
+        if preserve_history:
+            old = dropped.original_host_cells or dropped.row.model_dump(mode="json")
+            new = winner.original_host_cells or winner.row.model_dump(mode="json")
+            if old["version"] != HOST_HARDWARE_VERSION and any(
+                value is not None and (
+                    new.get(name) is None
+                    or (
+                        name in HOST_CLOCK_FIELDS | LEGACY_CPU_FIELDS
+                        and old["version"] != new["version"] and new[name] != value
+                    )
+                )
+                for name, value in old.items()
+            ):
+                raise HostStorageError("host settlement would discard a historical reading")
+        _say_what_was_dropped(record, winner.row, dropped.row)
     return list(kept.values())
 
 
@@ -370,7 +425,8 @@ def _settle_run_shards[C: Contract](
 
 
 def settle_registered_rows(
-    files: Sequence[Sequence[LedgerStoredRow]], key: tuple[str, ...], *, ledger: LedgerName
+    files: Sequence[Sequence[LedgerStoredRow]], key: tuple[str, ...], *, ledger: LedgerName,
+    preserve_host_history: bool = False,
 ) -> list[LedgerStoredRow]:
     """Settle a Python-owned ledger; planner rows are owned by TypeScript."""
     if paths.is_planner_ledger(ledger):
@@ -383,7 +439,7 @@ def settle_registered_rows(
                 raise ValueError("original settlement requires its original stored identities")
             original.append(held)
         legacy_files.append(original)
-    return list(settle_rows(legacy_files, key))
+    return list(settle_rows(legacy_files, key, preserve_host_history=preserve_host_history))
 
 
 def load_current_rows[C: Contract](

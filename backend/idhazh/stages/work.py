@@ -30,6 +30,7 @@ from idhazh.contracts.base import ServerJob, canonical_json
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.fingerprint import PipelineInputs
+from idhazh.contracts.host_fingerprint import HostHardwareRow
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
@@ -325,6 +326,7 @@ def stage_work(
     model_endpoint: str | None = None,
     server_pid: int | None = None,
     commit_sha: str = "0" * 40,
+    native_host: HostHardwareRow | None = None,
 ) -> None:
     """Fetch, extract, summarize and score one item at a time, writing as it goes."""
     if shards < 1 or not 0 <= shard < shards:
@@ -422,10 +424,16 @@ def stage_work(
     flags = Flags.of(settings.app.logging)
     # The workflow passes the PID written by the model-server maintainer. Looking
     # through the process table could select an unrelated server.
-    shard_facts = (
-        host.host_facts(job=ServerJob.WORK) if collect_host
-        else host.HostFacts(cpu_model=None, runner_name=None, job=ServerJob.WORK)
-    )
+    if host_mode == "python":
+        shard_facts = host.host_facts(job=ServerJob.WORK)
+    elif host_mode == "typescript":
+        shard_facts = host.HostFacts(
+            cpu_model=None if native_host is None else native_host.cpu_model,
+            runner_name=None if native_host is None else native_host.runner_name,
+            job=ServerJob.WORK, pipeline_name="digest", task_name=ServerJob.WORK,
+        )
+    else:
+        shard_facts = host.HostFacts(cpu_model=None, runner_name=None, job=ServerJob.WORK)
     shard_cells = _shard_cells(settings, shard=shard, shard_item_count=len(mine), facts=shard_facts)
     failures: dict[str, int] = {}
     finished: list[ItemHealthRow] = []

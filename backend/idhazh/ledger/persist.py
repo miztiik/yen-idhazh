@@ -39,11 +39,11 @@ from __future__ import annotations
 import hashlib
 import uuid
 from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from functools import cache
 from pathlib import Path
-from typing import Any, Final, Literal
+from typing import Any, Final, Literal, cast
 
 from pydantic import ValidationError
 
@@ -61,10 +61,15 @@ from idhazh.contracts.file_envelope import (
     covers_fits,
     envelope_from_metadata,
 )
+from idhazh.contracts.host_fingerprint import (
+    HOST_FINGERPRINT_READ_VERSIONS,
+    HostFingerprintRow,
+    HostHardwareRow,
+)
 from idhazh.contracts.knobs.ledger import LedgerConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_shards import RunShards, RunShardsProvenance
-from idhazh.ledger import arrow_schema, filenames, json_lines, lifecycle, paths
+from idhazh.ledger import arrow_schema, filenames, host_storage, json_lines, lifecycle, paths
 from idhazh.ledger.arrow_schema import Column
 from idhazh.ledger.keys import DATE_CELL
 from idhazh.ledger.paths import compact_path, raw_path
@@ -97,6 +102,7 @@ class StoredRow[C: Contract]:
     identity: RowIdentity
     row: C
     provenance: RunShardsProvenance | None = None
+    original_host_cells: Mapping[str, Any] | None = field(default=None, compare=False, repr=False)
 
     @property
     def day(self) -> str:
@@ -201,15 +207,15 @@ def _unit(ledger: LedgerName, covers: str, identity: WriterIdentity) -> uuid.UUI
         run_id=identity.run_id,
         shard=identity.shard,
         producer=identity.producer,
-        job=str(identity.job) if identity.pipeline_name is None else None,
+        job=str(identity.job) if identity.job is not None else None,
         pipeline_name=identity.pipeline_name,
         task_name=identity.task_name,
     )
 
 
-def _envelope[C: LedgerContract](
+def _envelope(
     *,
-    model: type[C],
+    row_schema_version: str,
     ledger: LedgerName,
     covers: str,
     identity: WriterIdentity,
@@ -237,7 +243,7 @@ def _envelope[C: LedgerContract](
         writer, engine = "idhazh.ledger.json_lines", json_lines.engine_version()
     envelope = FileEnvelope(
         version=FileEnvelope.schema_version(),
-        row_schema_version=model.schema_version(),
+        row_schema_version=row_schema_version,
         tier=tier,
         ledger=ledger,
         covers=covers,
@@ -268,14 +274,16 @@ def _rendered[C: LedgerContract](
     fmt: Format,
     compression: Compression,
     written_at_ms: int,
+    host_layout: host_storage.HostLayout | None = None,
 ) -> tuple[uuid.UUID, bytes]:
     """One file's bytes: identifiers minted, envelope assembled, rows rendered.
 
     Returns the minted `file_id` beside the bytes, because a raw file is named
     by it and a compact one is named by its period.
     """
+    digest = hashlib.sha256(json_lines.rows_bytes(stored)).hexdigest()
     name, envelope = _envelope(
-        model=model,
+        row_schema_version=model.schema_version() if host_layout is None else host_layout.stamp,
         ledger=ledger,
         covers=covers,
         identity=identity,
@@ -285,15 +293,22 @@ def _rendered[C: LedgerContract](
         fmt=fmt,
         compression=compression,
         written_at_ms=written_at_ms,
-        content_sha256=hashlib.sha256(json_lines.rows_bytes(stored)).hexdigest(),
+        content_sha256=digest,
     )
     if fmt is Format.PARQUET:
         from idhazh.ledger import parquet
 
-        return name, parquet.render(
-            file_columns(model), stored, envelope=envelope, compression=compression
+        columns = (
+            file_columns(model) if host_layout is None else host_storage.columns_for(host_layout)
         )
-    return name, json_lines.render(stored, envelope=envelope)
+        data = parquet.render(
+            columns, stored, envelope=envelope, compression=compression
+        )
+    else:
+        data = json_lines.render(stored, envelope=envelope)
+    if host_layout is not None:
+        host_storage.verify_packed(data, fmt, host_layout, count=len(stored), content_sha256=digest)
+    return name, data
 
 
 def _refuse_a_row_that_names_another_try(
@@ -373,6 +388,13 @@ def persist(
     if paths.is_planner_ledger(ledger):
         raise ValueError("planner rows are written by the TypeScript ledger owner")
     model = _one_contract(rows)
+    if ledger is LedgerName.HOST_FINGERPRINT and not (
+        model is HostHardwareRow or (
+            model is HostFingerprintRow
+            and all(row.version in HOST_FINGERPRINT_READ_VERSIONS for row in rows)
+        )
+    ):
+        raise ValueError("raw host writes require the current hardware or explicit rollback row")
     if not lifecycle.accepts_new_rows(ledger, len(rows), state_dir=state_dir, identity=identity):
         return []
     knobs = _knobs()
@@ -395,6 +417,11 @@ def persist(
             "unit_id": str(_unit(ledger, day, identity)),
         }
         own = [row.model_dump(mode="json") for row in batch]
+        if model is HostHardwareRow:
+            for cells in own:
+                HostHardwareRow.model_validate(cells)
+                if any(cells[name] != stamped[name] for name in ("run_id", "job", "shard")):
+                    raise ValueError("hardware capture must match its original writer identity")
         _refuse_a_row_that_names_another_try(stamped, own, where=f"{ledger.value} {day}")
         if model is RunShards:
             stamped |= RunShardsProvenance(
@@ -466,11 +493,25 @@ def _refuse_rows_outside_the_period[C: LedgerContract](
 def _stored(rows: Sequence[LedgerStoredRow]) -> list[dict[str, Any]]:
     """Each row as the cells a file holds: its identity cells, then its contract's own."""
     return [
+        dict(held.original_host_cells) if held.original_host_cells is not None else
         held.identity.model_dump(mode="json")
         | (held.provenance.model_dump(mode="json") if held.provenance is not None else {})
         | held.row.model_dump(mode="json")
         for held in rows
     ]
+
+
+def preserves_host_cells(
+    source: Sequence[LedgerStoredRow], packed: Sequence[LedgerStoredRow]
+) -> bool:
+    """Compare originals, allowing only absent cells padded with declared nulls."""
+    def facts(rows: Sequence[LedgerStoredRow]) -> bytes:
+        return json_lines.rows_bytes(
+            {key: value for key, value in cells.items() if value is not None}
+            for cells in _stored(rows)
+        )
+
+    return facts(source) == facts(packed)
 
 
 def render_period[C: LedgerContract](
@@ -505,8 +546,13 @@ def render_period[C: LedgerContract](
     knobs = _knobs()
     chosen = knobs.format if fmt is None else fmt
     compression = _compression(chosen, Tier.COMPACT, knobs)
+    stored = _stored(rows)
+    host_layout = None
+    if ledger is LedgerName.HOST_FINGERPRINT:
+        host_layout = host_storage.layout_for_rows(stored)
+        stored = [host_layout.project(cells) for cells in stored]
     _, data = _rendered(
-        _stored(rows),
+        stored,
         model=model,
         ledger=ledger,
         covers=covers,
@@ -517,6 +563,7 @@ def render_period[C: LedgerContract](
         fmt=chosen,
         compression=compression,
         written_at_ms=int(datetime.now(UTC).timestamp() * 1000),
+        host_layout=host_layout,
     )
     path = compact_path(state_dir, ledger, period, covers, fmt=chosen, registry=registry)
     return PeriodFile(path, data, len(rows))
@@ -534,6 +581,7 @@ def render_grouped_period[C: LedgerContract](
     built_from: int,
     fmt: Format | None = None,
     registry: paths.DoorRegistry | None = None,
+    host_sources: Sequence[Path] | None = None,
 ) -> PeriodFile:
     """One compact period's file built one group of rows at a time, and written nowhere.
 
@@ -542,7 +590,8 @@ def render_grouped_period[C: LedgerContract](
     is one row group, so its statistics bound that group alone and a reader
     filtering on a date can skip the rest; and only one group is held at a time,
     so a year is built one month at a time. JSON lines has no row groups and is
-    built whole.
+    built whole. The host gardener supplies its named month files to choose a
+    physical layout from their footers before it streams any of their rows.
     """
     _refuse_a_period_the_tier_cannot_take(covers, tier=Tier.COMPACT, period=period)
     if paths.is_planner_ledger(ledger):
@@ -553,20 +602,34 @@ def render_grouped_period[C: LedgerContract](
     chosen = knobs.format if fmt is None else fmt
     compression = _compression(chosen, Tier.COMPACT, knobs)
     written_at_ms = int(datetime.now(UTC).timestamp() * 1000)
+    host_layout = None
+    if ledger is LedgerName.HOST_FINGERPRINT:
+        if host_sources is None:
+            groups = tuple(groups)
+            host_layout = host_storage.layout_for_rows(
+                cells for group in groups for cells in _stored(group)
+            )
+        else:
+            host_layout = host_storage.HostLayout()
+            for path in host_sources:
+                host_layout |= host_storage.packed_source_layout(path)
     digest = hashlib.sha256()
     counted = 0
+
     def checked() -> Iterator[list[dict[str, Any]]]:
         nonlocal counted
         for group in groups:
             _refuse_rows_outside_the_period(group, model=model, ledger=ledger, covers=covers)
             stored = _stored(group)
+            if host_layout is not None:
+                stored = [host_layout.project(cells) for cells in stored]
             digest.update(json_lines.rows_bytes(stored))
             counted += len(stored)
             yield stored
 
     def envelope() -> dict[bytes, bytes]:
         return _envelope(
-            model=model,
+            row_schema_version=model.schema_version() if host_layout is None else host_layout.stamp,
             ledger=ledger,
             covers=covers,
             identity=identity,
@@ -582,12 +645,16 @@ def render_grouped_period[C: LedgerContract](
     if chosen is Format.PARQUET:
         from idhazh.ledger import parquet
 
-        data = parquet.render_groups(
-            file_columns(model), checked(), envelope=envelope, compression=compression
+        columns = (
+            file_columns(model) if host_layout is None else host_storage.columns_for(host_layout)
         )
+        data = parquet.render_groups(columns, checked(), envelope=envelope, compression=compression)
     else:
         whole = [cells for stored in checked() for cells in stored]
         data = json_lines.render(whole, envelope=envelope())
+    if host_layout is not None:
+        host_storage.verify_packed(data, chosen, host_layout, count=counted,
+                                   content_sha256=digest.hexdigest())
     path = compact_path(state_dir, ledger, period, covers, fmt=chosen, registry=registry)
     return PeriodFile(path, data, counted)
 
@@ -728,7 +795,7 @@ def _refuse_planner_file(metadata: Mapping[bytes, bytes], path: Path) -> None:
         raise ValueError(f"{path.name}: planner file requires its TypeScript reader")
 
 
-def _opened(path: Path) -> tuple[FileEnvelope, list[dict[str, Any]]]:
+def _opened(path: Path) -> tuple[FileEnvelope, list[dict[str, Any]], Any | None]:
     """One file's envelope and its stored rows, read by the container its own bytes name.
 
     The container is told from the file's first bytes and never from its suffix,
@@ -737,10 +804,11 @@ def _opened(path: Path) -> tuple[FileEnvelope, list[dict[str, Any]]]:
     """
     data = path.read_bytes()
     metadata: Mapping[bytes, bytes]
+    schema = None
     if data.startswith(_PARQUET_MAGIC):
         from idhazh.ledger import parquet
 
-        metadata, stored = parquet.read(data)
+        metadata, stored, schema = parquet.read_with_schema(data)
         container = Format.PARQUET
     elif data.startswith(json_lines.MAGIC):
         metadata, stored = json_lines.read(data)
@@ -749,7 +817,7 @@ def _opened(path: Path) -> tuple[FileEnvelope, list[dict[str, Any]]]:
         raise ValueError(f"{path.name} is neither a parquet nor a JSON-lines ledger file")
     _refuse_planner_file(metadata, path)
     envelope = envelope_from_metadata(metadata).validate_container(container)
-    return envelope, stored
+    return envelope, stored, schema
 
 
 def read_envelope(path: Path) -> FileEnvelope:
@@ -790,7 +858,7 @@ def _read_footer(path: Path) -> tuple[FileEnvelope, int]:
         metadata, rows = parquet.read_footer(path)
         _refuse_planner_file(metadata, path)
         return envelope_from_metadata(metadata).validate_container(Format.PARQUET), rows
-    envelope, stored = _opened(path)
+    envelope, stored, _schema = _opened(path)
     return envelope, len(stored)
 
 
@@ -848,69 +916,24 @@ def load_stored[C: Contract](
     declared |= added
     held: list[StoredRow[C]] = []
     for path in paths:
-        envelope, stored = _opened(path)
-        if envelope.row_schema_version > wanted:
+        envelope, stored, schema = _opened(path)
+        host = model in (HostFingerprintRow, HostHardwareRow)
+        if envelope.row_schema_version > wanted and not host:
             raise ValueError(
                 f"{path.name} ({envelope.ledger.value}, {envelope.covers}) holds "
                 f"{model.__name__} rows written under {envelope.row_schema_version}, and this "
                 f"build reads {model.__name__} {wanted}. Read it with a build at least as new"
             )
         try:
-            if envelope.ledger is LedgerName.HOST_FINGERPRINT:
-                from idhazh.contracts.host_fingerprint import (
-                    HostFingerprintRow,
-                    normalize_host_row,
-                    strip_null_legacy_placeholders,
+            if host:
+                held.extend(
+                    StoredRow(identity=identity, row=cast(C, row), original_host_cells=original)
+                    for identity, row, original in host_storage.read_rows(
+                        envelope, stored, schema, name=path.name,
+                        hardware_only=model is HostHardwareRow,
+                    )
                 )
-
-                if model is HostFingerprintRow:
-                    original = hashlib.sha256(json_lines.rows_bytes(stored)).hexdigest()
-                    if original != envelope.content_sha256:
-                        raise ValueError(f"{path.name} original host content_sha256 mismatch")
-                    normalized: list[StoredRow[C]] = []
-                    for cells in stored:
-                        identity = RowIdentity.model_validate(
-                            {column.name: cells.get(column.name) for column in _IDENTITY_COLUMNS}
-                        )
-                        expected_unit = (
-                            filenames.unit_id(
-                                ledger=LedgerName.HOST_FINGERPRINT,
-                                covers=identity.covers,
-                                run_id=identity.run_id,
-                                shard=identity.shard,
-                                producer="telemetry.silicon",
-                                job=(
-                                    str(identity.job)
-                                    if identity.pipeline_name is None
-                                    else None
-                                ),
-                                pipeline_name=identity.pipeline_name,
-                                task_name=identity.task_name,
-                            )
-                            if envelope.tier is Tier.RAW
-                            and envelope.writer.startswith("idhazh_rust.")
-                            else None
-                        )
-                        if (
-                            identity.ledger is not LedgerName.HOST_FINGERPRINT
-                            or identity.covers != cells.get(DATE_CELL)
-                            or (
-                                expected_unit is not None
-                                and identity.unit_id != str(expected_unit)
-                            )
-                        ):
-                            raise ValueError(f"{path.name} original host row identity mismatch")
-                        payload = {key: value for key, value in cells.items() if key not in added}
-                        normalized.append(
-                            StoredRow(
-                                identity=identity,
-                                row=model.model_validate(
-                                    normalize_host_row(strip_null_legacy_placeholders(payload))
-                                ),
-                            )
-                        )
-                    held.extend(normalized)
-                    continue
+                continue
             held.extend(
                 StoredRow(
                     identity=RowIdentity.model_validate(
@@ -929,7 +952,9 @@ def load_stored[C: Contract](
                 for cells in stored
             )
         except ValidationError as refusal:
-            facts = _refusal_facts(refusal, declared=declared)
+            facts = _refusal_facts(
+                refusal, declared=host_storage.KNOWN_CELLS if host else declared
+            )
             raise ValueError(f"{path.name} holds a row this build refuses: {facts}") from None
     return held
 

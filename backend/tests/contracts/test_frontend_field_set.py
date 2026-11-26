@@ -23,7 +23,7 @@ from typing import Any, Final
 import pytest
 from support.paths import REPO_ROOT, read_text
 
-from idhazh.contracts.host_fingerprint import HostFingerprintRow
+from idhazh.contracts.host_fingerprint import HostHardwareRow
 
 pytestmark = pytest.mark.contract
 
@@ -70,7 +70,7 @@ def ts_type(node: dict[str, Any]) -> str:
 
 def contract_cells() -> dict[str, str]:
     """Each column of the Pydantic row, as the TypeScript line that states it."""
-    schema = HostFingerprintRow.json_schema()
+    schema = HostHardwareRow.json_schema()
     required = set(schema.get("required", []))
     return {
         name: f"{name}{'' if name in required else '?'}: {ts_type(node)}"

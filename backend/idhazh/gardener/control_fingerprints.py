@@ -38,9 +38,9 @@ def expected(
 ) -> machine_evidence.ExpectedFile:
     day = date.fromisoformat(run_id[:10]).isoformat()
     return machine_evidence.ExpectedFile(
-        WriterIdentity(
-            job=f"gardener-{job}", shard=0, run_id=run_id, attempt=attempt,
-            git_sha=revision, producer=silicon.PRODUCER,
+        WriterIdentity.for_pipeline_task(
+            job=job, pipeline_name=PIPELINE, task_name=job,
+            shard=0, run_id=run_id, attempt=attempt, git_sha=revision, producer=silicon.PRODUCER,
         ),
         day, native=True,
     )

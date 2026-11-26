@@ -26,6 +26,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final, cast
 
+from idhazh.telemetry import native_diagnostics
+from idhazh.telemetry.host_control import DEFAULT_MODE, HostTelemetryMode
+from idhazh.telemetry.host_control import mode as host_telemetry_mode
+
 REPO_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$")
 GGUF_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*\.gguf$")
 # A full commit. A branch is re-pointed on every upload, so a benchmark that
@@ -257,7 +261,7 @@ def run_benchmarks(
     output: Path,
     resources_report: Path,
     memory_profiling_enabled: bool = True,
-    host_telemetry_enabled: bool = True,
+    host_mode: HostTelemetryMode = DEFAULT_MODE,
 ) -> list[dict[str, Any]]:
     """Run the bench and hand back the rows it printed.
 
@@ -269,6 +273,16 @@ def run_benchmarks(
     resources_report.parent.mkdir(parents=True, exist_ok=True)
     resources: list[dict[str, object]] = []
     rows: list[dict[str, Any]] = []
+
+    def observe() -> dict[str, object] | None:
+        if host_mode == "off":
+            return {}
+        if host_mode == "typescript":
+            return native_diagnostics.cgroup_snapshot(
+                memory_profiling_enabled=memory_profiling_enabled,
+            )
+        return resource_snapshot(memory_profiling_enabled=memory_profiling_enabled)
+
     with output.open("wb") as stream:
         for model in models:
             for thread_count in threads:
@@ -277,9 +291,7 @@ def run_benchmarks(
                     file=sys.stderr,
                     flush=True,
                 )
-                before = {} if not host_telemetry_enabled else resource_snapshot(
-                    memory_profiling_enabled=memory_profiling_enabled
-                )
+                before = observe()
                 started = time.monotonic()
                 result = subprocess.run(
                     bench_command(
@@ -302,9 +314,7 @@ def run_benchmarks(
                         "wall_seconds": time.monotonic() - started,
                         "returncode": result.returncode,
                         "before": before,
-                        "after": {} if not host_telemetry_enabled else resource_snapshot(
-                            memory_profiling_enabled=memory_profiling_enabled
-                        ),
+                        "after": observe(),
                     }
                 )
                 resources_report.write_text(
@@ -936,13 +946,13 @@ def run_bench(args: argparse.Namespace) -> int:
     from idhazh.contracts.base import ServerJob
     from idhazh.stages import common
     from idhazh.telemetry import task_telemetry
-    from idhazh.telemetry.host_control import enabled as host_telemetry_enabled
 
     settings = config.with_memory_profiling_override(
         config.load(getattr(args, "config", Path("config"))),
         {"on": True, "off": False}.get(getattr(args, "memory_profiling", None) or ""),
     )
     memory = settings.app.observability.memory_profiling_enabled
+    selected = host_telemetry_mode(settings.app.observability)
     models: list[Path] = []
     fetch_seconds: float | None = None
     args.weights_report.parent.mkdir(parents=True, exist_ok=True)
@@ -972,6 +982,8 @@ def run_bench(args: argparse.Namespace) -> int:
             state_root=common.state_root_of(settings, base=common.STATE_ROOT),
             commit_sha=args.commit,
             job=ServerJob.RUNTIME,
+            pipeline_name="llm-runtime" if selected == "typescript" else None,
+            task_name="benchmark" if selected == "typescript" else None,
         )
         if all(getattr(args, name, None) for name in ("date", "execution", "commit"))
         else nullcontext()
@@ -987,7 +999,7 @@ def run_bench(args: argparse.Namespace) -> int:
             output=args.output,
             resources_report=args.resources_report,
             memory_profiling_enabled=memory,
-            host_telemetry_enabled=host_telemetry_enabled(settings.app.observability),
+            host_mode=selected,
         )
     subprocess.run(
         [sys.executable, str(Path(__file__).with_name("summarise_bench.py")), str(args.output)],

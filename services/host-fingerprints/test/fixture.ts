@@ -24,11 +24,10 @@ export async function fixture() {
   settings.observability.host_fingerprint_frequency_enabled = true;
   const capture = CaptureContextSchema.parse({
     date: "2026-10-21", writer: {
-      run_id: "2026-10-21-123", attempt: 1, job: null,
+      run_id: "2026-10-21-123", attempt: 1, job: "fixture-job",
       pipeline_name: "fixture-pipeline", task_name: "inspect-host", shard: 2,
       producer: "telemetry.silicon", git_sha: "a".repeat(40),
     },
-    model_load_ms: 123.5, job_seconds: 42, server_prompt_tokens: 320, server_prompt_seconds: 1.25,
   });
   return {
     input, directory, root, config, settings, capture,

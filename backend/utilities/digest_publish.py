@@ -6,12 +6,11 @@ import argparse
 import dataclasses
 import hashlib
 import json
-import logging
 import os
 import shutil
 import sys
 from collections.abc import Callable
-from contextlib import nullcontext
+from contextlib import AbstractContextManager, nullcontext
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
@@ -21,32 +20,33 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from idhazh import completed_writes, config, run_context, telemetry
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.file_envelope import WriterIdentity
+from idhazh.contracts.host_fingerprint import HostHardwareRow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.publication_inventory import PublicationInventory
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.task_performance import TaskPerformanceOutcome
 from idhazh.ledger import staging
-from idhazh.telemetry.machine_api import MachineApi, MachineApiError
-from idhazh.telemetry.silicon import PRODUCER as HOST_PRODUCER
-from utilities import (
-    digest_performance,
-    machine_task,
-    model_runtime,
-    publication_evidence,
-)
+from idhazh.telemetry import machine_api, machine_evidence, task_probe
+from idhazh.telemetry.host_control import mode as host_mode
+from utilities import digest_performance, machine_task, model_runtime, publication_evidence
 from utilities.publication_conflict import capture_publication_delta, replay_publication_delta
 from utilities.publication_git import Repository
 from utilities.publication_inputs import materialize, named_entries
-from utilities.publication_request import IntegrityError, PublicationRequest, Write, safe_file
+from utilities.publication_request import (
+    IntegrityError,
+    PublicationRequest,
+    Write,
+    contains,
+    safe_file,
+)
 from utilities.publish_to_repo import PublicationResult, publish
 from utilities.push_retry import DEFAULT_CONFIG, load_retry
 
 INVENTORY = "frontend/public/publication.json"
-LOG = logging.getLogger(__name__)
 VERBS = {
-    "plan": ("plan", "fingerprint", "job-clock"),
-    "work": ("fingerprint", "work", "record", "job-clock"),
-    "assemble": ("fingerprint", "assemble", "harvest", "job-clock"),
+    "plan": ("plan",),
+    "work": ("work", "record"),
+    "assemble": ("assemble", "harvest"),
 }
 
 
@@ -81,7 +81,15 @@ def _flag(args: list[str], name: str, default: str = "") -> str:
 
 
 def measure(command: list[str]) -> int:
-    return machine_task.run(command)
+    selected = host_mode(config.load().app.observability)
+    legacy = None
+    job = os.environ.get("GITHUB_JOB", "")
+    date = os.environ.get("IDHAZH_MACHINE_ACCOUNTING_DAY", "")
+    if selected == "python" and job in VERBS and date:
+        shard = os.environ.get("IDHAZH_MACHINE_SHARD", "0")
+        identity = identify(["--date", date, "--shard", shard], job=job)
+        legacy = digest_performance.opening_file(identity, date, native=False).writer
+    return machine_task.run(command, legacy_opening=legacy, instrument=selected != "off")
 
 
 def identify(args: list[str], *, job: str) -> WriterIdentity:
@@ -111,24 +119,41 @@ def run(args: list[str]) -> int:
     if identity.job is None:
         raise ValueError("digest publication requires a legacy workflow job identity")
     job = ServerJob(identity.job)
-    if verb == "fingerprint" and (pipeline := _flag(args, "--pipeline-name")):
-        identity = WriterIdentity.for_pipeline_task(
-            run_id=identity.run_id, attempt=identity.attempt, shard=identity.shard,
-            git_sha=identity.git_sha, pipeline_name=pipeline,
-            task_name=_flag(args, "--task-name"), producer=HOST_PRODUCER,
-        )
+    if verb == "fingerprint":
+        digest_performance.capture(config.REPO_ROOT, identity, date, config.load())
+        return 0
+    if verb == "job-clock" and host_mode(config.load().app.observability) != "python":
+        return 0
 
     writes: dict[Path, str] = {}
     try:
-        profile = (
-            digest_performance.profile(config.REPO_ROOT, identity, date, verb)
-            if verb in ("plan", "work", "assemble")
-            else nullcontext()
-        )
-        with profile as completed, completed_writes.collect() as writes:
-            result = cli.main(args)
-            if completed is not None:
-                completed(result)
+        profile: AbstractContextManager[machine_api.TaskClose | None] = nullcontext(None)
+        native_host = None
+        if verb in ("plan", "work", "assemble"):
+            observability = config.load().app.observability
+            selected = host_mode(observability)
+            if selected != "off":
+                repo = config.REPO_ROOT
+                opening = digest_performance.read_opening(
+                    repo, identity, date, native=selected == "typescript",
+                )
+                if selected == "typescript" and verb == "work":
+                    if opening is not None and isinstance(opening.row, HostHardwareRow):
+                        native_host = opening.row
+                    elif observability.host_fingerprint:
+                        machine_api.warn("Digest work hardware unavailable: no verified opening")
+                profile = task_probe.profile(
+                    task_probe.Recording.for_job(repo, opening),
+                    digest_performance.task_file(identity, verb, date),
+                    digest_performance.bundle(repo, identity),
+                )
+        with profile as observation, completed_writes.collect() as writes:
+            result = (
+                cli.main(args, native_host=native_host)
+                if native_host is not None else cli.main(args)
+            )
+            if observation is not None and result:
+                observation.outcome = "error"
             return result
     finally:
         if verb == "work":
@@ -162,23 +187,21 @@ def close_serving(args: list[str]) -> int:
         outcome = "success"
     repo = config.REPO_ROOT
     identity = identify(args, job="work")
-    client = None
-    host = None
-    try:
-        client = MachineApi.for_job()
-        if client is not None:
-            host = digest_performance.import_opening_capture(repo, identity, parsed.date)
-    except MachineApiError as error:
-        LOG.warning("Task Performance serving listener unavailable: %s", error)
+    selected = host_mode(config.load().app.observability)
+    if selected == "off":
+        return 0
     observation = model_runtime.close_serving_observation(repo / "config", "llama-server", outcome)
-    if observation is not None and client is not None:
+    recording = digest_performance.recording(
+        repo, identity, parsed.date, native=selected == "typescript",
+    )
+    if observation is not None and recording is not None:
         try:
-            digest_performance.record_measurement(
-                client, repo, identity, parsed.date, digest_performance.SERVE,
-                observation, host=host,
+            recording.record(
+                digest_performance.task_file(identity, digest_performance.SERVE, parsed.date),
+                digest_performance.bundle(repo, identity), observation,
             )
-        except (OSError, ValueError, MachineApiError) as error:
-            LOG.warning("Task Performance serving receipt unavailable: %s", error)
+        except (OSError, ValueError, machine_api.MachineApiError) as error:
+            machine_api.unavailable(digest_performance.SERVE, "serving receipt", error)
     return 0
 
 
@@ -254,13 +277,24 @@ def request_for(
     if identity.job is None:
         raise ValueError("digest publication requires a legacy workflow job identity")
     job = ServerJob(identity.job)
+    settings = config.load()
+    selected = host_mode(settings.app.observability)
+    verbs = (*VERBS[job], "job-clock") if selected == "python" else VERBS[job]
     hashes = publication_evidence.read(
-        repo, identity, VERBS[job], excluded=(staging.staged_path(LedgerName.TASK_PERFORMANCE),),
+        repo, identity, verbs, excluded=(staging.staged_path(LedgerName.TASK_PERFORMANCE),),
     )
-    for path, digest in digest_performance.evidence(repo, identity, date).items():
-        if path in hashes and hashes[path] != digest:
-            raise IntegrityError("completed receipts disagree about the same file", (path,))
-        hashes[path] = digest
+    has_assembly = job is ServerJob.ASSEMBLE and any(
+        not contains(machine_evidence.raw_scope(machine_evidence.HOST, date), path)
+        for path in hashes
+    )
+    if selected != "off":
+        observer = digest_performance.evidence(
+            repo, identity, date, native=selected == "typescript",
+        )
+        for path, digest in observer.items():
+            if path in hashes and hashes[path] != digest:
+                raise IntegrityError("completed receipts disagree about the same file", (path,))
+            hashes[path] = digest
     authority = permissions(job, date=date)
     mutable: tuple[str, ...] = (INVENTORY,)
     if job is ServerJob.ASSEMBLE:
@@ -294,7 +328,7 @@ def request_for(
         request = dataclasses.replace(
             request, prepare=inventory_preparation(repo, request)
         )
-    if identity.job == ServerJob.ASSEMBLE and writes:
+    if has_assembly:
         from utilities import digest_assemble
 
         request = dataclasses.replace(
@@ -304,7 +338,7 @@ def request_for(
             repo,
             request,
             date=date,
-            settings=config.load(),
+            settings=settings,
             source_plan=source_plan,
             source_commit=source_commit,
         )

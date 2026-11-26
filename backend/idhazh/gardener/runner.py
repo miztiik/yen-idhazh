@@ -88,6 +88,7 @@ import logging
 import time
 import uuid
 from collections.abc import Callable, Mapping, Sequence
+from contextlib import nullcontext
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 from pathlib import Path, PurePosixPath
@@ -120,6 +121,7 @@ from idhazh.gardener.period_inputs import paths_for_task, scheduled_range
 from idhazh.ledger import staging
 from idhazh.site_weight import BYTES_PER_MB
 from idhazh.telemetry import task_probe, task_telemetry
+from idhazh.telemetry.host_control import mode as host_mode
 
 #: The name the record's writer carries in its envelope. This module writes it.
 PRODUCER: Final = "gardener.runner"
@@ -599,6 +601,7 @@ def run(
     package: ModuleType = shipped_tasks,
     clock: Callable[[], datetime] = utc_now,
     say: Callable[[str], None] = print,
+    standalone: bool = False,
 ) -> Outcome:
     """Run these tasks as one shard, write its record, and hand back what is left to land.
 
@@ -615,6 +618,7 @@ def run(
     scheduled wake. `operator_range` keeps only the range a person named. A
     compaction has no scheduled window, so a named range only limits the
     periods its steps choose.
+    Standalone hardware is local; hosted native evidence waits for publication.
     """
     refused = history_tasks_among(names, settings.tasks)
     if refused:
@@ -650,21 +654,32 @@ def run(
     finished: list[TaskFinished] = []
     too_heavy: str | None = None
     downloaded_bytes: int | None = None
-    try:
-        with task_telemetry.record(
+    collector = host_mode(settings.app.observability)
+    no_local_writes: list[Path] = []
+    machine_context = (
+        task_telemetry.record(
             date=run_id[:10],
             run_id=run_id,
             settings=settings,
             state_root=state_dir,
             commit_sha=git_sha,
+            job=job if standalone else None,
             pipeline_name=performance.PIPELINE,
-            task_name="run-tasks",
+            task_name=ServerJob.RUN_TASKS,
             shard=shard,
             attempt=attempt,
             started_at=started,
             clock=clock,
-        ) as machine:
-            recording = performance.record_in_private(repo_root, identity, machine)
+        )
+        if collector == "python" or (collector == "typescript" and standalone)
+        else nullcontext(no_local_writes)
+    )
+    try:
+        with machine_context as machine:
+            recording = None if standalone else performance.record_in_private(
+                repo_root, identity, machine, collector=collector,
+                capture_fingerprint=settings.app.observability.host_fingerprint,
+            )
             # Resolve ownership before the first task runs.
             resolved = {
                 name: folders_of(name, settings.tasks, repo_root, committed_folders)
@@ -797,9 +812,11 @@ def run(
     )
 
 
-def tasks_of_shard(settings: GardenerSettings, index: int) -> tuple[str, ...]:
+def tasks_of_shard(
+    settings: GardenerSettings, index: int, *, allowed_tasks: frozenset[str] | None = None,
+) -> tuple[str, ...]:
     """The tasks one shard of this wake runs, split the way the plan job splits them."""
-    planned = shards.plan(settings)
+    planned = shards.plan(settings, allowed_tasks=allowed_tasks)
     if not 0 <= index < planned.shard_count:
         raise ValueError(
             f"this wake has {planned.shard_count} shards, numbered from 0, so there is no "

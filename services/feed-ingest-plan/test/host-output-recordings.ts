@@ -15,7 +15,7 @@ export async function writeRecordedHostOutput(directory: string, identity: Execu
   if (captured.host.status !== "recorded") throw new Error("The host output recording must contain a captured native row");
   const registrations = await metadataRegistrations();
   const registration = registrations["host-fingerprint"];
-  const request = { date: identity.run_id.slice(0, 10), writer: hostWriter(identity) };
+  const request = { date: identity.run_id.slice(0, 10), writer: hostWriter(identity, true) };
   const row = HostFingerprintRowSchema.parse({ ...captured.host.row, date: request.date, run_id: identity.run_id });
   const written = await persistLedger({
     ledger: registration.name, registryEntry: registration, outputRoot: join(directory, "state"),

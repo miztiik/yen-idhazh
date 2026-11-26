@@ -163,23 +163,24 @@ async function main() {
           } finally { reader.releaseLock(); }
           return schema.parse(JSON.parse(Buffer.concat(chunks).toString("utf8")));
         }
-        stage = "MACHINE_FINGERPRINT_FAILED";
-        httpStatus = null;
-        const hardware = await call(FINGERPRINT_PATH, {
-          date: startup.run.started_at.slice(0, 10),
-          writer: {
-            ...startup.context, git_sha: startup.git_sha, attempt: startup.attempt,
-            job: null, shard: 0, producer: "telemetry.silicon",
-          },
-        }, FingerprintResponseSchema);
         stage = "MACHINE_PROCESS_IDENTITY_INVALID";
         httpStatus = null;
         const target = readProcessIdentity(process.pid, probes.max_proc_bytes, {});
         if (target.reason !== null) throw new Error("Owned machine-task identity is unavailable");
+        const pin = { pid: target.value.pid, start_ticks: target.value.start_ticks };
+        stage = "MACHINE_FINGERPRINT_FAILED";
+        const hardware = await call(FINGERPRINT_PATH, {
+          date: startup.run.started_at.slice(0, 10),
+          writer: {
+            ...startup.context, git_sha: startup.git_sha, attempt: startup.attempt,
+            job: process.env.GITHUB_JOB ?? null, shard: 0, producer: "telemetry.silicon",
+          },
+          target: pin,
+        }, FingerprintResponseSchema);
         stage = "MACHINE_PROFILE_START_FAILED";
         const started = await call(START_TASK_PROFILE_PATH, {
           identity: startup.context,
-          target: { pid: target.value.pid, start_ticks: target.value.start_ticks },
+          target: pin,
         }, StartTaskProfileResponseSchema);
         if (started.status !== "started") throw new Error("Required task profile is disabled");
         emit({

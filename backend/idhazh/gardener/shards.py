@@ -32,9 +32,17 @@ def runs_in_the_matrix(policy: TaskPolicy) -> bool:
     return policy.lifecycle_status is TaskLifecycleStatus.ACTIVE and policy.kind != TaskKind.HISTORY
 
 
-def plan(settings: GardenerSettings) -> GardenerPlan:
-    """One wake's shards, and the matrix that runs them."""
-    names = sorted(name for name, policy in settings.tasks.items() if runs_in_the_matrix(policy))
+def plan(
+    settings: GardenerSettings, *, allowed_tasks: frozenset[str] | None = None,
+) -> GardenerPlan:
+    """One wake's shards, optionally narrowed to the dispatch's allowed tasks."""
+    names = sorted(
+        name
+        for name, policy in settings.tasks.items()
+        if runs_in_the_matrix(policy) and (
+            allowed_tasks is None or (name in allowed_tasks and policy.kind == TaskKind.COMPACTION)
+        )
+    )
     count = min(settings.config.shards, len(names))
     dealt: list[list[str]] = [[] for _ in range(count)]
     for position, name in enumerate(names):

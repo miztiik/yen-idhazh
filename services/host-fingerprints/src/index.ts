@@ -27,7 +27,9 @@ async function main(context: OperationMetadata): Promise<void> {
   const settings = await loadSettings(values.settings);
   const options = { outputRoot: values["state-root"] };
   if (values.fingerprint) {
-    const result = await persistFingerprint(await Bun.file(values.context!).json(), config, settings, options);
+    const result = await persistFingerprint(
+      await Bun.file(values.context!).json(), config, settings, { ...options, cliSelf: true },
+    );
     console.error(JSON.stringify(createFingerprintCompletionEvent({ context, status: result.status })));
     console.log(JSON.stringify(result));
   } else {

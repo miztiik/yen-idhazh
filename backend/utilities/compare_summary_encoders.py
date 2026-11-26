@@ -284,30 +284,57 @@ def stage_score(args: argparse.Namespace) -> None:
     from idhazh import config
     from idhazh.contracts.base import ServerJob
     from idhazh.stages import common
-    from idhazh.telemetry import task_telemetry
-    from idhazh.telemetry.host_control import enabled
+    from idhazh.telemetry import machine_api, machine_evidence, task_probe, task_telemetry
+    from idhazh.telemetry.host_control import memory_override, mode
 
-    host_settings = config.load()
-    memory = enabled(host_settings.app.observability) and (
+    host_settings = config.with_memory_profiling_override(config.load(), memory_override())
+    selected = mode(host_settings.app.observability)
+    memory = selected != "off" and (
         host_settings.app.observability.memory_profiling_enabled
     )
     date = args.date
     execution = args.execution or os.environ.get("GITHUB_RUN_ID")
     commit = args.commit or os.environ.get("GITHUB_SHA")
     date = date or time.strftime("%Y-%m-%d", time.gmtime())
+    def score() -> bool:
+        return _score(args, memory_profiling_enabled=memory, native_memory=selected == "typescript")
+
     if not execution or not commit:
-        _score(args, memory_profiling_enabled=memory)
+        score()
+        return
+    run_id = f"{date}-{execution}"
+    pipeline = "encoder-comparison"
+    task = "score"
+    if selected == "typescript" and machine_api.job_runtime_expected():
+        writer = task_telemetry.native_writer(
+            run_id, commit, pipeline=pipeline, task=task, shard=args.shard,
+        )
+        repo = config.REPO_ROOT
+        expected = machine_evidence.ExpectedFile(writer, date, native=True)
+        opening = None
+        if host_settings.app.observability.host_fingerprint:
+            try:
+                opening = machine_evidence.capture_opening(repo, repo, expected)
+            except (OSError, ValueError, KeyError, machine_api.MachineApiError) as error:
+                machine_api.unavailable(task, "opening fingerprint", error)
+        recording = task_probe.Recording.for_job(repo, opening)
+        measurement = task_probe.task_file(writer, pipeline=pipeline, task=task, day=date)
+        with task_probe.profile(recording, measurement, repo) as closed:
+            if not score():
+                closed.outcome = "error"
         return
     with task_telemetry.record(
         date=date,
-        run_id=f"{date}-{execution}",
+        run_id=run_id,
         settings=host_settings,
         state_root=common.state_root_of(host_settings, base=common.STATE_ROOT),
         commit_sha=commit,
         job=ServerJob.COLLECT,
+        pipeline_name=pipeline if selected == "typescript" else None,
+        task_name=task if selected == "typescript" else None,
         shard=args.shard,
     ):
-        _score(args, memory_profiling_enabled=memory)
+        score()
 
 
 def resolve_encoder_thread_count(
@@ -317,7 +344,9 @@ def resolve_encoder_thread_count(
     return requested or available_processors or 1
 
 
-def _score(args: argparse.Namespace, *, memory_profiling_enabled: bool) -> None:
+def _score(
+    args: argparse.Namespace, *, memory_profiling_enabled: bool, native_memory: bool,
+) -> bool:
     """Encode in batches, writing the reading after every one.
 
     The write is atomic - a temporary file and a rename - so a shard killed
@@ -372,6 +401,10 @@ def _score(args: argparse.Namespace, *, memory_profiling_enabled: bool) -> None:
     def peak_memory_gb() -> float | None:
         if not memory_profiling_enabled or sys.platform == "win32":
             return None
+        if native_memory:
+            from idhazh.telemetry.native_diagnostics import peak_memory_gib
+
+            return peak_memory_gib()
         else:
             import resource
 
@@ -420,7 +453,7 @@ def _score(args: argparse.Namespace, *, memory_profiling_enabled: bool) -> None:
         reading.peak_memory_gb = peak_memory_gb()
         save()
         print(f"{chosen['slug']}: {reading.reason}", flush=True)
-        return
+        return False
 
     reading.state = ReadingState.ENCODING
     save()
@@ -466,7 +499,7 @@ def _score(args: argparse.Namespace, *, memory_profiling_enabled: bool) -> None:
         reading.peak_memory_gb = peak_memory_gb()
         save()
         print(f"{chosen['slug']}: stopped - {reading.reason}", flush=True)
-        return
+        return False
 
     vectors = np.concatenate(encoded)
 
@@ -527,6 +560,7 @@ def _score(args: argparse.Namespace, *, memory_profiling_enabled: bool) -> None:
           f"mean cosine difference {reading.spread:.3f}  "
           f"middle-overlap fraction above midpoint {reading.ambiguous_lean}  "
           f"{reading.articles_a_second:.1f} articles a second", flush=True)
+    return True
 
 
 def stage_collect(args: argparse.Namespace) -> None:

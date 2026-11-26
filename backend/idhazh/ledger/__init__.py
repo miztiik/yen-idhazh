@@ -48,6 +48,7 @@ from idhazh.ledger.keys import (
     Preference,
     door_contract,
     door_key,
+    host_record_key,
     preference_for,
 )
 from idhazh.ledger.ledger_files import (
@@ -228,6 +229,7 @@ __all__ = [  # noqa: RUF022
     "Preference",
     "door_contract",
     "door_key",
+    "host_record_key",
     "preference_for",
     # filenames.py: what one writer's file is called.
     "PRE_IDENTITY_TRACE",

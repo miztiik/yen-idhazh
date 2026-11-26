@@ -11,8 +11,8 @@ name: Idhazh Gardener
 #   plan       splits the active tasks into shards with the standard library
 #   run-tasks  one job a shard. Each runs its tasks, writes one record under
 #              state/raw/gardener/ and pushes it, trying again on a newer tip
-#   history    the corpus squash, once every shard has ended, unless the run was
-#              cancelled. It decides for itself whether the squash is due, and it
+#   history    the corpus squash, once every shard has ended, unless cancelled or
+#              dispatched for telemetry proof. It decides if a squash is due and
 #              is the one job in this repository that force-pushes main, the
 #              exception CLAUDE.md section 8 allows
 #   publish-fingerprints appends verified control evidence after history ends
@@ -61,14 +61,19 @@ on:
   workflow_dispatch:
     inputs:
       force:
-        description: 'Squash now, even if every_days in config/gardener/corpus-squash.json says it is not due. Every other task runs at every wake anyway'
+        description: 'Squash now even if the configured cadence is not due. Cannot be combined with telemetry_proof'
+        type: boolean
+        default: false
+      telemetry_proof:
+        description: 'Run only active host fingerprint and task performance compaction; skip history. Cannot be combined with force'
         type: boolean
         default: false
       host_telemetry:
-        description: 'Legacy host collection on task shards, or off for all host telemetry'
+        description: 'TypeScript host telemetry, Python rollback on task shards, or off'
         type: choice
-        default: python
+        default: typescript
         options:
+          - typescript
           - python
           - 'off'
       memory_profiling:
@@ -86,7 +91,7 @@ permissions:
   contents: read
 
 env:
-  IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry || 'python' }}
+  IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry || 'typescript' }}
   MEMORY_PROFILING: ${{ inputs.memory_profiling || 'inherit' }}
 
 # Never two of these at once, and never cancelled half way: the history job
@@ -106,6 +111,7 @@ jobs:
       any_active_task: ${{ steps.shards.outputs.any_active_task }}
       shard_count: ${{ steps.shards.outputs.shard_count }}
       matrix: ${{ steps.shards.outputs.matrix }}
+      history_allowed: ${{ steps.shards.outputs.history_allowed }}
       run_id: ${{ steps.run.outputs.run_id }}
       control_run_id: ${{ steps.identity.outputs.run_id }}
       control_attempt: ${{ steps.control_bundle.outputs.attempt }}
@@ -154,13 +160,15 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/gardener-instrument-venv"
           PY="$RUNNER_TEMP/gardener-instrument-venv/bin/python"
           "$PY" -m pip install -q -e .
+          MODE=$("$PY" backend/utilities/host_telemetry_control.py "$IDHAZH_HOST_TELEMETRY_MODE")
+          [ "$MODE" != off ] || exit 0
           echo "ready=true" >> "$GITHUB_OUTPUT"
           "$PY" backend/utilities/machine_task.py --run-id "$RUN_ID" -- \
             "$PY" backend/utilities/gardener_fingerprint.py --run-id "$RUN_ID" \
             --job plan --out "$RUNNER_TEMP/gardener-opening"
 
-      # Which shard runs which task, from the declarations alone. Three lines for
-      # $GITHUB_OUTPUT: whether any task runs, how many shards, and the matrix.
+      # The planner combines the declarations and the runner's manual dispatch
+      # event, then outputs the shard matrix and whether history may run.
       - id: shards
         env:
           RUN_ID: ${{ steps.identity.outputs.run_id }}
@@ -266,7 +274,7 @@ jobs:
       - name: Resolve host telemetry
         id: host_telemetry
         env:
-          REQUESTED: ${{ inputs.host_telemetry || 'python' }}
+          REQUESTED: ${{ env.IDHAZH_HOST_TELEMETRY_MODE }}
         run: |
           set -euo pipefail
           MODE=$(python backend/utilities/host_telemetry_control.py "$REQUESTED" --config-root config)
@@ -306,11 +314,10 @@ jobs:
     # After every shard has ended, so history is rewritten last, and whatever
     # the shards did: a red shard's push has already ended, and its work is
     # tried again at the next wake either way. A skipped `needs` would skip this
-    # job too, so it runs on `!cancelled()`: a day no task is active and a day a
-    # shard failed both still squash, and only a cancel stops it. The person's
-    # ruling, 2026-09-29.
+    # job too, so ordinary wakes keep the explicit cancellation check. On a
+    # proof dispatch the input vetoes history even if no planner output survived.
     needs: [plan, run-tasks]
-    if: ${{ !cancelled() }}
+    if: ${{ !cancelled() && inputs.telemetry_proof != true && needs.plan.outputs.history_allowed != 'false' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -367,6 +374,8 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/gardener-instrument-venv"
           PY="$RUNNER_TEMP/gardener-instrument-venv/bin/python"
           "$PY" -m pip install -q -e .
+          MODE=$("$PY" backend/utilities/host_telemetry_control.py "$IDHAZH_HOST_TELEMETRY_MODE")
+          [ "$MODE" != off ] || exit 0
           echo "ready=true" >> "$GITHUB_OUTPUT"
           "$PY" backend/utilities/machine_task.py --run-id "$RUN_ID" -- \
             "$PY" backend/utilities/gardener_fingerprint.py --run-id "$RUN_ID" \
@@ -519,20 +528,26 @@ jobs:
             services/host-fingerprints
             services/host-probes
 
-      - name: Prepare machine APIs
-        uses: ./.github/actions/machine-apis
-        with:
-          mode: ${{ env.IDHAZH_HOST_TELEMETRY_MODE }}
-          pipeline: gardener
-
       - name: Prepare the control evidence verifier
+        id: host_telemetry
         run: |
           set -euo pipefail
           python3 -m venv "$RUNNER_TEMP/gardener-instrument-venv"
           PY="$RUNNER_TEMP/gardener-instrument-venv/bin/python"
           "$PY" -m pip install -q -e .
+          MODE=$("$PY" backend/utilities/host_telemetry_control.py "$IDHAZH_HOST_TELEMETRY_MODE")
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+          echo "IDHAZH_HOST_TELEMETRY_MODE=$MODE" >> "$GITHUB_ENV"
+
+      - name: Prepare machine APIs
+        continue-on-error: true
+        uses: ./.github/actions/machine-apis
+        with:
+          mode: ${{ steps.host_telemetry.outputs.mode }}
+          pipeline: gardener
 
       - name: Capture the append runner's opening fingerprint
+        if: env.IDHAZH_HOST_TELEMETRY_MODE != 'off'
         id: opening
         continue-on-error: true
         run: |
@@ -556,7 +571,7 @@ jobs:
           if [ -n "$HISTORY_ARTIFACT" ]; then ids+=("$HISTORY_ARTIFACT"); fi
           (IFS=,; echo "ids=${ids[*]}") >> "$GITHUB_OUTPUT"
 
-      - if: steps.downloads.outputs.ids != ''
+      - if: env.IDHAZH_HOST_TELEMETRY_MODE != 'off' && steps.downloads.outputs.ids != ''
         uses: actions/download-artifact@v8
         with:
           artifact-ids: ${{ steps.downloads.outputs.ids }}
@@ -566,6 +581,7 @@ jobs:
           merge-multiple: false
 
       - name: Verify and append the named control evidence
+        if: env.IDHAZH_HOST_TELEMETRY_MODE != 'off'
         env:
           CAPTURE_RUN_ID: ${{ steps.opening.outputs.run_id }}
         run: |

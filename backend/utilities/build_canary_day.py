@@ -73,7 +73,11 @@ from idhazh.contracts.feed_health import (
 )
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.fingerprint import PipelineInputs
-from idhazh.contracts.host_fingerprint import HostFingerprintRow
+from idhazh.contracts.host_fingerprint import (
+    HOST_HARDWARE_VERSION,
+    HostFingerprintRow,
+    HostHardwareRow,
+)
 from idhazh.contracts.item_health import FailureCode as ItemFailureCode
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage, TimeSource
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
@@ -1541,12 +1545,17 @@ def file_fixture_rows(state: Path, staged: Path) -> dict[LedgerName, int]:
                     for row in rows:
                         if not isinstance(row, HostFingerprintRow):
                             raise TypeError("a host fixture must be a HostFingerprintRow")
+                        host: HostFingerprintRow | HostHardwareRow = row
+                        if row.version == HOST_HARDWARE_VERSION:
+                            host = HostHardwareRow.model_validate(
+                                row.model_dump(include=set(HostHardwareRow.model_fields)),
+                            )
                         ledger.persist(
                             state,
-                            [row],
+                            [host],
                             ledger=which,
                             covers=day,
-                            identity=_host_fixture_writer(row),
+                            identity=_host_fixture_writer(host),
                         )
                 else:
                     ledger.persist(
@@ -1558,12 +1567,13 @@ def file_fixture_rows(state: Path, staged: Path) -> dict[LedgerName, int]:
     return filed
 
 
-def _host_fixture_writer(row: HostFingerprintRow) -> WriterIdentity:
+def _host_fixture_writer(row: HostFingerprintRow | HostHardwareRow) -> WriterIdentity:
     """The production work unit this fixture host job would write under."""
     if row.pipeline_name is not None and row.task_name is not None:
-        return WriterIdentity.for_pipeline_task(
+        return WriterIdentity(
             run_id=row.run_id, attempt=SCORE_ATTEMPT, shard=row.shard, git_sha=FIXTURE_SHA,
             pipeline_name=row.pipeline_name, task_name=row.task_name, producer=silicon.PRODUCER,
+            job=row.job if isinstance(row, HostHardwareRow) else None,
         )
     return WriterIdentity(
         run_id=row.run_id,

@@ -4,8 +4,9 @@ import { join, resolve } from "node:path";
 import { z } from "zod";
 import {
   DateStampSchema, HostFingerprintRowSchema, HOST_FINGERPRINT_VERSION,
-  PlannerLedgerNameSchema, WriterIdentitySchema,
+  HOST_HARDWARE_VERSION, HostHardwareRowSchema, PlannerLedgerNameSchema, WriterIdentitySchema,
 } from "../../../packages/common-contracts/src/index";
+import type { HostFingerprintRow, HostHardwareRow } from "../../../packages/common-contracts/src/index";
 import type { LedgerRegistration, LedgerRowContract } from "../../../packages/ledger-file-writer/src/index";
 import { readLedgerParquet } from "../src/read-ledger-history/read-parquet";
 import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
@@ -47,9 +48,9 @@ export async function readMetadataRegistrations(path: string | URL): Promise<Met
   };
 }
 
-export function hostWriter(identity: ExecutionIdentity) {
+export function hostWriter(identity: ExecutionIdentity, historical = false) {
   return WriterIdentitySchema.parse({
-    ...ExecutionIdentitySchema.parse(identity), job: null, pipeline_name: "feed-ingest-plan",
+    ...ExecutionIdentitySchema.parse(identity), job: historical ? null : "isolated-plan", pipeline_name: "feed-ingest-plan",
     task_name: "isolated-plan", shard: 0, producer: "telemetry.silicon",
   });
 }
@@ -93,13 +94,15 @@ export async function verifyMetadataFile(root: string, path: string, registratio
   const named = identifyMetadataPath(path, registrations);
   const file = await resolveMetadataFile(root, path);
   if (named.ledger === "host-fingerprint") {
-    const actual = await readLedgerParquet(file, named.ledger, {
-      schema: HostFingerprintRowSchema, schemaVersion: HOST_FINGERPRINT_VERSION,
-    });
-    const writer = hostWriter(expected);
+    const actual = await readLedgerParquet<HostHardwareRow | HostFingerprintRow>(file, named.ledger, [
+      { schema: HostHardwareRowSchema, schemaVersion: HOST_HARDWARE_VERSION },
+      { schema: HostFingerprintRowSchema, schemaVersion: HOST_FINGERPRINT_VERSION },
+    ]);
+    const writer = hostWriter(expected, actual.envelope.row_schema_version === HOST_FINGERPRINT_VERSION);
     if (actual.envelope.tier !== "raw" || actual.envelope.covers !== expected.run_id.slice(0, 10)
       || actual.envelope.covers !== named.covers || actual.envelope.file_id !== named.file_id
       || actual.rows.length !== 1 || actual.rows[0]!.row.date !== named.covers
+      || actual.rows[0]!.row.version !== actual.envelope.row_schema_version
       || Object.entries(writer).some(([key, value]) => actual.envelope.identity[key as keyof typeof writer] !== value)) {
       throw new Error("delivery: host output differs from its current execution identity");
     }

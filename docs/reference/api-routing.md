@@ -86,7 +86,7 @@ Table C - Host and shared operations
 
 | Id | Method | Path | Meaning |
 | --- | --- | --- | --- |
-| C1 | POST | `/api/2026-11-05/capture-host-fingerprint` | Capture and persist the native hardware row, or return the configured disabled result. |
+| C1 | POST | `/api/2026-11-26/capture-host-fingerprint` | Capture and persist the hardware-only row for the admitted runner, or return the configured disabled result. |
 | C2 | GET | `/api/2026-11-05/get-host-fingerprint-health` | Read the fingerprint instrument's enablement without capture or writes. |
 | C3 | GET | `/api/2026-11-05/sample-host` | One native CPU/RAM sampling interval. |
 | C4 | POST | `/api/2026-11-05/start-task-profile` | Start a profile for the supplied PID and kernel start ticks. |

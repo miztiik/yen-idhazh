@@ -36,8 +36,16 @@ export async function loadMachineApiInputs(
     execution === undefined ? undefined : loadTaskPerformanceSettings(settingsPath),
   ]);
   const options = { outputRoot: resolve(root, outputRoot), registryPath };
+  const fingerprintOptions: FingerprintOptions[2] = execution === undefined ? options : {
+    ...options,
+    admit: ({ date, writer }) => execution.accounting_days.includes(date)
+      && writer.run_id === execution.run_id && writer.attempt === execution.attempt
+      && writer.pipeline_name === execution.pipeline_name && writer.shard === execution.shard
+      && writer.git_sha === execution.git_sha
+      && (execution.runner_job === undefined || writer.job === execution.runner_job),
+  };
   return {
-    fingerprint: { config, settings, options },
+    fingerprint: { config, settings, options: fingerprintOptions },
     probes: { config: probes, ...(execution === undefined || recordingSettings === undefined ? {} : {
       recording: { ...options, execution, settings: {
         ...recordingSettings,

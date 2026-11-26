@@ -13,7 +13,7 @@ import { TaskProfileSchema } from "../../../services/host-probes/src/task-profil
 import type { TaskProfile } from "../../../services/host-probes/src/task-profile/profile-schema";
 import { OperationMetadataSchema } from "../../../packages/common-contracts/src/schemas/operation-metadata.schema";
 import type { OperationMetadata } from "../../../packages/common-contracts/src/schemas/operation-metadata.schema";
-import { HostFingerprintRowSchema } from "../../../packages/common-contracts/src/schemas/host-fingerprint.schema";
+import { HostHardwareRowSchema } from "../../../packages/common-contracts/src/schemas/host-fingerprint.schema";
 import { FINGERPRINT_PATH } from "../../../services/host-fingerprints/src/api/server";
 import { fixture } from "../../../services/host-fingerprints/test/fixture";
 import { join } from "node:path";
@@ -25,7 +25,7 @@ function emit(value: unknown): void { process.stdout.write(JSON.stringify(value)
 
 if (Bun.argv[2] === "schemas") {
   emit({
-    hardware: z.toJSONSchema(HostFingerprintRowSchema),
+    hardware: z.toJSONSchema(HostHardwareRowSchema),
     machine: z.toJSONSchema(TaskProfileSchema),
     server: z.toJSONSchema(CurrentMachineServerEvidenceSchema),
   });
@@ -97,7 +97,7 @@ if (Bun.argv[2] === "schemas") {
         }));
         httpStatus = response.status;
         const hardware = z.object({
-          status: z.literal("written"), row: HostFingerprintRowSchema,
+          status: z.literal("written"), row: HostHardwareRowSchema,
           unavailable: z.record(z.string(), z.string()),
         }).parse(await response.json());
         if (response.status !== 200) throw new Error("Native hardware handler failed");

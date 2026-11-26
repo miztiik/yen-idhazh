@@ -17,6 +17,10 @@ $env:PYTHONPATH = "backend"
 python -m utilities.evaluate_content_similarity_judge --help
 ```
 
+Use the [native fingerprint command](../reference/host-metrics.md#independent-fingerprint-api-and-cli)
+for a new `host.json` input. Save its `row` object, not the enclosing receipt.
+Already recorded host files remain readable by their original stamp.
+
 Choose a private output directory under `backend/var/` or outside the checkout.
 Other repository destinations, including production state and published data,
 are refused. Keep transcripts private: article and model text remain untrusted

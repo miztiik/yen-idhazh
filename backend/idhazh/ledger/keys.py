@@ -26,7 +26,7 @@ from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, supersedes
 from idhazh.contracts.feed_retirement import FeedRetirementRow
-from idhazh.contracts.host_fingerprint import HostFingerprintRow
+from idhazh.contracts.host_fingerprint import HostFingerprintRow, HostHardwareRow
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.item_health_summary import ItemHealthSummaryRow
 from idhazh.contracts.ledger_name import LedgerName
@@ -68,8 +68,17 @@ ITEM_HEALTH_KEY: Final = ("date", "run_id", "item_id")
 ITEM_HEALTH_SUMMARY_KEY: Final = ("date", "stage")
 
 
-#: One machine a job, so four cells identify the host a job drew.
+#: Kept for job-only readers. Generic host records are keyed by host_record_key.
 HOST_FINGERPRINT_KEY: Final = ("date", "run_id", "job", "shard")
+
+
+def host_record_key(row: HostFingerprintRow | HostHardwareRow) -> tuple[str, ...]:
+    """Keep generic task identity separate from the legacy job namespace."""
+    if row.pipeline_name is not None and row.task_name is not None:
+        return (row.date, row.run_id, row.pipeline_name, row.task_name, str(row.shard))
+    if row.job is None or row.pipeline_name is not None or row.task_name is not None:
+        raise ValueError("host row has incomplete task identity")
+    return (row.date, row.run_id, str(row.job), str(row.shard))
 
 
 #: What makes two cleanup rows the same record. One cleanup pass per run, so a

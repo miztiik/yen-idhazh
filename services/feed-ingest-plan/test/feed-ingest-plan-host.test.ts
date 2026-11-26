@@ -84,8 +84,10 @@ test("real API receipts survive a missing planner result and keep byte-valued ca
     expect(hostNotice).toContain("total RAM 16383.750 MiB");
     expect(host.response.row.l3_cache_bytes).toBe(50_331_648);
     expect(host.response.row.machine_memory_total_mib).toBe(16_383.75);
-    expect(host.response.row).toMatchObject({ job_seconds: null, model_load_ms: null,
-      server_prompt_tokens: null, server_prompt_seconds: null });
+    expect(host.response.row.job).toBe("isolated-plan");
+    for (const name of ["job_seconds", "model_load_ms", "server_prompt_tokens", "server_prompt_seconds"]) {
+      expect(host.response.row).not.toHaveProperty(name);
+    }
     expect(Bun.markdown.html(report.markdown)).toContain("<table>");
     const retained = await prepareWorkflowArtifacts({ root: f.directory, directory,
       runNumber: "700", attempt: 1, identity, registrations: host.registrations });

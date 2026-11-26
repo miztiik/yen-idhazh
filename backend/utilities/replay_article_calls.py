@@ -42,7 +42,8 @@ from idhazh.llm.server import (
 )
 from idhazh.stages.common import INPUTS_PAYLOAD
 from idhazh.stages.summarize_one_item import summarize_one_item
-from idhazh.telemetry import host
+from idhazh.telemetry import host, native_diagnostics
+from idhazh.telemetry.host_control import mode as host_telemetry_mode
 from idhazh.telemetry.record import Flags, ItemRecorder, persist
 from idhazh.visual_outcomes import project_visual_outcome
 from utilities.digest_recovery_download import SourceRun, download
@@ -194,7 +195,16 @@ def run_calls(
     timeout = request_timeout_seconds(model)
     observed = props(endpoint, timeout=timeout)
     markers = derive_turn_markers(endpoint, entry=model, timeout=timeout)
-    facts = host.host_facts(job=ServerJob.WORK)
+    telemetry_selection = host_telemetry_mode(settings.app.observability)
+    facts = (
+        host.host_facts(job=ServerJob.WORK) if telemetry_selection == "python"
+        else host.HostFacts(
+            cpu_model=(
+                native_diagnostics.cpu_model() if telemetry_selection == "typescript" else None
+            ),
+            runner_name=None, job=ServerJob.WORK,
+        )
+    )
     LOG.info(identity.model_dump_json())
     failures: list[str] = []
     for index, article in enumerate(articles):

@@ -20,7 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator
 
 from idhazh.contracts.base import DateStamp, Model, PipelineName, RelPath, RunId, Sha256, TaskName
 from idhazh.contracts.file_envelope import UnitId, WriterIdentity
-from idhazh.contracts.host_fingerprint import HostFingerprintRow
+from idhazh.contracts.host_fingerprint import HOST_HARDWARE_VERSION, HostHardwareRow
 from idhazh.contracts.task_performance import TaskPerformanceOutcome, TaskPerformanceRow
 from idhazh.publication_paths import IntegrityError, relative, safe_file
 from idhazh.telemetry.host import HostCells, process_start_ticks
@@ -36,7 +36,7 @@ _ITEM_VERSION = "2026-11-26"
 _START_ITEM = f"/api/{_ITEM_VERSION}/start-item-profile"
 _STOP_ITEM = f"/api/{_ITEM_VERSION}/stop-item-profile"
 RECORD_PATH = "/api/2026-11-26/record-task-performance"
-FINGERPRINT_PATH = "/api/2026-11-05/capture-host-fingerprint"
+FINGERPRINT_PATH = f"/api/{HOST_HARDWARE_VERSION}/capture-host-fingerprint"
 PRODUCER = "host-probes"
 LOG = logging.getLogger(__name__)
 
@@ -72,7 +72,7 @@ RESPONSE: TypeAdapter[Written | NotWritten] = TypeAdapter(
 
 class Captured(Model):
     status: Literal["written"]
-    row: HostFingerprintRow
+    row: HostHardwareRow
     files: tuple[RecordedFile]
     unavailable: dict[str, str]
 
@@ -84,7 +84,7 @@ class CaptureDisabled(Model):
     unavailable: dict[str, str]
 
 
-_CAPTURE: TypeAdapter[Captured | CaptureDisabled] = TypeAdapter(
+CAPTURE_RESPONSE: TypeAdapter[Captured | CaptureDisabled] = TypeAdapter(
     Annotated[Captured | CaptureDisabled, Field(discriminator="status")]
 )
 
@@ -280,10 +280,14 @@ class MachineApi:
         request = record_request(date=date, identity=identity, measurement=measurement)
         return RESPONSE.validate_json(self._post(RECORD_PATH, request))
 
-    def fingerprint(self, date: str, identity: WriterIdentity) -> Captured | CaptureDisabled:
-        return _CAPTURE.validate_json(self._post(FINGERPRINT_PATH, {
-            "date": date, "writer": identity.model_dump(mode="json"),
-        }))
+    def fingerprint(
+        self, date: str, identity: WriterIdentity, *, ask_placement: bool = True,
+    ) -> Captured | CaptureDisabled:
+        return CAPTURE_RESPONSE.validate_json(
+            self._post(FINGERPRINT_PATH, fingerprint_request(
+                date, identity, ask_placement=ask_placement,
+            )),
+        )
 
     @contextmanager
     def profile(
@@ -326,6 +330,23 @@ def warn(message: str) -> None:
         print(f"::warning title=Task Performance::{message}", file=sys.stderr)
     else:
         LOG.warning("Task Performance: %s", message)
+
+
+def fingerprint_request(
+    date: str, identity: WriterIdentity, *, ask_placement: bool = True,
+) -> dict[str, object]:
+    pid = os.getpid()
+    ticks = process_start_ticks(pid)
+    return {
+        "date": date,
+        "writer": identity.model_dump(mode="json"),
+        "target": {"pid": pid, "start_ticks": str(ticks)} if ticks is not None else None,
+        **({} if ask_placement else {"ask_placement": False}),
+    }
+
+
+def job_runtime_expected() -> bool:
+    return os.environ.get("IDHAZH_MACHINE_APIS_READY") == "true"
 
 
 def private_state(repo: Path) -> Path:

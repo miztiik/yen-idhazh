@@ -5,21 +5,21 @@ import { z } from "zod";
 import {
   FingerprintRequestSchema, SelectedSettingsSchema, loadConfig as loadFingerprintConfig,
 } from "../../host-fingerprints/src/config";
-import { FingerprintWrittenSchema } from "../../host-fingerprints/src/api/fingerprint-response";
+import { pinFingerprintTarget } from "../../host-fingerprints/src/inspect/cpu-capacity";
 import { requestFingerprint } from "../../host-fingerprints/src/api/local-fingerprint";
 import { writeJsonLine } from "../src/logging/structured-logger";
 import { describePlanError } from "../src/api/plan-request";
 import { ExecutionIdentitySchema, hostWriter } from "./feed-ingest-plan-metadata";
 import type { ExecutionIdentity, MetadataRegistrations } from "./feed-ingest-plan-metadata";
-import { verifyHostFingerprint } from "./feed-ingest-plan-host-verification";
+import { ReadableFingerprintWrittenSchema, verifyHostFingerprint } from "./feed-ingest-plan-host-verification";
 
 const UnrecordedSchema = z.strictObject({
   status: z.enum(["disabled", "unavailable", "failed"]), reason: z.string().min(1),
 });
 export const WorkflowHostFingerprintSchema = z.strictObject({
-  host_request: FingerprintRequestSchema,
+  host_request: FingerprintRequestSchema.pick({ date: true, writer: true }),
   host: z.discriminatedUnion("status", [
-    FingerprintWrittenSchema.omit({ status: true }).extend({ status: z.literal("recorded") }),
+    ReadableFingerprintWrittenSchema.omit({ status: true }).extend({ status: z.literal("recorded") }),
     UnrecordedSchema,
   ]),
 });
@@ -51,7 +51,8 @@ export async function retainWorkflowHostFailure(
   const file = Bun.file(join(input.directory, "host-fingerprint.json"));
   if (await file.exists()) {
     const previous = WorkflowHostFingerprintSchema.parse(await file.json());
-    if (JSON.stringify(previous.host_request) !== JSON.stringify(request)) {
+    if (previous.host_request.date !== request.date || ![request.writer, hostWriter(input.identity, true)]
+      .some(writer => JSON.stringify(previous.host_request.writer) === JSON.stringify(writer))) {
       throw new Error("Fingerprint evidence belongs to another invocation");
     }
     return;
@@ -81,7 +82,8 @@ export async function captureWorkflowHostFingerprint(input: {
     try {
       if (input.origin === undefined) throw new Error("Enabled fingerprint capture requires its owned listener");
       const config = await loadFingerprintConfig(join(input.root, "config", "host-fingerprints.json"));
-      const result = await requestFingerprint(input.origin, request, config, settings, input.signal);
+      const target = await pinFingerprintTarget(process.pid, config);
+      const result = await requestFingerprint(input.origin, { ...request, target }, config, settings, input.signal);
       if (result.status !== "written") throw new Error("Enabled host instrument did not persist a fingerprint");
       await verifyHostFingerprint(input.stateRoot, result, input.registrations, identity);
       evidence.host = { ...result, status: "recorded" };

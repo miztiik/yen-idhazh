@@ -1105,8 +1105,7 @@ function writeHostFingerprintCanary() {
 		// The newest run: three jobs and two machines.
 		probe(date, 2, 'plan', 0, EPYC),
 		probe(date, 2, 'work', 0, XEON, {
-			version: '2026-10-14', pipeline_name: 'digest', task_name: 'work',
-			server_prompt_tokens: 1700, server_prompt_seconds: 73.72
+			version: '2026-11-26', pipeline_name: 'digest', task_name: 'work'
 		}),
 		legacyTotalsOnly(date, 2, 'work', 1, {
 			server_prompt_tokens: 962, server_prompt_seconds: 83.73
