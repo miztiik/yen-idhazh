@@ -1,4 +1,4 @@
-"""How does one gardener control runner retain its exact opening capture?"""
+"""How does one gardener control runner launch the recorder with its opening identity?"""
 
 from __future__ import annotations
 
@@ -13,6 +13,8 @@ from idhazh import ledger, run_context
 from idhazh.gardener.control_fingerprints import Job, expected
 from idhazh.publication_paths import IntegrityError
 from idhazh.telemetry import machine_api, machine_evidence
+from idhazh.telemetry.host_control import MODE_ENV
+from utilities import host_telemetry_control, machine_task
 
 
 def retain(
@@ -40,14 +42,31 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--job", required=True, type=Job, choices=list(Job))
-    parser.add_argument("--out", required=True, type=Path)
+    parser.add_argument("--out", type=Path)
+    parser.add_argument("command", nargs=argparse.REMAINDER, help="Trusted command after --")
     args = parser.parse_args(argv)
     if args.job != os.environ["GITHUB_JOB"]:
-        raise IntegrityError("fingerprint does not name this workflow job")
+        raise IntegrityError("control evidence does not name this workflow job")
     wanted = expected(
         args.job, run_id=args.run_id, attempt=run_context.run_attempt(),
         revision=os.environ["GITHUB_SHA"],
     )
+    if args.command:
+        if args.command[0] != "--" or len(args.command) < 2:
+            parser.error("pass the trusted command after --")
+        try:
+            instrument = host_telemetry_control.resolve(
+                os.environ.get(MODE_ENV, "python"), Path("config"),
+            ) != "off"
+        except (OSError, ValueError) as error:
+            machine_api.unavailable(args.job, "control selection", error)
+            instrument = False
+        return machine_task.run(
+            args.command[1:], run_id=args.run_id, days=(wanted.date,),
+            legacy_opening=wanted.writer, instrument=instrument,
+        )
+    if args.out is None:
+        parser.error("opening capture requires --out")
     if machine_evidence.read_receipt(args.out, wanted) is not None:
         raise IntegrityError("this runner already has a captured opening")
     client = machine_api.MachineApi.for_job()
@@ -57,9 +76,6 @@ def main(argv: list[str] | None = None) -> int:
     response = client.fingerprint(wanted.date, wanted.writer)
     if isinstance(response, machine_api.Captured):
         retain(machine_api.private_state(Path.cwd()), args.out, wanted, response)
-        if output := os.environ.get("GITHUB_OUTPUT"):
-            with Path(output).open("a", encoding="utf-8", newline="\n") as handle:
-                handle.write(f"run_id={wanted.writer.run_id}\nattempt={wanted.writer.attempt}\n")
     return 0
 
 

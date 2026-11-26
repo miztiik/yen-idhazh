@@ -1,6 +1,6 @@
 # The gardener
 
-**Last Updated**: 2026-11-05
+**Last Updated**: 2026-11-26
 
 How the one program that deletes and rewrites what this repository keeps is put
 together: where its tasks come from, how a wake is split into shards, what a
@@ -43,7 +43,7 @@ cannot change which tasks a wake plans.
 | 5 | `run-tasks` | the runner | Writes the shard's one record through `ledger.persist`, and hands back what to land |
 | 6 | `run-tasks` | `gardener_publish.publish` | Builds one commit of exactly what the shard wrote and deleted, pushes it, and tries again on a newer tip if the push failed. Lands nothing when `main` changed one of those paths after the commit the shard ran on |
 | 7 | `history` | `backend/utilities/corpus_squash_due.py`, then `backend/utilities/corpus_history.py` | Once every shard has ended, unless the run was cancelled: reads whether the corpus squash is due and, on a due day, squashes the old history and force-pushes `main` with a lease on the tip it read, squashing again on a new tip when the push is refused |
-| 8 | `publish-fingerprints` | `backend/utilities/gardener_fingerprint_publish.py` | After `history` ends, appends the verified control-runner openings, even when no task shard ran and no squash was due |
+| 8 | `publish-fingerprints` | `backend/utilities/gardener_fingerprint_publish.py` | After `history` ends, verifies and appends the control-runner openings and closed operations, even when no task shard ran and no squash was due |
 
 **The split is round-robin over sorted names.** Every task the matrix runs - an
 active one whose kind is not `history`, which has a job of its own - is sorted by
@@ -119,11 +119,11 @@ example `shard 0: compact-feed-health, traces`, so a run's page shows what every
 shard ran without opening a job; the workflow holds that format and never a
 list of tasks.
 
-**The job graph.** Three jobs, in order. `plan` prints the shards, one
+**The job graph.** `plan` prints the shards, one
 `run-tasks` job runs each shard - all of them at once - and `history` runs the
 corpus squash after them. The squash is not in the matrix: it rewrites `main`,
-so it runs alone, once every shard has ended. Every task in the matrix only
-reports today; the squash is the one task that changes anything.
+so it runs alone, once every shard has ended. `publish-fingerprints` runs after
+history, and only appends evidence.
 
 ```mermaid
 %%{init: {"theme": "base", "htmlLabels": false, "themeVariables": {"background": "#ffffff", "primaryColor": "#f8fafc", "primaryTextColor": "#1f2937", "primaryBorderColor": "#64748b", "lineColor": "#64748b", "textColor": "#1f2937", "clusterBkg": "#f1f5f9", "clusterBorder": "#64748b", "titleColor": "#1f2937", "edgeLabelBackground": "#f8fafc", "fontSize": "14px"}}}%%
@@ -150,7 +150,7 @@ flowchart TB
     ALARM["exit 1<br/>naming the failed task<br/>or what it downloaded"]
     REFUSED["exit 3<br/>refused: main did not<br/>move, nothing landed"]
     HIST["history job, once every shard<br/>has ended, unless the run was cancelled:<br/>corpus_squash_due.py, then,<br/>on a due day, corpus_history.py<br/>squashes and force-pushes main<br/>with a lease on the tip it read"]
-    OPENINGS["publish-fingerprints job:<br/>append the exact native openings"]
+    OPENINGS["publish-fingerprints job:<br/>append the exact native control evidence"]
   end
 
   subgraph TREE["The committed tree - state/"]
@@ -654,20 +654,38 @@ Compaction never reads the private state, even when the new receipt covers a
 day eligible for this pass. Refusal leaves no new measurement eligible to land.
 The existing shard record and closing host clock still write as before.
 
-The `plan`, `history` and `publish-fingerprints` runners take one native opening
-fingerprint each when enabled. None runs task profiles. The history runner
-loads the instrument at the workflow revision, separately from the fresh
-`main` checkout its due check and rewrite need. Its fingerprint is available
-even when the rewrite is not due. The planner and history jobs upload named
-artifacts without changing their credentials or staging files.
+### Control runner evidence
 
-The last job waits for history to end and appends only verified raw
-host-fingerprint files for the run's UTC day. It includes its own opening in
-that same append. Artifact IDs and producing attempts come from the upstream
-jobs' outputs, not the downloaded files. A partial retry can use the completed
-producer's original attempt; it never renames those bytes or assigns them the
-append runner's attempt. Missing and rejected evidence is reported. The
-appender cannot replace a different blob, delete data, or invoke the rewrite.
+The `plan`, `history` and `publish-fingerprints` runners each take one native
+opening fingerprint when enabled. Their [Host Probes](../../reference/host-probe-api.md)
+measure `plan`, `check-history-eligibility`, and `prepare-control-append`.
+The publisher closes its probe before the shared publisher fetches or pushes;
+that row does not say whether the append landed. An empty plan and a successful
+`due=false` check still performed work. A failed check yields an error
+observation, not a not-due decision. `corpus-squash` is profiled only if the
+existing due gate and setup steps reach the command.
+
+History runs the original commands on their fresh `main` checkouts with the
+same permissions. Its credential-free instrument checkout stays on the
+workflow revision, which is the recording producer's revision, not the revision
+of the input tree. Its profiles contain elapsed and available whole-machine
+readings, not CPU or RAM of the process waiting for the history command. A
+failed or skipped setup does not produce a squash observation.
+
+The planner and history jobs upload their retained receipts and files after
+work, including after a task error if the job is not cancelled. The final job
+opens only the exact expected opening and operation receipts, verifies the
+bytes and any host reference, and appends only the two raw ledgers for the run's
+UTC day. It includes its own opening and successful preparation in that same
+append. Artifact IDs and producing attempts come from workflow outputs. A
+partial retry keeps the original producer's bytes, identity and attempt.
+An unavailable opening can leave a closed task unlinked. Disabled or paused
+recording, unreached work and profiles that cannot close leave no task file.
+A runner stopped before upload might not deliver even a completed reading.
+No verified files means no commit. The appender cannot replace a different blob,
+delete data, or invoke the rewrite.
+
+### Local runs
 
 **`idhazh gardener run-task` never pushes.** It runs the same tasks and writes
 the same record into the checkout, and stops there, so running a task on a
