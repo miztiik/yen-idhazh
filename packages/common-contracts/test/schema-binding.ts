@@ -23,7 +23,7 @@ import {
   PublicationEntryInputSchema, PublicationInventoryInputSchema, PUBLICATION_INVENTORY_VERSION,
   RawArticleFreshnessSchema, AdmittedArticleFreshnessSchema, ScreenedCandidateSchema,
   NumericalSelectionInputSchema, NumericalSelectionOutputSchema,
-  FeedOutcomePayloadSchema,
+  FeedOutcomePayloadSchema, TaskPerformanceRowSchema,
 } from "../src/index";
 
 export const runtimeSchemas = {
@@ -34,6 +34,7 @@ export const runtimeSchemas = {
   FeedOutcomePayload: FeedOutcomePayloadSchema,
   WriterIdentity: WriterIdentitySchema, RowIdentity: RowIdentitySchema, FileEnvelope: FileEnvelopeSchema,
   PlannerFileEnvelope: PlannerFileEnvelopeSchema, FeedHealthRow: FeedHealthRowSchema,
+  TaskPerformanceRow: TaskPerformanceRowSchema,
   FetchedDocument: FetchedDocumentSchema,
   SourceArticleOutcome: SourceArticleOutcomeSchema, RejectedArticleRow: RejectedArticleRowSchema,
   ExtractionQuality: ExtractionQualitySchema, PlannerStageContext: PlannerStageContextSchema,
@@ -72,6 +73,9 @@ export const publicationInputSchemas = {
   PublicationEntry: z.toJSONSchema(PublicationEntryInputSchema, { io: "input" }),
   PublicationInventory: z.toJSONSchema(PublicationInventoryInputSchema, { io: "input" }),
 };
+const taskPerformanceCases = import.meta.main && process.argv.includes("--task-performance-cases")
+  ? z.array(z.unknown()).parse(await Bun.stdin.json()).map((value) => TaskPerformanceRowSchema.safeParse(value).success)
+  : [];
 if (import.meta.main) process.stdout.write(`${JSON.stringify({
   ...schemas, __footer_keys: footerKeys, __optional_footer_keys: optionalFooterKeys,
   __planner_footer_keys: PLANNER_FOOTER_METADATA_KEYS,
@@ -81,4 +85,5 @@ if (import.meta.main) process.stdout.write(`${JSON.stringify({
   __row_identity_column_versions: ROW_IDENTITY_COLUMN_VERSIONS,
   __publication_inputs: publicationInputSchemas,
   __publication_input_versions: { PublicationInventory: PUBLICATION_INVENTORY_VERSION },
+  __task_performance_cases: taskPerformanceCases,
 })}\n`);

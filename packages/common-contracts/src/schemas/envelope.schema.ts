@@ -9,7 +9,7 @@ import { RecordedInstantSchema } from "./recorded-instant.schema";
 import { CommitShaSchema, CountSchema, DateStampSchema, JobNameSchema, MonthStampSchema, NonEmptySchema, PositiveCountSchema, RunIdSchema, SchemaVersionSchema, ServerJobSchema, Sha256Schema, YearStampSchema, reject } from "./primitives";
 
 export const LedgerNameSchema = z.enum([
-  "seen", "feed-health", "item-health", "host-fingerprint", "summary-quality-evals",
+  "seen", "feed-health", "item-health", "host-fingerprint", "task-performance", "summary-quality-evals",
   "item-health-summary", "published", "feed-retirements", "visual-prunes", "visual-design-attempts",
   "counterfactual-scores", "holdout-pairs", "pair-verdicts", "threshold-history",
   "traces", "day-metrics", "digest-fragments",

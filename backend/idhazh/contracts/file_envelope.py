@@ -265,6 +265,7 @@ class EnvelopeWriterIdentity(WriterIdentity):
 _UNIT_ID_PATTERN: Final = (
     r"^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
 )
+UnitId = Annotated[str, StringConstraints(pattern=_UNIT_ID_PATTERN)]
 
 
 class RowIdentity(Model):
@@ -297,7 +298,7 @@ class RowIdentity(Model):
     pipeline_name: PipelineName | None = Field(default=None)
     task_name: TaskName | None = Field(default=None)
     shard: int = Field(ge=0, description="Which shard of that job, from 0.")
-    unit_id: Annotated[str, StringConstraints(pattern=_UNIT_ID_PATTERN)] = Field(
+    unit_id: UnitId = Field(
         description=(
             "The work unit the row belongs to, as the raw file's `unit_id` spells it. "
             "The same for every attempt at that unit."

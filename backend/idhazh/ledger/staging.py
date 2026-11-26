@@ -143,6 +143,11 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
         symbol="idhazh.telemetry.silicon.stage_fingerprint",
         job_labels=frozenset({"plan", "work", "assemble"}),
     ),
+    LedgerName.TASK_PERFORMANCE: LedgerStaging(
+        writer="TypeScript Host Probes API through the shared ledger writer; not yet writing rows",
+        symbol=None,
+        job_labels=frozenset(),
+    ),
     LedgerName.SUMMARY_QUALITY_EVALS: LedgerStaging(
         writer=(
             "idhazh.evals.writer.file_measurements, called by a work shard as each item "

@@ -104,6 +104,7 @@ from idhazh.contracts.story_similarity_threshold_history_row import (
     StorySimilarityThresholdHistoryRow,
 )
 from idhazh.contracts.summary import Summary, SummaryStatus
+from idhazh.contracts.task_performance import TaskPerformanceRow
 from idhazh.contracts.taxonomy import (
     EventDef,
     LensDef,
@@ -194,6 +195,7 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     StorySimilarityRunnerReport,
     StorySimilarityThresholdHistoryRow,
     Summary,
+    TaskPerformanceRow,
     Taxonomy,
     VisualAggregateRow,
     VisualAttemptRow,
@@ -263,6 +265,7 @@ __all__ = [
     "StalePayloadError",
     "Summary",
     "SummaryStatus",
+    "TaskPerformanceRow",
     "Taxonomy",
     "ValidationVerdict",
     "VerticalCount",

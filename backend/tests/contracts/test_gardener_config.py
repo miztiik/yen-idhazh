@@ -101,6 +101,7 @@ RETENTION_LEDGERS: Final = (
     "feed-retirements", "gardener", "host-fingerprint", "item-health",
     "item-health-summary", "published", "run-plan", "seen", "summary-quality-evals",
     "run-shards",
+    "task-performance",
     "visual-prunes",
 )
 MOVED_LEDGER_TASKS: Final = (
@@ -157,7 +158,7 @@ def test_a_squash_pushes_at_least_once_and_never_waits_less_than_nothing(
 
 
 def test_every_ledger_uses_the_approved_live_retention_chain() -> None:
-    """All fourteen declarations, and each moved onto the door since, pack live and expire."""
+    """Ordinary production compactions pack live and expire."""
     tasks = config.load_gardener().tasks
     retained = (*(f"compact-{name}" for name in RETENTION_LEDGERS), *MOVED_LEDGER_TASKS)
     assert {

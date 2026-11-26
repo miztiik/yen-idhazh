@@ -11,7 +11,47 @@ import pytest
 from pydantic import ValidationError
 from support.paths import REPO_ROOT
 
+from idhazh.contracts.task_performance import TaskPerformanceRow
+
 pytestmark = pytest.mark.contract
+
+
+def task_performance_cases() -> dict[str, tuple[dict[str, Any], bool]]:
+    identity = {
+        "version": TaskPerformanceRow.schema_version(), "date": "2026-11-25",
+        "run_id": "2026-11-25-1", "pipeline_name": "digest", "task_name": "work", "shard": 0,
+    }
+    phase = identity | {"task_kind": "workflow-task", "outcome": "cancelled", "elapsed_ms": 0}
+    judge = phase | {"task_kind": "judge", "subject_id": "quality"}
+    serving = identity | {"task_kind": "model-serving", "outcome": "error", "subject_id": "summary"}
+    return {
+        "phase with measurements missing": (phase, True),
+        "judge with a measured zero": (judge | {"model_calls": 0}, True),
+        "serving with only one observed zero": (serving | {"server_prompt_tokens": 0}, True),
+        "same instant at distinct precisions": (phase | {
+            "started_at": "2026-11-25T00:00:00Z", "finished_at": "2026-11-25T00:00:00.000Z",
+        }, True),
+        "missing version": ({key: value for key, value in phase.items() if key != "version"}, False),
+        "unrecognized version": (phase | {"version": "2026-11-24"}, False),
+        "invalid accounting day": (phase | {"date": "2026-02-29"}, False),
+        "local time": (phase | {"finished_at": "2026-11-25T00:00:00"}, False),
+        "inverted interval": (phase | {
+            "started_at": "2026-11-25T00:00:00.001Z", "finished_at": "2026-11-25T00:00:00Z",
+        }, False),
+        "invalid host reference": (phase | {"host_unit_id": "not-an-id"}, False),
+        "elapsed missing": (phase | {"elapsed_ms": None}, False),
+        "elapsed on serving": (serving | {"model_load_ms": 1, "elapsed_ms": 0}, False),
+        "judge without subject": (judge | {"subject_id": None}, False),
+        "serving without subject": (serving | {"subject_id": None, "model_load_ms": 1}, False),
+        "serving without measurements": (serving, False),
+        "serving cell on a phase": (phase | {"server_prompt_seconds": 0}, False),
+        "phase cell on serving": (serving | {"model_load_ms": 1, "tokens_out": 0}, False),
+        "CPU percentage past its bound": (phase | {"machine_cpu_busy_pct": 100.1}, False),
+        "unsafe integer reading": (phase | {"worker_rss_peak_kib": 1 << 53}, False),
+        "negative CPU time": (phase | {"worker_cpu_time_ms": -1}, False),
+        "payload stamps a writer identity": (phase | {"attempt": 1}, False),
+        "raw samples instead of a summary": (phase | {"samples": []}, False),
+    }
 
 
 @pytest.fixture(scope="module")
@@ -19,8 +59,9 @@ def typescript_schemas() -> dict[str, Any]:
     bun = shutil.which("bun")
     assert bun, "Install Bun to run the native contract binding gate"
     completed = subprocess.run(
-        [bun, "run", "test/schema-binding.ts"],
+        [bun, "run", "test/schema-binding.ts", "--task-performance-cases"],
         cwd=REPO_ROOT / "packages" / "common-contracts",
+        input=json.dumps([row for row, _ in task_performance_cases().values()]),
         text=True,
         capture_output=True,
         check=True,
@@ -114,11 +155,15 @@ def test_native_typescript_shapes_match_the_python_owned_contracts(
         "WriterIdentity": file_envelope.WriterIdentity.model_json_schema(),
         "RowIdentity": file_envelope.RowIdentity.model_json_schema(),
         "FeedHealthRow": FeedHealthRow.json_schema(),
+        "TaskPerformanceRow": TaskPerformanceRow.json_schema(),
     }
     for name, native in native_schemas.items():
         typescript = typescript_schemas[name]
         assert normalized_shape(typescript, typescript) == normalized_shape(native, native)
 
+    task_fields = typescript_schemas["TaskPerformanceRow"]["properties"]
+    assert list(task_fields) == list(TaskPerformanceRow.model_fields)
+    assert task_fields["version"]["const"] == TaskPerformanceRow.schema_version()
     assert typescript_schemas["__footer_keys"] == list(file_envelope._KEYS)
     assert set(typescript_schemas["__optional_footer_keys"]) == file_envelope._OPTIONAL_KEYS
     versions = typescript_schemas["__envelope_versions"]
@@ -151,3 +196,15 @@ def test_native_typescript_shapes_match_the_python_owned_contracts(
             {key: value for key, value in native_field.items() if key != "default"},
             native_inventory,
         )
+
+
+def test_task_performance_kind_and_boundary_rules_agree(typescript_schemas: dict[str, Any]) -> None:
+    cases = task_performance_cases()
+    native_results = typescript_schemas["__task_performance_cases"]
+    for (name, (payload, accepted)), ts_accepted in zip(cases.items(), native_results, strict=True):
+        assert ts_accepted is accepted, name
+        if accepted:
+            TaskPerformanceRow.model_validate(payload)
+        else:
+            with pytest.raises(ValidationError):
+                TaskPerformanceRow.model_validate(payload)

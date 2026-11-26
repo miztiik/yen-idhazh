@@ -775,11 +775,13 @@ class Contract(Model):
     rename of the Python class. The document's `version` defaults to the newest
     changelog entry but accepts an older date-stamp, so a payload written by an
     earlier run still validates and a read-side migration has something to
-    branch on.
+    branch on. A contract can require an explicit version when an unstamped
+    input has never been part of its format.
     """
 
     __schema_stem__: ClassVar[str] = ""
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = ()
+    __require_explicit_version__: ClassVar[bool] = False
 
     version: SchemaVersion
 
@@ -798,6 +800,8 @@ class Contract(Model):
     @model_validator(mode="before")
     @classmethod
     def _stamp_current_version(cls, data: Any) -> Any:
+        if cls.__require_explicit_version__:
+            return data
         if isinstance(data, dict) and "version" not in data:
             return {**data, "version": cls.schema_version()}
         return data
@@ -819,15 +823,14 @@ class Contract(Model):
         compute over it (`CLAUDE.md` section 1a).
         """
         schema = cls.model_json_schema()
-        # A document that omits `version` is stamped with the current one on
-        # read, so the schema says optional-with-a-default rather than required.
-        # Anything this project writes emits it explicitly.
-        schema["properties"]["version"]["default"] = cls.schema_version()
-        required = [name for name in schema.get("required", []) if name != "version"]
-        if required:
-            schema["required"] = required
-        else:
-            schema.pop("required", None)
+        if not cls.__require_explicit_version__:
+            # The validator supplies the stamp on read, so the schema declares its default.
+            schema["properties"]["version"]["default"] = cls.schema_version()
+            required = [name for name in schema.get("required", []) if name != "version"]
+            if required:
+                schema["required"] = required
+            else:
+                schema.pop("required", None)
         # `$id` is the stem's filename form rather than a URL, so a reader handed
         # this schema identifies it offline with nothing to 404.
         schema["$schema"] = JSON_SCHEMA_DIALECT

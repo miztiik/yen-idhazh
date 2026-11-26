@@ -277,6 +277,39 @@ the package; the backend gate installs its locked dependencies before pytest.
 The remaining native copies are bound by
 `backend/tests/contracts/test_native_typescript_bindings.py`.
 
+### Task Performance
+
+`backend/idhazh/contracts/task_performance.py` owns `TaskPerformanceRow`. Its
+strict Zod copy in `packages/common-contracts/src/schemas/task-performance.schema.ts`
+uses the same field types, null defaults, vocabularies and explicit version.
+This is the first format: the reader requires the declared stamp, and there
+is no older, unstamped or host-fingerprint representation to convert.
+
+Every terminal row carries its trusted UTC accounting `date`, `run_id`,
+`pipeline_name`, `task_name`, `shard`, `task_kind` and `outcome`. The kinds are
+`workflow-task`, `model-serving` and `judge`; outcomes are `success`, `error`
+and `cancelled`. The writer files under the accounting day, which need not
+match either observed instant, and supplies the attempt and work-unit identity.
+The optional start and finish are UTC instants, ordered when both are known.
+A `host_unit_id` is the original capture's work unit; the producer must verify
+the capture belongs to the same run and attempt before including the link.
+
+Workflow and judge rows require elapsed milliseconds. They can include model
+call counts, input and output token counts, and aggregate model seconds.
+Model-serving rows carry none of those phase fields. They require at least
+one observed value among model load milliseconds, server prompt seconds and
+server prompt tokens. A reader may calculate prompt tokens per second only
+from a same-row pair with positive seconds. Serving and judge rows both
+require a bounded `subject_id`.
+
+Any kind can report whole-interval CPU busy and steal percentages, minimum
+available machine memory and peak sampled worker RSS in KiB, and worker CPU
+time in milliseconds. Values are finite and nonnegative, percentages are at
+most 100, and counts are exact safe integers. Unknown measurements are null,
+not zero. No process details, text or individual samples are filed.
+
+### Planner-owned rows
+
 The current planner family has five strict native payloads:
 `DiscoveredArticleRow`, `SelectedArticleRow`, `FeedHealthStateRow` and
 `PlanRunRow`, plus `RejectedArticleRow`. Their `PlannerRow` declaration uses the current schema stamp
@@ -298,8 +331,8 @@ keys, defaults and vocabularies. Integration tests read real writer output
 through daily, monthly, reopened-month and yearly maintenance. Python planner
 model comparisons are retired, not skipped or replaced with compatible copies;
 native Python binding tests remain for payloads Python still owns.
-Contract input bindings use `Contract.json_schema()`, which includes its
-read-time version default; nested models use `model_json_schema()`.
+Contract input bindings use `Contract.json_schema()`, which declares a version
+default only when the reader supplies one; nested models use `model_json_schema()`.
 
 Current TypeScript planner batches and ledger rows refuse retired formats.
 Discovered articles and feed health use `2026-10-25`; selected articles and

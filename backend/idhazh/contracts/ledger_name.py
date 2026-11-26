@@ -47,6 +47,7 @@ class LedgerName(StrEnum):
     FEED_HEALTH = "feed-health"
     ITEM_HEALTH = "item-health"
     HOST_FINGERPRINT = "host-fingerprint"
+    TASK_PERFORMANCE = "task-performance"
     SUMMARY_QUALITY_EVALS = "summary-quality-evals"
     ITEM_HEALTH_SUMMARY = "item-health-summary"
     PUBLISHED = "published"
