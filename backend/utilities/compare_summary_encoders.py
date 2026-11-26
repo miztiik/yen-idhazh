@@ -399,12 +399,14 @@ def _score(
         beside.replace(args.out)
 
     def peak_memory_gb() -> float | None:
-        if not memory_profiling_enabled or sys.platform == "win32":
+        if not memory_profiling_enabled:
             return None
         if native_memory:
             from idhazh.telemetry.native_diagnostics import peak_memory_gib
 
             return peak_memory_gib()
+        if sys.platform == "win32":
+            return None
         else:
             import resource
 

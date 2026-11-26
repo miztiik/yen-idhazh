@@ -19,6 +19,7 @@ import os
 import subprocess
 import sys
 import traceback
+from functools import partial
 from pathlib import Path
 from typing import Any, ClassVar, Final
 
@@ -379,17 +380,18 @@ def test_only_the_host_ledger_may_keep_a_workflow_job_distinct_from_its_task() -
     assert current.task_key == "example-inspect-host"
     assert current.model_copy(update={"job": current.task_name}).task_key == "inspect-host"
 
-    args = {
-        "covers": envelope.covers, "run_id": current.run_id, "pipeline_name": "example",
-        "task_name": "inspect-host", "shard": current.shard, "producer": current.producer,
-    }
-    assert filenames.unit_id(ledger=LedgerName.HOST_FINGERPRINT, job=current.job, **args) == (
-        filenames.unit_id(ledger=LedgerName.HOST_FINGERPRINT, **args)
+    unit = partial(
+        filenames.unit_id, covers=envelope.covers, run_id=current.run_id,
+        pipeline_name="example", task_name="inspect-host", shard=current.shard,
+        producer=current.producer,
+    )
+    assert unit(ledger=LedgerName.HOST_FINGERPRINT, job=current.job) == (
+        unit(ledger=LedgerName.HOST_FINGERPRINT)
     )
     with pytest.raises(ValueError, match="distinct workflow job"):
         FileEnvelope.model_validate({**envelope.model_dump(), "identity": current})
     with pytest.raises(ValueError, match="job must be absent or match"):
-        filenames.unit_id(ledger=envelope.ledger, job=current.job, **args)
+        unit(ledger=envelope.ledger, job=current.job)
 
 
 @pytest.mark.parametrize("fmt", list(Format), ids=[fmt.value for fmt in Format])

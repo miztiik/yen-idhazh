@@ -10,6 +10,7 @@ import pytest
 from support.paths import CONFIG_DIR, read_text
 
 from idhazh import ledger
+from idhazh.contracts.base import ServerJob
 from idhazh.contracts.file_envelope import (
     HOST_FINGERPRINT_PRODUCER,
     Compression,
@@ -95,7 +96,7 @@ def _rollback(state: Path, *, generic: bool = False) -> Path:
 def _archived(state: Path) -> Path:
     identity = _writer(DAY, job="assemble")
     row = LegacyHostFingerprintRow(
-        version="2026-09-20", date=DAY, run_id=identity.run_id, job="assemble", shard=0,
+        version="2026-09-20", date=DAY, run_id=identity.run_id, job=ServerJob.ASSEMBLE, shard=0,
         measured_at=f"{DAY}T00:02:00Z", cores=2, threads=4, mhz_at_probe=2750.0,
         mhz_max=3100.0, job_seconds=33,
     )
@@ -111,6 +112,7 @@ def _archived(state: Path) -> Path:
     )
     cells = stamped.model_dump(mode="json") | row.model_dump(mode="json")
     envelope = FileEnvelope(
+        version=FileEnvelope.schema_version(),
         row_schema_version=row.version, tier=Tier.RAW, ledger=HOST, covers=DAY,
         written_at_ms=written_at_ms, identity=identity, unit_id=unit, file_id=file_id,
         content_sha256=hashlib.sha256(json_lines.rows_bytes([cells])).hexdigest(),
@@ -223,10 +225,10 @@ def test_unknown_physical_host_column_refuses_the_period_without_removing_its_so
     state = tmp_path / "state"
     raw = _new(state, DAY)
     model = HostFingerprintRow
-    source = raw if tier is Tier.RAW else ledger.persist_period(
+    source = ledger.persist_period(
         state, ledger.load_stored([raw], model=model), model=model, ledger=HOST,
         period=tier, covers=DAY if tier is Period.DAILY else DAY[:7], identity=PACKER, built_from=1,
-    )
+    ) if isinstance(tier, Period) else raw
     metadata, rows = parquet.read(source.read_bytes())
     rows = [{**row, "unknown_cell": None} for row in rows]
     data = parquet.render(
