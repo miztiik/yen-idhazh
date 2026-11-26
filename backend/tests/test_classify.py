@@ -147,7 +147,7 @@ def reading(evidence_id: str, interpretation: str = "as_stated") -> dict[str, st
 
 
 def named(label: str, evidence_id: str) -> dict[str, Any]:
-    return {"label": label, "reading": reading(evidence_id)}
+    return {"reading": reading(evidence_id), "label": label}
 
 
 def a_reply(decline: bool = False, /, **changed: object) -> str:
@@ -168,7 +168,7 @@ def a_reply(decline: bool = False, /, **changed: object) -> str:
             "type": "bar",
             **basis,
             "rows": [
-                named(label, f"q{index}") for index, label in enumerate(WIND_NAMES, 1)
+                named(label, f"ev{index}") for index, label in enumerate(WIND_NAMES, 1)
             ],
             "title": "Offshore wind approved",
             **changed,
@@ -191,7 +191,7 @@ class TestTheSummarizeAndPlanOracle:
         table, data = chart_data_over(article_ok, PRICES)
         choice = parse_summarize_and_plan(a_reply(
             type=form, title="Share price",
-            rows=[named("Before trading", "q1"), named("After trading began", "q2")],
+            rows=[named("Before trading", "ev1"), named("After trading began", "ev2")],
             comparison_basis="Price per share at two trading stages",
             axis_titles={"x": "Price per share", "y": "Trading stage"},
         )).visual
@@ -219,8 +219,8 @@ class TestTheSummarizeAndPlanOracle:
         choice = parse_summarize_and_plan(a_reply(
             type="line", title="Output",
             rows=[
-                {"date": "d4", "reading": reading("q3")},
-                {"date": "d2", "reading": reading("q1")},
+                {"date": "dt4", "reading": reading("ev3")},
+                {"date": "dt2", "reading": reading("ev1")},
             ],
         )).visual
         assert choice is not None
@@ -236,7 +236,7 @@ class TestTheSummarizeAndPlanOracle:
         text = "Alder is forecast to add 110 MW; Birch, likewise, expects to add 110 MW."
         table, data = chart_data_over(article_ok, text)
         catalog = candidates_for(table, text)
-        rows = [named("Birch", "q2"), named("Alder", "q1")]
+        rows = [named("Birch", "ev2"), named("Alder", "ev1")]
         choice = parse_summarize_and_plan(a_reply(
             rows=rows, title="Expected additions",
         )).visual
@@ -245,7 +245,7 @@ class TestTheSummarizeAndPlanOracle:
         assert plan.encodings.quantity == [candidate.element.element_id for candidate in reversed(catalog)]
         assert len(set(plan.encodings.quantity)) == 2
         extra = parse_summarize_and_plan(a_reply(
-            rows=[*rows, named("Cedar", "q3")], title="Expected additions",
+            rows=[*rows, named("Cedar", "ev3")], title="Expected additions",
         )).visual
         assert extra is not None
         with pytest.raises(ValueError, match="supplied quantity occurrence ID"):
@@ -256,31 +256,31 @@ class TestTheSummarizeAndPlanOracle:
             VisualType.SCATTER,
             "Alder reported 120 MW from 10 turbines. Birch reported 170 MW from 20 turbines.",
             [
-                {"label": label, "x": reading(x), "y": reading(y)}
-                for label, x, y in (("Alder", "q2", "q1"), ("Birch", "q4", "q3"))
+                {"x": reading(x), "y": reading(y), "label": label}
+                for label, x, y in (("Alder", "ev2", "ev1"), ("Birch", "ev4", "ev3"))
             ],
             {"x_measure": "Turbines", "y_measure": "MW", "title": "MW and turbines"},
         ),
         (
             VisualType.STACKED_BAR,
             "Total cargo was 90 tonnes, split into grain at 60 tonnes and sugar at 30 tonnes.",
-            [named("Grain", "q2"), named("Sugar", "q3")],
-            {"whole": named("Total cargo", "q1"), "measure": "Cargo", "title": "Cargo"},
+            [named("Grain", "ev2"), named("Sugar", "ev3")],
+            {"whole": named("Total cargo", "ev1"), "measure": "Cargo", "title": "Cargo"},
         ),
         (
             VisualType.PIE,
             "Cargo totals 90 tonnes: 60 tonnes of grain and 30 tonnes of sugar.",
-            [named("Grain", "q2"), named("Sugar", "q3")],
-            {"whole": named("Total cargo", "q1"), "title": "Cargo"},
+            [named("Grain", "ev2"), named("Sugar", "ev3")],
+            {"whole": named("Total cargo", "ev1"), "title": "Cargo"},
         ),
         (
             VisualType.BUBBLE,
             "Alder recorded 10 MW and 20 MWh on 5 hectares. Birch recorded 15 MW and 25 MWh on 8 hectares.",
             [
-                {"label": label, "x": reading(x), "y": reading(y),
-                 "size": reading(size), "series": series}
+                {"x": reading(x), "y": reading(y), "size": reading(size),
+                 "label": label, "series": series}
                 for label, x, y, size, series in (
-                    ("Alder", "q1", "q2", "q3", "North"), ("Birch", "q4", "q5", "q6", "South"),
+                    ("Alder", "ev1", "ev2", "ev3", "North"), ("Birch", "ev4", "ev5", "ev6", "South"),
                 )
             ],
             {"x_measure": "Power", "y_measure": "Energy", "size_measure": "Site area"},
@@ -289,15 +289,15 @@ class TestTheSummarizeAndPlanOracle:
             VisualType.SLOPE,
             "Alder moved from 12 MW in 2020 to 20 MW in 2024. Birch went from 9 MW to 15 MW.",
             [
-                {"label": label, "start": reading(start), "end": reading(end)}
-                for label, start, end in (("Alder", "q1", "q3"), ("Birch", "q5", "q6"))
+                {"start": reading(start), "end": reading(end), "label": label}
+                for label, start, end in (("Alder", "ev1", "ev3"), ("Birch", "ev5", "ev6"))
             ],
-            {"start_date": "d2", "end_date": "d4"},
+            {"start_date": "dt2", "end_date": "dt4"},
         ),
         (
             VisualType.HISTOGRAM,
             "The four readings (10 MW; 20 MW; 30 MW; 50 MW) describe separate sites.",
-            [reading(f"q{index}") for index in range(1, 5)],
+            [reading(f"ev{index}") for index in range(1, 5)],
             {"group": "Site power"},
         ),
     ])
@@ -319,7 +319,7 @@ class TestTheSummarizeAndPlanOracle:
     ) -> None:
         _, data = chart_data_over(article_ok, OIL_FORECAST)
         payload = a_request(article_ok.model_copy(update={"text": OIL_FORECAST}), data)
-        assert payload["prompt"].count(OIL_FORECAST) == 2
+        assert payload["prompt"].count(OIL_FORECAST) == 1
         assert payload["prompt"].count(FENCE_OPEN) == payload["prompt"].count(FENCE_CLOSE) == 2
         assert candidate_block(candidates_for(a_table(
             article_ok, OIL_FORECAST
@@ -333,11 +333,12 @@ class TestTheSummarizeAndPlanOracle:
             if form not in (VisualType.LINE, VisualType.SLOPE)
         ]
         assert {"type": "null"} in schema["properties"]["visual"]["anyOf"]
-        assert answers["bar"]["rows"]["items"]["required"] == ["label", "reading"]
+        assert answers["bar"]["rows"]["items"]["required"] == ["reading", "label"]
+        assert list(answers["bar"]["rows"]["items"]["properties"]) == ["reading", "label", "series"]
         assert answers["bar"]["rows"]["items"]["properties"]["reading"] == {
             "$ref": "#/$defs/Reading"
         }
-        assert schema["$defs"]["QuantityEvidenceId"]["enum"] == ["q2", "q3", "q4"]
+        assert schema["$defs"]["QuantityEvidenceId"]["enum"] == ["ev2", "ev3", "ev4"]
         assert "DateEvidenceId" not in schema["$defs"]
         assert schema["$defs"]["Reading"]["required"] == ["evidence_id", "interpretation"]
         assert answers["bar"]["comparison_basis"]["type"] == "string"
@@ -616,12 +617,12 @@ def test_shape_diagnostics_keep_native_fields_and_rules_without_reply_text(
         ((VisualType.DOT,), {}, "visual.type"),
         (
             (VisualType.BAR,),
-            {"rows": [named("offer price", "q9"), named("shares opened", "q2")]},
+            {"rows": [named("offer price", "ev9"), named("shares opened", "ev2")]},
             "visual.rows",
         ),
         (
             (VisualType.BAR,),
-            {"rows": [named("offer price", "q999"), named("shares opened", "q2")]},
+            {"rows": [named("offer price", "ev999"), named("shares opened", "ev2")]},
             "visual.rows",
         ),
     ),
@@ -650,7 +651,7 @@ def test_incompatible_evidence_and_incomplete_type_roles_never_draw(
     table, data = chart_data_over(article_ok, text)
     response = a_reply(
         type=type_name, title="Capacity",
-        rows=[named("Alder", "q1"), named("Birch", "q2")],
+        rows=[named("Alder", "ev1"), named("Birch", "ev2")],
     )
     if type_name == "line":
         with pytest.raises(ValidationError):
@@ -892,11 +893,15 @@ def test_evidence_keeps_whole_verified_sentences_with_fixed_bounds(article_ok: A
     table = a_table(article_ok, text)
     first, second = sentences_of(text)
     full = chart_candidates(table, text, (second, first, first))
-    assert [candidate.evidence_id for candidate in full] == ["q1", "q2", "q3"]
+    assert [candidate.evidence_id for candidate in full] == ["ev1", "ev2", "ev3"]
     assert [candidate.sentence for candidate in full] == [first, second, second]
-    assert candidate_block(full).count(first.text) == 1
-    assert "but only in a provisional estimate." in candidate_block(full)
-    exact = len(candidate_block(full))
+    rendered = candidate_block(full)
+    assert "Passage:" not in rendered
+    assert re.search(r"\[\d+:\d+\]", rendered) is None
+    assert "ev1: Output rose [20 MW], but only in a provisional ..." in rendered
+    assert "ev2: Other sites added [30 MW] and 40 MW." in rendered
+    assert "ev3: ... sites added 30 MW and [40 MW]." in rendered
+    exact = len(rendered)
     assert chart_candidates(
         table, text, (first, second), visuals=VisualsConfig(evidence_max_chars=exact)
     ) == full
@@ -913,13 +918,65 @@ def test_evidence_keeps_whole_verified_sentences_with_fixed_bounds(article_ok: A
         a_table(article_ok, padded), padded, (Sentence(padded, 0, len(padded)),)
     )
     block = candidate_block(offered)
-    passage = block.split("\nPassage:\n", 1)[1].split("\nReadings:", 1)[0]
-    assert passage == first.text
-    for candidate in offered:
-        match = re.search(rf"{candidate.evidence_id} \[(\d+):(\d+)\]: ([^\n]+)", block)
-        assert match is not None
-        start, end = int(match[1]), int(match[2])
-        assert passage[start:end] == match[3] == candidate.element.span_excerpt
+    assert "ev1: Output rose [20 MW], but only in a provisional ..." in block
+
+
+def test_local_snippets_disambiguate_readings_without_offsets_or_cross_sentence_bleed(
+    article_ok: Article,
+) -> None:
+    """1-line snippets keep local context inside the verified sentence and isolate bullet lines."""
+    bullets = (
+        "Locations:\n"
+        "- Firebaugh, CA: +10 stalls\n"
+        "- Kettleman City, CA: +8 stalls"
+    )
+    second = "Alder gained 20 MW, while Birch lost 20 MW."
+    text = f"{bullets}\n{second}"
+    table = a_table(article_ok, text)
+    sentences = (
+        Sentence(bullets, 0, len(bullets)),
+        Sentence(second, len(bullets) + 1, len(text)),
+    )
+    offered = chart_candidates(table, text, sentences)
+    block = candidate_block(offered)
+    lines = [line for line in block.splitlines() if line.startswith(("ev", "dt"))]
+    assert lines == [
+        "ev1: - Firebaugh, CA: +[10 stalls]",
+        "ev2: - Kettleman City, CA: +[8 stalls]",
+        "ev3: Alder gained [20 MW], while Birch lost 20 MW.",
+        "ev4: ... 20 MW, while Birch lost [20 MW].",
+    ]
+    assert "Kettleman" not in lines[0]
+    assert "Firebaugh" not in lines[1]
+    assert "Kettleman" not in lines[2]
+
+
+def test_schema_decodes_reading_ids_before_labels_for_every_row_shape(
+    article_ok: Article,
+) -> None:
+    """Every label-bearing chart row decodes its reading ID(s) before its display label."""
+    text = "Alder moved from 12 MW in 2020 to 20 MW in 2024. Birch moved from 9 MW to 15 MW."
+    table, forms = chart_data_over(article_ok, text)
+    candidates = candidates_for(table, text)
+    fields = chart_reply_fields(summarize_and_plan_schema(forms=forms, readings=candidates))
+
+    assert list(fields["bar"]["rows"]["items"]["properties"]) == ["reading", "label", "series"]
+    assert fields["bar"]["rows"]["items"]["required"] == ["reading", "label"]
+    assert list(fields["dot"]["rows"]["items"]["properties"]) == ["reading", "label", "series"]
+    assert fields["dot"]["rows"]["items"]["required"] == ["reading", "label"]
+    assert list(fields["slope"]["rows"]["items"]["properties"]) == ["start", "end", "label"]
+    assert fields["slope"]["rows"]["items"]["required"] == ["start", "end", "label"]
+    assert list(fields["scatter"]["rows"]["items"]["properties"]) == ["x", "y", "label", "series"]
+    assert fields["scatter"]["rows"]["items"]["required"] == ["x", "y", "label"]
+    assert list(fields["bubble"]["rows"]["items"]["properties"]) == [
+        "x", "y", "size", "label", "series",
+    ]
+    assert fields["bubble"]["rows"]["items"]["required"] == ["x", "y", "size", "label"]
+    for form in ("pie", "stacked_bar"):
+        assert list(fields[form]["whole"]["properties"]) == ["reading", "label"]
+        assert fields[form]["whole"]["required"] == ["reading", "label"]
+        assert list(fields[form]["rows"]["items"]["properties"]) == ["reading", "label"]
+        assert fields[form]["rows"]["items"]["required"] == ["reading", "label"]
 
 
 def test_evidence_never_falls_back_to_unverified_or_partial_sentences(article_ok: Article) -> None:
@@ -945,13 +1002,13 @@ def test_request_uses_distinct_finite_quantity_and_date_ids_without_source_strin
     text = "Output reached 170 MW in 2024, up from 120 MW in 2020."
     table, forms = chart_data_over(article_ok, text)
     candidates = candidates_for(table, text)
-    assert [candidate.evidence_id for candidate in candidates] == ["q1", "d2", "q3", "d4"]
+    assert [candidate.evidence_id for candidate in candidates] == ["ev1", "dt2", "ev3", "dt4"]
     schema = summarize_and_plan_schema(forms=forms, readings=candidates)
     assert schema["$defs"]["QuantityEvidenceId"] == {
-        "type": "string", "enum": ["q1", "q3"],
+        "type": "string", "enum": ["ev1", "ev3"],
     }
     assert schema["$defs"]["DateEvidenceId"] == {
-        "type": "string", "enum": ["d2", "d4"],
+        "type": "string", "enum": ["dt2", "dt4"],
     }
     fields = chart_reply_fields(schema)
     assert fields["line"]["rows"]["items"]["properties"]["date"] == {
@@ -984,8 +1041,8 @@ def test_model_can_choose_later_equal_occurrence_and_its_negative_interpretation
     candidates = candidates_for(table, text)
     choice = parse_summarize_and_plan(a_reply(
         rows=[
-            {"label": "Birch", "reading": reading("q2", "negative_magnitude")},
-            named("Cedar", "q3"),
+            {"reading": reading("ev2", "negative_magnitude"), "label": "Birch"},
+            named("Cedar", "ev3"),
         ],
         comparison_basis="Net capacity change in the same period",
     )).visual
@@ -1002,8 +1059,8 @@ def test_one_occurrence_cannot_have_conflicting_interpretations(article_ok: Arti
     text = "Alder lost 20 MW. Birch gained 30 MW."
     table, forms = chart_data_over(article_ok, text)
     choice = parse_summarize_and_plan(a_reply(rows=[
-        named("Alder", "q1"),
-        {"label": "Alder again", "reading": reading("q1", "negative_magnitude")},
+        named("Alder", "ev1"),
+        {"reading": reading("ev1", "negative_magnitude"), "label": "Alder again"},
     ])).visual
     assert choice is not None
     with pytest.raises(ValueError, match="one interpretation"):
@@ -1034,11 +1091,13 @@ def test_model_may_decline_ambiguous_time_categories_or_incomparable_prices(
 def test_legacy_value_unit_and_cross_kind_references_are_not_accepted() -> None:
     with pytest.raises(ValidationError):
         parse_summarize_and_plan(a_reply(rows=[
-            {"label": "Alder", "reading": {"value": "20", "unit": "MW"}},
-            named("Birch", "q2"),
+            {"reading": {"value": "20", "unit": "MW"}, "label": "Alder"},
+            named("Birch", "ev2"),
         ]))
     with pytest.raises(ValidationError):
-        parse_summarize_and_plan(a_reply(rows=[named("Year", "d2"), named("Alder", "q1")]))
+        parse_summarize_and_plan(a_reply(rows=[named("Year", "dt2"), named("Alder", "ev1")]))
+    with pytest.raises(ValidationError):
+        parse_summarize_and_plan(a_reply(rows=[named("Alder", "q1"), named("Birch", "ev2")]))
 
 
 def test_missing_sentence_analysis_intentionally_requests_summary_only(
@@ -1083,13 +1142,13 @@ def test_time_roles_only_offer_and_bind_comparable_precision_groups(article_ok: 
     table, forms = chart_data_over(article_ok, text)
     candidates = candidates_for(table, text)
     schema = summarize_and_plan_schema(forms=forms, readings=candidates)
-    assert schema["$defs"]["DateEvidenceId"]["enum"] == ["d2", "d4"]
+    assert schema["$defs"]["DateEvidenceId"]["enum"] == ["dt2", "dt4"]
     assert "line" in chart_reply_fields(schema)
     assert "slope" not in chart_reply_fields(schema)
     rejected = parse_summarize_and_plan(a_reply(
         type="line", rows=[
-            {"date": "d2", "reading": reading("q1")},
-            {"date": "d6", "reading": reading("q5")},
+            {"date": "dt2", "reading": reading("ev1")},
+            {"date": "dt6", "reading": reading("ev5")},
         ],
     )).visual
     assert rejected is not None
