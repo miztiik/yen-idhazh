@@ -1,0 +1,46 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Source of finding",
+    "y": "Share"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [
+      "m4",
+      "m5"
+    ],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "business-economy-9p0ewmzcg3q9e7x1",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Visa report (AI failure rate)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "National Retail Federation (AI adoption rate)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-5488-5491","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "%","value": "42"},
+    {"derived": null,"element_id": "quantity-135-138","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "59"},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m4","source_text": null,"text": "Proportion of test runs where AI failed to recommend a matching product","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m5","source_text": null,"text": "Share of consumers planning to use AI for winter shopping this weekend","time": null,"unit": null,"value": null}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "AI shopping failure rates by source (per report)",
+  "type": "bar",
+  "version": "2026-11-25"
+}

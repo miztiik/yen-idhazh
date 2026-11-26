@@ -1,0 +1,52 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Metric",
+    "y": "Change"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "quantity_x": [],
+    "series": [
+      "m6",
+      "m7",
+      "m8"
+    ],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-j1xygdzc89gc0q27",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Antigravity tokens/day change","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Daily token usage rise (rephrased)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Antigravity tokens/day change (quoted post)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-2186-2189","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "82"},
+    {"derived": null,"element_id": "quantity-2800-2803","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "%","value": "82"},
+    {"derived": null,"element_id": "quantity-2935-2938","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "%","value": "82"},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m6","source_text": null,"text": "Pichai's report","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m7","source_text": null,"text": "Pichai's report","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m8","source_text": null,"text": "Pichai's quoted post","time": null,"unit": null,"value": null}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Antigravity Token Usage Growth Since Argon Launch (Attributed to Pichai)",
+  "type": "bar",
+  "version": "2026-11-25"
+}
