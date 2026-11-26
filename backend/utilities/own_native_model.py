@@ -22,7 +22,7 @@ from urllib.parse import urlsplit
 from uuid import uuid4
 
 if TYPE_CHECKING:
-    from idhazh.contracts.knobs.models import ModelEntry
+    from idhazh.contracts.knobs.models import CompanionFile, ModelEntry
     from idhazh.contracts.model_server_pin import ModelServerPin
     from idhazh.contracts.task_performance import TaskPerformanceOutcome
     from utilities.model_refs import ModelFile
@@ -289,7 +289,7 @@ _OWNED_LAUNCH_FLAGS: Final = frozenset({
 
 
 def _require_matching_assets(entry: ModelEntry, files: Sequence[ModelFile]) -> None:
-    declared = (entry, *entry.companion_files)
+    declared: tuple[ModelEntry | CompanionFile, ...] = (entry, *entry.companion_files)
     if len(files) != len(declared) or any(
         (ref.repo, ref.revision, ref.file, ref.sha256, str(ref.byte_count or ""))
         != (asset.repo, asset.revision, asset.file, asset.sha256, asset.byte_count)
