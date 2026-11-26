@@ -9,6 +9,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Final
 
+from idhazh.atomic_write import write_atomic_bytes
 from idhazh.contracts.task_performance import TaskPerformanceOutcome
 
 # The existing capture limit applies to a startup log prefix and to the final metrics body.
@@ -99,3 +100,15 @@ def serving_measurement(
         "server_prompt_tokens": totals.tokens,
         "server_prompt_seconds": totals.seconds,
     }
+
+
+def retain_serving_capture(
+    path: Path, body: bytes, *, subject_id: str, outcome: TaskPerformanceOutcome,
+    started_at: str, finished_at: str,
+) -> dict[str, object] | None:
+    """Keep the verified raw capture even when it cannot supply a serving row."""
+    write_atomic_bytes(path, body)
+    return serving_measurement(
+        body.decode("utf-8"), subject_id=subject_id, outcome=outcome,
+        started_at=started_at, finished_at=finished_at,
+    )

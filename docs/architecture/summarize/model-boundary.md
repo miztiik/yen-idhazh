@@ -289,10 +289,12 @@ weights file itself, because llama-server does not publish an architecture.
 
 The digest launcher pins the model process it started. After shard work and
 before teardown it reads that process's local `/metrics` once, with a bounded
-response and deadline. A complete pair of cumulative prompt token and time
-counters supplies both the `serve-summarizer` task and the legacy host writer.
-An exited process, missing series or invalid pair leaves no serving row when
-there is no other measurement; it does not change the digest outcome.
+response and deadline. It keeps the exact verified response for the existing
+diagnostics and legacy host writer, even if a prompt series is missing. A
+complete, valid pair of cumulative prompt token and time counters from that
+same response supplies `serve-summarizer`. An exited process, missing series
+or invalid pair leaves no serving row when there is no other measurement;
+it does not change the digest outcome.
 The pinned runtime logs when tensor loading starts but does not log its finish
 as a distinct event. Its reported load timer after the first evaluation
 includes later work. Neither it nor the legacy startup markers or readiness

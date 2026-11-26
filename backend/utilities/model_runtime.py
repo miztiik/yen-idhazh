@@ -618,11 +618,10 @@ def close_serving_observation(
 ) -> dict[str, object] | None:
     """Read the launched model's final counters once, then stop only that model."""
     from idhazh import config
-    from idhazh.atomic_write import write_atomic_bytes
     from idhazh.contracts.knobs.model_server import port_of_base_url, resolve_base_url
     from idhazh.contracts.model_server_pin import ModelServerPin
     from idhazh.llm.server import loopback_url
-    from idhazh.llm.serving_metrics import CAPTURE_BYTES, serving_measurement
+    from idhazh.llm.serving_metrics import CAPTURE_BYTES, retain_serving_capture
     from idhazh.telemetry.host import process_start_ticks
 
     def unavailable(reason: str) -> None:
@@ -699,8 +698,8 @@ def close_serving_observation(
             return None
         observed_at = datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
         try:
-            measurement = serving_measurement(
-                reply.stdout.decode("utf-8"), subject_id=entry.id, outcome=outcome,
+            measurement = retain_serving_capture(
+                counters_path, reply.stdout, subject_id=entry.id, outcome=outcome,
                 started_at=pin.started_at, finished_at=observed_at,
             )
         except ValueError:
@@ -709,7 +708,6 @@ def close_serving_observation(
         if measurement is None:
             unavailable("prompt_pair_incomplete")
             return None
-        write_atomic_bytes(counters_path, reply.stdout)
         return measurement
     finally:
         stop_pinned_server(pin.pid, pin.start_ticks)
