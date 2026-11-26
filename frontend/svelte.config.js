@@ -50,6 +50,18 @@ const version = process.env.BUILD_VERSION ? { name: process.env.BUILD_VERSION } 
 
 const staticAdapter = adapter({ fallback: '404.html', strict: false });
 
+/** @type {import('@sveltejs/kit').Adapter} */
+const clientEntryAdapter = {
+	name: 'static-client-entry',
+	async adapt(builder) {
+		await staticAdapter.adapt(builder);
+		// Known browser-only destinations need an entry document, not the host's 404.
+		const entry = 'build/console/operations/index.html';
+		builder.mkdirp(dirname(entry));
+		await builder.generateFallback(entry);
+	}
+};
+
 // Seven routes ship a prerendered document: `/`, `/archive/` and the
 // five `/console/` pages. The two dated routes ship none - they declare
 // `ssr = false`, so the `404.html` fallback set below answers every dated
@@ -58,18 +70,7 @@ const staticAdapter = adapter({ fallback: '404.html', strict: false });
 // docs/architecture/publishing/frontend.md, rather than restated here.
 export default {
 	kit: {
-		adapter: {
-			name: 'static-client-entry',
-			/** @param {Parameters<typeof staticAdapter.adapt>[0]} builder */
-			async adapt(builder) {
-				await staticAdapter.adapt(builder);
-				// A known browser-only route must not enter through the host's 404.
-				// Generate the same empty app shell so the browser still reads all evidence.
-				const entry = 'build/console/operations/index.html';
-				builder.mkdirp(dirname(entry));
-				await builder.generateFallback(entry);
-			}
-		},
+		adapter: clientEntryAdapter,
 		paths: { base: process.env.BASE_PATH ?? '' },
 		...(version ? { version } : {}),
 		// `src/service-worker.ts` is built and shipped; registering it is ours.
