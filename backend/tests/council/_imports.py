@@ -70,6 +70,7 @@ MODULE_NAMES = (
     "idhazh.contracts.run_manifest",
     "idhazh.contracts.seen",
     "idhazh.contracts.sources",
+    "idhazh.contracts.task_performance",
     "idhazh.contracts.taxonomy",
     "idhazh.contracts.visual",
     "idhazh.contracts.visual_decision",
