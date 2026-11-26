@@ -1184,6 +1184,7 @@ python([
 	'backend/utilities/build_canary_day.py',
 	'--file-fixture-rows',
 	FIXTURE_ROWS,
+	'--with-serving-fixture',
 	'--out',
 	ROOT,
 	'--state',

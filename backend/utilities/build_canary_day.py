@@ -1915,7 +1915,14 @@ def main() -> int:
             "fixture day of the console's ledgers."
         ),
     )
+    parser.add_argument(
+        "--with-serving-fixture",
+        action="store_true",
+        help="File the full browser canary's serving observations against its staged hosts.",
+    )
     args = parser.parse_args()
+    if args.with_serving_fixture and args.file_fixture_rows is None:
+        parser.error("--with-serving-fixture requires --file-fixture-rows")
     if args.scored_keys:
         print(json.dumps(scored_keys(args.state), sort_keys=True))
         return 0
@@ -1924,7 +1931,8 @@ def main() -> int:
 
         filed = file_fixture_rows(args.state, args.file_fixture_rows)
         filed.update(file_published_fixture_rows(args.state))
-        filed[LedgerName.TASK_PERFORMANCE] = file_serving_fixture_rows(args.state)
+        if args.with_serving_fixture:
+            filed[LedgerName.TASK_PERFORMANCE] = file_serving_fixture_rows(args.state)
         backfill(
             args.out, args.state,
             first=(calendar_date.fromisoformat(DATE) - timedelta(
@@ -1935,7 +1943,8 @@ def main() -> int:
         )
         state = args.state.resolve()
         pack_fixture_ledgers(state, state.parent)
-        filed[LedgerName.TASK_PERFORMANCE] += file_serving_fixture_rows(args.state, late=True)
+        if args.with_serving_fixture:
+            filed[LedgerName.TASK_PERFORMANCE] += file_serving_fixture_rows(args.state, late=True)
         unpacked = file_unpacked_fixture_day(args.state)
         filed[LedgerName.ITEM_HEALTH] = filed.get(LedgerName.ITEM_HEALTH, 0) + unpacked
         for which, count in filed.items():
