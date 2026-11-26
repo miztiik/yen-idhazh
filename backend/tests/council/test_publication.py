@@ -325,15 +325,16 @@ def test_council_lands_original_runner_bytes_and_keeps_trials_private(
                 )
                 with monkeypatch.context() as scoped:
                     scoped.setenv("COUNCIL_EVENT_FILE", str(events))
-                    judge_cell = partial(
-                        session.run_shard,
-                        settings.council, slug=cell.tenant, date=cell.date, run_id=selected.run_id,
-                        shard=cell.shard, shards=cell.shards, started=time.monotonic(),
-                        selection=selected,
-                    )
-                    assert outcome.run(
-                        CouncilProgram.SHARD, lambda job=judge_cell: outcome.of_results((job(),)),
-                    ) == 0
+
+                    def judge_cell(cell: Cell) -> int:
+                        result = session.run_shard(
+                            settings.council, slug=cell.tenant, date=cell.date,
+                            run_id=selected.run_id, shard=cell.shard, shards=cell.shards,
+                            started=time.monotonic(), selection=selected,
+                        )
+                        return outcome.of_results((result,))
+
+                    assert outcome.run(CouncilProgram.SHARD, partial(judge_cell, cell)) == 0
             host.capture(settings)
             opening = machine_evidence.read_receipt(host.bundle, host.opening)
             assert opening is not None
