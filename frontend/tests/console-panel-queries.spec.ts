@@ -33,13 +33,14 @@ import { slowestArticles } from '../src/lib/console/pipelines/slowest-articles';
 import { PANEL_QUERIES } from '../src/lib/console/machine/records';
 import { rankedList } from '../src/lib/charts/d3/rankedList';
 import { numberFormat } from './support/number-format';
-import { councilAttemptLink, councilDetails, councilHistory } from '../src/lib/console/council-runs';
-import { compactActivity, gardenerWakes, recoveryNotes, removalReport } from '../src/lib/console/pipelines/gardener-activity';
+import { councilAttemptLink, councilJudges, councilHistory, councilPartCounts } from '../src/lib/console/council-runs';
+import { compactActivity } from '../src/lib/console/operations/gardener-activity';
+import { gardenerOutcomeLanes, gardenerReports } from '../src/lib/console/operations/gardener-reports';
 import type { CompactWriteTrack } from '../src/lib/data/compact-file-writes';
 
 const PRESETS = [3, 7, 30] as const;
 
-test('Council days count attempts once, without borrowing parts from another digest or retry', () => {
+test('Council keeps judge widths, older digests and retries separate on the UTC execution axis', () => {
 	const prep: Row = {
 		date: '2026-11-23', run_id: '2026-11-24-45335697395', attempt: 2, job: 'save_council_results',
 		judge_id: 'example-judge', started_at: '2026-11-24T23:57:00Z', evaluation_step: 'select_judge_work',
@@ -50,55 +51,71 @@ test('Council days count attempts once, without borrowing parts from another dig
 		evaluation_step: 'combine_judge_results', outcome: 'nothing_to_do' };
 	const history = councilHistory([prep, part, part, older,
 		{ ...part, attempt: 1, work_part_index: 1, started_at: '2026-11-24T00:02:00Z' },
-		{ ...prep, judge_id: 'other-judge', work_part_count: 0, outcome: 'nothing_to_do' }
+		{ ...prep, judge_id: 'other-judge', work_part_count: 3 },
+		{ ...part, judge_id: 'other-judge', work_part_count: 3, work_part_index: 2, outcome: 'stopped_on_deadline' },
+		{ ...prep, judge_id: 'quiet-judge', work_part_count: 0, outcome: 'nothing_to_do' }
 	]);
-	const attempts = history.days.get('2026-11-24')!;
-	expect(attempts.map(({ attempt }) => attempt.attempt)).toEqual([2, 1]);
-	expect(history.days.get('2026-11-25')?.map(({ attempt }) => attempt.attempt)).toEqual([2]);
-	const chosen = attempts[0].attempt;
-	expect(councilDetails(chosen)).toMatchObject([
-		{ date: '2026-11-20', activity: 'No judging work reported', expected: 2, reported: 0, incomplete: true },
-		{ date: '2026-11-23', activity: 'Judging reported', expected: 2, reported: 1, incomplete: true },
-		{ date: '2026-11-23', activity: 'No work assigned', expected: 0, reported: 0, incomplete: false }
-	]);
+	const judges = councilJudges(history.attempts, { start: '2026-11-24', end: '2026-11-25' });
+	expect(judges.map(({ judge }) => judge)).toEqual(['example-judge', 'other-judge', 'quiet-judge']);
+	const [retryOne, retryTwo] = judges[0].days.get('2026-11-24')!;
+	expect([retryOne.attempt.attempt, retryTwo.attempt.attempt]).toEqual([1, 2]);
+	expect(councilPartCounts(retryTwo)).toMatchObject({ completed: 1, reported: 1, unreported: 1 });
+	expect(judges[0].days.get('2026-11-25')).toMatchObject([{ digest: older.date, combine: 'nothing_to_do' }]);
+	const anotherJudge = judges[1].days.get('2026-11-24')![0];
+	expect(anotherJudge.expected).toBe(3);
+	expect(councilPartCounts(anotherJudge)).toMatchObject({ stopped_on_deadline: 1, unreported: 2 });
+	expect(judges[2].days.get('2026-11-24')).toMatchObject([{ expected: 0, noWork: true }]);
+	expect(councilJudges(history.attempts, { start: '2026-11-25', end: '2026-11-25' }).map(({ judge }) => judge))
+		.toEqual(['example-judge']);
+	const chosen = retryTwo.attempt;
 	expect(councilAttemptLink(chosen, 'https://code.example/project/source')).toBe('https://code.example/project/source/actions/runs/45335697395/attempts/2');
 	expect(councilAttemptLink({ ...chosen, saveJob: false }, 'https://code.example/project/source')).toBeNull();
 });
 
-test('the compaction grid follows UTC write days, not the dates the files cover', () => {
+test('the compaction grid keeps the full UTC window and clips milestones by write date', () => {
 	const track = (period: CompactWriteTrack['period'], date: string, covers: string): CompactWriteTrack => ({
 		period, candidates: 1, days: 7, spans: [], omitted: false, issues: [],
-		writes: [{ ledger: 'gardener', period, covers, writtenAt: Date.parse(date), runId: '2026-11-15-43688487431', attempt: 1, shard: 4 }]
+		writes: [{ ledger: 'gardener', period, covers, writtenAt: Date.parse(date), runId: '2026-11-15-43688487431',
+			attempt: 1, shard: 4, inputs: 2, rows: 18, bytes: 12_536 }]
 	});
 	const monthly = track('monthly', '2026-11-15T07:09:25Z', '2026-09');
 	const daily = track('daily', '2026-11-17T02:00:00Z', '2026-11-15');
 	const yearly = track('yearly', '2026-11-17T22:00:00Z', '2025');
-	const view = compactActivity({ daily, monthly, yearly }, 7);
+	const viewport = { start: '2026-11-13', end: '2026-11-19' };
+	const view = compactActivity({ daily: { ...daily, days: 1 }, monthly, yearly }, viewport, 7);
 	expect(view.monthly?.covers).toBe('2026-09');
-	expect(view.calendar).toEqual(['2026-11-15', '2026-11-16', '2026-11-17']);
-	expect(view.lanes.map(({ cells }) => cells.map(({ state }) => state))).toEqual([
-		['checked', 'checked', 'written'], ['written', 'checked', 'checked'], ['checked', 'checked', 'written']
-	]);
-	expect(compactActivity({ daily, monthly, yearly: { ...yearly, candidates: 0, writes: [], issues: ['index unavailable'] } }, 7)
-		.lanes[2].cells.every(({ state }) => state === 'unavailable')).toBe(true);
+	expect(view.calendar).toHaveLength(7);
+	expect(view.calendar[0]).toBe(viewport.start);
+	expect(view.lanes[0].cells[0]).toMatchObject({ state: 'unavailable', draw: true });
+	expect(view.lanes[1].cells[0].draw).toBe(false);
+	expect(view.lanes[1].cells[2]).toMatchObject({ state: 'written', draw: true });
+	expect(view.lanes[2].cells[4]).toMatchObject({ state: 'written', draw: true });
+	const narrow = { start: '2026-11-16', end: '2026-11-17' };
+	expect(compactActivity({ daily, monthly, yearly }, narrow, 2).monthly).toBeNull();
+	expect(compactActivity({}, narrow, 2).calendar).toEqual([narrow.start, narrow.end]);
 });
 
-test('a Gardener wake retains reported stops and never counts a preview as a live removal', () => {
+test('Gardener links only observed consecutive deferrals and does not plot a cleanup preview as a stop', () => {
 	const artifact: Row = {
 		date: '2026-11-15', run_id: '2026-11-15-43688487431', attempt: 1, job: 'run-tasks', shard: 4,
 		task: 'workflow-artifacts', dry_run: true, stopped_because: 'ceiling', selected: 25, deleted: 10,
-		work_ended_at: '2026-11-15T07:12:00Z'
+		work_ended_at: '2026-11-15T07:12:00Z', candidates_seen: 33, recovered: '[]'
 	};
-	const compact = { ...artifact, task: 'compact-gardener', dry_run: false, selected: 1, deleted: 1,
-		stopped_because: 'deferred', fault: 'packed-file-unreadable', resume_from: '2026-11-08' };
-	const wake = gardenerWakes([artifact, compact]).wakes[0];
-	expect(wake.countStops).toEqual([{ label: 'Limit reached', count: 1 }, { label: 'Deferred', count: 1 }]);
-	expect(removalReport(wake.tasks[0])).toBe('Would remove: 10 workflow artifacts of 25 selected.');
-	expect(removalReport(wake.tasks[1])).toBe('Task report: 1 removals, cause not separated.');
-	expect(recoveryNotes([{ task: 'compact-gardener', recovered: '[{"note":"index-rebuilt","subject":"2026-09"}]' },
-		{ task: 'compact-council-run-records', recovered: null }])).toEqual({
-		partial: true, reports: [{ task: 'compact-gardener', label: 'Existing file restored to index', subject: '2026-09' }]
-	});
+	const compact = { ...artifact, task: 'compact-gardener', dry_run: false,
+		stopped_because: 'deferred', fault: 'packed-file-unreadable', resume_from: '2026-11-08',
+		work_ended_at: '2026-11-16T00:01:00Z' };
+	const { byDay } = gardenerReports([artifact, compact,
+		{ ...compact, work_ended_at: '2026-11-17T00:01:00Z' },
+		{ ...compact, work_ended_at: '2026-11-19T00:01:00Z', stopped_because: 'exhausted',
+			recovered: '[{"note":"index-rebuilt","subject":"2026-09"}]' }
+	]);
+	const [, deferred, recovery] = gardenerOutcomeLanes(
+		['2026-11-15', '2026-11-16', '2026-11-17', '2026-11-18', '2026-11-19'], byDay);
+	expect(deferred.cells.map(({ draw, links }) => [draw, links?.after])).toEqual([
+		[false, false], [true, true], [true, false], [false, false], [false, false]
+	]);
+	expect(byDay.get('2026-11-15')).toMatchObject([{ dryRun: true, checked: 33, selected: 25, deleted: 10 }]);
+	expect(recovery.cells[4].draw).toBe(true);
 });
 
 test('Judgement intersects the displayed digest window with packed history and opens only the selected run and attempt', async ({}, info) => {

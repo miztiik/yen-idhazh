@@ -3,7 +3,7 @@ import { getContext, onDestroy, setContext } from 'svelte';
 import type { TimeWindow } from '../charts/viewport';
 import type { RecordWindow } from './waiting';
 import type { WindowChoice } from './window-preference';
-import type { RouteId } from './band';
+import type { ConsoleDestinationId } from './console-destinations';
 
 /** What the control reads off the route under it.
  *
@@ -12,7 +12,7 @@ import type { RouteId } from './band';
  */
 export interface WindowSource {
 	/** Read these getters only while this route owns the layout. */
-	readonly route: RouteId;
+	readonly route: ConsoleDestinationId;
 	readonly days: number;
 	readonly presets: readonly number[];
 	/** True while the route is fetching what the window reaches into. */
@@ -32,6 +32,7 @@ export interface WindowSource {
 /** Where a route hands its window. */
 interface WindowSlot {
 	choice: WindowChoice;
+	utcDay(): string | null;
 	fill(source: WindowSource): void;
 	/** Empty the slot, but only if it still holds this source. */
 	clear(source: WindowSource): void;
@@ -42,11 +43,13 @@ const SLOT = Symbol('console-window');
 /** A plain holder prevents an outgoing teardown from clearing its replacement. */
 export function provideWindowSlot(
 	show: (source: WindowSource | null) => void,
-	choice: WindowChoice
+	choice: WindowChoice,
+	utcDay: () => string | null
 ): void {
 	let holder: WindowSource | null = null;
 	setContext<WindowSlot>(SLOT, {
 		choice,
+		utcDay,
 		fill(source) {
 			holder = source;
 			show(source);
@@ -64,6 +67,12 @@ export function useWindowChoice(): WindowChoice {
 	const slot = getContext<WindowSlot | undefined>(SLOT);
 	if (slot === undefined) throw new Error('A console route needs the layout window slot.');
 	return slot.choice;
+}
+
+export function useConsoleUtcDay(): () => string | null {
+	const slot = getContext<WindowSlot | undefined>(SLOT);
+	if (slot === undefined) throw new Error('A console route needs the layout window slot.');
+	return slot.utcDay;
 }
 
 /** Hand the route's window to the layout, for as long as the route is mounted.

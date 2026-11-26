@@ -1,4 +1,5 @@
 /** What can the published Council steps establish about a run attempt? */
+import type { TimeWindow } from '../charts/viewport';
 import { isDay, type Row } from '../data/slice-shapes';
 
 export const COUNCIL_STEPS = ['select_judge_work', 'evaluate_work_part', 'combine_judge_results'] as const;
@@ -11,7 +12,7 @@ const OUTCOME_LABEL: Record<Outcome, string> = {
 const SAVE_JOB = 'save_council_results';
 const RUN_ID = /^(\d{4}-\d{2}-\d{2})-([1-9]\d*)$/;
 
-interface CouncilStep {
+export interface CouncilStep {
 	date: string;
 	judge: string;
 	startedAt: string;
@@ -27,12 +28,6 @@ export interface CouncilAttempt {
 	attempt: number;
 	saveJob: boolean;
 	steps: CouncilStep[];
-}
-
-export interface CouncilDayAttempt {
-	attempt: CouncilAttempt;
-	first: string;
-	last: string;
 }
 
 export function councilHistory(rows: readonly Row[]) {
@@ -62,28 +57,29 @@ export function councilHistory(rows: readonly Row[]) {
 			part: typeof work_part_index === 'number' ? work_part_index : null, width: work_part_count });
 		attempts.set(key, held);
 	}
-	const days = new Map<string, CouncilDayAttempt[]>();
-	for (const attempt of attempts.values()) {
-		const times = new Map<string, CouncilDayAttempt>();
-		for (const { startedAt } of attempt.steps) {
-			const date = startedAt.slice(0, 10);
-			const span = times.get(date) ?? { attempt, first: startedAt, last: startedAt };
-			if (startedAt < span.first) span.first = startedAt;
-			if (startedAt > span.last) span.last = startedAt;
-			times.set(date, span);
-		}
-		for (const [date, span] of times) {
-			const onDay = days.get(date) ?? [];
-			onDay.push(span);
-			days.set(date, onDay);
-		}
-	}
-	for (const day of days.values()) day.sort((a, b) => b.last.localeCompare(a.last)
-		|| b.attempt.attempt - a.attempt.attempt || a.attempt.runId.localeCompare(b.attempt.runId));
-	return { days, ignored };
+	return { attempts: [...attempts.values()], ignored };
 }
 
-export function councilDetails(attempt: CouncilAttempt) {
+export interface CouncilWork {
+	key: string;
+	judge: string;
+	digest: string;
+	startedAt: string;
+	attempt: CouncilAttempt;
+	expected: number | null;
+	parts: ReadonlyMap<number, Outcome>;
+	combine: Outcome | null;
+	prepare: Outcome | null;
+	noWork: boolean;
+}
+
+function outcome(steps: readonly CouncilStep[], step: Step): Outcome | null {
+	const states = new Set(steps.filter((row) => row.step === step).map((row) => row.outcome));
+	return states.size === 1 ? states.values().next().value ?? null : null;
+}
+
+/** A cohort is one judge, digest and attempt; a retry can never supply another cohort's part. */
+function councilWork(attempt: CouncilAttempt): CouncilWork[] {
 	const groups = new Map<string, CouncilStep[]>();
 	for (const row of attempt.steps) {
 		const key = `${row.judge}/${row.date}`;
@@ -91,29 +87,60 @@ export function councilDetails(attempt: CouncilAttempt) {
 		held.push(row);
 		groups.set(key, held);
 	}
-	return [...groups].sort(([a], [b]) => a.localeCompare(b)).map(([key, rows]) => {
+	return [...groups].map(([key, rows]) => {
 		const { judge, date } = rows[0];
-		const parts = rows.filter((row) => row.part !== null)
-			.sort((a, b) => (a.part ?? 0) - (b.part ?? 0));
-		const reported = new Set(parts.map((part) => part.part)).size;
 		const widths = new Set(rows.map((row) => row.width));
 		const expected = widths.size === 1 ? rows[0].width : null;
-		const prep = rows.filter((row) => row.step === 'select_judge_work');
-		const combine = rows.filter((row) => row.step === 'combine_judge_results');
-		const noWork = expected === 0 && prep.length === 1 && prep[0].outcome === 'nothing_to_do'
-			&& parts.length === 0 && combine.every((row) => row.outcome === 'nothing_to_do');
-		const phase = (steps: CouncilStep[], empty = 'Not reported') => steps.length > 0
-			? [...new Set(steps.map((row) => OUTCOME_LABEL[row.outcome]))].join(', ') : empty;
-		return {
-			key, judge, date, reported, expected,
-			activity: parts.some((row) => row.outcome === 'completed') ? 'Judging reported'
-				: parts.some((row) => row.outcome !== 'nothing_to_do') ? 'Judging attempted'
-				: noWork ? 'No work assigned' : 'No judging work reported',
-			prepare: phase(prep), combine: phase(combine, noWork ? 'Not needed' : 'Not reported'),
-			incomplete: prep.length === 0 || (expected !== null && (reported < expected || (expected > 0 && combine.length === 0))),
-			parts: parts.map((part) => `Part ${part.part! + 1}: ${OUTCOME_LABEL[part.outcome]}`).join('; ')
-		};
+		const candidates = new Map<number, Set<Outcome>>();
+		for (const row of rows) {
+			if (row.part === null) continue;
+			const states = candidates.get(row.part) ?? new Set<Outcome>();
+			states.add(row.outcome);
+			candidates.set(row.part, states);
+		}
+		const parts = new Map<number, Outcome>();
+		for (const [part, states] of candidates) {
+			const state = states.values().next().value;
+			if (states.size === 1 && state !== undefined) parts.set(part, state);
+		}
+		const prepare = outcome(rows, 'select_judge_work');
+		const combine = outcome(rows, 'combine_judge_results');
+		const noWork = expected === 0 && prepare === 'nothing_to_do' && candidates.size === 0 &&
+			(combine === null || combine === 'nothing_to_do');
+		const startedAt = rows.reduce((first, row) => row.startedAt < first ? row.startedAt : first, rows[0].startedAt);
+		return { key: `${attempt.key}/${key}`, judge, digest: date, startedAt, attempt, expected, parts, prepare, combine, noWork };
 	});
+}
+
+export function councilJudges(attempts: readonly CouncilAttempt[], window: TimeWindow) {
+	const judges = new Map<string, Map<string, CouncilWork[]>>();
+	for (const work of attempts.flatMap(councilWork)) {
+		const day = work.startedAt.slice(0, 10);
+		if (day < window.start || day > window.end) continue;
+		const days = judges.get(work.judge) ?? new Map<string, CouncilWork[]>();
+		const at = days.get(day) ?? [];
+		at.push(work);
+		days.set(day, at);
+		judges.set(work.judge, days);
+	}
+	return [...judges].sort(([a], [b]) => a.localeCompare(b)).map(([judge, days]) => ({
+		judge, days: new Map([...days].map(([day, items]) => [day, items.sort((a, b) =>
+			a.startedAt.localeCompare(b.startedAt) || a.key.localeCompare(b.key))]))
+	}));
+}
+
+export function councilPartCounts(work: CouncilWork) {
+	const reported = { completed: 0, stopped_on_deadline: 0, failed: 0, nothing_to_do: 0 };
+	for (const part of work.parts.values()) reported[part] += 1;
+	return {
+		...reported,
+		unreported: work.expected === null ? 0 : Math.max(0, work.expected - work.parts.size),
+		reported: work.parts.size
+	};
+}
+
+export function councilOutcomeLabel(value: Outcome | null): string {
+	return value === null ? 'Not reported' : OUTCOME_LABEL[value];
 }
 
 export function councilAttemptLink(attempt: CouncilAttempt, configuredRepo: string): string | null {

@@ -48,12 +48,11 @@ pytestmark = pytest.mark.contract
 LEGACY_HOST_INPUT_COLUMNS: Final = ("cores", "threads", "mhz_max", "mhz_at_probe")
 
 #: Fixed input inventory, in the registry's ownership order.
-QUERY_MODULES: Final = ("shared", "pipelines", "model", "machine", "voices", "judgement", "window")
+QUERY_MODULES: Final = ("shared", "pipelines", "model", "machine", "voices", "judgement", "operations", "window")
 QUERY_ROOT: Final = "frontend/src/lib/console/queries"
 EXPECTED_NAMES: Final = {
     "shared": ("failedRuleQuery",),
     "pipelines": (
-        "gardenerWakeQuery",
         "failureMixQuery", "itemTimeSplitQuery",
         "stageTimingsQuery", "writeCostQuery", "tailTrendQuery", "runTimelineQuery", "slowestArticlesQuery", "articleAgeQuery",
     ),
@@ -71,9 +70,10 @@ EXPECTED_NAMES: Final = {
     ),
     "voices": ("feedsFailedQuery", "fetchTimeQuery", "sourceCutsQuery", "whyChosenQuery"),
     "judgement": (
-        "councilRunsQuery", "judgeHistoryQuery", "judgeDayQuery", "judgeDrawTrialQuery", "judgePairTrialQuery", "judgeCutoffTrialQuery",
+        "judgeHistoryQuery", "judgeDayQuery", "judgeDrawTrialQuery", "judgePairTrialQuery", "judgeCutoffTrialQuery",
         "judgePoolTrialQuery",
     ),
+    "operations": ("councilRunsQuery", "gardenerWakeQuery"),
     "window": (),
 }
 
@@ -83,6 +83,7 @@ EXPECTED_COLUMNS: Final[Mapping[str, tuple[str, ...]]] = {
     "gardenerWakeQuery": (
         "date", "run_id", "attempt", "job", "shard", "task", "work_ended_at", "dry_run",
         "selected", "deleted", "bytes_freed", "stopped_because", "fault", "resume_from",
+        "candidates_seen", "handled_through", "recovered",
     ),
     "failedRuleQuery": ("date", "stage", "outcome", "code", "failed_rule"),
     "failureMixQuery": ("date", "stage", "outcome", "code", "failed_rule"),
@@ -259,22 +260,19 @@ def ts_literal(path: str, key: str) -> tuple[str, ...]:
 
 def test_console_run_reports_use_the_producers_vocabulary() -> None:
     council = "frontend/src/lib/console/council-runs.ts"
-    gardener = "frontend/src/lib/console/pipelines/gardener-activity.ts"
+    gardener = "frontend/src/lib/console/operations/gardener-reports.ts"
     assert ts_literal(council, "COUNCIL_STEPS") == tuple(EvaluationStep)
     assert ts_literal(council, "COUNCIL_OUTCOMES") == tuple(ShardOutcome)
     assert ts_literal(gardener, "GARDENER_STOPS") == tuple(StopReason)
     assert ts_literal(gardener, "GARDENER_RECOVERIES") == tuple(RecoveryNote)
 
 
-def test_compact_write_and_recovery_projection_use_native_fields() -> None:
+def test_compact_write_projection_uses_native_fields() -> None:
     compact = ts_literal("frontend/src/lib/data/compact-write-footer.ts", "COMPACT_WRITE_FOOTER_KEYS")
     identity = {"run_id", "attempt", "job", "shard", "producer"}
     assert identity <= set(WriterIdentity.model_fields)
-    assert set(compact) == {"envelope_version", "tier", "ledger", "period", "covers", "written_at_ms", *identity}
+    assert set(compact) == {"envelope_version", "tier", "ledger", "period", "covers", "written_at_ms", "built_from", *identity}
     assert set(compact) - identity - {"envelope_version"} <= set(FileEnvelope.model_fields)
-    recovery = ts_literal("frontend/src/lib/data/ledger.ts", "GARDENER_RECOVERY_COLUMNS")
-    assert set(recovery) == {"date", "run_id", "attempt", "job", "shard", "task", "recovered"}
-    assert set(recovery) <= set(CollectionPruneRow.model_fields)
 
 
 def test_judgement_reads_only_the_compact_diagnostic_fields_it_displays() -> None:
@@ -438,7 +436,7 @@ def test_word_and_machine_renames_are_the_actual_contract_mappings() -> None:
 def test_query_span_and_fetch_predicate_match_the_panel_contracts() -> None:
     queries = load_queries()
     assert {query.name for query in queries if query.span == "widest"} == {
-        "runShardsQuery", "platformMixQuery", "servingSpeedQuery"
+        "runShardsQuery", "platformMixQuery", "servingSpeedQuery", "councilRunsQuery", "gardenerWakeQuery"
     }
     assert {query.name for query in queries if query.span == "newest-day"} == {
         "runTimelineQuery",

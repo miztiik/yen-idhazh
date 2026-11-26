@@ -84,7 +84,8 @@ test('compact evidence ranks the real footer clock, checks the file budget, and 
 		const { daily, monthly, yearly } = reader.activity(options);
 		expect(await monthly).toMatchObject({
 			period: 'monthly', candidates: 1, issues: [], writes: [{
-				ledger: LEDGER, period: 'monthly', covers: '2026-08', writtenAt: 1790620268518
+				ledger: LEDGER, period: 'monthly', covers: '2026-08', writtenAt: 1790620268518,
+				rows: 3, bytes: 13_639, inputs: 2
 			}]
 		});
 		expect(await daily).toMatchObject({ period: 'daily', omitted: true, writes: [] });

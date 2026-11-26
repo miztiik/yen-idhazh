@@ -344,8 +344,3 @@ export function readBand(payload: unknown): ConsoleShell {
 		read: true
 	};
 }
-
-/** The routes the strip draws, in the producer's order. */
-export function stripRoutes(routes: readonly ConsoleRoute[]): ConsoleRoute[] {
-	return [...routes];
-}

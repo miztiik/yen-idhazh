@@ -51,23 +51,24 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'WindowControl.svelte', 'WindowControlSource.svelte', 'WindowCoverage.svelte', 'WindowStatus.svelte'
 	],
 	'src/lib/console': [
-		'band.ts', 'chrome.ts', 'completeness.ts', 'console-style.ts', 'council-runs.ts', 'daily-figures.ts',
+		'band.ts', 'chrome.ts', 'completeness.ts', 'console-destinations.ts', 'console-style.ts', 'council-runs.ts', 'daily-figures.ts',
 		'duration-cohort.ts', 'eval-instruments.ts', 'failure-rules.ts',
 		'holdout.ts', 'judge-canaries.ts', 'judge-cutoff-evidence.ts', 'judge-draw.ts', 'judge-observations.ts', 'judge-pair-evidence.ts',
 		'judge-score-pool.ts', 'judge-trial-read.svelte.ts', 'judgement-evidence.ts', 'merged-stories.ts', 'model-cards.ts',
 		'query-state.ts', 'rates.ts', 'recording.ts', 'RecordNotes.svelte', 'route-console.ts', 'run-square.ts', 'series-tokens.ts',
 		'settings-moved.ts', 'span-words.ts', 'TimeCost.svelte', 'waiting.ts', 'window-coverage.ts', 'window-preference.ts', 'window-slot.ts'
 	],
-	'src/lib/console/queries': ['judgement.ts', 'machine.ts', 'model.ts', 'pipelines.ts', 'shared.ts', 'voices.ts', 'window.ts'],
+	'src/lib/console/queries': ['judgement.ts', 'machine.ts', 'model.ts', 'operations.ts', 'pipelines.ts', 'shared.ts', 'voices.ts', 'window.ts'],
 	'src/lib/console/pipelines': [
 		'ArticleAge.svelte', 'AtAGlance.svelte', 'ChartDrawing.svelte',
-		'FailureMix.svelte', 'GardenerActivity.svelte', 'GardenerTaskReports.svelte', 'ItemTimeSplit.svelte', 'RunHealth.svelte',
+		'FailureMix.svelte', 'ItemTimeSplit.svelte', 'RunHealth.svelte',
 		'RunTimeline.svelte', 'SlowestArticles.svelte', 'SiteCostPerItem.svelte', 'TailTrendPanel.svelte', 'StageTimings.svelte',
 		'VisualRefusals.svelte',
 		'article-age.ts', 'at-a-glance.ts', 'attempt-notes.ts', 'chart-drawing.ts', 'drawing-flow.ts', 'failure-mix.ts',
-		'gardener-activity.ts', 'item-time-split.ts', 'query-groups.ts', 'record-window.ts', 'run-health.ts', 'slowest-articles.ts',
+		'item-time-split.ts', 'query-groups.ts', 'record-window.ts', 'run-health.ts', 'slowest-articles.ts',
 		'run-timeline.ts', 'site-cost-per-item.ts', 'stage-timings.ts', 'visual-attempts.ts', 'visual-refusals.ts'
 	],
+	'src/lib/console/operations': ['GardenerActivity.svelte', 'GardenerTaskReports.svelte', 'gardener-activity.ts', 'gardener-reports.ts'],
 	'src/lib/console/model': [
 		'rows.ts', 'call-ending.ts', 'faithfulness.ts', 'summary-length.ts',
 		'model-throughput.ts', 'model-rule.ts', 'cost.ts', 'item-cost.ts', 'ItemCost.svelte', 'Query.svelte', 'Series.svelte',
@@ -114,7 +115,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	],
 	'src/routes/console/data-explorer': ['+page.svelte', '+page.ts'],
 	'src/routes/console/judgement': [
-		'+page.server.ts', '+page.svelte', 'CouncilRunsPanel.svelte', 'HoldoutMargin.svelte', 'MergedStoriesPanel.svelte',
+		'+page.server.ts', '+page.svelte', 'HoldoutMargin.svelte', 'MergedStoriesPanel.svelte',
 		'JudgeObservations.svelte', 'JudgeCanaryChart.svelte', 'JudgeCanaryDetails.svelte', 'JudgeCoverage.svelte', 'JudgeDigestDetails.svelte',
 		'JudgeScoreRanges.svelte', 'JudgeSliceChart.svelte',
 		'JudgeCutoffDiagnostics.svelte', 'JudgeDrawIntervals.svelte', 'JudgePairEvidence.svelte', 'JudgePercentStacks.svelte',
@@ -123,6 +124,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	],
 	'src/routes/console/machine': ['+page.server.ts', '+page.svelte'],
 	'src/routes/console/model': ['+page.server.ts', '+page.svelte'],
+	'src/routes/console/operations': ['+page.ts', '+page.svelte', 'CouncilJudgeChart.svelte', 'CouncilRunsPanel.svelte'],
 	'src/routes/console/voices': ['+page.server.ts', '+page.svelte'],
 	'src/routes/[date]': ['+page.svelte', '+page.ts'],
 	'src/routes/[date]/[vertical]': ['+page.svelte', '+page.ts'],

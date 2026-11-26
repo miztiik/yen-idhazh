@@ -8,7 +8,7 @@
  * frame, the tokens, the charts, the icons, the digest and console knobs.
  * `config/idhazh.json` owns the pipeline, and this module still reads the two
  * blocks the console needs from it to say whether a run went well.
- * The six named `config/console/` files own each route's panels and knobs.
+ * The named `config/console/` files own each route's panels and knobs.
  *
  * The appearance blocks moved on 2026-08-29 and the move is backwards
  * compatible: a reader prefers `appearance.json` and falls back to the legacy
@@ -23,6 +23,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { routeConsolesFrom, type RouteConsoles } from '../console/route-console';
+import { consoleDestinationIds } from '../console/console-destinations';
 import { REPO_ROOT } from './payload';
 import type { NumberFormatConfig } from '../number-format';
 import { resolveConsoleStyle, type ConsoleStyleInput } from '../console/console-style';
@@ -1088,10 +1089,10 @@ export function explorerConfig(): ExplorerConfig {
 	};
 }
 
-/** The six named console files, validated before Vite defines the browser value. */
+/** The named console files, validated before Vite defines the browser value. */
 export function routeConsoles(): RouteConsoles {
 	const files: Record<string, unknown> = {};
-	for (const route of ['pipelines', 'model', 'machine', 'judgement', 'voices', 'data-explorer']) {
+	for (const route of consoleDestinationIds) {
 		const file = `config/console/${route}.json`;
 		try {
 			files[route] = JSON.parse(readFileSync(join(REPO_ROOT, 'config', 'console', `${route}.json`), 'utf-8'));

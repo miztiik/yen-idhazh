@@ -38,7 +38,7 @@ surfaces follow the window control is
 ## Plan52: native readings and private published-day facts
 
 The route has fourteen addressed panels, in this order: `at-a-glance`,
-`run-health`, `site-cost-per-item`, `failure-mix`, `gardener-activity`, `item-time-split`,
+`run-health`, `site-cost-per-item`, `failure-mix`, `item-time-split`,
 `stage-timings`, `write-cost`, `tail-trend`, `run-timeline`,
 `slowest-articles`, `chart-drawing`, `visual-refusals`, `article-age`. Configuration comes from
 `consoleKnobs()` and `routeConsole('pipelines')`, not from page data.
@@ -331,26 +331,6 @@ and what one run's square says is
 [../../../frontend/src/lib/console/run-square.ts](../../../frontend/src/lib/console/run-square.ts).
 [../../../frontend/tests/console-run-health.spec.ts](../../../frontend/tests/console-run-health.spec.ts)
 checks manifest facts, square labels and the shared day-slot geometry.
-
-## Gardener maintenance shows published writes, not a workflow verdict
-
-The monthly lead names the latest verified write among retained published
-month files in the widest staged range. Its timestamp and the month it covers
-answer different questions. The daily, monthly and yearly rows below share
-one UTC write-day axis. A filled tile is a verified published write, an
-outline means no write found in the files checked, and a dashed tile means
-the evidence is incomplete. A future published year file can fill the Yearly
-row without a schema change. Narrow panels keep the same readout and day
-selector without squeezing in unreadable marks.
-
-The [query door](how-the-query-door-answers-a-panel.md#what-a-panel-asks-for-and-the-four-answers)
-owns the bounded file and footer reads. Task reports separately show when the
-last reported shard finished work and which tasks deferred, failed or reached
-a limit. Select a period to see the file's covered dates and writer, or a wake
-to see its task reports. A dry-run removal, an index adoption, and a landed
-write are not interchangeable. Compaction can remove superseded inputs
-without deleting any records for retention. Missing staged evidence cannot
-establish that a workflow did not run.
 
 ## What is failing, by stage
 

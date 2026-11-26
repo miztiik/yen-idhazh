@@ -24,6 +24,9 @@ export interface ConsoleColors {
 	chart_measure: string;
 	chart_memory_low: string;
 	chart_memory_high: string;
+	operation_written: string;
+	operation_deferred: string;
+	operation_failed: string;
 	/** Console category colours; the last slot is reserved for absence. */
 	categorical: string[];
 }
@@ -109,6 +112,7 @@ export const CONSOLE_STYLE_DEFAULTS: ConsoleStyleConfig = {
 			selected: '#e6f5d0', chart_axis: '#b6afa0', chart_grid: '#dad6cb',
 			chart_measure: '#6929c4',
 			chart_memory_low: '#a02b43', chart_memory_high: '#206e49',
+			operation_written: '#258e64', operation_deferred: '#b8780d', operation_failed: '#d7485d',
 			categorical: ['#126e81', '#1746a2', '#9f1853', '#343a3f', '#2773ad', '#8b538e', '#243d72', '#6a7078']
 		},
 		dark: {
@@ -119,6 +123,7 @@ export const CONSOLE_STYLE_DEFAULTS: ConsoleStyleConfig = {
 			selected: '#1b4612', chart_axis: '#565348', chart_grid: '#393932',
 			chart_measure: '#a56eff',
 			chart_memory_low: '#bb4e5a', chart_memory_high: '#64bb88',
+			operation_written: '#48c99b', operation_deferred: '#f2b54b', operation_failed: '#ff677b',
 			categorical: ['#6ac4d3', '#90a8ff', '#ff7eb6', '#dde1e6', '#74bce9', '#d397d9', '#aebfe5', '#a3aab4']
 		}
 	},

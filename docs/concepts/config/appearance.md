@@ -129,8 +129,10 @@ elevation and motion switches retain their existing fallbacks.
 
 Shared console knobs stay in `config/appearance.json`. Each route owns its panel
 order, judged ids and route-only numeric knobs in `config/console/<route>.json`.
-The six route ids are `pipelines`, `model`, `machine`, `voices`, `judgement` and
-`data-explorer`. The route id is a file name, not the label an operator sees.
+The route ids are declared by the browser Console destination inventory. The
+route id is a file name, not the label an operator sees. Operations mark colors
+are separate light and dark `console_style.colors` values; they do not change
+confidence or category colors.
 
 The source-doubt ranking and its `console.doubt_rows` limit are removed.
 Both native config families discard that one legacy key on read and never

@@ -2,13 +2,13 @@
 	/** Labelled route and group navigation stays beside the evidence on a wide screen. */
 	import { onMount } from 'svelte';
 	import { base } from '$app/paths';
-	import type { ConsoleRoute, RouteId } from '$lib/console/band';
+	import type { ConsoleDestination, ConsoleDestinationId } from '$lib/console/console-destinations';
 	import { ROUTE_GLYPHS } from '$lib/console/route-glyph';
 	import Icon from '$lib/icons/Icon.svelte';
 
 	let { routes, active, groups = [] }: {
-		routes: ConsoleRoute[];
-		active: RouteId;
+		routes: ConsoleDestination[];
+		active: ConsoleDestinationId;
 		groups?: readonly { id: string; title: string }[];
 	} = $props();
 	let expanded = $state(true);
