@@ -600,18 +600,33 @@ const EXPLORER_DEFAULTS: ExplorerConfig = {
 	counter_from_share: 0.9,
 	examples: [
 		{
-			id: "p99-by-machine",
-			title: "p99 job time by machine kind",
-			ledgers: ["host-fingerprint"],
-			days: 14,
-			sql: "SELECT cpu_model, quantile_cont(job_seconds, 0.99) AS p99_job_seconds, count(job_seconds) AS jobs FROM \"host-fingerprint\" WHERE job_seconds IS NOT NULL GROUP BY cpu_model ORDER BY p99_job_seconds DESC"
-		},
-		{
 			id: "throughput-by-machine",
 			title: "Prompt throughput by machine kind",
-			ledgers: ["host-fingerprint"],
+			ledgers: ["host-fingerprint", "task-performance"],
 			days: 14,
-			sql: "SELECT cpu_model, sum(server_prompt_tokens) / sum(server_prompt_seconds) AS prompt_tokens_per_second, count(*) AS jobs FROM \"host-fingerprint\" WHERE server_prompt_seconds > 0 GROUP BY cpu_model ORDER BY prompt_tokens_per_second DESC"
+			sql: `WITH hosts AS (
+  SELECT * FROM "host-fingerprint"
+  UNION ALL BY NAME
+  SELECT NULL::BIGINT AS server_prompt_tokens, NULL::DOUBLE AS server_prompt_seconds WHERE FALSE
+), serving AS (
+  SELECT host_unit_id, run_id, attempt, count(*) AS observations,
+         max(server_prompt_tokens) AS tokens, max(server_prompt_seconds) AS seconds
+  FROM "task-performance"
+  WHERE pipeline_name = 'digest' AND task_name = 'serve-summarizer'
+    AND task_kind = 'model-serving' AND host_unit_id IS NOT NULL
+  GROUP BY host_unit_id, run_id, attempt
+), paired AS (
+  SELECT h.cpu_model,
+    CASE WHEN s.observations = 1 THEN s.tokens
+         WHEN s.observations IS NULL AND h.version >= '2026-09-19' THEN h.server_prompt_tokens END AS tokens,
+    CASE WHEN s.observations = 1 THEN s.seconds
+         WHEN s.observations IS NULL AND h.version >= '2026-09-19' THEN h.server_prompt_seconds END AS seconds
+  FROM hosts h LEFT JOIN serving s
+    ON h.unit_id = s.host_unit_id AND h.run_id = s.run_id AND h.attempt = s.attempt
+)
+SELECT cpu_model, sum(tokens) / sum(seconds) AS prompt_tokens_per_second, count(*) AS jobs
+FROM paired WHERE tokens >= 0 AND isfinite(seconds) AND seconds > 0
+GROUP BY cpu_model ORDER BY prompt_tokens_per_second DESC`
 		},
 		{
 			id: "feeds-gone-quiet",

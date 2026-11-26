@@ -115,11 +115,9 @@ export type MissingFigures = 'scores' | 'server-counters';
  *
  * It names the days and never counts them, because a name says where to look.
  * Where every day on screen is one of them, it names them with the window's own
- * words. On Hardware it says where the speed figures come from instead: the
- * summariser's own clock and the server's own clock are two instruments, and a
- * page that let a reader think it had the second one would be quoting the wrong
- * denominator. It claims nothing about scores there, because Hardware draws no
- * quality figure.
+ * words. On Hardware the article timings and independently measured server
+ * speed use different evidence. Missing usable server data says nothing
+ * about whether the server took a reading.
  */
 function coveredElsewhereSentence(missing: MissingFigures, days: readonly string[], open: OfferedWindow): string {
 	const every = days.length === open.days;
@@ -127,8 +125,7 @@ function coveredElsewhereSentence(missing: MissingFigures, days: readonly string
 	if (missing === 'scores') {
 		return `There are no quality figures for ${named}. The machine ran and we timed it, but nothing scored the summaries.`;
 	}
-	const where = every ? 'here' : days.length === 1 ? 'for that day' : 'for those days';
-	return `No server figures were written down for ${named}. The speed figures ${where} come from the summariser, not the server.`;
+	return `No usable server prompt-speed readings are available for ${named}. Article timings come from the summariser's replies.`;
 }
 
 /** What one instrument's figures are called: the server's own counters on
@@ -137,8 +134,7 @@ export type InstrumentFigures = 'server figures' | 'quality figures' | 'machine 
 
 /** The words a started line opens with, naming what started, so two started
  * lines on one page with two dates never read as one fact with two answers. */
-const STARTED_SUBJECT: Readonly<Record<InstrumentFigures, string>> = {
-	'server figures': 'Server figures',
+const STARTED_SUBJECT: Readonly<Record<Exclude<InstrumentFigures, 'server figures'>, string>> = {
 	'quality figures': 'Quality figures',
 	'machine record': 'The machine record'
 };
@@ -162,6 +158,9 @@ export function recordingStarted(
 ): string | null {
 	if (firstRecorded === null || daysBefore <= 0) return null;
 	const days = daysBefore === 1 ? '1 day' : `${daysBefore} days`;
+	if (figures === 'server figures') {
+		return `The earliest available server prompt-speed reading is on ${shortDate(firstRecorded)}. Earlier in this window, ${days} had a run but no usable server reading.`;
+	}
 	return `${STARTED_SUBJECT[figures]} started on ${shortDate(firstRecorded)}. Earlier in this window, ${days} had a run but no ${figures}.`;
 }
 

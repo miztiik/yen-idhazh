@@ -85,7 +85,9 @@ The chart rules these panels obey are
  without a selection instruction. Actual mark hover shows only that date, capacity and its
  exact capacity-day count out of the day's recorded jobs. Day space shows the
  date and total. Keyboard/touch selection exposes complete counts and speed
- notes plus run, job or pipeline/task, shard, machine, L3, seconds and speed.
+ notes plus run, job or pipeline/task, shard, machine, L3 and prompt speed. An
+ unmatched or incomplete serving reading leaves the job visible with speed not
+ recorded; it never becomes a duration or changes the L3 colours.
 - **The machine mix reads after mount through the shared query reader.** Its
  window is the route's own, ending on the common item-health, host-fingerprint
  and run-shards evidence day, and
@@ -281,9 +283,8 @@ item ledger's read rate with the model server's own counters against a 5 percent
 allowance. Nothing else on the route read its answer: a run is refused by
 identity and count rules (`hostHalvesConflict`, `machineCounters`), never by that gap.
 The two readings are still recorded and `machineCounters` keeps no copy of the
-comparison; `backend/utilities/reconcile_prefill.py --run <id>` still compares
-them by hand, a frozen-fixture test guards its arithmetic, and nothing watches
-the live ledger. The count needed to refuse an impossible shard index comes
+comparison. The [prompt audit](../../architecture/summarize/throughput.md#the-read-rate-is-checked-against-the-server-and-it-holds)
+compares them offline. The count needed to refuse an impossible shard index comes
 only from the recorded manifest count, through the narrow `run-shards` ledger.
 Unknown remains unknown; neither observed machines nor configuration supplies
 that denominator.

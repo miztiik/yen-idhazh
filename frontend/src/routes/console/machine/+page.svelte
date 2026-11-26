@@ -15,7 +15,6 @@
 	import { MACHINE_QUERY_GROUPS } from '$lib/console/machine/query-groups';
 	import { retryReach } from '$lib/console/pipelines/record-window';
 	import { describeRefusedRuns } from '$lib/console/machine/refused-runs';
-	import { finiteCell } from '$lib/console/rates';
 	import { formatNumber } from '$lib/number-format';
 	import { measurementOff, recordingNotes, type RecordRead } from '$lib/console/recording';
 	import { settingsRules } from '$lib/console/settings-moved';
@@ -64,7 +63,9 @@
 	let countFault = $state<string | null>(null);
 	let tokenHistory = $state<TokenHistory | null>(null);
 	let tokenHistoryRange = $state<Range | null>(null);
-	const asked: readonly PanelQuery[] = MACHINE_QUERY_GROUPS.flatMap((group) => [...group.queries]);
+	const asked: readonly PanelQuery[] = [
+		...MACHINE_QUERY_GROUPS.flatMap((group) => [...group.queries]), queries.servingSpeedQuery
+	];
 	let requestedDays: number | null = null;
 	onMount(() => {
 		ready = true;
@@ -131,7 +132,22 @@
 						tokenHistory = { state: 'unreachable', readings: [], incomplete: false };
 					}
 				};
-				await Promise.all([readHistory(), ...group.queries.map(async (query) => {
+				const readServing = async () => {
+					if (group.id !== 'native' || found.through === null) return;
+					const query = queries.servingSpeedQuery;
+					try {
+						const serving = await routeReach([query.ledger]);
+						// Serving evidence can enrich the widest host window, never shorten it.
+						const span = rangeFor(query, days, { ...serving, through: found.through }, presets);
+						const result = 'state' in span ? span : await sliceOnce(queries.servingSpeedQuery, span);
+						if (current) answers = { ...answers, [query.name]: result };
+					} catch (error) {
+						if (!current) return;
+						console.warn('[machine] The serving record did not arrive.', error);
+						answers = { ...answers, [query.name]: { state: 'unreachable' } };
+					}
+				};
+				await Promise.all([readHistory(), readServing(), ...group.queries.map(async (query) => {
 					const range = rangeFor(query, days, found, presets);
 					let result: SliceResult | LedgerReach = 'state' in range ? range : await ask(query, range);
 					if (current && query.name === 'runShardsQuery' && 'rows' in result) {
@@ -178,7 +194,7 @@
 	const counters = $derived(countersFrom(counterReady ? rows('platformMixQuery') : [], counterReady ? rows('articleCostQuery') : [], counterReady ? rows('runShardsQuery') : []));
 	const countedRuns = $derived(counters.runs.filter((run) => run.date >= start && run.date <= end).length);
 	const refused = $derived(describeRefusedRuns(counters.refused.filter((run) => run.date >= start && run.date <= end)));
-	const jobs = $derived(fleetJobs(rows('platformMixQuery')));
+	const jobs = $derived(fleetJobs(rows('platformMixQuery'), rows(queries.servingSpeedQuery.name)));
 	const keys = $derived(machineKeys(jobs.map((job) => ({
 		fingerprint: job.fingerprint, fingerprintVersion: job.fingerprintVersion, cpuModel: job.cpuModel
 	}))));
@@ -207,8 +223,7 @@
 	const off = $derived(measurementOff({ enabled: cfg.recording, recorded: [...hostDates], read: hostRead, open,
 		offered: through === null ? [] : presets.map((days) => { const one = windowRange(days, through, '0001-01-01'); return { start: one.from, end: one.to, days }; }) }));
 	const serverNotes = $derived(recordingNotes({ enabled: cfg.recording,
-		recorded: [...new Set(rows('platformMixQuery').filter((row) => finiteCell(row.server_prompt_tokens) !== null &&
-			finiteCell(row.server_prompt_seconds) !== null).map((row) => String(row.date)))],
+		recorded: [...new Set(jobs.filter((job) => job.rate !== null).map((job) => job.date))],
 		window: healthDates, reads: [hostRead], from: through === null ? '' : windowRange(Math.max(...presets), through, '0001-01-01').from,
 		open, figures: 'server figures', coveredElsewhere: healthDates, missing: 'server-counters' }));
 	const lostSentence = $derived(lost.length ? `${lost.reduce((n, day) => n + day.articles, 0)} dated article records have no machine record on ${lost.map((day) => day.date).join(', ')}. The article work was recorded; no machine measurement can be inferred.` : null);
@@ -279,7 +294,7 @@
 						{/each}
 					{/snippet}
 					{#if id === 'platform-mix'}
-						<PlatformMixPanel {ramp} {start} {end} {windowDays} {lost} recordRows={rows('platformMixQuery')} recording={cfg.recording}
+						<PlatformMixPanel {ramp} {start} {end} {windowDays} {lost} {jobs} recording={cfg.recording}
 							chart={cfg.chart} knobs={shared} />
 					{:else if id === 'article-cost'}
 						<ArticleCostPanel cost={articleCost(textRows(rows('articleCostQuery')), processors(rows('articleCostHostsQuery')))}

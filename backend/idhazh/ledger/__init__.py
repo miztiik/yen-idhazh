@@ -59,6 +59,7 @@ from idhazh.ledger.ledger_files import (
     list_ledger_files,
     load_days,
     load_ledger_rows,
+    load_stored_days,
     month_days,
 )
 from idhazh.ledger.lifecycle import accepts_new_rows
@@ -199,6 +200,7 @@ __all__ = [  # noqa: RUF022
     "list_ledger_files",
     "load_days",
     "load_ledger_rows",
+    "load_stored_days",
     "month_days",
     # day_removal.py: which door files hold a range of days, and each one rebuilt without them.
     "HeldFile",

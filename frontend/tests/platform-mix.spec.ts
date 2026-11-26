@@ -123,7 +123,6 @@ function job(over: Partial<Record<(typeof FLEET_COLUMNS)[number], string | numbe
 		shard: 0,
 		fingerprint: 'aaaa000000000000',
 		cpu_model: 'AMD EPYC 7763 64-Core Processor',
-		job_seconds: 800,
 		server_prompt_tokens: 1000,
 		server_prompt_seconds: 100,
 		...over
@@ -506,7 +505,7 @@ test.describe('the window, the states and the rows the door hands over', () => {
 	});
 
 	test('a cell read off disk as text and one handed back typed are the same job', () => {
-		const typed = job({ shard: 3, job_seconds: 812.5, server_prompt_tokens: 950, server_prompt_seconds: 80.65 });
+		const typed = job({ shard: 3, server_prompt_tokens: 950, server_prompt_seconds: 80.65 });
 		const text: Row = Object.fromEntries(Object.entries(typed).map(([key, value]) => [key, value === null ? '' : String(value)]));
 		expect(fleetJobs([text])).toEqual(fleetJobs([typed]));
 		const [one] = fleetJobs([typed]);
@@ -540,7 +539,7 @@ test.describe('the window, the states and the rows the door hands over', () => {
 			['Fast One', 40],
 			['Fast One', 40]
 		]);
-		expect(view.lines[0].every((line) => line.seconds === 800 && line.runId === '2026-09-12-1')).toBe(true);
+		expect(view.lines[0].map((line) => line.runId)).toEqual(Array(3).fill('2026-09-12-1'));
 	});
 
 	test('one square a job, a day stacked bottom up in row order, and the busiest day fits', () => {

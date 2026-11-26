@@ -509,7 +509,11 @@ this migration only while a committed band still carries `months`.
 
 `HostFingerprintRow` could have been a list on `RunRecord`, and four things say it should not be. **Grain**: a manifest run record is one run and a host record is one job, so the manifest would grow a variable-length list keyed by something it does not otherwise carry. **Producer**: the manifest is written by `assemble`, in another job hours later, so the numbers would have to travel inside the `items-*` artifact - which expires and is never committed, and a cancelled shard's readings are the ones most worth having. **Audience**: `run.json` is a published payload a reader's browser fetches, and this is measurement evidence, which belongs under `state/` where nothing is served. **Timing**: a concurrent branch was also opening `RunManifest`, and two branches stamping one contract's changelog on the same date raise `TypeError` at import.
 
-**The grain argument earned four more cells on 2026-09-19.** `job_seconds`, `model_load_ms` and the two `server_prompt_*` counters are facts about the `work` job rather than about the run, and they landed here rather than on the manifest for the first reason above: one run draws up to eight hosts and takes eight different clocks, so a manifest field would have to become a per-shard list - which is what this ledger already is. `docs/reference/pipeline-cost.md` owns what they measure and how to read them; the rollback rule for the truncation cap is the caller.
+**Historical host files retain their original readings.** The host contract still
+validates its old clock, load time and prompt counters. The
+[Hardware publication contract](../publishing/console-machine.md#what-may-not-be-pooled)
+defines when the legacy prompt pair is read; the other timing fields no longer
+feed the console or the offline ledger report.
 
 **The readings arrive as raw text the job printed** - llama-server's own log, its `GET /metrics` body - and every derivation happens in `telemetry.silicon`, beside the stage that writes the row. A shell that computes a percentage is a second place the arithmetic lives and no place it can be tested; a Python function over text the caller opened is one place, and its oracle is the real captures under `tests/fixtures/runtime/`.
 

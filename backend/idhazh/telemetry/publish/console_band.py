@@ -48,7 +48,6 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import assemble, day_partition, discover, ledger
-from idhazh.contracts.base import ServerJob
 from idhazh.contracts.console_band import (
     BandCheckerMoved,
     BandRun,
@@ -69,10 +68,10 @@ from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.console import ConsoleConfig
 from idhazh.contracts.knobs.run import RunConfig
 from idhazh.contracts.knobs.windows import months_a_window_can_touch
-from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_manifest import RunManifest, RunRecord
 from idhazh.contracts.source_health_view import SourceHealthRow
 from idhazh.month_partition import oldest_month_kept
+from idhazh.telemetry.host_prompt_totals import HostPromptReading, read_host_prompt_totals
 from idhazh.telemetry.publish import (
     day_metrics,
     series,
@@ -608,7 +607,7 @@ class MachineFacts:
 
 
 def machine_facts(
-    rows: Sequence[Mapping[str, str]], planned: Mapping[str, int] | None = None
+    rows: Sequence[HostPromptReading], planned: Mapping[str, int] | None = None
 ) -> MachineFacts:
     """Refused runs, and the newest run's shard count, answers and read spread.
 
@@ -622,11 +621,9 @@ def machine_facts(
     it does not name has an unknown denominator, which costs that run the two
     checks that need one and nothing else.
     """
-    by_run: dict[str, list[Mapping[str, str]]] = defaultdict(list)
+    by_run: dict[str, list[HostPromptReading]] = defaultdict(list)
     for row in rows:
-        run_id = row.get("run_id") or ""
-        if run_id:
-            by_run[run_id].append(row)
+        by_run[row.host.run_id].append(row)
     refused = 0
     newest: MachineFacts | None = None
     # Run ids are `<date>-<n>`, so a plain string sort orders a day's runs
@@ -650,64 +647,51 @@ def machine_facts(
     )
 
 
-#: The cells that identify one host row. Two rows carrying these four are two
-#: halves of one row, which the compaction folds into one.
-_MACHINE_KEY: Final[tuple[str, ...]] = ("date", "run_id", "job", "shard")
-
-#: Every cell that is not key and not the schema stamp, derived off the contract
-#: rather than listed a second time - a column added later cannot be forgotten
-#: here. Two rows for one shard are the same host only if all of these match; a
-#: difference means two hosts, and two hosts cannot be added or picked between.
-#: `version` is excluded for the reason the compaction excludes it: two halves
-#: written by two builds are still two halves of one row.
+#: Identity and historical timing are not physical measurements. A verified
+#: serving pair has its own identity and cannot make two hardware rows conflict.
+_NOT_MACHINE_EVIDENCE: Final = frozenset({
+    "date", "run_id", "job", "shard", "version",
+    "job_seconds", "model_load_ms", "server_prompt_tokens", "server_prompt_seconds",
+})
 _MACHINE_CELLS: Final[tuple[str, ...]] = tuple(
     name
     for name in HostFingerprintRow.csv_columns()
-    if name not in _MACHINE_KEY and name != "version"
+    if name not in _NOT_MACHINE_EVIDENCE
 )
 
 
-def _one_run(rows: Sequence[Mapping[str, str]], planned: int | None) -> MachineFacts | None:
+def _one_run(rows: Sequence[HostPromptReading], planned: int | None) -> MachineFacts | None:
     """One run's rows as one run, or None when they cannot be."""
-    if len({row.get("date", "") for row in rows}) > 1:
+    if len({row.host.date for row in rows}) > 1:
         return None
-    by_shard: dict[str, list[Mapping[str, str]]] = defaultdict(list)
+    by_shard: dict[int, list[HostPromptReading]] = defaultdict(list)
     for row in rows:
-        key = row.get("shard", "")
-        if _number(key) is None:
-            return None
-        by_shard[key].append(row)
-    kept: list[Mapping[str, str]] = []
+        by_shard[row.host.shard].append(row)
+    rates: list[float] = []
     for same_shard in by_shard.values():
-        hosts = {tuple(row.get(cell, "") for cell in _MACHINE_CELLS) for row in same_shard}
+        hosts = {tuple(getattr(row.host, cell) for cell in _MACHINE_CELLS) for row in same_shard}
         if len(hosts) > 1:
             return None
-        kept.append(same_shard[0])
+        pairs = {row.totals for row in same_shard if row.totals is not None}
+        if len(pairs) == 1:
+            pair = next(iter(pairs))
+            rate = pair.tokens / pair.seconds
+            if math.isfinite(rate):
+                rates.append(rate)
     # The denominator and the numerator come from different files, so these two
     # can disagree - which is the whole reason the manifest records the count.
     if planned is not None:
-        if planned < 1 or len(kept) > planned:
+        if planned < 1 or len(by_shard) > planned:
             return None
-        if any((_number(row.get("shard")) or 0) >= planned for row in kept):
+        if any(shard >= planned for shard in by_shard):
             return None
-    rates = [
-        rate
-        for rate in (
-            _rate(
-                _number(row.get("server_prompt_tokens")),
-                _number(row.get("server_prompt_seconds")),
-            )
-            for row in kept
-        )
-        if rate is not None
-    ]
     # One shard cannot spread against itself, so a run of one reports nothing
-    # rather than 1.00x, which would read as "the hosts agreed".
-    spread = None if len(rates) < 2 else max(rates) / min(rates)
+    # rather than 1.00x. A zero rate has no multiplicative comparison either.
+    spread = max(rates) / min(rates) if len(rates) >= 2 and min(rates) > 0 else None
     return MachineFacts(
         refused=0,
         shards=planned or 0,
-        reported=len(kept),
+        reported=len(by_shard),
         read_spread=spread,
         read_shards=len(rates),
     )
@@ -1014,13 +998,6 @@ def _number(cell: str | None) -> float | None:
     return value if math.isfinite(value) else None
 
 
-def _rate(tokens: float | None, seconds: float | None) -> float | None:
-    """Tokens over seconds. None where either is unknown or no time was spent."""
-    if tokens is None or seconds is None or seconds <= 0:
-        return None
-    return tokens / seconds
-
-
 # --- the band ----------------------------------------------------------------
 
 
@@ -1031,7 +1008,7 @@ def build(
     feeds: Sequence[FeedHealthRow],
     health_rows: Sequence[Mapping[str, str]],
     record: DayMetrics | None,
-    machine_rows: Sequence[Mapping[str, str]],
+    machine_rows: Sequence[HostPromptReading],
     planned_shards: Mapping[str, int] | None = None,
     run: RunConfig,
     collect: CollectConfig,
@@ -1321,8 +1298,8 @@ def publish(
       which opens the files of the newest days the ledger holds and no others;
     - the newest day's item-health rows through `ledger.load_days`, which opens
       that one day's files, and its day-metrics record, one file;
-    - the host rows for the days the widest span reaches, through
-      `ledger.load_days`, which opens the files of those days and no others;
+    - the host rows and their packed serving evidence for the days the widest
+      span reaches, through the bounded ledger reader;
     - the same manifests' inputs and native eval versions over that span, with
       one independent walkback per kind of at most one equal-length span.
 
@@ -1418,7 +1395,7 @@ def publish(
         else day_metrics.read_health_rows(state_root, newest_date)
     )
     record = records.get(newest_date) if newest_date is not None else None
-    machine_rows = _machine_rows(state_root, within_days=widest, anchor=anchor)
+    machine_rows = read_host_prompt_totals(state_root, day_partition.days_in_window(anchor, widest))
     band = build(
         generated_at=generated_at,
         days=[row for row in days if _within(row.date, anchor, widest)],
@@ -1455,29 +1432,3 @@ def _within(day: str, anchor: str, window_days: int) -> bool:
     return (
         date.fromisoformat(anchor) - date.fromisoformat(day)
     ).days < window_days and day <= anchor
-
-
-def _machine_rows(
-    state_root: Path, *, within_days: int, anchor: str
-) -> list[Mapping[str, str]]:
-    """The `work` host rows the widest span reaches, as the cells a CSV line spells.
-
-    Read through the ledger door, so every row was validated by its contract when
-    it was filed and each day is settled on its own: a re-run's host replaces its
-    first attempt's, and one shard of one run is one host. Every other job writes
-    a host row too, and they are not this slice: the plan and assemble jobs run
-    one shard each, so pooling them into a shard count would answer about a
-    matrix nobody dispatched.
-
-    The days of `within_days`, which is `max(console.window_presets)`, so the
-    cost is set by a committed knob and not by how much the archive has
-    accumulated (Guardrail #12). A day nothing wrote reads nothing.
-    """
-    days = day_partition.days_in_window(anchor, within_days)
-    return [
-        row.csv_row()
-        for row in ledger.load_days(
-            state_root, LedgerName.HOST_FINGERPRINT, days, model=HostFingerprintRow
-        )
-        if row.job == ServerJob.WORK
-    ]

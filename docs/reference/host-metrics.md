@@ -839,7 +839,7 @@ because of the second half: the half a job writes at its end measured no machine
 so it names none and stamps no probe time. A compacted row carries both, because
 the probe's half is where they come from.
 
-## What the job cost
+## Historical closing readings
 
 The half written at job end. Every reading comes from the workflow - one from a
 step that ran before the checkout existed, one from the log of the server this
@@ -849,27 +849,15 @@ stage anywhere else records none of them.
 | Column | Type | What it is | What it is for |
 | --- | --- | --- | --- |
 | `model_load_ms` | float? | Milliseconds between the server's legacy `loading model` and `model loaded` markers; includes context setup | The startup cost `run.shard_size` exists to amortise. Not an exact weights-load time |
-| `job_seconds` | int? | The job's own wall clock, first step to the clock write | **The cell the truncation-cap rollback reads.** Before it, that number lived only in the GitHub jobs API, which drops a job record when the run ages out |
+| `job_seconds` | int? | The historical clock from job start to its closing write, before later publishing steps | Retained for compatibility; no live chart or offline report reads it |
 | `server_prompt_tokens` | int? | Prompt tokens llama-server itself counted reading, cached tokens excluded | **The second instrument.** The item ledger's own answer is `sum(input_tokens) - sum(cached_tokens)`, and arithmetic over that ledger cannot check that ledger |
 | `server_prompt_seconds` | float? | Seconds llama-server itself counted reading prompts | The other half. A rate is a ratio, and the 80 percent defect this check caught in August 2026 was in the numerator, so one cell alone could not see it |
 
-**`job_seconds` is a floor on the task's wall clock and never a ceiling.** The
-steps after it - the ledger push, log summaries and artifact uploads - are
-outside the window. A caller that records the closing clock can populate it;
-server counters remain empty unless that caller supplies their source files.
-
-**`server_prompt_tokens` and `server_prompt_seconds` are the only two cells on
-the site that can disagree with the item ledger.** Everything else that answers
-"how fast did this run read?" is arithmetic over the item-health ledger, and a sum
-over a ledger cannot tell you the ledger is wrong. These two come from a counter
-the model server kept on its own, so the two answers are independent - which is
-what let a 0.746 percent drift on one article be seen at all. The bound is 5
-percent and it is not a `config/` knob: tuning it is how a failing check is made
-to pass.
-
 During rollout the legacy host row and the separate `serve-summarizer` row
-read the same final counter pair, not two observations. Only the legacy row
-uses the broad startup interval. The [model boundary](../architecture/summarize/model-boundary.md#what-proves-the-two-sides-agree)
+read the same final counter pair, not two observations. The
+[Hardware publication contract](../architecture/publishing/console-machine.md#what-may-not-be-pooled)
+defines the read-side fallback. Only the legacy row uses the broad startup
+interval. The [model boundary](../architecture/summarize/model-boundary.md#what-proves-the-two-sides-agree)
 explains why the exact weights-load value is unavailable.
 
 ## Identity names
@@ -890,7 +878,7 @@ to keep one column. Its full vocabulary lives in the contract.
 **The HTTP API collects hardware, not work done by its caller.** Maintainer
 ruling, 2026-10-26 UTC: remove timing/model inputs from the HTTP API only, with
 no request migration. The CLI, Python producers and persisted ledger keep those
-fields and their existing consumers. Total machine RAM is an optional addition
+fields for compatibility. Total machine RAM is an optional addition
 to the shared row; unmeasured historical capacity stays null. No compatibility
 migration, historical rewrite or replacement metrics ledger is introduced.
 Placement is optional and its failure cannot discard local hardware or a

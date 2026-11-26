@@ -1,14 +1,14 @@
 /** Which recorded jobs belong to each UTC day and machine kind? */
 
 import type { LostDay } from '../console/recording';
+import { servingSpeeds, speedForHost } from '../console/machine/serving-speed';
 import type { Row } from '../data/ledger';
-import { normalizeHostRows } from '../data/host-fingerprint';
+import { normalizeHostRow } from '../data/host-fingerprint';
 import { formatNumber, type NumberFormatConfig } from '../number-format';
 import { dayTicks, type DayTick, type Frame } from './frame';
 import {
 	isUnrecorded,
 	machineKeys,
-	promptRate,
 	rateWords,
 	UNRECORDED_KEY,
 	type MachineIdentity,
@@ -35,7 +35,8 @@ export const FLEET_COLUMNS = [
 	'fingerprint_version',
 	'cpu_model',
 	'l3_cache_bytes',
-	'job_seconds',
+	'unit_id',
+	'attempt',
 	'server_prompt_tokens',
 	'server_prompt_seconds',
 	'cores',
@@ -58,8 +59,6 @@ export interface FleetJob {
 	fingerprintVersion: number | null;
 	cpuModel: string | null;
 	l3CacheBytes: number | null;
-	/** The job's own clock, in seconds. */
-	seconds: number | null;
 	/** Prompt tokens its model server read a second. Only a job that served the
 	 * summarizing model takes one. */
 	rate: number | null;
@@ -106,7 +105,6 @@ export interface FleetLine {
 	machine: string;
 	l3Cache?: string;
 	swatch: string;
-	seconds: number | null;
 	rate: number | null;
 	/** The row this job is drawn in. */
 	row: string;
@@ -184,9 +182,12 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
  * on a day nor named in a list. A row with no machine is kept: the platform
  * handed that job a machine too, and nobody recorded which.
  */
-export function fleetJobs(rows: readonly Row[]): FleetJob[] {
+export function fleetJobs(rows: readonly Row[], servingRows: readonly Row[] = []): FleetJob[] {
+	const serving = servingSpeeds(servingRows);
 	const jobs: FleetJob[] = [];
-	for (const row of normalizeHostRows(rows)) {
+	for (const source of rows) {
+		const row = normalizeHostRow(source);
+		if (row === null) continue;
 		const date = text(row.date);
 		const runId = text(row.run_id);
 		if (date === null || !DAY.test(date) || runId === null) continue;
@@ -203,8 +204,7 @@ export function fleetJobs(rows: readonly Row[]): FleetJob[] {
 			fingerprintVersion: figure(row.fingerprint_version),
 			cpuModel: text(row.cpu_model),
 			l3CacheBytes: figure(row.l3_cache_bytes),
-			seconds: figure(row.job_seconds),
-			rate: promptRate(figure(row.server_prompt_tokens), figure(row.server_prompt_seconds))
+			rate: speedForHost(source, row.version, serving)
 		});
 	}
 	return jobs;
@@ -397,7 +397,6 @@ export function fleetView(jobs: readonly FleetJob[], options: FleetOptions): Fle
 			shard: job.shard,
 			machine: paint(identity).label,
 			swatch: paint(identity).colour,
-			seconds: job.seconds,
 			rate: job.rate,
 			row
 		});

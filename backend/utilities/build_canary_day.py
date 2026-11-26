@@ -33,8 +33,8 @@ import re
 import shutil
 from array import array
 from collections.abc import Sequence
-from datetime import UTC, datetime, timedelta
 from datetime import date as calendar_date
+from datetime import timedelta
 from itertools import combinations
 from pathlib import Path
 from typing import Final, NamedTuple
@@ -86,6 +86,7 @@ from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.similarity_holdout_pair import SimilarityHoldoutPair
 from idhazh.contracts.source_health_view import SourceHealthView
 from idhazh.contracts.sources import FeedDef, SourceForm
+from idhazh.contracts.task_performance import TaskPerformanceRow
 from idhazh.contracts.visual import VisualPlan, VisualType
 from idhazh.contracts.visual_data import (
     RENDERER_VERSION,
@@ -102,6 +103,7 @@ from idhazh.gardener.tasks import compaction
 from idhazh.render import asset_relpath, render_planned_visual
 from idhazh.render.write import write_bytes_atomic
 from idhazh.telemetry import silicon
+from idhazh.telemetry.host_prompt_totals import DIGEST_PIPELINE, SERVE_SUMMARIZER
 from idhazh.telemetry.publish import (
     console_band,
     day_metrics,
@@ -124,16 +126,6 @@ SCORE_SHARD: Final = 0
 
 #: The producer for the canary's item and score writers. Hosts use silicon's.
 PRODUCER: Final = "utilities.build_canary_day"
-
-#: Modeled native inputs for the newest work shard's existing fixture readings,
-#: not a live server capture. The production clock parses these, not a JSON row.
-HOST_CLOCK_LOG: Final = (
-    "0.00.011.682 I srv load_model: loading model 'canary.gguf'\n"
-    "0.02.482.510 I srv llama_server: model loaded\n"
-)
-HOST_CLOCK_METRICS: Final = (
-    "llamacpp:prompt_tokens_total 1700\nllamacpp:prompt_seconds_total 73.72\n"
-)
 
 type FixtureRow = ItemHealthRow | HostFingerprintRow
 
@@ -1549,21 +1541,13 @@ def file_fixture_rows(state: Path, staged: Path) -> dict[LedgerName, int]:
                     for row in rows:
                         if not isinstance(row, HostFingerprintRow):
                             raise TypeError("a host fixture must be a HostFingerprintRow")
-                        if (
-                            day == DATE
-                            and run_id == f"{DATE}-2"
-                            and row.job == ServerJob.WORK
-                            and row.shard == 0
-                        ):
-                            _file_host_halves(state, row)
-                        else:
-                            ledger.persist(
-                                state,
-                                [row],
-                                ledger=which,
-                                covers=day,
-                                identity=_host_fixture_writer(row),
-                            )
+                        ledger.persist(
+                            state,
+                            [row],
+                            ledger=which,
+                            covers=day,
+                            identity=_host_fixture_writer(row),
+                        )
                 else:
                     ledger.persist(
                         state, rows, ledger=which, covers=day, identity=_fixture_writer(run_id)
@@ -1576,6 +1560,11 @@ def file_fixture_rows(state: Path, staged: Path) -> dict[LedgerName, int]:
 
 def _host_fixture_writer(row: HostFingerprintRow) -> WriterIdentity:
     """The production work unit this fixture host job would write under."""
+    if row.pipeline_name is not None and row.task_name is not None:
+        return WriterIdentity.for_pipeline_task(
+            run_id=row.run_id, attempt=SCORE_ATTEMPT, shard=row.shard, git_sha=FIXTURE_SHA,
+            pipeline_name=row.pipeline_name, task_name=row.task_name, producer=silicon.PRODUCER,
+        )
     return WriterIdentity(
         run_id=row.run_id,
         attempt=SCORE_ATTEMPT,
@@ -1586,43 +1575,45 @@ def _host_fixture_writer(row: HostFingerprintRow) -> WriterIdentity:
     )
 
 
-def _file_host_halves(state: Path, row: HostFingerprintRow) -> None:
-    """Replay a validated probe, then let the production clock file its whole row."""
-    probe = HostFingerprintRow.model_validate(row.model_dump() | dict.fromkeys(silicon.CLOCK_CELLS))
-    ledger.persist(
-        state,
-        [probe],
-        ledger=LedgerName.HOST_FINGERPRINT,
-        covers=row.date,
-        identity=_host_fixture_writer(row),
+def file_serving_fixture_rows(state: Path, *, late: bool = False) -> int:
+    """File paired, incomplete and unmatched serving observations."""
+    earlier = (calendar_date.fromisoformat(DATE) - timedelta(days=40)).isoformat()
+    observations: list[tuple[str, int, int, int, bool, int, float | None]] = (
+        [(earlier, 1, 0, 1, True, 5000, 5.0)] if late else [
+            (DATE, 2, 0, 1, True, 2400, 80.0),        # Replaces the same host's old pair.
+            (DATE, 1, 0, 1, True, 9000, None),        # The new row is present but incomplete.
+            (DATE, 1, 1, 2, True, 7000, 10.0),        # A different attempt cannot fill speed.
+            (YESTERDAY, 1, 1, 1, False, 8000, 10.0),  # A null link cannot replace a legacy pair.
+        ]
     )
-    inputs = state.parent / "fixture-clock" / f"{row.run_id}-{row.job}-{row.shard}"
-    server_log = inputs / "server.log"
-    metrics = inputs / "metrics.prom"
-    write_atomic(server_log, HOST_CLOCK_LOG)
-    write_atomic(metrics, HOST_CLOCK_METRICS)
-    try:
-        silicon.file_job_clock(
-            date=row.date,
-            run_id=row.run_id,
-            settings=config.load(),
-            state_root=state,
-            commit_sha=FIXTURE_SHA,
-            shard=row.shard,
-            job=row.job,
-            attempt=SCORE_ATTEMPT,
-            job_started_at=int(
-                datetime.fromisoformat(f"{row.date}T22:00:00").replace(tzinfo=UTC).timestamp()
-            ),
-            finished_at=f"{row.date}T22:15:00Z",
-            server_log_path=server_log,
-            metrics_path=metrics,
+    hosts = {
+        (held.identity.run_id, held.identity.shard): held.identity
+        for held in ledger.load_stored_days(
+            state, LedgerName.HOST_FINGERPRINT,
+            {day for day, *_ in observations}, model=HostFingerprintRow,
         )
-    finally:
-        server_log.unlink()
-        metrics.unlink()
-        inputs.rmdir()
-        inputs.parent.rmdir()
+        if held.identity.job == ServerJob.WORK or (
+            held.identity.pipeline_name == DIGEST_PIPELINE and held.identity.task_name == "work"
+        )
+    }
+    for day, run, shard, attempt, linked, tokens, seconds in observations:
+        run_id = f"{day}-{run}"
+        host = hosts[run_id, shard]
+        identity = WriterIdentity.for_pipeline_task(
+            run_id=run_id, attempt=attempt, shard=shard, git_sha=FIXTURE_SHA,
+            pipeline_name=DIGEST_PIPELINE, task_name=SERVE_SUMMARIZER, producer=PRODUCER,
+        )
+        row = TaskPerformanceRow.model_validate({
+            "version": TaskPerformanceRow.schema_version(), "date": day, "run_id": run_id,
+            "shard": shard, "pipeline_name": DIGEST_PIPELINE, "task_name": SERVE_SUMMARIZER,
+            "task_kind": "model-serving", "outcome": "success", "subject_id": "summarizer",
+            "host_unit_id": host.unit_id if linked else None,
+            "server_prompt_tokens": tokens, "server_prompt_seconds": seconds,
+        })
+        ledger.persist(
+            state, [row], ledger=LedgerName.TASK_PERFORMANCE, covers=day, identity=identity
+        )
+    return len(observations)
 
 
 def _staged_days(root: Path) -> dict[str, list[Path]]:
@@ -1933,6 +1924,7 @@ def main() -> int:
 
         filed = file_fixture_rows(args.state, args.file_fixture_rows)
         filed.update(file_published_fixture_rows(args.state))
+        filed[LedgerName.TASK_PERFORMANCE] = file_serving_fixture_rows(args.state)
         backfill(
             args.out, args.state,
             first=(calendar_date.fromisoformat(DATE) - timedelta(
@@ -1943,6 +1935,7 @@ def main() -> int:
         )
         state = args.state.resolve()
         pack_fixture_ledgers(state, state.parent)
+        filed[LedgerName.TASK_PERFORMANCE] += file_serving_fixture_rows(args.state, late=True)
         unpacked = file_unpacked_fixture_day(args.state)
         filed[LedgerName.ITEM_HEALTH] = filed.get(LedgerName.ITEM_HEALTH, 0) + unpacked
         for which, count in filed.items():

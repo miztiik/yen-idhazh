@@ -8,7 +8,7 @@ const PANELS = [
 	'platform-mix', 'slower-on-same-work', 'closest-to-memory', 'memory-held',
 	'context-headroom', 'article-cost', 'prompt-reuse', 'read-against-written'
 ];
-const NATIVE = /\/state\/(?:compact|raw)\/(?:item-health|host-fingerprint|run-shards)\//;
+const NATIVE = /\/state\/(?:compact|raw)\/(?:item-health|host-fingerprint|run-shards|task-performance)\//;
 
 async function settled(page: Page): Promise<void> {
 	await expect(page.locator('[data-console-panels="machine"]')).toHaveAttribute('data-route-state', 'ok');
@@ -142,6 +142,19 @@ test('Hardware reads native files, opens a dated answer and carries its window a
 	expect(await dayDetails.locator('[data-fleet-job]').count()).toBeGreaterThan(0);
 	await expect(dayDetails).toContainText('tokens a second');
 	await dayDetails.getByRole('button', { name: 'Close the list' }).click();
+	await history.locator('[data-fleet-square]').last().click();
+	const newestJobs = history.locator('[data-fleet-jobs="2026-08-20"]');
+	await expect(newestJobs.getByRole('columnheader')).toHaveText([
+		'Run', 'Job or pipeline/task', 'Shard', 'Machine and L3', 'Speed'
+	]);
+	await expect(newestJobs.locator('[data-fleet-job]')).toHaveCount(7);
+	await expect(newestJobs.getByRole('row').filter({ hasText: 'digest/work' }).locator('.speed')).toHaveText('30 tokens a second');
+	await expect(newestJobs.getByRole('row').filter({ hasText: '2026-08-20-1' })
+		.filter({ has: page.getByRole('cell', { name: 'work', exact: true }) }).locator('.speed'))
+		.toHaveText(['Speed not recorded', 'Speed not recorded']);
+	expect(arrived.some((url) => url.includes('/task-performance/') && new URL(url).pathname.endsWith('.parquet')))
+		.toBe(true);
+	await newestJobs.getByRole('button', { name: 'Close the list' }).click();
 	const tokens = page.locator('[data-console-panel-id="read-against-written"]');
 	const plot = tokens.locator('[data-chart-type="runSeries"]');
 	await expect(plot).toBeVisible();
@@ -381,6 +394,23 @@ test('a failed run-count index alone offers the same retry, and the run count fo
 	await settled(page);
 	await expect(page.locator('[data-machine-run-count]')).toHaveCount(1);
 	await expect(page.locator('[data-console-retry]')).toHaveCount(0);
+});
+
+test('an unpublished serving ledger leaves the host count, legacy speed and article panels', async ({ page }) => {
+	const taskIndex = /\/state\/compact\/task-performance\/index\/[^/]+\.json/;
+	const missing = page.waitForResponse((response) =>
+		taskIndex.test(response.url()) && response.status() === 404);
+	await page.route(taskIndex, (route) => route.fulfill({ status: 404 }));
+	await page.goto('/console/machine/');
+	await missing;
+	await settled(page);
+	await expect(page.locator('[data-window-status]')).toContainText('20 Aug 2026');
+	await expect(page.locator('[data-panel-query="article-cost"]')).toHaveAttribute('data-machine-panel-state', 'ok');
+	await page.locator('[data-fleet-square]').last().click();
+	const newest = page.locator('[data-fleet-jobs="2026-08-20"]');
+	await expect(newest.locator('[data-fleet-job]')).toHaveCount(7);
+	await expect(newest.getByRole('row').filter({ hasText: 'digest/work' }).locator('.speed'))
+		.toHaveText(/^23[.,]1 tokens a second$/);
 });
 
 test('unpublished native indexes keep a named absence, not a lost record or invented drawing', async ({ page }) => {

@@ -165,9 +165,7 @@ COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
             "fingerprint_version",
             "cpu_model",
             "l3_cache_bytes",
-            "job_seconds",
             "cpu_logical_processors",
-            "model_load_ms",
         ),
     }
 )
@@ -197,6 +195,10 @@ UNREAD_CELLS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
             "vm_fault_domain",
         ),
         "Historical machine label and sampling instant": ("measured_at", "runner_name"),
+        "Historical job clock and model load retained for compatibility": (
+            "job_seconds",
+            "model_load_ms",
+        ),
         "Total machine RAM returned by the fingerprint API, not drawn by the console": (
             "machine_memory_total_mib",
         ),

@@ -1,27 +1,12 @@
-"""Three figures the committed ledgers already hold, and that nobody had taken.
+"""Report the per-item timing residual and how article words turn into prompt tokens.
 
-Read-only, offline, and not a stage. It runs when somebody wants one of these
-three numbers, never on the daily pipeline's critical path. It is committed
+Read-only, offline, and not a stage. It runs when somebody wants these figures,
+never on the daily pipeline's critical path. It is committed
 rather than kept as a private script so anyone can re-derive the figures in
 `docs/reference/pipeline-cost.md` from a fork or a stale branch, which is the
 same reason `reconcile_prefill.py` lives beside it.
 
-**1. Unaccounted shard wall-clock.** A `work` shard's own clock, minus the
-milliseconds its items claim for fetching, extracting and summarizing. It
-answers one question: is the model busy for most of a shard? If it is, more
-shards buys throughput. If it is not, more shards buys more fixed cost, and
-nobody could see that before, because the two clocks sat in two files nothing
-joined.
-
-**This is per shard where the rows allow it and per run where they do not.**
-The item row's shard landed on `ItemHealthRow` on 2026-08-30, as `shard` and now
-`machine_shard`, and is empty on every row written before it, so both grains are
-live at once and the report says which one each
-line is. Per run is the coarser answer because it averages the shards together,
-and the read rate spreads 2.30x between shards inside one run - which is exactly
-the variance the per-shard split exists to show.
-
-**2. The clock residual.** `summarize_ms` is our stopwatch around the HTTP call.
+**1. The clock residual.** `summarize_ms` is our stopwatch around the HTTP call.
 `prefill_ms + decode_ms` is what the model server said the same call cost. The
 difference is transport, JSON and validation - plus, if it is large, time the
 server spent that its own timings block does not name. It decides whether a slow
@@ -32,7 +17,7 @@ It is reported here and deliberately not published. It is a difference of two
 clocks, so it can print negative, and a negative "overhead" one line away from a
 model-time figure invites a reader to add the two and get a wrong number.
 
-**3. Words to tokens, at the configured cap.** `input_tokens` regressed on
+**2. Words to tokens, at the configured cap.** `input_tokens` regressed on
 `source_words` - **regressed, never divided**. A ratio blends the fixed prompt
 into the per-word rate and reads high on short articles: over the widest item
 of one run the ratio says 1.695 tokens a word where the regression says 1.387
@@ -88,8 +73,6 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import config, ledger
-from idhazh.contracts.base import WORK_JOB
-from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.extract import TOKENS_PER_WORD
@@ -103,7 +86,7 @@ UPPER_PERCENTILE: Final = 0.95
 
 @dataclass(frozen=True, slots=True)
 class Item:
-    """The cells of one item-health row these three figures read.
+    """The cells of one item-health row these two reports read.
 
     Every cell is optional because the ledger predates most of them, and a null
     is not a zero: a row written before token capture is not evidence that zero
@@ -111,9 +94,6 @@ class Item:
     """
 
     run_id: str
-    shard: str | None
-    fetch_ms: int | None
-    extract_ms: int | None
     summarize_ms: int | None
     prefill_ms: int | None
     decode_ms: int | None
@@ -143,9 +123,6 @@ def read_items(state_dir: Path) -> list[Item]:
         items.append(
             Item(
                 run_id=row["run_id"],
-                shard=row.get("machine_shard") or None,
-                fetch_ms=_cell(row, "fetch_ms"),
-                extract_ms=_cell(row, "extract_ms"),
                 summarize_ms=_cell(row, "summarize_ms"),
                 prefill_ms=_cell(row, "prefill_ms"),
                 decode_ms=_cell(row, "decode_ms"),
@@ -156,125 +133,6 @@ def read_items(state_dir: Path) -> list[Item]:
             )
         )
     return items
-
-
-@dataclass(frozen=True, slots=True)
-class ShardClock:
-    """A committed job clock against the item milliseconds charged under it.
-
-    The scope is one shard where the item rows name their shard, and one whole
-    run where they do not.
-    """
-
-    run_id: str
-    shard: str | None
-    clock_rows: int
-    job_seconds: int
-    fetch_ms: int
-    extract_ms: int
-    summarize_ms: int
-
-    @property
-    def scope(self) -> str:
-        return self.run_id if self.shard is None else f"{self.run_id} shard {self.shard}"
-
-    @property
-    def accounted_seconds(self) -> float:
-        return (self.fetch_ms + self.extract_ms + self.summarize_ms) / 1000.0
-
-    @property
-    def unaccounted_seconds(self) -> float:
-        return self.job_seconds - self.accounted_seconds
-
-    @property
-    def unaccounted_share(self) -> float:
-        return self.unaccounted_seconds / self.job_seconds if self.job_seconds else 0.0
-
-    @property
-    def model_share(self) -> float:
-        """Summarizing, as a share of the job clocks. The lever question."""
-        return self.summarize_ms / 1000.0 / self.job_seconds if self.job_seconds else 0.0
-
-    @property
-    def joinable(self) -> bool:
-        """Whether the two ledgers cover the same work in this scope.
-
-        Items claiming more time than the job clocks hold mean a shard that
-        produced rows filed no clock, and the difference is then not a
-        measurement of anything. A re-run shard cannot split the two: both
-        ledgers are read through the ledger door, which keeps the highest
-        attempt of each job's files, so both describe the same execution.
-        """
-        return self.unaccounted_seconds >= 0
-
-    @property
-    def verdict(self) -> str:
-        if self.unaccounted_seconds < 0:
-            return (
-                "NOT JOINABLE: the items claim more time than the job clocks hold, "
-                "so a shard that produced rows filed no clock"
-            )
-        return (
-            f"{self.unaccounted_seconds:.1f} s outside fetch, extract and summarize "
-            f"({self.unaccounted_share * 100:.1f} percent of the job clocks); "
-            f"summarizing is {self.model_share * 100:.1f} percent of them"
-        )
-
-
-def shard_clocks(state_dir: Path, items: Sequence[Item]) -> list[ShardClock]:
-    """The finest grain the two ledgers support, for every run that filed a clock.
-
-    One entry per shard where that run's item rows name their shard, and one for
-    the whole run where they do not. The item row's shard landed on
-    `ItemHealthRow` on 2026-08-30, as `shard` and now `machine_shard`, and is
-    empty on every row written before it, so a ledger can hold both kinds of run
-    at once.
-    """
-    clocks_read = _job_clock_rows(state_dir)
-    clocks: list[ShardClock] = []
-    for run_id in sorted({row["run_id"] for row in clocks_read if row["job_seconds"]}):
-        rows = [r for r in clocks_read if r["run_id"] == run_id and r["job_seconds"]]
-        mine = [item for item in items if item.run_id == run_id]
-        if mine and all(item.shard is not None for item in mine):
-            for shard in sorted({item.shard for item in mine if item.shard is not None}):
-                clocks.append(
-                    _clock(run_id, shard, [r for r in rows if r["shard"] == shard], mine)
-                )
-        else:
-            clocks.append(_clock(run_id, None, rows, mine))
-    return clocks
-
-
-def _clock(
-    run_id: str, shard: str | None, rows: list[dict[str, str]], items: Sequence[Item]
-) -> ShardClock:
-    mine = items if shard is None else [item for item in items if item.shard == shard]
-    return ShardClock(
-        run_id=run_id,
-        shard=shard,
-        clock_rows=len(rows),
-        job_seconds=sum(int(r["job_seconds"]) for r in rows),
-        fetch_ms=sum(i.fetch_ms or 0 for i in mine),
-        extract_ms=sum(i.extract_ms or 0 for i in mine),
-        summarize_ms=sum(i.summarize_ms or 0 for i in mine),
-    )
-
-
-def _job_clock_rows(state_dir: Path) -> list[dict[str, str]]:
-    """Every committed `work` host row, as the cells a CSV line spells.
-
-    The `work` job is the only one this report is about: the plan and assemble
-    jobs run one shard each and serve different weights, so their clocks cannot
-    be read against a shard board. The rows come through the ledger door, so a
-    file this build cannot parse is skipped with a warning rather than counted.
-    """
-    return [
-        row.csv_row()
-        for row in ledger.load_ledger_rows(
-            state_dir, LedgerName.HOST_FINGERPRINT, model=HostFingerprintRow
-        )
-        if row.job == WORK_JOB
-    ]
 
 
 def percentile(values: Sequence[int], share: float) -> int:
@@ -426,40 +284,11 @@ def sized_pairs(items: Iterable[Item], runs: Iterable[str]) -> list[tuple[int, i
 
 
 def report(state_dir: Path, *, cap_tokens: int, context_tokens: int, output_tokens: int) -> str:
-    """The three figures, each with its denominator and what it could not answer."""
+    """The two reports, each with its denominator and what it could not answer."""
     items = read_items(state_dir)
     lines = [f"{len(items)} committed item-health rows, from {state_dir.as_posix()}", ""]
 
-    lines.append("1. Unaccounted job wall-clock")
-    attributed = sum(1 for item in items if item.shard is not None)
-    if "machine_shard" not in ItemHealthRow.csv_columns():
-        lines.append(
-            "   per SHARD is unavailable: item-health has no `machine_shard` column, so an "
-            "item row cannot be attributed to the machine that produced it"
-        )
-    elif attributed == 0:
-        lines.append(
-            f"   per SHARD has no population yet: `machine_shard` is a column but 0 of "
-            f"{len(items)} committed rows carry one, so every line below is a whole run"
-        )
-    else:
-        lines.append(
-            f"   {attributed} of {len(items)} committed rows name their shard; "
-            "a run splits per shard once all of its rows do"
-        )
-    clocks = shard_clocks(state_dir, items)
-    if not clocks:
-        lines.append("   no run has committed a job clock yet")
-    for clock in clocks:
-        lines.append(
-            f"   {clock.scope}: {clock.job_seconds} s over {clock.clock_rows} clock rows; "
-            f"fetch {clock.fetch_ms / 1000:.1f} s, extract {clock.extract_ms / 1000:.1f} s, "
-            f"summarize {clock.summarize_ms / 1000:.1f} s"
-        )
-        lines.append(f"     {clock.verdict}")
-    lines.append("")
-
-    lines.append("2. The clock residual, summarize_ms - (prefill_ms + decode_ms), per item")
+    lines.append("1. The clock residual, summarize_ms - (prefill_ms + decode_ms), per item")
     residual = Residual.over(items)
     if residual.count == 0:
         lines.append("   no row carries all three clocks")
@@ -476,7 +305,7 @@ def report(state_dir: Path, *, cap_tokens: int, context_tokens: int, output_toke
 
     ceiling = ceiling_words(cap_tokens)
     lines.append(
-        f"3. Words to tokens at truncation_cap_tokens={cap_tokens} "
+        f"2. Words to tokens at truncation_cap_tokens={cap_tokens} "
         f"({ceiling} words at {TOKENS_PER_WORD} tokens a word)"
     )
     admitted = [a for a in admissions(state_dir, items, cap_tokens=cap_tokens) if a.admitted]
@@ -507,7 +336,7 @@ def report(state_dir: Path, *, cap_tokens: int, context_tokens: int, output_toke
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Three figures the committed ledgers hold.")
+    parser = argparse.ArgumentParser(description="Item timing and token counts from the ledger.")
     parser.add_argument("--state", type=Path, default=Path("state"))
     args = parser.parse_args()
     if not ledger.held_days(args.state, LedgerName.ITEM_HEALTH):

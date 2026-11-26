@@ -1,20 +1,12 @@
-"""The three ledger figures, each checked against a second, independent expression.
+"""The two ledger reports, each checked against a second, independent expression.
 
 A single expression cannot catch its own error, so every figure here is computed
 twice: once by `measure_ledgers` and once by arithmetic written a different way -
 the stdlib's own least squares for the regression, a counting definition for the
-percentile, and a positional re-read of the fixture for the clocks.
+percentile, and a positional re-read of the fixture for per-item timing.
 
-The fixture is a small ledger of four runs designed so each branch has exactly
-one witness: one run proven at the cap by a row cut on the ceiling, two proven
-by nothing, and one whose shard filed no clock. One of the four names its shard
-on every row and so splits per shard; the rest predate the column and read as
-whole runs.
-
-The fixture is committed as CSV, one file per ledger, and the report reads
-neither file: it reads the ledger door. So each test files the same rows through
-the door into its own tree first, and the CSV is what the second expression
-re-reads.
+Each test files the committed item rows through the ledger door into its own
+tree first. The CSV is what the second expression re-reads.
 """
 
 from __future__ import annotations
@@ -25,33 +17,28 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Final
 
-from support.ledger import seed_host_fingerprint, seed_item_health
+from support.ledger import seed_item_health
 from support.paths import FIXTURES_DIR
 
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.eval_row import EvalRow
-from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import RETIRED_CELLS, ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.extract import TOKENS_PER_WORD
 from utilities.measure_ledgers import (
     UPPER_PERCENTILE,
     Residual,
-    ShardClock,
     WordsToTokens,
     admissions,
     ceiling_words,
     percentile,
     read_items,
     report,
-    shard_clocks,
     sized_pairs,
 )
 
 FIXTURE: Final = FIXTURES_DIR / "state" / "measure-ledgers"
 #: The item rows, one file for the ledger.
 ITEMS: Final = FIXTURE / "item-health.csv"
-#: The job clocks, the same way.
-CLOCKS: Final = FIXTURE / "host-fingerprint.csv"
 #: The day every fixture row is filed under.
 DAY: Final = "2026-01-01"
 #: The cap the fixture rows were written under. It is the fixture's own, not
@@ -87,30 +74,12 @@ def census_row(cells: dict[str, str]) -> ItemHealthRow:
     )
 
 
-def clock_row(cells: dict[str, str]) -> HostFingerprintRow:
-    """One fixture clock as a machine row. `flags` is the one cell the reader requires."""
-    return HostFingerprintRow.from_csv_row(
-        {"version": HostFingerprintRow.schema_version(), "flags": ""} | cells
-    )
-
-
 def a_ledger(tmp_path: Path) -> Path:
-    """The fixture's two ledgers filed through the ledger door, and the tree that holds them.
-
-    The census is one writer's file. The clocks are filed under the job that
-    drew each machine. The fixture holds two clocks for one shard of
-    `2026-01-01-3` - a re-run the CSV reader used to see twice - and both land in
-    that job's one file, where the door keeps the first row a shard.
-    """
+    """The fixture's item ledger, filed through the ledger door."""
     state = tmp_path / "state"
     census = [census_row(cells) for cells in fixture_cells(ITEMS)]
     assert seed_item_health(state, DAY, census) == len(census)
-    seed_host_fingerprint(state, [clock_row(cells) for cells in fixture_cells(CLOCKS)])
     return state
-
-
-def clock_for(state: Path, scope: str) -> ShardClock:
-    return next(c for c in shard_clocks(state, read_items(state)) if c.scope == scope)
 
 
 def fixture_rows() -> list[list[str]]:
@@ -147,65 +116,12 @@ def test_the_fixture_only_names_columns_the_real_ledgers_have() -> None:
     """
     pairs = (
         (ITEMS, {*ItemHealthRow.csv_columns(), *RETIRED_CELLS}),
-        (CLOCKS, set(HostFingerprintRow.csv_columns())),
         (FIXTURE / "scores.csv", set(EvalRow.csv_columns())),
     )
     for path, columns in pairs:
         with path.open(encoding="utf-8", newline="") as handle:
             header = next(csv.reader(handle))
         assert set(header) <= columns, path.relative_to(FIXTURE).as_posix()
-
-
-def test_the_unaccounted_seconds_are_the_job_clocks_minus_the_item_milliseconds(
-    tmp_path: Path,
-) -> None:
-    state = a_ledger(tmp_path)
-    shard_zero = clock_for(state, "2026-01-01-2 shard 0")
-    shard_one = clock_for(state, "2026-01-01-2 shard 1")
-    milliseconds = sum(
-        int(row[3]) + int(row[4]) + int(row[5])
-        for row in fixture_rows()
-        if row[1] == "2026-01-01-2"
-    )
-
-    assert shard_zero.job_seconds == 100
-    assert shard_one.job_seconds == 200
-    assert milliseconds == 250_000
-    assert shard_zero.accounted_seconds + shard_one.accounted_seconds == milliseconds / 1000
-    assert shard_zero.unaccounted_seconds == 14.0
-    assert shard_one.unaccounted_seconds == 36.0
-    assert shard_zero.unaccounted_share == 14.0 / 100
-    assert shard_one.model_share == 160.0 / 200
-    assert shard_zero.joinable and shard_one.joinable
-
-
-def test_a_run_whose_rows_name_no_shard_reads_as_one_whole_run(tmp_path: Path) -> None:
-    """The item row's shard landed 2026-08-30; every older row is empty and reads at run grain."""
-    state = a_ledger(tmp_path)
-    scopes = {clock.scope for clock in shard_clocks(state, read_items(state))}
-
-    assert "2026-01-01-2" not in scopes
-    assert {"2026-01-01-2 shard 0", "2026-01-01-2 shard 1"} <= scopes
-    assert {"2026-01-01-1", "2026-01-01-3"} <= scopes
-    assert clock_for(state, "2026-01-01-1").shard is None
-
-
-def test_items_claiming_more_time_than_the_shard_clocks_hold_is_not_a_measurement(
-    tmp_path: Path,
-) -> None:
-    clock = clock_for(a_ledger(tmp_path), "2026-01-01-1")
-
-    assert clock.unaccounted_seconds < 0
-    assert not clock.joinable
-    assert "filed no clock" in clock.verdict
-
-
-def test_a_shard_row_with_an_empty_clock_produces_no_reading(tmp_path: Path) -> None:
-    state = a_ledger(tmp_path)
-    clocked = {clock.run_id for clock in shard_clocks(state, read_items(state))}
-
-    assert "2026-01-01-4" not in clocked
-    assert "2026-01-01-3" in clocked, "the read has to reach the clocks or this proves nothing"
 
 
 def test_the_residual_matches_a_second_expression_over_the_same_rows(tmp_path: Path) -> None:
@@ -312,21 +228,9 @@ def test_percentile_takes_the_nearest_rank() -> None:
     assert percentile([1, 2, 3, 4], 1.0) == 4
 
 
-def test_the_report_says_which_grain_each_line_is(tmp_path: Path) -> None:
+def test_the_report_keeps_item_timing_and_token_size(tmp_path: Path) -> None:
     text = report(a_ledger(tmp_path), cap_tokens=CAP_TOKENS, context_tokens=8192, output_tokens=900)
 
-    assert "3 of 8 committed rows name their shard" in text
-    assert "2026-01-01-2 shard 0:" in text
-    assert "2026-01-01-1:" in text
-    assert "2. The clock residual" in text
+    assert "1. The clock residual" in text
+    assert "2. Words to tokens" in text
     assert "tokens an article word" in text
-
-
-def test_both_ledgers_now_name_the_shard_that_did_the_work() -> None:
-    """The item row's shard landed 2026-08-30, as `machine_shard` now; the clock always had it.
-
-    The item row names the machine that took its readings, and the host row keeps
-    `shard` for the writer that filed it, which for a machine row is the same shard.
-    """
-    assert "shard" in HostFingerprintRow.csv_columns()
-    assert "machine_shard" in ItemHealthRow.csv_columns()

@@ -75,6 +75,14 @@ A selected ledger with no file in the span uses an empty view (`LIMIT 0`) over i
 
 The column rail describes the one table being browsed, not the query's dependencies. For a repository ledger it describes its newest file, even outside the dates. Columns belong to the ledger; dates bound repository answer rows. A ledger with no file lists no columns. Fetch or engine failures are named in the browser console. Local columns come from the already inspected file.
 
+The **Prompt throughput by machine kind** example uses the
+[Hardware attribution rule](console-machine.md#what-may-not-be-pooled) before
+grouping complete pairs by CPU. Its typed, zero-row union permits a host file
+without historical prompt columns without adding an observation. Before Task
+Performance packs a file, this exact built-in question uses an empty serving
+view so historical pairs still answer. Partial indexes and missing named files
+still fail; other questions keep the usual missing-table behavior.
+
 ## Limits and pricing
 
 `console.explorer_max_files` is a positive integer, default 128 unique Parquet candidates per question. It becomes `ExplorerConfig.max_files` and `AskOptions.maxFiles`. Selection and pricing are shared by Run and the automatic column rail. Candidates include the query files and newest files needed for columns or empty views; duplicate paths count once. Preflight applies the file and byte limits before either path fetches Parquet.

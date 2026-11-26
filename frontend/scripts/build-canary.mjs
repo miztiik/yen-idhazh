@@ -1007,31 +1007,20 @@ function writeItemHealthCanary() {
  * mix has more than one group to draw and the speed colour has more than one
  * machine kind to rank.
  *
- * **This file is also the machine half of the Hardware page.** Of the cells
- * after `measured_at`, `job_seconds` is a job's Seconds, and
- * `server_prompt_tokens` over `server_prompt_seconds` is its Speed, which is
- * also what each machine kind is coloured by, as the median of its jobs. The
- * figures are fixture values, pinned by the recorded slices under
- * `tests/fixtures/console/`.
- *
- * Three states nothing else can reach are written here as well. Shard 1 of the
- * newest run carries the server's counters and neither clock, so its job lists
- * its seconds as not recorded and its machine as "Machine not recorded", and
- * still has a speed. The two runs forty days back carry a job clock and a
- * weights load and no server counters, so their jobs list "Speed not
- * recorded". And the day two days back keeps an empty file, so a quiet day is
- * not an incident.
+ * The historic prompt pairs coexist with the separately packed serving rows
+ * filed by build_canary_day.py. A host whose probe did not land can still hold
+ * a legacy pair. Older hardware without a pair shows "Speed not recorded".
+ * The day two days back is quiet, not an incident.
  */
 function writeHostFingerprintCanary() {
 	const COLUMNS = [
-		'version', 'date', 'run_id', 'job', 'shard', 'fingerprint', 'fingerprint_version',
+		'version', 'date', 'run_id', 'job', 'pipeline_name', 'task_name', 'shard', 'fingerprint', 'fingerprint_version',
 		'cpu_model', 'cpu_vendor', 'cpu_family', 'cpu_model_number', 'cpu_stepping', 'microcode',
 		'cpu_physical_cores', 'cpu_logical_processors', 'cpu_allowed_processors',
 		'cpu_quota_cores', 'cpu_quota_state', 'cpu_target_measured_at', 'l3_cache_bytes',
 		'cpu_observed_mhz', 'cpu_reported_max_mhz', 'flags', 'boot_seconds', 'memcpy_gib_s',
 		'memcpy_probe_mib', 'vm_size', 'vm_location', 'vm_zone', 'vm_fault_domain', 'runner_name',
-		'measured_at', 'model_load_ms', 'job_seconds', 'server_prompt_tokens',
-		'server_prompt_seconds'
+		'measured_at', 'server_prompt_tokens', 'server_prompt_seconds'
 	];
 	const year = newestDirectory(ROOT);
 	const month = newestDirectory(join(ROOT, year));
@@ -1083,7 +1072,7 @@ function writeHostFingerprintCanary() {
 	})).digest('hex').slice(0, 16);
 
 	const line = (cells) => COLUMNS.map((name) => cells[name] ?? '').join(',');
-	const probe = (rowDate, run, job, index, machine, clocks) =>
+	const probe = (rowDate, run, job, index, machine, readings) =>
 		line({
 			version: '2026-10-10',
 			date: rowDate,
@@ -1098,38 +1087,28 @@ function writeHostFingerprintCanary() {
 			runner_name: `runner-${job}-${index}`,
 			measured_at: `${rowDate}T2${run}:0${index}:00Z`,
 			...machine,
-			...clocks
+			...readings
 		});
 
-	/** The half a job files after the work, with no probe behind it.
-	 *
-	 * A job writes its record in two halves at one key - the probe before the
-	 * work, the clocks and the server's counters after it - so a shard whose
-	 * probe never landed carries the clocks and no machine at all.
-	 */
-	const clocksOnly = (rowDate, run, job, index, clocks) =>
+	/** Historical serving totals from a job whose machine probe did not land. */
+	const legacyTotalsOnly = (rowDate, run, job, index, readings) =>
 		line({
 			version: '2026-10-10',
 			date: rowDate,
 			run_id: `${rowDate}-${run}`,
 			job,
 			shard: index,
-			...clocks
+			...readings
 		});
 
 	const rows = [
 		// The newest run: three jobs and two machines.
 		probe(date, 2, 'plan', 0, EPYC),
 		probe(date, 2, 'work', 0, XEON, {
-			model_load_ms: 2470.828, job_seconds: 900,
+			version: '2026-10-14', pipeline_name: 'digest', task_name: 'work',
 			server_prompt_tokens: 1700, server_prompt_seconds: 73.72
 		}),
-		// Absence drawn as absence. This shard carries the server's two counters and
-		// nothing else - no clock, no weights load, no processor - exactly as every
-		// row written before those columns landed. Its job reads "not recorded" for
-		// its seconds and "Machine not recorded" for its machine, and still has a
-		// speed, rather than reading a blank clock as a fast one.
-		clocksOnly(date, 2, 'work', 1, {
+		legacyTotalsOnly(date, 2, 'work', 1, {
 			server_prompt_tokens: 962, server_prompt_seconds: 83.73
 		}),
 		probe(date, 2, 'assemble', 0, EPYC),
@@ -1138,31 +1117,23 @@ function writeHostFingerprintCanary() {
 		// the state the list-and-a-sentence exists for.
 		probe(date, 1, 'plan', 0, EPYC),
 		probe(date, 1, 'work', 0, EPYC, {
-			model_load_ms: 2309.44, job_seconds: 812,
 			server_prompt_tokens: 950, server_prompt_seconds: 80.65
 		}),
-		probe(date, 1, 'work', 1, EPYC, {
-			model_load_ms: 2298.17, job_seconds: 795,
-			server_prompt_tokens: 76, server_prompt_seconds: 7.29
-		}),
+		probe(date, 1, 'work', 1, EPYC),
 		probe(back(1), 1, 'plan', 0, XEON),
 		probe(back(1), 1, 'work', 0, XEON, {
-			model_load_ms: 2512.06, job_seconds: 868,
 			server_prompt_tokens: 1300, server_prompt_seconds: 117.74
 		}),
 		probe(back(1), 1, 'work', 1, XEON, {
-			model_load_ms: 2498.33, job_seconds: 851,
 			server_prompt_tokens: 860, server_prompt_seconds: 78.18
 		}),
 		probe(back(1), 1, 'assemble', 0, EPYC),
 		// Forty days back, on the day the item ledger puts its widest-preset runs.
-		// They carry a job clock and a weights load and no server counters at all,
-		// which is the state every run before the server counters landed is in:
-		// their jobs list "Speed not recorded".
-		probe(longAgo, 1, 'work', 0, EPYC, { model_load_ms: 2290.5, job_seconds: 780 }),
-		probe(longAgo, 1, 'work', 1, EPYC, { model_load_ms: 2284.9, job_seconds: 774 }),
-		probe(longAgo, 2, 'work', 0, XEON, { model_load_ms: 2602.7, job_seconds: 836 }),
-		probe(longAgo, 2, 'work', 1, XEON, { model_load_ms: 2588.1, job_seconds: 829 })
+		// This day keeps hosts but has no packed serving evidence.
+		probe(longAgo, 1, 'work', 0, EPYC),
+		probe(longAgo, 1, 'work', 1, EPYC),
+		probe(longAgo, 2, 'work', 0, XEON),
+		probe(longAgo, 2, 'work', 1, XEON)
 	];
 
 	// A day tree, one file a writer, the shape a bounded window reads.
@@ -1207,7 +1178,7 @@ function writeHostFingerprintCanary() {
 const canaryDays = writeItemHealthCanary();
 writeHostFingerprintCanary();
 // The two ledgers above go through the ledger door, and then every fixture day of
-// the console's three door ledgers is packed: the console reads them from packed
+// the console's ledgers is packed: the console reads them from packed
 // files only, so a day left raw is a day no browser test can see.
 python([
 	'backend/utilities/build_canary_day.py',

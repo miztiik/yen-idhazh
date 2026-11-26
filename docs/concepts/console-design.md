@@ -96,12 +96,11 @@ A panel that vanishes when it has nothing teaches the operator that the
 measurement does not exist. The heading and the explanatory sentence stay; only
 the figure changes.
 
-This is the normal case rather than the exception. Measured 2026-08-31 on the
-committed tree: `job_seconds` and `cpu_model` are empty on **24 of 54** counter
-rows, the three host cells on **34 of 54**, and the counters ledger starts five
-days after the eval ledger - so five days inside a thirty-day window have
-scores and no server figures at all. A console that only designed the loaded
-state would be mostly undesigned.
+Hardware can count a recorded job without knowing its processor or independent
+prompt speed. Article timings and server counters cover different populations;
+one missing reading must not remove the other. The
+[Hardware publication contract](../architecture/publishing/console-machine.md#what-may-not-be-pooled)
+defines which readings may be joined.
 
 Seven states have fixed wording, held in
 [../../frontend/src/lib/console/recording.ts](../../frontend/src/lib/console/recording.ts):
