@@ -4,13 +4,14 @@ description: Prepare the existing machine-only listener for this runner's measur
 inputs:
   mode:
     description: The caller's resolved host telemetry mode.
-    required: true
+    required: false
+    default: 'python'
   date:
-    description: The UTC accounting day admitted by this runner.
-    required: true
+    description: The UTC accounting day admitted by this runner; omit to install only.
+    required: false
   pipeline:
     description: The workflow's declared pipeline name.
-    required: true
+    required: false
   shard:
     description: This runner's shard number.
     required: false
@@ -46,6 +47,7 @@ runs:
         mkdir -p backend/var
 
     - name: Declare the measured command's execution
+      if: inputs.date != ''
       shell: bash
       env:
         MODE: ${{ inputs.mode }}
@@ -57,6 +59,7 @@ runs:
         if [ "$MODE" = off ]; then
           echo "IDHAZH_MACHINE_APIS_READY=false" >> "$GITHUB_ENV"
         else
+          : "${PIPELINE:?A measured command requires a pipeline name}"
           {
             echo "IDHAZH_MACHINE_APIS_READY=true"
             echo "IDHAZH_MACHINE_ACCOUNTING_DAY=$ACCOUNTING_DAY"

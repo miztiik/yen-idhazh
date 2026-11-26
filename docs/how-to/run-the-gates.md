@@ -565,6 +565,10 @@ bun run --cwd .\services\feed-ingest-plan test .\test\plan-entry-points.test.ts 
 ```
 
 The shared selection lists affected surfaces; it does not execute Bun.
+The backend suite's digest publication oracle also needs the frozen
+machine API packages: shared hosting, host fingerprints and host probes.
+CI installs them before Python tests so the oracle can run the real
+recording handler without a listener or network access.
 For the composed feed listener, install shared hosting before the native
 assembly packages, using their frozen locks. Check the actual shared
 server, native construction and named workflow dependants:
