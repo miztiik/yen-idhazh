@@ -1,0 +1,52 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Gold holdings location",
+    "y": "Tonnes of gold"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "quantity_x": [],
+    "series": [
+      "m6",
+      "m7",
+      "m8"
+    ],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-kvf38vj8d3rk9mvy",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Domestic gold, Sep 2026","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Domestic gold, Mar 2026","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Overseas gold, Sep 2026","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-410-423","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "tonne","value": "740.13"},
+    {"derived": null,"element_id": "quantity-442-455","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "tonne","value": "680.05"},
+    {"derived": null,"element_id": "quantity-797-810","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "tonne","value": "140.39"},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m6","source_text": null,"text": "Location of holdings","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m7","source_text": null,"text": "Location of holdings","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m8","source_text": null,"text": "Location of holdings","time": null,"unit": null,"value": null}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "RBI Gold Reserves: Domestic vs Overseas Holdings in Tonnes",
+  "type": "bar",
+  "version": "2026-11-25"
+}

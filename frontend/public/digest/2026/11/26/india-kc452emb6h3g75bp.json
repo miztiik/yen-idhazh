@@ -1,0 +1,52 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Category / Metric",
+    "y": "Percentage Change"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "quantity_x": [],
+    "series": [
+      "m6",
+      "m7",
+      "m8"
+    ],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-kc452emb6h3g75bp",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "BSE premium average daily turnover growth (Oct)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Broader industry premium average daily turnover growth (Oct)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "EPS estimate revision FY27-29","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-190-193","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "53"},
+    {"derived": null,"element_id": "quantity-363-366","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "%","value": "42"},
+    {"derived": {"bin_lower": null,"bin_upper": null,"function": "negative_magnitude","inputs": ["quantity-668-673"],"source_unit": null,"unit": "%","unit_table_version": null,"value": "-1.9","version": "2026-11-25"},"element_id": null,"mark_id": "m5","source_text": "-1.9%","text": null,"time": null,"unit": "%","value": "-1.9"},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m6","source_text": null,"text": "BSE","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m7","source_text": null,"text": "Industry","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m8","source_text": null,"text": "HDFC Securities","time": null,"unit": null,"value": null}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "BSE vs. Broader Industry: October Premium Average Daily Turnover Growth and EPS/",
+  "type": "bar",
+  "version": "2026-11-25"
+}
