@@ -10,7 +10,10 @@
 
 	let { days, lanes, name, label, chosen, onPick, width, density, maxShare }: {
 		days: readonly string[];
-		lanes: readonly { name: string; cells: readonly { state: 'written' | 'checked' | 'unavailable'; text: string }[] }[];
+		lanes: readonly { name: string; cells: readonly {
+			state: 'written' | 'checked' | 'unavailable' | 'failed' | 'deferred' | 'recovered';
+			text: string; draw?: boolean; links?: { before: boolean; after: boolean }; caption?: string
+		}[] }[];
 		name: string;
 		label: string;
 		chosen: number;
@@ -21,12 +24,13 @@
 	} = $props();
 	const labels = useChartLabels();
 	let measured = $state<number | null>(null);
-	let pointed = $state<number | null>(null);
+	let pointed = $state<string | null>(null);
 	const slots = $derived(daySlots(chartWidth(measured, width), days.length, { left: 0, right: 0 }));
 	const square = $derived(slotCellFor(slots.slot));
 	const axis = $derived(axisLabels([...days], { density, pitch: slots.slot, labels: labels() }));
 	const marks = $derived(readoutMarks(slots.centres));
-	const at = $derived(pointed !== null && pointed < days.length ? pointed : chosen);
+	const pointedIndex = $derived(pointed === null ? -1 : days.indexOf(pointed));
+	const at = $derived(pointedIndex < 0 ? chosen : pointedIndex);
 	const reading = $derived(readoutOf({
 		type: 'tileStrip', columns: days.map((date) => `${longDate(date)} UTC`),
 		series: lanes.map(({ name, cells }) => ({
@@ -47,13 +51,22 @@
 				data-chart-type="tileStrip" data-chart-name={name} data-readout-columns={days.length}
 				style:--square-size={`${square.cell}px`}
 				use:pointerReadout={{ marks, width: slots.width, selected: at,
-					onSelect: (column) => pointed = column, hover: { name, readout: reading } }}
+					onSelect: (column) => pointed = column === null ? null : days[column] ?? null,
+					hover: { name, readout: reading } }}
 				use:columnPick={{ marks, width: slots.width, showing: at, onPick }}>
 				{#each lanes as lane (lane.name)}
 					<div class="track" aria-hidden="true">
 						{#each lane.cells as cell, index (days[index])}
 							<span class="slot" class:chosen={index === chosen}>
-								<span data-write-state={cell.state}></span>
+								{#if cell.draw !== false}
+									<span data-write-state={cell.state}>
+										{#if cell.state === 'written'}<span class="check"></span>
+										{:else if cell.state === 'failed'}<span class="cross"></span>{/if}
+									</span>
+									{#if cell.links?.before}<span class="connector before"></span>{/if}
+									{#if cell.links?.after}<span class="connector after"></span>{/if}
+									{#if cell.caption && index < days.length / 2}<span class="caption">{cell.caption}</span>{/if}
+								{/if}
 							</span>
 						{/each}
 					</div>
@@ -64,6 +77,12 @@
 					<span class={tick.align} style:grid-column={tick.column}>{tick.text}</span>
 				{/each}
 			</div>
+		{:else}
+			<label class="compact-days">Inspect UTC day
+				<input type="range" min="0" max={days.length - 1} step="1" value={chosen}
+					aria-valuetext={days[chosen] ? longDate(days[chosen]) : undefined}
+					oninput={(event) => { pointed = null; onPick(event.currentTarget.valueAsNumber); }} />
+			</label>
 		{/if}
 	</div>
 </div>
@@ -74,14 +93,34 @@
 	.tile-grid { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: var(--space-2); }
 	.lanes { display: grid; color: var(--color-text-secondary); font-size: var(--console-small-size); }
 	.tile-grid:not(.fits) .lanes { visibility: hidden; block-size: 0; overflow: hidden; }
-	.lanes span, .slot { min-block-size: var(--space-6); display: grid; align-items: center; }
+	.lanes span, .slot { min-block-size: var(--space-5); display: grid; align-items: center; }
+	.caption { position: absolute; inset-block-end: 50%; inset-inline-start: 50%; white-space: nowrap;
+		color: var(--color-text-secondary); font-size: var(--console-small-size); text-transform: capitalize; }
+	@container (max-width: 42rem) { .caption { display: none; } }
+	.plot { container-type: inline-size; }
 	.track, .axis { display: grid; grid-template-columns: repeat(var(--date-columns), minmax(0, 1fr)); }
-	.slot { justify-content: center; }
+	.slot { position: relative; justify-content: center; }
 	.slot.chosen { background: var(--color-surface-sunken); }
-	[data-write-state] { inline-size: var(--square-size); block-size: var(--square-size); box-sizing: border-box; }
-	[data-write-state='written'] { background: var(--chart-measure); }
+	[data-write-state] { position: relative; inline-size: var(--square-size); block-size: var(--square-size); box-sizing: border-box; }
+	[data-write-state='written'] { background: var(--operation-written); color: var(--color-surface); }
 	[data-write-state='checked'] { border: 1px solid var(--chart-axis); }
-	[data-write-state='unavailable'] { border: 1px dashed var(--color-rule-strong); }
+	[data-write-state='unavailable'] {
+		border: 1px solid var(--chart-grid);
+		background: repeating-linear-gradient(135deg, transparent 0 2px, var(--color-rule-strong) 2px 3px);
+	}
+	[data-write-state='failed'] { background: var(--operation-failed); color: var(--color-surface); }
+	[data-write-state='deferred'] { background: var(--operation-deferred); block-size: var(--console-chart-line-width); }
+	.connector { position: absolute; inset-block-start: 50%; inline-size: 50%; translate: 0 -50%;
+		block-size: var(--console-chart-line-width); background: var(--operation-deferred); }
+	.connector.before { inset-inline-start: 0; }
+	.connector.after { inset-inline-end: 0; }
+	[data-write-state='recovered'] { background: var(--chart-1); scale: .65; rotate: 45deg; }
+	.check, .cross { position: absolute; inset: 20%; }
+	.check { border: solid currentColor; border-width: 0 1px 1px 0; transform: rotate(40deg) scaleX(.55); }
+	.cross::before, .cross::after { content: ''; position: absolute; inset: 45% 0; background: currentColor; rotate: 45deg; }
+	.cross::after { rotate: -45deg; }
+	.compact-days { display: grid; gap: var(--space-1); color: var(--color-text-secondary); }
+	.compact-days input { accent-color: var(--color-accent); }
 	.tracks:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 	.axis { color: var(--color-text-secondary); font-size: var(--text-xs); }
 	.axis span { white-space: nowrap; justify-self: center; }

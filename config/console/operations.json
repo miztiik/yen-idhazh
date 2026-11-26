@@ -1,0 +1,11 @@
+{
+  "panel_groups": [
+    {
+      "id": "workflow-and-upkeep",
+      "title": "",
+      "panels": ["council-runs", "gardener-activity"]
+    }
+  ],
+  "judged": ["council-runs", "gardener-activity"],
+  "knobs": {}
+}

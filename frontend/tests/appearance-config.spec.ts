@@ -14,7 +14,8 @@ import { dirname, join } from 'node:path';
 import { assistConfig, consoleConfig, explorerConfig, mergeLayers, routeConsoles, routeConsolesFrom } from '../src/lib/server/config';
 import ts from 'typescript';
 import { runInNewContext } from 'node:vm';
-import { BAND_UNREAD, type RouteId } from '../src/lib/console/band';
+import type { RouteId } from '../src/lib/console/band';
+import { consoleDestinationIds } from '../src/lib/console/console-destinations';
 import { resolveConsoleStyle, type ConsoleStyleConfig } from '../src/lib/console/console-style';
 import { renderFrameCss } from '../scripts/build-frame-css.mjs';
 import { consolePalette } from '../scripts/console-palette';
@@ -27,7 +28,7 @@ test('the explorer receives the configured positive file limit', () => {
 });
 
 function routeFiles(): Record<string, { panel_groups: { id: string; title: string; panels: string[] }[]; judged: string[]; knobs: Record<string, number> }> {
-	return Object.fromEntries(BAND_UNREAD.routes.map(({ id }) => [id, {
+	return Object.fromEntries(consoleDestinationIds.map((id) => [id, {
 		panel_groups: [{ id, title: '', panels: [`${id}-panel`] }],
 		judged: [`${id}-panel`],
 		knobs: { floor: 2 }
@@ -35,9 +36,9 @@ function routeFiles(): Record<string, { panel_groups: { id: string; title: strin
 }
 
 test.describe('route-owned console configuration', () => {
-	test('preserves the committed six routes and their judged panels', () => {
+	test('preserves the committed route groups and their judged panels', () => {
 		const routes = routeConsoles();
-		expect(Object.keys(routes).sort()).toEqual(BAND_UNREAD.routes.map(({ id }) => id).sort());
+		expect(Object.keys(routes).sort()).toEqual([...consoleDestinationIds].sort());
 		expect(routes.machine.judged).toEqual([
 			'slower-machines', 'platform-mix',
 			'slower-on-same-work', 'closest-to-memory', 'memory-held', 'context-headroom',
@@ -49,10 +50,10 @@ test.describe('route-owned console configuration', () => {
 		const observations = ['judge-coverage', 'judge-score-ranges', 'pair-score-drift'];
 		expect(routes.judgement.panel_groups).toEqual([
 			{ id: 'judgement', title: 'Published grouping', panels: judgementPanels },
-			{ id: 'council-activity', title: 'Council activity', panels: ['council-runs'] },
 			{ id: 'judge-observations', title: 'Judge: Content Similarity', panels: observations }
 		]);
-		expect(routes.judgement.judged).toEqual([...judgementPanels, 'council-runs', ...observations]);
+		expect(routes.judgement.judged).toEqual([...judgementPanels, ...observations]);
+		expect(routes.operations.judged).toEqual(['council-runs', 'gardener-activity']);
 		const modelPanels = [
 			'model-cards', 'model-throughput', 'item-cost', 'call-ending',
 			'faithfulness',
@@ -66,12 +67,11 @@ test.describe('route-owned console configuration', () => {
 		expect(routes.model.judged).toEqual(modelPanels);
 		expect(routes.pipelines.panel_groups.map(({ id, title }) => ({ id, title }))).toEqual([
 			{ id: 'how-publishing-went', title: 'How publishing went' },
-			{ id: 'maintenance', title: 'Maintenance' },
 			{ id: 'where-the-time-went', title: 'Where the time went' },
 			{ id: 'what-reached-the-digest', title: 'What reached the digest' }
 		]);
 		expect(routes.pipelines.panel_groups.flatMap((group) => group.panels)).toEqual([
-			'at-a-glance', 'run-health', 'site-cost-per-item', 'failure-mix', 'gardener-activity',
+			'at-a-glance', 'run-health', 'site-cost-per-item', 'failure-mix',
 			'item-time-split', 'stage-timings', 'write-cost', 'tail-trend', 'run-timeline', 'slowest-articles',
 			'chart-drawing', 'visual-refusals', 'article-age'
 		]);
@@ -204,7 +204,7 @@ test.describe('route-owned console configuration', () => {
 		const defined = { shared: consoleConfig(), routes: routeConsolesFrom(routeFiles()) };
 		runInNewContext(compiled, {
 			exports,
-			require: () => ({ BAND_UNREAD }),
+			require: () => ({ consoleDestinationIds }),
 			['__' + 'CONSOLE__']: defined
 		});
 		const access = exports.routeKnobs as (route: RouteId, keys: readonly string[]) => Record<string, number>;

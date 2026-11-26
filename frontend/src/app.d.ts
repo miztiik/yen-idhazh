@@ -36,6 +36,7 @@ declare global {
 
 	/** Shared knobs and each route's console file, injected by `vite.config.ts`. */
 	const __CONSOLE__: import('$lib/server/config').ConsoleDefine;
+	const __OPERATIONS_CHART__: Pick<import('$lib/server/config').ChartConfig, 'tick_density' | 'readout_max_share'>;
 
 	/** Data explorer route knobs, injected by `vite.config.ts`. */
 	const __EXPLORER_CONFIG__: import('$lib/server/config').ExplorerConfig;

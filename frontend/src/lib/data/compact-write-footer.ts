@@ -11,16 +11,20 @@ export interface CompactWrite {
 	runId: string;
 	attempt: number;
 	shard: number;
+	inputs: number | null;
+	rows: number;
+	bytes: number;
 }
 
 export const COMPACT_WRITE_FOOTER_KEYS = [
-	'envelope_version', 'tier', 'ledger', 'period', 'covers', 'written_at_ms', 'run_id', 'attempt', 'job', 'shard', 'producer'
+	'envelope_version', 'tier', 'ledger', 'period', 'covers', 'written_at_ms', 'run_id', 'attempt', 'job', 'shard', 'producer',
+	'built_from'
 ] as const;
 
 const PLACEHOLDERS = COMPACT_WRITE_FOOTER_KEYS.map(() => '?').join(', ');
 
 export async function compactWriteFooter(
-	engine: QueryEngine, file: string, member: Pick<CompactWrite, 'ledger' | 'period' | 'covers'>
+	engine: QueryEngine, file: string, member: Pick<CompactWrite, 'ledger' | 'period' | 'covers' | 'rows' | 'bytes'>
 ): Promise<CompactWrite | null> {
 	const cells = await engine.rows(
 		`SELECT decode(key) AS key, decode(value) AS value FROM parquet_kv_metadata(?) WHERE decode(key) IN (${PLACEHOLDERS})`,
@@ -49,5 +53,5 @@ export async function compactWriteFooter(
 		footer.get('job') !== 'run-tasks' || footer.get('producer') !== 'gardener.tasks.compaction' ||
 		runId === undefined || !isDay(runDay) || attempt === null || attempt < 1 || shard === null ||
 		writtenAt === null || stamp === null || !Number.isFinite(stamp.getTime()) || !isDay(stamp.toISOString().slice(0, 10))) return null;
-	return { ...member, writtenAt, runId, attempt, shard };
+	return { ...member, writtenAt, runId, attempt, shard, inputs: decimal('built_from') };
 }

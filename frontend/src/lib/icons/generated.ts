@@ -21,6 +21,7 @@ export const ICONS = {
 	'judgement': '<path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z" /><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z" /><path d="M7 21h10" /><path d="M12 3v18" /><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2" />',
 	'ledgers': '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/>',
 	'list-refresh': '<path d="M3 6h10"/><path d="M3 12h7"/><path d="M3 18h8"/><path d="M17 7v4h4"/><path d="M21 11a5 5 0 1 0-1.46 3.54"/>',
+	'operations': '<path d="M10 6h8" /><path d="M12 16h6" /><path d="M3 3v16a2 2 0 0 0 2 2h16" /><path d="M8 11h7" />',
 	'previous-edition': '<path d="m15 18-6-6 6-6" />',
 	'query-editor': '<path d="m7 11 2-2-2-2"/><path d="M11 13h4"/><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/>',
 	'query-run': '<path d="M5 3l14 9-14 9V3z"/>',

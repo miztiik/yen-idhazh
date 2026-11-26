@@ -2,7 +2,7 @@ import { windowOfDays } from '$lib/charts/viewport';
 import type { RunYieldSource } from '$lib/charts/run-yield';
 import { runHealthGrid } from '$lib/console/pipelines/run-health';
 import { chartDays, chartTypeDays } from '$lib/server/chart-days';
-import { chartConfig, consoleConfig, explorerConfig, runConfig } from '$lib/server/config';
+import { chartConfig, consoleConfig, runConfig } from '$lib/server/config';
 import { dayMetrics, loadManifests, publishedCharts } from '$lib/server/payload';
 import { windowDay } from '$lib/server/window-day';
 import { visualAttemptRows } from '$lib/server/ledger-rows';
@@ -28,13 +28,11 @@ export async function load() {
 	}));
 	const attempts = await visualAttemptRows(widestSpan);
 	const floorPct = runConfig().success_floor_pct;
-	const { max_files, max_fetch_bytes } = explorerConfig();
 	return {
 		manifests, charts, publishedItems: Object.fromEntries([...visuals].map(([date, counts]) => [date, counts.items])),
 		chartTypes: chartTypeDays(manifests, visuals, attempts),
 		grid: runHealthGrid(manifests, floorPct), floorPct, runYieldDays,
 		chart: chartConfig(), windowDay: day,
-		compactReadLimits: { maxFiles: max_files, maxBytes: max_fetch_bytes },
 		visualAttempts: { days: visualAttemptDays(attempts.rows), read: attempts.read }
 	};
 }

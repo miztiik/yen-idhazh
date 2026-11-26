@@ -124,7 +124,8 @@ export function compactWriteReader(keeper: PageKeeper, rangeOnly: boolean) {
 				? 'the indexed compact file is missing' : explainShortfall(file, result.shortfall));
 			try {
 				const write = await compactWriteFooter(result.engine, result.names[0], {
-					ledger: member.ledger, period: member.period, covers: member.entry.covers
+					ledger: member.ledger, period: member.period, covers: member.entry.covers,
+					rows: member.entry.rows, bytes: member.entry.bytes
 				});
 				return write ?? report('the footer does not establish a dated Gardener write');
 			} finally {

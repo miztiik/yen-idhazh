@@ -3,7 +3,7 @@
 	import { fillWindowSlot } from '$lib/console/window-slot';
 	import type { RecordWindow } from '$lib/console/waiting';
 	import type { TimeWindow } from '$lib/charts/viewport';
-	import type { RouteId } from '$lib/console/band';
+	import type { ConsoleDestinationId } from '$lib/console/console-destinations';
 
 	let {
 		route,
@@ -17,7 +17,7 @@
 		statusLine = null,
 		onChange
 	}: {
-		route: RouteId;
+		route: ConsoleDestinationId;
 		days: number;
 		presets: readonly number[];
 		/** Month files a preset would fetch that are not already in hand. */

@@ -25,7 +25,6 @@
 	import RunHealth from '$lib/console/pipelines/RunHealth.svelte';
 	import SiteCostPerItem from '$lib/console/pipelines/SiteCostPerItem.svelte';
 	import FailureMix from '$lib/console/pipelines/FailureMix.svelte';
-	import GardenerActivity from '$lib/console/pipelines/GardenerActivity.svelte';
 	import ItemTimeSplit from '$lib/console/pipelines/ItemTimeSplit.svelte';
 	import StageTimings from '$lib/console/pipelines/StageTimings.svelte';
 	import TimeCost from '$lib/console/TimeCost.svelte';
@@ -181,9 +180,7 @@
 	{#each configured.panel_groups as group (group.id)}
 		<PanelGroup id={group.id} title={group.title} panels={group.panels.length}>
 			{#each group.panels as id (id)}
-				{#if id === 'gardener-activity'}
-					<GardenerActivity days={windowDays} {knobs} chart={data.chart} limits={data.compactReadLimits} />
-				{:else if id === 'tail-trend'}
+				{#if id === 'tail-trend'}
 					{@const answer = answers[queries.tailTrendQuery.name]}
 					{@const range = ranges[queries.tailTrendQuery.name]}
 					<RecordFrame {id} title={titles[id]} heading="h2" state={answer === 'pending' ? 'loading' : answer.state}

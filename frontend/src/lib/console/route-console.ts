@@ -1,4 +1,4 @@
-import { BAND_UNREAD, type RouteId } from './band';
+import { consoleDestinationIds, type ConsoleDestinationId } from './console-destinations';
 import type { ConsoleConfig } from '../server/config';
 import { checkedTokenDeviationRules, type TokenDeviationRules } from '../data/token-deviation-query';
 import { MAX_SCORE_BINS } from './judge-score-pool';
@@ -15,7 +15,7 @@ export interface RouteConsole {
 	readonly knobs: Readonly<Record<string, number>>;
 }
 
-export type RouteConsoles = Readonly<Record<RouteId, RouteConsole>>;
+export type RouteConsoles = Readonly<Record<ConsoleDestinationId, RouteConsole>>;
 
 export interface ConsoleDefine {
 	readonly shared: ConsoleConfig;
@@ -104,9 +104,9 @@ function strings(value: unknown, path: string): string[] {
 
 /** Parse authored route files without reading disk or the build-time define. */
 export function routeConsolesFrom(files: Readonly<Record<string, unknown>>): RouteConsoles {
-	const routes = BAND_UNREAD.routes.map(({ id }) => id);
+	const routes = consoleDestinationIds;
 	keys(object(files, 'config/console'), routes, 'config/console');
-	const result = {} as Record<RouteId, RouteConsole>;
+	const result = {} as Record<ConsoleDestinationId, RouteConsole>;
 	const allPanels = new Set<string>();
 	for (const route of routes) {
 		const path = `config/console/${route}.json`;
@@ -172,7 +172,7 @@ export function routeConsolesFrom(files: Readonly<Record<string, unknown>>): Rou
 	return result;
 }
 
-export function routeConsole(route: RouteId): RouteConsole {
+export function routeConsole(route: ConsoleDestinationId): RouteConsole {
 	return __CONSOLE__.routes[route];
 }
 
@@ -184,7 +184,7 @@ export function consoleHoverReadout(): boolean {
 	return __CONSOLE__.hover_readout;
 }
 
-export function routeKnobs<K extends string>(route: RouteId, wanted: readonly K[]): Readonly<Record<K, number>> {
+export function routeKnobs<K extends string>(route: ConsoleDestinationId, wanted: readonly K[]): Readonly<Record<K, number>> {
 	const knobs = routeConsole(route).knobs;
 	const result = {} as Record<K, number>;
 	for (const key of wanted) {

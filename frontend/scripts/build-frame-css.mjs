@@ -73,6 +73,8 @@ async function consoleColors(style, mode, theme, choice) {
 		'chart-axis': colors.chart_axis, 'chart-grid': colors.chart_grid, 'chart-label': colors.text_secondary,
 		'chart-measure': colors.chart_measure,
 		'chart-memory-low': colors.chart_memory_low, 'chart-memory-high': colors.chart_memory_high,
+		'operation-written': colors.operation_written, 'operation-deferred': colors.operation_deferred,
+		'operation-failed': colors.operation_failed,
 		'chart-marker': colors.text_secondary, 'chart-readout-bg': colors.inset, 'chart-readout-text': colors.text,
 		'item-edge': colors.rule,
 		'shadow-sm': shadow(depth.panel, theme.elevation_enabled),

@@ -47,6 +47,7 @@ The reading page's return control uses `go-top` from Lucide
 `chevron-up`, unmodified from the same upstream version.
 The shared footer uses `previous-edition` from `chevron-left` and `source-code`
 from `code-xml` in the same version.
+The Operations destination uses `operations` from Lucide `chart-gantt`, unmodified.
 
 ## How a new icon is added
 

@@ -18,7 +18,7 @@ and bounded publication dates; Voices keeps the source census, source decisions 
 inputs; Judgement keeps its published merge counts and hand marks. Those inputs
 are not newly published by removing the chart engine. Hardware's page carries
 configuration and words, then asks its three native ledgers in the browser.
-Route shells remain prerendered; Data explorer retains its existing fallback
+Existing route shells remain prerendered; Operations and Data explorer use the fallback
 document. New data panels follow browser-owned delivery, not these exceptions.
 
 The detailed requirements are in [Telemetry Intent](../../concepts/telemetry-intent.md),
@@ -69,18 +69,23 @@ Keep the first useful chart visible without making an operator scroll through
 diagnostics before reaching the status that explains them. Figures must be
 legible, tables must fit their container, and titles must use plain words.
 
-## The console is six routes
+## Console routes
 
 | Path | Label | What it answers |
 | --- | --- | --- |
 | `/console/` | **Pipelines** | Did the runs work, and what did each stage cost? |
-| `/console/model/` | **Summaries** | What was written, how long did it take, and what went wrong? |
+| `/console/operations/` | **Operations** | Which judges finished work, and what did Gardener write, defer or repair? |
 | `/console/machine/` | **Hardware** | Which hardware ran the work, and how much did it vary? |
+| `/console/model/` | **Summaries** | What was written, how long did it take, and what went wrong? |
 | `/console/judgement/` | **Judgement** | Which stories did the day merge, and where is the merge line relative to pairs marked as separate stories? |
 | `/console/voices/` | **Voices** | Who supplied the day, and how are feeds discounted? |
 | `/console/data-explorer/` | **Data explorer** | What do the ledgers hold, and what does a question of my own return? |
 
-**Data explorer is live.** It is the one console route that prerenders no document of its own: GitHub Pages serves the fallback document, then the browser fetches the registry, indexes and files after the operator chooses a question. The old `console.data_explorer_tab` flag is gone because a tab no longer points at a missing page.
+**Operations and Data explorer draw in the browser.** GitHub Pages serves the
+fallback document on a direct visit. Operations uses the existing staged
+records; Data explorer fetches its registry, indexes and files after the
+operator chooses a question. Operations is a browser destination, not a route
+verdict added to the saved Console band.
 
 Feed and source panels belong to Voices, not Pipelines. Keep `/console/` as the
 Pipelines address; renaming a label is not a reason to break an existing bookmark.
@@ -125,7 +130,7 @@ Use **Summaries** for the output and **Hardware** for the machine. **Judgement**
 names the activity, and **Voices** is the source route's chosen label. These
 reader-facing names do not require route ids, paths or data keys to change.
 
-### Every panel title on the five routes is a noun phrase
+### Every panel title is a noun phrase
 
 Name the information shown, not the implementation: no trailing question mark
 or opening auxiliary verb. `What`, `Which` and `How` are valid when they name
@@ -135,10 +140,17 @@ what the operator learns; mechanism names alone are not enough.
 Copy changes keep stable addresses. Summaries' retained section is
 `Model figures by recorded day`, not a claim about live work today.
 
+## Operations separates judging from data upkeep
+
+[Operations](what-operations-draws.md) keeps Council completion and the
+Gardener write calendar separate under the same UTC preset. Judge results stay
+on Judgement, digest production stays on Pipelines, and resource measurements
+stay on Hardware.
+
 ## Judgement draws the published merges and the holdout labels
 
-The tab separates **Published grouping**, **Council activity** and
-**Judge: Content Similarity**. Published grouping has two full-width panels,
+The tab separates **Published grouping** and **Judge: Content Similarity**.
+Published grouping has two full-width panels,
 in this order:
 
 - `merged-stories` counts the published `same_story_as` decisions. Daily columns
@@ -158,13 +170,6 @@ axis reaches `holdout_axis_below_line` score points below the merge line and
 `config/console/judgement.json` that must be above zero; a pair beyond either
 edge is drawn as a chip at that edge. The line is the current configuration,
 not a record of the floor that grouped an older digest.
-
-**LLM Council runs** reads the packed `council-run-records` ledger in the browser.
-The selected window bounds the judged digest dates; the strip groups distinct
-recorded attempts by UTC step start instead. Choose a day and attempt to see the
-judges, their digest dates and the reported parts. An absent report is not a
-failed or skipped workflow; a retry may replace an older report. The attempt
-link opens the recorded filing run without asking the workflow API.
 
 Both panels keep their build-time reads. The digest days are not published
 ledgers. The holdout labels are in a ledger, `holdout-pairs` in the Data explorer,

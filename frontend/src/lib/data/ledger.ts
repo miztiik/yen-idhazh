@@ -15,7 +15,7 @@ import { questionReader } from './question-reader';
 import { TOKEN_HISTORY_COLUMNS, type TokenDeviationOptions } from './token-deviation-query';
 import type { LedgerCatalog } from './ledger-catalog';
 import type { QueryEngine } from './slice-query';
-import { isDay, SliceRequestError, type AskOptions, type AskResult, type Column, type DateStamp, type LedgerName, type SliceOptions, type SliceResult, type SpanCost } from './slice-shapes';
+import type { AskOptions, AskResult, Column, DateStamp, LedgerName, SliceOptions, SliceResult, SpanCost } from './slice-shapes';
 
 export type { LedgerReach } from './ledger-reach';
 export { readSession } from './read-session';
@@ -106,19 +106,6 @@ export function slice(ledger: LedgerName, options: SliceOptions): Promise<SliceR
 export function compactWrites(request: CompactWriteRequest) { return panelReader().compactWrites(request); }
 export function compactPeriod(ledger: LedgerName, period: Period, covers: string, limits: Pick<CompactWriteRequest, 'maxFiles' | 'maxBytes'>) {
 	return panelReader().compactPeriod(ledger, period, covers, limits);
-}
-export function compactLedgerNames(): LedgerName[] {
-	return configuredCatalog.entries.filter(({ publish_to_data_explorer }) => publish_to_data_explorer).map(({ name }) => name).sort();
-}
-export const GARDENER_RECOVERY_COLUMNS = ['date', 'run_id', 'attempt', 'job', 'shard', 'task', 'recovered'] as const;
-export function gardenerRecoveries(from: DateStamp, to: DateStamp, runId: string, attempt: number): Promise<SliceResult> {
-	if (!isDay(/^\d{4}-\d{2}-\d{2}(?=-\d+$)/.exec(runId)?.[0]) || !Number.isSafeInteger(attempt) || attempt < 1) {
-		throw new SliceRequestError('a recovery read needs a valid Gardener run and attempt');
-	}
-	return slice('gardener', {
-		from, to, columns: GARDENER_RECOVERY_COLUMNS,
-		where: [{ column: 'run_id', op: '=', value: runId }, { column: 'attempt', op: '=', value: attempt }]
-	});
 }
 export function tokenDeviations(from: DateStamp, to: DateStamp, options: TokenDeviationOptions): Promise<SliceResult> {
 	return panelReader().tokenDeviations(from, to, options);

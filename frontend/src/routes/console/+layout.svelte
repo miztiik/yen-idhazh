@@ -9,7 +9,8 @@
 	import BackToTop from '$lib/components/BackToTop.svelte';
 	import Icon from '$lib/icons/Icon.svelte';
 	import { ROUTE_GLYPHS } from '$lib/console/route-glyph';
-	import { stripRoutes } from '$lib/console/band';
+	import { consoleDestinations } from '$lib/console/console-destinations';
+	import { dayKey } from '$lib/charts/viewport';
 	import { consoleChromeOf } from '$lib/console/chrome';
 	import { consoleHoverReadout, consoleKnobs, routeConsole } from '$lib/console/route-console';
 	import { completenessOf, completenessSentence, untilNextUtcDay } from '$lib/console/completeness';
@@ -27,7 +28,7 @@
 	provideNumberFormat(data.number_format);
 	const configured = consoleKnobs();
 	const hoverEnabled = consoleHoverReadout();
-	const routes = $derived(stripRoutes(data.routes));
+	const routes = $derived(consoleDestinations(data.routes));
 	const route = $derived(routes.find((entry) => entry.href.replace(/\/$/, '') === page.route.id) ?? routes[0]);
 	const active = $derived(route.id);
 	const contents = $derived(routeConsole(active).panel_groups.filter((group) => group.title !== ''));
@@ -35,12 +36,13 @@
 	const workbench = $derived(chrome === 'workbench');
 
 	let chosen = $state(configured.default_window_days);
+	let now = $state<number | null>(null);
 	const preference = createWindowPreference(configured.default_window_days, configured.window_presets, (days) => { chosen = days; });
 	let handed = $state.raw<WindowSource | null>(null);
 	provideWindowSlot((source) => { handed = source; }, {
 		get days() { return chosen; },
 		select: preference.select
-	});
+	}, () => now === null ? null : dayKey(new Date(now)));
 	const windowSource = $derived<WindowSource>(handed !== null && handed.route === active ? handed : {
 		route: active, days: chosen, presets: configured.window_presets, busy: false, ready: false,
 		statusLine: null, monthsFor: () => 0, onChange: preference.select
@@ -50,7 +52,6 @@
 	let labels = $state.raw<ChartLabels | null>(null);
 	provideChartLabels(() => labels);
 
-	let now = $state<number | null>(null);
 	let heading = $state<HTMLHeadingElement | null>(null);
 	let toolbar = $state<HTMLElement | null>(null);
 	onMount(() => {

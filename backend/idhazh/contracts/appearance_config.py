@@ -583,7 +583,7 @@ class AppearanceConfig(Contract):
         json_schema_extra={
             "readCompatibility": (
                 "additive; absent archive controls and console_style blocks/leaves use "
-                "declared defaults, including the console measurement and memory scale colors; "
+                "declared defaults, including measurement, memory scale and Operations colors; "
                 "style arrays replace whole; numeric console frame "
                 "maxima retain their caps and null selects the full window; "
                 "chart.palette adds spectral and piyg while prior choices remain accepted; "
@@ -592,6 +592,11 @@ class AppearanceConfig(Contract):
         }
     )
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-11-26",
+            change="Set separate light and dark status colors for Operations marks.",
+            why="Older settings inherit the new colors without changing existing charts.",
+        ),
         ChangelogEntry(
             version="2026-11-22",
             change="Add light and dark endpoints for the available-memory scale.",
@@ -606,11 +611,6 @@ class AppearanceConfig(Contract):
             version="2026-11-15",
             change="Remove the console source-doubt ranking limit.",
             why="Historical configs discard the retired limit without restoring the ranking.",
-        ),
-        ChangelogEntry(
-            version="2026-11-12",
-            change="Add built-in D3 console palettes and aligned appearance defaults.",
-            why="Prior choices and explicit colours still read; field shapes are unchanged.",
         ),
         ChangelogEntry(
             version="2026-09-30",

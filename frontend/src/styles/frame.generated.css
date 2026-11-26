@@ -119,6 +119,9 @@
 	--chart-measure: #a56eff;
 	--chart-memory-low: #bb4e5a;
 	--chart-memory-high: #64bb88;
+	--operation-written: #48c99b;
+	--operation-deferred: #f2b54b;
+	--operation-failed: #ff677b;
 	--chart-marker: #c1bcb1;
 	--chart-readout-bg: #151513;
 	--chart-readout-text: #f0ede5;
@@ -184,6 +187,9 @@
 	--chart-measure: #6929c4;
 	--chart-memory-low: #a02b43;
 	--chart-memory-high: #206e49;
+	--operation-written: #258e64;
+	--operation-deferred: #b8780d;
+	--operation-failed: #d7485d;
 	--chart-marker: #625e55;
 	--chart-readout-bg: #e9e7e1;
 	--chart-readout-text: #25251f;

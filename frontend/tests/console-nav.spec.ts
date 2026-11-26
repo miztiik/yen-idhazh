@@ -1,12 +1,13 @@
 import { expect, test } from './support/door-page';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { BAND_UNREAD, readBand, stripRoutes, type RouteId } from '../src/lib/console/band';
+import { BAND_UNREAD, readBand, type RouteId } from '../src/lib/console/band';
 import { uiConfig } from '../src/lib/server/config';
 import { BY_ROUTE } from './support/console-expect/console-nav';
+import { consoleDestinations } from '../src/lib/console/console-destinations';
 /**
- * The console is six routes, and this file is why it is routes and not tabs.
- * Data explorer is live and is answered by the fallback document because it fetches
+ * The console uses separate routes rather than hiding panels behind tabs.
+ * Operations and Data explorer use the fallback document because they fetch
  * all data after JavaScript starts.
  *
  * A tab strip that switches with script fails every assertion here: with
@@ -69,6 +70,14 @@ test.describe('the title names the route on screen', () => {
 /** A band written before Data explorer existed still reads, and the fallback fills the route. */
 const OLD_BAND = resolve(process.cwd(), '..', 'tests', 'fixtures', 'contracts', 'console-band', 'newest-day.json');
 test.describe('old bands still draw every route', () => {
+    test('Operations appears beside Pipelines even with an older producer record', () => {
+        const band = readBand(JSON.parse(readFileSync(OLD_BAND, 'utf8')));
+        const routes = consoleDestinations(band.routes);
+        expect(routes.map(({ label }) => label)).toEqual([
+            'Pipelines', 'Operations', 'Hardware', 'Summaries', 'Judgement', 'Voices', 'Data explorer'
+        ]);
+        expect(routes[1]).toMatchObject({ id: 'operations', href: '/console/operations/', worst: null });
+    });
     for (const DATA_EXPLORER of FALLBACK_ROUTES) {
         test('the strip draws Data explorer from the fallback words', () => {
             const payload = JSON.parse(readFileSync(OLD_BAND, 'utf8')) as {
@@ -79,8 +88,7 @@ test.describe('old bands still draw every route', () => {
             expect(payload.routes.map((route) => route.id)).not.toContain('data-explorer');
             const band = readBand(payload);
             expect(band.read, 'an old band no longer reads').toBe(true);
-            const drawn = stripRoutes(band.routes);
-            expect(drawn.map((route) => route.id)).toEqual(ROUTES.map((entry) => entry.id));
+            const drawn = consoleDestinations(band.routes);
             expect(drawn.at(-1)).toMatchObject({
                 id: DATA_EXPLORER.id,
                 label: DATA_EXPLORER.label,

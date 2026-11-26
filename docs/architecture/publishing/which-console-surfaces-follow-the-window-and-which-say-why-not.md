@@ -223,12 +223,11 @@ Source truncation and item-cost panels now derive their answers from declared
 native queries over the selected window. Their old per-preset telemetry copies
 are not a reason to retain an unused file reader or pan control.
 
-Gardener's [monthly finding](what-the-pipelines-route-draws.md#gardener-maintenance-shows-published-writes-not-a-workflow-verdict)
-uses the widest published monthly evidence even when the route is narrowed.
-Its grid uses the selected number of UTC write days; its daily evidence may
-use a shorter covered-day read under the file budget, which the panel names.
-The wake summary follows the selected preset against the Gardener ledger's
-own packed reach. Neither changes the publishing or article-timing window.
+[Operations](what-operations-draws.md) applies the top preset to both charts
+on the same UTC interval. Council execution and Gardener write or work dates
+are clipped to the interval, even when the underlying packed records describe
+earlier dates. The file budget may shorten the daily evidence read, not the
+visible calendar or the interval used by the monthly callout.
 
 **A panel that honours the control need not declare `data-windowed`.**
 Lower-tier query and render tests prove dates, denominators, gaps and snapshots
