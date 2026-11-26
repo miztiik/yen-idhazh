@@ -22,9 +22,11 @@ _REMOVED: Final = {"job_seconds", "model_load_ms", "server_prompt_tokens", "serv
 
 
 def _snapshot() -> dict[str, Any]:
-    return json.loads(read_text(
+    snapshot: object = json.loads(read_text(
         REPO_ROOT / "tests" / "fixtures" / "host-fingerprints" / "host-schema.json"
     ))
+    assert isinstance(snapshot, dict)
+    return snapshot
 
 
 def test_native_host_snapshot_matches_the_authoritative_contract() -> None:

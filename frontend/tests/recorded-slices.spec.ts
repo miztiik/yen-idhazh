@@ -158,7 +158,7 @@ test('the packed canary retains length, inferred time, watchlist, negative gap a
 	expect(rows.some((row) => row.stage === 'publish' && row.outcome === 'ok' && !hostDays.has(row.date))).toBe(true);
 });
 
-test('real packed Hardware keeps CPU identity and counts while exact serving evidence replaces legacy speed', async () => {
+test('real packed Hardware keeps CPU identity and counts with current and historical speed evidence', async () => {
 	const reader = createQueryWindow({
 		reach: (ledger) => reachFromDisk(state, ledger),
 		rows: (ledger, options) => sliceFromDisk(state, ledger, options)
@@ -191,7 +191,8 @@ test('real packed Hardware keeps CPU identity and counts while exact serving evi
 		row.task_name === 'work' && row.shard === 0);
 	if (captured === undefined) throw new Error('The serving work host was not packed.');
 	expect(captured).toMatchObject({
-		cpu_logical_processors: 4, fingerprint_version: 2, attempt: 1
+		cpu_logical_processors: 4, fingerprint_version: 2, attempt: 1,
+		server_prompt_tokens: null, server_prompt_seconds: null
 	});
 	expect(typeof captured.unit_id).toBe('string');
 	expect(serving.rows).toContainEqual(expect.objectContaining({
@@ -201,11 +202,13 @@ test('real packed Hardware keeps CPU identity and counts while exact serving evi
 	const isCaptured = (job: FleetJob) => job.runId === captured.run_id &&
 		job.pipelineName === captured.pipeline_name && job.taskName === captured.task_name &&
 		job.shard === captured.shard;
-	const legacy = fleetJobs(platform.rows);
+	const withoutServing = fleetJobs(platform.rows);
 	const joined = fleetJobs(platform.rows, serving.rows);
-	expect(joined).toHaveLength(legacy.length);
-	expect(legacy.find(isCaptured)?.rate).toBeCloseTo(1700 / 73.72, 10);
+	expect(joined).toHaveLength(withoutServing.length);
+	expect(withoutServing.find(isCaptured)?.rate).toBeNull();
 	expect(joined.filter(isCaptured).map((job) => job.rate)).toEqual([30]);
+	const historical = joined.find((job) => job.runId === captured.run_id && job.job === 'work' && job.shard === 1);
+	expect(historical?.rate).toBeCloseTo(962 / 83.73, 10);
 	expect(processors(hosts.rows)).toHaveLength(11);
 	expect(processors(hosts.rows).some((row) => row.cpu_logical_processors === null)).toBe(true);
 });
