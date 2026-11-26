@@ -48,6 +48,20 @@ function inlineScriptHashes() {
 // id without editing this file - see docs/reference/agent-notes.md.
 const version = process.env.BUILD_VERSION ? { name: process.env.BUILD_VERSION } : undefined;
 
+const staticAdapter = adapter({ fallback: '404.html', strict: false });
+
+/** @type {import('@sveltejs/kit').Adapter} */
+const clientEntryAdapter = {
+	name: 'static-client-entry',
+	async adapt(builder) {
+		await staticAdapter.adapt(builder);
+		// Known browser-only destinations need an entry document, not the host's 404.
+		const entry = 'build/console/operations/index.html';
+		builder.mkdirp(dirname(entry));
+		await builder.generateFallback(entry);
+	}
+};
+
 // Seven routes ship a prerendered document: `/`, `/archive/` and the
 // five `/console/` pages. The two dated routes ship none - they declare
 // `ssr = false`, so the `404.html` fallback set below answers every dated
@@ -56,7 +70,7 @@ const version = process.env.BUILD_VERSION ? { name: process.env.BUILD_VERSION } 
 // docs/architecture/publishing/frontend.md, rather than restated here.
 export default {
 	kit: {
-		adapter: adapter({ fallback: '404.html', strict: false }),
+		adapter: clientEntryAdapter,
 		paths: { base: process.env.BASE_PATH ?? '' },
 		...(version ? { version } : {}),
 		// `src/service-worker.ts` is built and shipped; registering it is ours.

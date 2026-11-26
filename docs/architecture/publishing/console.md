@@ -18,7 +18,7 @@ and bounded publication dates; Voices keeps the source census, source decisions 
 inputs; Judgement keeps its published merge counts and hand marks. Those inputs
 are not newly published by removing the chart engine. Hardware's page carries
 configuration and words, then asks its three native ledgers in the browser.
-Existing route shells remain prerendered; Operations and Data explorer use the fallback
+Existing route shells remain prerendered; Operations uses a static app shell and Data explorer uses the fallback
 document. New data panels follow browser-owned delivery, not these exceptions.
 
 The detailed requirements are in [Telemetry Intent](../../concepts/telemetry-intent.md),
@@ -81,11 +81,11 @@ legible, tables must fit their container, and titles must use plain words.
 | `/console/voices/` | **Voices** | Who supplied the day, and how are feeds discounted? |
 | `/console/data-explorer/` | **Data explorer** | What do the ledgers hold, and what does a question of my own return? |
 
-**Operations and Data explorer draw in the browser.** GitHub Pages serves the
-fallback document on a direct visit. Operations uses the existing staged
-records; Data explorer fetches its registry, indexes and files after the
-operator chooses a question. Operations is a browser destination, not a route
-verdict added to the saved Console band.
+**Operations and Data explorer draw in the browser.** Operations has its own
+static entry shell so a direct visit returns HTTP 200. The shell contains no
+chart or evidence; the browser reads the existing staged records. Data explorer
+uses the shared fallback and fetches its registry, indexes and files after the
+operator chooses a question. Operations is not a verdict in the saved Console band.
 
 Feed and source panels belong to Voices, not Pipelines. Keep `/console/` as the
 Pipelines address; renaming a label is not a reason to break an existing bookmark.

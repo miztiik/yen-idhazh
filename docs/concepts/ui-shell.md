@@ -25,8 +25,9 @@ The console's data and chart rules are owned by
 The current console still prerenders its route shells. Published-ledger panels
 fetch and draw native answers in the browser; approved private build-time inputs
 remain on Pipelines, Summaries, Voices and Judgement. Hardware carries only
-configuration and words before its native reads. Operations and Data explorer use the fallback
-document. [The console boundary](../architecture/publishing/console.md#rendering-direction)
+configuration and words before its native reads. Operations has a static entry
+shell without evidence, and Data explorer uses the fallback document.
+[The console boundary](../architecture/publishing/console.md#rendering-direction)
 names those exceptions. Retiring a chart engine does not change that architecture
 or publish private inputs.
 Current implementation details belong to the
