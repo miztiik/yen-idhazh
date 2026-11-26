@@ -310,7 +310,7 @@
       "mhz_at_probe": null
     },
     {
-      "version": "2026-10-14",
+      "version": "2026-11-26",
       "date": "2026-08-20",
       "run_id": "2026-08-20-2",
       "job": "work",
@@ -324,8 +324,8 @@
       "cpu_model": "INTEL(R) XEON(R) PLATINUM 8573C",
       "l3_cache_bytes": 272629760,
       "cpu_logical_processors": 4,
-      "server_prompt_tokens": 1700,
-      "server_prompt_seconds": 73.72,
+      "server_prompt_tokens": null,
+      "server_prompt_seconds": null,
       "cores": null,
       "threads": null,
       "mhz_max": null,
