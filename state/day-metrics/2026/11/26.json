@@ -28,8 +28,8 @@
   "items_published": 400,
   "items_truncated": 0,
   "model_id": "ornith-1-5-9b-q5-k-m",
-  "revision": 8,
-  "runs": 8,
+  "revision": 9,
+  "runs": 9,
   "sources": [
     {"published": 10,"source_id": "abc-au-world","truncated": 0},
     {"published": 9,"source_id": "africanews","truncated": 0},
