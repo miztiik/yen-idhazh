@@ -39,6 +39,7 @@ def record(
     started_at: datetime | None = None,
     clock: Callable[[], datetime] = utc_now,
     ask_placement: bool = True,
+    capture_opening: bool = True,
 ) -> Iterator[list[Path]]:
     """Yield exact files for a generic task, including its clock on work failure."""
     if (pipeline_name is None) != (task_name is None):
@@ -52,20 +53,21 @@ def record(
     started = started_at if started_at is not None else clock()
     written: list[Path] = []
     try:
-        _, paths = silicon.file_machine_row(
-            date=date,
-            run_id=run_id,
-            settings=settings,
-            state_root=state_root,
-            commit_sha=commit_sha,
-            job=writer_job,
-            pipeline_name=pipeline_name,
-            task_name=task_name,
-            shard=shard,
-            attempt=attempt,
-            ask_placement=ask_placement,
-        )
-        written.extend(paths)
+        if capture_opening:
+            _, paths = silicon.file_machine_row(
+                date=date,
+                run_id=run_id,
+                settings=settings,
+                state_root=state_root,
+                commit_sha=commit_sha,
+                job=writer_job,
+                pipeline_name=pipeline_name,
+                task_name=task_name,
+                shard=shard,
+                attempt=attempt,
+                ask_placement=ask_placement,
+            )
+            written.extend(paths)
     except OSError as error:
         _LOG.warning(
             "machine probe not written run=%s task=%s error=%s",

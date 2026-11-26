@@ -2,7 +2,7 @@
 
 A council night never drew a digest run, so it cannot honestly file rows under
 one. It mints a name of its own from the day it opened and the identity the
-platform gave the run - once, in the planning job, published as a job output
+platform gave the run - once, in the bounds job, published as a job output
 that every later verb reads.
 
 Nothing here opens a ledger, resolves an ordinal or names a judge. The digest

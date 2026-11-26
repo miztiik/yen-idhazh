@@ -95,3 +95,4 @@ class Outcome:
     finished_tasks: tuple[TaskFinished, ...] = ()
     downloaded_bytes: int | None = None
     over_budget: bool = False
+    performance_root: Path | None = None

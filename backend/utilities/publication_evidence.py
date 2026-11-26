@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import hashlib
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from idhazh import ledger
 from idhazh.atomic_write import write_atomic
-from idhazh.contracts.file_envelope import FileEnvelope, Format, Tier, WriterIdentity
-from idhazh.contracts.ledger_name import LedgerName
+from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.publication_receipt import PublicationReceipt
 from utilities.publication_git import Repository
 from utilities.publication_request import IntegrityError, Write, contains, safe_file
@@ -77,38 +75,6 @@ def identified(repo: Path, identity: WriterIdentity, hashes: Mapping[str, str]) 
             raise IntegrityError(f"invalid completed raw envelope: {error}", (path,)) from error
         if any(getattr(actual, field) != getattr(identity, field) for field in fields):
             raise IntegrityError("completed raw file belongs to another invocation", (path,))
-
-
-def verified_raw(
-    root: Path, relative: str, data: bytes, *, name: LedgerName, date: str,
-    identity: WriterIdentity,
-) -> tuple[FileEnvelope, list[dict[str, object]]]:
-    """Verify the exact named Parquet's envelope, row digest and writer."""
-    from idhazh.ledger import json_lines, parquet
-    from idhazh.ledger.filenames import file_id, unit_id
-
-    meta, rows = parquet.read(data)
-    envelope = FileEnvelope.from_metadata(meta).validate_container(Format.PARQUET)
-    expected_unit = unit_id(
-        ledger=name, covers=date, run_id=identity.run_id, job=identity.job,
-        pipeline_name=identity.pipeline_name, task_name=identity.task_name,
-        shard=identity.shard, producer=identity.producer,
-    )
-    expected_file = file_id(
-        unit=expected_unit, attempt=identity.attempt, written_at_ms=envelope.written_at_ms,
-    )
-    want = ledger.raw_path(root, name, date, expected_file).relative_to(root).as_posix()
-    if (
-        relative != want or envelope.tier is not Tier.RAW or envelope.ledger != name
-        or envelope.covers != date or envelope.identity != identity
-        or envelope.unit_id != expected_unit or envelope.file_id != expected_file
-        or len(rows) != 1
-        or hashlib.sha256(json_lines.rows_bytes(rows)).hexdigest() != envelope.content_sha256
-    ):
-        raise IntegrityError(
-            "completed raw file does not match its exact path or writer", (relative,),
-        )
-    return envelope, rows
 
 
 def confirmed(

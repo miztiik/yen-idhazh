@@ -9,7 +9,6 @@ import json
 import logging
 import os
 import shutil
-import subprocess
 import sys
 from collections.abc import Callable
 from contextlib import nullcontext
@@ -31,7 +30,7 @@ from idhazh.telemetry.machine_api import MachineApi, MachineApiError
 from idhazh.telemetry.silicon import PRODUCER as HOST_PRODUCER
 from utilities import (
     digest_performance,
-    memory_profiling_control,
+    machine_task,
     model_runtime,
     publication_evidence,
 )
@@ -82,30 +81,7 @@ def _flag(args: list[str], name: str, default: str = "") -> str:
 
 
 def measure(command: list[str]) -> int:
-    """Start the existing owned machine listener around one trusted digest command."""
-    if not command:
-        raise ValueError("a digest command is required")
-    argv = command
-    if os.environ.get("IDHAZH_MACHINE_APIS_READY") != "true":
-        if os.environ.get("IDHAZH_HOST_TELEMETRY_MODE") == "python":
-            print(
-                "::warning title=Task Performance::Machine API runtime was not prepared",
-                file=sys.stderr,
-            )
-    else:
-        day = os.environ["IDHAZH_MACHINE_ACCOUNTING_DAY"]
-        memory = memory_profiling_control.resolve(
-            os.environ.get("MEMORY_PROFILING", "inherit"), config.REPO_ROOT / "config",
-        )
-        argv = [
-            "bun", "run", "--no-install", "services/host-probes/src/api/run-recording-task.ts",
-            day, f"{day}-{os.environ['GITHUB_RUN_ID']}", str(run_context.run_attempt()),
-            os.environ["IDHAZH_MACHINE_PIPELINE"], os.environ["IDHAZH_MACHINE_SHARD"],
-            os.environ["GITHUB_SHA"], "on" if memory else "off", *command,
-        ]
-    if os.name != "nt":
-        os.execvp(argv[0], argv)
-    return subprocess.run(argv, check=False).returncode
+    return machine_task.run(command)
 
 
 def identify(args: list[str], *, job: str) -> WriterIdentity:

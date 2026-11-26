@@ -76,13 +76,22 @@ async function findRecordedTask(
 }
 
 async function verifyHostCapture(
-  root: string, entry: LedgerRegistration, days: readonly string[], writer: TaskPerformanceWriter, unitId: string,
+  root: string, entry: LedgerRegistration, execution: TaskPerformanceExecution,
+  writer: TaskPerformanceWriter, unitId: string,
 ): Promise<void> {
-  for (const day of days) {
+  const opening = execution.legacy_opening_writer;
+  for (const day of execution.accounting_days) {
     for await (const file of readPrivateRawDay(root, entry, day, hostContract)) {
-      if (file.envelope.unit_id === unitId && sameExecution(file.envelope.identity, writer)
-        && file.envelope.identity.git_sha === writer.git_sha
-        && file.rows.length === 1 && file.rows[0]?.row.date === day) return;
+      if (file.envelope.unit_id !== unitId || file.rows.length !== 1) continue;
+      const held = file.envelope.identity;
+      const row = file.rows[0]?.row;
+      if (row?.date !== day || held.git_sha !== writer.git_sha) continue;
+      if (sameExecution(held, writer)) return;
+      if (opening !== undefined && held.job === opening.job && held.producer === opening.producer
+        && held.pipeline_name === null && held.task_name === null && held.run_id === opening.run_id
+        && held.attempt === opening.attempt && held.shard === opening.shard
+        && row.job === opening.job && row.job_seconds === null && row.model_load_ms === null
+        && row.server_prompt_seconds === null && row.server_prompt_tokens === null) return;
     }
   }
   throw new TaskPerformanceRequestError(400, "Host capture does not match the launched execution");
@@ -105,7 +114,7 @@ export function createTaskPerformanceRecorder(options: TaskPerformanceRecordingO
     const recorded = await findRecordedTask(outputRoot, registryEntry, writer, row);
     if (recorded !== undefined) return recorded;
     if (row.host_unit_id !== null) {
-      await verifyHostCapture(outputRoot, registration(registry, HOST_LEDGER), execution.accounting_days, writer, row.host_unit_id);
+      await verifyHostCapture(outputRoot, registration(registry, HOST_LEDGER), execution, writer, row.host_unit_id);
     }
     const result = await persistLedger({
       ledger: TASK_LEDGER, rowContract: taskContract, outputRoot, registryEntry, ledgerSettings,

@@ -43,6 +43,7 @@ cannot change which tasks a wake plans.
 | 5 | `run-tasks` | the runner | Writes the shard's one record through `ledger.persist`, and hands back what to land |
 | 6 | `run-tasks` | `gardener_publish.publish` | Builds one commit of exactly what the shard wrote and deleted, pushes it, and tries again on a newer tip if the push failed. Lands nothing when `main` changed one of those paths after the commit the shard ran on |
 | 7 | `history` | `backend/utilities/corpus_squash_due.py`, then `backend/utilities/corpus_history.py` | Once every shard has ended, unless the run was cancelled: reads whether the corpus squash is due and, on a due day, squashes the old history and force-pushes `main` with a lease on the tip it read, squashing again on a new tip when the push is refused |
+| 8 | `publish-fingerprints` | `backend/utilities/gardener_fingerprint_publish.py` | After `history` ends, appends the verified control-runner openings, even when no task shard ran and no squash was due |
 
 **The split is round-robin over sorted names.** Every task the matrix runs - an
 active one whose kind is not `history`, which has a job of its own - is sorted by
@@ -130,7 +131,7 @@ flowchart TB
   WAKE["a wake: 00:40 UTC every day,<br/>or a person's dispatch"]
 
   subgraph OPS["Idhazh Gardener - idhazh-gardener.yml"]
-    PLAN["plan job: gardener_shards.py<br/>standard library only,<br/>before any install;<br/>reads the config alone"]
+    PLAN["plan job: gardener_shards.py<br/>standard library only;<br/>reads the config alone"]
     ANY{"any active task<br/>for the matrix?"}
     IDLE["no shard runs"]
     TEND["run-tasks job, one a shard:<br/>gardener_publish.py --shard N<br/>reads named planner paths locally;<br/>other families from the commit"]
@@ -149,6 +150,7 @@ flowchart TB
     ALARM["exit 1<br/>naming the failed task<br/>or what it downloaded"]
     REFUSED["exit 3<br/>refused: main did not<br/>move, nothing landed"]
     HIST["history job, once every shard<br/>has ended, unless the run was cancelled:<br/>corpus_squash_due.py, then,<br/>on a due day, corpus_history.py<br/>squashes and force-pushes main<br/>with a lease on the tip it read"]
+    OPENINGS["publish-fingerprints job:<br/>append the exact native openings"]
   end
 
   subgraph TREE["The committed tree - state/"]
@@ -183,6 +185,8 @@ flowchart TB
   OUTSIDE --> HIST
   REFUSED --> HIST
   IDLE --> HIST
+  HIST --> OPENINGS
+  OPENINGS --> RAW
   REAPPLY -->|"the record, and every live task's files"| RAW
   RAW -->|"a live compaction takes a due day into its day file"| COMPACT
   COMPACT -.->|"the next compaction works out its marks from the indexes"| RUN
@@ -196,7 +200,7 @@ flowchart TB
   classDef sysOps fill:#f1f5f9,stroke:#475569,stroke-width:1.5px,color:#475569;
   classDef sysPublish fill:#f1f5f9,stroke:#0e7490,stroke-width:1.5px,color:#0e7490;
 
-  class WAKE,PLAN,TEND,RUN,REAPPLY,HIST stage;
+  class WAKE,PLAN,TEND,RUN,REAPPLY,HIST,OPENINGS stage;
   class ANY,OWNED,LANDED,STALE,PUSHED,MOVED,CLEAN decision;
   class OK yes;
   class OUTSIDE,REFUSED,ALARM no;
@@ -207,7 +211,7 @@ flowchart TB
 ```
 
 **The squash runs unless the run was cancelled.** The history job waits for
-every `run-tasks` shard to end, so history is still rewritten last, and then runs
+every `run-tasks` shard to end, so no shard push races the rewrite, and then runs
 on `if: ${{ !cancelled() }}`. A red shard does not hold it off: that shard's push
 has already ended, and its work is tried again at the next wake either way. A
 failed `plan` job, which skips every shard, does not hold it off either, and a
@@ -640,6 +644,30 @@ retention folders remain declared by config. No task may claim `state/`,
 the task's declared `appends_to`. Before fetching or staging, the publisher
 refuses any exact write or deletion outside these claims. A task's returned
 path cannot widen them.
+
+Each `run-tasks` runner reuses its one opening fingerprint for the admitted
+named tasks. The shared Host Probes listener starts and stops a probe around
+each task's execution, then writes its Task Performance row into job-private
+state. The publisher checks those exact receipts separately from task-owned
+changes and adds only immutable raw appends for that shard's accounting day.
+Compaction never reads the private state, even when the new receipt covers a
+day eligible for this pass. Refusal leaves no new measurement eligible to land.
+The existing shard record and closing host clock still write as before.
+
+The `plan`, `history` and `publish-fingerprints` runners take one native opening
+fingerprint each when enabled. None runs task profiles. The history runner
+loads the instrument at the workflow revision, separately from the fresh
+`main` checkout its due check and rewrite need. Its fingerprint is available
+even when the rewrite is not due. The planner and history jobs upload named
+artifacts without changing their credentials or staging files.
+
+The last job waits for history to end and appends only verified raw
+host-fingerprint files for the run's UTC day. It includes its own opening in
+that same append. Artifact IDs and producing attempts come from the upstream
+jobs' outputs, not the downloaded files. A partial retry can use the completed
+producer's original attempt; it never renames those bytes or assigns them the
+append runner's attempt. Missing and rejected evidence is reported. The
+appender cannot replace a different blob, delete data, or invoke the rewrite.
 
 **`idhazh gardener run-task` never pushes.** It runs the same tasks and writes
 the same record into the checkout, and stops there, so running a task on a

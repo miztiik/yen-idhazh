@@ -7,15 +7,15 @@ name: Idhazh Gardener
 # `plan` job reads the declarations under config/gardener/, so adding a task is
 # a declaration, plus a module only when nothing serves its kind.
 #
-# Three jobs, in order:
-#   plan       splits the active tasks into shards, standard library only,
-#              before anything of ours is installed
+# Jobs, in order:
+#   plan       splits the active tasks into shards with the standard library
 #   run-tasks  one job a shard. Each runs its tasks, writes one record under
 #              state/raw/gardener/ and pushes it, trying again on a newer tip
 #   history    the corpus squash, once every shard has ended, unless the run was
 #              cancelled. It decides for itself whether the squash is due, and it
 #              is the one job in this repository that force-pushes main, the
 #              exception CLAUDE.md section 8 allows
+#   publish-fingerprints appends verified opening captures after history ends
 #
 # A push made with the default GITHUB_TOKEN starts no workflow. That is what
 # keeps the shards' pushes, one a shard every day, from starting a CI run each,
@@ -65,7 +65,7 @@ on:
         type: boolean
         default: false
       host_telemetry:
-        description: 'Python host collector, or off for all host telemetry'
+        description: 'Legacy host collection on task shards, or off for all host telemetry'
         type: choice
         default: python
         options:
@@ -107,12 +107,12 @@ jobs:
       shard_count: ${{ steps.shards.outputs.shard_count }}
       matrix: ${{ steps.shards.outputs.matrix }}
       run_id: ${{ steps.run.outputs.run_id }}
+      fingerprint_run_id: ${{ steps.opening.outputs.run_id }}
+      fingerprint_attempt: ${{ steps.opening.outputs.attempt }}
+      fingerprint_artifact: ${{ steps.fingerprint_artifact.outputs.artifact-id }}
     steps:
-      # The planner and the crash printer it imports, and nothing else: it runs
-      # before any install and opens nothing outside `config/`. The printer,
-      # `backend/idhazh/crash_trace.py`, and the package's `__init__.py` are the
-      # standard library alone, so `backend/idhazh` is checked out and never
-      # installed.
+      # The planner reads only config and the standard-library crash printer.
+      # The named native packages are for the optional opening fingerprint.
       - uses: actions/checkout@v6
         with:
           fetch-depth: 1
@@ -121,6 +121,51 @@ jobs:
             config
             backend/utilities
             backend/idhazh
+            .github/actions/machine-apis
+            packages/common-contracts
+            packages/ledger-file-writer
+            services/serve-pipeline-apis
+            services/host-fingerprints
+            services/host-probes
+
+      # Minted once. A partial retry can receive this output from an earlier try.
+      - id: identity
+        run: |
+          set -euo pipefail
+          echo "run_id=$(date -u +%F)-${GITHUB_RUN_ID}" | tee /dev/stderr >> "$GITHUB_OUTPUT"
+
+      - name: Prepare machine APIs
+        if: env.IDHAZH_HOST_TELEMETRY_MODE != 'off'
+        id: instrument
+        continue-on-error: true
+        uses: ./.github/actions/machine-apis
+        with:
+          mode: ${{ env.IDHAZH_HOST_TELEMETRY_MODE }}
+          pipeline: gardener
+
+      - name: Capture the planner's opening fingerprint
+        if: steps.instrument.outcome == 'success'
+        id: opening
+        continue-on-error: true
+        env:
+          RUN_ID: ${{ steps.identity.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/gardener-instrument-venv"
+          PY="$RUNNER_TEMP/gardener-instrument-venv/bin/python"
+          "$PY" -m pip install -q -e .
+          "$PY" backend/utilities/machine_task.py --run-id "$RUN_ID" -- \
+            "$PY" backend/utilities/gardener_fingerprint.py --run-id "$RUN_ID" \
+            --job plan --out "$RUNNER_TEMP/gardener-opening"
+
+      - id: fingerprint_artifact
+        if: steps.opening.outputs.attempt != ''
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: gardener-fingerprint-plan-${{ steps.opening.outputs.run_id }}-${{ steps.opening.outputs.attempt }}
+          path: ${{ runner.temp }}/gardener-opening
+          if-no-files-found: error
 
       # Which shard runs which task, from the declarations alone. Three lines for
       # $GITHUB_OUTPUT: whether any task runs, how many shards, and the matrix.
@@ -129,13 +174,11 @@ jobs:
           set -euo pipefail
           python3 backend/utilities/gardener_shards.py | tee /dev/stderr >> "$GITHUB_OUTPUT"
 
-      # One run id for every shard and the history job, read once. Re-running a
-      # failed shard keeps this job's outputs, so the shard keeps the run it
-      # belongs to.
+      # On planning failure, history still uses its existing run-ID fallback.
       - id: run
-        run: |
-          set -euo pipefail
-          echo "run_id=$(date -u +%F)-${GITHUB_RUN_ID}" | tee /dev/stderr >> "$GITHUB_OUTPUT"
+        env:
+          RUN_ID: ${{ steps.identity.outputs.run_id }}
+        run: echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
 
   run-tasks:
     # A run's page lists what every shard ran without opening a job. The names
@@ -175,6 +218,9 @@ jobs:
             .github
             packages/common-contracts
             packages/ledger-file-writer
+            services/serve-pipeline-apis
+            services/host-fingerprints
+            services/host-probes
             state/raw/feed-ingest-plan
             state/compact/feed-ingest-plan
 
@@ -208,6 +254,15 @@ jobs:
           echo "IDHAZH_HOST_TELEMETRY_MODE=$MODE" >> "$GITHUB_ENV"
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
 
+      - name: Prepare machine APIs
+        continue-on-error: true
+        uses: ./.github/actions/machine-apis
+        with:
+          mode: ${{ steps.host_telemetry.outputs.mode }}
+          pipeline: gardener
+          shard: ${{ matrix.shard }}
+          publication_runtime_ready: ${{ contains(join(matrix.task_names, ','), 'compact-feed-ingest-plan-') }}
+
       # Runs the shard's tasks, writes its one record and pushes it, trying again
       # on a newer tip when another shard pushed first. It exits with the worst
       # code it earned: 2 ownership or integrity, 3 main refused the push, 1 a
@@ -224,7 +279,8 @@ jobs:
           ATTEMPT: ${{ github.run_attempt }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          python backend/utilities/gardener_publish.py \
+          python backend/utilities/machine_task.py --run-id "$RUN_ID" -- \
+            python backend/utilities/gardener_publish.py \
             --shard "$SHARD" --run-id "$RUN_ID" --attempt "$ATTEMPT"
 
   history:
@@ -240,7 +296,70 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: write
+    outputs:
+      fingerprint_run_id: ${{ steps.opening.outputs.run_id }}
+      fingerprint_attempt: ${{ steps.opening.outputs.attempt }}
+      fingerprint_artifact: ${{ steps.fingerprint_artifact.outputs.artifact-id }}
     steps:
+      # Take the instrument from the workflow revision, not the newer tip the
+      # actual history job must read and rewrite. Do not retain its credential.
+      - id: instrument_checkout
+        if: env.IDHAZH_HOST_TELEMETRY_MODE != 'off'
+        continue-on-error: true
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          path: gardener-instrument
+          persist-credentials: false
+          fetch-depth: 1
+          filter: blob:none
+          sparse-checkout: |
+            config
+            backend/utilities
+            backend/idhazh
+            .github/actions/machine-apis
+            packages/common-contracts
+            packages/ledger-file-writer
+            services/serve-pipeline-apis
+            services/host-fingerprints
+            services/host-probes
+
+      - name: Prepare machine APIs
+        id: instrument
+        if: steps.instrument_checkout.outcome == 'success'
+        continue-on-error: true
+        uses: ./gardener-instrument/.github/actions/machine-apis
+        with:
+          mode: ${{ env.IDHAZH_HOST_TELEMETRY_MODE }}
+          pipeline: gardener
+          checkout_path: gardener-instrument
+
+      - name: Capture the history runner, whether or not a rewrite is due
+        if: steps.instrument.outcome == 'success'
+        id: opening
+        continue-on-error: true
+        working-directory: gardener-instrument
+        env:
+          PLANNED_RUN_ID: ${{ needs.plan.outputs.run_id || needs.plan.outputs.fingerprint_run_id }}
+        run: |
+          set -euo pipefail
+          RUN_ID="${PLANNED_RUN_ID:-$(date -u +%F)-$GITHUB_RUN_ID}"
+          python3 -m venv "$RUNNER_TEMP/gardener-instrument-venv"
+          PY="$RUNNER_TEMP/gardener-instrument-venv/bin/python"
+          "$PY" -m pip install -q -e .
+          "$PY" backend/utilities/machine_task.py --run-id "$RUN_ID" -- \
+            "$PY" backend/utilities/gardener_fingerprint.py --run-id "$RUN_ID" \
+            --job history --out "$RUNNER_TEMP/gardener-opening"
+
+      - id: fingerprint_artifact
+        if: steps.opening.outputs.attempt != ''
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: gardener-fingerprint-history-${{ steps.opening.outputs.run_id }}-${{ steps.opening.outputs.attempt }}
+          path: ${{ runner.temp }}/gardener-opening
+          if-no-files-found: error
+
       # Shallow, because 29 wakes out of 30 only read one committed file. The
       # full history is fetched below, and only when there is something to do.
       # Both checkouts take `main` as it is now rather than the commit this run
@@ -311,3 +430,85 @@ jobs:
           RUN_ID: ${{ needs.plan.outputs.run_id || format('{0}-{1}', steps.due.outputs.today, github.run_id) }}
           ATTEMPT: ${{ github.run_attempt }}
         run: python backend/utilities/corpus_history.py --today "$TODAY" --run-id "$RUN_ID" --attempt "$ATTEMPT"
+
+  publish-fingerprints:
+    needs: [plan, history]
+    if: always() && !cancelled() && inputs.host_telemetry != 'off'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    env:
+      RUN_ID: ${{ needs.plan.outputs.run_id || needs.plan.outputs.fingerprint_run_id || needs.history.outputs.fingerprint_run_id }}
+      PLAN_ATTEMPT: ${{ needs.plan.outputs.fingerprint_attempt }}
+      HISTORY_ATTEMPT: ${{ needs.history.outputs.fingerprint_attempt }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          filter: blob:none
+          sparse-checkout: |
+            config
+            backend/utilities
+            backend/idhazh
+            .github/actions/machine-apis
+            packages/common-contracts
+            packages/ledger-file-writer
+            services/serve-pipeline-apis
+            services/host-fingerprints
+            services/host-probes
+
+      - name: Prepare machine APIs
+        uses: ./.github/actions/machine-apis
+        with:
+          mode: ${{ env.IDHAZH_HOST_TELEMETRY_MODE }}
+          pipeline: gardener
+
+      - name: Capture the append runner's opening fingerprint
+        id: opening
+        run: |
+          set -euo pipefail
+          RUN_ID="${RUN_ID:-$(date -u +%F)-$GITHUB_RUN_ID}"
+          python3 -m venv "$RUNNER_TEMP/gardener-instrument-venv"
+          PY="$RUNNER_TEMP/gardener-instrument-venv/bin/python"
+          "$PY" -m pip install -q -e .
+          "$PY" backend/utilities/machine_task.py --run-id "$RUN_ID" -- \
+            "$PY" backend/utilities/gardener_fingerprint.py --run-id "$RUN_ID" \
+            --job publish-fingerprints --out "$RUNNER_TEMP/gardener-opening"
+
+      - name: Name only the artifacts the producing jobs uploaded
+        id: downloads
+        env:
+          PLAN_ARTIFACT: ${{ needs.plan.outputs.fingerprint_artifact }}
+          HISTORY_ARTIFACT: ${{ needs.history.outputs.fingerprint_artifact }}
+        run: |
+          set -euo pipefail
+          ids=()
+          if [ -n "$PLAN_ARTIFACT" ]; then ids+=("$PLAN_ARTIFACT"); fi
+          if [ -n "$HISTORY_ARTIFACT" ]; then ids+=("$HISTORY_ARTIFACT"); fi
+          (IFS=,; echo "ids=${ids[*]}") >> "$GITHUB_OUTPUT"
+
+      - if: steps.downloads.outputs.ids != ''
+        uses: actions/download-artifact@v8
+        with:
+          artifact-ids: ${{ steps.downloads.outputs.ids }}
+          run-id: ${{ github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: ${{ runner.temp }}/gardener-incoming
+          merge-multiple: false
+
+      - name: Append the verified native openings
+        if: steps.opening.outputs.attempt != '' || env.PLAN_ATTEMPT != '' || env.HISTORY_ATTEMPT != ''
+        env:
+          CAPTURE_RUN_ID: ${{ steps.opening.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          expected=()
+          if [ -n "$PLAN_ATTEMPT" ]; then expected+=(--plan-attempt "$PLAN_ATTEMPT"); fi
+          if [ -n "$HISTORY_ATTEMPT" ]; then expected+=(--history-attempt "$HISTORY_ATTEMPT"); fi
+          "$RUNNER_TEMP/gardener-instrument-venv/bin/python" \
+            backend/utilities/gardener_fingerprint_publish.py --run-id "${CAPTURE_RUN_ID:-$RUN_ID}" \
+            "${expected[@]}" --incoming "$RUNNER_TEMP/gardener-incoming" \
+            --local "$RUNNER_TEMP/gardener-opening"

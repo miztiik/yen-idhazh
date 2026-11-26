@@ -15,13 +15,25 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from idhazh import completed_writes, config, event_lines, run_context
 from idhazh.contracts.council_events import CouncilExit, CouncilProgram, NightPublished
 from idhazh.contracts.council_invocation import Cell, ShardReport
+from idhazh.contracts.knobs.council import CouncilConfig, CouncilTask
 from idhazh.contracts.publication_receipt import PublicationReceipt
-from idhazh.council import event_log, outcome, run_identity, run_summary, session, work_files
+from idhazh.council import (
+    event_log,
+    outcome,
+    performance,
+    run_identity,
+    run_summary,
+    session,
+    work_files,
+)
 from idhazh.council.night_plan import a_date
 from idhazh.council.registry import tenants
 from idhazh.council.selection import Selection, from_environment
 from idhazh.council.tenancy import Tenant
-from idhazh.telemetry import task_telemetry
+from idhazh.ledger.staging import staged_path
+from idhazh.telemetry import machine_api, machine_evidence, task_telemetry
+from idhazh.telemetry.host_control import enabled as telemetry_enabled
+from utilities import council_machine_delivery
 from utilities.council_matrix import VENUE_LEDGERS
 from utilities.publication_evidence import identified
 from utilities.publication_git import Repository
@@ -44,6 +56,7 @@ def settle_and_publish(
     selection: Selection,
     matrix: str | None = None,
     report: run_summary.Report | None = None,
+    opening_attempted: bool = False,
 ) -> int:
     dates = tuple(a_date(date, what="--date") for date in dates)
     run_identity.opened_on(run_id)
@@ -56,9 +69,17 @@ def settle_and_publish(
     if dates and dates != selection.dates:
         raise SystemExit(CouncilExit.REFUSED)
     dates = selection.dates
+    active = selected.names(publish=True)
+    instrumented = telemetry_enabled(settings.app.observability)
+    warn_opening = (
+        opening_attempted and instrumented and settings.app.observability.host_fingerprint
+    )
     try:
-        _import_work(selected, matrix)
-    except work_files.FileIntegrityError as error:
+        received = _import_work(
+            selected, matrix, settings.council, admit_readings=instrumented,
+            expect_opening=warn_opening,
+        )
+    except (OSError, ValueError) as error:
         event_log.failed(error)
         event_log.emit(
             NightPublished(
@@ -118,6 +139,8 @@ def settle_and_publish(
         council=settings.council,
         trials=selected.trials,
     )
+    if warn_opening and not active:
+        machine_api.warn("Council evidence stays in artifacts: no active selection")
     if not hosted:
         code = CouncilExit.FAILED if units_failed else CouncilExit.OK
         event_log.emit(
@@ -132,6 +155,7 @@ def settle_and_publish(
         dict.fromkeys(
             (
                 *VENUE_LEDGERS,
+                *(council_machine_delivery.scopes(selected) if active else ()),
                 *(
                     path
                     for host in hosted
@@ -144,6 +168,17 @@ def settle_and_publish(
     writes: dict[str, Write] = {}
     integrity_failed: IntegrityError | None = None
     identity = session._identify_writer(run_id=run_id, commit_sha=commit_sha)
+    settlement = performance.selected_runner(
+        session.COUNCIL_ROOT, performance.Phase.SETTLE, selected,
+    )
+    opening = None
+
+    def include_machine(proof: machine_evidence.VerifiedFile) -> None:
+        path = proof.path
+        if path in writes or not any(contains(scope, path) for scope in permissions):
+            raise IntegrityError("Council measurement exceeds or overlaps its scope", (path,))
+        proof.place(repo)
+        writes[path] = Write(proof.sha256, git.entry(source, path), True)
 
     def completed(host: Tenant | None, evidence: dict[Path, str]) -> None:
         nonlocal integrity_failed
@@ -153,7 +188,9 @@ def settle_and_publish(
             path = target.relative_to(repo).as_posix()
             if path.startswith("backend/var/"):
                 continue
-            if not any(contains(scope, path) for scope in allowed):
+            if contains(staged_path(machine_evidence.TASK), path) or not any(
+                contains(scope, path) for scope in allowed
+            ):
                 integrity_failed = IntegrityError(
                     "tenant output exceeds its own declaration", (path,)
                 )
@@ -197,9 +234,26 @@ def settle_and_publish(
                 raise work_files.FileIntegrityError("settlement input integrity failed") from error
             raise
 
-    active = selected.names(publish=True)
+    if active and instrumented:
+        try:
+            for proof in received:
+                include_machine(proof)
+            # The legacy clock still reads the one opening written by its own writer.
+            opening = machine_evidence.read_receipt(settlement.bundle, settlement.opening)
+            if opening is not None:
+                include_machine(opening)
+            elif warn_opening:
+                machine_api.warn("Council settlement opening fingerprint not delivered")
+        except (OSError, ValueError) as error:
+            event_log.failed(error)
+            event_log.emit(NightPublished(
+                dates=dates, run_id=run_id, landing="integrity-refused",
+                pushes=0, writes=0, code=CouncilExit.FAILED,
+            ))
+            return CouncilExit.FAILED
+
     machine_paths: list[Path] = []
-    with completed_writes.collect() as machine_evidence:
+    with completed_writes.collect() as legacy_evidence:
         machine = (
             task_telemetry.record(
                 date=run_identity.opened_on(run_id),
@@ -211,6 +265,7 @@ def settle_and_publish(
                 attempt=identity.attempt,
                 started_at=started_at,
                 clock=clock,
+                capture_opening=not opening_attempted and opening is None,
             )
             if active
             else nullcontext(machine_paths)
@@ -242,7 +297,16 @@ def settle_and_publish(
                     event_log.failed(error)
     if active:
         try:
-            machine_completed = dict(machine_evidence)
+            for judge in selected.judges if instrumented else ():
+                if selected.trial(judge.tenant):
+                    continue
+                for day in judge.dates:
+                    expected = settlement.task(day, CouncilTask.SETTLE, judge.tenant)
+                    settled_proof = machine_evidence.read_receipt(settlement.bundle, expected)
+                    if settled_proof is not None:
+                        machine_evidence.verify_host_link(settled_proof, opening)
+                        include_machine(settled_proof)
+            machine_completed = dict(legacy_evidence)
             for path in machine_paths:
                 if path not in machine_completed:
                     relative = path.relative_to(repo).as_posix()
@@ -305,7 +369,10 @@ def _publication_code(result: PublicationResult) -> CouncilExit:
     return CouncilExit.FAILED
 
 
-def _import_work(selected: Selection, matrix: str | None) -> None:
+def _import_work(
+    selected: Selection, matrix: str | None, council: CouncilConfig, *,
+    admit_readings: bool, expect_opening: bool,
+) -> tuple[machine_evidence.VerifiedFile, ...]:
     """Admit only named planner and dispatched worker bundles, never merge trees."""
     root = session.COUNCIL_ROOT
     incoming = root / "incoming"
@@ -314,7 +381,20 @@ def _import_work(selected: Selection, matrix: str | None) -> None:
         judge = selected.judge(cell.tenant, cell.date)
         if cell.shards != judge.shards:
             raise work_files.FileIntegrityError("matrix width differs from selected cell")
-    downloads = work_files.downloaded_bundles(incoming, selected, cells)
+        if cell.runs_model != council.declaration(cell.tenant).runs_model:
+            raise work_files.FileIntegrityError("matrix model selection differs from declaration")
+    bundles = council_machine_delivery.incoming(root, selected, cells)
+    downloads = work_files.downloaded_bundles(
+        incoming, selected, cells,
+        extra_markers={bundle.name: bundle.markers() for bundle in bundles},
+    )
+    readings = (
+        tuple(
+            proof for bundle in bundles if not bundle.runner.trial
+            for proof in bundle.readings(downloads, expect_opening=expect_opening)
+        )
+        if admit_readings and selected.names(publish=True) else ()
+    )
     planner = downloads.get(f"council-selection-{selected.anchor_date}")
     if planner is not None:
         for judge in selected.judges:
@@ -349,6 +429,7 @@ def _import_work(selected: Selection, matrix: str | None) -> None:
                 bundle,
                 f"{cell.tenant}/{cell.date}/{cell.shard}.jsonl",
             )
+    return readings
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -377,6 +458,7 @@ def _main(argv: list[str] | None = None, *, report: run_summary.Report | None = 
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--commit", required=True)
     parser.add_argument("--job-started-at", type=int)
+    parser.add_argument("--opening-attempted", action="store_true")
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())
     parser.add_argument("--config-root", type=Path, default=Path("config"))
     parser.add_argument("--matrix", help="The planner's JSON list of expected judging jobs.")
@@ -401,6 +483,7 @@ def _main(argv: list[str] | None = None, *, report: run_summary.Report | None = 
         selection=selected,
         matrix=args.matrix,
         report=report,
+        opening_attempted=args.opening_attempted,
         started_at=datetime.fromtimestamp(args.job_started_at, UTC)
         if args.job_started_at is not None
         else None,

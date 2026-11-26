@@ -109,7 +109,7 @@ from idhazh.contracts.knobs.gardener import (
     TaskPolicy,
 )
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.gardener import error_cause, event_log, ownership, registry, report, shards
+from idhazh.gardener import error_cause, event_log, ownership, performance, registry, report, shards
 from idhazh.gardener import tasks as shipped_tasks
 from idhazh.gardener.context import TaskContext
 from idhazh.gardener.error_cause import ErrorCause
@@ -119,7 +119,7 @@ from idhazh.gardener.outcome import EXIT_INTEGRITY, EXIT_OK, EXIT_TASK_FAILED, O
 from idhazh.gardener.period_inputs import paths_for_task, scheduled_range
 from idhazh.ledger import staging
 from idhazh.site_weight import BYTES_PER_MB
-from idhazh.telemetry import task_telemetry
+from idhazh.telemetry import task_probe, task_telemetry
 
 #: The name the record's writer carries in its envelope. This module writes it.
 PRODUCER: Final = "gardener.runner"
@@ -657,13 +657,14 @@ def run(
             settings=settings,
             state_root=state_dir,
             commit_sha=git_sha,
-            pipeline_name="gardener",
+            pipeline_name=performance.PIPELINE,
             task_name="run-tasks",
             shard=shard,
             attempt=attempt,
             started_at=started,
             clock=clock,
         ) as machine:
+            recording = performance.record_in_private(repo_root, identity, machine)
             # Resolve ownership before the first task runs.
             resolved = {
                 name: folders_of(name, settings.tasks, repo_root, committed_folders)
@@ -711,7 +712,12 @@ def run(
                     period_range=period_ranges[name],
                 )
                 event_log.emit(_planned(name, context, resolved[name], operator_range))
-                done = _run_one(name, bound[name], context)
+                with task_probe.profile(recording, performance.task_file(identity, name)) as probe:
+                    done = _run_one(name, bound[name], context)
+                    if done.failed:
+                        probe.outcome = "error"
+                    elif done.outcome.stopped_because is StopReason.DEFERRED:
+                        probe.outcome = "cancelled"
                 finished.append(_said_finished(done))
                 _refuse_a_path_outside(done, settings.tasks, bound[name].owned_ledgers)
                 _refuse_an_append_outside(done, today.isoformat())
@@ -787,6 +793,7 @@ def run(
         finished_tasks=tuple(finished),
         downloaded_bytes=downloaded_bytes,
         over_budget=too_heavy is not None,
+        performance_root=recording.private if recording is not None else None,
     )
 
 

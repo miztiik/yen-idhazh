@@ -7,10 +7,10 @@ inputs:
     required: false
     default: 'python'
   date:
-    description: The UTC accounting day admitted by this runner; omit to install only.
+    description: Default UTC accounting day for the caller's measured command.
     required: false
   pipeline:
-    description: The workflow's declared pipeline name.
+    description: The workflow's declared pipeline name; omit to install only.
     required: false
   shard:
     description: This runner's shard number.
@@ -20,6 +20,10 @@ inputs:
     description: The caller already installed Bun and the shared publication packages.
     required: false
     default: 'false'
+  checkout_path:
+    description: Path of the revision owning this listener, relative to the workspace.
+    required: false
+    default: '.'
 
 runs:
   using: composite
@@ -32,7 +36,7 @@ runs:
     - name: Prepare the locked machine listener
       if: inputs.mode != 'off'
       shell: bash
-      working-directory: ${{ github.workspace }}
+      working-directory: ${{ github.workspace }}/${{ inputs.checkout_path }}
       env:
         PUBLICATION_RUNTIME_READY: ${{ inputs.publication_runtime_ready }}
       run: |
@@ -47,7 +51,7 @@ runs:
         mkdir -p backend/var
 
     - name: Declare the measured command's execution
-      if: inputs.date != ''
+      if: inputs.pipeline != '' || inputs.date != ''
       shell: bash
       env:
         MODE: ${{ inputs.mode }}
