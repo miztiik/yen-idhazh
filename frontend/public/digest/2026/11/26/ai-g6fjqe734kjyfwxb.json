@@ -1,0 +1,46 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Update window",
+    "y": "Held-out training success rate"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [
+      "m4",
+      "m5"
+    ],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "ai-g6fjqe734kjyfwxb",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "First five updates","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Last five updates (checkpoint 75)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-8837-8841","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "%","value": "6.6"},
+    {"derived": null,"element_id": "quantity-8845-8850","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "82.3"},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m4","source_text": null,"text": "Training success rate at the first five updates.","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m5","source_text": null,"text": "Training success rate at the last five updates, including checkpoint 75.","time": null,"unit": null,"value": null}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Training Success Across Five Update Windows (Original Experiment)",
+  "type": "bar",
+  "version": "2026-11-25"
+}

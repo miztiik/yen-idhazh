@@ -1,0 +1,46 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Refinery Location",
+    "y": "Daily Processing Capacity"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [
+      "m4",
+      "m5"
+    ],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "world-b3dszfrc744858az",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Phra Khanong (Bangkok)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Chonburi Province","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-1529-1544","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "barrel","value": "120000"},
+    {"derived": null,"element_id": "quantity-1705-1720","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "barrel","value": "180000"},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m4","source_text": null,"text": "Refinery capacity","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m5","source_text": null,"text": "Refinery capacity","time": null,"unit": null,"value": null}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Daily Oil Processing Capacity by Refinery (Bangchak Corporation)",
+  "type": "bar",
+  "version": "2026-11-25"
+}

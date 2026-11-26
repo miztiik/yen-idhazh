@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Storage location",
+    "y": "Gold held (tonnes)"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-mg8ky1ckb3wyvfr3",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Domestic storage","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Overseas safe custody (Bank of England and BIS)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-1355-1368","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "tonne","value": "740.13"},
+    {"derived": null,"element_id": "quantity-1399-1412","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "tonne","value": "140.39"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "RBI Gold Reserves: Domestic vs Overseas Storage (Sept 30, 2026)",
+  "type": "bar",
+  "version": "2026-11-25"
+}
