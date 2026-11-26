@@ -12,7 +12,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from http.client import HTTPConnection, HTTPException
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import TYPE_CHECKING, Annotated, Literal
 from urllib.parse import urlsplit
 from uuid import UUID
 
@@ -21,10 +21,12 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator
 from idhazh.contracts.base import DateStamp, Model, PipelineName, RelPath, RunId, Sha256, TaskName
 from idhazh.contracts.file_envelope import UnitId, WriterIdentity
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
-from idhazh.contracts.model_server_pin import ModelServerPin
 from idhazh.contracts.task_performance import TaskPerformanceOutcome, TaskPerformanceRow
 from idhazh.publication_paths import IntegrityError, relative, safe_file
 from idhazh.telemetry.host import HostCells, process_start_ticks
+
+if TYPE_CHECKING:
+    from idhazh.contracts.model_server_pin import ModelServerPin
 
 ORIGIN_ENV = "IDHAZH_MACHINE_API_ORIGIN"
 STATE_ROOT_ENV = "IDHAZH_MACHINE_API_STATE_ROOT"
