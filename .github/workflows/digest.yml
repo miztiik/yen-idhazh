@@ -276,6 +276,53 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
+  plan-typescript:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    # Pages listens for a successful Content refresh, even though only Python drives it.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: true
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /.github/actions/machine-apis/
+            /config/
+            /packages/common-contracts/
+            /packages/data-delivery/
+            /packages/ledger-file-writer/
+            /services/feed-ingest-plan/
+            /services/host-fingerprints/
+            /services/host-probes/
+            /services/serve-pipeline-apis/
+            /state/raw/feed-ingest-plan/
+            /state/compact/feed-ingest-plan/
+            /state/raw/published/
+            /state/compact/published/
+            /state/raw/item-health/
+            /state/compact/item-health/
+            /frontend/public/publication.json
+
+      - uses: ./.github/actions/machine-apis
+
+      - name: Install locked planner and delivery packages
+        run: |
+          bun install --frozen-lockfile --cwd packages/data-delivery
+          bun install --frozen-lockfile --cwd services/feed-ingest-plan
+
+      - name: Collect and select articles
+        id: collect
+        run: bun run services/feed-ingest-plan/scripts/run-feed-ingest-plan.ts
+
+      - name: Commit planner ledgers
+        if: ${{ !cancelled() && steps.collect.outputs.current_run_files != '' }}
+        env:
+          FINALIZATION_OPERATION: commit-ledgers
+          CURRENT_RUN_FILES: ${{ steps.collect.outputs.current_run_files }}
+          RUN_CANCELLED: 'false'
+        run: bun run services/feed-ingest-plan/scripts/finalize-run-output.ts
+
 
   # The worker timeout comes from run.shard_timeout_minutes in config.
   work:

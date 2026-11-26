@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-11-20
+**Last Updated**: 2026-11-26
 
 Which workflows run, when they run, and what they may publish.
 The [workflow declarations](../../.github/workflows/) are authoritative.
@@ -63,9 +63,16 @@ scheduled and manually dispatched runs keep the committed default.
 
 ## Content refresh
 
-Plan once, then distribute that plan across workers. Derive worker counts and job
-bounds from config before the work matrix starts. Workers must not plan separately:
-they would read changing feeds and could skip or duplicate articles.
+Plan once in Python, then distribute that plan across workers. Derive worker
+counts and job bounds from config before the work matrix starts. Workers must
+not plan separately: they would read changing feeds and could skip or duplicate
+articles.
+
+The independent `plan-typescript` job calls the local feed planner API and
+commits the existing [feed planner ledgers](feed-planner-ledgers.md) for the
+live UTC day. It does not upload article text or supply input to workers or
+assembly. Its failures stay visible in that job without blocking the digest
+or its automatic Pages publication trigger.
 
 Assemble after worker failures if planning succeeded and the run was not cancelled.
 Keep successful items and commit failure records; annotate a planned run that
