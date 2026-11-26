@@ -20,6 +20,10 @@ inputs:
     description: The caller already installed Bun and the shared publication packages.
     required: false
     default: 'false'
+  checkout_path:
+    description: Path of the revision owning this listener, relative to the workspace.
+    required: false
+    default: '.'
 
 runs:
   using: composite
@@ -32,7 +36,7 @@ runs:
     - name: Prepare the locked machine listener
       if: inputs.mode != 'off'
       shell: bash
-      working-directory: ${{ github.workspace }}
+      working-directory: ${{ github.workspace }}/${{ inputs.checkout_path }}
       env:
         PUBLICATION_RUNTIME_READY: ${{ inputs.publication_runtime_ready }}
       run: |

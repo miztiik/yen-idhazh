@@ -20,6 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
 from idhazh.contracts.base import DateStamp, Model, PipelineName, RelPath, RunId, Sha256, TaskName
 from idhazh.contracts.file_envelope import UnitId, WriterIdentity
+from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.task_performance import TaskPerformanceOutcome, TaskPerformanceRow
 from idhazh.publication_paths import IntegrityError, relative, safe_file
 from idhazh.telemetry.host import process_start_ticks
@@ -29,6 +30,7 @@ STATE_ROOT_ENV = "IDHAZH_MACHINE_API_STATE_ROOT"
 _START = "/api/2026-11-05/start-task-profile"
 _STOP = "/api/2026-11-05/stop-task-profile"
 RECORD_PATH = "/api/2026-11-26/record-task-performance"
+FINGERPRINT_PATH = "/api/2026-11-05/capture-host-fingerprint"
 PRODUCER = "host-probes"
 LOG = logging.getLogger(__name__)
 
@@ -59,6 +61,25 @@ class NotWritten(Model):
 
 RESPONSE: TypeAdapter[Written | NotWritten] = TypeAdapter(
     Annotated[Written | NotWritten, Field(discriminator="status")]
+)
+
+
+class Captured(Model):
+    status: Literal["written"]
+    row: HostFingerprintRow
+    files: tuple[RecordedFile]
+    unavailable: dict[str, str]
+
+
+class CaptureDisabled(Model):
+    status: Literal["disabled"]
+    row: None
+    files: tuple[()]
+    unavailable: dict[str, str]
+
+
+_CAPTURE: TypeAdapter[Captured | CaptureDisabled] = TypeAdapter(
+    Annotated[Captured | CaptureDisabled, Field(discriminator="status")]
 )
 
 
@@ -202,6 +223,11 @@ class MachineApi:
     ) -> Written | NotWritten:
         request = record_request(date=date, identity=identity, measurement=measurement)
         return RESPONSE.validate_json(self._post(RECORD_PATH, request))
+
+    def fingerprint(self, date: str, identity: WriterIdentity) -> Captured | CaptureDisabled:
+        return _CAPTURE.validate_json(self._post(FINGERPRINT_PATH, {
+            "date": date, "writer": identity.model_dump(mode="json"),
+        }))
 
     @contextmanager
     def profile(

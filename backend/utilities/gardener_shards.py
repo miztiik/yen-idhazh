@@ -1,7 +1,7 @@
 """Which shard runs which gardener task at this wake, worked out with nothing of ours installed?
 
-The gardener's plan job runs this before the package is installed, so it is
-the standard library alone. It reads `config/gardener/config/idhazh_gardener.json` and every
+The planner needs only the standard library, independently of optional
+fingerprint collection. It reads `config/gardener/config/idhazh_gardener.json` and every
 declaration under `config/gardener/`, and prints the plan the matrix reads:
 
     python backend/utilities/gardener_shards.py           three lines for $GITHUB_OUTPUT

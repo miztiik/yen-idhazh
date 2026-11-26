@@ -14,7 +14,6 @@ from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.publication_receipt import PublicationReceipt
 from idhazh.contracts.task_performance import TaskPerformanceKind, TaskPerformanceRow
-from idhazh.ledger import json_lines, parquet
 from idhazh.ledger.filenames import file_id, unit_id
 from idhazh.publication_paths import IntegrityError, contains, safe_file
 from idhazh.telemetry.silicon import CLOCK_CELLS
@@ -34,6 +33,8 @@ def verified_raw(
     identity: WriterIdentity,
 ) -> tuple[FileEnvelope, list[dict[str, object]]]:
     """Verify the exact named Parquet's envelope, row digest and writer."""
+    from idhazh.ledger import json_lines, parquet
+
     meta, rows = parquet.read(data)
     envelope = FileEnvelope.from_metadata(meta).validate_container(Format.PARQUET)
     expected_unit = unit_id(
@@ -66,6 +67,7 @@ class ExpectedFile:
     date: str
     kind: TaskPerformanceKind | None = None
     subject: str | None = None
+    native: bool = False
 
     @property
     def ledger(self) -> LedgerName:
@@ -176,6 +178,8 @@ def verify_file(
             kind=expected.kind, subject=expected.subject,
         )
     )
+    if expected.native and envelope.writer != NATIVE_PARQUET:
+        raise IntegrityError("opening fingerprint did not use the native writer", (path,))
     return VerifiedFile(path, data, digest, envelope, row)
 
 
