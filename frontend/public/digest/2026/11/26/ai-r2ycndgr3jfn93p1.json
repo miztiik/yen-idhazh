@@ -1,0 +1,58 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Category / measure",
+    "y": "Rate (%)"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m4",
+      "m5",
+      "m6",
+      "m7"
+    ],
+    "quantity_x": [],
+    "series": [
+      "m8",
+      "m9",
+      "m10",
+      "m11"
+    ],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "ai-r2ycndgr3jfn93p1",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Overall tariff ceiling Malaysia seeks (ART)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "US indicative range \u2013 lower bound","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "US indicative range \u2013 upper bound (excess capacity)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m3","source_text": null,"text": "Forced-labour tariff (finalized, included in ceiling)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-2112-2115","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "%","value": "19"},
+    {"derived": null,"element_id": "quantity-756-759","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "%","value": "18"},
+    {"derived": null,"element_id": "quantity-764-767","mark_id": "m6","source_text": null,"text": null,"time": null,"unit": "%","value": "25"},
+    {"derived": null,"element_id": "quantity-2049-2052","mark_id": "m7","source_text": null,"text": null,"time": null,"unit": "%","value": "10"},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m8","source_text": null,"text": "Tariff rates cited by Johari Abdul Ghani","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m9","source_text": null,"text": "Tariff rates cited by Johari Abdul Ghani","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m10","source_text": null,"text": "Tariff rates cited by Johari Abdul Ghani","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m11","source_text": null,"text": "Tariff rates cited by Johari Abdul Ghani","time": null,"unit": null,"value": null}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Tariff figures cited in Malaysia\u2013US trade talks (as reported by MITI)",
+  "type": "bar",
+  "version": "2026-11-25"
+}

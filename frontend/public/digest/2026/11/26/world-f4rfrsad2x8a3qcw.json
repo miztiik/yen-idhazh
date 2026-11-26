@@ -1,0 +1,52 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Category / Tariff Rate",
+    "y": "Rate (per cent)"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "quantity_x": [],
+    "series": [
+      "m6",
+      "m7",
+      "m8"
+    ],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "world-f4rfrsad2x8a3qcw",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Existing Section 301 additional tariff","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Proposed US tariffs on Indian goods","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Rate if India reaches a trade deal","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-1403-1414","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "10"},
+    {"derived": null,"element_id": "quantity-867-878","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "%","value": "25"},
+    {"derived": null,"element_id": "quantity-989-1000","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "%","value": "17"},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m6","source_text": null,"text": "Section 301 measure (July)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m7","source_text": null,"text": "USTR proposal","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m8","source_text": null,"text": "Trade-deal scenario","time": null,"unit": null,"value": null}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Tariff Rates in US-India Trade Dispute (per cent)",
+  "type": "bar",
+  "version": "2026-11-25"
+}

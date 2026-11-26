@@ -1,0 +1,58 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Country / Scenario",
+    "y": "Tariff Rate (%)"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m4",
+      "m5",
+      "m6",
+      "m7"
+    ],
+    "quantity_x": [],
+    "series": [
+      "m8",
+      "m9",
+      "m10",
+      "m11"
+    ],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "business-economy-052nbs45v7fy6m4t",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Threatened (excessive capacity)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Proposed deal outcome","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Existing general duty (baseline)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m3","source_text": null,"text": "Competitors' agreed deal","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-372-383","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "%","value": "35"},
+    {"derived": null,"element_id": "quantity-1387-1398","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "%","value": "20"},
+    {"derived": null,"element_id": "quantity-1434-1447","mark_id": "m6","source_text": null,"text": null,"time": null,"unit": "%","value": "12.5"},
+    {"derived": null,"element_id": "quantity-2713-2724","mark_id": "m7","source_text": null,"text": null,"time": null,"unit": "%","value": "18"},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m8","source_text": null,"text": "Vietnam threatened","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m9","source_text": null,"text": "Vietnam proposed","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m10","source_text": null,"text": "Vietnam baseline","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m11","source_text": null,"text": "Regional competitors","time": null,"unit": null,"value": null}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Tariff Rates: Threatened vs. Proposed Deal vs. Regional Competitors (Vietnam)",
+  "type": "bar",
+  "version": "2026-11-25"
+}

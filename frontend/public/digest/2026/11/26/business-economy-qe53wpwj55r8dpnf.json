@@ -1,0 +1,46 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Lender type",
+    "y": "Share of total corporate debt (%)"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [
+      "m4",
+      "m5"
+    ],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "business-economy-qe53wpwj55r8dpnf",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "2008 (baseline)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Latest estimate","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-1545-1548","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "%","value": "60"},
+    {"derived": null,"element_id": "quantity-1465-1468","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "40"},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m4","source_text": null,"text": "Bank lending share in 2008","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m5","source_text": null,"text": "Bank lending share now","time": null,"unit": null,"value": null}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Share of UK corporate debt held by banks vs non-banks (2008 and latest)",
+  "type": "bar",
+  "version": "2026-11-25"
+}

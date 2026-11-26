@@ -1,0 +1,65 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Constituent company",
+    "y": "Daily return"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3",
+      "m4",
+      "m5",
+      "m6",
+      "m7"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m8",
+      "m9",
+      "m10",
+      "m11",
+      "m12",
+      "m13",
+      "m14",
+      "m15"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-xrajx2e17xbmt6hd",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "HCLTech","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Wipro","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Infosys","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m3","source_text": null,"text": "TCS","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m4","source_text": null,"text": "Tech Mahindra","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m5","source_text": null,"text": "LTM","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m6","source_text": null,"text": "Persistent","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m7","source_text": null,"text": "Oracle Financial Services Software","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-294-307","mark_id": "m8","source_text": null,"text": null,"time": null,"unit": "%","value": "4.67"},
+    {"derived": null,"element_id": "quantity-333-346","mark_id": "m9","source_text": null,"text": null,"time": null,"unit": "%","value": "3.53"},
+    {"derived": null,"element_id": "quantity-378-391","mark_id": "m10","source_text": null,"text": null,"time": null,"unit": "%","value": "3.38"},
+    {"derived": null,"element_id": "quantity-418-431","mark_id": "m11","source_text": null,"text": null,"time": null,"unit": "%","value": "2.92"},
+    {"derived": null,"element_id": "quantity-472-485","mark_id": "m12","source_text": null,"text": null,"time": null,"unit": "%","value": "1.65"},
+    {"derived": null,"element_id": "quantity-509-522","mark_id": "m13","source_text": null,"text": null,"time": null,"unit": "%","value": "1.33"},
+    {"derived": null,"element_id": "quantity-557-570","mark_id": "m14","source_text": null,"text": null,"time": null,"unit": "%","value": "0.36"},
+    {"derived": null,"element_id": "quantity-644-657","mark_id": "m15","source_text": null,"text": null,"time": null,"unit": "%","value": "0.03"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Nifty IT constituent daily returns (Nov 26, 2026)",
+  "type": "bar",
+  "version": "2026-11-25"
+}
