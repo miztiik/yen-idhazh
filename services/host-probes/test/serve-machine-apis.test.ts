@@ -14,7 +14,9 @@ import { fixture as fingerprintFixture } from "../../host-fingerprints/test/fixt
 import { createMachineApp } from "../src/api/create-machine-app";
 import { superviseMachineApiTask } from "../src/api/supervise-machine-api-task";
 import { MachineServerEvidenceSchema, readMachineServerEvidence } from "../src/api/create-machine-server-evidence";
-import { START_TASK_PROFILE_PATH, STOP_TASK_PROFILE_PATH } from "../src/api/server";
+import {
+  RECORD_TASK_PERFORMANCE_PATH, RecordTaskPerformanceResponseSchema, START_TASK_PROFILE_PATH, STOP_TASK_PROFILE_PATH,
+} from "../src/api/server";
 import { StartTaskProfileResponseSchema, StopTaskProfileResponseSchema } from "../src/api/task-command-schema";
 import { loadConfig } from "../src/config";
 import { parseProcessStat, readProcessIdentity } from "../src/task-profile/process-stat";
@@ -22,6 +24,7 @@ import { TaskProfileSchema } from "../src/task-profile/profile-schema";
 import type { TaskProfile } from "../src/task-profile/profile-schema";
 import { recordedMachineTask } from "./machine-api-recordings";
 import { MachineApiStartupSchema } from "../src/api/read-machine-api-startup";
+import { summarizeClosedTaskProfile } from "../src/task-profile/summarize-closed-profile";
 
 const json = (body: unknown, carrier = {}) => ({
   method: "POST", headers: { "content-type": "application/json", ...carrier }, body: JSON.stringify(body),
@@ -109,8 +112,16 @@ test.skipIf(process.platform !== "linux")("the real machine child writes fingerp
     const probes = await loadConfig(join(fixture.root, "config", "host-probes.json"));
     const pin = readProcessIdentity(process.pid, probes.max_proc_bytes, {});
     if (pin.reason !== null) throw new Error("The actual Linux caller must have a verified process pin");
+    const date = "2026-11-04";
+    const writer = { run_id: `${date}-700`, attempt: fixture.startup.run.attempt,
+      pipeline_name: "recorded-work", task_name: "independent-machine", shard: 0, git_sha: "a".repeat(40) };
     const result = await superviseMachineApiTask({
-      root: fixture.root, startup: fixture.startup,
+      root: fixture.root, startup: {
+        ...fixture.startup, task_performance: {
+          run_id: writer.run_id, attempt: writer.attempt, git_sha: writer.git_sha,
+          pipeline_name: writer.pipeline_name, shard: writer.shard, accounting_days: [date],
+        },
+      },
       request: async (origin, signal) => {
         const health = await fetch(new URL(API_HEALTH_PATH, origin), { signal });
         const ready = ApiReadySchema.parse((await health.json()).identity);
@@ -120,19 +131,18 @@ test.skipIf(process.platform !== "linux")("the real machine child writes fingerp
         expect(ready.pid).not.toBe(process.pid);
         expect((await fetch(`${origin}${PLANNER_API_PREFIX}${PLANNER_API_PATHS.plan}`, { ...json({}), signal })).status).toBe(404);
         const fingerprint = await fetch(origin + FINGERPRINT_PATH, { ...json({
-          date: "2026-11-04", writer: {
-            run_id: "2026-11-04-700", attempt: 3, job: null, pipeline_name: "recorded-work",
-            task_name: "independent-machine", shard: 0, producer: "telemetry.silicon", git_sha: "a".repeat(40),
-          },
+          date, writer: { ...writer, job: null, producer: "telemetry.silicon" },
         }), signal });
         expect(fingerprint.status).toBe(200);
         const written = FingerprintResponseSchema.parse(await fingerprint.json());
         if (written.status !== "written") throw new Error("The real machine child must write its fingerprint");
         expect(written.files).toHaveLength(1);
+        const hostUnitId = written.files[0]?.unit_id;
+        if (hostUnitId === undefined) throw new Error("The fingerprint receipt must identify its work unit");
         expect(await Bun.file(join(fixture.root, "state", written.files[0]!.path)).exists()).toBe(true);
         const start = async () => {
           const response = await fetch(origin + START_TASK_PROFILE_PATH, { ...json({
-            identity: { pipeline_name: "recorded-work", task_name: "independent-machine", run_id: "recorded-run" },
+            identity: { pipeline_name: writer.pipeline_name, task_name: writer.task_name, run_id: writer.run_id },
             target: { pid: process.pid, start_ticks: pin.value.start_ticks },
           }, writeTraceContext(fixture.startup.run.context)), signal });
           expect(response.status).toBe(200);
@@ -146,6 +156,16 @@ test.skipIf(process.platform !== "linux")("the real machine child writes fingerp
         const stopped = StopTaskProfileResponseSchema.parse(await response.json());
         if (stopped.status !== "stopped") throw new Error("Explicit stop must return the actual profile");
         expect(stopped.profile).toMatchObject({ traceId: first.traceId, spanId: first.spanId, outcome: "success", end_reason: "explicit_stop" });
+        const filed = await fetch(origin + RECORD_TASK_PERFORMANCE_PATH, { ...json({
+          date, writer, measurement: {
+            task_kind: "workflow-task", ...summarizeClosedTaskProfile(stopped.profile), host_unit_id: hostUnitId,
+          },
+        }), signal });
+        expect(filed.status).toBe(200);
+        const saved = RecordTaskPerformanceResponseSchema.parse(await filed.json());
+        if (saved.status !== "written") throw new Error("The real machine child must record its closed profile");
+        expect(saved.row.host_unit_id).toBe(hostUnitId);
+        expect(await Bun.file(join(fixture.root, "state", saved.files[0].path)).exists()).toBe(true);
         const interrupted = await start();
         return { pid: ready.pid, stopped: stopped.profile, interrupted };
       },

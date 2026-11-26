@@ -1,6 +1,7 @@
 /** Which validated controls govern one host sampling service? */
 import { z } from "zod";
 import { constants as bufferConstants } from "node:buffer";
+import { CompressionSchema, TaskPerformanceRowSchema, WriterIdentitySchema } from "@idhazh/common-contracts";
 import { CacheProbeConfigSchema } from "./cache-probe/cache-config";
 
 // Bun timers use a signed 32-bit millisecond delay; larger values overflow.
@@ -33,6 +34,39 @@ export const ProbeConfigSchema = z.object({
 
 export type ProbeConfig = z.infer<typeof ProbeConfigSchema>;
 export type TaskProfileConfig = z.infer<typeof TaskProfileConfigSchema>;
+
+export const TaskPerformanceExecutionSchema = z.strictObject({
+  run_id: WriterIdentitySchema.shape.run_id,
+  attempt: WriterIdentitySchema.shape.attempt,
+  pipeline_name: TaskPerformanceRowSchema.shape.pipeline_name,
+  shard: WriterIdentitySchema.shape.shard,
+  git_sha: WriterIdentitySchema.shape.git_sha,
+  accounting_days: z.array(TaskPerformanceRowSchema.shape.date).min(1)
+    .refine(days => new Set(days).size === days.length, "accounting days must be distinct"),
+});
+export type TaskPerformanceExecution = z.infer<typeof TaskPerformanceExecutionSchema>;
+
+const TaskPerformanceSettingsSchema = z.object({
+  observability: z.object({ host_telemetry_enabled: z.boolean(), memory_profiling_enabled: z.boolean() }),
+  ledger: z.object({
+    format: z.literal("parquet"), compression_raw: CompressionSchema, compression_compact: CompressionSchema,
+  }),
+});
+export type TaskPerformanceSettings = z.infer<typeof TaskPerformanceSettingsSchema>;
+
+export async function loadTaskPerformanceSettings(
+  path: string | URL = new URL("../../../config/idhazh.json", import.meta.url),
+): Promise<TaskPerformanceSettings> {
+  return TaskPerformanceSettingsSchema.parse(await Bun.file(path).json());
+}
+
+export function configureJobProfiles(config: ProbeConfig, settings: TaskPerformanceSettings): ProbeConfig {
+  const enabled = settings.observability.host_telemetry_enabled;
+  const memory = enabled && settings.observability.memory_profiling_enabled;
+  return { ...config, task_profile: {
+    ...config.task_profile, enabled, memory_enabled: memory, machine_memory_enabled: memory,
+  } };
+}
 
 export async function loadConfig(
   path: string | URL = new URL("../../../config/host-probes.json", import.meta.url),

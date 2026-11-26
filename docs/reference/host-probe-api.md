@@ -1,8 +1,8 @@
-# Start and stop a task resource profile
+# Measure and record a completed task
 
-**Last Updated**: 2026-11-07
+**Last Updated**: 2026-11-26
 
-Which local HTTP commands measure one process for an operator-owned task?
+Which local HTTP commands measure and record an operator-owned task?
 The Bun host probe includes PID CPU and optional process and machine RAM.
 Optional [cache probes](host-cache-probes.md) attach exact last-level-cache
 events to this same handle lifetime; their separate latency command measures
@@ -125,19 +125,71 @@ not stop CPU/RAM profiling. The cache result retains its own actual interval.
 Its native-tool, concurrency, body-time and working-set bounds are defined in
 the [cache reference](host-cache-probes.md).
 
-The instrument and completed handles exist only in this service process.
-There is no disk registry, host-ledger field or request-journal change.
+The transient command's completed handles exist only in this service process.
 A restart loses its handles. CPU/RAM metadata may be returned by this API,
 reported through the existing TypeScript callback or written to structured
-stderr; none of these makes it durable request authority.
+stderr; recording the evidence is a separate command.
+
+## Record
+
+`POST /api/2026-11-26/record-task-performance` files one completed
+[Task Performance row](../architecture/contracts/schemas.md#task-performance)
+without sampling again. The standalone listener takes a trusted launch file
+with `--serve --recording-context launch.json`. It contains `state_root`,
+optional `registry_path` (defaults to `config/ledgers.json`), and `execution`:
+`run_id`, `attempt`, `pipeline_name`, `shard`, `git_sha`, and the distinct
+`accounting_days` the caller admits. Explicit paths are relative to the
+launcher's working directory unless absolute. The composed machine child
+takes the same execution fields as `task_performance` on its private startup
+pipe and reuses its selected state root and registry. Start only one recording
+listener at a time for that private root. Without a trusted execution the
+record route refuses writes; existing commands keep their defaults.
+
+The JSON body contains `date`, `writer` (the execution identity without
+`accounting_days`, plus `task_name`), and `measurement` (the row's measurement
+fields, including `task_kind` and `outcome`). The request cannot name the
+destination or set `version`, `producer`, `job` or substitute row identity.
+The writer stamps `producer: "host-probes"` and `job: null`. Use only the
+flat summary of a closed profile, not its samples, PIDs or handle. TypeScript
+callers can use `summarizeClosedTaskProfile` to select the whole-interval CPU,
+RAM and elapsed readings. Independently measured phases or model-serving
+sessions can send their typed evidence without a profile or handle. If supplied,
+`host_unit_id` must match verified capture bytes in the same private root,
+admitted days and execution; omit it when no capture was available.
+
+When the launched job enables the master `observability.host_telemetry_enabled`
+switch, the existing task profiler is enabled and both profile memory settings
+follow `observability.memory_profiling_enabled`. Memory off refuses non-null RAM
+readings, not independently measured elapsed time or model counters. Request
+bodies cannot change these settings.
+
+`written` returns the validated `row` and its one completed `files` receipt.
+Master off returns `disabled` / `configured_off`; a paused or retired family
+returns `skipped` / `ledger_not_active`. Both have `row: null` and `files: []`.
+The writer verifies the exact raw UTC day in the private root before writing.
+An equal retry returns the original relative path, ID and digest, even after
+restart. Omitted nullable values and explicit nulls compare equally. A changed
+row for the same task and attempt returns 409 without replacement. Another
+named task or attempt can have its own record. No retry can recover a
+measurement that never closed or a lost private root.
+
+Bad JSON or measurements return 400, an unmatched launch context returns 403,
+and unreadable or unverifiable persistence returns 500. The existing JSON
+body bound and browser-origin refusal apply. The receipt is not a publication
+action; [delivery checks](../architecture/publishing/committing.md#evidence-is-not-permission)
+remain the caller's responsibility.
+
+The offline recording test sends its exact Parquet files to the ordinary
+Python reader and packer. Run it with the installed backend environment
+(`IDHAZH_PYTHON` selects the interpreter when it is not `python`).
 
 ## Native command diagnostics
 
 All commands follow the
 [native API event standard](../architecture/contracts/identity.md#native-api-support).
 After an actual result, `host_probe_completed` contains only the command name
-and `handled` or `disabled`. Handled means the command returned its native
-result, not that a measurement was available or that the profiled task succeeded.
+and outcome. For transient commands, `handled` means the command returned its
+native result, not that a measurement was available or that the profiled task succeeded.
 Disabled start/stop creates no collector, handle or measurement.
 
 An enabled start uses the real profiler operation for its event. Successful
@@ -155,8 +207,9 @@ sample on stdout and emits the corresponding safe event on stderr.
 
 ## Bounds and failures
 
-`config/host-probes.json` owns these controls. The task instrument remains
-default-off; RAM follows the [measurement controls](host-metrics.md#whole-task-typescript-samples).
+`config/host-probes.json` owns these controls. Without an instrumented job
+launch, the task instrument remains default-off; RAM follows the
+[measurement controls](host-metrics.md#whole-task-typescript-samples).
 Neither CPU windows nor polling intervals limit task lifetime.
 
 Table A - task HTTP bounds
@@ -201,6 +254,7 @@ Table B - native probe event payloads
 | B3 | `host_probe_cleanup_failed` | `code: "HOST_PROBE_CLEANUP_FAILED"` |
 | B4 | `host_probe_body_cleanup_failed` | `code: "HOST_PROBE_BODY_CLEANUP_FAILED"` |
 | B5 | `task_profile_failed` | `code: "TASK_PROFILE_FAILED"` |
+| B6 | `host_probe_completed` | `operation: "record-task-performance"`; `outcome`: `written`, `disabled` or `skipped`. |
 
 ## Embedded use
 

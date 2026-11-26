@@ -21,7 +21,11 @@ export async function checkTrustedParent(root: string, target: string): Promise<
 }
 
 export function buildRawPath(root: string, prefix: readonly string[], covers: string, file: string): string {
-  return resolve(root, "raw", ...prefix, covers.slice(0, 4), covers.slice(5, 7), covers.slice(8, 10), `${file}.parquet`);
+  return resolve(buildRawDayPath(root, prefix, covers), `${file}.parquet`);
+}
+
+export function buildRawDayPath(root: string, prefix: readonly string[], covers: string): string {
+  return resolve(root, "raw", ...prefix, covers.slice(0, 4), covers.slice(5, 7), covers.slice(8, 10));
 }
 
 export function buildCompactPath(

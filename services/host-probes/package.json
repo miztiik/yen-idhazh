@@ -15,7 +15,7 @@
     "./machine-evidence": "./src/api/create-machine-server-evidence.ts",
     "./machine-diagnostics": "./src/api/read-machine-api-diagnostic.ts"
   },
-  "description": "Independent Linux CPU and memory sampling, with native fingerprint/profile assembly for shared local hosting. Shared hosting and fingerprint dependencies support machine-only tasks; existing Hono adds tool installation bytes only. Shared contracts and Zod validate inputs; Bun serves HTTP. TypeScript and Bun types are development-only.",
+  "description": "Independent Linux CPU and memory sampling, with native fingerprint/profile assembly for shared local hosting. The existing Parquet writer also files completed task evidence without a separate writer runtime. Shared hosting and fingerprint dependencies support machine-only tasks; existing Hono adds tool installation bytes only. Shared contracts and Zod validate inputs; Bun serves HTTP. TypeScript and Bun types are development-only.",
   "scripts": {
     "start": "bun run src/index.ts --serve",
     "sample": "bun run src/index.ts --sample",
@@ -25,6 +25,7 @@
   "dependencies": {
     "@idhazh/common-contracts": "file:../../packages/common-contracts",
     "@idhazh/host-fingerprints": "file:../../services/host-fingerprints",
+    "@idhazh/ledger-file-writer": "file:../../packages/ledger-file-writer",
     "@idhazh/serve-pipeline-apis": "file:../../services/serve-pipeline-apis",
     "hono": "4.13.13",
     "zod": "^4.1.12"

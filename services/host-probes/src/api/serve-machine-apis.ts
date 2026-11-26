@@ -13,7 +13,8 @@ export function runMachineApiServer() {
       shutdownTimeoutMs: startup.server.supervision.shutdown_timeout_ms,
       start: async signal => {
         const inputs = await loadMachineApiInputs(process.cwd(), startup.state_root,
-          startup.registry_path === undefined ? undefined : join(process.cwd(), startup.registry_path));
+          startup.registry_path === undefined ? undefined : join(process.cwd(), startup.registry_path),
+          startup.task_performance);
         const identity = readMachineApiIdentity(startup, process.pid);
         signal.throwIfAborted();
         try {

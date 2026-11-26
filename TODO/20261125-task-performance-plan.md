@@ -34,7 +34,7 @@ Table C - Implementation sequence.
 | ID | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | 1 | Declare and pack task performance records | - | A | DONE | task-performance-contract | - | Task Performance contract |
-| C2 | 2 | Record one completed task through TypeScript Host Probes | 1 | B | PENDING | - | - | - |
+| C2 | 2 | Record one completed task through TypeScript Host Probes | 1 | B | DONE | task-performance-recording | - | Task Performance recording |
 | C3 | 3 | Record digest tasks and model-server sessions | 2 | C | PENDING | - | - | - |
 | C4 | 4 | Record Council and gardener tasks | 3 | D | PENDING | - | - | - |
 | C5 | 5 | Migrate console and audit readers and retire the live CI clock | 4 | E | PENDING | - | - | - |

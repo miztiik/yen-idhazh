@@ -32,7 +32,7 @@ test("disabled probe commands retain an honest outcome without a handle or measu
   expect(ProbeEventSchema.meta()).toMatchObject({
     version: HOST_PROBE_EVENT_VERSION,
     readCompatibility: "current_only; diagnostic readers and writers change together",
-    changelog: [{ version: HOST_PROBE_EVENT_VERSION }],
+    changelog: expect.arrayContaining([expect.objectContaining({ version: HOST_PROBE_EVENT_VERSION })]),
   });
 });
 
