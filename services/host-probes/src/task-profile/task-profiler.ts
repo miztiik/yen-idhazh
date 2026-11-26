@@ -5,7 +5,7 @@ import type { OperationMetadata } from "@idhazh/common-contracts/schemas/operati
 import type { ProbeConfig } from "../config";
 import type { ProbeContext } from "../probe/proc-reader";
 import { CollectorInputSchema, CollectorMessageSchema } from "./profile-schema";
-import type { OwnedProcess, TaskEndReason, TaskIdentity, TaskOutcome, TaskProfile } from "./profile-schema";
+import type { ClosedProfile, ItemWindowProfile, OwnedProcess, TaskEndReason, TaskIdentity, TaskOutcome, TaskProfile } from "./profile-schema";
 import { resolveClockTicks } from "./clock-ticks";
 import { ProcessPinError, verifyProcessPin } from "./process-stat";
 
@@ -18,13 +18,17 @@ export type TaskProfiling = {
   context?: ProbeContext;
 };
 
-export type TaskProfileResult = { profile: TaskProfile } | { error: Error };
-export type TaskProfileSession = {
+export type TaskProfileResult<Profile = TaskProfile> = { profile: Profile } | { error: Error };
+export type TaskProfileSession<Profile = TaskProfile> = {
   operation: OperationMetadata;
   target: OwnedProcess | null;
   expires_at: string | null;
-  settled: Promise<TaskProfileResult>;
-  close: (outcome: TaskOutcome, reason?: TaskEndReason) => Promise<TaskProfile>;
+  settled: Promise<TaskProfileResult<Profile>>;
+  close: (outcome: TaskOutcome, reason?: TaskEndReason) => Promise<Profile>;
+};
+type LifecycleControls = { signal?: AbortSignal; expiresAfterMs?: number };
+type CollectionOptions<Profile> = Omit<TaskProfiling, "report"> & {
+  report: (profile: Profile) => void | Promise<void>;
 };
 
 async function withinDeadline<T>(work: Promise<T>, deadline: number, message: string): Promise<T> {
@@ -39,21 +43,43 @@ async function withinDeadline<T>(work: Promise<T>, deadline: number, message: st
   } finally { clearTimeout(timer); }
 }
 
-export async function startTaskProfile(
+export function startTaskProfile(
   options: TaskProfiling, identity: TaskIdentity,
-  controls: { signal?: AbortSignal; expiresAfterMs?: number } = {},
+  controls: LifecycleControls = {},
 ): Promise<TaskProfileSession | null> {
+  return startCollector(options, identity, controls, profile => {
+    if ("version" in profile) throw new Error("Task collector returned an item result");
+    return profile;
+  });
+}
+
+export function startItemWindowProfile(
+  options: Omit<TaskProfiling, "report"> & { target: OwnedProcess },
+  identity: TaskIdentity, pollMs: number, controls: LifecycleControls,
+): Promise<TaskProfileSession<ItemWindowProfile> | null> {
+  return startCollector({ ...options, report: () => {} }, identity, controls, profile => {
+    if (!("version" in profile)) throw new Error("Item collector returned a generic task result");
+    return profile;
+  }, pollMs);
+}
+
+async function startCollector<Profile extends ClosedProfile>(
+  options: CollectionOptions<Profile>, identity: TaskIdentity, controls: LifecycleControls,
+  project: (profile: ClosedProfile) => Profile, itemPollMs?: number,
+): Promise<TaskProfileSession<Profile> | null> {
   if (!options.config.task_profile.enabled) return null;
   controls.signal?.throwIfAborted();
   const operation = options.parent === undefined ? createRootContext() : createChildContext(options.parent);
   if (options.target !== undefined) verifyProcessPin(options.target, options.config.max_proc_bytes, options.context ?? {});
-  const clock_ticks_per_second = await resolveClockTicks(options.config);
+  const clock_ticks_per_second = itemPollMs === undefined ? await resolveClockTicks(options.config)
+    : { value: null, reason: "configured_off" };
   controls.signal?.throwIfAborted();
   const input = CollectorInputSchema.parse({
     operation, identity, config: options.config.task_profile, max_proc_bytes: options.config.max_proc_bytes,
     worker_pid: options.target?.pid ?? process.pid, target: options.target ?? null,
     clock_ticks_per_second, expires_after_ms: controls.expiresAfterMs ?? null,
     server: options.server ?? null, context: options.context ?? {},
+    ...(itemPollMs === undefined ? {} : { item_poll_ms: itemPollMs }),
   });
   const worker = new Worker(new URL("./collector.worker.ts", import.meta.url), { workerData: input });
   let terminating: ReturnType<Worker["terminate"]> | undefined;
@@ -62,10 +88,10 @@ export async function startTaskProfile(
   let ready: (value: Ready) => void;
   let failedStart: (error: Error) => void;
   const started = new Promise<Ready>((resolve, reject) => { ready = resolve; failedStart = reject; });
-  let resolveFinished: (result: TaskProfileResult) => void;
-  const finished = new Promise<TaskProfileResult>(resolve => { resolveFinished = resolve; });
+  let resolveFinished: (result: TaskProfileResult<Profile>) => void;
+  const finished = new Promise<TaskProfileResult<Profile>>(resolve => { resolveFinished = resolve; });
   let completionDeadline: number | undefined;
-  const finish = (result: TaskProfileResult) => {
+  const finish = (result: TaskProfileResult<Profile>) => {
     completionDeadline ??= performance.now() + input.config.lifecycle_timeout_ms;
     resolveFinished(result);
   };
@@ -80,7 +106,10 @@ export async function startTaskProfile(
     if (!message.success) { fail(new Error("Task collector returned invalid metadata")); return; }
     if (message.data.type === "ready") ready({ target: message.data.target, expires_at: message.data.expires_at });
     else if (message.data.type === "rejected") fail(new ProcessPinError(message.data.reason));
-    else { received = true; finish({ profile: message.data.profile }); }
+    else {
+      try { finish({ profile: project(message.data.profile) }); received = true; }
+      catch (error) { fail(new Error("Task collector returned the wrong profile mode", { cause: error })); }
+    }
   });
   worker.once("error", error => fail(new Error("Task profile collector failed", { cause: error })));
   worker.once("exit", () => {
@@ -102,7 +131,7 @@ export async function startTaskProfile(
     throw error;
   }
   finally { clearTimeout(timeout); controls.signal?.removeEventListener("abort", abort); }
-  const settled = (async (): Promise<TaskProfileResult> => {
+  const settled = (async (): Promise<TaskProfileResult<Profile>> => {
     let result = await finished;
     const deadline = completionDeadline ??= performance.now() + input.config.lifecycle_timeout_ms;
     try { await withinDeadline(terminate(), deadline, "Task profile collector cleanup timed out"); }
@@ -119,7 +148,7 @@ export async function startTaskProfile(
     }
     return result;
   })();
-  let closing: Promise<TaskProfile> | undefined;
+  let closing: Promise<Profile> | undefined;
   return {
     operation, ...details, settled,
     close(outcome, end_reason = "task_settled") {

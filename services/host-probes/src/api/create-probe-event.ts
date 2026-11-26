@@ -9,14 +9,14 @@ const diagnosticContract = {
   version: HOST_PROBE_EVENT_VERSION,
   readCompatibility: "current_only; diagnostic readers and writers change together",
   changelog: [
-    { version: HOST_PROBE_EVENT_VERSION, change: "Report the actual Task Performance recording outcome." },
+    { version: HOST_PROBE_EVENT_VERSION, change: "Report Task Performance recording and item-profile command outcomes." },
     { version: "2026-11-05", change: "Declare safe native probe command outcomes and failures." },
   ],
 };
 const NativeEnvelopeSchema = CloudEventSchema.safeExtend({ source: z.literal(HOST_PROBE_EVENT_SOURCE) });
 const CompletionDataSchema = z.discriminatedUnion("operation", [
   z.strictObject({
-    operation: z.enum(["sample", "start-task-profile", "stop-task-profile", "cache-latency"]),
+    operation: z.enum(["sample", "start-task-profile", "stop-task-profile", "start-item-profile", "stop-item-profile", "cache-latency"]),
     outcome: z.enum(["handled", "disabled"]),
   }),
   z.strictObject({

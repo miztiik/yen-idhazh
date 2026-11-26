@@ -3,6 +3,7 @@ import { z } from "zod";
 import { OperationMetadataSchema } from "@idhazh/common-contracts/schemas/operation-metadata";
 import { MAX_TIMER_DELAY_MS, TaskProfileConfigSchema } from "../config";
 import { UNAVAILABLE_REASONS } from "../probe/proc-reader";
+import { ItemPollMsSchema, ItemWindowMetadataSchema } from "./item-window-schema";
 
 export const TASK_PROFILE_VERSION = "2026-11-04" as const;
 const profileContract = {
@@ -78,6 +79,9 @@ export const TaskOutcomeSchema = z.enum(["success", "error", "cancelled"]);
 export const TaskEndReasonSchema = z.enum([
   "task_settled", "explicit_stop", "owner_exited", "pid_reused", "expired", "service_stopped", "start_aborted",
 ]);
+export const ItemWindowProfileSchema = ItemWindowMetadataSchema.safeExtend({
+  identity: TaskIdentitySchema, outcome: TaskOutcomeSchema, end_reason: TaskEndReasonSchema,
+});
 export const TaskProfileSchema = OperationMetadataSchema.safeExtend({
   identity: TaskIdentitySchema,
   collector: z.literal("worker_thread"),
@@ -129,6 +133,7 @@ export const CollectorInputSchema = z.strictObject({
   target: OwnedProcessSchema.nullable(), clock_ticks_per_second: ClockTicksSchema,
   expires_after_ms: z.int().positive().max(MAX_TIMER_DELAY_MS).nullable(),
   server: OwnedProcessSchema.nullable(),
+  item_poll_ms: ItemPollMsSchema.optional(),
   context: z.strictObject({ platform: z.string().optional(), procRoot: z.string().optional() }),
 }).refine(value => value.target === null || value.target.pid === value.worker_pid, {
   path: ["target", "pid"], message: "must name the task worker PID",
@@ -139,7 +144,7 @@ export const CollectorMessageSchema = z.discriminatedUnion("type", [
     type: z.literal("ready"), target: OwnedProcessSchema.nullable(), expires_at: z.iso.datetime().nullable(),
   }),
   z.strictObject({ type: z.literal("rejected"), reason: UnavailableSchema }),
-  z.strictObject({ type: z.literal("complete"), profile: TaskProfileSchema }),
+  z.strictObject({ type: z.literal("complete"), profile: z.union([TaskProfileSchema, ItemWindowProfileSchema]) }),
 ]);
 export type TaskIdentity = z.infer<typeof TaskIdentitySchema>;
 export type OwnedProcess = z.infer<typeof OwnedProcessSchema>;
@@ -151,4 +156,6 @@ export type TaskSample = z.infer<typeof TaskSampleSchema>;
 export type TaskOutcome = z.infer<typeof TaskOutcomeSchema>;
 export type TaskEndReason = z.infer<typeof TaskEndReasonSchema>;
 export type TaskProfile = z.infer<typeof TaskProfileSchema>;
+export type ItemWindowProfile = z.infer<typeof ItemWindowProfileSchema>;
+export type ClosedProfile = TaskProfile | ItemWindowProfile;
 export type CollectorInput = z.infer<typeof CollectorInputSchema>;

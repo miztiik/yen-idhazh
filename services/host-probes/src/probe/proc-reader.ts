@@ -18,20 +18,25 @@ export interface ProbeContext {
 }
 
 export function readProcFile(
-  name: "stat" | "meminfo" | "vmstat" | `${number}/stat` | `${number}/status`,
+  name: "stat" | "meminfo" | "vmstat" | "loadavg" | "self/cgroup" | `${number}/${"stat" | "status" | "comm"}`,
   maxBytes: number,
   context: ProbeContext,
   scratch?: Buffer,
 ): Observation<string> {
-  if (!/^(stat|meminfo|vmstat|[1-9]\d*\/(stat|status))$/.test(name)) {
+  if (!/^(stat|meminfo|vmstat|loadavg|self\/cgroup|[1-9]\d*\/(stat|status|comm))$/.test(name)) {
     throw new Error("Invalid named proc input");
   }
   if ((context.platform ?? process.platform) !== "linux") {
     return { value: null, reason: "unsupported_platform" };
   }
+  return readLinuxFile(join(context.procRoot ?? "/proc", name), maxBytes, scratch);
+}
+
+/** Read one caller-owned Linux input, never a path from a request. */
+export function readLinuxFile(path: string, maxBytes: number, scratch?: Buffer): Observation<string> {
   let descriptor: number | undefined;
   try {
-    descriptor = openSync(join(context.procRoot ?? "/proc", name), "r");
+    descriptor = openSync(path, "r");
     const buffer = scratch ?? Buffer.alloc(maxBytes + 1);
     if (buffer.length !== maxBytes + 1) throw new Error("Proc buffer differs from the configured byte limit");
     let size = 0;
@@ -46,7 +51,7 @@ export function readProcFile(
     const code = error instanceof Error && "code" in error ? error.code : undefined;
     if (code === "ENOENT" || code === "ENOTDIR" || code === "ESRCH") return { value: null, reason: "missing_file" };
     if (code === "EACCES" || code === "EPERM") return { value: null, reason: "permission_denied" };
-    throw new Error(`Cannot read proc ${name}${typeof code === "string" ? ` (${code})` : ""}`, { cause: error });
+    throw new Error(`Cannot read host input${typeof code === "string" ? ` (${code})` : ""}`, { cause: error });
   } finally {
     if (descriptor !== undefined) closeSync(descriptor);
   }

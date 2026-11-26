@@ -2,8 +2,8 @@
 import type { Observation } from "./proc-reader";
 
 // Linux /proc/stat positions; guest and guest_nice are already in user and nice.
-const COUNTERS = ["user", "nice", "system", "idle", "iowait", "irq", "softirq", "steal"] as const;
-type CounterName = typeof COUNTERS[number];
+export const CPU_COUNTERS = ["user", "nice", "system", "idle", "iowait", "irq", "softirq", "steal"] as const;
+type CounterName = typeof CPU_COUNTERS[number];
 export type CpuCounters = Record<CounterName, bigint>;
 export interface CpuPercentages {
   user: number;
@@ -15,11 +15,11 @@ export interface CpuPercentages {
 
 export function parseCpuCounters(text: string): Observation<CpuCounters> {
   const fields = text.split(/\r?\n/, 1)[0]?.trim().split(/\s+/) ?? [];
-  if (fields[0] !== "cpu" || fields.length < COUNTERS.length + 1) {
+  if (fields[0] !== "cpu" || fields.length < CPU_COUNTERS.length + 1) {
     return { value: null, reason: "invalid_data" };
   }
   const counters: CpuCounters = { user: 0n, nice: 0n, system: 0n, idle: 0n, iowait: 0n, irq: 0n, softirq: 0n, steal: 0n };
-  for (const [index, name] of COUNTERS.entries()) {
+  for (const [index, name] of CPU_COUNTERS.entries()) {
     const field = fields[index + 1];
     if (field === undefined || !/^\d+$/.test(field)) return { value: null, reason: "invalid_data" };
     counters[name] = BigInt(field);
@@ -34,7 +34,7 @@ export function calculateCpuPercentages(
   if (start.reason !== null) return start;
   if (end.reason !== null) return end;
   const delta = { ...end.value };
-  for (const name of COUNTERS) {
+  for (const name of CPU_COUNTERS) {
     delta[name] -= start.value[name];
     if (delta[name] < 0n) return { value: null, reason: "counter_reset" };
   }

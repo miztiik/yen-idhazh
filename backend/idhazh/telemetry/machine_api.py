@@ -12,23 +12,29 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from http.client import HTTPConnection, HTTPException
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import TYPE_CHECKING, Annotated, Literal
 from urllib.parse import urlsplit
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator
 
 from idhazh.contracts.base import DateStamp, Model, PipelineName, RelPath, RunId, Sha256, TaskName
 from idhazh.contracts.file_envelope import UnitId, WriterIdentity
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.task_performance import TaskPerformanceOutcome, TaskPerformanceRow
 from idhazh.publication_paths import IntegrityError, relative, safe_file
-from idhazh.telemetry.host import process_start_ticks
+from idhazh.telemetry.host import HostCells, process_start_ticks
+
+if TYPE_CHECKING:
+    from idhazh.contracts.model_server_pin import ModelServerPin
 
 ORIGIN_ENV = "IDHAZH_MACHINE_API_ORIGIN"
 STATE_ROOT_ENV = "IDHAZH_MACHINE_API_STATE_ROOT"
 _START = "/api/2026-11-05/start-task-profile"
 _STOP = "/api/2026-11-05/stop-task-profile"
+_ITEM_VERSION = "2026-11-26"
+_START_ITEM = f"/api/{_ITEM_VERSION}/start-item-profile"
+_STOP_ITEM = f"/api/{_ITEM_VERSION}/stop-item-profile"
 RECORD_PATH = "/api/2026-11-26/record-task-performance"
 FINGERPRINT_PATH = "/api/2026-11-05/capture-host-fingerprint"
 PRODUCER = "host-probes"
@@ -123,6 +129,32 @@ class _Started(_Projection):
     handle: UUID
 
 
+class _ItemStarted(_Started):
+    version: Literal["2026-11-26"]
+
+
+class _ItemProfile(_Projection):
+    version: Literal["2026-11-26"]
+    identity: ProfileIdentity
+    outcome: TaskPerformanceOutcome
+    end_reason: str
+    cells: HostCells
+
+    @field_validator("cells", mode="before")
+    @classmethod
+    def _exact_cells(cls, value: object) -> object:
+        if not isinstance(value, dict) or value.keys() != HostCells.__dataclass_fields__.keys():
+            raise ValueError("item profile must provide exactly the item host cells")
+        return value
+
+
+class _ItemStopped(_Projection):
+    status: Literal["stopped"]
+    handle: UUID
+    end_reason: str
+    profile: _ItemProfile
+
+
 class _Profile(_Projection):
     identity: ProfileIdentity
     outcome: TaskPerformanceOutcome
@@ -198,15 +230,39 @@ class MachineApi:
             raise MachineApiError("machine response exceeded its byte bound")
         return data
 
-    def start(self, identity: ProfileIdentity) -> UUID:
+    def _opening(self, identity: ProfileIdentity) -> dict[str, object]:
         pid = os.getpid()
         ticks = process_start_ticks(pid)
         if ticks is None:
             raise MachineApiError("task process pin unavailable")
-        return _Started.model_validate_json(self._post(_START, {
+        return {
             "identity": identity.model_dump(mode="json"),
             "target": {"pid": pid, "start_ticks": str(ticks)},
-        })).handle
+        }
+
+    def start(self, identity: ProfileIdentity) -> UUID:
+        return _Started.model_validate_json(self._post(_START, self._opening(identity))).handle
+
+    def start_item_window(
+        self, identity: ProfileIdentity, *, heartbeat_seconds: int, server: ModelServerPin | None,
+        memory_profiling_enabled: bool,
+    ) -> UUID:
+        opening = self._opening(identity)
+        opening["waiting_heartbeat_seconds"] = heartbeat_seconds
+        if not memory_profiling_enabled:
+            opening["memory_profiling_enabled"] = False
+        if server is not None:
+            opening["server"] = {"pid": server.pid, "start_ticks": str(server.start_ticks)}
+        return _ItemStarted.model_validate_json(self._post(_START_ITEM, opening)).handle
+
+    def stop_item_window(
+        self, handle: UUID, identity: ProfileIdentity, outcome: TaskPerformanceOutcome,
+    ) -> HostCells:
+        stopped = _ItemStopped.model_validate_json(
+            self._post(_STOP_ITEM, {"handle": str(handle), "outcome": outcome}),
+        )
+        _verify_close(stopped, handle, identity, outcome)
+        return stopped.profile.cells
 
     def stop(
         self, handle: UUID, identity: ProfileIdentity,
@@ -290,6 +346,14 @@ def closed_measurement(
 ) -> dict[str, object]:
     """Refuse an automatic or foreign close before projecting its summary."""
     stopped = _Stopped.model_validate_json(raw)
+    _verify_close(stopped, handle, identity, outcome)
+    return summarize_profile(stopped.profile)
+
+
+def _verify_close(
+    stopped: _Stopped | _ItemStopped, handle: UUID, identity: ProfileIdentity,
+    outcome: TaskPerformanceOutcome,
+) -> None:
     profile = stopped.profile
     if (
         stopped.handle != handle or stopped.end_reason != profile.end_reason
@@ -298,7 +362,6 @@ def closed_measurement(
         raise MachineApiError("closed profile does not match the task or handle")
     if profile.end_reason != "explicit_stop" or profile.outcome != outcome:
         raise MachineApiError("profile closed before the workflow command did")
-    return summarize_profile(profile)
 
 
 def summarize_profile(profile: _Profile) -> dict[str, object]:

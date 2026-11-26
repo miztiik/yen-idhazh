@@ -99,14 +99,10 @@ inputs stay null. A missing frequency entry does not reduce the CPU count.
 Item CPU shares are unknown when the aggregate line lacks its four required
 counters, any counter resets, or the resulting shares are impossible.
 
-The work stage receives the server PID written by the model-server maintainer. It
-checks the PID and the kernel start-time counter before and after each server
-status read. An exited or reused PID makes server memory and fault readings
-unknown; a job with no server PID records no server process values. Server
-status reads name one process and do not search the Python process list.
-Individual `/proc` and `/sys` reads stop at 1 MiB; a missing, denied, malformed
-or oversized reading stays unknown. Closing an item waits for its sampler to
-stop, and repeated closes return the same cells.
+The work stage receives the server PID from the model-server maintainer and
+does not search for a model process. See
+[Digest item windows](#digest-item-windows-and-shard-memory) for the item and
+shard readings and how the collector handles an exited or reused PID.
 
 Table A - collected measurements
 
@@ -265,11 +261,11 @@ results do not certify Linux collection or live cloud metadata access.
 
 ## Independent CPU and memory samples
 
-`services/host-probes` is an opt-in Bun service, separate from the production
-pipeline and the persisted Python instrument. From that directory, run
+The single-interval command is independent of task and digest observation.
+From `services/host-probes`, run
 `bun run src/index.ts --sample` for one JSON response, or
 `bun run src/index.ts --serve` for `GET /api/2026-11-05/sample-host`.
-The service does not create hardware identities or write state files.
+The single-interval command does not create hardware identities or write state files.
 
 `config/host-probes.json` owns the sampling interval, listener and read limit.
 The defaults wait 1000 milliseconds between CPU snapshots, bind loopback
@@ -454,6 +450,61 @@ Generic profile results retain explicit unavailable reasons, never zero
 substitutes. They do not add native host fields, durable request fields or
 ledger rows. The manual planner report shows the host fingerprint separately;
 it does not report process or machine RAM samples.
+
+## Digest item windows and shard memory
+
+The digest's `host_telemetry` input defaults to `python`. The explicit
+`typescript` choice replaces only the item watch and private shard memory
+sampler. It does not replace the job's fingerprint, its legacy CI clock, or
+the whole-workflow-task profile: those describe different intervals or facts.
+The enabled paths never run two item watches or two shard memory samplers.
+If the native item listener is unavailable, the item still runs and logs
+progress; it does not fall back to Python collection.
+
+The item watch opens immediately before model work and closes when the work
+stage has finished that item's model and optional scoring work. Fetch,
+extraction and time in the queue are not in this window. The
+[versioned item command](host-probe-api.md#item-windows) uses the already
+configured heartbeat interval for interior polls, but the application owns
+its heartbeat separately. Whole-item CPU busy and steal come from opening
+and closing `/proc/stat` counters. Idle and I/O wait are not busy; steal is
+separate and stays null if either endpoint lacks it. Guest time is not counted
+twice and a reset invalidates that comparison. Shares are rounded as in the
+Python watch. Busy minimum and maximum include opening-to-first-poll,
+adjacent polls and the whole-item share, not the last poll-to-close slice.
+An item with no periodic polls still takes both endpoints.
+
+The closing observation supplies one-minute load, worker and model RSS and
+anonymous RSS, and available, total, cached and swap memory. Available RAM
+minimum includes both endpoints and periodic samples. The model's reported
+lifetime high-water mark takes the largest available endpoint, not a
+per-item peak. Major faults are the difference between the pinned server's
+endpoint counters; an absent or reset counter stays null. Linux start ticks
+are checked around status reads, so a different process cannot supply
+closing data. Item-health retains its byte units and existing null cells.
+CPU, load and the heartbeat remain active when memory profiling is off.
+
+The private shard sampler starts after model readiness and runs independently
+of individual items, until the pinned server is gone or the workflow closes
+it. The sampler reads available, total and committed machine RAM and records
+the visible Python process count and resident memory from the same census.
+It reads the runner's selected memory cgroup, not an assumed mount root:
+current charge appears in `rss-samples.jsonl` and the lifetime peak in
+`memory-peak.txt`. Unavailable group readings are not replaced with the
+root group's counters. `python-procs.jsonl` keeps the private per-process
+roll-call without executable paths or arguments. Job logs report aggregates
+only in this mode. The same shard artifact and two-day retention apply; raw
+model counters remain a separate measurement in the artifact. None of these
+sample or roll-call rows enters a ledger or an HTTP response.
+
+`config/host-probes.json` controls `shard_memory`: the 15-second interval
+cannot observe shorter RSS spikes; the 8,192-entry scan limit makes a
+census unknown rather than partial; the 16 MiB combined JSONL limit stops
+the sampler before the next row group would cross it. The existing proc
+byte bound, safety expiry and shutdown deadline also apply. Missing inputs
+stay unavailable. An owned closing receipt seals the output without
+rereading or scanning the artifact files. Whole-telemetry off or memory
+off starts no shard sampler and writes no memory artifacts.
 
 ## Controls and precedence
 
