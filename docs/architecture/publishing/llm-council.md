@@ -299,10 +299,14 @@ file changes neither which judges run nor what work fits inside a night.
 ### Each registered judge declares whether it runs
 
 Every name has a file at `config/judges/<slug>.json`. The council validates only
-`lifecycle_status` and `runs_model`; both are required, with no default.
-`JudgeDeclaration` declares those two keys. The judge's own settings reader
-validates the other keys. Registration order is preserved, and a repeated name
-is refused by name.
+`lifecycle_status` and `runs_model` when reading the roster; both are required,
+with no default. An admitted model-running judge must also name a preset in
+`models_file`. That selection is validated before preparing work and bound to
+the invocation, including the preset digest, model ID and weights digest. A
+model-free judge cannot supply `models_file`. An unselected judge's preset is
+not opened. Registration order is preserved, and a repeated name is refused
+by name. The [model file guide](../../concepts/config/model-file.md) explains
+how the judge and Digest choose independently.
 
 Table B - judge status
 
@@ -516,11 +520,13 @@ Units run in parallel, one `llama-server` for each model-running cell, and **non
 anything**. A `collect` job downloads every unit's output and makes one commit call,
 over every path the night's tenants named. Two processes never share a path.
 
-The model-server action has `if: matrix.runs_model`. A model-free cell restores
-no weights and starts no server. It keeps the same timeout, preamble allowance
-and wrap-up reserve. Its process starts earlier, so its unchanged work window
-ends earlier against the job clock; there is no second clock or larger budget.
-The planning job still prints the pinned llama.cpp build on every night.
+Only a model-running cell restores and verifies the assets for its admitted
+preset. The judging task owns the local native llama-server and proves process
+ownership and loaded identity before sending summaries. It closes the serving
+observation while the process is still running, then stops the child. Serving
+lifecycle diagnostics are body-free CloudEvents. No Council HTTP wrapper is
+involved. A model-free cell restores no weights, starts no server and keeps the
+same timeout, preamble allowance and wrap-up reserve.
 
 `fail-fast` is off. An ordinary unit failure does not cancel its siblings;
 collection retains valid completed bytes. Integrity and cancellation retain

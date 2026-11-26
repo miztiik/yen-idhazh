@@ -5,18 +5,24 @@ from __future__ import annotations
 import hashlib
 import http.client
 import json
+import socket
+import subprocess
+import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
+from textwrap import dedent
 from typing import Any
 
 import pytest
-from contracts._fixtures import copy_config
+from contracts._fixtures import copy_config, entry_with
 from support.paths import FIXTURES_DIR, read_text
 from support.server import RecordedEndpoint
 
+from idhazh.contracts.model_server_pin import MODEL_SERVER_PIN_VERSION, ModelServerPin
 from idhazh.llm.server import ProbeRefusedError
-from utilities import model_refs, model_runtime
+from idhazh.telemetry.host import process_start_ticks
+from utilities import model_refs, model_runtime, own_native_model
 
 WEIGHTS = b"the weights, as bytes"
 COMPANION = b"a draft head"
@@ -118,6 +124,133 @@ def _serving(monkeypatch: pytest.MonkeyPatch, entry: dict[str, object]) -> _Serv
     )
     monkeypatch.setattr(urllib.request, "urlopen", served)
     return served
+
+
+def test_explicit_download_and_verify_use_the_same_named_assets(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = _a_config_root(tmp_path, _entry())
+    selected = "models/selected.json"
+    (root / "models" / "candidate.json").rename(root / selected)
+    monkeypatch.chdir(tmp_path)
+    MODELS_DIR.mkdir(parents=True)
+    (MODELS_DIR / "model-Q4_K_M.gguf").write_bytes(WEIGHTS)
+    (MODELS_DIR / "mtp-model.gguf").write_bytes(COMPANION)
+
+    model_runtime.download_model_files(root, models_file=selected)
+    model_runtime.verify_model_files(root, models_file=selected)
+    with pytest.raises(SystemExit, match="explicitly name one file"):
+        model_runtime.verify_model_files(root, models_file="")
+
+
+def test_owned_startup_validates_the_named_bytes_before_launch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    legacy = copy_config(tmp_path)
+    root = tmp_path / "config"
+    selected = "models/selected.json"
+    (root / legacy).unlink()
+    entry = _entry(declared_for=hashlib.sha256(WEIGHTS).hexdigest())
+    (root / selected).write_text(json.dumps(entry_with(**entry)), encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    MODELS_DIR.mkdir(parents=True)
+    (MODELS_DIR / "model-Q4_K_M.gguf").write_bytes(WEIGHTS[::-1])
+    (MODELS_DIR / "mtp-model.gguf").write_bytes(COMPANION)
+
+    with (
+        pytest.raises(SystemExit, match="hashes"),
+        model_runtime.own_native_model(root, models_file=selected, startup_seconds=1),
+    ):
+        pytest.fail("damaged bytes must not start a child")
+
+
+def test_native_props_must_identify_the_full_path_and_alias(tmp_path: Path) -> None:
+    pin = ModelServerPin(
+        version=MODEL_SERVER_PIN_VERSION, pid=1, start_ticks=1, started_at="2026-11-26T00:00:00Z",
+    )
+    weights = tmp_path / "model.gguf"
+    model = own_native_model.OwnedNativeModel(
+        pin, "http://127.0.0.1:8080", "ours", weights, "a" * 64, True,
+    )
+
+    def check(path: str, alias: str) -> None:
+        body = json.dumps({"model_path": path, "model_alias": alias}).encode()
+        own_native_model._require_loaded_model(body, model)
+
+    check(str(weights), "ours")
+    for path, alias in [(weights.name, "ours"), (str(weights), "other")]:
+        with pytest.raises(RuntimeError, match="selected model path and alias"):
+            check(path, alias)
+
+
+def test_reap_owned_child_waits_for_the_actual_process() -> None:
+    with subprocess.Popen(
+        [sys.executable, "-c", "import sys; sys.stdin.buffer.read()"],
+        stdin=subprocess.PIPE,
+    ) as child:
+        forced = own_native_model.reap_owned_child(child, shutdown_seconds=3, forced_exit_seconds=3)
+        assert not forced and child.returncode is not None
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="Native ownership uses Linux process evidence.")
+def test_owned_model_observes_recorded_counters_before_cancel_reaps_the_child(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Replay the native wire boundary in a real child, without running model inference.
+    serve_recording = dedent("""\
+        import json
+        import sys
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+        from pathlib import Path
+
+        port, weights, metrics = sys.argv[1:]
+        responses = {
+            "/health": b'{"status":"ok"}',
+            "/props": json.dumps({"model_path": weights, "model_alias": "selected"}).encode(),
+            "/metrics": Path(metrics).read_bytes(),
+        }
+
+        class NativeRecording(BaseHTTPRequestHandler):
+            def do_GET(self):
+                body = responses[self.path]
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+        HTTPServer(("127.0.0.1", int(port)), NativeRecording).serve_forever()
+    """)
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = int(probe.getsockname()[1])
+    weights = tmp_path / "selected.gguf"
+    recorded = FIXTURES_DIR / "runtime" / "2026-08-26-5-shard-0.prom"
+    command = own_native_model.parent_bound_command([
+        sys.executable, "-c", serve_recording, str(port), str(weights), str(recorded),
+    ])
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(KeyboardInterrupt), own_native_model._own_native_child(
+        command, f"http://127.0.0.1:{port}", "selected", weights, "a" * 64, True,
+        startup_seconds=10, library_dir=tmp_path,
+    ) as model:
+        pin = model.pin
+        assert process_start_ticks(pin.pid) == pin.start_ticks
+        measurement = model.observe("cancelled")
+        assert measurement is not None
+        assert measurement["subject_id"] == "selected"
+        assert measurement["server_prompt_tokens"] == 30538
+        assert own_native_model.SERVING_COUNTERS_PATH.read_bytes() == recorded.read_bytes()
+        # Sampling does not close the listener or release ownership.
+        model.assert_owned()
+        raise KeyboardInterrupt
+
+    assert process_start_ticks(pin.pid) is None
+    events = [json.loads(line) for line in capsys.readouterr().err.splitlines()
+              if line.startswith("{")]
+    assert [event["data"]["action"] for event in events] == ["started", "ready", "stopped"]
+    assert all(event["specversion"] == "1.0" and event["source"] == "/llama-server"
+               for event in events)
 
 
 @pytest.mark.parametrize("filename", ["mtp-model.gguf", "MTP/mtp-model.gguf"])

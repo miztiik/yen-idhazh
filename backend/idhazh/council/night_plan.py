@@ -22,6 +22,7 @@ from idhazh.contracts.council_invocation import ScheduleRequest
 from idhazh.contracts.knobs.council import CouncilConfig
 from idhazh.council import event_log, outcome
 from idhazh.council.deadline import compute_shard_deadline
+from idhazh.council.model_selection import bind_model
 from idhazh.council.registry import tenants
 from idhazh.council.selection import SelectedJudge, Selection, manual
 from idhazh.council.tenancy import Tenant
@@ -91,6 +92,7 @@ def plan_the_night(
     the answer, and refuses any date or width outside the supplied budget.
     """
     window = (tonight, *window_before(council, tonight=tonight))
+    models = {host.judge_id: bind_model(council, host.judge_id) for host in hosted}
     selected: list[SelectedJudge] = []
     for host in hosted:
         width = min(host.shard_count, council.shards)
@@ -109,6 +111,7 @@ def plan_the_night(
                 status=council.declaration(host.judge_id).lifecycle_status,
                 dates=answer.dates,
                 shards=width,
+                model=models[host.judge_id],
             )
         )
     return Selection(
@@ -149,12 +152,13 @@ def _main(argv: list[str] | None = None) -> int:
     parser.add_argument("--judges", default="", help="A manual run's JSON list of judge names.")
     args = parser.parse_args(argv)
 
-    settings = config.load(args.config_root)
-    event_log.install(settings.app.logging.level.value)
+    app = config.load_app(args.config_root)
+    council = config.load_council(args.config_root)
+    event_log.install(app.logging.level.value)
     if args.mode == "manual":
         tonight = a_date(str(args.dispatched), what="the dispatched date")
         selected = manual(
-            settings.council,
+            council,
             judges=args.judges,
             day=tonight,
             run_id=args.run_id,
@@ -163,8 +167,8 @@ def _main(argv: list[str] | None = None) -> int:
         )
         tenants(
             selected.names(),
-            app=settings.app,
-            council=settings.council,
+            app=app,
+            council=council,
             trials=selected.trials,
         )
     else:
@@ -175,9 +179,9 @@ def _main(argv: list[str] | None = None) -> int:
             what="--tonight",
         )
         selected = plan_the_night(
-            settings.council,
+            council,
             tonight=tonight,
-            hosted=tenants(settings.council.running(), app=settings.app, council=settings.council),
+            hosted=tenants(council.running(), app=app, council=council),
             run_id=args.run_id,
             git_sha=args.commit,
             attempt=args.attempt,

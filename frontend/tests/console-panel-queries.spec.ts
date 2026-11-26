@@ -10,7 +10,7 @@ import { compareRuns, failedRuleQuery, hostKey, joinItemHosts, newestRunRows } f
 import { feedsFailedQuery } from '../src/lib/console/queries/voices';
 import { judgeDayQuery, judgeHistoryQuery } from '../src/lib/console/queries/judgement';
 import {
-	exactJudgeDay, judgeCoverage, judgeRange, latestJudgeReadings, selectedJudgeDate
+	exactJudgeDay, judgeCoverage, judgeModelRule, judgeRange, latestJudgeReadings, selectedJudgeDate
 } from '../src/lib/console/judge-observations';
 import { modelThroughput } from '../src/lib/console/model/model-throughput';
 import { throughputWithin } from '../src/lib/server/model-work';
@@ -104,11 +104,11 @@ test('a Gardener wake retains reported stops and never counts a preview as a liv
 test('Judgement intersects the displayed digest window with packed history and opens only the selected run and attempt', async ({}, info) => {
 	const root = info.outputPath('judge-history');
 	const date = '2026-08-18';
-	const legacy = { date: '2026-08-17', run_id: '2026-08-20-1', attempt: 1 };
+	const legacy = { date: '2026-08-17', run_id: '2026-08-20-1', attempt: 1, judge_model: 'first-judge' };
 	const currentRun = { date, run_id: '2026-08-20-10' };
-	const staleAttempt = { ...currentRun, attempt: 1, pairs_drawn: 11, pairs_returned: 7 };
+	const staleAttempt = { ...currentRun, attempt: 1, pairs_drawn: 11, pairs_returned: 7, judge_model: 'first-judge' };
 	const selectedRow = {
-		...currentRun, attempt: 2, pairs_drawn: 8, pairs_returned: 6,
+		...currentRun, attempt: 2, pairs_drawn: 8, pairs_returned: 6, judge_model: 'second-judge',
 		sample_tp: 2, sample_fp: 1, sample_fn: 0, sample_tn: 1, score_psi: 0, runners_reported: 1
 	};
 	const olderRun = {
@@ -132,6 +132,10 @@ test('Judgement intersects the displayed digest window with packed history and o
 	const readings = latestJudgeReadings([...history.rows, staleAttempt]);
 	expect([...readings.keys()].sort()).toEqual([legacy.date, date]);
 	const calendar = [legacy.date, date, '2026-08-19', '2026-08-20'];
+	expect(judgeModelRule(calendar, readings).changes).toEqual([
+		{ date, kind: 'settings', words: 'Judge model: first-judge to second-judge' }
+	]);
+	expect(judgeModelRule(calendar.slice(1), readings).changes).toEqual([]);
 	expect(selectedJudgeDate(calendar, null, readings)).toBe(date);
 	expect(selectedJudgeDate(calendar, legacy.date, readings)).toBe(legacy.date);
 	expect(selectedJudgeDate(calendar.slice(1), legacy.date, readings)).toBe(date);

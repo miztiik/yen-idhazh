@@ -69,7 +69,7 @@ def an_hour_away() -> float:
 
 def a_settings() -> config.Settings:
     """The committed settings, judging in one span so that one call is one reading."""
-    settings = config.load(CONFIG_DIR)
+    settings = config.load(CONFIG_DIR, models_file=config.load_app(CONFIG_DIR).models_file)
     raw = settings.models.model_dump(mode="json")
     raw["summarizer"] |= {"thinking_close": None, "thinking_kwarg": "reasoning"}
     return dataclasses.replace(settings, models=ModelsConfig.model_validate(raw | {"judge": None}))

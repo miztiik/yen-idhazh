@@ -81,7 +81,8 @@ worked independently or used only the blinded view.
 
 ## Capture the actual model
 
-Start the already configured, operator-controlled model process separately.
+Start the operator-controlled model process using the preset named by
+`models_file` in `config/judges/content-similarity-judge.json`.
 This utility never starts a server or downloads weights. Its only destination
 is `model_server.base_url` in the selected committed config; there is no
 destination or model override argument. Capture uses the production tokenizer

@@ -47,6 +47,7 @@ from idhazh.contracts.knobs.council import CouncilConfig, CouncilTask
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.council import event_log, metrics_sink, outcome, performance, trial_paths, work_files
 from idhazh.council.deadline import run_shard_under_the_clock
+from idhazh.council.model_selection import use_model, verify_model
 from idhazh.council.registry import VENUE_LEDGERS as VENUE_LEDGERS
 from idhazh.council.registry import tenant, tenants
 from idhazh.council.selection import Selection
@@ -479,7 +480,7 @@ def run_shard(
         ),
     )
     recording = runner.recording(config.REPO_ROOT)
-    with _route(selection, slug):
+    with _route(selection, slug), use_model(council.config_dir, selection.judge(slug, date).model):
         bundle = f"shard-{slug}-{date}-{shard}"
         try:
             with performance.profile(
@@ -559,6 +560,7 @@ def verify_work(
         git_sha=selection.git_sha,
     )
     judge = selection.judge(slug, date)
+    verify_model(council, judge)
     host = tenant(slug, council=council, trial=selection.trial(slug))
     if shards != judge.shards or shards != shard_width(council, host) or not 0 <= shard < shards:
         raise ValueError("shard differs from selected width")

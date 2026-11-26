@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from idhazh.contracts.app_config import MODELS_FILE_PATTERN
 from idhazh.contracts.base import SLUG_PATTERN
 from utilities import measure_llm, model_refs
 
@@ -141,6 +142,29 @@ def test_the_pinned_keys_and_trial_keys_do_not_collide(tmp_path: Path) -> None:
     assert pinned & trial == set()
 
 
+def test_explicit_assets_keep_the_same_cache_key_without_reading_the_pointer(tmp_path: Path) -> None:
+    companions = [
+        {"repo": "publisher/Model-GGUF", "revision": "0" * 40, "file": name, "sha256": "b" * 64}
+        for name in ("mtp.gguf", "adapter.bin")
+    ]
+    entry = _an_entry(companion_files=companions)
+    root = _a_config_tree(tmp_path, entry)
+    pinned = model_refs.pinned_rows(root)
+    (root / "models" / "candidate.json").rename(root / "models" / "selected.json")
+
+    selected = model_refs.named_asset_rows(root, "models/selected.json")
+
+    assert selected == pinned
+    assert _published(selected)["summarizer_cache_key"] == _digest_of(entry, *companions)
+
+
+@pytest.mark.parametrize("named", ["", " ", "models/../candidate.json", "candidate.json"])
+def test_explicit_assets_do_not_fall_back_to_a_working_pointer(tmp_path: Path, named: str) -> None:
+    root = _a_config_tree(tmp_path, _an_entry())
+    with pytest.raises(SystemExit, match="explicitly name one file"):
+        model_refs.named_asset_rows(root, named)
+
+
 def test_the_reader_and_measurement_module_use_the_same_validation_grammar() -> None:
     for name in ("REPO_RE", "REVISION_RE", "GGUF_RE"):
         here = getattr(model_refs, name)
@@ -148,6 +172,7 @@ def test_the_reader_and_measurement_module_use_the_same_validation_grammar() -> 
         assert here.pattern == there.pattern
         assert here.flags == there.flags
     assert model_refs.SLUG_RE.pattern == SLUG_PATTERN
+    assert model_refs.MODELS_FILE_RE.pattern == MODELS_FILE_PATTERN
 
 
 @pytest.mark.parametrize(

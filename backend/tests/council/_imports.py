@@ -88,6 +88,7 @@ MODULE_NAMES = (
     "idhazh.council.deadline",
     "idhazh.council.metrics_sink",
     "idhazh.council.event_log",
+    "idhazh.council.model_selection",
     "idhazh.council.outcome",
     "idhazh.council.night_plan",
     "idhazh.council.performance",

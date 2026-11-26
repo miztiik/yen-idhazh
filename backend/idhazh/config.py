@@ -39,10 +39,15 @@ from typing import Final
 
 from pydantic import TypeAdapter, ValidationError
 
-from idhazh.contracts.app_config import AppConfig
+from idhazh.contracts.app_config import AppConfig, ModelsFile
 from idhazh.contracts.appearance_config import AppearanceConfig
 from idhazh.contracts.base import SLUG_PATTERN
-from idhazh.contracts.knobs.council import CouncilConfig, JudgeDeclaration, JudgeRefusalError
+from idhazh.contracts.knobs.council import (
+    CouncilConfig,
+    JudgeDeclaration,
+    JudgeModelSource,
+    JudgeRefusalError,
+)
 from idhazh.contracts.knobs.gardener import (
     CollectionTaskPolicy,
     CompactionPolicy,
@@ -68,6 +73,7 @@ from idhazh.source_classification import bind_source_classification
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG_DIR: Final = REPO_ROOT / "config"
+_MODEL_POINTER: Final[TypeAdapter[str]] = TypeAdapter(ModelsFile)
 
 
 _FILES: Final[tuple[str, ...]] = (
@@ -159,6 +165,27 @@ def models_path(config_dir: Path, app: AppConfig) -> Path:
     return config_dir / app.models_file
 
 
+def load_app(config_dir: Path) -> AppConfig:
+    """Read shared settings without opening the digest's model preset."""
+    return AppConfig.from_json((config_dir / "idhazh.json").read_text(encoding="utf-8"))
+
+
+def parse_models(models_file: str, text: str) -> ModelsConfig:
+    """Validate the preset selected by a caller's model pointer."""
+    try:
+        models = ModelsConfig.from_json(text)
+    except ValidationError as error:
+        raise ValueError(f"config/{models_file} is refused: {error}") from error
+    refuse_a_model_nothing_could_run(models_file, models)
+    return models
+
+
+def load_models(config_dir: Path, models_file: str) -> ModelsConfig:
+    """Read a caller's named preset, never the app's pointer."""
+    named = _MODEL_POINTER.validate_python(models_file)
+    return parse_models(named, (config_dir / named).read_text(encoding="utf-8"))
+
+
 def refuse_a_trial_case_named_for_a_claimed_root(app: AppConfig) -> None:
     """A case slug may not reuse a child of `state/` owned by a ledger."""
     from idhazh.ledger.paths import claimed_roots
@@ -186,6 +213,7 @@ class Settings:
     watchlist: Watchlist
     digests: tuple[ConfigDigest, ...]
     config_dir: Path = DEFAULT_CONFIG_DIR
+    explicit_models_file: str | None = None
 
 
 def load_council(config_dir: Path = DEFAULT_CONFIG_DIR) -> CouncilConfig:
@@ -216,7 +244,31 @@ def load_judge_declarations(
     return declarations
 
 
-def load(config_dir: Path = DEFAULT_CONFIG_DIR) -> Settings:
+def judge_models_file(council: CouncilConfig, name: str) -> str | None:
+    """Refuse a selected judge with a missing, invalid or inapplicable model pointer."""
+    declaration = council.declaration(name)
+    relative = f"judges/{name}.json"
+    if council.config_dir is None and not declaration.runs_model:
+        return None
+    try:
+        if council.config_dir is None:
+            raise ValueError("a model-running judge needs its own config directory")
+        raw = TypeAdapter(dict[str, object]).validate_json(
+            (council.config_dir / relative).read_bytes()
+        )
+        source = JudgeModelSource.model_validate(
+            {key: raw[key] for key in JudgeModelSource.model_fields if key in raw}
+        )
+        if declaration.runs_model and source.models_file is None:
+            raise ValueError("models_file is required for a model-running judge")
+        if not declaration.runs_model and "models_file" in raw:
+            raise ValueError("models_file is not allowed for a model-free judge")
+        return source.models_file
+    except (OSError, ValueError) as error:
+        raise JudgeRefusalError(name, f"config/{relative} models_file is refused") from error
+
+
+def load(config_dir: Path = DEFAULT_CONFIG_DIR, *, models_file: str | None = None) -> Settings:
     """A fresh clone runs on the committed defaults; a missing file is a failure, not a default."""
     read = {name: (config_dir / name).read_text(encoding="utf-8") for name in _FILES}
     app = AppConfig.from_json(read["idhazh.json"])
@@ -227,15 +279,13 @@ def load(config_dir: Path = DEFAULT_CONFIG_DIR) -> Settings:
         judge_file = f"judges/{name}.json"
         read[judge_file] = (config_dir / judge_file).read_text(encoding="utf-8")
     refuse_a_trial_case_named_for_a_claimed_root(app)
-    read[app.models_file] = models_path(config_dir, app).read_text(encoding="utf-8")
-    try:
-        models = ModelsConfig.from_json(read[app.models_file])
-    except ValidationError as error:
-        # Which file, named in the first line. Every model has a file of its own
-        # now, so the one thing a refusal could no longer say for itself is the
-        # one an operator needs before they can edit anything.
-        raise ValueError(f"config/{app.models_file} is refused: {error}") from error
-    refuse_a_model_nothing_could_run(app.models_file, models)
+    chosen = app.models_file if models_file is None else _MODEL_POINTER.validate_python(models_file)
+    source = config_dir / chosen
+    read[chosen] = (
+        source.read_text(encoding="utf-8") if models_file is None
+        else source.read_bytes().decode("utf-8")
+    )
+    models = parse_models(chosen, read[chosen])
     appearance = AppearanceConfig.from_json(
         (config_dir / _APPEARANCE_FILE).read_text(encoding="utf-8")
     )
@@ -256,6 +306,7 @@ def load(config_dir: Path = DEFAULT_CONFIG_DIR) -> Settings:
             for name, text in sorted(read.items())
         ),
         config_dir=config_dir,
+        explicit_models_file=models_file,
     )
     bind_source_classification(
         taxonomy=settings.taxonomy,

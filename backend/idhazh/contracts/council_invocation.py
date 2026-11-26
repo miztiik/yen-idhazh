@@ -8,6 +8,7 @@ from typing import ClassVar, Literal, Self
 
 from pydantic import Field, field_validator, model_validator
 
+from idhazh.contracts.app_config import ModelsFile
 from idhazh.contracts.base import (
     ChangelogEntry,
     CommitSha,
@@ -70,6 +71,15 @@ class JudgeSchedule(Model):
         return self
 
 
+class SelectedModel(Model):
+    """The named preset and verified identity expected by a model-running shard."""
+
+    models_file: ModelsFile
+    preset_sha256: Sha256
+    model_id: Slug
+    weights_sha256: Sha256
+
+
 class SelectedJudge(Model):
     """One registered plugin's exact status, dates and admitted width."""
 
@@ -77,6 +87,7 @@ class SelectedJudge(Model):
     status: JudgeLifecycleStatus
     dates: tuple[DateStamp, ...]
     shards: int = Field(ge=1, strict=True)
+    model: SelectedModel | None = None
 
     _valid_dates = field_validator("dates")(_dates)
 
@@ -94,6 +105,11 @@ class Selection(Contract, Invocation):
 
     __schema_stem__: ClassVar[str] = "council-selection"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-11-26",
+            change="Bind a model-running judge to its explicitly selected preset.",
+            why="Each shard must serve the model its planning job admitted.",
+        ),
         ChangelogEntry(
             version="2026-11-05",
             change="Bind selected plugins and widths to one invocation.",
@@ -156,8 +172,13 @@ class Selection(Contract, Invocation):
             if anchor < floor or self.window != window:
                 raise ValueError("selection window differs from committed bounds")
         for judge in self.judges:
-            if council.declaration(judge.tenant).lifecycle_status is not judge.status:
+            declaration = council.declaration(judge.tenant)
+            if declaration.lifecycle_status is not judge.status:
                 raise ValueError("selected status differs from its declaration")
+            if (judge.model is not None) != declaration.runs_model:
+                raise ValueError(
+                    f"judge '{judge.tenant}' selection differs from its runs_model declaration"
+                )
             if judge.shards > council.shards:
                 raise ValueError("selected width exceeds council width")
             if self.mode == "scheduled":

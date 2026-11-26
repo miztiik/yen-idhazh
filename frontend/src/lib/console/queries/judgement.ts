@@ -13,6 +13,7 @@ export const judgeHistoryQuery = {
 	ledger: 'threshold-history',
 	columns: [
 		'date', 'run_id', 'attempt', 'pairs_drawn', 'pairs_returned',
+		'judge_model',
 		'sample_tp', 'sample_fp', 'sample_fn', 'sample_tn', 'score_psi',
 		'canary_answers', 'canary_expectations', 'canary_kappa', 'canary_kappa_pairs', 'config_versions'
 	],

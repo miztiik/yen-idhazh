@@ -70,9 +70,6 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # Where this job's own probes ask, for the reason `digest.yml` gives: the
-  # server is on this runner, and where a unit posts is `model_server.base_url`.
-  MODEL_SERVER_PROBE: 'http://127.0.0.1:8080'
   IDHAZH_HOST_TELEMETRY_MODE: ${{ inputs.host_telemetry || 'typescript' }}
   MEMORY_PROFILING: ${{ inputs.memory_profiling || 'inherit' }}
 
@@ -360,7 +357,8 @@ jobs:
           # what this credential may do, and an artifact read is one of them.
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Verify this unit's prepared work
+      - id: verified
+        name: Verify this unit's prepared work and model selection
         env:
           COUNCIL_COMMIT: ${{ github.sha }}
         run: |
@@ -372,26 +370,15 @@ jobs:
             --run-id "$COUNCIL_RUN_ID" \
             --commit "$COUNCIL_COMMIT" \
             --shard "$COUNCIL_SHARD" \
-            --shards "$COUNCIL_SHARDS"
+            --shards "$COUNCIL_SHARDS" >> "$GITHUB_OUTPUT"
 
-      # The cache, the fetch, the digest check, the server and the health probe.
-      # One action, shared with `digest.yml`, which ran the same five steps as a
-      # second copy. Two things follow from sharing it: the two runs cannot key
-      # the cache differently, so the daily run has already created the entry
-      # and this restores rather than downloads and adds ZERO bytes to the 10 GB
-      # allowance; and the repository's own throughput reading transfers to this
-      # workload, because it was taken on these weights.
-      #
-      # The probe address is handed over rather than inherited: it has one home,
-      # the workflow `env` above, and this is the line that carries it in.
-      - id: model
-        uses: ./.github/actions/model-server
+      - uses: ./.github/actions/model-server
         if: matrix.runs_model
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          probe_url: ${{ env.MODEL_SERVER_PROBE }}
           llama_cpp_build: ${{ needs.draw.outputs.llama_cpp_build }}
-          observe_serving: ${{ env.IDHAZH_HOST_TELEMETRY_MODE != 'off' }}
+          models_file: ${{ steps.verified.outputs.models_file }}
+          prepare_only: 'true'
 
       # One cell is one tenant, so the in-process deadline the verb computes is
       # about this tenant's span and nobody else's. Two tenants in one job would
@@ -410,16 +397,6 @@ jobs:
             --commit "$COUNCIL_COMMIT" \
             --shard "$COUNCIL_SHARD" \
             --shards "$COUNCIL_SHARDS"
-
-      - name: Close the verified model's serving observation
-        if: always() && steps.model.outcome == 'success' && env.IDHAZH_HOST_TELEMETRY_MODE != 'off'
-        continue-on-error: true
-        env:
-          COUNCIL_WORK_OUTCOME: ${{ steps.work.outcome }}
-        run: |
-          python backend/utilities/council_machine.py measure --phase judge --run-id "$COUNCIL_RUN_ID" -- \
-            python backend/utilities/council_machine.py close-server --phase judge --run-id "$COUNCIL_RUN_ID" \
-            --runtime-outcome "$COUNCIL_WORK_OUTCOME"
 
       # The unit commits nothing, and an artifact is the only way its rows get
       # across. Every checkout here names no ref, so each job is pinned to the

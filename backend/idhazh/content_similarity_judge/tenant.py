@@ -35,6 +35,7 @@ from idhazh.contracts.council_run_record import ShardOutcome
 from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.council import metrics_sink, session
+from idhazh.council.model_selection import load_admitted_settings
 from idhazh.council.tenancy import ShardResult
 from idhazh.ledger import staging
 from idhazh.ledger.window_inputs import inputs_of_days
@@ -223,7 +224,7 @@ class ContentSimilarityJudge:
         from idhazh.stages import common, judge_item_pairs
         from idhazh.stages.common import LOG
 
-        settings = config.load()
+        settings = load_admitted_settings()
         report = judge_item_pairs.stage_judge_item_pairs(
             date,
             run_id=run_id,

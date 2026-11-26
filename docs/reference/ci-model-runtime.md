@@ -12,6 +12,11 @@ a flag. The workflows that use them are in
 `digest.yml`, `llm-council.yml` and `idhazh-pipeline-tests.yaml` run one
 llama.cpp build. Each checks the archive against its digest before it unpacks
 anything, and each goes on to download weights.
+Council passes its admitted judge preset to the shared action for cache,
+download and checksum verification only. The judging task owns startup,
+loaded-identity checks, native inference and shutdown rather than using the
+summary schema as a readiness test. Its native lifecycle CloudEvents and
+existing host recording describe that process.
 The independent `yen-ai-pipeline.yml` and `ai-pipeline-tests.yml` launchers
 now use the same pinned build and shared model-server action. Their optional
 `models_file` input selects a scratch config; blank reads the committed pointer.
@@ -77,8 +82,9 @@ one home rather than copying it.
 ### What the cache key holds
 
 The weights cache key is `llm-<digest over every declared file>-<build>-v5`,
-written once, in the shared action - so the daily run's workers, the council's
-shards and the pipeline tests' runners restore one entry.
+written once in the shared action. Callers share an entry when they name the
+same weights and runtime. Another judge preset has its own entry when the
+declared files differ.
 
 The digest covers `repo`, `revision`, `file` and `sha256` **per file, in
 declared order** - the weights first, then every companion. It does not cover a

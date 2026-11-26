@@ -10,6 +10,7 @@ from idhazh.contracts.base import DateStamp
 from idhazh.contracts.council_invocation import SelectedJudge as SelectedJudge
 from idhazh.contracts.council_invocation import Selection as Selection
 from idhazh.contracts.knobs.council import CouncilConfig
+from idhazh.council.model_selection import bind_model
 
 ENVIRONMENT_NAME = "COUNCIL_SELECTION"
 
@@ -38,6 +39,7 @@ def manual(
         if declaration.lifecycle_status.value == "paused"
     )
     hosted = tenants(raw, council=council, trials=trials)
+    models = {name: bind_model(council, name) for name in raw}
     return Selection(
         version=Selection.schema_version(),
         run_id=run_id,
@@ -52,6 +54,7 @@ def manual(
                 status=declaration.lifecycle_status,
                 dates=(day,),
                 shards=min(host.shard_count, council.shards),
+                model=models[host.judge_id],
             )
             for host, declaration in zip(hosted, declarations, strict=True)
         ),

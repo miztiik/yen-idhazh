@@ -14,6 +14,8 @@ from summary_evaluator.shared.contracts.base import NonblankText
 
 from idhazh.llm.server import server_argv
 from utilities.model_runtime import BIN_DIR, SERVER_BINARY, verify_model_files
+from utilities.own_native_model import NativeListenerEvidenceTooLargeError
+from utilities.own_native_model import owns_listener as probe_owned_listener
 
 from .contracts import LoadedModel, ServerOutcome
 from .failures import WorkflowError
@@ -33,31 +35,11 @@ class NativeProps(BaseModel):
 
 
 def owns_listener(pid: int, port: int, limit: int) -> bool:
-    """Inspect one owned process, never adopt a listener found by port alone."""
-    inodes: set[str] = set()
-    with os.scandir(f"/proc/{pid}/fd") as entries:
-        for entry in entries:
-            try:
-                target = str(Path(entry.path).readlink())
-            except FileNotFoundError:
-                continue
-            if target.startswith("socket:[") and target.endswith("]"):
-                inodes.add(target[8:-1])
-    for name in ("tcp", "tcp6"):
-        with Path(f"/proc/{pid}/net/{name}").open("rb") as stream:
-            encoded = stream.read(limit + 1)
-        if len(encoded) > limit:
-            raise WorkflowError("RESPONSE_TOO_LARGE", "health", "llama")
-        for row in encoded.decode("ascii").splitlines()[1:]:
-            fields = row.split()
-            if (
-                len(fields) > 9
-                and fields[3] == "0A"
-                and int(fields[1].rsplit(":", 1)[1], 16) == port
-                and fields[9] in inodes
-            ):
-                return True
-    return False
+    """Translate the shared kernel proof to this workflow's error vocabulary."""
+    try:
+        return probe_owned_listener(pid, port, limit)
+    except NativeListenerEvidenceTooLargeError:
+        raise WorkflowError("RESPONSE_TOO_LARGE", "health", "llama") from None
 
 
 class OwnedLlama:

@@ -250,18 +250,10 @@ def first_token_window(choices: Sequence[TokenChoice]) -> str:
 
 
 def entry_of(settings: config.Settings) -> ModelEntry:
-    """Which model entry this judge decodes with, in the one place that decides it.
-
-    `models.judge` where the active models file declares one, and the summariser's
-    entry otherwise. The two name the same weights by contract, so a judge role
-    changes how a verdict is decoded and never which file the runner's cache has
-    to hold - the cache restore is the largest fixed cost in the pipeline
-    (Guardrail #2).
-
-    Read here by the decode, by the stamp and by the shard, so a run cannot judge
-    under one entry and record another.
-    """
-    return settings.models.judge or settings.models.summarizer
+    """Use the served entry from the judge's explicitly loaded preset."""
+    if settings.explicit_models_file is None:
+        raise ValueError("content-similarity-judge requires an explicit model preset")
+    return settings.models.summarizer
 
 
 def decode_settings(settings: config.Settings) -> Mapping[str, Any]:
@@ -326,8 +318,7 @@ def read_once(
     known-answer pairs, whose text lives in config - goes through this same function
     and builds the same request, rather than through a second path that could drift.
 
-    The model is `judge.entry_of` - the summariser's entry, or a judge role
-    declared beside it on the same weights.
+    The model is the served entry of this judge's explicitly selected preset.
 
     **A reasoning span runs only where the entry declares a closing marker.** An
     entry with none cannot be asked for one: the answer body carries a grammar of

@@ -731,6 +731,9 @@ def _dispatch(
                 shards=args.shards,
                 selection=council_selection,
             )
+            model = council_selection.judge(args.tenant, args.date).model
+            if model is not None:
+                print(f"models_file={model.models_file}")
             return 0
         result = council_session.run_shard(
             settings.council,

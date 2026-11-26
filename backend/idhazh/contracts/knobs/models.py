@@ -430,16 +430,8 @@ class ModelsConfig(Contract):
     )
 
     summarizer: ModelEntry
-    #: How the content-similarity judge decodes, when it is not the summariser's
-    #: own entry. Null in every committed file and null is the default, so a
-    #: fresh clone judges exactly as it judges today. It exists because the one
-    #: thing the judge wants - a reasoning span in front of its verdict - lives
-    #: in an entry that also moves the summariser's answer budget, its cache
-    #: types and its batch size, and moving those for a judge's benefit is an
-    #: uninstrumented change to the words a reader gets. It is filled when a
-    #: replay says a reasoned verdict is a better verdict; until then it stays
-    #: null and the channel stays shut
-    #: (`docs/reference/benchmarks/what-the-margin-rule-changes.md`).
+    #: Read old presets that carried a same-weights decoding profile. Council
+    #: selects the served entry of its own preset, not this legacy block.
     judge: ModelEntry | None = None
 
     @classmethod

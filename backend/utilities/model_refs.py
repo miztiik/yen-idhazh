@@ -48,6 +48,7 @@ CONFIGURED_EXTRA: Final = ("id", "weights_path", "cache_key")
 DEFAULT_CONFIG_ROOT: Final = Path("config")
 POINTER_FILE = "idhazh.json"
 POINTER_KEY = "models_file"
+NAMED_VERB: Final = "describe-named-model"
 
 #: The two verbs a workflow step calls. They say what they answer rather than
 #: which of two states a caller is in: `configured` and `candidate` read as a
@@ -91,6 +92,8 @@ FLAG_RE: Final = re.compile(r"^--?[A-Za-z0-9][A-Za-z0-9-]*$")
 #: DIVISION SLASH - either builds a hub URL that is not the one a reviewer read.
 #: Empty passes, for the two values that are legitimately absent.
 PRINTABLE_RE: Final = re.compile(r"^[\x21-\x7E]+$")
+# This pre-install reader cannot import AppConfig. A contract test binds the two.
+MODELS_FILE_RE: Final = re.compile(r"^models/[a-z0-9]+(?:[.-][a-z0-9]+)*\.json$")
 
 
 @dataclass(frozen=True, slots=True)
@@ -187,17 +190,29 @@ def resolve_under_config(named: str, *, root: Path) -> Path:
     return path
 
 
+def _read_declared(config_root: Path, wanted: str, named_at: str) -> _Declared:
+    """Read the resolved declaration, whatever its caller's selection rule."""
+    path = resolve_under_config(wanted, root=config_root)
+    models_file = path.relative_to(config_root.resolve()).as_posix()
+    summarizer: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))["summarizer"]
+    return _Declared(models_file, (config_root / models_file).as_posix(), named_at, summarizer)
+
+
 def _declared(config_root: Path, named: str) -> _Declared:
-    """The entry a verb was pointed at, and both spellings of where it lives."""
+    """The legacy pointer or trial input; blank still consults the pointer."""
     wanted = named.strip()
     named_at = "candidate_models_file" if wanted else f"{POINTER_FILE}:{POINTER_KEY}"
     if not wanted:
         pointer = config_root / POINTER_FILE
         wanted = str(json.loads(pointer.read_text(encoding="utf-8"))[POINTER_KEY])
-    path = resolve_under_config(wanted, root=config_root)
-    models_file = path.relative_to(config_root.resolve()).as_posix()
-    summarizer: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))["summarizer"]
-    return _Declared(models_file, (config_root / models_file).as_posix(), named_at, summarizer)
+    return _read_declared(config_root, wanted, named_at)
+
+
+def _named(config_root: Path, models_file: str) -> _Declared:
+    """An explicit selection never consults the pointer, even when missing."""
+    if not MODELS_FILE_RE.fullmatch(models_file):
+        raise SystemExit("models_file must explicitly name one file under config/models/")
+    return _read_declared(config_root, models_file, POINTER_KEY)
 
 
 def _a_file(declared: _Declared, block: Mapping[str, Any], at: str, *, weights: bool) -> ModelFile:
@@ -258,6 +273,11 @@ def list_model_files(config_root: Path, named: str = "") -> list[ModelFile]:
     reads the file the committed pointer names.
     """
     return _model_files(_declared(config_root, named))
+
+
+def named_model_files(config_root: Path, models_file: str) -> list[ModelFile]:
+    """Return every asset of the explicitly named model, in launch order."""
+    return _model_files(_named(config_root, models_file))
 
 
 def _cache_key(files: Sequence[ModelFile]) -> str:
@@ -360,21 +380,24 @@ def _values(declared: _Declared, files: Sequence[ModelFile]) -> dict[str, tuple[
     return values
 
 
-def pinned_rows(config_root: Path) -> list[str]:
-    """What the daily run needs about the model config pins: its refs and where they land.
-
-    No companion refs. The run used to publish four `draft_*` keys here so a
-    shell could pass them to a download; the download reads the declaration
-    itself now, so a second copy of one companion's facts is a second answer to
-    a question nobody asks any more.
-    """
-    declared = _declared(config_root, "")
+def _asset_rows(declared: _Declared) -> list[str]:
+    """The shared action's stable keys; the cache digest includes all companions."""
     files = _model_files(declared)
     values = _values(declared, files)
     return [
         _row(declared, "summarizer_", name, *values[name])
         for name in (*CONFIGURED_FIELDS, *CONFIGURED_EXTRA)
     ]
+
+
+def pinned_rows(config_root: Path) -> list[str]:
+    """Describe the assets named by the legacy pointer."""
+    return _asset_rows(_declared(config_root, ""))
+
+
+def named_asset_rows(config_root: Path, models_file: str) -> list[str]:
+    """Describe the cache and output keys for a required explicit selection."""
+    return _asset_rows(_named(config_root, models_file))
 
 
 def trial_rows(config_root: Path, named: str, *, prefix: str) -> list[str]:
@@ -399,11 +422,11 @@ def trial_rows(config_root: Path, named: str, *, prefix: str) -> list[str]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=(PINNED_VERB, TRIAL_VERB))
+    parser.add_argument("mode", choices=(PINNED_VERB, TRIAL_VERB, NAMED_VERB))
     parser.add_argument(
         "--models-file",
         default="",
-        help="Models file under the config root. Empty reads the committed pointer.",
+        help="Models file under the config root. Required for describe-named-model.",
     )
     parser.add_argument(
         "--prefix",
@@ -426,6 +449,8 @@ def main(argv: list[str] | None = None) -> int:
     rows: list[str] = []
     if args.mode == PINNED_VERB:
         rows += pinned_rows(args.config_root)
+    elif args.mode == NAMED_VERB:
+        rows += named_asset_rows(args.config_root, args.models_file)
     else:
         if args.also_pinned:
             rows += pinned_rows(args.config_root)

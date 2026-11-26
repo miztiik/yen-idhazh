@@ -70,7 +70,7 @@ def test_a_written_judge_file_changes_the_sampler_and_the_stamp_together(tmp_pat
         flush_every_pairs=2,
         judge_temperature=0.4,
     )
-    settings = dataclasses.replace(config.load(CONFIG_DIR), config_dir=tmp_path)
+    settings = dataclasses.replace(judge_settings.load_runtime(CONFIG_DIR), config_dir=tmp_path)
     prompt_file = settings.app.prompt_files.compare_articles
     prompt_path = tmp_path / prompt_file
     prompt_path.parent.mkdir(parents=True)

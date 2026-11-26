@@ -53,8 +53,11 @@ def room(
     path.write_text(json.dumps(raw), encoding="utf-8", newline="\n")
     (target / "judges").mkdir(exist_ok=True)
     for name, (status, model) in declarations.items():
+        written = {"lifecycle_status": status, "runs_model": model, "private": "unvalidated"}
+        if model:
+            written["models_file"] = config.load_app(target).models_file
         (target / "judges" / f"{name}.json").write_text(
-            json.dumps({"lifecycle_status": status, "runs_model": model, "private": "unvalidated"}),
+            json.dumps(written),
             encoding="utf-8",
             newline="\n",
         )

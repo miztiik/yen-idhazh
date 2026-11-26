@@ -349,15 +349,13 @@ null. It is one of the six values of the meaning stamp, so a change to it leaves
 out of the evidence and the window restarts by itself. No prompt edit is used to reset the
 evidence.
 
-**The judge may take a model entry of its own, and no committed file gives it one.** The one
-thing this judge could want from a second entry is a reasoning span in front of its verdict,
-and the committed entry that offers one also moves the summariser's answer budget, cache types
-and batch size, which would change the words a reader gets with no instrument watching. So
-`models.judge` is optional and null everywhere. A second entry that names weights nobody
-serves is refused when the config loads: no server is started for it, so it would decode on
-the summariser's weights while every verdict was recorded under a model that never saw the
-pair. What it may move is the decode. It is filled the day a replay says a reasoned verdict is
-a better verdict, and that replay is priced and unrun.
+**The judge selects its own served model.** Its `models_file` is required and
+never falls back to Digest. The committed selection is
+`models/qwen3.8-9b-q5km-distill.json`. The judge uses that preset's served entry
+for template, reasoning and sampling settings, while its own `judge_temperature`
+still sets the verdict temperature. The same model reads known-answer and drawn
+pairs and is recorded as `judge_model`. Give different weights distinct model
+IDs so their evidence is not pooled. See [model selection and rollback](../../concepts/config/model-file.md#council-selects-its-own-preset).
 
 **Three risks in how the judge reads its first answer token were checked against the code on
 2026-10-12, and one is still open.**

@@ -25,6 +25,7 @@ from support.models import a_markers
 from support.paths import CONFIG_DIR
 
 from idhazh import config, event_lines
+from idhazh.content_similarity_judge import settings as judge_settings
 from idhazh.content_similarity_judge.freeze_evaluation import (
     blinded_view,
     freeze,
@@ -73,7 +74,7 @@ RUBRIC = "Software input only: decide whether the two summaries describe the sam
 
 @pytest.fixture(scope="module")
 def settings() -> config.Settings:
-    return config.load(CONFIG_DIR)
+    return config.load(CONFIG_DIR, models_file=config.load_app(CONFIG_DIR).models_file)
 
 
 def tuning(**changes: object) -> ContentSimilarityEvaluationConfig:
@@ -157,15 +158,19 @@ def memory_run(
     frozen: EvaluationSet, settings: config.Settings, *responses: bytes,
 ) -> tuple[EvaluationRun, ProtocolReplies]:
     boundary = ProtocolReplies(*(responses or (native_reply("YES"),)))
+    entry = settings.models.summarizer
+    reader = ModelReader(
+        boundary, a_markers(thinking_close=entry.thinking_close, thinking_kwarg=entry.thinking_kwarg)
+    )
     run = start_run(
-        frozen, split="confirmation", settings=settings, reader=boundary.reader,
+        frozen, split="confirmation", settings=settings, reader=reader,
         host=host(), git_sha="a" * 40, started_at=NOW,
     )
     rows = tuple(
         EvaluationCaseRun(
             case_id=case.case_id, input_sha256=case.input_sha256,
-            forward=capture_reading(case, reverse=False, reader=boundary.reader, settings=settings),
-            reverse=capture_reading(case, reverse=True, reader=boundary.reader, settings=settings),
+            forward=capture_reading(case, reverse=False, reader=reader, settings=settings),
+            reverse=capture_reading(case, reverse=True, reader=reader, settings=settings),
         )
         for case in frozen.cases
     )
@@ -389,7 +394,7 @@ def test_two_span_capture_retains_every_request_response_and_real_token_cost(
 ) -> None:
     frozen = evaluation()
     model_data = settings.models.model_dump(mode="json")
-    model_data["judge"] = (model_data["judge"] or model_data["summarizer"]) | {
+    model_data["summarizer"] = model_data["summarizer"] | {
         "thinking_close": "</think>",
     }
     thinking = dataclasses.replace(settings, models=ModelsConfig.model_validate(model_data))
@@ -643,17 +648,16 @@ def test_only_named_file_boundaries_are_read_and_written(
 
 
 def test_score_cli_json_logs_redact_model_text_and_preserve_stdout(
-    tmp_path: Path, settings: config.Settings,
+    tmp_path: Path,
 ) -> None:
     frozen = evaluation()
-    run, _ = memory_run(frozen, settings)
+    run, _ = memory_run(frozen, judge_settings.load_runtime(CONFIG_DIR))
     row = run.cases[0]
     reading = row.forward
     assert reading is not None
     secret = "PRIVATE_MODEL_TEXT https://invalid.test/?token=do-not-log"
-    run = run.model_copy(update={"cases": (
-        row.model_copy(update={"forward": reading.model_copy(update={"raw_response": (secret,)})}),
-    )})
+    redacted = reading.model_copy(update={"raw_response": (secret, *reading.raw_response[1:])})
+    run = run.model_copy(update={"cases": (row.model_copy(update={"forward": redacted}),)})
     set_path, run_path = tmp_path / "set.json", tmp_path / "run.json"
     set_path.write_text(frozen.to_json(), encoding="utf-8")
     run_path.write_text(run.to_json(), encoding="utf-8")
