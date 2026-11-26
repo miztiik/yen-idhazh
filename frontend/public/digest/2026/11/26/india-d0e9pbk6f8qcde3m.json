@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Storage location",
+    "y": "Gold holdings (tonnes)"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-d0e9pbk6f8qcde3m",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Domestic storage","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Overseas holdings (Bank of England and BIS)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-379-391","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "tonne","value": "740.1"},
+    {"derived": null,"element_id": "quantity-518-530","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "tonne","value": "140.4"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "RBI Gold Holdings: Domestic vs Overseas (tonnes)",
+  "type": "bar",
+  "version": "2026-11-25"
+}

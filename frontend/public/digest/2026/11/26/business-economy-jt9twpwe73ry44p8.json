@@ -1,0 +1,46 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Threshold amount ($)",
+    "y": "Loan exemption level"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [
+      "m4",
+      "m5"
+    ],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "business-economy-jt9twpwe73ry44p8",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "$34,200 (prior)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "$35,500 (new 2027)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-540-547","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "$","value": "34200"},
+    {"derived": null,"element_id": "quantity-551-558","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "$","value": "35500"},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m4","source_text": null,"text": "Prior threshold","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m5","source_text": null,"text": "New 2027 threshold","time": null,"unit": null,"value": null}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Higher-Priced Mortgage Appraisal Exemption Threshold: $34,200 to $35,500 (2027)",
+  "type": "bar",
+  "version": "2026-11-25"
+}
