@@ -41,7 +41,7 @@ def _column_type(prop: dict[str, Any], defs: dict[str, Any]) -> str:
 
 
 def _empty_ledger(con: duckdb.DuckDBPyConnection, ledger: LedgerName) -> None:
-    columns = {}
+    columns: dict[str, str] = {}
     for model in (RowIdentity, door_contract(ledger)):
         schema = model.model_json_schema()
         defs = schema.get("$defs", {})
