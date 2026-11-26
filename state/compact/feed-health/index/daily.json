@@ -54,7 +54,8 @@
     {"bytes": 20370,"covers": "2026-11-20","rows": 1256},
     {"bytes": 20542,"covers": "2026-11-21","rows": 1413},
     {"bytes": 20626,"covers": "2026-11-22","rows": 1413},
-    {"bytes": 19796,"covers": "2026-11-23","rows": 942}
+    {"bytes": 19796,"covers": "2026-11-23","rows": 942},
+    {"bytes": 20490,"covers": "2026-11-24","rows": 1413}
   ],
   "ledger": "feed-health",
   "period": "daily",

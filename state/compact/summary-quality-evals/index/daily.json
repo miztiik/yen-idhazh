@@ -54,7 +54,8 @@
     {"bytes": 115985,"covers": "2026-11-20","rows": 400},
     {"bytes": 116537,"covers": "2026-11-21","rows": 400},
     {"bytes": 119547,"covers": "2026-11-22","rows": 417},
-    {"bytes": 112626,"covers": "2026-11-23","rows": 392}
+    {"bytes": 112626,"covers": "2026-11-23","rows": 392},
+    {"bytes": 114906,"covers": "2026-11-24","rows": 403}
   ],
   "ledger": "summary-quality-evals",
   "period": "daily",

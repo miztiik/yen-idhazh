@@ -54,7 +54,8 @@
     {"bytes": 9518,"covers": "2026-11-20","rows": 1},
     {"bytes": 9518,"covers": "2026-11-21","rows": 1},
     {"bytes": 9518,"covers": "2026-11-22","rows": 1},
-    {"bytes": 9518,"covers": "2026-11-23","rows": 1}
+    {"bytes": 9518,"covers": "2026-11-23","rows": 1},
+    {"bytes": 9518,"covers": "2026-11-24","rows": 1}
   ],
   "ledger": "visual-prunes",
   "period": "daily",
