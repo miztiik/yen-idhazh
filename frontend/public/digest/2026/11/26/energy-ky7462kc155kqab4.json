@@ -1,0 +1,64 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Period",
+    "y": "Barrel rate"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3",
+      "m4"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m5",
+      "m6",
+      "m7",
+      "m8",
+      "m9"
+    ],
+    "quantity_x": [],
+    "series": [
+      "m10",
+      "m11",
+      "m12",
+      "m13",
+      "m14"
+    ],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "energy-ky7462kc155kqab4",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Oct 8 (2-month low)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Mid-October peak","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Late October","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m3","source_text": null,"text": "Week 1, November","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m4","source_text": null,"text": "Week 2, November","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-1796-1816","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "barrel","value": "10100000"},
+    {"derived": null,"element_id": "quantity-2437-2455","mark_id": "m6","source_text": null,"text": null,"time": null,"unit": "barrel","value": "20000000"},
+    {"derived": null,"element_id": "quantity-2530-2551","mark_id": "m7","source_text": null,"text": null,"time": null,"unit": "barrel","value": "16030000"},
+    {"derived": null,"element_id": "quantity-2607-2628","mark_id": "m8","source_text": null,"text": null,"time": null,"unit": "barrel","value": "15770000"},
+    {"derived": null,"element_id": "quantity-2688-2709","mark_id": "m9","source_text": null,"text": null,"time": null,"unit": "barrel","value": "13960000"},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m10","source_text": null,"text": "Barrel rate","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m11","source_text": null,"text": "Barrel rate","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m12","source_text": null,"text": "Barrel rate","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m13","source_text": null,"text": "Barrel rate","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m14","source_text": null,"text": "Barrel rate","time": null,"unit": null,"value": null}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Strait of Hormuz Daily Tanker Traffic (millions of barrels/day)",
+  "type": "bar",
+  "version": "2026-11-25"
+}

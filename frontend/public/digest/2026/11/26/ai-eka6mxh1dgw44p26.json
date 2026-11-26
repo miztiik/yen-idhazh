@@ -1,0 +1,49 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "PAN-OS version",
+    "y": "Number of fix releases"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m4",
+      "m5",
+      "m6",
+      "m7"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "ai-eka6mxh1dgw44p26",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "10.2","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "11.1","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "11.2","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m3","source_text": null,"text": "12.2","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-1756-1760","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": null,"value": "10.2"},
+    {"derived": null,"element_id": "quantity-1762-1766","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": null,"value": "11.1"},
+    {"derived": null,"element_id": "quantity-1768-1772","mark_id": "m6","source_text": null,"text": null,"time": null,"unit": null,"value": "11.2"},
+    {"derived": null,"element_id": "quantity-1784-1788","mark_id": "m7","source_text": null,"text": null,"time": null,"unit": null,"value": "12.2"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "PAN-OS Versions with Fragnesia Fixes Released by Palo Alto Networks",
+  "type": "bar",
+  "version": "2026-11-25"
+}

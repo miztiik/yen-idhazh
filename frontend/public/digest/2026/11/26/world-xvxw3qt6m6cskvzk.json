@@ -1,0 +1,46 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Trading partner",
+    "y": "Tariff rate (%)"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [
+      "m4",
+      "m5"
+    ],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "world-xvxw3qt6m6cskvzk",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "China \u2013 agreed rate","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "China \u2013 potential higher rate","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-297-300","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "%","value": "20"},
+    {"derived": null,"element_id": "quantity-410-413","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "40"},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m4","source_text": null,"text": "Agreed rate with prior agreement","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m5","source_text": null,"text": "Potential doubling if talks fail (senior U.S. official)","time": null,"unit": null,"value": null}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Planned U.S. Tariff Rates by Trading Partner",
+  "type": "bar",
+  "version": "2026-11-25"
+}
