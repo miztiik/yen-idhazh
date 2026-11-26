@@ -79,6 +79,7 @@ def test_real_css_producer_substitutes_nondefault_style_without_changing_reader_
     assert "--color-bg:" not in reader
     assert "--chart-measure:" not in reader
     assert "--chart-memory-" not in reader
+    assert "--operation-" not in reader
     assert "--color-bg: #1a1a18;" in operator
     assert "--color-bg: #f3f2ee;" in operator
     assert "--console-small-size: 0.875rem;" in operator
@@ -89,3 +90,6 @@ def test_real_css_producer_substitutes_nondefault_style_without_changing_reader_
     assert f"--chart-measure: {style.colors.light.chart_measure};" in operator
     assert f"--chart-measure: {style.colors.dark.chart_measure};" in operator
     assert "--chart-memory-high: #286c48;" in operator
+    assert f"--operation-written: {style.colors.light.operation_written};" in operator
+    assert f"--operation-deferred: {style.colors.dark.operation_deferred};" in operator
+    assert f"--operation-failed: {style.colors.dark.operation_failed};" in operator

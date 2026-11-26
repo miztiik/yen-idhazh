@@ -211,6 +211,7 @@
         "accent_hover": "#095e59", "on_accent": "#fffffe", "focus": "#0c756f",
         "selected": "#ddeceb", "chart_axis": "#b7b0a1", "chart_grid": "#dbd7cc", "chart_measure": "#496688",
         "chart_memory_low": "#98263d", "chart_memory_high": "#286c48",
+        "operation_written": "#287a58", "operation_deferred": "#a66e14", "operation_failed": "#c74459",
         "categorical": ["#366b9b", "#7e54a1", "#17809a", "#a4437d", "#5a69b0", "#2a749f", "#9a5bac", "#787369"]
       },
       "dark": {
@@ -220,6 +221,7 @@
         "accent_hover": "#95dad1", "on_accent": "#132823", "focus": "#6cc8bf",
         "selected": "#273e39", "chart_axis": "#575449", "chart_grid": "#3a3a33", "chart_measure": "#9eb8d4",
         "chart_memory_low": "#b44d56", "chart_memory_high": "#5aad7c",
+        "operation_written": "#52c99e", "operation_deferred": "#e2aa47", "operation_failed": "#ed7785",
         "categorical": ["#8cbde6", "#bfa3e0", "#73c7da", "#e7a2ca", "#a5b2e9", "#84c0dd", "#cfa5e1", "#b1ab9f"]
       }
     },

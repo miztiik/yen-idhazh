@@ -21,8 +21,8 @@ Execute per docs/how-to/execute-a-plan.md: one maintainer carries the plan and d
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Show the Gardener write calendar in Operations | - | A | IN-FLIGHT | scaling-adventure | - | - |
-| 2 | Show Council completion independently for each judge | 1 | B | IN-FLIGHT | scaling-adventure | - | - |
+| 1 | Show the Gardener write calendar in Operations | - | A | DONE | scaling-adventure | - | - |
+| 2 | Show Council completion independently for each judge | 1 | B | DONE | scaling-adventure | - | - |
 
 ## 2. Row 1 - Show the Gardener write calendar in Operations
 
