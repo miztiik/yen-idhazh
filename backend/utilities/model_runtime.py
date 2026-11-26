@@ -31,18 +31,25 @@ import hashlib
 import http.client
 import json
 import os
+import re
 import shutil
+import signal
 import subprocess
+import sys
 import tarfile
 import tempfile
 import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Sequence
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import IO, Final
+from typing import IO, TYPE_CHECKING, Final
 
 from utilities import model_refs
+
+if TYPE_CHECKING:
+    from idhazh.contracts.task_performance import TaskPerformanceOutcome
 
 #: The pin: which llama.cpp build, which asset of that release, and the digest
 #: of the archive that asset is. One home, because it used to be written in six
@@ -115,6 +122,9 @@ LOCKED_MEMORY_ROW: Final = "Max locked memory"
 #: refuses one of its own flags is gone in well under a second, so two seconds
 #: separates that from a server still reading weights.
 START_GRACE_SECONDS: Final = 2.0
+
+#: Budget the final scrape before the workflow still needs to publish and upload.
+METRICS_READ_TIMEOUT_SECONDS: Final = 30
 
 #: How much of the server log a start-up failure carries out with it. The
 #: refused flag is named in the last few lines, and the log dies with the runner.
@@ -513,7 +523,7 @@ def refuse_a_server_that_died_at_startup(
     raise RuntimeError(f"llama-server exited {server.returncode} before it could answer\n{tail}")
 
 
-def start_server(config_root: Path, name: str) -> None:
+def start_server(config_root: Path, name: str, *, observe_serving: bool = False) -> None:
     """Start llama-server against one config root and prove the process survived.
 
     Everything `idhazh` is imported here rather than at module scope, because
@@ -560,6 +570,9 @@ def start_server(config_root: Path, name: str) -> None:
     )
     _say(f"starting: {' '.join(argv)}")
 
+    pin_path = Path(f"{name}.pin.json")
+    if observe_serving:
+        pin_path.unlink(missing_ok=True)
     log_path = Path(f"{name}.log")
     with log_path.open("wb") as log:
         # Every one of these is load-bearing. The shell form was a prefix
@@ -569,6 +582,7 @@ def start_server(config_root: Path, name: str) -> None:
         # at completion, so all three streams are set. `start_new_session`
         # calls `setsid`, which is strictly more detached than `nohup`: with no
         # controlling terminal, SIGHUP is never delivered at all.
+        started_at = datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
         server = subprocess.Popen(
             argv,
             stdin=subprocess.DEVNULL,
@@ -579,8 +593,146 @@ def start_server(config_root: Path, name: str) -> None:
             close_fds=True,
         )
     Path(f"{name}.pid").write_text(str(server.pid), encoding="utf-8")
+    if observe_serving:
+        from idhazh.atomic_write import write_atomic
+        from idhazh.contracts.model_server_pin import MODEL_SERVER_PIN_VERSION, ModelServerPin
+        from idhazh.telemetry.host import process_start_ticks
+
+        ticks = process_start_ticks(server.pid)
+        if ticks is None:
+            _say("::warning title=Model serving observation::process_pin_unavailable")
+        else:
+            try:
+                write_atomic(pin_path, ModelServerPin(
+                    version=MODEL_SERVER_PIN_VERSION,
+                    pid=server.pid, start_ticks=ticks, started_at=started_at,
+                ).to_json())
+            except OSError:
+                _say("::warning title=Model serving observation::process_pin_not_saved")
     refuse_a_server_that_died_at_startup(server, log_path)
     _say(f"{name} is up as pid {server.pid}")
+
+
+def close_serving_observation(
+    config_root: Path, name: str, outcome: TaskPerformanceOutcome,
+) -> dict[str, object] | None:
+    """Read the launched model's final counters once, then stop only that model."""
+    from idhazh import config
+    from idhazh.atomic_write import write_atomic_bytes
+    from idhazh.contracts.knobs.model_server import port_of_base_url, resolve_base_url
+    from idhazh.contracts.model_server_pin import ModelServerPin
+    from idhazh.llm.server import loopback_url
+    from idhazh.llm.serving_metrics import CAPTURE_BYTES, serving_measurement
+    from idhazh.telemetry.host import process_start_ticks
+
+    def unavailable(reason: str) -> None:
+        print(f"::warning title=Model serving observation::{reason}", file=sys.stderr)
+
+    counters_path = Path("llama-metrics.prom")
+    counters_path.unlink(missing_ok=True)
+    try:
+        pin = ModelServerPin.read(Path(f"{name}.pin.json"))
+    except (OSError, ValueError):
+        unavailable("process_pin_unavailable")
+        return None
+
+    def alive() -> bool:
+        return process_start_ticks(pin.pid) == pin.start_ticks
+
+    def owns_listener(port: int) -> bool:
+        try:
+            listeners = subprocess.run(
+                ["ss", "-Hlnpt", "sport", "=", f":{port}"],
+                capture_output=True, check=True, text=True, timeout=START_GRACE_SECONDS,
+            ).stdout.splitlines()
+        except (OSError, subprocess.SubprocessError) as error:
+            unavailable(f"metrics_listener_inspection_failed_{type(error).__name__}")
+            return False
+        return (
+            len(listeners) == 1
+            and set(re.findall(r"\bpid=(\d+),", listeners[0])) == {str(pin.pid)}
+            and alive()
+        )
+
+    if not alive():
+        unavailable("owned_process_not_live")
+        return None
+    # The pinned runtime has no confirmed weights-only end marker. Its legacy
+    # startup markers and post-evaluation load timer both include other work.
+    unavailable("weights_load_boundary_unobserved")
+    try:
+        settings = config.load(config_root)
+        entry = settings.models.summarizer
+        base = resolve_base_url(settings.app.model_server.base_url)
+        port = port_of_base_url(base)
+        if base != loopback_url(port):
+            raise ValueError("model serving metrics require the configured local launcher address")
+        if "--metrics" not in entry.server:
+            unavailable("metrics_configured_off")
+            return None
+        # Do not attribute counters from another healthy process on the runner.
+        if not owns_listener(port):
+            unavailable("metrics_listener_unverified")
+            return None
+        try:
+            # curl keeps the previous whole-request deadline; no redirects, proxy or retries.
+            flags = [
+                "--fail", "--silent", "--show-error", "--noproxy", "*",
+                "--max-time", str(METRICS_READ_TIMEOUT_SECONDS),
+                "--max-filesize", str(CAPTURE_BYTES),
+            ]
+            reply = subprocess.run(
+                ["curl", "--disable", *flags, base + "/metrics"],
+                stdout=subprocess.PIPE, check=False,
+            )
+        except OSError:
+            unavailable("metrics_unreadable")
+            return None
+        if reply.returncode != 0:
+            unavailable("metrics_unreadable")
+            return None
+        if not owns_listener(port):
+            unavailable("metrics_listener_changed_during_read")
+            return None
+        if len(reply.stdout) > CAPTURE_BYTES:
+            unavailable("metrics_exceed_capture_bound")
+            return None
+        observed_at = datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+        try:
+            measurement = serving_measurement(
+                reply.stdout.decode("utf-8"), subject_id=entry.id, outcome=outcome,
+                started_at=pin.started_at, finished_at=observed_at,
+            )
+        except ValueError:
+            unavailable("prompt_pair_invalid")
+            return None
+        if measurement is None:
+            unavailable("prompt_pair_incomplete")
+            return None
+        write_atomic_bytes(counters_path, reply.stdout)
+        return measurement
+    finally:
+        stop_pinned_server(pin.pid, pin.start_ticks)
+
+
+def stop_pinned_server(pid: int, start_ticks: int) -> None:
+    """Signal the original Linux process without racing a PID reuse."""
+    from idhazh.telemetry.host import process_start_ticks
+
+    if not hasattr(os, "pidfd_open") or not hasattr(signal, "pidfd_send_signal"):
+        raise RuntimeError("Stopping the launcher-owned model requires Linux pidfds")
+    try:
+        descriptor = os.pidfd_open(pid)
+    except ProcessLookupError:
+        return
+    try:
+        if process_start_ticks(pid) == start_ticks:
+            try:
+                signal.pidfd_send_signal(descriptor, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+    finally:
+        os.close(descriptor)
 
 
 def describe_request(config_root: Path, *, prove_runtime: bool = False) -> None:
@@ -663,6 +815,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         default="llama-server",
         help="The stem for <name>.log and <name>.pid, which later steps read back.",
     )
+    start.add_argument("--observe-serving", action="store_true")
     args = parser.parse_args(argv)
 
     ran: dict[str, Callable[[], None]] = {
@@ -673,7 +826,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         "describe-request": lambda: describe_request(
             args.config_root, prove_runtime=args.prove_runtime
         ),
-        "start-server": lambda: start_server(args.config_root, args.name),
+        "start-server": lambda: start_server(
+            args.config_root, args.name, observe_serving=args.observe_serving
+        ),
     }
     ran[args.verb]()
     return 0

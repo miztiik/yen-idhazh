@@ -19,6 +19,7 @@ from idhazh.contracts.base import ServerJob
 from idhazh.contracts.file_envelope import FileEnvelope, WriterIdentity
 from idhazh.contracts.host_fingerprint import HostFingerprintRow, fingerprint_v2
 from idhazh.contracts.ledger_name import LedgerName
+from idhazh.llm.serving_metrics import legacy_model_load_ms, server_prompt_totals
 from idhazh.telemetry import silicon, task_telemetry
 
 #: One committed capture of llama-server's own log, so the four-field stamp the
@@ -908,7 +909,7 @@ def test_the_job_clock_and_the_model_load_are_decoded_off_a_real_capture() -> No
     """
     text = SERVER_LOG.read_text(encoding="utf-8")
 
-    loaded = silicon.model_load_ms(text)
+    loaded = legacy_model_load_ms(text)
 
     assert loaded is not None and loaded > 0
     assert silicon.job_seconds("2026-09-16T04:11:02Z", 1789531312) == 550
@@ -924,7 +925,7 @@ def test_the_two_prompt_counters_are_read_off_one_table_and_never_a_second_copy(
     """
     text = SERVER_METRICS.read_text(encoding="utf-8")
 
-    assert silicon.server_prompt_totals(text) == (30538, 2795.15)
+    assert server_prompt_totals(text) == (30538, 2795.15)
 
 
 def test_a_scrape_the_server_was_already_gone_for_reports_absence_rather_than_zero() -> None:
@@ -933,9 +934,9 @@ def test_a_scrape_the_server_was_already_gone_for_reports_absence_rather_than_ze
     A zero here would be averaged into a rate by the next reader, and a rate over
     a denominator nobody measured is the defect this instrument exists to catch.
     """
-    assert silicon.server_prompt_totals(None) == (None, None)
-    assert silicon.server_prompt_totals("") == (None, None)
-    assert silicon.server_prompt_totals("# HELP nothing\n") == (None, None)
+    assert server_prompt_totals(None) == (None, None)
+    assert server_prompt_totals("") == (None, None)
+    assert server_prompt_totals("# HELP nothing\n") == (None, None)
 
 
 def test_a_renamed_series_leaves_the_cells_empty_and_a_broken_one_is_loud() -> None:
@@ -947,7 +948,7 @@ def test_a_renamed_series_leaves_the_cells_empty_and_a_broken_one_is_loud() -> N
     """
     renamed = "llamacpp:prompt_tokens_read_total 5\nllamacpp:prompt_seconds_total 2.5\n"
 
-    assert silicon.server_prompt_totals(renamed) == (None, 2.5)
+    assert server_prompt_totals(renamed) == (None, 2.5)
 
     with pytest.raises(ValueError, match="prompt_tokens_total"):
-        silicon.server_prompt_totals("llamacpp:prompt_tokens_total 5.5\n")
+        server_prompt_totals("llamacpp:prompt_tokens_total 5.5\n")

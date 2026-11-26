@@ -14,7 +14,7 @@ export function runMachineApiServer() {
       start: async signal => {
         const inputs = await loadMachineApiInputs(process.cwd(), startup.state_root,
           startup.registry_path === undefined ? undefined : join(process.cwd(), startup.registry_path),
-          startup.task_performance);
+          startup.task_performance, startup.task_profile_memory_enabled);
         const identity = readMachineApiIdentity(startup, process.pid);
         signal.throwIfAborted();
         try {

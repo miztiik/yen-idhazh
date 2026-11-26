@@ -39,7 +39,7 @@ from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.ledger import filenames, ledger_files
 from idhazh.ledger.persist import _rendered
-from idhazh.telemetry import silicon
+from idhazh.llm.serving_metrics import server_prompt_totals
 from idhazh.telemetry.source_health import feed_reliability, reliability
 from utilities.reconcile_prefill import TOLERANCE, reconcile
 
@@ -1011,7 +1011,7 @@ def test_the_ledgers_prefill_rate_agrees_with_the_servers_own_counters(tmp_path:
         FIXTURES_DIR / "runtime" / "2026-08-26-5-shard-2.prom",
         FIXTURES_DIR / "runtime" / "2026-08-26-5-shard-3.prom",
     ):
-        tokens, seconds = silicon.server_prompt_totals(path.read_text(encoding="utf-8"))
+        tokens, seconds = server_prompt_totals(path.read_text(encoding="utf-8"))
         machines.append(
             HostFingerprintRow(
                 version=HostFingerprintRow.schema_version(),

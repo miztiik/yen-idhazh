@@ -8,11 +8,14 @@ export const MachineApiStartupSchema = z.strictObject({
   group: z.literal("machine"), nonce: z.uuid(), state_root: PrivatePathSchema,
   registry_path: PrivatePathSchema.optional(),
   task_performance: TaskPerformanceExecutionSchema.optional(),
+  task_profile_memory_enabled: z.boolean().optional(),
+}).refine(value => value.task_profile_memory_enabled === undefined || value.task_performance !== undefined, {
+  path: ["task_profile_memory_enabled"], message: "A memory selection requires a task recording execution",
 }).meta({
   version: "2026-11-26",
   readCompatibility: "An omitted registry uses the committed registry; omitted task execution leaves legacy probes unchanged.",
   changelog: [
-    { version: "2026-11-26", change: "Admit one trusted execution and its accounting days for Task Performance." },
+    { version: "2026-11-26", change: "Admit a recording execution, accounting days and the job's memory selection." },
     { version: "2026-11-07", change: "Capture the caller's selected registry without feed configuration." },
   ],
 });

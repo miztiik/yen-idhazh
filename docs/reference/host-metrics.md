@@ -1,15 +1,15 @@
 # What the pipeline records about the machine it ran on
 
-**Last Updated**: 2026-11-07
+**Last Updated**: 2026-11-26
 
 Every host-fingerprint field, what it means and which readings are optional.
 The hardware fingerprint is reusable by any pipeline. Callers name their
 pipeline, task and shard; no workflow enum or digest-specific identity is needed.
 Python collects the production host fingerprint. The independent Bun fingerprint
 service writes the same existing host row through the shared TypeScript writer;
-it does not replace the production collector. The separate Bun host probe
-returns transient CPU and memory samples without writing a ledger. Item resource
-readings and diagnostic memory files are separate optional instruments.
+it does not replace the production collector. Host Probes collects transient CPU
+and memory profiles and can file the closed summary in Task Performance. Item
+resource readings and diagnostic memory files are separate optional instruments.
 
 Read this when a number surprises you and you want to know which machine
 produced it. Runner hardware varies between jobs, so compare measurements only
@@ -347,6 +347,18 @@ reporting, not for limiting task duration. The owned collector stops before
 the report callback runs. A callback that does not settle fails closing at
 that deadline; it cannot keep the collector or HTTP shutdown waiting forever.
 An actual-work failure and a reporting failure remain separate errors.
+
+Digest measures the Python `plan`, shard `work`, and `assemble` commands on
+their own runners, after the existing machine listener verifies readiness.
+Checkout, dependency installation, server startup and publication are not part
+of those intervals. The closed profile is recorded through the
+[Host Probes API](host-probe-api.md#record) with the declared accounting day,
+run, attempt, shard and revision. The host telemetry off setting disables both
+old and new instruments. The existing memory selection governs PID and machine
+RAM without disabling task elapsed time or CPU. The legacy fingerprint and
+job clock remain in use. An opening capture with only a legacy job identity
+cannot supply a `host_unit_id`; a compatible capture must match the same
+execution and runner, and measurement does not take a second fingerprint.
 
 Host CPU remains machine-wide, including other work on the machine.
 Whole-task shares use opening and closing counters. Each rolling sample reports its actual
@@ -836,7 +848,7 @@ stage anywhere else records none of them.
 
 | Column | Type | What it is | What it is for |
 | --- | --- | --- | --- |
-| `model_load_ms` | float? | Milliseconds the server spent opening the weights before the first item | The fixed cost `run.shard_size` exists to amortise. Measured 1.1 to 1.5 percent of a work shard's fixed cost |
+| `model_load_ms` | float? | Milliseconds between the server's legacy `loading model` and `model loaded` markers; includes context setup | The startup cost `run.shard_size` exists to amortise. Not an exact weights-load time |
 | `job_seconds` | int? | The job's own wall clock, first step to the clock write | **The cell the truncation-cap rollback reads.** Before it, that number lived only in the GitHub jobs API, which drops a job record when the run ages out |
 | `server_prompt_tokens` | int? | Prompt tokens llama-server itself counted reading, cached tokens excluded | **The second instrument.** The item ledger's own answer is `sum(input_tokens) - sum(cached_tokens)`, and arithmetic over that ledger cannot check that ledger |
 | `server_prompt_seconds` | float? | Seconds llama-server itself counted reading prompts | The other half. A rate is a ratio, and the 80 percent defect this check caught in August 2026 was in the numerator, so one cell alone could not see it |
@@ -855,11 +867,10 @@ what let a 0.746 percent drift on one article be seen at all. The bound is 5
 percent and it is not a `config/` knob: tuning it is how a failing check is made
 to pass.
 
-**These cells sit here and nowhere else, and that is on purpose.**
-`state/runtime-counters.csv` carried a second copy of them until 2026-09-20. The
-clock parser lives in
-[`silicon.py`](../../backend/idhazh/telemetry/silicon.py), beside the writer.
-Python owns each invocation's host row.
+During rollout the legacy host row and the separate `serve-summarizer` row
+read the same final counter pair, not two observations. Only the legacy row
+uses the broad startup interval. The [model boundary](../architecture/summarize/model-boundary.md#what-proves-the-two-sides-agree)
+explains why the exact weights-load value is unavailable.
 
 ## Identity names
 

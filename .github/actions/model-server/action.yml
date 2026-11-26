@@ -29,6 +29,10 @@ inputs:
       scratch copy it cut.
     required: false
     default: 'config'
+  observe_serving:
+    description: Retain the launched process identity for the caller's final serving observation.
+    required: false
+    default: 'false'
 
 # Six steps, and the two workflows that run them ran them as two copies. They
 # were the same steps in the same order, differing only in the job each read its
@@ -177,10 +181,13 @@ runs:
       shell: bash
       env:
         CONFIG_ROOT: ${{ inputs.config_root }}
+        OBSERVE_SERVING: ${{ inputs.observe_serving }}
       run: |
         set -euo pipefail
+        SERVING=()
+        if [ "$OBSERVE_SERVING" = true ]; then SERVING=(--observe-serving); fi
         python3 backend/utilities/model_runtime.py start-server \
-          --config-root "$CONFIG_ROOT"
+          --config-root "$CONFIG_ROOT" "${SERVING[@]}"
 
     - name: Check model health
       shell: bash
