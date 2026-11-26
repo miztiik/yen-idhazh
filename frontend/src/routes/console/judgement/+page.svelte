@@ -7,6 +7,7 @@
 	import { judgementEvidence } from '$lib/console/judgement-evidence';
 	import WindowControlSource from '$lib/components/WindowControlSource.svelte';
 	import PanelGroup from '$lib/components/PanelGroup.svelte';
+	import CouncilRunsPanel from './CouncilRunsPanel.svelte';
 	import JudgeObservations from './JudgeObservations.svelte';
 	import MergedStoriesPanel from './MergedStoriesPanel.svelte';
 	import HoldoutMargin from './HoldoutMargin.svelte';
@@ -16,7 +17,7 @@
 	const configured = routeConsole('judgement');
 	const axis = holdoutAxisRules(configured.knobs);
 	const rules = judgeObservationRules(configured.knobs);
-	const [grouping, observations] = configured.panel_groups;
+	const [grouping, council, observations] = configured.panel_groups;
 
 	const presets = console.window_presets;
 	const choice = useWindowChoice();
@@ -74,6 +75,9 @@
 						height={console.chart_height} width={console.chart_width} readoutMaxShare={data.chart.readout_max_share} />
 				{/if}
 			{/each}
+		</PanelGroup>
+		<PanelGroup id={council.id} title={council.title} panels={council.panels.length}>
+			<CouncilRunsPanel days={windowDays} knobs={console} chart={data.chart} repo={data.ui.repo_url} />
 		</PanelGroup>
 	{/snippet}
 </JudgeObservations>

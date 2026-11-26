@@ -12,7 +12,11 @@ from typing import Final
 import pytest
 from support.paths import REPO_ROOT, read_text
 
+from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason
+from idhazh.contracts.council_run_record import CouncilRunRecord, EvaluationStep, ShardOutcome
 from idhazh.contracts.eval_row import RENAMED_CELLS, EvalRow
+from idhazh.contracts.file_envelope import FileEnvelope, RowIdentity, WriterIdentity
+from idhazh.contracts.gardener_fault import RecoveryNote
 from idhazh.contracts.host_fingerprint import COLUMN_READERS as HOST_READERS
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import COLUMN_READERS as ITEM_READERS
@@ -48,6 +52,7 @@ QUERY_ROOT: Final = "frontend/src/lib/console/queries"
 EXPECTED_NAMES: Final = {
     "shared": ("failedRuleQuery",),
     "pipelines": (
+        "gardenerWakeQuery",
         "failureMixQuery", "itemTimeSplitQuery",
         "stageTimingsQuery", "writeCostQuery", "tailTrendQuery", "runTimelineQuery", "slowestArticlesQuery", "articleAgeQuery",
     ),
@@ -65,7 +70,7 @@ EXPECTED_NAMES: Final = {
     ),
     "voices": ("feedsFailedQuery", "fetchTimeQuery", "sourceCutsQuery", "whyChosenQuery"),
     "judgement": (
-        "judgeHistoryQuery", "judgeDayQuery", "judgeDrawTrialQuery", "judgePairTrialQuery", "judgeCutoffTrialQuery",
+        "councilRunsQuery", "judgeHistoryQuery", "judgeDayQuery", "judgeDrawTrialQuery", "judgePairTrialQuery", "judgeCutoffTrialQuery",
         "judgePoolTrialQuery",
     ),
     "window": (),
@@ -74,6 +79,10 @@ EXPECTED_NAMES: Final = {
 #: Independent transcription of the panel tables, using the row's declared renames.
 EXPECTED_COLUMNS: Final[Mapping[str, tuple[str, ...]]] = {
     "runShardsQuery": ("date", "run_id", "shards"),
+    "gardenerWakeQuery": (
+        "date", "run_id", "attempt", "job", "shard", "task", "work_ended_at", "dry_run",
+        "selected", "deleted", "bytes_freed", "stopped_because", "fault", "resume_from",
+    ),
     "failedRuleQuery": ("date", "stage", "outcome", "code", "failed_rule"),
     "failureMixQuery": ("date", "stage", "outcome", "code", "failed_rule"),
     "itemTimeSplitQuery": ("date", "item_total_ms", "fetch_ms", "extract_ms", "analyze_ms", "summarize_ms", "label_ms", "summary_ms", "visual_plan_ms", "faithfulness_ms", "stage_gap_ms"),
@@ -114,6 +123,10 @@ EXPECTED_COLUMNS: Final[Mapping[str, tuple[str, ...]]] = {
     "fetchTimeQuery": ("source_id", "fetch_ms", "fetch_connect_ms", "fetch_ttfb_ms", "robots_ms", "retry_total_ms", "retry_count"),
     "sourceCutsQuery": ("date", "source_id", "url_key", "source_words_before_cap", "source_words"),
     "whyChosenQuery": ("date", "run_id", "item_id", "source_id", "selection_score", "authority_score", "tier_score", "feed_weight", "feed_reliability", "recency_bonus", "lens_bonus", "watchlist_bonus", "carriage_step"),
+    "councilRunsQuery": (
+        "date", "run_id", "attempt", "job", "judge_id", "started_at", "evaluation_step",
+        "work_part_index", "work_part_count", "outcome",
+    ),
     "judgeHistoryQuery": (
         "date", "run_id", "attempt", "pairs_drawn", "pairs_returned",
         "sample_tp", "sample_fp", "sample_fn", "sample_tn", "score_psi",
@@ -220,6 +233,8 @@ def load_queries() -> tuple[QueryDeclaration, ...]:
 
 def row_columns() -> dict[str, tuple[str, ...]]:
     return {
+        "council-run-records": tuple(dict.fromkeys((*CouncilRunRecord.model_fields, *RowIdentity.model_fields))),
+        "gardener": tuple(CollectionPruneRow.model_fields),
         "run-shards": tuple(RunShards.model_fields),
         "item-health": ItemHealthRow.csv_columns(),
         "host-fingerprint": HostFingerprintRow.csv_columns(),
@@ -228,6 +243,32 @@ def row_columns() -> dict[str, tuple[str, ...]]:
         "threshold-history": (*StorySimilarityThresholdHistoryRow.model_fields, "attempt"),
         "pair-verdicts": (*StorySimilarityPairVerdict.model_fields, "attempt"),
     }
+
+
+def ts_literal(path: str, key: str) -> tuple[str, ...]:
+    literal = re.search(rf"const {key} = \[([^\]]+)\]", read_text(REPO_ROOT / path))
+    assert literal is not None
+    return tuple(re.findall(r"'([^']+)'", literal[1]))
+
+
+def test_console_run_reports_use_the_producers_vocabulary() -> None:
+    council = "frontend/src/lib/console/council-runs.ts"
+    gardener = "frontend/src/lib/console/pipelines/gardener-activity.ts"
+    assert ts_literal(council, "COUNCIL_STEPS") == tuple(EvaluationStep)
+    assert ts_literal(council, "COUNCIL_OUTCOMES") == tuple(ShardOutcome)
+    assert ts_literal(gardener, "GARDENER_STOPS") == tuple(StopReason)
+    assert ts_literal(gardener, "GARDENER_RECOVERIES") == tuple(RecoveryNote)
+
+
+def test_compact_write_and_recovery_projection_use_native_fields() -> None:
+    compact = ts_literal("frontend/src/lib/data/compact-write-footer.ts", "COMPACT_WRITE_FOOTER_KEYS")
+    identity = {"run_id", "attempt", "job", "shard", "producer"}
+    assert identity <= set(WriterIdentity.model_fields)
+    assert set(compact) == {"envelope_version", "tier", "ledger", "period", "covers", "written_at_ms", *identity}
+    assert set(compact) - identity - {"envelope_version"} <= set(FileEnvelope.model_fields)
+    recovery = ts_literal("frontend/src/lib/data/ledger.ts", "GARDENER_RECOVERY_COLUMNS")
+    assert set(recovery) == {"date", "run_id", "attempt", "job", "shard", "task", "recovered"}
+    assert set(recovery) <= set(CollectionPruneRow.model_fields)
 
 
 def test_judgement_reads_only_the_compact_diagnostic_fields_it_displays() -> None:

@@ -289,7 +289,7 @@ export async function readSlice(
 				keeper.warn(`${LOG_PREFIX} ${ledger}: ${message}`),
 				tokenHistory === undefined ? undefined : {
 					options: tokenHistory, complete: lostDays.length === 0 && Object.keys(setAside).length === 0
-				});
+				}, ledger === 'gardener' && request.columns.includes('recovered') ? 'recovered' : undefined);
 		} finally {
 			await held.done();
 		}

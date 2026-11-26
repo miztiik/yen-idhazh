@@ -49,9 +49,10 @@ test.describe('route-owned console configuration', () => {
 		const observations = ['judge-coverage', 'judge-score-ranges', 'pair-score-drift'];
 		expect(routes.judgement.panel_groups).toEqual([
 			{ id: 'judgement', title: 'Published grouping', panels: judgementPanels },
+			{ id: 'council-activity', title: 'Council activity', panels: ['council-runs'] },
 			{ id: 'judge-observations', title: 'Judge: Content Similarity', panels: observations }
 		]);
-		expect(routes.judgement.judged).toEqual([...judgementPanels, ...observations]);
+		expect(routes.judgement.judged).toEqual([...judgementPanels, 'council-runs', ...observations]);
 		const modelPanels = [
 			'model-cards', 'model-throughput', 'item-cost', 'call-ending',
 			'faithfulness',
@@ -65,11 +66,12 @@ test.describe('route-owned console configuration', () => {
 		expect(routes.model.judged).toEqual(modelPanels);
 		expect(routes.pipelines.panel_groups.map(({ id, title }) => ({ id, title }))).toEqual([
 			{ id: 'how-publishing-went', title: 'How publishing went' },
+			{ id: 'maintenance', title: 'Maintenance' },
 			{ id: 'where-the-time-went', title: 'Where the time went' },
 			{ id: 'what-reached-the-digest', title: 'What reached the digest' }
 		]);
 		expect(routes.pipelines.panel_groups.flatMap((group) => group.panels)).toEqual([
-			'at-a-glance', 'run-health', 'site-cost-per-item', 'failure-mix',
+			'at-a-glance', 'run-health', 'site-cost-per-item', 'failure-mix', 'gardener-activity',
 			'item-time-split', 'stage-timings', 'write-cost', 'tail-trend', 'run-timeline', 'slowest-articles',
 			'chart-drawing', 'visual-refusals', 'article-age'
 		]);

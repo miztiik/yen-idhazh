@@ -50,6 +50,19 @@ browser answers, not a stored ledger, export or explorer-origin read. The
 fixed historical bound, nullable warning rule and unavailable-history behavior.
 Ordinary `slice()` projection and its four states are unchanged.
 
+The Gardener panel also asks `compactWrites()` and `compactPeriod()` for dated
+file evidence. The door chooses named files from the staged, consented indexes
+and uses DuckDB to project the file footer, not a row's producer or date. It
+reserves monthly and yearly evidence before fitting the daily request to the
+existing file and byte limits; that preflight prices the full indexed length.
+Browser footer reads use the same keeper and require range registration; the
+door does not retry them as whole-file reads. The full-length cap still applies
+if the host answers an engine range with the entire file. An unreadable footer
+or an envelope without writer provenance cannot supply a write date. A separate
+bounded `gardenerRecoveries()`
+read returns the selected wake's native `recovered` list as JSON text so the
+scalar row reader keeps its contract.
+
 Everything else comes back as one of four answers, so a panel draws the right one
 of four nothings without inspecting an error:
 

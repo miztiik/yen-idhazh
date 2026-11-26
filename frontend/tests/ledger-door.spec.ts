@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -13,7 +13,7 @@ import { parseLedgerCatalog } from '../src/lib/data/ledger-catalog';
 import { readReach } from '../src/lib/data/ledger-reach';
 import { pageKeeper, type ByteSource, type EngineOpener, type PageKeeper, type WantedFile } from '../src/lib/data/page-keeper';
 import { daysBetween, filesFor, namesFile, newestFile, newestNamed } from '../src/lib/data/slice';
-import { cellOf, SliceValueError, statementFor } from '../src/lib/data/slice-query';
+import { cellOf, rowsFor, SliceValueError, statementFor } from '../src/lib/data/slice-query';
 import { dataPath as catalogDataPath, indexPath as catalogIndexPath, readSlice } from '../src/lib/data/slice-reader';
 import { checkedRequest, LEDGER_FAULTS, SliceRequestError, type LedgerName, type SliceOptions, type SliceResult } from '../src/lib/data/slice-shapes';
 import { engineExtensionRepository, explorerConfig } from '../src/lib/server/config';
@@ -23,6 +23,7 @@ import { readColumns } from '../src/lib/data/ledger-columns';
 import { configuredCatalog } from '../src/lib/data/configured-catalog';
 import { buildLedger, compactIndex } from './support/ledger-lifecycle';
 import { questionReader } from '../src/lib/data/question-reader';
+import { compactWriteReader } from '../src/lib/data/compact-file-writes';
 
 /**
  * THE ORACLE for the query door: a request is answered through exactly the
@@ -68,6 +69,66 @@ const MONTHLY_INDEX = indexPath(LEDGER, 'monthly');
 const YEARLY_INDEX = indexPath(LEDGER, 'yearly');
 const resolver = createRequire(import.meta.url);
 const locate = (specifier: string): string => resolver.resolve(specifier);
+
+test('compact evidence ranks the real footer clock, checks the file budget, and never opens an empty period', async () => {
+	const catalog = parseLedgerCatalog({ families: [{
+		name: LEDGER, lifecycle_status: 'active', description: 'Recorded hosts', onboarded: '2026-08-01',
+		ledgers: [{ name: LEDGER, grain: 'raw-and-compact', prefix: [LEDGER], publish_to_data_explorer: true }]
+	}] });
+	const source = recorded();
+	const engine = counted();
+	const keeper = pageKeeper(fetchedBytes(PREFIX, source.fetcher), engine.open, catalog);
+	try {
+		const reader = compactWriteReader(keeper, false);
+		const options = { days: 7, presets: [1, 7, 90], maxFiles: 1, maxBytes: 1_000_000 };
+		const { daily, monthly, yearly } = reader.activity(options);
+		expect(await monthly).toMatchObject({
+			period: 'monthly', candidates: 1, issues: [], writes: [{
+				ledger: LEDGER, period: 'monthly', covers: '2026-08', writtenAt: 1790620268518
+			}]
+		});
+		expect(await daily).toMatchObject({ period: 'daily', omitted: true, writes: [] });
+		expect(await yearly).toMatchObject({ period: 'yearly', candidates: 0, omitted: false, writes: [] });
+		expect(engine.registered).toHaveLength(1);
+		expect(await reader.period(LEDGER, 'daily', '2026-08-30', options)).toMatchObject({ state: 'coarser', period: 'monthly', covers: '2026-08' });
+	} finally { await keeper.release(); }
+	const year = recorded({}, YEAR_STATE);
+	const yearKeeper = pageKeeper(fetchedBytes(PREFIX, year.fetcher), engine.open, catalog);
+	try {
+		expect(await compactWriteReader(yearKeeper, false).period(LEDGER, 'yearly', '2026', {
+			maxFiles: 1, maxBytes: 1_000_000
+		})).toMatchObject({ state: 'packed', write: { covers: '2026', writtenAt: 1790770662854 } });
+	} finally { await yearKeeper.release(); }
+});
+
+test('range-only compact asks do not replace a missing range capability with whole files', async () => {
+	const engine = counted();
+	const source = recorded();
+	const keeper = pageKeeper(fetchedBytes(PREFIX, source.fetcher), engine.open, configuredCatalog);
+	try {
+		expect(await compactWriteReader(keeper, true).period(LEDGER, 'monthly', '2026-08', {
+			maxFiles: 1, maxBytes: 1_000_000
+		})).toMatchObject({ state: 'packed', write: null });
+		expect(source.asked.every(({ path }) => path.endsWith('.json'))).toBeTruthy();
+		expect(engine.registered).toEqual([]);
+	} finally { await keeper.release(); }
+});
+
+test('the recovery projection carries the native list as JSON using the scalar row door', async ({}, info) => {
+	const db = await nodeEngine(locate, engineExtensionRepository());
+	const output = info.outputPath('recovered.parquet');
+	const safeOutput = output.replaceAll('\\', '/').replaceAll("'", "''");
+	mkdirSync(path.dirname(output), { recursive: true });
+	await db.rows(`COPY (SELECT '2026-11-15' AS "date", [{'note': 'reopened-month', 'subject': '2026-09'}] AS recovered)
+		TO '${safeOutput}' (FORMAT PARQUET)`, []);
+	const file = await db.register(new Uint8Array(readFileSync(output)));
+	try {
+		const span = { from: '2026-11-15', to: '2026-11-15', columns: ['recovered'], where: [] };
+		expect(await rowsFor(db, [file], span, span.to, () => {}, undefined, 'recovered')).toEqual([
+			{ recovered: '[{"note":"reopened-month","subject":"2026-09"}]' }
+		]);
+	} finally { await db.drop([file]); }
+});
 
 test('native SQL discovery, not saved hints, selects consented compact dependencies', async () => {
 	const response = recorded();

@@ -9,6 +9,11 @@
       ]
     },
     {
+      "id": "council-activity",
+      "title": "Council activity",
+      "panels": ["council-runs"]
+    },
+    {
       "id": "judge-observations",
       "title": "Judge: Content Similarity",
       "panels": [
@@ -21,6 +26,7 @@
   "judged": [
     "merged-stories",
     "holdout-margin",
+    "council-runs",
     "judge-coverage",
     "judge-score-ranges",
     "pair-score-drift"

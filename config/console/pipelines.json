@@ -11,6 +11,11 @@
       ]
     },
     {
+      "id": "maintenance",
+      "title": "Maintenance",
+      "panels": ["gardener-activity"]
+    },
+    {
       "id": "where-the-time-went",
       "title": "Where the time went",
       "panels": [
@@ -33,7 +38,7 @@
     }
   ],
   "judged": [
-    "at-a-glance", "run-health", "site-cost-per-item", "failure-mix", "item-time-split",
+    "at-a-glance", "run-health", "site-cost-per-item", "failure-mix", "gardener-activity", "item-time-split",
     "stage-timings", "write-cost", "tail-trend", "run-timeline", "slowest-articles", "chart-drawing", "visual-refusals", "article-age"
   ],
   "knobs": {}

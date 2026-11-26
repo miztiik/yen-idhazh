@@ -111,11 +111,13 @@ export function statementFor(
 	files: string,
 	present: ReadonlySet<string>,
 	request: Required<SliceOptions>,
-	until: DateStamp
+	until: DateStamp,
+	jsonColumn?: 'recovered'
 ): { sql: string; params: Bound[] } {
 	const params: Bound[] = [request.from, until];
 	const select = request.columns
-		.map((column) => (present.has(column) ? quoted(column) : `NULL AS ${quoted(column)}`))
+		.map((column) => !present.has(column) ? `NULL AS ${quoted(column)}`
+			: column === jsonColumn ? `CAST(to_json(${quoted(column)}) AS VARCHAR) AS ${quoted(column)}` : quoted(column))
 		.join(', ');
 	const placed = dayColumn(present);
 	const day = placed === null ? 'NULL' : quoted(placed);
@@ -147,7 +149,8 @@ export async function rowsFor(
 	request: Required<SliceOptions>,
 	until: DateStamp,
 	warn: (message: string) => void,
-	tokenHistory?: { options: TokenDeviationOptions; complete: boolean }
+	tokenHistory?: { options: TokenDeviationOptions; complete: boolean },
+	jsonColumn?: 'recovered'
 ): Promise<Row[]> {
 	const files = listOf(names);
 	const described = await engine.rows(`DESCRIBE SELECT * FROM ${source(files)}`, []);
@@ -159,7 +162,7 @@ export async function rowsFor(
 	if (dayColumn(present) === null) {
 		warn(`no file in this span holds the column ${DATE_COLUMN} or ${FILED_DAY_COLUMN}, so no row is placed in the span`);
 	}
-	const sourceQuery = statementFor(files, present, request, until);
+	const sourceQuery = statementFor(files, present, request, until, jsonColumn);
 	const { sql, params } = tokenHistory === undefined ? sourceQuery
 		: tokenDeviationStatement(sourceQuery, tokenHistory.options, tokenHistory.complete);
 	const raw = await engine.rows(sql, params);

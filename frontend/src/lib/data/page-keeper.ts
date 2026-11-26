@@ -104,7 +104,7 @@ export interface PageKeeper {
 	 *  what this keeper does not hold yet, and opening a file it reads by byte
 	 *  range for this call alone. Rejects when the engine cannot start or cannot
 	 *  take a file. */
-	hold(files: readonly WantedFile[]): Promise<Holding>;
+	hold(files: readonly WantedFile[], rangeOnly?: boolean): Promise<Holding>;
 	/** Drops every file this keeper keeps registered. A build-time call does this when it ends; the Data explorer page also does it when Refresh starts afresh. */
 	release(): Promise<void>;
 	/** Whole-file bytes this keeper currently holds in the engine. Byte-range files are not kept. */
@@ -224,11 +224,18 @@ export function pageKeeper(source: ByteSource, openEngine: EngineOpener, catalog
 		return { registration: handOver(engine, key, arrival.bytes), fetched: true };
 	}
 
-	async function hold(files: readonly WantedFile[]): Promise<Holding> {
+	async function hold(files: readonly WantedFile[], rangeOnly = false): Promise<Holding> {
 		const keys = files.map((file) => `${file.path}?v=${file.version}`);
 		const addresses = files.map((file) =>
 			file.byRange && source.address !== undefined ? source.address(file.path, file.version) : null
 		);
+		const unavailable = (failed: number): Holding => ({
+			failed, shortfall: { reason: 'fetch', error: new Error('The compact footer requires a byte-range source.') }
+		});
+		if (rangeOnly) {
+			const missing = addresses.indexOf(null);
+			if (missing !== -1) return unavailable(missing);
+		}
 		const starting = openEngine();
 		void starting.catch(() => undefined);
 		const arriving = files.map((file, at) =>
@@ -240,11 +247,12 @@ export function pageKeeper(source: ByteSource, openEngine: EngineOpener, catalog
 			const failed = arrived.findIndex((one) => one !== null && 'reason' in one);
 			if (failed !== -1) return { failed, shortfall: arrived[failed] as FileShortfall };
 			const engine = await starting;
+			if (rangeOnly && files.length > 0 && engine.registerAddress === undefined) return unavailable(0);
 			registeredWith = engine;
 			// A file the engine opens at an address is this call's alone: never kept, and dropped by `done`.
 			const opening = files.map((file, at) => {
 				const address = addresses[at];
-				return address !== null && engine.registerAddress !== undefined && !names.has(keys[at])
+				return address !== null && engine.registerAddress !== undefined && (rangeOnly || !names.has(keys[at]))
 					? openAt(engine, file, address)
 					: null;
 			});

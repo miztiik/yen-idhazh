@@ -53,6 +53,7 @@ from idhazh.assemble import (
 from idhazh.atomic_write import write_atomic
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import Contract, ServerJob, derive_url_key, normalize_prose
+from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason
 from idhazh.contracts.council_run_record import CouncilRunRecord
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.digest_day import (
@@ -1690,6 +1691,27 @@ def file_published_fixture_rows(state: Path) -> dict[LedgerName, int]:
     url = "https://canary.example.com/published-ledger"
     url_key = derive_url_key(url)
     rows: dict[LedgerName, list[Contract]] = {
+        LedgerName.GARDENER: [
+            CollectionPruneRow(
+                version=CollectionPruneRow.schema_version(),
+                date=DATE,
+                task="workflow-artifacts",
+                run_id=SCORE_RUN_ID,
+                attempt=SCORE_ATTEMPT,
+                job=ServerJob.RUN_TASKS,
+                shard=SCORE_SHARD,
+                until=YESTERDAY,
+                max_deletes_per_run=2,
+                dry_run=True,
+                candidates_seen=3,
+                selected=2,
+                deleted=2,
+                bytes_freed=512,
+                stopped_because=StopReason.EXHAUSTED,
+                duration_ms=50,
+                work_ended_at=f"{DATE}T08:12:00Z",
+            )
+        ],
         LedgerName.COUNCIL_RUN_RECORDS: [
             CouncilRunRecord.model_validate(
                 CouncilRunRecord.read(
@@ -1740,19 +1762,20 @@ def file_published_fixture_rows(state: Path) -> dict[LedgerName, int]:
         ledger_rows = rows.get(which)
         if ledger_rows is None:
             continue
+        identity = _fixture_writer(SCORE_RUN_ID)
+        if which is LedgerName.COUNCIL_RUN_RECORDS:
+            identity = identity.model_copy(update={
+                "job": ServerJob.SAVE_COUNCIL_RESULTS,
+                "producer": "council.session",
+            })
+        elif which is LedgerName.GARDENER:
+            identity = identity.model_copy(update={"job": ServerJob.RUN_TASKS})
         ledger.persist(
             state,
             ledger_rows,
             ledger=which,
             covers=DATE,
-            identity=(
-                _fixture_writer(SCORE_RUN_ID).model_copy(update={
-                    "job": ServerJob.SAVE_COUNCIL_RESULTS,
-                    "producer": "council.session",
-                })
-                if which is LedgerName.COUNCIL_RUN_RECORDS
-                else _fixture_writer(SCORE_RUN_ID)
-            ),
+            identity=identity,
         )
         filed[which] = len(ledger_rows)
     return filed

@@ -29,7 +29,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'theme.ts', 'viewport.ts'
 	],
 	'src/lib/charts/d3': [
-		'axis.ts', 'DateSeries.svelte', 'dateSeries.ts', 'DiagnosticGrid.svelte', 'diagnosticGrid.ts', 'Distribution.svelte', 'distribution.ts',
+		'axis.ts', 'DateSeries.svelte', 'DateTileGrid.svelte', 'dateSeries.ts', 'DiagnosticGrid.svelte', 'diagnosticGrid.ts', 'Distribution.svelte', 'distribution.ts',
 		'empty.ts', 'EmptyState.svelte', 'Flow.svelte', 'flow.ts', 'model-rule.ts', 'motion.ts', 'ordered-colour.ts',
 		'overlapTimeline.ts', 'paired.ts', 'PairedScatter.svelte', 'pairedScatter.ts',
 		'PartsOfOne.svelte', 'partsOfOne.ts', 'PrecisionRecall.svelte', 'precisionRecall.ts', 'rankedList.ts',
@@ -51,7 +51,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'WindowControl.svelte', 'WindowControlSource.svelte', 'WindowCoverage.svelte', 'WindowStatus.svelte'
 	],
 	'src/lib/console': [
-		'band.ts', 'chrome.ts', 'completeness.ts', 'console-style.ts', 'daily-figures.ts',
+		'band.ts', 'chrome.ts', 'completeness.ts', 'console-style.ts', 'council-runs.ts', 'daily-figures.ts',
 		'duration-cohort.ts', 'eval-instruments.ts', 'failure-rules.ts',
 		'holdout.ts', 'judge-canaries.ts', 'judge-cutoff-evidence.ts', 'judge-draw.ts', 'judge-observations.ts', 'judge-pair-evidence.ts',
 		'judge-score-pool.ts', 'judge-trial-read.svelte.ts', 'judgement-evidence.ts', 'merged-stories.ts', 'model-cards.ts',
@@ -61,11 +61,11 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	'src/lib/console/queries': ['judgement.ts', 'machine.ts', 'model.ts', 'pipelines.ts', 'shared.ts', 'voices.ts', 'window.ts'],
 	'src/lib/console/pipelines': [
 		'ArticleAge.svelte', 'AtAGlance.svelte', 'ChartDrawing.svelte',
-		'FailureMix.svelte', 'ItemTimeSplit.svelte', 'RunHealth.svelte',
+		'FailureMix.svelte', 'GardenerActivity.svelte', 'GardenerTaskReports.svelte', 'ItemTimeSplit.svelte', 'RunHealth.svelte',
 		'RunTimeline.svelte', 'SlowestArticles.svelte', 'SiteCostPerItem.svelte', 'TailTrendPanel.svelte', 'StageTimings.svelte',
 		'VisualRefusals.svelte',
 		'article-age.ts', 'at-a-glance.ts', 'attempt-notes.ts', 'chart-drawing.ts', 'drawing-flow.ts', 'failure-mix.ts',
-		'item-time-split.ts', 'query-groups.ts', 'record-window.ts', 'run-health.ts', 'slowest-articles.ts',
+		'gardener-activity.ts', 'item-time-split.ts', 'query-groups.ts', 'record-window.ts', 'run-health.ts', 'slowest-articles.ts',
 		'run-timeline.ts', 'site-cost-per-item.ts', 'stage-timings.ts', 'visual-attempts.ts', 'visual-refusals.ts'
 	],
 	'src/lib/console/model': [
@@ -95,7 +95,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'query-groups.ts', 'refused-runs.ts', 'run-axis.ts', 'ReadWritePanel.svelte', 'SlowerOnSameWork.svelte', 'slower-on-same-work.ts'
 	],
 	'src/lib/data': [
-		'ask-reader.ts', 'compact-index.ts', 'configured-catalog.ts', 'engine.ts', 'fetched-bytes.ts', 'host-fingerprint.ts', 'ledger-catalog.ts', 'ledger-columns.ts',
+		'ask-reader.ts', 'compact-file-writes.ts', 'compact-index.ts', 'compact-write-footer.ts', 'configured-catalog.ts', 'engine.ts', 'fetched-bytes.ts', 'host-fingerprint.ts', 'ledger-catalog.ts', 'ledger-columns.ts',
 		'ledger-reach.ts', 'ledger.ts', 'page-keeper.ts', 'read-session.ts', 'site-window.ts',
 		'slice-query.ts', 'slice-reader.ts', 'slice-shapes.ts', 'slice.ts', 'statement.ts'
 	],
@@ -114,7 +114,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 	],
 	'src/routes/console/data-explorer': ['+page.svelte', '+page.ts'],
 	'src/routes/console/judgement': [
-		'+page.server.ts', '+page.svelte', 'HoldoutMargin.svelte', 'MergedStoriesPanel.svelte',
+		'+page.server.ts', '+page.svelte', 'CouncilRunsPanel.svelte', 'HoldoutMargin.svelte', 'MergedStoriesPanel.svelte',
 		'JudgeObservations.svelte', 'JudgeCanaryChart.svelte', 'JudgeCanaryDetails.svelte', 'JudgeCoverage.svelte', 'JudgeDigestDetails.svelte',
 		'JudgeScoreRanges.svelte', 'JudgeSliceChart.svelte',
 		'JudgeCutoffDiagnostics.svelte', 'JudgeDrawIntervals.svelte', 'JudgePairEvidence.svelte', 'JudgePercentStacks.svelte',
