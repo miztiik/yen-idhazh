@@ -9,7 +9,8 @@
     {"bytes": 35132,"covers": "2026-11-20","rows": 1},
     {"bytes": 55986,"covers": "2026-11-21","rows": 1},
     {"bytes": 59869,"covers": "2026-11-22","rows": 1},
-    {"bytes": 61123,"covers": "2026-11-23","rows": 1}
+    {"bytes": 61123,"covers": "2026-11-23","rows": 1},
+    {"bytes": 62650,"covers": "2026-11-24","rows": 1}
   ],
   "ledger": "threshold-history",
   "period": "daily",

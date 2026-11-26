@@ -54,7 +54,8 @@
     {"bytes": 13135,"covers": "2026-11-20","rows": 32},
     {"bytes": 13346,"covers": "2026-11-21","rows": 32},
     {"bytes": 13339,"covers": "2026-11-22","rows": 32},
-    {"bytes": 13138,"covers": "2026-11-23","rows": 32}
+    {"bytes": 13138,"covers": "2026-11-23","rows": 32},
+    {"bytes": 13148,"covers": "2026-11-24","rows": 32}
   ],
   "ledger": "gardener",
   "period": "daily",
