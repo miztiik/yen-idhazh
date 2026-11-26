@@ -32,6 +32,7 @@ from idhazh.contracts.base import DateStamp, RunId, ServerJob
 from idhazh.contracts.council_events import NightPlanned, RowsCollected, UnitFinished
 from idhazh.contracts.council_invocation import (
     ArtifactFile,
+    Cell,
     PreparationReceipt,
     ShardFiles,
     ShardReport,
@@ -42,9 +43,9 @@ from idhazh.contracts.council_run_record import (
     ShardOutcome,
 )
 from idhazh.contracts.file_envelope import WriterIdentity
-from idhazh.contracts.knobs.council import CouncilConfig
+from idhazh.contracts.knobs.council import CouncilConfig, CouncilTask
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.council import event_log, metrics_sink, outcome, trial_paths, work_files
+from idhazh.council import event_log, metrics_sink, outcome, performance, trial_paths, work_files
 from idhazh.council.deadline import run_shard_under_the_clock
 from idhazh.council.registry import VENUE_LEDGERS as VENUE_LEDGERS
 from idhazh.council.registry import tenant, tenants
@@ -211,6 +212,8 @@ def prepare(
     # Resolve every declaration before the first plugin does work.
     hosted = tenants(selected.names(), council=council, trials=selected.trials)
     _check_widths(council, selected, hosted)
+    runner = performance.selected_runner(COUNCIL_ROOT, performance.Phase.DRAW, selected)
+    recording = runner.recording(config.REPO_ROOT)
     results: list[ShardResult] = []
     for host in hosted:
         own = next(judge for judge in selected.judges if judge.tenant == host.judge_id)
@@ -240,15 +243,19 @@ def prepare(
                     return result
 
                 try:
-                    result = _recorded(
-                        host.judge_id,
-                        date=day,
-                        run_id=run_id,
-                        evaluation_step=EvaluationStep.SELECT_JUDGE_WORK,
-                        work_part_index=None,
-                        work_part_count=own.shards,
-                        work=work,
-                    )
+                    with performance.profile(
+                        runner, recording, selected, CouncilTask.PREPARE, host.judge_id, day,
+                    ) as observation:
+                        result = _recorded(
+                            host.judge_id,
+                            date=day,
+                            run_id=run_id,
+                            evaluation_step=EvaluationStep.SELECT_JUDGE_WORK,
+                            work_part_index=None,
+                            work_part_count=own.shards,
+                            work=work,
+                        )
+                        performance.complete(observation, result)
                 except BaseException as error:
                     if work_files.fatal(error):
                         raise
@@ -348,6 +355,8 @@ def settle(
         hosted,
     )
     active = tuple(host for host in hosted if _trial_root(selection, host.judge_id, run_id) is None)
+    runner = performance.selected_runner(COUNCIL_ROOT, performance.Phase.SETTLE, selection)
+    recording = runner.recording(state_dir.parent)
     results: list[ShardResult] = []
     failures: list[Exception] = []
     for host in hosted:
@@ -371,8 +380,10 @@ def settle(
                     if reports is not None
                     else _reports(selection, host.judge_id, date, prepared.shards)
                 )
-                results.append(
-                    _recorded(
+                with performance.profile(
+                    runner, recording, selection, CouncilTask.SETTLE, host.judge_id, date,
+                ) as observation:
+                    result = _recorded(
                         host.judge_id,
                         date=date,
                         run_id=run_id,
@@ -389,7 +400,8 @@ def settle(
                             reports=normalized,
                         ),
                     )
-                )
+                    performance.complete(observation, result)
+                results.append(result)
             except Exception as error:
                 if work_files.fatal(error):
                     raise
@@ -459,28 +471,42 @@ def run_shard(
         shards=shards,
         selection=selection,
     )
+    runner = performance.selected_runner(
+        COUNCIL_ROOT, performance.Phase.JUDGE, selection,
+        cell=Cell(
+            tenant=slug, date=date, shard=shard, shards=shards,
+            runs_model=council.declaration(slug).runs_model,
+        ),
+    )
+    recording = runner.recording(config.REPO_ROOT)
     with _route(selection, slug):
         bundle = f"shard-{slug}-{date}-{shard}"
         try:
-            result = _recorded(
-                host.judge_id,
-                date=date,
-                run_id=run_id,
-                evaluation_step=EvaluationStep.EVALUATE_WORK_PART,
-                work_part_index=shard,
-                work_part_count=shards,
-                work=partial(
-                    run_shard_under_the_clock,
-                    host,
+            with performance.profile(
+                runner, recording, selection, CouncilTask.JUDGE, slug, date,
+            ) as observation:
+                # The costs come back from the tenant, including on its deadline.
+                observation.facts.update(task_kind="judge", subject_id=slug)
+                result = _recorded(
+                    host.judge_id,
                     date=date,
                     run_id=run_id,
-                    shard=shard,
-                    shards=shards,
-                    council=council,
-                    started=started,
-                    prepared=prepared,
-                ),
-            )
+                    evaluation_step=EvaluationStep.EVALUATE_WORK_PART,
+                    work_part_index=shard,
+                    work_part_count=shards,
+                    work=partial(
+                        run_shard_under_the_clock,
+                        host,
+                        date=date,
+                        run_id=run_id,
+                        shard=shard,
+                        shards=shards,
+                        council=council,
+                        started=started,
+                        prepared=prepared,
+                    ),
+                )
+                performance.complete(observation, result, judge=slug)
         finally:
             if work_files.record_path(COUNCIL_ROOT, selection, slug, date, shard).is_file():
                 _export_record(selection, slug, date, str(shard), bundle)

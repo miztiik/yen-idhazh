@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
+from support.native_performance import Batch, write_batches
 from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh import config, ledger
@@ -36,10 +37,12 @@ from idhazh.contracts.knobs.gardener import TaskKind
 from idhazh.contracts.ledger_index import CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.ledgers import LedgerLifecycleStatus, LedgersConfig
-from idhazh.gardener import event_log, report, runner
+from idhazh.contracts.task_performance import TaskPerformanceRow
+from idhazh.gardener import event_log, performance, report, runner, tasks
 from idhazh.gardener.outcome import EXIT_INTEGRITY, EXIT_OK, EXIT_TASK_FAILED, Outcome
 from idhazh.ledger import paths
 from utilities import gardener_publish
+from utilities.publication_git import Repository
 
 from ._events import events, the_event
 from ._garden import (
@@ -162,6 +165,74 @@ def test_a_shard_runs_its_tasks_writes_one_record_and_lands_it(
     assert all(row.job is ServerJob.RUN_TASKS for row in rows.values())
     assert {(row.run_id, row.attempt, row.shard) for row in rows.values()} == {(RUN_ID, 1, 0)}
     assert {row.work_ended_at for row in rows.values()} == {"2026-09-27T00:40:00Z"}
+
+
+def test_task_performance_compaction_lands_its_own_receipt_only_after_the_pass(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    quiet_git(tmp_path, monkeypatch)
+    monkeypatch.setenv("IDHAZH_HOST_TELEMETRY_MODE", "off")
+    origin, repo = an_origin(tmp_path, {"seed": "seed\n"})
+    name = "compact-task-performance"
+    chosen = LedgerName.TASK_PERFORMANCE
+    root = a_config(repo, CONFIG_DIR / "gardener" / f"{name}.json")
+    settings = config.load_gardener(root)
+    source = git(repo, "rev-parse", "HEAD").strip()
+    day = "2026-09-27"
+    execution = WriterIdentity(
+        run_id=RUN_ID, attempt=1, shard=0, job=ServerJob.RUN_TASKS,
+        producer=runner.PRODUCER, git_sha=source,
+    )
+    private = tmp_path / "machine"
+    old, own, foreign = write_batches((Batch(private, (
+        (performance.task_file(execution, "old-work"), {"elapsed_ms": 5}, private),
+        (performance.task_file(execution, name), {"elapsed_ms": 11}, private),
+        (performance.task_file(execution, "other-work"), {"elapsed_ms": 7}, private),
+    )),))
+    old.place(repo)
+    git(repo, "add", "--", old.path)
+    git(repo, "-c", "user.name=Seed", "-c", "user.email=seed@example.invalid",
+        "commit", "-m", "Seed one eligible raw row")
+    git(repo, "push", "origin", "HEAD:main")
+
+    # A newer wake may pack this date. If the private row were visible to the
+    # pass, it could accidentally be consumed along with the existing raw.
+    wake = datetime(2026, 10, 1, tzinfo=UTC)
+    outcome = runner.run(
+        (name,), settings=settings, repo_root=repo, run_id=RUN_ID, attempt=1, shard=0,
+        git_sha=source, committed_folders=None, cone_bytes=None, listing=None, package=tasks,
+        period_range=(day[:7], day[:7]), clock=lambda: wake,
+    )
+    assert outcome.exit_code == 0 and outcome.landing is not None
+    compacted = ledger.compact_file(repo / "state", chosen, Period.DAILY, day)
+    assert compacted is not None
+    assert [row.task_name for row in ledger.load([compacted], model=TaskPerformanceRow)] == [
+        "old-work",
+    ]
+    assert own.path not in outcome.landing.written_paths | outcome.landing.deleted_paths
+    assert not (repo / own.path).exists()
+    before = git(origin, "rev-parse", "main")
+    permissions = tuple(outcome.landing.owned_prefixes)
+    (private / own.path).write_bytes(own.data + b"foreign bytes")
+    assert gardener_publish.publish(
+        outcome.landing, attempts=1, repo=repo, identity=execution,
+        write_permissions=permissions, delete_permissions=settings.tasks[name].owns,
+        performance_root=private,
+    ).exit_code == EXIT_INTEGRITY
+    assert git(origin, "rev-parse", "main") == before
+    assert not (repo / own.path).exists()
+    (private / own.path).write_bytes(own.data)
+    assert gardener_publish.publish(
+        outcome.landing, attempts=1, repo=repo, identity=execution,
+        write_permissions=permissions, delete_permissions=settings.tasks[name].owns,
+        performance_root=private,
+    ).exit_code == EXIT_OK
+    remote = Repository(origin, git_dir=origin)
+    entry = remote.entry("main", own.path)
+    assert entry is not None and remote.blob(entry.oid) == own.data
+    assert remote.entry("main", old.path) is None
+    assert remote.entry("main", foreign.path) is None
+    assert not (repo / own.path).exists()
 
 
 def test_the_runner_writes_the_record_and_hands_back_what_to_land_without_pushing(

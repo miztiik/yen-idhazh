@@ -33,9 +33,9 @@ from enum import StrEnum
 from pathlib import PurePosixPath
 from typing import Annotated, Final, Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, TypeAdapter, field_validator, model_validator
 
-from idhazh.contracts.base import DateStamp, Model, RelPath, Slug, YearStamp
+from idhazh.contracts.base import DateStamp, Model, RelPath, Slug, TaskName, YearStamp
 from idhazh.contracts.ledger_name import LedgerName
 
 
@@ -81,7 +81,7 @@ class GardenerConfig(Model):
         description=(
             "The complete configured task-name list. Declaration readers open only these "
             "named files and never discover tasks by listing the config directory."
-        )
+        ),
     )
     attempts: int = Field(
         ge=1,
@@ -119,6 +119,11 @@ class GardenerConfig(Model):
             "year folders it names. No ledger holds a row from before it."
         ),
     )
+
+    @field_validator("task_names")
+    @classmethod
+    def _admit_task_names(cls, names: tuple[str, ...]) -> tuple[str, ...]:
+        return TypeAdapter(tuple[TaskName, ...]).validate_python(names)
 
     @model_validator(mode="after")
     def _the_last_shard_has_a_try_left(self) -> Self:

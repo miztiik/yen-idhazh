@@ -88,6 +88,7 @@ import os
 import subprocess
 import sys
 from collections.abc import Callable, Iterable, Sequence
+from contextlib import ExitStack
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path, PurePosixPath
@@ -107,8 +108,16 @@ from idhazh.contracts.gardener_events import (
 from idhazh.contracts.knobs.gardener import GardenerConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.shard_landing import ShardLanding
+from idhazh.contracts.task_performance import TaskPerformanceRow
 from idhazh.gardener import cli as gardener_cli
-from idhazh.gardener import event_log, github_collections, ownership, run_summary, runner
+from idhazh.gardener import (
+    event_log,
+    github_collections,
+    ownership,
+    performance,
+    run_summary,
+    runner,
+)
 from idhazh.gardener import tasks as shipped_tasks
 from idhazh.gardener.file_listing import (
     FileListing,
@@ -131,9 +140,18 @@ from idhazh.gardener.period_inputs import paths_for_task, scheduled_range
 from idhazh.ledger import paths as ledger_paths
 from idhazh.ledger import staging
 from idhazh.site_weight import BYTES_PER_MB
+from idhazh.telemetry import machine_api
+from idhazh.telemetry.host_control import enabled as telemetry_enabled
 from utilities.publication_git import Repository
-from utilities.publication_request import Delete, IntegrityError, PublicationRequest, Write
-from utilities.publish_to_repo import Status
+from utilities.publication_request import (
+    Delete,
+    IntegrityError,
+    PublicationRequest,
+    Write,
+    contains,
+    safe_file,
+)
+from utilities.publish_to_repo import PublicationResult, Status
 from utilities.publish_to_repo import publish as publish_request
 from utilities.push_retry import DEFAULT_CONFIG, load_retry
 
@@ -311,6 +329,7 @@ def publish(
     write_permissions: tuple[str, ...],
     delete_permissions: tuple[str, ...],
     say: Callable[[str], None] = print,
+    performance_root: Path | None = None,
 ) -> PushOutcome:
     """Apply independently declared ownership through the shared publisher."""
     outside = sorted(
@@ -323,45 +342,11 @@ def publish(
         return PushOutcome(exit_code=EXIT_INTEGRITY)
     git = Repository(repo)
     try:
-        refused = _refuse_a_directory(shard, repo)
-        if refused is not None:
-            raise IntegrityError(refused)
-        source = (
-            identity.git_sha if planner_input_folders(shard.owned_prefixes)
-            else git.git("rev-parse", "HEAD").strip()
-        )
-        git.prime(source, set(shard.written_paths) | set(shard.deleted_paths))
-        writes = {
-            path: Write(
-                hashlib.sha256((repo / path).read_bytes()).hexdigest(),
-                git.entry(source, path),
-                path == shard.record_path,
+        with ExitStack() as cleanup:
+            result = _publish_operations(
+                shard, git, identity, write_permissions, delete_permissions,
+                performance_root=performance_root, attempts=attempts, cleanup=cleanup,
             )
-            for path in shard.written_paths
-        }
-        deletions: dict[str, Delete] = {}
-        for path in shard.deleted_paths:
-            baseline = git.entry(source, path)
-            if baseline is None:
-                raise IntegrityError("deletion was not listed in the source", (path,))
-            deletions[path] = Delete(baseline, not (repo / path).exists())
-        request = PublicationRequest(
-            identity,
-            shard.message,
-            source,
-            write_permissions,
-            delete_permissions,
-            writes,
-            deletions,
-        )
-        result = publish_request(
-            request,
-            repo=repo,
-            retry=load_retry(repo / DEFAULT_CONFIG)
-            if (repo / DEFAULT_CONFIG).is_file()
-            else load_retry(Path(__file__).resolve().parents[2] / DEFAULT_CONFIG),
-            max_pushes=attempts,
-        )
     except (OSError, ValueError, RuntimeError) as error:
         say(f"shard {shard.index}: {error}")
         return PushOutcome(EXIT_INTEGRITY)
@@ -387,6 +372,82 @@ def publish(
         landing,
         max(1, result.push_count) if landing is not None else None,
         result.refusal_paths if result.status is Status.STALE else (),
+    )
+
+
+def _publish_operations(
+    shard: Shard, git: Repository, identity: WriterIdentity,
+    write_permissions: tuple[str, ...], delete_permissions: tuple[str, ...], *,
+    performance_root: Path | None, attempts: int, cleanup: ExitStack,
+) -> PublicationResult:
+    repo = git.repo
+    refused = _refuse_a_directory(shard, repo)
+    if refused is not None:
+        raise IntegrityError(refused)
+    source = (
+        identity.git_sha if planner_input_folders(shard.owned_prefixes)
+        else git.git("rev-parse", "HEAD").strip()
+    )
+    operations = shard.written_paths | shard.deleted_paths
+    extra: dict[str, str] = {}
+    if performance_root is not None:
+        if identity.job != ServerJob.RUN_TASKS or identity.shard != shard.index:
+            raise IntegrityError("Task Performance does not belong to this gardener shard")
+        scope = performance.append_scope(identity)
+        opening, proofs = performance.append_evidence(performance_root, identity, shard.task_names)
+        if any(
+            isinstance(proof.row, TaskPerformanceRow) and proof.row.host_unit_id is not None
+            for proof in proofs
+        ):
+            if opening is None or opening.path not in shard.written_paths:
+                raise IntegrityError("Task Performance opening is not a shard write")
+            if safe_file(repo, opening.path, exists=True).read_bytes() != opening.data:
+                raise IntegrityError("gardener opening fingerprint bytes changed", (opening.path,))
+        for proof in proofs:
+            if proof.path in operations or proof.path in extra or not contains(scope, proof.path):
+                raise IntegrityError(
+                    "Task Performance overlaps or exceeds its append scope", (proof.path,),
+                )
+            created = proof.place(repo)
+            if created is not None:
+                cleanup.callback(created.unlink, missing_ok=True)
+            extra[proof.path] = proof.sha256
+        if extra:
+            write_permissions = (*write_permissions, scope)
+    git.prime(source, set(operations) | set(extra))
+    writes = {
+        path: Write(
+            hashlib.sha256(safe_file(repo, path, exists=True).read_bytes()).hexdigest(),
+            git.entry(source, path),
+            path == shard.record_path,
+        )
+        for path in shard.written_paths
+    }
+    writes.update({
+        path: Write(digest, git.entry(source, path), True) for path, digest in extra.items()
+    })
+    deletions: dict[str, Delete] = {}
+    for path in shard.deleted_paths:
+        baseline = git.entry(source, path)
+        if baseline is None:
+            raise IntegrityError("deletion was not listed in the source", (path,))
+        deletions[path] = Delete(baseline, not (repo / path).exists())
+    request = PublicationRequest(
+        identity,
+        shard.message,
+        source,
+        write_permissions,
+        delete_permissions,
+        writes,
+        deletions,
+    )
+    return publish_request(
+        request,
+        repo=repo,
+        retry=load_retry(repo / DEFAULT_CONFIG)
+        if (repo / DEFAULT_CONFIG).is_file()
+        else load_retry(Path(__file__).resolve().parents[2] / DEFAULT_CONFIG),
+        max_pushes=attempts,
     )
 
 
@@ -730,6 +791,8 @@ def _run_and_land(
         say=say,
     )
     if ran.landing is None:
+        if telemetry_enabled(settings.app.observability):
+            machine_api.warn(f"gardener shard {shard} refused before any measurement could land")
         return ran, run.published(ran.exit_code, ran=ran, stopped=ShardStop.CHECK_REFUSED)
     unlisted_deletions = sorted(ran.landing.deleted_paths - listing.listed())
     if unlisted_deletions:
@@ -769,6 +832,7 @@ def _run_and_land(
             )
         ),
         delete_permissions=tuple(owned),
+        performance_root=ran.performance_root,
     )
     code = worst(ran.exit_code, pushed.exit_code)
     stopped = None if pushed.landing is not None else ShardStop.CHECK_REFUSED

@@ -3,9 +3,15 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
-from collections.abc import Mapping
+import sys
+from asyncio import CancelledError
+from collections.abc import Callable, Iterator, Mapping
+from contextlib import contextmanager
+from dataclasses import dataclass, field
 from http.client import HTTPConnection, HTTPException
+from pathlib import Path
 from typing import Annotated, Literal
 from urllib.parse import urlsplit
 from uuid import UUID
@@ -15,6 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 from idhazh.contracts.base import DateStamp, Model, PipelineName, RelPath, RunId, Sha256, TaskName
 from idhazh.contracts.file_envelope import UnitId, WriterIdentity
 from idhazh.contracts.task_performance import TaskPerformanceOutcome, TaskPerformanceRow
+from idhazh.publication_paths import IntegrityError, relative, safe_file
 from idhazh.telemetry.host import process_start_ticks
 
 ORIGIN_ENV = "IDHAZH_MACHINE_API_ORIGIN"
@@ -23,6 +30,7 @@ _START = "/api/2026-11-05/start-task-profile"
 _STOP = "/api/2026-11-05/stop-task-profile"
 RECORD_PATH = "/api/2026-11-26/record-task-performance"
 PRODUCER = "host-probes"
+LOG = logging.getLogger(__name__)
 
 
 class RecordedFile(Model):
@@ -117,6 +125,12 @@ class MachineApiError(RuntimeError):
     """A measurement command failed, without changing the measured task's outcome."""
 
 
+@dataclass(slots=True)
+class TaskClose:
+    outcome: TaskPerformanceOutcome = "success"
+    facts: dict[str, object] = field(default_factory=dict)
+
+
 class MachineApi:
     def __init__(self, origin: str, *, timeout_ms: int, max_response_bytes: int) -> None:
         address = urlsplit(origin)
@@ -188,6 +202,60 @@ class MachineApi:
     ) -> Written | NotWritten:
         request = record_request(date=date, identity=identity, measurement=measurement)
         return RESPONSE.validate_json(self._post(RECORD_PATH, request))
+
+    @contextmanager
+    def profile(
+        self, identity: ProfileIdentity, retain: Callable[[Mapping[str, object]], None],
+    ) -> Iterator[TaskClose]:
+        handle = None
+        try:
+            handle = self.start(identity)
+        except (ValueError, MachineApiError) as error:
+            unavailable(identity.task_name, "start", error)
+        result = TaskClose()
+        try:
+            yield result
+        except (CancelledError, KeyboardInterrupt):
+            result.outcome = "cancelled"
+            raise
+        except SystemExit as error:
+            if error.code not in (None, 0):
+                result.outcome = "error"
+            raise
+        except BaseException:
+            result.outcome = "error"
+            raise
+        finally:
+            if handle is not None:
+                try:
+                    retain({**self.stop(handle, identity, result.outcome), **result.facts})
+                except (OSError, ValueError, MachineApiError) as error:
+                    unavailable(identity.task_name, "close", error)
+
+
+def unavailable(task: str, stage: str, error: Exception) -> None:
+    detail = str(error) if isinstance(error, MachineApiError) else type(error).__name__
+    warn(f"{stage} unavailable for {task}: {detail}")
+
+
+def warn(message: str) -> None:
+    """Report trusted instrument status even when the caller omits unstructured logs."""
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        print(f"::warning title=Task Performance::{message}", file=sys.stderr)
+    else:
+        LOG.warning("Task Performance: %s", message)
+
+
+def private_state(repo: Path) -> Path:
+    root = relative(os.environ[STATE_ROOT_ENV])
+    parts = root.split("/")
+    if (
+        len(parts) != 4 or parts[:2] != ["backend", "var"]
+        or not parts[2].startswith("machine-task-") or parts[3] != "state"
+    ):
+        raise IntegrityError("machine recording state is not job private")
+    safe_file(repo, f"{root}/.machine-output", exists=False)
+    return repo / root
 
 
 def closed_measurement(

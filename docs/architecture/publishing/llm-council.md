@@ -44,21 +44,20 @@ the application step. The judging shard still reads its separate 200-minute
 deadline from `config/llm_council.json`; it is not the planning or collection
 budget.
 
-The `job_bounds` prerequisite checks out the workflow revision and runs the
-standard-library-only `backend/utilities/shard_bound.py` with stock runner
-`python3`. It refuses missing keys and values other than positive integers
-before publishing the two job outputs. Planning and collection depend directly
-on that job and decode their respective output with `fromJSON` at job scope.
-No backend installation, model or tenant loading is needed to read these
-Actions settings. This repository-authored configuration is not a persisted
-pipeline payload and needs no schema version or migration.
+The `job_bounds` prerequisite checks out the workflow revision, names the run,
+and reads both bounds through `backend/utilities/shard_bound.py`. The shared
+machine listener can measure that read without changing its validation. The
+reader refuses missing keys and values other than positive integers before
+publishing the two job outputs. Planning and collection decode their respective
+output with `fromJSON` at job scope. No model or tenant runs here.
 
 Collection still runs after planning or judging fails or is cancelled, provided
 the prerequisite succeeded. If budget validation fails, the run is red and
 collection does not start with an absent deadline; no work was planned.
 The prerequisite has no custom timeout and inherits the Actions 6-hour ceiling,
 at which GitHub kills the job. This costs one additional runner startup and
-checkout on the path before planning, with no new CI job or dependency.
+checkout on the path before planning. The task recorder uses the same locked
+runtime as the other runners.
 
 The page stays whole because these settings govern the same workflow clock
 described here.
@@ -527,6 +526,21 @@ The planning job still prints the pinned llama.cpp build on every night.
 collection retains valid completed bytes. Integrity and cancellation retain
 their whole-publication refusal.
 
+Each started bounds, draw, judging or settling runner takes its own opening
+fingerprint when host recording is enabled. Draw and settlement use the run's
+opening UTC day for that fingerprint; a judging runner uses its selected date,
+tenant and part. The same fingerprint can support several task rows without
+becoming several hardware rows. Bounds work records `job_bounds`; reached
+tenant work records `prepare-<tenant>`, `judge-<tenant>` or `settle-<tenant>` on
+the judged day. The judge's existing model-call costs travel with its measured
+task, while its outcome, coverage and verdicts remain in the Council's records.
+Only a verified server contributes `serve-<tenant>` using its own final counters.
+While host compaction still groups on the legacy job column, the Council uses
+distinct job labels for the bounds runner, draw, settlement and each tenant's
+judging runners. This keeps their rows separate without changing legacy
+readers or settling a job under a different runner. The settlement clock keeps
+its existing identity. The listener links only the exact admitted opening.
+
 **Writers declare their paths beside themselves.** Tenant paths come back from
 `committed_paths` on the protocol. The venue declares `COUNCIL_RUN_RECORDS` and
 `HOST_FINGERPRINT` beside its resolver; their staging paths come from the ledger
@@ -534,6 +548,13 @@ registry. The collecting utility uses these independent declarations and returns
 without a production record or push when no selected judge is active.
 Paused trial settlement remains downloadable and never grants publication
 permission.
+
+Task Performance uses its own write declaration for the selected days and
+each original writer. The collector verifies named receipts and exact
+Parquet bytes against the selection and matrix before delivery. A missing
+artifact supplies no reading; a wrong writer, changed bytes or an unsupported
+host link refuses delivery. Paused observations stay under trial paths; without
+an active selection, even shared control observations stay downloadable only.
 
 **A declared directory is not permission to sweep it.** As the collecting job
 finishes atomic writes, `council_publish.py` records exact paths and byte digests
@@ -546,7 +567,8 @@ There is one collecting job for any number of judges or shards. A tenant/date
 failure does not suppress earlier completed bytes or later tenants/dates.
 
 The collecting job starts with a shallow, blob-less sparse checkout of `config`,
-`backend` and `.github`, plus Git's root-level files. It keeps a sparse index.
+`backend`, `.github` and the named Machine API packages, plus Git's root-level
+files. It keeps a sparse index.
 After checkout, `GIT_NO_LAZY_FETCH=1` stops Git from downloading missing objects
 implicitly; the collecting entrypoint sets it too. Planning and judging cells
 keep their full checkout, with unchanged model, dependency and cache steps.
@@ -907,7 +929,7 @@ manifest - and a council row was filed under the digest run that published the
 day it read. That run never drew a pair, never called a model, ran on a
 different machine, and opened on a different day.
 
-**The council mints its own name now.** Once, in the planning job, from the day
+**The council mints its own name now.** Once, in the bounds job, from the day
 the council RUNS and the run id the platform gave the run:
 `2026-09-21-35534060762`. It is published as a job output and every verb that
 writes a row is handed it, the same way the shard bound and the model refs

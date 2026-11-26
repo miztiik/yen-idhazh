@@ -67,6 +67,8 @@ def downloaded_bundles(
     incoming: Path,
     selected: Selection,
     cells: tuple[Cell, ...] = (),
+    *,
+    extra_markers: dict[str, tuple[str, ...]] | None = None,
 ) -> dict[str, Path]:
     """Resolve flat singleton or named downloads using only expected invocation files."""
     if incoming.is_symlink() or (incoming.exists() and not incoming.is_dir()):
@@ -87,6 +89,8 @@ def downloaded_bundles(
             record_path(Path(), selected, cell.tenant, cell.date, cell.shard).as_posix(),
             f"events/{cell.tenant}/{cell.date}/{cell.shard}.jsonl",
         )
+    for name, markers in (extra_markers or {}).items():
+        expected[name] = (*expected.get(name, ()), *markers)
     named: dict[str, Path] = {}
     flat: list[str] = []
     for name, markers in expected.items():

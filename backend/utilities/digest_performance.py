@@ -4,26 +4,24 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import os
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 
 from pydantic import ValidationError
 
 from idhazh import ledger
 from idhazh.atomic_write import write_atomic_bytes
 from idhazh.contracts.base import ServerJob
-from idhazh.contracts.file_envelope import FileEnvelope, RowIdentity, WriterIdentity
-from idhazh.contracts.host_fingerprint import HostFingerprintRow
+from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.task_performance import TaskPerformanceOutcome, TaskPerformanceRow
 from idhazh.ledger.staging import staged_path
-from idhazh.telemetry import machine_api, silicon
+from idhazh.telemetry import machine_api, machine_evidence, silicon
 from utilities import publication_evidence
 from utilities.publication_request import IntegrityError, contains, safe_file
-from utilities.publication_request import relative as relative_path
 
 LOG = logging.getLogger(__name__)
 PIPELINE = "digest"
@@ -34,8 +32,8 @@ TASKS = {
     ServerJob.WORK: ("work", SERVE),
     ServerJob.ASSEMBLE: ("assemble",),
 }
-TASK_LEDGER = LedgerName.TASK_PERFORMANCE
-HOST_LEDGER = LedgerName.HOST_FINGERPRINT
+TASK_LEDGER: Final = LedgerName.TASK_PERFORMANCE
+HOST_LEDGER: Final = LedgerName.HOST_FINGERPRINT
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,20 +95,10 @@ def opening_capture(
     data = read_path.read_bytes()
     if digest != hashlib.sha256(data).hexdigest():
         raise IntegrityError("opening fingerprint bytes changed", (path,))
-    envelope, _ = publication_evidence.verified_raw(
-        repo / "state", path.removeprefix("state/"), data, name=HOST_LEDGER,
+    envelope, _ = machine_evidence.verified_reading(
+        path.removeprefix("state/"), data, name=HOST_LEDGER,
         date=date, identity=identity,
     )
-    (stored,) = ledger.load_stored([read_path], model=HostFingerprintRow)
-    if (
-        stored.identity != _row_identity(envelope, identity)
-        or (
-            stored.row.date, stored.row.run_id, stored.row.pipeline_name,
-            stored.row.task_name, stored.row.shard,
-        ) != (date, identity.run_id, PIPELINE, identity.task_name, identity.shard)
-        or any(getattr(stored.row, field) is not None for field in silicon.CLOCK_CELLS)
-    ):
-        raise IntegrityError("fingerprint is not the execution's opening capture", (path,))
     if private_state is not None:
         _copy_exact(private_state, path.removeprefix("state/"), data)
     return OpeningCapture(str(envelope.unit_id), path, digest)
@@ -124,35 +112,13 @@ def _copy_exact(root: Path, path: str, data: bytes) -> None:
         raise IntegrityError("completed file would replace different local bytes", (path,))
 
 
-def _row_identity(envelope: FileEnvelope, writer: WriterIdentity) -> RowIdentity:
-    return RowIdentity(
-        ledger=envelope.ledger, covers=envelope.covers, unit_id=str(envelope.unit_id),
-        run_id=writer.run_id, attempt=writer.attempt, job=writer.job, shard=writer.shard,
-        pipeline_name=writer.pipeline_name, task_name=writer.task_name,
-    )
-
-
 def _verified_task(
-    root: Path, path: str, data: bytes, *, identity: WriterIdentity, date: str,
+    path: str, data: bytes, *, identity: WriterIdentity, date: str,
 ) -> tuple[TaskPerformanceRow, str, str]:
-    envelope, (cells,) = publication_evidence.verified_raw(
-        root, path, data, name=TASK_LEDGER, date=date, identity=identity,
+    envelope, row = machine_evidence.verified_reading(
+        path, data, name=TASK_LEDGER, date=date, identity=identity,
+        kind="model-serving" if identity.task_name == SERVE else "workflow-task",
     )
-    if envelope.writer != "idhazh_typescript.ledger.parquet":
-        raise IntegrityError("Task Performance file did not come from the native writer", (path,))
-    row = TaskPerformanceRow.model_validate({
-        key: cells[key] for key in TaskPerformanceRow.model_fields if key in cells
-    })
-    stamped = RowIdentity.model_validate({key: cells.get(key) for key in RowIdentity.model_fields})
-    if (
-        row.version != envelope.row_schema_version
-        or (row.date, row.run_id, row.pipeline_name, row.task_name, row.shard) != (
-            date, identity.run_id, identity.pipeline_name, identity.task_name, identity.shard,
-        )
-        or stamped != _row_identity(envelope, identity)
-        or row.task_kind != ("model-serving" if identity.task_name == SERVE else "workflow-task")
-    ):
-        raise IntegrityError("Task Performance row does not match its recorded task", (path,))
     return row, str(envelope.unit_id), envelope.content_sha256
 
 
@@ -172,7 +138,7 @@ def retain(
     if receipt.path != expected or receipt.covers != date:
         raise IntegrityError("native receipt is outside the task's exact raw path")
     data = safe_file(private_state, expected, exists=True).read_bytes()
-    row, unit, digest = _verified_task(private_state, expected, data, identity=identity, date=date)
+    row, unit, digest = _verified_task(expected, data, identity=identity, date=date)
     if (row, unit, digest) != (response.row, receipt.unit_id, receipt.content_sha256):
         raise IntegrityError("native receipt does not match the completed file", (expected,))
     _copy_exact(repo, f"state/{expected}", data)
@@ -204,7 +170,7 @@ def evidence(repo: Path, job: WriterIdentity, date: str) -> dict[str, str]:
         if hashlib.sha256(data).hexdigest() != digest:
             raise IntegrityError("completed write bytes changed", (relative,))
         row, _, _ = _verified_task(
-            repo / "state", relative.removeprefix("state/"), data, identity=identity, date=date,
+            relative.removeprefix("state/"), data, identity=identity, date=date,
         )
         if row.host_unit_id is not None:
             host = opening_capture(repo, job, date)
@@ -217,17 +183,6 @@ def evidence(repo: Path, job: WriterIdentity, date: str) -> dict[str, str]:
     return writes
 
 
-def _private_state(repo: Path) -> Path:
-    root = relative_path(os.environ[machine_api.STATE_ROOT_ENV])
-    parts = root.split("/")
-    if (
-        len(parts) != 4 or parts[:2] != ["backend", "var"]
-        or not parts[2].startswith("machine-task-") or parts[3] != "state"
-    ):
-        raise IntegrityError("machine recording state is not job private")
-    return repo / root
-
-
 def record_measurement(
     client: machine_api.MachineApi, repo: Path, job: WriterIdentity, date: str, task: str,
     measurement: Mapping[str, object], *, host: str | None,
@@ -236,12 +191,14 @@ def record_measurement(
         date=date, identity=task_writer(job, task),
         measurement={**measurement, "host_unit_id": host},
     )
-    retain(repo, _private_state(repo), job=job, date=date, task=task, response=response)
+    retain(
+        repo, machine_api.private_state(repo), job=job, date=date, task=task, response=response,
+    )
 
 
 def import_opening_capture(repo: Path, job: WriterIdentity, date: str) -> str | None:
     try:
-        capture = opening_capture(repo, job, date, private_state=_private_state(repo))
+        capture = opening_capture(repo, job, date, private_state=machine_api.private_state(repo))
         return capture.unit_id if capture is not None else None
     except (OSError, ValueError, KeyError) as error:
         LOG.warning("Task Performance host reference unavailable: %s", error)

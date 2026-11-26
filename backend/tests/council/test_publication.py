@@ -1,20 +1,32 @@
 """Does the real collecting publisher retain earlier and later completed tenant work?"""
 
 import json
+import shutil
+import time
 from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
 
 import pytest
 from _host_placement import refuse_external_placement
 from gardener._garden import an_origin, git, on_origin, quiet_git
+from support.native_performance import Batch, write_batches
 
-from idhazh import ledger
+from idhazh import config, ledger
 from idhazh.contracts.base import ServerJob
+from idhazh.contracts.council_events import CouncilProgram
+from idhazh.contracts.council_invocation import Cell, SelectedJudge, Selection
 from idhazh.contracts.council_run_record import CouncilRunRecord
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
+from idhazh.contracts.knobs.council import CouncilTask, JudgeLifecycleStatus
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.publication_receipt import PublicationReceipt
-from idhazh.council import registry, session
+from idhazh.council import outcome, performance, registry, session
+from idhazh.ledger.keys import HOST_FINGERPRINT_KEY
+from idhazh.ledger.raw_files import load_current_rows
+from idhazh.llm.serving_metrics import serving_measurement
+from idhazh.telemetry import machine_evidence
+from utilities import council_machine_delivery
 from utilities.council_publish import settle_and_publish
 from utilities.publication_git import Repository
 
@@ -255,3 +267,156 @@ def test_empty_venue_writes_no_row_or_commit(
     )
     assert git(origin, "rev-parse", "main") == before
     assert not (repo / "state").exists()
+
+
+@pytest.mark.parametrize("missing", [False, True], ids=["every-runner", "missing-and-skipped"])
+def test_council_lands_original_runner_bytes_and_keeps_trials_private(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, missing: bool,
+) -> None:
+    quiet_git(tmp_path, monkeypatch)
+    origin, repo = an_origin(tmp_path, {
+        "config/push-retry.json": '{"deadline_seconds":{"default":300},"base_step_seconds":0.001,'
+        '"ceiling_seconds":0.001,"ceiling_after":1}\n',
+    })
+    revision = git(repo, "rev-parse", "HEAD").strip()
+    package = "measured_venue"
+    active, paused = "active-judge", "paused-judge"
+    a_venue(tmp_path, package=package, slugs={active: (5, ()), paused: (1, ())})
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setattr(registry, "TENANT_PACKAGE", package)
+    root = tmp_path / "producers"
+    collector = repo / "backend" / "var" / "council"
+    monkeypatch.setattr(session, "COUNCIL_ROOT", root)
+    target = room(tmp_path, {active: ("active", True), paused: ("paused", False)})
+    council_file = target / "llm_council.json"
+    current = json.loads(council_file.read_text(encoding="utf-8"))
+    council_file.write_text(json.dumps({**current, "shards": 5}), encoding="utf-8")
+    set_host_fingerprint_placement(target, False)
+    settings = config.load(target)
+    judged = "2026-10-09"
+    selected = Selection(
+        version=Selection.schema_version(), run_id="2026-10-10-123", attempt=1, git_sha=revision,
+        mode="manual", anchor_date=judged, window=(judged,),
+        judges=(
+            SelectedJudge(tenant=active, status=JudgeLifecycleStatus.ACTIVE, dates=(judged,), shards=5),
+            SelectedJudge(tenant=paused, status=JudgeLifecycleStatus.PAUSED, dates=(judged,), shards=1),
+        ),
+    )
+    cells = tuple(
+        Cell(tenant=judge.tenant, date=judged, shard=part, shards=judge.shards, runs_model=judge.tenant == active)
+        for judge in selected.judges for part in range(judge.shards)
+        if not (missing and judge.tenant == active and part == 3)
+    )
+    session.prepare(settings.council, run_id=selected.run_id, selection=selected)
+    bundles = council_machine_delivery.incoming(root, selected, cells)
+    captures, batches = [], []
+    direct = performance.selected_runner(collector, performance.Phase.SETTLE, selected)
+    with refuse_external_placement():
+        for bundle, cell in zip(bundles, [None, None, *cells], strict=True):
+            host = bundle.runner
+            if cell is not None:
+                if missing and cell.tenant == active and cell.shard == 4:
+                    continue
+                events = (
+                    root / "outgoing" / f"shard-{cell.tenant}-{cell.date}-{cell.shard}"
+                    / "events" / cell.tenant / cell.date / f"{cell.shard}.jsonl"
+                )
+                with monkeypatch.context() as scoped:
+                    scoped.setenv("COUNCIL_EVENT_FILE", str(events))
+                    def judge_cell(cell: Cell = cell) -> int:
+                        return outcome.of_results((session.run_shard(
+                            settings.council, slug=cell.tenant, date=cell.date, run_id=selected.run_id,
+                            shard=cell.shard, shards=cell.shards, started=time.monotonic(),
+                            selection=selected,
+                        ),))
+                    assert outcome.run(CouncilProgram.SHARD, judge_cell) == 0
+            host.capture(settings)
+            opening = machine_evidence.read_receipt(host.bundle, host.opening)
+            assert opening is not None
+            captures.append((opening, not host.trial))
+            observations = bundle.tasks
+            if host.phase is performance.Phase.DRAW:
+                observations = (*observations, host.task(judged, CouncilTask.PREPARE, paused))
+            requests = []
+            for expected in observations:
+                if expected.kind == "model-serving":
+                    if cell is None or cell.shard != 0:
+                        continue
+                    counters = serving_measurement(
+                        "llamacpp:prompt_tokens_total 13\nllamacpp:prompt_seconds_total 2\n",
+                        subject_id="test-model", outcome="success",
+                    )
+                    assert counters is not None
+                else:
+                    counters = {"elapsed_ms": 23}
+                requests.append((expected, counters, (
+                    host.tenant_store(selected, paused)
+                    if expected.writer.task_name == "prepare-paused-judge" else host.bundle
+                )))
+            batches.append(Batch(tmp_path / f"machine-{len(batches)}", tuple(requests), opening))
+        direct.capture(settings)
+    opening = machine_evidence.read_receipt(direct.bundle, direct.opening)
+    assert opening is not None
+    captures.append((opening, True))
+    batches.append(Batch(tmp_path / "settlement-machine", (
+        (direct.task(judged, CouncilTask.SETTLE, active), {"elapsed_ms": 11}, direct.bundle),
+        (direct.task(judged, CouncilTask.SETTLE, paused), {"elapsed_ms": 11},
+         direct.tenant_store(selected, paused)),
+    ), opening))
+    recorded = write_batches(batches)
+    for bundle in bundles:
+        outgoing = root / "outgoing" / bundle.name.removeprefix("council-metrics-")
+        if bundle.runner.phase is not performance.Phase.JUDGE:
+            outgoing = bundle.runner.bundle
+        else:
+            outgoing = outgoing.with_name("shard-" + outgoing.name)
+        if outgoing.is_dir():
+            shutil.copytree(outgoing, collector / "incoming" / bundle.name)
+    monkeypatch.setattr(session, "COUNCIL_ROOT", collector)
+
+    matrix = json.dumps([cell.model_dump(mode="json") for cell in cells])
+    # A correct receipt and wrong actual bytes must still refuse the whole publication.
+    first = recorded[0]
+    imported = collector / "incoming" / bundles[0].name / first.path
+    imported.write_bytes(first.data + b"foreign bytes")
+    unchanged = git(origin, "rev-parse", "main")
+    publish = partial(
+        settle_and_publish, repo=repo, run_id=selected.run_id, commit_sha=revision,
+        config_root=target, selection=selected, matrix=matrix, opening_attempted=True,
+    )
+    assert publish() == 1
+    assert git(origin, "rev-parse", "main") == unchanged
+    imported.write_bytes(first.data)
+    bound_receipt = collector / "incoming" / bundles[0].name / bundles[0].tasks[0].receipt
+    original = bound_receipt.read_text(encoding="utf-8")
+    received = json.loads(original)
+    received["identity"]["producer"] = "not-the-native-writer"
+    bound_receipt.write_text(json.dumps(received), encoding="utf-8")
+    assert publish() == 1
+    assert git(origin, "rev-parse", "main") == unchanged
+    bound_receipt.write_text(original, encoding="utf-8")
+    assert publish() == int(missing)
+
+    remote = Repository(origin, git_dir=origin)
+    expected_runners = 6 if missing else 8
+    assert sum(allowed for _, allowed in captures) == expected_runners
+    assert len({item.envelope.unit_id for item, allowed in captures if allowed}) == expected_runners
+    for proof, allowed in [
+        *captures, *((proof, "paused" not in proof.envelope.identity.task_key) for proof in recorded),
+    ]:
+        entry = remote.entry("main", proof.path)
+        if allowed:
+            assert entry is not None and remote.blob(entry.oid) == proof.data
+        else:
+            assert entry is None
+    settled = load_current_rows(
+        repo / "state", LedgerName.HOST_FINGERPRINT, model=HostFingerprintRow,
+        key=HOST_FINGERPRINT_KEY, days={judged, "2026-10-10"},
+    )
+    assert {(row.job, row.shard) for row in settled} == {
+        (proof.envelope.identity.job, proof.envelope.identity.shard)
+        for proof, allowed in captures if allowed
+    }
+    assert ledger.load_days(repo / "state", LedgerName.COUNCIL_RUN_RECORDS, [judged], model=CouncilRunRecord)
+    if missing:
+        assert all(proof.envelope.identity.shard not in (3, 4) for proof in recorded)

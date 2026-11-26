@@ -8,12 +8,14 @@ import { loadConfig, TaskPerformanceExecutionSchema } from "../config";
 import { superviseMachineApiTask } from "./supervise-machine-api-task";
 
 async function run() {
-  const [day, runId, attempt, pipeline, shard, gitSha, memory, ...command] = Bun.argv.slice(2);
+  const [days, runId, attempt, pipeline, shard, gitSha, memory, ...command] = Bun.argv.slice(2);
   if (command.length === 0) throw new Error("A trusted workflow command is required");
   const root = process.cwd();
   const env: NodeJS.ProcessEnv = { ...process.env };
   delete env.IDHAZH_MACHINE_API_ORIGIN;
   delete env.IDHAZH_MACHINE_API_STATE_ROOT;
+  const legacy = env.IDHAZH_MACHINE_LEGACY_OPENING_WRITER;
+  delete env.IDHAZH_MACHINE_LEGACY_OPENING_WRITER;
   const cancellation = new AbortController();
   let signalChild: ((signal: NodeJS.Signals) => void) | undefined;
   let commandExit: Promise<number> | undefined;
@@ -49,7 +51,8 @@ async function run() {
   try {
     const task_performance = TaskPerformanceExecutionSchema.parse({
       run_id: runId, attempt: Number(attempt), pipeline_name: pipeline, shard: Number(shard),
-      git_sha: gitSha, accounting_days: [day],
+      git_sha: gitSha, accounting_days: days?.split(","),
+      ...(legacy === undefined ? {} : { legacy_opening_writer: JSON.parse(legacy) }),
     });
     if (memory !== "on" && memory !== "off") throw new Error("Invalid resolved memory selection");
     const [server, probes] = await Promise.all([

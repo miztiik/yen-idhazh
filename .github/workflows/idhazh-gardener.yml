@@ -175,6 +175,9 @@ jobs:
             .github
             packages/common-contracts
             packages/ledger-file-writer
+            services/serve-pipeline-apis
+            services/host-fingerprints
+            services/host-probes
             state/raw/feed-ingest-plan
             state/compact/feed-ingest-plan
 
@@ -208,6 +211,15 @@ jobs:
           echo "IDHAZH_HOST_TELEMETRY_MODE=$MODE" >> "$GITHUB_ENV"
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
 
+      - name: Prepare machine APIs
+        continue-on-error: true
+        uses: ./.github/actions/machine-apis
+        with:
+          mode: ${{ steps.host_telemetry.outputs.mode }}
+          pipeline: gardener
+          shard: ${{ matrix.shard }}
+          publication_runtime_ready: ${{ contains(join(matrix.task_names, ','), 'compact-feed-ingest-plan-') }}
+
       # Runs the shard's tasks, writes its one record and pushes it, trying again
       # on a newer tip when another shard pushed first. It exits with the worst
       # code it earned: 2 ownership or integrity, 3 main refused the push, 1 a
@@ -224,7 +236,8 @@ jobs:
           ATTEMPT: ${{ github.run_attempt }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          python backend/utilities/gardener_publish.py \
+          python backend/utilities/machine_task.py --run-id "$RUN_ID" -- \
+            python backend/utilities/gardener_publish.py \
             --shard "$SHARD" --run-id "$RUN_ID" --attempt "$ATTEMPT"
 
   history:

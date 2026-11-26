@@ -641,6 +641,18 @@ the task's declared `appends_to`. Before fetching or staging, the publisher
 refuses any exact write or deletion outside these claims. A task's returned
 path cannot widen them.
 
+Each `run-tasks` runner reuses its one opening fingerprint for the admitted
+named tasks. The shared Host Probes listener starts and stops a probe around
+each task's execution, then writes its Task Performance row into job-private
+state. The publisher checks those exact receipts separately from task-owned
+changes and adds only immutable raw appends for that shard's accounting day.
+Compaction never reads the private state, even when the new receipt covers a
+day eligible for this pass. Refusal leaves no new measurement eligible to land.
+The existing shard record and closing host clock still write as before.
+The `plan` and `history` runners do not have a measurement delivery path: the
+former emits planning outputs only and the latter is authorized only for its
+history operation. They are not represented by a shard's fingerprint.
+
 **`idhazh gardener run-task` never pushes.** It runs the same tasks and writes
 the same record into the checkout, and stops there, so running a task on a
 developer's machine cannot reset their branch or push to main. It takes the

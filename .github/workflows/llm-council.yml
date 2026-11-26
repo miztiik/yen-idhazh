@@ -81,27 +81,71 @@ jobs:
       contents: read
     runs-on: ubuntu-latest
     outputs:
-      planning_timeout_minutes: ${{ steps.planning.outputs.planning_timeout_minutes }}
-      collection_timeout_minutes: ${{ steps.collection.outputs.collection_timeout_minutes }}
+      planning_timeout_minutes: ${{ steps.bounds.outputs.planning_timeout_minutes }}
+      collection_timeout_minutes: ${{ steps.bounds.outputs.collection_timeout_minutes }}
+      run_id: ${{ steps.identity.outputs.run_id }}
+      host_telemetry_mode: ${{ steps.host_telemetry.outputs.mode }}
     steps:
       - uses: actions/checkout@v6
 
-      - id: planning
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: pip install -e .
+
+      - id: identity
+        name: Mint the name this night files its rows under
+        run: python -m idhazh.council.run_identity --platform-run-id "$GITHUB_RUN_ID" >> "$GITHUB_OUTPUT"
+
+      - id: host_telemetry
+        name: Resolve host telemetry
         run: |
           set -euo pipefail
-          python3 backend/utilities/shard_bound.py --key planning_timeout_minutes --config-file llm_council_job_timeouts.json \
+          MODE=$(python backend/utilities/host_telemetry_control.py "$IDHAZH_HOST_TELEMETRY_MODE")
+          echo "IDHAZH_HOST_TELEMETRY_MODE=$MODE" >> "$GITHUB_ENV"
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+
+      - name: Capture the bounds runner
+        continue-on-error: true
+        env:
+          COUNCIL_RUN_ID: ${{ steps.identity.outputs.run_id }}
+        run: python backend/utilities/council_machine.py open --phase job_bounds --run-id "$COUNCIL_RUN_ID"
+
+      - name: Prepare machine APIs
+        continue-on-error: true
+        uses: ./.github/actions/machine-apis
+        with:
+          mode: ${{ steps.host_telemetry.outputs.mode }}
+          pipeline: council
+
+      - id: bounds
+        name: Read the planning and collection bounds
+        env:
+          COUNCIL_RUN_ID: ${{ steps.identity.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          python backend/utilities/council_machine.py measure --phase job_bounds --run-id "$COUNCIL_RUN_ID" -- \
+            python backend/utilities/council_machine.py bounds --phase job_bounds --run-id "$COUNCIL_RUN_ID" \
             >> "$GITHUB_OUTPUT"
 
-      - id: collection
-        run: |
-          set -euo pipefail
-          python3 backend/utilities/shard_bound.py --key collection_timeout_minutes --config-file llm_council_job_timeouts.json \
-            >> "$GITHUB_OUTPUT"
+      - if: always() && steps.host_telemetry.outputs.mode == 'python'
+        uses: actions/upload-artifact@v7
+        with:
+          name: council-bounds-${{ steps.identity.outputs.run_id }}-${{ github.run_attempt }}
+          path: backend/var/council/outgoing/job_bounds
+          if-no-files-found: warn
+          retention-days: 3
 
   draw:
     needs: job_bounds
     env:
       COUNCIL_EVENT_FILE: backend/var/council/outgoing/planner/events/planner.jsonl
+      COUNCIL_RUN_ID: ${{ needs.job_bounds.outputs.run_id }}
+      IDHAZH_HOST_TELEMETRY_MODE: ${{ needs.job_bounds.outputs.host_telemetry_mode }}
     permissions:
       contents: read
     runs-on: ubuntu-latest
@@ -109,7 +153,7 @@ jobs:
     outputs:
       date: ${{ steps.plan.outputs.date }}
       selection: ${{ steps.plan.outputs.selection }}
-      run_id: ${{ steps.identity.outputs.run_id }}
+      run_id: ${{ needs.job_bounds.outputs.run_id }}
       preparation_finished: ${{ steps.prepare.outputs.preparation_finished }}
       matrix: ${{ steps.fanout.outputs.matrix }}
       max_parallel: ${{ steps.fanout.outputs.max_parallel }}
@@ -129,27 +173,9 @@ jobs:
       - name: Install
         run: pip install -e .
 
-      # The name every row this night writes is filed under, minted once here.
-      # A job output for the same reason the bound is: the later jobs read it
-      # through `needs`, and a name minted per job would compute the date prefix
-      # once a job - so a run crossing midnight would file one night's rows
-      # under two addresses.
-      #
-      # The council mints its own rather than borrowing the digest run's, which
-      # claims a machine and a clock this night never drew and carries a date
-      # prefix a day stale. The prefix is the day the COUNCIL runs, because a
-      # reader takes a run id's first ten characters as the day its run opened.
-      - id: identity
-        name: Mint the name this night files its rows under
-        env:
-          # Through `env`, not pasted into the command. The platform's run id
-          # and not its run number: the number starts again in the next workflow
-          # and would collide with a digest run's id.
-          PLATFORM_RUN_ID: ${{ github.run_id }}
-        run: |
-          set -euo pipefail
-          python -m idhazh.council.run_identity --platform-run-id "$PLATFORM_RUN_ID" \
-            | tee /dev/stderr >> "$GITHUB_OUTPUT"
+      - name: Capture the draw runner
+        continue-on-error: true
+        run: python backend/utilities/council_machine.py open --phase draw --run-id "$COUNCIL_RUN_ID"
 
       # The identity binds the selection before any preparation is authorized.
       # Scheduled judges choose dates inside the offered window and budgets.
@@ -159,7 +185,6 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           DISPATCH_DATE: ${{ inputs.date }}
           DISPATCH_JUDGES: ${{ inputs.judges }}
-          COUNCIL_RUN_ID: ${{ steps.identity.outputs.run_id }}
           COUNCIL_COMMIT: ${{ github.sha }}
         run: |
           set -euo pipefail
@@ -205,17 +230,24 @@ jobs:
           python3 backend/utilities/shard_bound.py --key shard_timeout_minutes --config-file llm_council.json \
             >> "$GITHUB_OUTPUT"
 
+      - name: Prepare machine APIs
+        continue-on-error: true
+        uses: ./.github/actions/machine-apis
+        with:
+          mode: ${{ env.IDHAZH_HOST_TELEMETRY_MODE }}
+          pipeline: council
+
       # Python visits the entire selection, retaining independent preparations
       # after ordinary failures. Only a fully visited batch emits the marker.
       - id: prepare
         name: Pick the work for each date
         env:
           COUNCIL_SELECTION: ${{ steps.plan.outputs.selection }}
-          COUNCIL_RUN_ID: ${{ steps.identity.outputs.run_id }}
           COUNCIL_COMMIT: ${{ github.sha }}
         run: |
           set -euo pipefail
-          python -m idhazh council-prepare \
+          python backend/utilities/council_machine.py measure --phase draw --run-id "$COUNCIL_RUN_ID" -- \
+            python -m idhazh council-prepare \
             --run-id "$COUNCIL_RUN_ID" --commit "$COUNCIL_COMMIT" \
             | tee /dev/stderr >> "$GITHUB_OUTPUT"
 
@@ -256,11 +288,17 @@ jobs:
   judge:
     env:
       COUNCIL_SELECTION: ${{ needs.draw.outputs.selection }}
+      COUNCIL_RUN_ID: ${{ needs.draw.outputs.run_id }}
+      COUNCIL_TENANT: ${{ matrix.tenant }}
+      COUNCIL_DATE: ${{ matrix.date }}
+      COUNCIL_SHARD: ${{ matrix.shard }}
+      COUNCIL_SHARDS: ${{ matrix.shards }}
       COUNCIL_EVENT_FILE: backend/var/council/outgoing/shard-${{ matrix.tenant }}-${{ matrix.date }}-${{ matrix.shard }}/events/${{ matrix.tenant }}/${{ matrix.date }}/${{ matrix.shard }}.jsonl
+      IDHAZH_HOST_TELEMETRY_MODE: ${{ needs.job_bounds.outputs.host_telemetry_mode }}
     permissions:
       contents: read
       actions: read
-    needs: draw
+    needs: [job_bounds, draw]
     # Ordinary preparation failures keep draw red without suppressing ready
     # siblings. Cancellation or an unfinished batch authorizes no dispatch.
     if: always() && !cancelled() && needs.draw.outputs.preparation_finished == 'true' && needs.draw.outputs.matrix != '' && needs.draw.outputs.matrix != '[]'
@@ -288,6 +326,10 @@ jobs:
       - name: Install
         run: pip install -e .
 
+      - name: Capture this judging runner
+        continue-on-error: true
+        run: python backend/utilities/council_machine.py open --phase judge --run-id "$COUNCIL_RUN_ID"
+
       # Preserve each artifact directory until its identity, ownership and
       # declared bytes have been checked, before paying for model setup.
       - uses: actions/download-artifact@v8
@@ -301,12 +343,7 @@ jobs:
 
       - name: Verify this unit's prepared work
         env:
-          COUNCIL_RUN_ID: ${{ needs.draw.outputs.run_id }}
           COUNCIL_COMMIT: ${{ github.sha }}
-          COUNCIL_TENANT: ${{ matrix.tenant }}
-          COUNCIL_DATE: ${{ matrix.date }}
-          COUNCIL_SHARD: ${{ matrix.shard }}
-          COUNCIL_SHARDS: ${{ matrix.shards }}
         run: |
           set -euo pipefail
           python -m idhazh council-shard \
@@ -328,33 +365,50 @@ jobs:
       #
       # The probe address is handed over rather than inherited: it has one home,
       # the workflow `env` above, and this is the line that carries it in.
-      - uses: ./.github/actions/model-server
+      - name: Prepare machine APIs
+        continue-on-error: true
+        uses: ./.github/actions/machine-apis
+        with:
+          mode: ${{ env.IDHAZH_HOST_TELEMETRY_MODE }}
+          pipeline: council
+          shard: ${{ matrix.shard }}
+
+      - id: model
+        uses: ./.github/actions/model-server
         if: matrix.runs_model
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           probe_url: ${{ env.MODEL_SERVER_PROBE }}
           llama_cpp_build: ${{ needs.draw.outputs.llama_cpp_build }}
+          observe_serving: ${{ env.IDHAZH_HOST_TELEMETRY_MODE != 'off' }}
 
       # One cell is one tenant, so the in-process deadline the verb computes is
       # about this tenant's span and nobody else's. Two tenants in one job would
       # each be handed the whole span the venue meant for one of them.
-      - name: Run this unit of the tenant's work
+      - id: work
+        name: Run this unit of the tenant's work
         env:
-          COUNCIL_RUN_ID: ${{ needs.draw.outputs.run_id }}
           COUNCIL_COMMIT: ${{ github.sha }}
-          COUNCIL_TENANT: ${{ matrix.tenant }}
-          COUNCIL_DATE: ${{ matrix.date }}
-          COUNCIL_SHARD: ${{ matrix.shard }}
-          COUNCIL_SHARDS: ${{ matrix.shards }}
         run: |
           set -euo pipefail
-          python -m idhazh council-shard \
+          python backend/utilities/council_machine.py measure --phase judge --run-id "$COUNCIL_RUN_ID" -- \
+            python -m idhazh council-shard \
             --tenant "$COUNCIL_TENANT" \
             --date "$COUNCIL_DATE" \
             --run-id "$COUNCIL_RUN_ID" \
             --commit "$COUNCIL_COMMIT" \
             --shard "$COUNCIL_SHARD" \
             --shards "$COUNCIL_SHARDS"
+
+      - name: Close the verified model's serving observation
+        if: always() && steps.model.outcome == 'success' && env.IDHAZH_HOST_TELEMETRY_MODE != 'off'
+        continue-on-error: true
+        env:
+          COUNCIL_WORK_OUTCOME: ${{ steps.work.outcome }}
+        run: |
+          python backend/utilities/council_machine.py measure --phase judge --run-id "$COUNCIL_RUN_ID" -- \
+            python backend/utilities/council_machine.py close-server --phase judge --run-id "$COUNCIL_RUN_ID" \
+            --runtime-outcome "$COUNCIL_WORK_OUTCOME"
 
       # The unit commits nothing, and an artifact is the only way its rows get
       # across. Every checkout here names no ref, so each job is pinned to the
@@ -388,6 +442,10 @@ jobs:
     if: always() && needs.job_bounds.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: ${{ fromJSON(needs.job_bounds.outputs.collection_timeout_minutes) }}
+    env:
+      COUNCIL_SELECTION: ${{ needs.draw.outputs.selection }}
+      COUNCIL_RUN_ID: ${{ needs.job_bounds.outputs.run_id }}
+      IDHAZH_HOST_TELEMETRY_MODE: ${{ needs.job_bounds.outputs.host_telemetry_mode }}
     steps:
       - name: Stamp the collecting job clock
         run: echo "JOB_STARTED_AT=$(date -u +%s)" >> "$GITHUB_ENV"
@@ -400,6 +458,11 @@ jobs:
             config
             backend
             .github
+            packages/common-contracts
+            packages/ledger-file-writer
+            services/serve-pipeline-apis
+            services/host-fingerprints
+            services/host-probes
 
       - name: Keep collection sparse and disable implicit downloads
         run: |
@@ -414,15 +477,17 @@ jobs:
 
       - name: Install
         run: pip install -e .
-      - name: Resolve host telemetry
-        id: host_telemetry
-        env:
-          REQUESTED: ${{ inputs.host_telemetry || 'python' }}
-        run: |
-          set -euo pipefail
-          MODE=$(python backend/utilities/host_telemetry_control.py "$REQUESTED" --config-root config)
-          echo "IDHAZH_HOST_TELEMETRY_MODE=$MODE" >> "$GITHUB_ENV"
-          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+
+      - name: Capture the settlement runner
+        continue-on-error: true
+        run: python backend/utilities/council_machine.py open --phase save_council_results --run-id "$COUNCIL_RUN_ID"
+
+      - name: Prepare machine APIs
+        continue-on-error: true
+        uses: ./.github/actions/machine-apis
+        with:
+          mode: ${{ env.IDHAZH_HOST_TELEMETRY_MODE }}
+          pipeline: council
 
       # Keep unvalidated artifacts separate. The collector imports only named
       # expected bundles, including planner records and no-work bookkeeping.
@@ -439,8 +504,6 @@ jobs:
       - name: Settle and publish every completed tenant output
         if: always()
         env:
-          COUNCIL_SELECTION: ${{ needs.draw.outputs.selection }}
-          COUNCIL_RUN_ID: ${{ needs.draw.outputs.run_id }}
           COUNCIL_COMMIT: ${{ github.sha }}
           COUNCIL_UNITS_RESULT: ${{ needs.judge.result }}
           COUNCIL_PLANNING_RESULT: ${{ needs.draw.result }}
@@ -448,7 +511,8 @@ jobs:
           MEMORY_PROFILING: ${{ inputs.memory_profiling || 'inherit' }}
         run: |
           set -euo pipefail
-          python backend/utilities/council_publish.py \
+          python backend/utilities/council_machine.py measure --phase save_council_results --run-id "$COUNCIL_RUN_ID" -- \
+            python backend/utilities/council_publish.py --opening-attempted \
             --run-id "$COUNCIL_RUN_ID" --commit "$COUNCIL_COMMIT" \
             --job-started-at "$JOB_STARTED_AT" --units-result "$COUNCIL_UNITS_RESULT" \
             --planning-result "$COUNCIL_PLANNING_RESULT" \
@@ -461,7 +525,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: council-results-${{ needs.draw.outputs.run_id }}
+          name: council-results-${{ needs.job_bounds.outputs.run_id }}
           path: backend/var/council
           if-no-files-found: warn
           retention-days: 3

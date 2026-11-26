@@ -36,7 +36,7 @@ Table C - Implementation sequence.
 | C1 | 1 | Declare and pack task performance records | - | A | DONE | task-performance-contract | - | Task Performance contract |
 | C2 | 2 | Record one completed task through TypeScript Host Probes | 1 | B | DONE | task-performance-recording | - | Task Performance recording |
 | C3 | 3 | Record digest tasks and model-server sessions | 2 | C | DONE | digest-task-performance | - | Digest Task Performance |
-| C4 | 4 | Record Council and gardener tasks | 3 | D | PENDING | - | - | - |
+| C4 | 4 | Record Council and gardener tasks | 3 | D | BLOCKED | council-and-gardener-performance | - | Council and gardener performance |
 | C5 | 5 | Migrate console and audit readers and retire the live CI clock | 4 | E | PENDING | - | - | - |
 | C6 | 6 | Build TypeScript parity for item and shard probes | 4 | F | PENDING | - | - | - |
 | C7 | 7 | Switch host collection to TypeScript and narrow fingerprints | 5, 6 | G | PENDING | - | - | - |

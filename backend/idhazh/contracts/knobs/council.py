@@ -6,9 +6,23 @@ import keyword
 from enum import UNIQUE, StrEnum, verify
 from pathlib import Path
 
-from pydantic import Field, PrivateAttr, field_validator
+from pydantic import Field, PrivateAttr, TypeAdapter, field_validator
 
-from idhazh.contracts.base import DateStamp, Model, Slug
+from idhazh.contracts.base import DateStamp, Model, Slug, TaskName
+
+
+class CouncilTask(StrEnum):
+    PREPARE = "prepare"
+    JUDGE = "judge"
+    SETTLE = "settle"
+    SERVE = "serve"
+
+
+_TASK_NAME = TypeAdapter(TaskName)
+
+
+def task_name(phase: CouncilTask, tenant: str) -> str:
+    return _TASK_NAME.validate_python(f"{phase}-{tenant}")
 
 
 @verify(UNIQUE)
@@ -195,6 +209,8 @@ class CouncilConfig(Model):
         seen: set[str] = set()
         for name in names:
             derive_judge_package_name(name)
+            for phase in CouncilTask:
+                task_name(phase, name)
             if name in seen:
                 raise JudgeRefusalError(name, f"judge_names lists judge '{name}' twice")
             seen.add(name)
