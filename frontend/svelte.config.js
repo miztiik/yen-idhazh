@@ -48,6 +48,8 @@ function inlineScriptHashes() {
 // id without editing this file - see docs/reference/agent-notes.md.
 const version = process.env.BUILD_VERSION ? { name: process.env.BUILD_VERSION } : undefined;
 
+const staticAdapter = adapter({ fallback: '404.html', strict: false });
+
 // Seven routes ship a prerendered document: `/`, `/archive/` and the
 // five `/console/` pages. The two dated routes ship none - they declare
 // `ssr = false`, so the `404.html` fallback set below answers every dated
@@ -58,8 +60,9 @@ export default {
 	kit: {
 		adapter: {
 			name: 'static-client-entry',
+			/** @param {Parameters<typeof staticAdapter.adapt>[0]} builder */
 			async adapt(builder) {
-				await adapter({ fallback: '404.html', strict: false }).adapt(builder);
+				await staticAdapter.adapt(builder);
 				// A known browser-only route must not enter through the host's 404.
 				// Generate the same empty app shell so the browser still reads all evidence.
 				const entry = 'build/console/operations/index.html';
