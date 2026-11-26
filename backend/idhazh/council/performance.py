@@ -9,7 +9,6 @@ from enum import StrEnum
 from pathlib import Path
 
 from idhazh import config
-from idhazh.contracts.base import ServerJob
 from idhazh.contracts.council_invocation import Cell
 from idhazh.contracts.council_run_record import ShardOutcome
 from idhazh.contracts.file_envelope import WriterIdentity
@@ -18,7 +17,7 @@ from idhazh.council import run_identity, work_files
 from idhazh.council.selection import Selection
 from idhazh.council.tenancy import ShardResult
 from idhazh.telemetry import machine_api, machine_evidence, silicon, task_probe
-from idhazh.telemetry.host_control import enabled
+from idhazh.telemetry.host_control import MODE_ENV, mode
 
 PIPELINE = "council"
 
@@ -63,18 +62,21 @@ class Runner:
         )
 
     def capture(self, settings: config.Settings) -> None:
-        """Keep the Python opening during rollout; never recapture at task close."""
+        """Capture on this runner only, before any of its work starts."""
         knobs = settings.app.observability
-        if not enabled(knobs) or not knobs.host_fingerprint:
+        selected = mode(knobs)
+        if selected == "off" or not knobs.host_fingerprint:
             return
         writer = self.opening.writer
         if machine_evidence.read_receipt(self.bundle, self.opening) is not None:
             return
+        if selected == "typescript":
+            machine_evidence.capture_opening(config.REPO_ROOT, self.bundle, self.opening)
+            return
         _, paths = silicon.file_machine_row(
             date=self.opening.date, run_id=writer.run_id, settings=settings,
             state_root=self.bundle / machine_evidence.STATE, commit_sha=writer.git_sha,
-            job=writer.job, pipeline_name=writer.pipeline_name, task_name=writer.task_name,
-            shard=writer.shard, attempt=writer.attempt,
+            job=writer.job, shard=writer.shard, attempt=writer.attempt,
         )
         if not paths:
             machine_api.warn(f"Council opening fingerprint not written for {self.phase}")
@@ -114,14 +116,15 @@ def runner(
         trial = selection.trial(cell.tenant)
         if trial:
             bundle = work_files.invocation_root(bundle, selection, cell.tenant)
-    # The live host compactor still groups on legacy job and part. Distinct
-    # opening jobs preserve every runner until it can group on pipeline/task.
+    native = os.environ.get(MODE_ENV) != "python"
     writer = WriterIdentity(
         run_id=run_id, attempt=attempt, git_sha=git_sha, shard=shard,
-        job=ServerJob.SAVE_COUNCIL_RESULTS if phase is Phase.SETTLE else task,
+        job=phase.value if native else task,
+        pipeline_name=PIPELINE if native else None, task_name=task if native else None,
         producer=silicon.PRODUCER,
     )
-    return Runner(phase, root, bundle, machine_evidence.ExpectedFile(writer, day), trial)
+    opening = machine_evidence.ExpectedFile(writer, day, native=native)
+    return Runner(phase, root, bundle, opening, trial)
 
 
 def selected_runner(

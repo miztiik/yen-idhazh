@@ -5,7 +5,7 @@ inputs:
   mode:
     description: The caller's resolved host telemetry mode.
     required: false
-    default: 'python'
+    default: 'typescript'
   date:
     description: Default UTC accounting day for the caller's measured command.
     required: false

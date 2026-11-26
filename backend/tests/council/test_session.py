@@ -239,10 +239,11 @@ def test_a_council_verb_runs_a_night_that_hosts_nobody(
     )
 
 
-def test_settle_records_one_machine_for_the_night_not_for_each_judged_date(
+def test_python_rollback_records_one_machine_for_the_night_not_for_each_judged_date(
     venue: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setenv("IDHAZH_HOST_TELEMETRY_MODE", "python")
     a_venue(venue, package=A_VENUE, slugs={A_SLUG: (1, ())})
     config_root = _config_registering(venue, A_SLUG)
     set_host_fingerprint_placement(config_root, False)

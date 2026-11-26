@@ -140,7 +140,8 @@ function parseParquet<T>(read: () => T): T {
   }
 }
 export async function readLedgerParquet<T extends object>(
-  path: string, ledger: RowIdentity["ledger"], contract: LedgerRowContract<T> | LedgerRowProjectionContract<T>,
+  path: string, ledger: RowIdentity["ledger"],
+  expected: LedgerRowContract<T> | LedgerRowProjectionContract<T> | LedgerRowContract<T>[],
 ): Promise<ReadLedgerFile<T>> {
   initialization ??= initializeParquet();
   await initialization;
@@ -157,6 +158,9 @@ export async function readLedgerParquet<T extends object>(
   if (envelope.ledger !== ledger) {
     throw new LedgerHistoryReadError("Parquet ledger differs from the requested contract");
   }
+  const contract = Array.isArray(expected)
+    ? expected.find(candidate => candidate.schemaVersion === envelope.row_schema_version) : expected;
+  if (contract === undefined) throw new LedgerHistoryReadError("Parquet row schema version differs from the requested contract");
   const projectionContract = "projectedFields" in contract ? contract : undefined;
   if (projectionContract !== undefined) {
     if (SchemaVersionSchema.parse(envelope.row_schema_version) > projectionContract.schemaVersion) {

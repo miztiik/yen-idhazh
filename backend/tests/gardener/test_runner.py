@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
-from support.native_performance import Batch, write_batches
+from support.native_performance import Batch, capture_openings, write_batches
 from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh import config, ledger
@@ -41,6 +41,7 @@ from idhazh.contracts.task_performance import TaskPerformanceRow
 from idhazh.gardener import event_log, performance, report, runner, tasks
 from idhazh.gardener.outcome import EXIT_INTEGRITY, EXIT_OK, EXIT_TASK_FAILED, Outcome
 from idhazh.ledger import paths
+from idhazh.telemetry import machine_api
 from utilities import gardener_publish
 from utilities.publication_git import Repository
 
@@ -184,11 +185,13 @@ def test_task_performance_compaction_lands_its_own_receipt_only_after_the_pass(
         producer=runner.PRODUCER, git_sha=source,
     )
     private = tmp_path / "machine"
+    expected = performance.opening_file(execution, native=True)
+    (opening,) = capture_openings(((private, expected),))
     old, own, foreign = write_batches((Batch(private, (
         (performance.task_file(execution, "old-work"), {"elapsed_ms": 5}, private),
         (performance.task_file(execution, name), {"elapsed_ms": 11}, private),
         (performance.task_file(execution, "other-work"), {"elapsed_ms": 7}, private),
-    )),))
+    ), opening),))
     old.place(repo)
     git(repo, "add", "--", old.path)
     git(repo, "-c", "user.name=Seed", "-c", "user.email=seed@example.invalid",
@@ -211,6 +214,7 @@ def test_task_performance_compaction_lands_its_own_receipt_only_after_the_pass(
     ]
     assert own.path not in outcome.landing.written_paths | outcome.landing.deleted_paths
     assert not (repo / own.path).exists()
+    assert not (repo / opening.path).exists()
     before = git(origin, "rev-parse", "main")
     permissions = tuple(outcome.landing.owned_prefixes)
     deletions = tuple(settings.tasks[name].owns)
@@ -223,6 +227,14 @@ def test_task_performance_compaction_lands_its_own_receipt_only_after_the_pass(
     assert git(origin, "rev-parse", "main") == before
     assert not (repo / own.path).exists()
     (private / own.path).write_bytes(own.data)
+    (private / expected.receipt).unlink()
+    assert gardener_publish.publish(
+        outcome.landing, attempts=1, repo=repo, identity=execution,
+        write_permissions=permissions, delete_permissions=deletions,
+        performance_root=private,
+    ).exit_code == EXIT_INTEGRITY
+    assert git(origin, "rev-parse", "main") == before
+    opening.save_receipt(private, expected)
     assert gardener_publish.publish(
         outcome.landing, attempts=1, repo=repo, identity=execution,
         write_permissions=permissions, delete_permissions=deletions,
@@ -231,9 +243,14 @@ def test_task_performance_compaction_lands_its_own_receipt_only_after_the_pass(
     remote = Repository(origin, git_dir=origin)
     entry = remote.entry("main", own.path)
     assert entry is not None and remote.blob(entry.oid) == own.data
+    host = remote.entry("main", opening.path)
+    assert host is not None and remote.blob(host.oid) == opening.data
+    assert isinstance(own.row, TaskPerformanceRow)
+    assert own.row.host_unit_id == str(opening.envelope.unit_id)
     assert remote.entry("main", old.path) is None
     assert remote.entry("main", foreign.path) is None
     assert not (repo / own.path).exists()
+    assert not (repo / opening.path).exists()
 
 
 def test_the_runner_writes_the_record_and_hands_back_what_to_land_without_pushing(
@@ -254,6 +271,21 @@ def test_the_runner_writes_the_record_and_hands_back_what_to_land_without_pushin
     assert outcome.landing.message == "gardener: old-days on 2026-09-27"
 
 
+def test_a_typescript_shard_without_a_listener_does_not_collect_in_python(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
+) -> None:
+    _, checkout, settings = a_garden(tmp_path, monkeypatch, "runner", RUNNER_FILES)
+    monkeypatch.setenv("IDHAZH_HOST_TELEMETRY_MODE", "typescript")
+    monkeypatch.delenv(machine_api.ORIGIN_ENV, raising=False)
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+
+    outcome, _ = ran(("old-days",), settings, checkout, "garden_tasks_ok", monkeypatch, land=False)
+
+    assert outcome.exit_code == EXIT_OK and outcome.landing is not None
+    assert not ledger.raw_root(checkout / "state", LedgerName.HOST_FINGERPRINT).exists()
+    assert "Gardener shard fingerprint unavailable: no machine listener" in caplog.text
+
+
 @pytest.mark.parametrize("land", [False, True], ids=["local", "pushed"])
 def test_a_shard_records_the_machine_it_drew_and_names_it_among_its_writes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, land: bool
@@ -271,6 +303,7 @@ def test_a_shard_records_the_machine_it_drew_and_names_it_among_its_writes(
     inherited from production defaults. See `docs/reference/host-metrics.md`.
     """
     origin, checkout, settings = a_garden(tmp_path, monkeypatch, "runner", RUNNER_FILES)
+    monkeypatch.setenv("IDHAZH_HOST_TELEMETRY_MODE", "python")
     monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "9")
 
     outcome, _ = ran(("old-days",), settings, checkout, "garden_tasks_ok", monkeypatch, land=land)

@@ -64,14 +64,14 @@ export const contextHeadroomQuery = {
 
 export const articleCostQuery = {
 	name: 'articleCostQuery', ledger: 'item-health',
-	columns: ['date', 'run_id', 'machine_job', 'machine_pipeline_name', 'machine_task_name', 'machine_shard', 'item_index', 'item_total_ms', 'cpu_busy_pct', 'prefill_ms', 'decode_ms', 'llama_rss_bytes'],
+	columns: ['date', 'run_id', 'attempt', 'machine_job', 'machine_pipeline_name', 'machine_task_name', 'machine_shard', 'item_index', 'item_total_ms', 'cpu_busy_pct', 'prefill_ms', 'decode_ms', 'llama_rss_bytes'],
 	span: 'window'
 } as const satisfies PanelQuery;
 
 export const articleCostHostsQuery = {
 	name: 'articleCostHostsQuery', ledger: 'host-fingerprint',
 	columns: [
-		'version', 'date', 'run_id', 'job', 'pipeline_name', 'task_name', 'shard', 'cpu_logical_processors',
+		'version', 'date', 'run_id', 'attempt', 'job', 'pipeline_name', 'task_name', 'shard', 'cpu_logical_processors',
 		'cores', 'threads', 'mhz_max', 'mhz_at_probe'
 	],
 	span: 'window'

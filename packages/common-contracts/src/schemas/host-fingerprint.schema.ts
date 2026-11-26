@@ -1,9 +1,11 @@
-/** Which complete hardware and task measurements may an existing host row retain? */
+/** What does a new hardware capture write, and what may a historical host row retain? */
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { JobNameSchema, RunIdSchema, reject } from "./primitives";
 
 export const HOST_FINGERPRINT_VERSION = "2026-10-26";
+export const HOST_HARDWARE_VERSION = "2026-11-26";
+export const HOST_FINGERPRINT_PRODUCER = "telemetry.silicon";
 export const WATCHED_FLAGS = [
   "amx_bf16", "amx_int8", "amx_tile", "avx2", "avx512_bf16",
   "avx512_fp16", "avx512_vnni", "avx512f", "avx_vnni", "f16c", "fma", "sse4_2",
@@ -45,12 +47,7 @@ export function fingerprintV2(row: Hardware): string | null {
   return createHash("sha256").update(json, "ascii").digest("hex").slice(0, 16);
 }
 
-export const HostFingerprintRowSchema = z.strictObject({
-  version: z.enum(["2026-10-10", "2026-10-12", "2026-10-14", HOST_FINGERPRINT_VERSION]).default(HOST_FINGERPRINT_VERSION),
-  date: z.iso.date(), run_id: RunIdSchema,
-  job: JobNameSchema.nullable().default("work"),
-  pipeline_name: JobNameSchema.nullable().default(null),
-  task_name: JobNameSchema.nullable().default(null), shard: count,
+const hardwareFields = {
   fingerprint: z.string().regex(/^[0-9a-f]{16}$/).nullable().default(null),
   fingerprint_version: z.union([z.literal(1), z.literal(2)]).nullable().default(null),
   cpu_model: text, cpu_vendor: text,
@@ -72,14 +69,9 @@ export const HostFingerprintRowSchema = z.strictObject({
   memcpy_probe_mib: count.nullable().default(null),
   vm_size: text, vm_location: text, vm_zone: text, vm_fault_domain: text,
   runner_name: text, measured_at: instant,
-  model_load_ms: number.nonnegative().nullable().default(null),
-  job_seconds: count.nullable().default(null),
-  server_prompt_tokens: count.nullable().default(null),
-  server_prompt_seconds: number.nonnegative().nullable().default(null),
-}).superRefine((row, ctx) => {
-  if ((row.pipeline_name === null) !== (row.task_name === null)) reject(ctx, "requires both pipeline_name and task_name");
-  if (row.task_name === null && row.job === null) reject(ctx, "requires a legacy job or pipeline and task");
-  if (row.task_name !== null && row.job !== null && row.job !== row.task_name) reject(ctx, "generic job must be null or match task_name");
+};
+
+function checkHardware(row: z.output<z.ZodObject<typeof hardwareFields>>, ctx: z.RefinementCtx) {
   if ((row.fingerprint === null) !== (row.fingerprint_version === null)) reject(ctx, "fingerprint and version must be present together");
   if (row.fingerprint_version === 2) {
     try {
@@ -96,5 +88,31 @@ export const HostFingerprintRowSchema = z.strictObject({
     if (row[name] !== null && row.cpu_logical_processors !== null && row[name] > row.cpu_logical_processors) reject(ctx, `${name} cannot exceed logical count`);
   }
   if (row.measured_at !== null && row.cpu_target_measured_at !== null && row.cpu_target_measured_at < row.measured_at) reject(ctx, "target capture cannot precede machine probe");
+}
+
+export const HostHardwareRowSchema = z.strictObject({
+  version: z.literal(HOST_HARDWARE_VERSION),
+  date: z.iso.date(), run_id: RunIdSchema, job: JobNameSchema.nullable(),
+  pipeline_name: JobNameSchema, task_name: JobNameSchema, shard: count,
+  ...hardwareFields,
+}).superRefine(checkHardware);
+export type HostHardwareRow = z.infer<typeof HostHardwareRowSchema>;
+
+export const HostFingerprintRowSchema = z.strictObject({
+  version: z.enum(["2026-10-10", "2026-10-12", "2026-10-14", HOST_FINGERPRINT_VERSION]).default(HOST_FINGERPRINT_VERSION),
+  date: z.iso.date(), run_id: RunIdSchema,
+  job: JobNameSchema.nullable().default("work"),
+  pipeline_name: JobNameSchema.nullable().default(null),
+  task_name: JobNameSchema.nullable().default(null), shard: count,
+  ...hardwareFields,
+  model_load_ms: number.nonnegative().nullable().default(null),
+  job_seconds: count.nullable().default(null),
+  server_prompt_tokens: count.nullable().default(null),
+  server_prompt_seconds: number.nonnegative().nullable().default(null),
+}).superRefine((row, ctx) => {
+  if ((row.pipeline_name === null) !== (row.task_name === null)) reject(ctx, "requires both pipeline_name and task_name");
+  if (row.task_name === null && row.job === null) reject(ctx, "requires a legacy job or pipeline and task");
+  if (row.task_name !== null && row.job !== null && row.job !== row.task_name) reject(ctx, "generic job must be null or match task_name");
+  checkHardware(row, ctx);
 });
 export type HostFingerprintRow = z.infer<typeof HostFingerprintRowSchema>;

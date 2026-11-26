@@ -123,7 +123,8 @@ def reopen[C: LedgerContract](
     try:
         for day, raw in answered.items():
             days[day] = ledger.settle_registered_rows(
-                [days.get(day, []), *(rows for _path, rows in raw.taken)], key, ledger=tree.ledger
+                [days.get(day, []), *(rows for _path, rows in raw.taken)], key,
+                ledger=tree.ledger, preserve_host_history=True,
             )
         rows = [row for day in sorted(days) for row in days[day]]
         built = (

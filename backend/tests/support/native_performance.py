@@ -21,6 +21,35 @@ class Batch:
     opening: VerifiedFile | None = None
 
 
+def capture_openings(
+    captures: Sequence[tuple[Path, ExpectedFile]],
+) -> tuple[VerifiedFile, ...]:
+    """File requested runner openings with the real handler and retain exact bytes."""
+    bun = shutil.which("bun")
+    assert bun is not None
+    result = subprocess.run(
+        [bun, "run", "--no-install", "test/write-gardener-control.ts"],
+        cwd=REPO_ROOT / "services" / "host-probes",
+        input=json.dumps([
+            {
+                "state": str(root / "state"),
+                "request": {"date": expected.date, "writer": expected.writer.model_dump(mode="json")},
+                "tasks": [],
+            }
+            for root, expected in captures
+        ]),
+        text=True, capture_output=True, timeout=45, check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    proofs = []
+    for (root, expected), line in zip(captures, result.stdout.splitlines(), strict=True):
+        response = machine_api.Captured.model_validate(json.loads(line)["opening"])
+        proof = machine_evidence.verify_capture(root / "state", response, expected)
+        proof.save_receipt(root, expected)
+        proofs.append(proof)
+    return tuple(proofs)
+
+
 def write_batches(batches: Sequence[Batch]) -> tuple[VerifiedFile, ...]:
     this_run = []
     for batch in batches:
@@ -37,6 +66,8 @@ def write_batches(batches: Sequence[Batch]) -> tuple[VerifiedFile, ...]:
             days.add(host.envelope.covers)
             if host.envelope.identity.pipeline_name is None:
                 execution["legacy_opening_writer"] = host.envelope.identity.model_dump(mode="json")
+            elif host.envelope.identity.job is not None:
+                execution["runner_job"] = host.envelope.identity.job
         execution["accounting_days"] = sorted(days)
         this_run.append({
             "state": str(batch.private / "state"), "execution": execution,

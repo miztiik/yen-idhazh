@@ -73,12 +73,14 @@ from idhazh.contracts.gardener_events import CompactionStep, StepChoice
 from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
 from idhazh.contracts.knobs.gardener import GITHUB_LARGE_FILE_BYTES
 from idhazh.contracts.ledger_index import CompactEntry, EntryState
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.gardener import ledger_marks, named_trees
 from idhazh.gardener.error_cause import ManualActionError
 from idhazh.gardener.file_listing import OverBudgetError
 from idhazh.gardener.tasks._compact_tree import CompactTree, PeriodFetch, Stop
 from idhazh.gardener.tasks._monthly_period import days_of
 from idhazh.ledger import LedgerStoredRow
+from idhazh.ledger.persist import preserves_host_cells
 
 #: The step a year this module refuses is named under. Its yearly mark stays.
 _STEP: Final = CompactionStep.PACK_YEARS
@@ -118,8 +120,24 @@ def _keep_own(tree: CompactTree, year: str, own: ledger_marks.Adopted) -> None:
     """Index a year's own file, which no entry named, as the year, and let its months go.
 
     Its months' lost days and set-aside counts carry onto its entry, and their
-    files go by their names, so none of them is downloaded.
+    files go by their names. Host packing verifies the original rows in the
+    year and each month before deciding those deletions.
     """
+    if tree.ledger is LedgerName.HOST_FINGERPRINT:
+        model = ledger.door_contract(tree.ledger)
+        by_month: dict[str, list[LedgerStoredRow]] = {}
+        for row in tree.load(own.path, model=model):
+            by_month.setdefault(row.day[:7], []).append(row)
+        for month in months_of(year):
+            path = named_trees.compact_file(
+                tree.listing, tree.state_dir, tree.ledger, Period.MONTHLY, month
+            )
+            if path is not None and not preserves_host_cells(
+                tree.load(path, model=model), by_month.get(month, [])
+            ):
+                raise ManualActionError(
+                    "an unindexed host year file disagrees with the rows in its month files"
+                )
     held = [tree.monthly[month] for month in months_of(year) if month in tree.monthly]
     tree.yearly[year] = own.entry.model_copy(
         update={
@@ -167,12 +185,15 @@ def _build[C: LedgerContract](
     year file over GitHub's large-file line, before anything is written.
     """
     unreadable: list[str] = []
+    host = tree.ledger is LedgerName.HOST_FINGERPRINT
 
     def groups(months: Sequence[str]) -> Iterator[list[LedgerStoredRow]]:
         for month in months:
             try:
                 rows = tree.load(held[month], model=model)
             except ValueError:
+                if host:
+                    raise
                 if month not in unreadable:
                     unreadable.append(month)
                 continue
@@ -190,6 +211,7 @@ def _build[C: LedgerContract](
             covers=year,
             identity=identity,
             built_from=len(months),
+            host_sources=[held[month] for month in months] if host else None,
         )
 
     built = render(sorted(held))
@@ -214,7 +236,10 @@ def _pack(tree: CompactTree, year: str, *, identity: WriterIdentity) -> tuple[St
     except ValueError as refusal:
         return (tree.refuse(_STEP, year, failure=refusal),)
     if own is not None:
-        _keep_own(tree, year, own)
+        try:
+            _keep_own(tree, year, own)
+        except ValueError as refusal:
+            return (tree.refuse(_STEP, year, failure=refusal),)
         return ()
     months = _counted(tree, year)
     recovered: dict[str, ledger_marks.Adopted] = {}
@@ -250,6 +275,11 @@ def _pack(tree: CompactTree, year: str, *, identity: WriterIdentity) -> tuple[St
         if month in tree.monthly and tree.monthly[month].names_file
     }
     absent = [month for month, found in files.items() if found is None]
+    if absent and tree.ledger is LedgerName.HOST_FINGERPRINT:
+        return (tree.refuse(
+            _STEP, year, fault=GardenerFault.PACKED_FILE_UNREADABLE,
+            ledger_fault=ledger.LedgerFault.FILE_MISSING,
+        ),)
     held = {month: found for month, found in files.items() if found is not None}
     held.update((month, adopted.path) for month, adopted in recovered.items())
     try:
@@ -310,7 +340,10 @@ def _fetched(tree: CompactTree, year: str) -> PeriodFetch:
     """
     own = named_trees.compact_file(tree.listing, tree.state_dir, tree.ledger, Period.YEARLY, year)
     if own is not None:
-        return PeriodFetch(beside=(own,))
+        folders = (
+            (tree.monthly_year_folder(year),) if tree.ledger is LedgerName.HOST_FINGERPRINT else ()
+        )
+        return PeriodFetch(folders=folders, beside=(own,))
     return PeriodFetch(folders=(tree.monthly_year_folder(year),))
 
 

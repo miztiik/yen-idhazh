@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import subprocess
 import sys
 import time
@@ -15,6 +16,7 @@ import pytest
 from support.paths import CONFIG_DIR
 
 from idhazh import config
+from idhazh.telemetry.host_control import MODE_ENV
 from utilities import memory_sampler
 
 #: The program, run the way a workflow step runs it.
@@ -91,8 +93,9 @@ def _a_proc_tree(tmp_path: Path) -> Path:
 
 
 def test_summarize_accepts_named_python_artifact_paths(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setenv(MODE_ENV, "python")
     caplog.set_level(logging.INFO, logger="memory_sampler")
     samples = tmp_path / "samples" / "rss-samples.jsonl"
     processes = tmp_path / "samples" / "python-procs.jsonl"
@@ -253,12 +256,14 @@ def _enabled_config(tmp_path: Path) -> Path:
     return root
 
 
-def _ran(tmp_path: Path, *argv: str) -> subprocess.CompletedProcess[str]:
+def _ran_python_sampler(tmp_path: Path, *argv: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, str(MODULE), *argv, "--config-root", str(_enabled_config(tmp_path))],
         cwd=tmp_path,
+        env=os.environ | {MODE_ENV: "python"},
         capture_output=True,
         text=True,
+        timeout=PATIENCE_SECONDS,
         check=False,
     )
 
@@ -344,7 +349,7 @@ def test_the_summary_prints_the_five_figures_off_the_records(tmp_path: Path) -> 
         ],
     )
 
-    completed = _ran(tmp_path, "summarize")
+    completed = _ran_python_sampler(tmp_path, "summarize")
 
     assert completed.returncode == 0, completed.stderr
     assert (
@@ -367,7 +372,7 @@ def test_the_summary_says_a_file_is_missing_and_does_not_fail_the_step(tmp_path:
     A summary that raised would turn a lost measurement into a red step on a job
     that had already failed for its own reasons, and hide the real one.
     """
-    completed = _ran(tmp_path, "summarize")
+    completed = _ran_python_sampler(tmp_path, "summarize")
 
     assert completed.returncode == 0, completed.stderr
     assert "rss-samples.jsonl not found" in completed.stderr
@@ -394,29 +399,30 @@ def test_the_pid_file_names_the_loop_and_not_the_process_that_launched_it(
     On the runner `python3` is the interpreter itself, and this program cannot
     run anywhere without a `/proc` in any case.
 
-    Nothing here waits on a clock. The target is a process that has already been
-    reaped, so the loop writes its first line and stops.
+    Keep the target alive through the first sample and PID check. Releasing it
+    through stdin then lets the sampler stop on its own.
     """
-    root = _enabled_config(tmp_path)
-    reaped = subprocess.Popen([sys.executable, "-c", ""])
-    reaped.wait()
+    log = tmp_path / "memory-sampler.log"
+    with subprocess.Popen(
+        [sys.executable, "-c", "import sys; sys.stdin.read()"], stdin=subprocess.PIPE,
+    ) as target:
+        try:
+            launcher = _ran_python_sampler(
+                tmp_path, "start-sampler", "--pid", str(target.pid), "--every", "0.1",
+            )
+            assert launcher.returncode == 0, launcher.stderr
+            said = _waited_for(log, "as pid ")
+            claimed = int(said.rsplit("as pid ", 1)[1].split()[0])
+            recorded = int((tmp_path / "memory-sampler.pid").read_text(encoding="utf-8"))
 
-    launcher = subprocess.Popen(
-        [sys.executable, str(MODULE), "start-sampler", "--pid", str(reaped.pid),
-         "--config-root", str(root)],
-        cwd=tmp_path,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    launcher.communicate(timeout=PATIENCE_SECONDS)
+            assert recorded == claimed, "the pid file names a process that is not the sampling loop"
+            assert recorded != target.pid, "the pid file names the process being watched"
+            assert _waited_for(tmp_path / "rss-samples.jsonl", '"llama_vmrss_kb":')
+        finally:
+            target.communicate(timeout=PATIENCE_SECONDS)
 
-    said = _waited_for(tmp_path / "memory-sampler.log", "as pid ")
-    claimed = int(said.rsplit("as pid ", 1)[1].split()[0])
-    recorded = int((tmp_path / "memory-sampler.pid").read_text(encoding="utf-8"))
-
-    assert recorded == claimed, "the pid file names a process that is not the sampling loop"
-    assert recorded != reaped.pid, "the pid file names the process being watched"
+    stopped = _waited_for(log, f"pid {target.pid} is gone, after ")
+    assert int(stopped.rsplit("after ", 1)[1].split()[0]) > 0
 
 
 def test_a_loop_that_is_already_gone_is_refused_rather_than_recorded(tmp_path: Path) -> None:

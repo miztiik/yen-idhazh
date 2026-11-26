@@ -1,15 +1,64 @@
-/** What affinity and tightest visible cgroup quota apply to this process? */
+/** What affinity and visible cgroup quota apply to the intended process? */
+import { readlink } from "node:fs/promises";
 import { posix } from "node:path";
-import type { ServiceConfig } from "../config";
+import type { FingerprintTarget, ServiceConfig } from "../config";
 import type { Inspection } from "./bounded-input";
-import { parseInteger, readInput, unavailable } from "./bounded-input";
+import { hostPath, parseInteger, readInput, unavailable } from "./bounded-input";
 import { parseCpuIds } from "./cpu-topology";
 
-export async function collectCapacity(ids: number[] | null, config: ServiceConfig, context: Inspection) {
-  const status = await readInput("/proc/self/status", config, context);
+export async function pinFingerprintTarget(pid: number, config: ServiceConfig, context: Inspection = {}): Promise<FingerprintTarget | null> {
+  if ((context.platform ?? process.platform) !== "linux") return null;
+  const stat = await readInput(`/proc/${pid}/stat`, config, context);
+  // Linux puts an unescaped process name in parentheses before field three.
+  const end = stat?.lastIndexOf(") ") ?? -1;
+  if (stat == null || end < 0 || !stat.startsWith(`${pid} (`)) return null;
+  const fields = stat.slice(end + 2).trim().split(/\s+/);
+  const start_ticks = fields[19];
+  return start_ticks !== undefined && /^\d{1,20}$/.test(start_ticks)
+    && /^[A-Za-z]$/.test(fields[0] ?? "") && !["Z", "X", "x"].includes(fields[0] ?? "")
+    ? { pid, start_ticks } : null;
+}
+
+async function pinned(target: FingerprintTarget, config: ServiceConfig, context: Inspection) {
+  return (await pinFingerprintTarget(target.pid, config, context))?.start_ticks === target.start_ticks;
+}
+
+async function sharesQuotaView(processRoot: string, context: Inspection) {
+  if (processRoot === "/proc/self") return true;
+  try {
+    for (const namespace of ["cgroup", "mnt"]) {
+      const self = await readlink(hostPath(context, `/proc/self/ns/${namespace}`));
+      const target = await readlink(hostPath(context, `${processRoot}/ns/${namespace}`));
+      if (target !== self) return false;
+    }
+    return true;
+  } catch (error) {
+    if (error instanceof Error && "code" in error
+      && ["ENOENT", "EACCES", "EPERM", "EINVAL", "ENOTDIR"].includes(String(error.code))) return false;
+    throw error;
+  }
+}
+
+function unknownTarget(context: Inspection, reason: string) {
+  return {
+    cpu_allowed_processors: unavailable(context, "cpu_allowed_processors", reason),
+    cpu_quota_cores: unavailable(context, "cpu_quota_cores", reason),
+    cpu_quota_state: null,
+    cpu_target_measured_at: null,
+  };
+}
+
+export async function collectCapacity(
+  ids: number[] | null, config: ServiceConfig, context: Inspection, target: FingerprintTarget | "self" | null,
+) {
+  if (target === null) return unknownTarget(context, "target_not_supplied");
+  if (target !== "self" && !await pinned(target, config, context)) return unknownTarget(context, "target_pin_unavailable");
+  const processRoot = target === "self" ? "/proc/self" : `/proc/${target.pid}`;
+  const status = await readInput(`${processRoot}/status`, config, context);
   const affinity = parseCpuIds(status?.match(/^Cpus_allowed_list:\s*(.+)$/m)?.[1] ?? null, config.max_online_processors);
   const count = ids && affinity ? ids.filter((id) => affinity.includes(id)).length : 0;
-  const groups = await readInput("/proc/self/cgroup", config, context);
+  const sharedView = await sharesQuotaView(processRoot, context);
+  const groups = sharedView ? await readInput(`${processRoot}/cgroup`, config, context) : null;
   const lines = (groups ?? "").split("\n").map((line) => line.match(/^(\d+):([^:]*):(\/.*)$/));
   const v2 = lines.find((line) => line?.[1] === "0" && line[2] === "");
   const chosen = v2 ?? lines.find((line) => line?.[2]?.split(",").includes("cpu"));
@@ -41,10 +90,19 @@ export async function collectCapacity(ids: number[] | null, config: ServiceConfi
   }
   if (state === "unavailable") {
     quota = null;
-    unavailable(context, "cpu_quota_cores", "ancestor_quota_unavailable");
+    unavailable(context, "cpu_quota_cores", sharedView ? "ancestor_quota_unavailable" : "target_quota_view_unavailable");
+  }
+  if (target !== "self") {
+    if (!await pinned(target, config, context)) return unknownTarget(context, "target_pin_unavailable");
+    if (groups !== null && (await readInput(`${processRoot}/cgroup`, config, context) !== groups
+      || !await sharesQuotaView(processRoot, context))) {
+      state = "unavailable";
+      quota = unavailable(context, "cpu_quota_cores", "target_quota_view_changed");
+    }
   }
   return {
     cpu_allowed_processors: count || unavailable(context, "cpu_allowed_processors", "affinity_unavailable"),
     cpu_quota_cores: quota, cpu_quota_state: state,
+    cpu_target_measured_at: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
   };
 }

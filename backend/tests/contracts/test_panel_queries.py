@@ -117,9 +117,9 @@ EXPECTED_COLUMNS: Final[Mapping[str, tuple[str, ...]]] = {
     "closestToMemoryQuery": ("date", "item_id", "source_id", "os_mem_total_bytes", "os_mem_available_min_bytes"),
     "memoryHeldQuery": ("date", "item_id", "os_mem_total_bytes", "os_mem_available_bytes", "llama_rss_bytes", "python_rss_bytes", "llama_rss_anon_bytes", "python_rss_anon_bytes", "os_swap_total_bytes", "os_swap_free_bytes"),
     "contextHeadroomQuery": ("date", "summary_input_tokens", "n_ctx_configured", "n_parallel", "truncation_cap_tokens"),
-    "articleCostQuery": ("date", "run_id", "machine_job", "machine_pipeline_name", "machine_task_name", "machine_shard", "item_index", "item_total_ms", "cpu_busy_pct", "prefill_ms", "decode_ms", "llama_rss_bytes"),
+    "articleCostQuery": ("date", "run_id", "attempt", "machine_job", "machine_pipeline_name", "machine_task_name", "machine_shard", "item_index", "item_total_ms", "cpu_busy_pct", "prefill_ms", "decode_ms", "llama_rss_bytes"),
     "articleCostHostsQuery": (
-        "version", "date", "run_id", "job", "pipeline_name", "task_name", "shard", "cpu_logical_processors",
+        "version", "date", "run_id", "attempt", "job", "pipeline_name", "task_name", "shard", "cpu_logical_processors",
         *LEGACY_HOST_INPUT_COLUMNS,
     ),
     "promptReuseQuery": ("date", "label_input_tokens", "label_cached_tokens", "summary_input_tokens", "summary_cached_tokens"),
@@ -241,7 +241,7 @@ def row_columns() -> dict[str, tuple[str, ...]]:
         "council-run-records": tuple(dict.fromkeys((*CouncilRunRecord.model_fields, *RowIdentity.model_fields))),
         "gardener": tuple(CollectionPruneRow.model_fields),
         "run-shards": tuple(RunShards.model_fields),
-        "item-health": ItemHealthRow.csv_columns(),
+        "item-health": (*ItemHealthRow.csv_columns(), "attempt"),
         "host-fingerprint": (*HostFingerprintRow.csv_columns(), "attempt", "unit_id"),
         "task-performance": (*TaskPerformanceRow.model_fields, "attempt"),
         "summary-quality-evals": EvalRow.csv_columns(),
@@ -361,6 +361,8 @@ def test_each_declared_item_and_host_column_has_exactly_the_first_query_owner() 
         if query.ledger not in readers_by_ledger:
             continue
         for column in query.columns:
+            if query.ledger == "item-health" and column == "attempt":
+                continue  # Writer attempt is stored envelope metadata, not an item measurement.
             if query.ledger == "host-fingerprint" and (
                 column in LEGACY_HOST_INPUT_COLUMNS
                 or (column in RowIdentity.model_fields and column not in HostFingerprintRow.model_fields)

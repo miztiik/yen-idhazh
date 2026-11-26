@@ -1,4 +1,4 @@
-/** Write gardener evidence through the native handlers without external requests. */
+/** Write hosted runner evidence through the native handlers without external requests. */
 import { z } from "zod";
 import { createFingerprintHandler, FINGERPRINT_PATH } from "@idhazh/host-fingerprints/api";
 import { FingerprintRequestSchema, loadConfig, loadSettings } from "@idhazh/host-fingerprints/config";
@@ -35,13 +35,14 @@ for (const { state, request, tasks } of captures) {
   const reply = await handler(command(FINGERPRINT_PATH, request));
   if (!reply.ok) throw new Error(`${reply.status}: ${await reply.text()}`);
   const opening = FingerprintResponseSchema.parse(await reply.json());
-  if (opening.status !== "written") throw new Error("The control runner did not capture its opening");
-  const { run_id, attempt, shard, git_sha } = request.writer;
+  if (opening.status !== "written") throw new Error("The runner did not capture its opening");
+  const { run_id, attempt, shard, git_sha, job, pipeline_name } = request.writer;
+  if (job === null || pipeline_name === null) throw new Error("A hosted runner needs both identities");
   const recorder = createSampleHandler(probes, {}, undefined, undefined, {
     outputRoot: state, registryPath, settings: performance,
     execution: {
-      run_id, attempt, shard, git_sha, pipeline_name: "gardener", accounting_days: [request.date],
-      legacy_opening_writer: request.writer,
+      run_id, attempt, shard, git_sha, pipeline_name, accounting_days: [request.date],
+      runner_job: job,
     },
   });
   try {

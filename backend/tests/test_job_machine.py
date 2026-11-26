@@ -41,6 +41,7 @@ def test_both_halves_name_one_attempt_and_clock_the_work(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fails: bool
 ) -> None:
     monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "9")
+    monkeypatch.setenv("IDHAZH_HOST_TELEMETRY_MODE", "python")
     settings = config.load()
     settings.app.observability.host_fingerprint_bandwidth_floor_mib = 0
     settings.app.observability.host_telemetry_enabled = True
@@ -108,8 +109,9 @@ def test_disabled_recording_writes_neither_half(tmp_path: Path) -> None:
 
 
 def test_instrument_io_failure_is_reported_without_losing_the_work(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setenv("IDHAZH_HOST_TELEMETRY_MODE", "python")
     settings = config.load()
     settings.app.observability.host_fingerprint_bandwidth_floor_mib = 0
     settings.app.observability.host_telemetry_enabled = True

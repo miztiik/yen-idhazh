@@ -1,7 +1,7 @@
 /** Which authored controls and selected observability settings govern collection? */
 import { z } from "zod";
 import { constants } from "node:buffer";
-import { WriterIdentitySchema } from "@idhazh/common-contracts";
+import { HOST_FINGERPRINT_PRODUCER, JobNameSchema, WriterIdentitySchema } from "@idhazh/common-contracts";
 
 export const SERVICE_ROOT = new URL("../", import.meta.url);
 export const REPOSITORY_ROOT = new URL("../../../", import.meta.url);
@@ -31,18 +31,20 @@ export const SelectedSettingsSchema = z.object({
     compression_compact: z.enum(["snappy", "zstd", "none"]),
   }),
 });
+export const FingerprintTargetSchema = z.strictObject({
+  pid: z.int().positive(), start_ticks: z.string().regex(/^\d{1,20}$/),
+});
+export type FingerprintTarget = z.infer<typeof FingerprintTargetSchema>;
+
 export const FingerprintRequestSchema = z.strictObject({
   date: z.iso.date(),
-  writer: WriterIdentitySchema.superRefine((writer, ctx) => {
-    if (writer.producer !== "telemetry.silicon") ctx.addIssue({ code: "custom", message: "host producer must be telemetry.silicon", path: ["producer"] });
+  writer: WriterIdentitySchema.safeExtend({
+    pipeline_name: JobNameSchema, task_name: JobNameSchema, producer: z.literal(HOST_FINGERPRINT_PRODUCER),
   }),
+  target: FingerprintTargetSchema.nullable().optional(),
+  ask_placement: z.literal(false).optional(),
 });
-export const CaptureContextSchema = FingerprintRequestSchema.extend({
-  model_load_ms: z.number().finite().nonnegative().nullable().default(null),
-  job_seconds: z.int().nonnegative().nullable().default(null),
-  server_prompt_tokens: z.int().nonnegative().nullable().default(null),
-  server_prompt_seconds: z.number().finite().nonnegative().nullable().default(null),
-});
+export const CaptureContextSchema = FingerprintRequestSchema;
 export type ServiceConfig = z.infer<typeof ServiceConfigSchema>;
 export type SelectedSettings = z.infer<typeof SelectedSettingsSchema>;
 export type CaptureContext = z.infer<typeof CaptureContextSchema>;

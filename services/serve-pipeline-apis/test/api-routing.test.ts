@@ -24,7 +24,7 @@ test("exported host and shared paths use the fixed HTTP protocol date", () => {
     FINGERPRINT_PATH, HEALTH_PATH, SAMPLE_PATH, START_TASK_PROFILE_PATH, STOP_TASK_PROFILE_PATH,
     CACHE_LATENCY_PATH, API_HEALTH_PATH,
   }).toEqual({
-    FINGERPRINT_PATH: "/api/2026-11-05/capture-host-fingerprint",
+    FINGERPRINT_PATH: "/api/2026-11-26/capture-host-fingerprint",
     HEALTH_PATH: "/api/2026-11-05/get-host-fingerprint-health",
     SAMPLE_PATH: "/api/2026-11-05/sample-host",
     START_TASK_PROFILE_PATH: "/api/2026-11-05/start-task-profile",

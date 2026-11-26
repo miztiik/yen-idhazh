@@ -83,6 +83,7 @@ export interface MachineProcessors {
 	job?: string | null;
 	pipeline_name?: string | null;
 	task_name?: string | null;
+	attempt?: number | string | null;
 	shard: number | string | null;
 	/** Logical processors, which is what the kernel's busy share is taken over.
 	 * Null where the record reached the machine but named no count. */
@@ -124,7 +125,7 @@ function processorsByShard(hosts: readonly MachineProcessors[]): Map<string, num
 		if (host.cpu_logical_processors === null || !Number.isSafeInteger(host.cpu_logical_processors) ||
 			host.cpu_logical_processors <= 0) continue;
 		const key = shardKey(
-			host.date, host.run_id, host.job, host.shard, host.pipeline_name, host.task_name
+			host.date, host.run_id, host.job, host.shard, host.pipeline_name, host.task_name, host.attempt
 		);
 		if (key === null) continue;
 		const seen = named.get(key);
@@ -166,7 +167,7 @@ function processorTime(
 		offered += 1;
 		const key = shardKey(
 			row.date ?? '', row.run_id ?? '', row.machine_job, row.machine_shard ?? '',
-			row.machine_pipeline_name, row.machine_task_name
+			row.machine_pipeline_name, row.machine_task_name, row.attempt
 		);
 		const processors = key === null ? undefined : byShard.get(key);
 		if (processors === undefined) continue;

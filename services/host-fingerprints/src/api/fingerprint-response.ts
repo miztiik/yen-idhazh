@@ -1,11 +1,11 @@
 /** What can a completed fingerprint HTTP request truthfully report? */
 import { z } from "zod";
-import { HostFingerprintRowSchema } from "@idhazh/common-contracts";
+import { HostHardwareRowSchema } from "@idhazh/common-contracts";
 import { PersistedLedgerFileSchema } from "@idhazh/ledger-file-writer";
 
 export const FingerprintHealthSchema = z.strictObject({ status: z.literal("ok"), enabled: z.boolean() });
 export const FingerprintWrittenSchema = z.strictObject({
-  status: z.literal("written"), row: HostFingerprintRowSchema,
+  status: z.literal("written"), row: HostHardwareRowSchema,
   unavailable: z.record(z.string(), z.string()),
   files: z.array(PersistedLedgerFileSchema.required({ unit_id: true })).length(1),
 });

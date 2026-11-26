@@ -47,6 +47,10 @@ export async function postFingerprint(
     if (!(error instanceof SyntaxError || error instanceof z.ZodError)) throw error;
     return Response.json({ error: error.message }, { status: 400 });
   }
+  if (options.admit !== undefined && !options.admit(input)) {
+    writeEvent(createFingerprintFailureEvent({ context }));
+    return Response.json({ error: "Fingerprint does not match the launched execution" }, { status: 403 });
+  }
   let result: z.infer<typeof FingerprintResponseSchema>;
   try { result = FingerprintResponseSchema.parse(await persistFingerprint(input, config, settings, options)); }
   catch (error) {

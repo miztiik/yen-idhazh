@@ -1,5 +1,6 @@
 /** Which writer and recorded format identify one immutable ledger file? */
 import { z } from "zod";
+import { HOST_FINGERPRINT_PRODUCER, HOST_HARDWARE_VERSION } from "./host-fingerprint.schema";
 import { REJECTED_ARTICLE_VERSION } from "./rejected-article.schema";
 import {
   DISCOVERED_ARTICLE_VERSION, PLANNER_ENVELOPE_VERSION, PLAN_RUN_VERSION,
@@ -37,18 +38,26 @@ const IdentityFields = {
   pipeline_name: JobNameSchema.nullable().default(null),
   task_name: JobNameSchema.nullable().default(null), shard: CountSchema,
 };
-function checkWriterIdentity(value: { pipeline_name: string | null; task_name: string | null; job: string | null }, ctx: z.RefinementCtx): void {
+function distinctJob(value: { task_name: string | null; job: string | null }): boolean {
+  return value.task_name !== null && value.job !== null && value.job !== value.task_name;
+}
+function checkIdentity(value: { pipeline_name: string | null; task_name: string | null; job: string | null }, ctx: z.RefinementCtx): void {
   if ((value.pipeline_name === null) !== (value.task_name === null)) reject(ctx, "identity requires both pipeline_name and task_name");
   if (value.task_name === null && value.job === null) reject(ctx, "identity requires a legacy job or pipeline and task");
-  if (value.task_name !== null && value.job !== null && value.job !== value.task_name) reject(ctx, "generic job must be absent or match its task");
 }
 export const WriterIdentitySchema = z.strictObject({
   ...IdentityFields, producer: NonEmptySchema, git_sha: CommitShaSchema,
-}).superRefine(checkWriterIdentity);
+}).superRefine((value, ctx) => {
+  checkIdentity(value, ctx);
+  if (distinctJob(value) && value.producer !== HOST_FINGERPRINT_PRODUCER) reject(ctx, "only a fingerprint writer may name a distinct job");
+});
 export const RowIdentitySchema = z.strictObject({
   ledger: LedgerNameSchema, covers: DateStampSchema, ...IdentityFields,
   unit_id: z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/),
-}).superRefine(checkWriterIdentity);
+}).superRefine((value, ctx) => {
+  checkIdentity(value, ctx);
+  if (distinctJob(value) && value.ledger !== "host-fingerprint") reject(ctx, "only a host fingerprint may name a distinct job");
+});
 export const FILE_ENVELOPE_VERSION = "2026-10-24" as const;
 export const ENVELOPE_VERSIONS = [
   FILE_ENVELOPE_VERSION, "2026-10-20", "2026-10-14", "2026-09-25", "2026-09-27", "2026-09-28", "2026-09-30",
@@ -74,6 +83,10 @@ export const FileEnvelopeSchema = z.strictObject({
   if (value.unit_id[14] !== "5" || value.file_id[14] !== "8") reject(ctx, "unit_id must be UUID version 5 and file_id version 8");
   if (!(ENVELOPE_VERSIONS as readonly string[]).includes(value.version)) reject(ctx, "unrecognized file envelope version");
   if (value.writer === "idhazh_typescript.ledger.parquet" && value.version < "2026-10-20") reject(ctx, "TypeScript writer requires envelope version 2026-10-20 or later");
+  if (distinctJob(value.identity)
+    && (value.ledger !== "host-fingerprint" || value.row_schema_version !== HOST_HARDWARE_VERSION)) {
+    reject(ctx, "a distinct runner job requires the hardware-only fingerprint contract");
+  }
   if (value.writer.startsWith("idhazh_rust.") && (
     value.version !== "2026-10-10" || value.row_schema_version !== "2026-10-10" ||
     value.ledger !== "host-fingerprint" || value.tier !== "raw" ||

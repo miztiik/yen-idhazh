@@ -32,6 +32,7 @@ from support.paths import CONFIG_DIR, FIXTURES_DIR, read_text
 from idhazh import config, ledger, telemetry
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import ServerJob
+from idhazh.contracts.host_fingerprint import HOST_HARDWARE_VERSION, HostHardwareRow
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
@@ -39,24 +40,36 @@ from idhazh.contracts.summary import Summary
 from idhazh.stages.assemble import stage_assemble
 from idhazh.stages.record import stage_record
 from idhazh.telemetry.census import EXTRACTION_CELLS
+from idhazh.telemetry.host_control import MODE_ENV
 from idhazh.telemetry.record import HEALTH_SUFFIX
 
-from ._builders import _work_stage, isolate_ledgers
+from ._builders import _work_stage, isolate_ledgers, plan
 
 pytestmark = pytest.mark.slow
 
 SUMMARIZE_AND_PLAN_REPLY: Final = (
     FIXTURES_DIR / "completions" / "summarize-and-plan" / "summary-and-plan.json"
 )
+CAPTURED_CPU: Final = "fixture CPU"
 
 
-def worked(tmp_path: Path, monkeypatch: MonkeyPatch) -> tuple[RunPlan, Path]:
+def worked(
+    tmp_path: Path, monkeypatch: MonkeyPatch, *, with_opening: bool = False,
+) -> tuple[RunPlan, Path]:
     """One real work stage with every output root inside the test's own tree."""
     isolate_ledgers(tmp_path, monkeypatch)
+    run_plan = plan()
+    opening = HostHardwareRow(
+        version=HOST_HARDWARE_VERSION, date=run_plan.date, run_id=run_plan.run_id,
+        job=ServerJob.WORK.value, pipeline_name="digest", task_name="work", shard=0,
+        cpu_model=CAPTURED_CPU,
+    ) if with_opening else None
     run_plan, items_dir, _ = _work_stage(
         tmp_path,
         monkeypatch,
+        run_plan=run_plan,
         replies=(SUMMARIZE_AND_PLAN_REPLY.read_bytes(),),
+        native_host=opening,
     )
     assert run_plan.items, "an empty plan would exercise no census rows"
     return run_plan, items_dir
@@ -208,7 +221,8 @@ def test_an_item_whose_shard_sealed_nothing_still_gets_a_census_line(
     answer to "why is this column empty" is "no shard recorded this item", not
     "the census dropped it".
     """
-    run_plan, items_dir = worked(tmp_path, monkeypatch)
+    monkeypatch.delenv(MODE_ENV, raising=False)
+    run_plan, items_dir = worked(tmp_path, monkeypatch, with_opening=True)
     state = tmp_path / "state"
     orphan = run_plan.items[0]
     (items_dir / f"{orphan.item_id}{HEALTH_SUFFIX}").unlink()
@@ -224,7 +238,11 @@ def test_an_item_whose_shard_sealed_nothing_still_gets_a_census_line(
         EXTRACTION_CELLS
     ), "the fallback row says something the payloads cannot"
     assert kept[orphan.item_id].cpu_model is None
-    assert all(kept[item.item_id].cpu_model is not None for item in run_plan.items[1:])
+    assert {
+        (row.cpu_model, row.machine_job, row.machine_pipeline_name, row.machine_task_name,
+         row.machine_shard)
+        for item_id, row in kept.items() if item_id != orphan.item_id
+    } == {(CAPTURED_CPU, ServerJob.WORK, "digest", "work", 0)}
     assert str(kept[orphan.item_id].machine_job) == ServerJob.WORK.value, (
         "the stage that rebuilt the row knows which job it is, even where the shard sealed nothing"
     )

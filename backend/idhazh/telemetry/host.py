@@ -411,6 +411,8 @@ class HostFacts:
     #: says it - so it is handed in rather than probed for, and it travels here
     #: because it is one half of the key the item row joins the host record on.
     job: ServerJob | None = None
+    pipeline_name: str | None = None
+    task_name: str | None = None
 
     def shard_cells(self) -> dict[str, str | None]:
         """The two a shard reads once and notes on every item it records.
@@ -428,6 +430,10 @@ class HostFacts:
         return {
             "cpu_model": self.cpu_model,
             "machine_job": None if self.job is None else self.job.value,
+            **({
+                "machine_pipeline_name": self.pipeline_name,
+                "machine_task_name": self.task_name,
+            } if self.pipeline_name is not None else {}),
         }
 
 

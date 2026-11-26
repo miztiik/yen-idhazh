@@ -25,7 +25,8 @@ export function createUnitId(identity: UnitIdentity): string {
   if (!generic && identity.job === null) {
     throw new Error("unit identity requires legacy job or pipeline and task");
   }
-  if (generic && identity.job !== null && identity.job !== identity.taskName) {
+  if (generic && identity.job !== null && identity.job !== identity.taskName
+    && identity.ledger !== "host-fingerprint") {
     throw new Error("generic job must be absent or match its task");
   }
   const label = generic ? `${identity.pipelineName}|${identity.taskName}` : identity.job!;

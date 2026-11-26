@@ -659,8 +659,8 @@ test('newest run is dated and numerically ordered, including run ids beyond safe
 	expect(newestRunRows([])).toEqual([]);
 });
 
-test('item-host joins use all four host keys, default only the empty job, and count unmatched items', () => {
-	const base = item('2026-09-25');
+test('item-host joins use the execution keys, default only the empty legacy job, and count unmatched items', () => {
+	const base = { ...item('2026-09-25'), attempt: 1 };
 	const hosts = [
 		host('2026-09-25'),
 		{ ...host('2026-09-25'), job: 'assemble', server_prompt_tokens: 999 }
@@ -677,6 +677,20 @@ test('item-host joins use all four host keys, default only the empty job, and co
 	expect(joined.rows.slice(0, 3).map((row) => row.host?.server_prompt_tokens)).toEqual([200, 200, 999]);
 	expect(hostKey(base, true)).toBe(hostKey(hosts[0]));
 	expect(() => hostKey({ ...base, machine_shard: false }, true)).toThrow('shard');
+});
+
+test('item-host joins keep task and attempt separate from the actual job, with a finite digest alias', () => {
+	const day = '2026-09-25';
+	const legacy = { ...host(day), attempt: 1 };
+	const native = { ...host(day), pipeline_name: 'digest', task_name: 'work', job: 'actual-runner-job', attempt: 2 };
+	const other = { ...native, pipeline_name: 'other', task_name: 'work' };
+	const itemRow = { ...item(day), machine_pipeline_name: 'digest', machine_task_name: 'work' };
+	const { rows } = joinItemHosts([
+		{ ...itemRow, attempt: 1 }, { ...itemRow, attempt: 2 }, { ...itemRow, attempt: 3 },
+		{ ...itemRow, attempt: 2, machine_pipeline_name: 'other' },
+		{ ...itemRow, attempt: 1, machine_pipeline_name: 'other' }
+	], [legacy, native, other]);
+	expect(rows.map(row => row.host)).toEqual([legacy, native, null, other, null]);
 });
 
 test('legacy itemRates keeps independent read and write evidence and its absent-cache behavior', () => {

@@ -111,6 +111,7 @@ MODULE_NAMES = (
     "idhazh.ledger.csv_file",
     "idhazh.ledger.day_removal",
     "idhazh.ledger.filenames",
+    "idhazh.ledger.host_storage",
     "idhazh.ledger.json_lines",
     "idhazh.ledger.keys",
     "idhazh.ledger.ledger_files",

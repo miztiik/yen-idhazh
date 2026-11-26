@@ -1,6 +1,6 @@
 /** Which native machine fields does the Python workflow consume? */
 import { z } from "../../services/host-probes/node_modules/zod";
-import { HostFingerprintRowSchema } from "../../packages/common-contracts/src/schemas/host-fingerprint.schema";
+import { HostHardwareRowSchema } from "../../packages/common-contracts/src/schemas/host-fingerprint.schema";
 import type { TaskProfile, TaskSample } from "../../services/host-probes/src/task-profile/profile-schema";
 import { CurrentMachineServerEvidenceSchema } from "../../services/host-probes/src/api/create-machine-server-evidence";
 
@@ -15,10 +15,10 @@ export const MachineServerProjectionSchema = z.object({
 });
 
 export const HardwareSchema = z.object({
-  cpu_model: HostFingerprintRowSchema.shape.cpu_model,
-  cpu_logical_processors: HostFingerprintRowSchema.shape.cpu_logical_processors,
-  cpu_physical_cores: HostFingerprintRowSchema.shape.cpu_physical_cores,
-  machine_memory_total_mib: HostFingerprintRowSchema.shape.machine_memory_total_mib,
+  cpu_model: HostHardwareRowSchema.shape.cpu_model,
+  cpu_logical_processors: HostHardwareRowSchema.shape.cpu_logical_processors,
+  cpu_physical_cores: HostHardwareRowSchema.shape.cpu_physical_cores,
+  machine_memory_total_mib: HostHardwareRowSchema.shape.machine_memory_total_mib,
   status: z.enum(["collected", "disabled", "failed"]),
   unavailable: z.record(z.string(), z.string()),
   reason: z.enum(["configured_off", "collection_failed"]).nullable(),

@@ -171,9 +171,10 @@ def test_placement_off_keeps_a_real_local_machine_row(
     assert row.cpu_target_measured_at == row.measured_at
 
 
-def test_default_config_reaches_real_placement_before_any_network_call(
-    tmp_path: Path,
+def test_python_rollback_reaches_real_placement_before_any_network_call(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setenv("IDHAZH_HOST_TELEMETRY_MODE", "python")
     settings = config.load()
     assert settings.app.observability.host_fingerprint_placement_enabled is True
     requested: list[FrameType] = []

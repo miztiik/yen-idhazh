@@ -152,7 +152,7 @@ test("a listener restart returns the original receipt, refuses unequal evidence 
   const post = (body: unknown) => fetch(new URL(PATH, standalone.url), json(body));
   const serving = {
     ...work, writer: { ...work.writer, task_name: "serve-summarizer" },
-    measurement: { task_kind: "model-serving", outcome: "success", subject_id: "summary", server_prompt_tokens: 0 },
+    measurement: { task_kind: "model-serving", outcome: "success", subject_id: "summary", model_load_ms: 125.5 },
   };
   try {
     const sample = await fetch(new URL(SAMPLE_PATH, standalone.url));

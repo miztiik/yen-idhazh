@@ -4,6 +4,12 @@
 
 `/console/machine/` asks what machine the work actually got and how much
 resource headroom that work left.
+
+Current fingerprints contain hardware only. The Hardware view uses a completed
+serving task's paired prompt measurements only for the same host, run and attempt.
+For older captures it can use their original pair when no matching serving row
+exists. The per-item cost join uses the declared pipeline, task, shard and attempt;
+only known digest job aliases stand in for a missing historical task.
 [The shared shell](what-sits-above-every-console-route.md) owns navigation,
 the route title/window and on-demand UTC date metadata;
 [console-charts.md](console-charts.md) owns chart frames and readouts.

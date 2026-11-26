@@ -29,6 +29,13 @@ listener and process lifetime. The explicit machine listener and shared supervis
 waits come from `config/hono-server.json`. The standalone command above retains
 its own listener controls.
 
+The composed listener accepts hardware captures on the
+[dated fingerprint route](host-metrics.md#independent-fingerprint-api-and-cli).
+A workflow launch supplies the accounting days, revision, run, attempt, pipeline,
+shard and actual job. The listener refuses a capture outside that execution.
+The fingerprint's job names the runner; a completed task may have a different
+task name and must link to the runner's verified opening file.
+
 Task commands require UTF-8 JSON and `Content-Type: application/json`.
 Unknown fields fail. No command accepts a path, executable, URL, proc root
 or process name to search. Task names, identity and

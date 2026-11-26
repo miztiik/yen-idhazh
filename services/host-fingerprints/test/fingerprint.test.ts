@@ -28,6 +28,7 @@ test("dated fingerprint routes refuse retired paths and wrong methods before cap
     for (const path of [
       "/api/2026-10-20/fingerprint", "/api/2026-10-20/health",
       "/api/2026-11-04/capture-host-fingerprint", "/api/2026-11-06/get-host-fingerprint-health",
+      "/api/2026-11-05/capture-host-fingerprint",
       `${FINGERPRINT_PATH}/`, `${HEALTH_PATH}/`,
     ]) {
       for (const method of ["GET", "POST"]) {
@@ -40,14 +41,39 @@ test("dated fingerprint routes refuse retired paths and wrong methods before cap
   } finally { await f.cleanup(); }
 });
 
-test("full Linux fixture collects hardware, quota, affinity, clocks, placement and task counters", async () => {
+test("full Linux fixture keeps hardware, quota, affinity and placement with the same hash", async () => {
   const f = await fixture();
   try {
     const { row } = await collectFingerprint(f.capture, f.config, f.settings, f.inspection);
     expect(row).toMatchObject(f.input.expected);
     expect(row.vm_size).toBe("Standard_D4ds_v5");
     expect(row.cpu_target_measured_at! >= row.measured_at!).toBe(true);
-    expect(row).toMatchObject({ model_load_ms: 123.5, job_seconds: 42, server_prompt_tokens: 320, server_prompt_seconds: 1.25, fingerprint_version: 2, memcpy_probe_mib: 0, memcpy_gib_s: null });
+    expect(row).toMatchObject({ job: "fixture-job", task_name: "inspect-host",
+      fingerprint_version: 2, memcpy_probe_mib: 0, memcpy_gib_s: null });
+  } finally { await f.cleanup(); }
+});
+test("HTTP uses pinned target affinity, never the listener's own quota or affinity", async () => {
+  const f = await fixture();
+  try {
+    const pid = 1234;
+    const root = join(f.root, "proc", String(pid));
+    await mkdir(root);
+    const stat = [ "R", ...Array<string>(18).fill("0"), "42" ].join(" ");
+    await writeFile(join(root, "stat"), `${pid} (target with (parens)) ${stat}`);
+    await writeFile(join(root, "status"), "Cpus_allowed_list:\t0\n");
+    const capture = { ...f.capture, target: { pid, start_ticks: "42" } };
+    const options = { outputRoot: join(f.directory, "pinned"), inspection: f.inspection };
+    const handler = createFingerprintHandler(f.config, f.settings, options);
+    const post = async (input: unknown) => (await handler(new Request(`http://localhost${FINGERPRINT_PATH}`, {
+      method: "POST", body: JSON.stringify(input),
+    }))).json();
+    const current = await post(capture);
+    expect(current.row).toMatchObject({ cpu_allowed_processors: 1, cpu_quota_cores: null, cpu_quota_state: "unavailable" });
+    expect(current.unavailable.cpu_quota_cores).toBe("target_quota_view_unavailable");
+    const reused = await post({ ...capture, target: { pid, start_ticks: "41" },
+      writer: { ...capture.writer, attempt: 2 } });
+    expect(reused.row).toMatchObject({ cpu_allowed_processors: null, cpu_quota_cores: null, cpu_target_measured_at: null });
+    expect(reused.unavailable.cpu_allowed_processors).toBe("target_pin_unavailable");
   } finally { await f.cleanup(); }
 });
 test.each(["win32", "darwin"] as const)("unsupported %s never fabricates readings", async (platform) => {

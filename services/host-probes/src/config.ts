@@ -1,7 +1,7 @@
 /** Which validated controls govern one host sampling service? */
 import { z } from "zod";
 import { constants as bufferConstants } from "node:buffer";
-import { CompressionSchema, TaskPerformanceRowSchema, WriterIdentitySchema } from "@idhazh/common-contracts";
+import { CompressionSchema, JobNameSchema, TaskPerformanceRowSchema, WriterIdentitySchema } from "@idhazh/common-contracts";
 import { CacheProbeConfigSchema } from "./cache-probe/cache-config";
 
 // Bun timers use a signed 32-bit millisecond delay; larger values overflow.
@@ -52,6 +52,7 @@ export const TaskPerformanceExecutionSchema = z.strictObject({
   git_sha: WriterIdentitySchema.shape.git_sha,
   accounting_days: z.array(TaskPerformanceRowSchema.shape.date).min(1)
     .refine(days => new Set(days).size === days.length, "accounting days must be distinct"),
+  runner_job: JobNameSchema.optional(),
   legacy_opening_writer: WriterIdentitySchema.optional(),
 }).superRefine((execution, context) => {
   const writer = execution.legacy_opening_writer;

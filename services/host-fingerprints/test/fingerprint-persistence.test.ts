@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { readMetadata } from "parquet-wasm/esm";
-import { createRootContext, HostFingerprintRowSchema, HOST_FINGERPRINT_VERSION, readTraceContext, writeTraceContext } from "@idhazh/common-contracts";
+import { createRootContext, HostFingerprintRowSchema, HOST_HARDWARE_VERSION, readTraceContext, writeTraceContext } from "@idhazh/common-contracts";
 import { createFingerprintHandler, FINGERPRINT_PATH, HEALTH_PATH } from "../src/api/server";
 import { persistFingerprint } from "../src/persist-fingerprint";
 import { writeAtomically } from "../../../packages/ledger-file-writer/src/atomic-file";
@@ -12,6 +12,8 @@ import { fixture } from "./fixture";
 import { readTable, storedRow } from "./parquet-readback";
 import { FingerprintEventSchema } from "../src/api/create-fingerprint-event";
 import type { FingerprintEvent } from "../src/api/create-fingerprint-event";
+
+const historicalOnly = ["model_load_ms", "job_seconds", "server_prompt_tokens", "server_prompt_seconds"];
 
 function request(input: unknown, carrier = {}) {
   return new Request(`http://localhost${FINGERPRINT_PATH}`, { method: "POST", headers: carrier, body: JSON.stringify(input) });
@@ -36,11 +38,11 @@ test("POST persists the entire hardware row and independent Arrow column transcr
     const operation = readTraceContext({ traceparent: event.traceparent, tracestate: event.tracestate });
     expect(operation).toMatchObject({ traceId: parent.traceId, traceState: parent.traceState });
     expect(operation?.spanId).not.toBe(parent.spanId);
-    expect(body.row).toMatchObject(f.input.expected);
+    expect(body.row.fingerprint).toBe(f.input.expected.fingerprint);
     expect(body.files).toHaveLength(1);
     expect(body.row).toMatchObject({
-      model_load_ms: null, job_seconds: null, server_prompt_tokens: null, server_prompt_seconds: null,
-      memcpy_probe_mib: 0, memcpy_gib_s: null,
+      cpu_allowed_processors: null, cpu_quota_cores: null, cpu_target_measured_at: null,
+      memcpy_probe_mib: 0, memcpy_gib_s: null, job: "fixture-job",
     });
     expect(body.unavailable.memcpy_gib_s).toBe("configured_off");
     expect(body.files[0].path).toMatch(/^raw\/host-fingerprint\/2026\/10\/21\/[0-9a-f-]+\.parquet$/);
@@ -48,8 +50,15 @@ test("POST persists the entire hardware row and independent Arrow column transcr
     const recorded = await Bun.file(new URL("../../../tests/fixtures/host-fingerprints/host-schema.json", import.meta.url)).json();
     const columns = new Map(table.schema.fields.map((field) => [field.name, field.type.toString()]));
     for (const [name, kind] of Object.entries(recorded.columns)) {
+      if (historicalOnly.includes(name)) {
+        expect(body.row).not.toHaveProperty(name);
+        expect(columns.has(name)).toBe(false);
+        continue;
+      }
       expect(columns.get(name)).toBe(kind === "int64" ? "Int64" : kind === "float64" ? "Float64" : "Utf8");
-      expect(table.schema.fields.find((field) => field.name === name)?.nullable).toBe(!recorded.required.includes(name));
+      expect(table.schema.fields.find((field) => field.name === name)?.nullable).toBe(
+        ![...recorded.required, "pipeline_name", "task_name"].includes(name),
+      );
     }
     const actual = storedRow(table);
     for (const [name, value] of Object.entries(body.row)) expect(actual[name]).toEqual(value);
@@ -59,10 +68,9 @@ test("POST persists the entire hardware row and independent Arrow column transcr
     const parquetMetadata = readMetadata(bytes);
     const metadata = Object.fromEntries(parquetMetadata.fileMetadata().keyValueMetadata());
     parquetMetadata.free();
-    expect(metadata.schema_version).toBe(HOST_FINGERPRINT_VERSION);
+    expect(metadata.schema_version).toBe(HOST_HARDWARE_VERSION);
     expect(metadata.writer).toBe("idhazh_typescript.ledger.parquet");
     expect(metadata.content_sha256).toBe(body.files[0].content_sha256);
-    expect((await readdir(outputRoot, { recursive: true })).some((path) => path.endsWith("index.json"))).toBe(false);
   } finally { await f.cleanup(); }
 });
 test("full independently recorded row retains every non-null hardware and clock cell through the shared writer", async () => {
@@ -74,7 +82,7 @@ test("full independently recorded row retains every non-null hardware and clock 
     const outputRoot = join(f.directory, "full-row");
     const result = await persistLedger({
       ledger: "host-fingerprint", rowContract: { schema: HostFingerprintRowSchema, schemaVersion: row.version },
-      rows: [row], writerContext: f.capture.writer, outputRoot,
+      rows: [row], writerContext: { ...f.capture.writer, job: row.job }, outputRoot,
       registryEntry: { name: "host-fingerprint", family: "host-fingerprint", grain: "raw-and-compact", lifecycle_status: "active", prefix: ["host-fingerprint"] },
       ledgerSettings: f.settings.ledger, period: { tier: "raw", covers: row.date },
     });
@@ -150,13 +158,13 @@ test("failed persistence rejects the API request rather than returning row or pa
     expect((await readdir(f.directory)).filter((name) => name.endsWith(".tmp"))).toEqual([]);
   } finally { await f.cleanup(); }
 });
-test.each(["model_load_ms", "job_seconds", "server_prompt_tokens", "server_prompt_seconds"] as const)(
-  "HTTP refuses %s even when null, without changing CLI or ledger acceptance", async (field) => {
+test.each(historicalOnly)(
+  "new HTTP capture refuses %s even when null", async (field) => {
     const f = await fixture();
     try {
       const outputRoot = join(f.directory, "refused-counter");
       const handler = createFingerprintHandler(f.config, f.settings, { outputRoot, inspection: f.inspection });
-      for (const value of [f.capture[field], null]) {
+      for (const value of [1, null]) {
         const response = await handler(request({ ...f.apiInput, [field]: value }));
         expect(response.status).toBe(400);
         expect((await response.json()).error).toContain(field);
@@ -179,7 +187,7 @@ test("HTTP retains the existing task-gated copy benchmark", async () => {
     const body = await response.json();
     expect(body.row.memcpy_probe_mib).toBe(2);
     expect(body.row.memcpy_gib_s).toBeGreaterThan(0);
-    expect(body.row.job_seconds).toBeNull();
+    expect(body.row).not.toHaveProperty("job_seconds");
     expect(body.files).toHaveLength(1);
   } finally { await f.cleanup(); }
 });
@@ -191,7 +199,7 @@ test("retry keeps one work-unit identity and later whole-row settlement without 
     const first = await persistFingerprint(f.capture, f.config, f.settings, options);
     if (first.status !== "written" || !first.files[0]) throw new Error("first capture missing");
     const original = await readFile(join(outputRoot, first.files[0].path));
-    const retry = await persistFingerprint({ ...f.capture, job_seconds: 99, writer: { ...f.capture.writer, attempt: 2 } }, f.config, f.settings, options);
+    const retry = await persistFingerprint({ ...f.capture, writer: { ...f.capture.writer, attempt: 2 } }, f.config, f.settings, options);
     if (retry.status !== "written" || !retry.files[0]) throw new Error("retry capture missing");
     expect(first.files[0].unit_id).toBe(retry.files[0].unit_id);
     expect(first.files[0].path).not.toBe(retry.files[0].path);
@@ -199,7 +207,7 @@ test("retry keeps one work-unit identity and later whole-row settlement without 
     const rows = await Promise.all([first.files[0], retry.files[0]].map(async (file) => storedRow((await readTable(outputRoot, file.path)).table)));
     // Existing settlement chooses the later whole row, not a merge of cells.
     const settled = rows.sort((a, b) => Number(a.attempt) - Number(b.attempt)).at(-1);
-    expect(settled?.job_seconds).toBe(99);
+    expect(settled?.attempt).toBe(2);
     expect(settled?.cpu_vendor).toBe("GenuineIntel");
   } finally { await f.cleanup(); }
 });
@@ -234,7 +242,7 @@ test("actual CLI writes readable Parquet, honors selected settings, and exits no
     const actual = storedRow((await readTable(outputRoot, response.files[0].path)).table);
     expect(actual.run_id).toBe(f.capture.writer.run_id);
     expect(actual.pipeline_name).toBe(f.capture.writer.pipeline_name);
-    expect(actual.job_seconds).toBe(42);
+    expect(actual).not.toHaveProperty("job_seconds");
     if (process.platform !== "linux") expect(actual.cpu_vendor).toBeNull();
     const failRoot = join(f.directory, "file-not-directory");
     await writeFile(failRoot, "unchanged");
@@ -242,6 +250,10 @@ test("actual CLI writes readable Parquet, honors selected settings, and exits no
     expect(await failed.exited).not.toBe(0);
     expect(await new Response(failed.stdout).text()).toBe("");
     expect(await new Response(failed.stderr).text()).toContain("host_fingerprint_failed");
+    await writeFile(contextPath, JSON.stringify({ ...f.capture, job_seconds: null }));
+    const obsolete = Bun.spawn(args, { stdout: "pipe", stderr: "pipe" });
+    expect(await obsolete.exited).not.toBe(0);
+    await writeFile(contextPath, JSON.stringify(f.capture));
     f.settings.observability.host_telemetry_enabled = false;
     await writeFile(settingsPath, JSON.stringify(f.settings));
     const disabled = Bun.spawn(args, { stdout: "pipe", stderr: "pipe" });

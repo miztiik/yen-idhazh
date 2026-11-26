@@ -88,10 +88,12 @@ from idhazh.contracts.gardener_events import CompactionStep, LedgerFaultMet, Ste
 from idhazh.contracts.gardener_fault import GardenerFault, RecoveryNote
 from idhazh.contracts.knobs.gardener import DaysWindow, ForeverWindow, Window
 from idhazh.contracts.ledger_index import CompactEntry, EntryState
+from idhazh.contracts.ledger_name import LedgerName
 from idhazh.gardener import event_log, ledger_marks, named_trees, schedule
 from idhazh.gardener.error_cause import ManualActionError
 from idhazh.gardener.file_listing import OverBudgetError
 from idhazh.gardener.tasks._compact_tree import CompactTree, PeriodFetch, Stop
+from idhazh.ledger.persist import preserves_host_cells
 
 #: The step a month this module refuses is named under.
 _STEP: Final = CompactionStep.CLOSE_MONTHS
@@ -318,13 +320,30 @@ def _close[C: LedgerContract](
             set_aside=set_aside,
             model=model,
         )
+    if absent and tree.ledger is LedgerName.HOST_FINGERPRINT:
+        return (tree.refuse(
+            _STEP, month, fault=GardenerFault.PACKED_FILE_UNREADABLE,
+            ledger_fault=ledger.LedgerFault.FILE_MISSING,
+        ),)
     rows: list[ledger.LedgerStoredRow] = []
     unreadable: list[str] = []
     for day in sorted(packed):
         try:
             rows.extend(tree.load(packed[day], model=model))
-        except ValueError:
+        except ValueError as refusal:
+            if tree.ledger is LedgerName.HOST_FINGERPRINT:
+                return (tree.refuse(
+                    _STEP, month, fault=GardenerFault.PACKED_FILE_UNREADABLE, failure=refusal
+                ),)
             unreadable.append(day)
+    sources = [packed[day] for day in sorted(packed) if day not in unreadable]
+    try:
+        built = ledger.render_period(
+            tree.state_dir, rows, model=model, ledger=tree.ledger,
+            period=Period.MONTHLY, covers=month, identity=identity, built_from=len(sources),
+        ) if rows else None
+    except ValueError as refusal:
+        return (tree.refuse(_STEP, month, failure=refusal),)
     _keep(tree, {day: held for day, held in adopted.items() if day not in unreadable})
     for day in unreadable:
         tree.set_aside(packed[day])
@@ -333,18 +352,7 @@ def _close[C: LedgerContract](
         tree.note_recovery(RecoveryNote.RECORDED_LOST, day)
     lost_days = sorted({*lost, *gone, *absent, *unreadable})
     set_aside += len(unreadable)
-    sources = [packed[day] for day in sorted(packed) if day not in unreadable]
-    if rows:
-        built = ledger.render_period(
-            tree.state_dir,
-            rows,
-            model=model,
-            ledger=tree.ledger,
-            period=Period.MONTHLY,
-            covers=month,
-            identity=identity,
-            built_from=len(sources),
-        )
+    if built is not None:
         tree.write(built.path, built.data)
         tree.monthly[month] = CompactEntry(
             covers=month,
@@ -388,20 +396,21 @@ def _keep_own[C: LedgerContract](
     compare decides the rest. The month's days hold `set_aside` files moved
     aside before, and its entry keeps the count.
     """
-    if not sources:
-        tree.monthly[month] = own.entry.model_copy(update={"set_aside": set_aside})
-    else:
-        try:
+    host = tree.ledger is LedgerName.HOST_FINGERPRINT
+    try:
+        packed = tree.load(own.path, model=model) if sources or host else []
+        if sources:
             rows = [row for path in sources for row in tree.load(path, model=model)]
-            if tree.load(own.path, model=model) != rows:
-                # Its own file is at its path, no monthly entry names it, and it
-                # holds other rows than its days. Nothing is written over a
-                # packed file no entry names, so the month waits for a person.
+            same = preserves_host_cells(rows, packed) if host else packed == rows
+            if not same:
                 raise ManualActionError(
                     "an unindexed month file disagrees with the rows in its day files"
                 )
-        except ValueError as refusal:
-            return (tree.refuse(_STEP, month, failure=refusal),)
+    except ValueError as refusal:
+        return (tree.refuse(_STEP, month, failure=refusal),)
+    if not sources:
+        tree.monthly[month] = own.entry.model_copy(update={"set_aside": set_aside})
+    else:
         _keep(tree, adopted)
         for day in gone:
             tree.note_recovery(RecoveryNote.RECORDED_LOST, day)

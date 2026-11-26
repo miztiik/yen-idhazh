@@ -12,7 +12,7 @@ from typing import Final
 from idhazh import ledger
 from idhazh.contracts.base import WORK_JOB
 from idhazh.contracts.file_envelope import RowIdentity
-from idhazh.contracts.host_fingerprint import HostFingerprintRow
+from idhazh.contracts.host_fingerprint import HOST_HARDWARE_VERSION, HostFingerprintRow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.task_performance import TaskPerformanceRow
 from idhazh.llm.serving_metrics import PromptTotals
@@ -79,10 +79,8 @@ def read_host_prompt_totals(
         if not _is_digest_work(identity) or (run_id is not None and identity.run_id != run_id):
             continue
         key = (identity.unit_id, identity.run_id, identity.attempt)
-        totals = (
-            recorded[key]
-            if key in recorded
-            else _pair(host.server_prompt_tokens, host.server_prompt_seconds)
-        )
+        totals = recorded.get(key)
+        if key not in recorded and host.version < HOST_HARDWARE_VERSION:
+            totals = _pair(host.server_prompt_tokens, host.server_prompt_seconds)
         result.append(HostPromptReading(host, totals))
     return result

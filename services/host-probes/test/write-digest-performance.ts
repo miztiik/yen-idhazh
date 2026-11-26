@@ -16,7 +16,8 @@ const input = z.strictObject({
   profile_reply: z.string(),
   host_unit_id: z.uuid().nullable(),
 }).parse(JSON.parse(await Bun.stdin.text()));
-const { accounting_days, ...writer } = input.execution;
+const { accounting_days, run_id, attempt, pipeline_name, shard, git_sha } = input.execution;
+const writer = { run_id, attempt, pipeline_name, shard, git_sha };
 const [day] = accounting_days;
 if (day === undefined) throw new Error("The recording requires a day");
 const probes = await loadConfig();

@@ -1,6 +1,7 @@
 /** How a recorded host gets an independent prompt speed without guessing its server. */
 import { promptRate } from '../../charts/machine-colour';
 import type { Row } from '../../data/ledger';
+import { HOST_SCHEMA_VERSION } from '../../data/host-fingerprint';
 import { finiteCell } from '../rates';
 
 // Writer identities, not tunables. Other serving scopes measure different work.
@@ -49,5 +50,5 @@ export function speedForHost(host: Row, version: string, serving: ReadonlyMap<st
 		// Null is an observed but unusable pair, not permission to fall back.
 		if (speed !== undefined) return speed;
 	}
-	return version >= FIRST_HOST_WITH_PROMPT_TOTALS ? pairedSpeed(host) : null;
+	return version >= FIRST_HOST_WITH_PROMPT_TOTALS && version < HOST_SCHEMA_VERSION ? pairedSpeed(host) : null;
 }

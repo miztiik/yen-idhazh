@@ -2,9 +2,10 @@
 import { resolve } from "node:path";
 import { z } from "zod";
 import {
-  HOST_FINGERPRINT_VERSION, HostFingerprintRowSchema, TASK_PERFORMANCE_VERSION, TaskPerformanceRowSchema,
+  HOST_FINGERPRINT_PRODUCER, HOST_FINGERPRINT_VERSION, HostFingerprintRowSchema, HOST_HARDWARE_VERSION,
+  HostHardwareRowSchema, TASK_PERFORMANCE_VERSION, TaskPerformanceRowSchema,
 } from "@idhazh/common-contracts";
-import type { TaskPerformanceRow, WriterIdentity } from "@idhazh/common-contracts";
+import type { HostFingerprintRow, HostHardwareRow, TaskPerformanceRow, WriterIdentity } from "@idhazh/common-contracts";
 import { persistLedger, readPrivateRawDay } from "@idhazh/ledger-file-writer";
 import type { LedgerRegistration, PersistedLedgerFile } from "@idhazh/ledger-file-writer";
 import { TaskPerformanceExecutionSchema } from "./config";
@@ -15,7 +16,10 @@ const HOST_LEDGER = "host-fingerprint";
 // This producer is part of the shared writer's work-unit identity.
 const PRODUCER = "host-probes";
 const taskContract = { schema: TaskPerformanceRowSchema, schemaVersion: TASK_PERFORMANCE_VERSION };
-const hostContract = { schema: HostFingerprintRowSchema, schemaVersion: HOST_FINGERPRINT_VERSION };
+const hostContracts = [
+  { schema: HostHardwareRowSchema, schemaVersion: HOST_HARDWARE_VERSION },
+  { schema: HostFingerprintRowSchema, schemaVersion: HOST_FINGERPRINT_VERSION },
+];
 const registrySchema = z.object({ families: z.array(z.object({
   name: z.string(), lifecycle_status: z.enum(["active", "paused", "retired"]),
   ledgers: z.array(z.object({ name: z.string(), grain: z.string(), prefix: z.array(z.string()).nullable() })),
@@ -81,17 +85,22 @@ async function verifyHostCapture(
 ): Promise<void> {
   const opening = execution.legacy_opening_writer;
   for (const day of execution.accounting_days) {
-    for await (const file of readPrivateRawDay(root, entry, day, hostContract)) {
+    for await (const file of readPrivateRawDay<HostHardwareRow | HostFingerprintRow>(root, entry, day, hostContracts)) {
       if (file.envelope.unit_id !== unitId || file.rows.length !== 1) continue;
       const held = file.envelope.identity;
       const row = file.rows[0]?.row;
-      if (row?.date !== day || held.git_sha !== writer.git_sha) continue;
+      if (row?.date !== day || held.git_sha !== writer.git_sha || held.producer !== HOST_FINGERPRINT_PRODUCER) continue;
+      if (row.version === HOST_HARDWARE_VERSION) {
+        if (sameExecution(held, writer) && file.envelope.writer === "idhazh_typescript.ledger.parquet"
+          && (execution.runner_job === undefined || held.job === execution.runner_job)) return;
+        continue;
+      }
+      if (row.job_seconds !== null || row.model_load_ms !== null || row.server_prompt_seconds !== null
+        || row.server_prompt_tokens !== null) continue;
       if (sameExecution(held, writer)) return;
       if (opening !== undefined && held.job === opening.job && held.producer === opening.producer
         && held.pipeline_name === null && held.task_name === null && held.run_id === opening.run_id
-        && held.attempt === opening.attempt && held.shard === opening.shard
-        && row.job === opening.job && row.job_seconds === null && row.model_load_ms === null
-        && row.server_prompt_seconds === null && row.server_prompt_tokens === null) return;
+        && held.attempt === opening.attempt && held.shard === opening.shard && row.job === opening.job) return;
     }
   }
   throw new TaskPerformanceRequestError(400, "Host capture does not match the launched execution");

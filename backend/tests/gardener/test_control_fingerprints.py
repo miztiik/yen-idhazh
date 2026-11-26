@@ -12,12 +12,12 @@ from pathlib import Path
 import pytest
 from support.paths import CONFIG_DIR, REPO_ROOT
 
+from idhazh.contracts.host_fingerprint import HostHardwareRow
 from idhazh.contracts.task_performance import TaskPerformanceRow
 from idhazh.gardener.control_fingerprints import Job, Operation, artifact, expected, task_file
 from idhazh.publication_paths import IntegrityError
 from idhazh.telemetry import machine_api, machine_evidence
 from utilities import gardener_control_task
-from utilities.gardener_fingerprint import retain
 from utilities.gardener_fingerprint_publish import land
 from utilities.publication_git import Repository
 from utilities.publish_to_repo import Status
@@ -113,7 +113,10 @@ def test_control_evidence_appends_without_shards_and_keeps_original_producing_at
     proofs = []
     task_proofs = []
     for state, item, task, reply, bundle in zip(states, readings, tasks, replies, bundles, strict=True):
-        retain(state, bundle, item, machine_api.Captured.model_validate(reply["opening"]))
+        opening = machine_evidence.verify_capture(
+            state, machine_api.Captured.model_validate(reply["opening"]), item,
+        )
+        opening.save_receipt(bundle, item)
         proof = machine_evidence.read_receipt(bundle, item)
         assert proof is not None
         proofs.append(proof)
@@ -173,8 +176,11 @@ def test_control_evidence_appends_without_shards_and_keeps_original_producing_at
             entry = remote.entry("main", completed.path)
             assert entry is not None and remote.blob(entry.oid) == completed.data
             assert not (repo / completed.path).exists()
-        assert (proof.envelope.identity.job, proof.envelope.identity.attempt) == (
-            f"gardener-{job}", attempt,
+        assert isinstance(proof.row, HostHardwareRow)
+        assert (
+            proof.row.job, proof.row.pipeline_name, proof.row.task_name, proof.envelope.identity.attempt,
+        ) == (
+            job, "gardener", job, attempt,
         )
         assert measured.envelope.identity.attempt == attempt
         assert measured.envelope.identity.git_sha == revision

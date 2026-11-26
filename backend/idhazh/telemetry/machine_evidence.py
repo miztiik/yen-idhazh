@@ -10,12 +10,17 @@ from typing import Final, Literal, overload
 from idhazh import ledger
 from idhazh.atomic_write import write_atomic, write_atomic_bytes
 from idhazh.contracts.file_envelope import FileEnvelope, Format, RowIdentity, Tier, WriterIdentity
-from idhazh.contracts.host_fingerprint import HostFingerprintRow
+from idhazh.contracts.host_fingerprint import (
+    HOST_HARDWARE_VERSION,
+    HostFingerprintRow,
+    HostHardwareRow,
+)
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.publication_receipt import PublicationReceipt
 from idhazh.contracts.task_performance import TaskPerformanceKind, TaskPerformanceRow
 from idhazh.ledger.filenames import file_id, unit_id
 from idhazh.publication_paths import IntegrityError, contains, safe_file
+from idhazh.telemetry import machine_api
 from idhazh.telemetry.silicon import CLOCK_CELLS
 
 HOST: Final = LedgerName.HOST_FINGERPRINT
@@ -85,7 +90,7 @@ class VerifiedFile:
     data: bytes
     sha256: str
     envelope: FileEnvelope
-    row: HostFingerprintRow | TaskPerformanceRow
+    row: HostFingerprintRow | HostHardwareRow | TaskPerformanceRow
 
     def place(self, root: Path) -> Path | None:
         """Copy only the original bytes; report which new file needs caller cleanup."""
@@ -115,7 +120,7 @@ class VerifiedFile:
 def verified_reading(
     path: str, data: bytes, *, name: Literal[LedgerName.HOST_FINGERPRINT], date: str,
     identity: WriterIdentity, kind: None = None, subject: str | None = None,
-) -> tuple[FileEnvelope, HostFingerprintRow]: ...
+) -> tuple[FileEnvelope, HostFingerprintRow | HostHardwareRow]: ...
 
 
 @overload
@@ -128,14 +133,19 @@ def verified_reading(
 def verified_reading(
     path: str, data: bytes, *, name: LedgerName, date: str,
     identity: WriterIdentity, kind: TaskPerformanceKind | None = None, subject: str | None = None,
-) -> tuple[FileEnvelope, HostFingerprintRow | TaskPerformanceRow]:
+) -> tuple[FileEnvelope, HostFingerprintRow | HostHardwareRow | TaskPerformanceRow]:
     envelope, (cells,) = verified_raw(
         STATE, path, data, name=name, date=date, identity=identity,
     )
-    row_model = HostFingerprintRow if name is HOST else TaskPerformanceRow
-    row = row_model.model_validate(
-        {key: cells[key] for key in row_model.model_fields if key in cells},
+    row_model = (
+        HostHardwareRow if name is HOST and envelope.row_schema_version == HOST_HARDWARE_VERSION
+        else HostFingerprintRow if name is HOST
+        else TaskPerformanceRow
     )
+    row = row_model.model_validate({
+        key: value for key, value in cells.items()
+        if key not in RowIdentity.model_fields or key in row_model.model_fields
+    })
     stamped = RowIdentity.model_validate({key: cells.get(key) for key in RowIdentity.model_fields})
     if (
         row.version != envelope.row_schema_version
@@ -149,7 +159,10 @@ def verified_reading(
         )
     ):
         raise IntegrityError("completed row does not match its recorded task", (path,))
-    if isinstance(row, HostFingerprintRow):
+    if isinstance(row, HostHardwareRow):
+        if row.job != identity.job or envelope.writer != NATIVE_PARQUET:
+            raise IntegrityError("hardware capture is not from the native runner", (path,))
+    elif isinstance(row, HostFingerprintRow):
         if row.job != identity.job or any(getattr(row, field) is not None for field in CLOCK_CELLS):
             raise IntegrityError("fingerprint is not the execution's opening capture", (path,))
     elif (
@@ -181,6 +194,47 @@ def verify_file(
     if expected.native and envelope.writer != NATIVE_PARQUET:
         raise IntegrityError("opening fingerprint did not use the native writer", (path,))
     return VerifiedFile(path, data, digest, envelope, row)
+
+
+def verify_capture(
+    state: Path, response: machine_api.Captured, expected: ExpectedFile,
+) -> VerifiedFile:
+    if expected.kind is not None or len(response.files) != 1:
+        raise IntegrityError("native fingerprint must return one completed file")
+    (receipt,) = response.files
+    relative = ledger.raw_path(
+        STATE, HOST, expected.date, receipt.file_id,
+    ).relative_to(STATE).as_posix()
+    if receipt.path != relative or receipt.covers != expected.date:
+        raise IntegrityError("native fingerprint receipt is outside its exact raw path")
+    data = safe_file(state, relative, exists=True).read_bytes()
+    envelope, row = verified_reading(
+        relative, data, name=HOST, date=expected.date, identity=expected.writer,
+    )
+    if (
+        row != response.row or str(envelope.unit_id) != receipt.unit_id
+        or envelope.content_sha256 != receipt.content_sha256
+    ):
+        raise IntegrityError("native fingerprint receipt does not match the completed file")
+    return VerifiedFile(f"state/{relative}", data, hashlib.sha256(data).hexdigest(), envelope, row)
+
+
+def capture_opening(
+    repo: Path, destination: Path, expected: ExpectedFile, *, ask_placement: bool = True,
+) -> VerifiedFile | None:
+    """Retain exactly the native opening receipt before the listener goes away."""
+    client = machine_api.MachineApi.for_job()
+    if client is None:
+        machine_api.warn(
+            f"Opening fingerprint unavailable for {expected.writer.task_key}: no listener"
+        )
+        return None
+    response = client.fingerprint(expected.date, expected.writer, ask_placement=ask_placement)
+    if not isinstance(response, machine_api.Captured):
+        return None
+    proof = verify_capture(machine_api.private_state(repo), response, expected)
+    proof.save_receipt(destination, expected)
+    return proof
 
 
 def read_receipt(root: Path, expected: ExpectedFile) -> VerifiedFile | None:

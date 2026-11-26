@@ -13,7 +13,7 @@ from idhazh import ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.file_envelope import Compression, FileEnvelope, Format, Period, WriterIdentity
-from idhazh.contracts.host_fingerprint import HostFingerprintRow
+from idhazh.contracts.host_fingerprint import HOST_HARDWARE_VERSION, HostFingerprintRow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.ledger import parquet, published_columns
@@ -309,7 +309,7 @@ def test_f3_newer_file_fails_and_prints(
     printed = capsys.readouterr().out
     assert "published-columns FAIL F3 ledger=host-fingerprint" in printed
     assert (
-        f"file_schema=9999-01-01 contract_schema={HostFingerprintRow.schema_version()} column=<not declared> "
+        f"file_schema=9999-01-01 contract_schema={HOST_HARDWARE_VERSION} column=<not declared> "
         "file_type=<not declared> contract_type=<not declared>; fix: re-pack the file "
         "with this build or run a build at least as new"
     ) in printed

@@ -1,21 +1,4 @@
-"""What silicon a job drew, and what that job cost, as the host itself reported it.
-
-One row a job. The columns are fixed for the length of that job - a processor
-does not change model number mid-run - which is why they are not repeated on
-every item row beside the readings that do move.
-
-**The row is written in two halves and neither half is ever edited.** The probe
-runs before the job's heaviest step, because the bandwidth reading wants an idle
-machine; the clock, the weight-load cost and what the model server itself counted
-are only known when the job is over. So each half is a row of this shape carrying
-the cells it has, and the compaction is what unites them - one key, no cell filled
-twice, one row in the day file.
-
-Pipeline and task names are validated strings. Legacy `job` values remain
-readable as enums or strings; readers compare their values, not enum identity.
-Hardware identifiers are open strings because a closed vocabulary would refuse
-a new part rather than record it. See `docs/reference/host-metrics.md`.
-"""
+"""What hardware a task drew, and how earlier host records remain readable."""
 
 from __future__ import annotations
 
@@ -23,6 +6,7 @@ import hashlib
 import json
 import math
 from collections.abc import Mapping
+from datetime import date as calendar_date
 from datetime import datetime
 from types import MappingProxyType
 from typing import Any, ClassVar, Final, Literal, Self
@@ -64,6 +48,7 @@ WATCHED_FLAGS: tuple[str, ...] = (
 )
 
 HOST_FINGERPRINT_VERSION: Final = "2026-10-26"
+HOST_HARDWARE_VERSION: Final = "2026-11-26"
 HOST_FINGERPRINT_READ_VERSIONS: Final = frozenset(
     {"2026-10-10", "2026-10-12", "2026-10-14", HOST_FINGERPRINT_VERSION}
 )
@@ -77,7 +62,7 @@ LEGACY_HOST_VERSIONS: Final = (
 INT64_MAX: Final = (1 << 63) - 1
 INT64_MIN: Final = -(1 << 63)
 LEGACY_CPU_FIELDS: Final = frozenset({"cores", "threads", "mhz_max", "mhz_at_probe"})
-_CLOCK_FIELDS: Final = frozenset(
+HOST_CLOCK_FIELDS: Final = frozenset(
     {"model_load_ms", "job_seconds", "server_prompt_tokens", "server_prompt_seconds"}
 )
 _TARGET_FIELDS: Final = frozenset(
@@ -419,7 +404,7 @@ class LegacyHostFingerprintRow(Contract):
         version = data["version"]
         forbidden: set[str] = set()
         if version < "2026-09-18":
-            forbidden.update(_CLOCK_FIELDS)
+            forbidden.update(HOST_CLOCK_FIELDS)
             if data.get("fingerprint") is None or data.get("measured_at") is None:
                 raise ValueError("pre-clock schemas require fingerprint and measured_at")
         if version < "2026-09-19":
@@ -511,42 +496,22 @@ def _fingerprint_bytes(cells: Mapping[str, object], keys: tuple[str, ...]) -> by
     ).encode("ascii")
 
 
-class HostFingerprintRow(Contract):
-    """One normalized host row with corrected CPU meanings and versioned identity."""
+class _HostHardwareCells(Contract):
+    """Hardware cells shared by the existing reader and the strict current writer."""
 
     model_config = ConfigDict(frozen=True, allow_inf_nan=False)
-    __schema_stem__: ClassVar[str] = "host-fingerprint-row"
+    __schema_stem__: ClassVar[str] = "host-hardware-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version="2026-10-26",
-            change="Add optional total machine RAM capacity in MiB.",
-            why="Machine capacity is distinct from transient task and process memory.",
-        ),
-        ChangelogEntry(
-            version="2026-10-14",
-            change="Allow pipeline and task identity without a legacy job value.",
-            why="Shared host records group reusable readings by separate identity columns.",
-        ),
-        ChangelogEntry(
-            version="2026-10-10",
-            change="Replace ambiguous CPU cells and add versioned fingerprints.",
-            why="Topology, target constraints and frequencies are different measurements.",
-        ),
-        ChangelogEntry(
-            version="2026-09-20",
-            change="`memcpy_probe_mib` records the derived probe buffer.",
-            why="The configured floor is not the size actually measured.",
-        ),
-        ChangelogEntry(
-            version="2026-09-18",
-            change="Earlier changes are in this contract's git history.",
-            why="Git is the archive for older shape changes.",
+            version="2026-11-26",
+            change="Keep hardware and generic task identity; record timing separately.",
+            why="Task performance has its own measurement and writer.",
         ),
     )
 
     date: DateStamp
     run_id: RunId
-    job: ServerJob | JobName | None = Field(default=WORK_JOB)
+    job: JobName | None = None
     pipeline_name: PipelineName | None = None
     task_name: TaskName | None = None
     shard: int = Field(ge=0, le=INT64_MAX, strict=True)
@@ -586,6 +551,92 @@ class HostFingerprintRow(Contract):
     vm_fault_domain: str | None = None
     runner_name: str | None = None
     measured_at: Timestamp | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _strict_numbers(cls, data: Any) -> Any:
+        return _check_numbers(data, cls)
+
+    @model_validator(mode="after")
+    def _consistent_measurements(self) -> Self:
+        for name in ("measured_at", "cpu_target_measured_at"):
+            value = getattr(self, name)
+            if value is not None:
+                datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ")
+        if (self.fingerprint is None) != (self.fingerprint_version is None):
+            raise ValueError("fingerprint and fingerprint_version must be present together")
+        if self.fingerprint_version == 2 and self.fingerprint != fingerprint_v2(self):
+            raise ValueError("fingerprint does not match algorithm 2 hardware facts")
+        if (self.cpu_quota_cores is not None) != (self.cpu_quota_state == "finite"):
+            raise ValueError("cpu_quota_state is finite iff cpu_quota_cores is present")
+        has_target = self.cpu_target_measured_at is not None
+        if has_target != (self.cpu_quota_state is not None):
+            raise ValueError("target capture time and quota state must be present together")
+        if self.cpu_allowed_processors is not None and (
+            not has_target or self.cpu_logical_processors is None
+        ):
+            raise ValueError("allowed processors require a target capture and logical count")
+        if self.cpu_logical_processors is not None:
+            for name in ("cpu_physical_cores", "cpu_allowed_processors"):
+                count = getattr(self, name)
+                if count is not None and count > self.cpu_logical_processors:
+                    raise ValueError(f"{name} cannot exceed cpu_logical_processors")
+        if self.cpu_target_measured_at is not None and self.measured_at is not None:
+            if self.cpu_target_measured_at < self.measured_at:
+                raise ValueError("target capture cannot precede the original machine probe")
+        return self
+
+
+class HostHardwareRow(_HostHardwareCells):
+    """One current hardware capture, without the superseded task measurements."""
+
+    model_config = ConfigDict(strict=True)
+    __require_explicit_version__: ClassVar[bool] = True
+
+    version: Literal["2026-11-26"]
+    job: JobName | None
+    pipeline_name: PipelineName
+    task_name: TaskName
+
+    @model_validator(mode="after")
+    def _calendar_date(self) -> Self:
+        calendar_date.fromisoformat(self.date)
+        return self
+
+
+class HostFingerprintRow(_HostHardwareCells):
+    """The normalized read view and the previous writer kept for rollback."""
+
+    __schema_stem__: ClassVar[str] = "host-fingerprint-row"
+    __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-10-26",
+            change="Add optional total machine RAM capacity in MiB.",
+            why="Machine capacity is distinct from transient task and process memory.",
+        ),
+        ChangelogEntry(
+            version="2026-10-14",
+            change="Allow pipeline and task identity without a legacy job value.",
+            why="Shared host records group reusable readings by separate identity columns.",
+        ),
+        ChangelogEntry(
+            version="2026-10-10",
+            change="Replace ambiguous CPU cells and add versioned fingerprints.",
+            why="Topology, target constraints and frequencies are different measurements.",
+        ),
+        ChangelogEntry(
+            version="2026-09-20",
+            change="`memcpy_probe_mib` records the derived probe buffer.",
+            why="The configured floor is not the size actually measured.",
+        ),
+        ChangelogEntry(
+            version="2026-09-18",
+            change="Earlier changes are in this contract's git history.",
+            why="Git is the archive for older shape changes.",
+        ),
+    )
+
+    job: ServerJob | JobName | None = Field(default=WORK_JOB)
     model_load_ms: float | None = Field(default=None, ge=0)
     job_seconds: int | None = Field(default=None, ge=0)
     server_prompt_tokens: int | None = Field(default=None, ge=0)
@@ -617,56 +668,36 @@ class HostFingerprintRow(Contract):
         if not isinstance(data, Mapping):
             return data
         payload = dict(data)
-        probe_keys = set(LegacyHostFingerprintRow.model_fields) - {"version"} - _CLOCK_FIELDS
+        probe_keys = set(LegacyHostFingerprintRow.model_fields) - {"version"} - HOST_CLOCK_FIELDS
         if "version" not in payload and set(payload) == probe_keys:
             return normalize_host_row(payload).model_dump()
         if payload.get("version") in LEGACY_HOST_VERSIONS:
             return normalize_host_row(payload).model_dump()
-        if payload.get("version") in HOST_FINGERPRINT_READ_VERSIONS:
-            return _check_numbers(payload, cls)
         if LEGACY_CPU_FIELDS.intersection(payload):
             raise ValueError(
                 "legacy CPU fields require a declared legacy or exact constructor shape"
             )
-        return _check_numbers(payload, cls)
+        if payload.get("version") == HOST_HARDWARE_VERSION:
+            if any(payload.get(name) is not None for name in HOST_CLOCK_FIELDS):
+                raise ValueError("hardware capture cannot carry historical timing values")
+            hardware = HostHardwareRow.model_validate(
+                {key: value for key, value in payload.items() if key not in HOST_CLOCK_FIELDS}
+            )
+            return hardware.model_dump()
+        return payload
 
     @model_validator(mode="after")
-    def _consistent_measurements(self) -> Self:
+    def _host_identity(self) -> Self:
+        if self.version == HOST_HARDWARE_VERSION:
+            return self
         if (self.pipeline_name is None) != (self.task_name is None):
             raise ValueError("host row requires both pipeline_name and task_name")
         if self.task_name is None and self.job is None:
             raise ValueError("host row requires a legacy job or pipeline and task")
         if self.task_name is not None and self.job not in (None, self.task_name):
             raise ValueError("generic host row job must be absent or match task_name")
-        for name in ("measured_at", "cpu_target_measured_at"):
-            value = getattr(self, name)
-            if value is not None:
-                datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ")
         if self.version not in HOST_FINGERPRINT_READ_VERSIONS:
             raise ValueError("normalized host row has an unsupported schema version")
-        if (self.fingerprint is None) != (self.fingerprint_version is None):
-            raise ValueError("fingerprint and fingerprint_version must be present together")
-        if self.fingerprint_version == 2 and self.fingerprint != fingerprint_v2(self):
-            raise ValueError("fingerprint does not match algorithm 2 hardware facts")
-        if (self.cpu_quota_cores is not None) != (self.cpu_quota_state == "finite"):
-            raise ValueError("cpu_quota_state is finite iff cpu_quota_cores is present")
-        has_target = self.cpu_target_measured_at is not None
-        if has_target != (self.cpu_quota_state is not None):
-            raise ValueError("target capture time and quota state must be present together")
-        if self.cpu_allowed_processors is not None and (
-            not has_target or self.cpu_logical_processors is None
-        ):
-            raise ValueError("allowed processors require a target capture and logical count")
-        if self.cpu_logical_processors is not None:
-            for name in ("cpu_physical_cores", "cpu_allowed_processors"):
-                count = getattr(self, name)
-                if count is not None and count > self.cpu_logical_processors:
-                    raise ValueError(f"{name} cannot exceed cpu_logical_processors")
-        if self.cpu_target_measured_at is not None and self.measured_at is not None:
-            if datetime.fromisoformat(self.cpu_target_measured_at) < datetime.fromisoformat(
-                self.measured_at
-            ):
-                raise ValueError("target capture cannot precede the original machine probe")
         return self
 
     @property
@@ -694,6 +725,8 @@ class HostFingerprintRow(Contract):
         if legacy:
             payload = LegacyHostFingerprintRow.model_validate(payload).model_dump()
         else:
+            if payload["job"] == "" and payload["pipeline_name"] and payload["task_name"]:
+                payload["job"] = None
             for name in _CORRECTED_INT_FIELDS:
                 if payload.get(name) not in (None, ""):
                     payload[name] = int(payload[name])
@@ -703,7 +736,7 @@ class HostFingerprintRow(Contract):
         return cls.model_validate(payload)
 
 
-def fingerprint_v2(row: HostFingerprintRow) -> str | None:
+def fingerprint_v2(row: _HostHardwareCells) -> str | None:
     """AO2's static hardware class, or no identity when no fact was sourced."""
     cells = row.model_dump()
     flags = row.flags.split()
@@ -727,10 +760,13 @@ def normalize_host_row(data: Mapping[str, object]) -> HostFingerprintRow:
     """Normalize only finite declared legacy shapes or the exact old probe constructor."""
     payload = dict(data)
     if "version" not in payload:
-        probe_keys = set(LegacyHostFingerprintRow.model_fields) - {"version"} - _CLOCK_FIELDS
+        probe_keys = set(LegacyHostFingerprintRow.model_fields) - {"version"} - HOST_CLOCK_FIELDS
         if set(payload) != probe_keys:
             raise ValueError("unstamped input is not an unchanged silicon constructor shape")
         payload["version"] = LEGACY_HOST_VERSIONS[-1]
+    if payload["version"] == HOST_HARDWARE_VERSION:
+        hardware = HostHardwareRow.model_validate(payload)
+        return HostFingerprintRow.model_construct(**hardware.model_dump())
     if payload["version"] in HOST_FINGERPRINT_READ_VERSIONS:
         return HostFingerprintRow.model_validate(payload)
     if payload["version"] not in LEGACY_HOST_VERSIONS:
@@ -756,7 +792,7 @@ def strip_null_legacy_placeholders(data: Mapping[str, object]) -> dict[str, obje
         return payload
     forbidden: set[str] = set()
     if version < "2026-09-18":
-        forbidden.update(_CLOCK_FIELDS)
+        forbidden.update(HOST_CLOCK_FIELDS)
     if version < "2026-09-19":
         forbidden.update({"server_prompt_tokens", "server_prompt_seconds"})
     return {

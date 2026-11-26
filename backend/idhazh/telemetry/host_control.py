@@ -11,13 +11,14 @@ from idhazh.contracts.knobs.observability import ObservabilityConfig
 HostTelemetryMode = Literal["python", "typescript", "off"]
 MODE_ENV = "IDHAZH_HOST_TELEMETRY_MODE"
 HOST_TELEMETRY_MODES = ("python", "typescript", "off")
+DEFAULT_MODE: HostTelemetryMode = "typescript"
 
 
 def mode(
     observability: ObservabilityConfig, environ: Mapping[str, str] | None = None
 ) -> HostTelemetryMode:
     environment = os.environ if environ is None else environ
-    requested = environment.get(MODE_ENV) or "python"
+    requested = environment.get(MODE_ENV) or DEFAULT_MODE
     if requested not in HOST_TELEMETRY_MODES:
         raise ValueError(f"{MODE_ENV} must be python, typescript or off")
     if not observability.host_telemetry_enabled or requested == "off":

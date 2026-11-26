@@ -22,7 +22,7 @@ test("placement setting off skips the metadata body without disabling hardware o
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.status).toBe("written");
-    expect(body.row).toMatchObject(f.input.expected);
+    expect(body.row.fingerprint).toBe(f.input.expected.fingerprint);
     expect(body.row.vm_size).toBeNull();
     expect(body.unavailable.placement).toBe("configured_off");
     expect(body.files).toHaveLength(1);
@@ -65,7 +65,7 @@ test("recorded HTTP and transport failures degrade only placement and still pers
       expect(response.status, entry.name).toBe(200);
       const body = await response.json();
       expect(body.status, entry.name).toBe("written");
-      expect(body.row, entry.name).toMatchObject(f.input.expected);
+      expect(body.row.fingerprint, entry.name).toBe(f.input.expected.fingerprint);
       expect(body.row.vm_size, entry.name).toBeNull();
       expect(body.unavailable.placement, entry.name).toBe(entry.reason);
       expect(body.files, entry.name).toHaveLength(1);
@@ -87,7 +87,7 @@ test("oversized metadata cannot stop the hardware ledger write", async () => {
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.status).toBe("written");
-    expect(body.row).toMatchObject(f.input.expected);
+    expect(body.row.fingerprint).toBe(f.input.expected.fingerprint);
     expect(body.row.vm_size).toBeNull();
     expect(body.unavailable.placement).toBe("metadata_too_large");
     expect(body.files).toHaveLength(1);

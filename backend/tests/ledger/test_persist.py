@@ -19,13 +19,14 @@ import os
 import subprocess
 import sys
 import traceback
+from functools import partial
 from pathlib import Path
 from typing import Any, ClassVar, Final
 
 import pyarrow.parquet
 import pytest
 from pydantic import Field, model_validator
-from support.paths import FIXTURES_DIR, REPO_ROOT
+from support.paths import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
 
 from idhazh import ledger
 from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, Model, RunId, ServerJob
@@ -41,7 +42,11 @@ from idhazh.contracts.file_envelope import (
     Tier,
     WriterIdentity,
 )
-from idhazh.contracts.host_fingerprint import HostFingerprintRow, fingerprint_v2
+from idhazh.contracts.host_fingerprint import (
+    HOST_HARDWARE_VERSION,
+    HostFingerprintRow,
+    fingerprint_v2,
+)
 from idhazh.contracts.knobs.ledger import LedgerConfig
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.visual_prune import VisualPruneRow
@@ -355,6 +360,38 @@ def test_corrected_host_history_retains_its_versioned_facts(
     envelope = ledger.read_envelope(written[0])
     assert envelope.row_schema_version == HostFingerprintRow.schema_version()
     assert envelope.writer == (parquet if fmt is Format.PARQUET else json_lines).__name__
+
+
+def test_only_the_host_ledger_may_keep_a_workflow_job_distinct_from_its_task() -> None:
+    envelope = FileEnvelope.from_json(
+        read_text(CONTRACT_FIXTURES_DIR / "file-envelope" / "a-raw-file.json")
+    )
+    current = WriterIdentity.for_pipeline_task(
+        run_id=envelope.identity.run_id, attempt=1, pipeline_name="example",
+        task_name="inspect-host", shard=3, producer="telemetry.silicon", git_sha=A_SHA,
+        job="run-tasks",
+    )
+    host = FileEnvelope.model_validate({
+        **envelope.model_dump(),
+        "version": FileEnvelope.schema_version(), "row_schema_version": HOST_HARDWARE_VERSION,
+        "identity": current, "ledger": LedgerName.HOST_FINGERPRINT,
+    })
+    assert FileEnvelope.from_metadata(host.as_metadata()).identity == current
+    assert current.task_key == "example-inspect-host"
+    assert current.model_copy(update={"job": current.task_name}).task_key == "inspect-host"
+
+    unit = partial(
+        filenames.unit_id, covers=envelope.covers, run_id=current.run_id,
+        pipeline_name="example", task_name="inspect-host", shard=current.shard,
+        producer=current.producer,
+    )
+    assert unit(ledger=LedgerName.HOST_FINGERPRINT, job=current.job) == (
+        unit(ledger=LedgerName.HOST_FINGERPRINT)
+    )
+    with pytest.raises(ValueError, match="distinct workflow job"):
+        FileEnvelope.model_validate({**envelope.model_dump(), "identity": current})
+    with pytest.raises(ValueError, match="job must be absent or match"):
+        unit(ledger=envelope.ledger, job=current.job)
 
 
 @pytest.mark.parametrize("fmt", list(Format), ids=[fmt.value for fmt in Format])

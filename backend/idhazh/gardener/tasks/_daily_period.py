@@ -98,6 +98,7 @@ from idhazh.gardener import ledger_marks, named_trees
 from idhazh.gardener.file_listing import OverBudgetError
 from idhazh.gardener.tasks import _reopened_month
 from idhazh.gardener.tasks._compact_tree import CompactTree, PeriodFetch, Stop
+from idhazh.ledger.host_storage import HostStorageError
 
 #: The step a day this module refuses is named under.
 _STEP: Final = CompactionStep.PACK_DAYS
@@ -206,7 +207,8 @@ def _take[C: LedgerContract](
         return tree.refuse(_STEP, day, fault=GardenerFault.PACKED_FILE_UNREADABLE, failure=refusal)
     try:
         settled = ledger.settle_registered_rows(
-            [*kept, *(rows for _path, rows in raw.taken)], key, ledger=tree.ledger
+            [*kept, *(rows for _path, rows in raw.taken)], key, ledger=tree.ledger,
+            preserve_host_history=True,
         )
     except ValueError as refusal:
         return tree.refuse(_STEP, day, failure=refusal)
@@ -214,16 +216,19 @@ def _take[C: LedgerContract](
         tree.set_aside(path)
     set_aside = (0 if entry is None else entry.set_aside) + len(raw.unreadable)
     if raw.taken:
-        _record(
-            tree,
-            day,
-            settled,
-            existing,
-            model=model,
-            identity=identity,
-            built_from=len(raw.taken) + (existing is not None),
-            set_aside=set_aside,
-        )
+        try:
+            _record(
+                tree,
+                day,
+                settled,
+                existing,
+                model=model,
+                identity=identity,
+                built_from=len(raw.taken) + (existing is not None),
+                set_aside=set_aside,
+            )
+        except HostStorageError as refusal:
+            return tree.refuse(_STEP, day, failure=refusal)
         for path, _rows in raw.taken:
             tree.delete(path)
     elif adopted is not None:

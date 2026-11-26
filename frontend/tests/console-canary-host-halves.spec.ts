@@ -56,6 +56,10 @@ test('Hardware and the audit prefer one paired observation and keep hosts withou
 		...servingSpeedQuery, from: EARLIER, to: TODAY
 	});
 	expect([hosts.state, serving.state]).toEqual(['ok', 'ok']);
+	expect(hosts.rows).toContainEqual(expect.objectContaining({
+		version: '2026-11-26', run_id: `${TODAY}-2`, task_name: 'work',
+		server_prompt_tokens: null, server_prompt_seconds: null,
+	}));
 	expect(serving.rows).toHaveLength(4);
 	const jobs = fleetJobs(hosts.rows, serving.rows);
 	expect(jobs).toHaveLength(15);
