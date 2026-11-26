@@ -213,10 +213,11 @@ def test_task_performance_compaction_lands_its_own_receipt_only_after_the_pass(
     assert not (repo / own.path).exists()
     before = git(origin, "rev-parse", "main")
     permissions = tuple(outcome.landing.owned_prefixes)
+    deletions = tuple(settings.tasks[name].owns)
     (private / own.path).write_bytes(own.data + b"foreign bytes")
     assert gardener_publish.publish(
         outcome.landing, attempts=1, repo=repo, identity=execution,
-        write_permissions=permissions, delete_permissions=settings.tasks[name].owns,
+        write_permissions=permissions, delete_permissions=deletions,
         performance_root=private,
     ).exit_code == EXIT_INTEGRITY
     assert git(origin, "rev-parse", "main") == before
@@ -224,7 +225,7 @@ def test_task_performance_compaction_lands_its_own_receipt_only_after_the_pass(
     (private / own.path).write_bytes(own.data)
     assert gardener_publish.publish(
         outcome.landing, attempts=1, repo=repo, identity=execution,
-        write_permissions=permissions, delete_permissions=settings.tasks[name].owns,
+        write_permissions=permissions, delete_permissions=deletions,
         performance_root=private,
     ).exit_code == EXIT_OK
     remote = Repository(origin, git_dir=origin)
