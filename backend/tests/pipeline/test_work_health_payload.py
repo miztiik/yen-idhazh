@@ -226,6 +226,7 @@ def a_machine_that_answers(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(host, "PROC", table)
     monkeypatch.setattr(host, "_text", built)
     monkeypatch.setenv("RUNNER_NAME", "ubuntu-4core-3")
+    monkeypatch.setenv("IDHAZH_HOST_TELEMETRY_MODE", "python")
 
 
 def test_every_host_column_reaches_the_row_the_shard_left_behind(

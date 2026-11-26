@@ -32,7 +32,8 @@ def native_writer(
 ) -> WriterIdentity:
     return WriterIdentity(
         run_id=run_id, git_sha=commit_sha, shard=shard,
-        job=os.environ.get("GITHUB_JOB") or job, pipeline_name=pipeline,
+        job=job if job is not None else (os.environ.get("GITHUB_JOB") or None),
+        pipeline_name=pipeline,
         task_name=task, producer=HOST_FINGERPRINT_PRODUCER,
         attempt=run_context.run_attempt() if attempt is None else attempt,
     )

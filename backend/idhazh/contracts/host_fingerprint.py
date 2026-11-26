@@ -503,7 +503,7 @@ class _HostHardwareCells(Contract):
     __schema_stem__: ClassVar[str] = "host-hardware-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version=HOST_HARDWARE_VERSION,
+            version="2026-11-26",
             change="Keep hardware and generic task identity; record timing separately.",
             why="Task performance has its own measurement and writer.",
         ),
@@ -610,7 +610,7 @@ class HostFingerprintRow(_HostHardwareCells):
     __schema_stem__: ClassVar[str] = "host-fingerprint-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version=HOST_FINGERPRINT_VERSION,
+            version="2026-10-26",
             change="Add optional total machine RAM capacity in MiB.",
             why="Machine capacity is distinct from transient task and process memory.",
         ),

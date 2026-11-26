@@ -180,6 +180,8 @@ bun run src/index.ts --serve --state-root generated-state
 `pipeline_name` and `task_name` identify the work independently. Producer
 `telemetry.silicon` preserves the existing host work-unit identity; attempts
 remain separate immutable writes and normal settlement chooses the later whole row.
+For `idhazh fingerprint`, an explicit `--job` names the runner; without it the
+native caller uses `GITHUB_JOB` if present.
 Dates and timestamps are UTC. Integer inputs must be exactly representable
 JavaScript safe integers; values outside that range fail rather than round.
 

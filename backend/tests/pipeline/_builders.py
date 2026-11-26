@@ -25,6 +25,7 @@ from idhazh.contracts.base import canonical_json
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FetchOutcome
+from idhazh.contracts.host_fingerprint import HostHardwareRow
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.summary import Summary
@@ -419,6 +420,7 @@ def _work_stage(
     hold_s: float = 0.0,
     server_pid: int | None = None,
     settings: config.Settings | None = None,
+    native_host: HostHardwareRow | None = None,
 ) -> tuple[RunPlan, Path, RecordedEndpoint]:
     """One real work stage over captured pages and recorded replies.
 
@@ -456,6 +458,7 @@ def _work_stage(
             fetcher=fetcher,
             model_endpoint=server.endpoint,
             server_pid=server_pid,
+            native_host=native_host,
         )
     return run_plan, tmp_path / "run" / run_plan.date / "items", server
 

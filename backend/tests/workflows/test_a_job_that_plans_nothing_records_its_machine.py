@@ -20,9 +20,10 @@ from support.paths import read_text
 
 from idhazh import cli, ledger
 from idhazh.contracts.base import ServerJob
-from idhazh.contracts.host_fingerprint import HostFingerprintRow
+from idhazh.contracts.host_fingerprint import HostFingerprintRow, HostHardwareRow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.stages import common
+from idhazh.telemetry.host_control import MODE_ENV
 
 from ._harness import _copy_config
 
@@ -70,6 +71,8 @@ def test_the_fingerprint_verb_records_a_machine_on_a_day_no_run_planned(
     to carry on.
     """
     monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "1")
+    monkeypatch.setenv("GITHUB_JOB", "unrelated-ci-job")
+    monkeypatch.delenv(MODE_ENV, raising=False)
     config_dir = a_config_with_no_bandwidth_probe(tmp_path)
 
     code = cli.main(
@@ -85,17 +88,26 @@ def test_the_fingerprint_verb_records_a_machine_on_a_day_no_run_planned(
             SEED_COMMIT,
             "--job",
             ServerJob.RUN_TASKS.value,
+            "--pipeline-name",
+            "gardener",
+            "--task-name",
+            "compact-host-fingerprint",
             "--shard",
             str(WAKE_SHARD),
         ]
     )
 
     assert code == 0, "a job that planned nothing still has a machine to report"
-    (row,) = ledger.load_days(
-        common.STATE_ROOT, LedgerName.HOST_FINGERPRINT, [WAKE_DAY], model=HostFingerprintRow
-    )
+    (file,) = _raw(common.STATE_ROOT)
+    (row,) = ledger.load([file.path], model=HostHardwareRow)
     assert (row.date, row.run_id) == (WAKE_DAY, f"{WAKE_DAY}-{WAKE_EXECUTION}")
-    assert (row.job, row.shard) == (ServerJob.RUN_TASKS, WAKE_SHARD)
+    assert (row.job, row.pipeline_name, row.task_name, row.shard) == (
+        ServerJob.RUN_TASKS, "gardener", "compact-host-fingerprint", WAKE_SHARD,
+    )
+    assert file.envelope.writer == "idhazh_typescript.ledger.parquet"
+    assert (file.envelope.identity.job, file.envelope.identity.task_name) == (
+        row.job, row.task_name,
+    )
     assert not ledger.raw_root(common.STATE_ROOT, LedgerName.RUN_PLAN).exists(), (
         "the verb read no plan, so it may not have written one either"
     )

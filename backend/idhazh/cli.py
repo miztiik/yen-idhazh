@@ -413,14 +413,9 @@ def _main(
     parser.add_argument(
         "--job",
         type=ServerJob,
-        default=WORK_JOB,
         help=(
-            "The workflow job writing this row. Two jobs stand a model server up and "
-            "they serve different weights, so a row that cannot say which one wrote it "
-            "proves nothing. The default is the job that wrote every row committed "
-            "before the cell existed. Converted here rather than downstream: the "
-            "readers are typed for the enum, and a bare string reached one of them as "
-            "soon as a segment name asked for `.value`."
+            "The runner job writing this row. An explicit value takes precedence over "
+            "GITHUB_JOB for native fingerprints; Python rollback defaults to work."
         ),
     )
     parser.add_argument(
@@ -826,7 +821,7 @@ def _dispatch(
             silicon.stage_fingerprint(
                 date=date, run_id=run_id, settings=settings, state_root=common.STATE_ROOT,
                 commit_sha=args.commit, shard=args.shard,
-                job=None if args.pipeline_name is not None else args.job,
+                job=None if args.pipeline_name is not None else (args.job or WORK_JOB),
                 pipeline_name=args.pipeline_name, task_name=args.task_name,
             )
         elif selected == "typescript":
@@ -834,7 +829,7 @@ def _dispatch(
                 date=date, run_id=run_id, settings=settings, state_root=common.STATE_ROOT,
                 commit_sha=args.commit, shard=args.shard, job=args.job,
                 pipeline_name=args.pipeline_name or "operator",
-                task_name=args.task_name or args.job,
+                task_name=args.task_name or args.job or WORK_JOB,
             ):
                 pass
         return 0
@@ -850,7 +845,7 @@ def _dispatch(
             state_root=common.STATE_ROOT,
             commit_sha=args.commit,
             shard=args.shard,
-            job=None if args.pipeline_name is not None else args.job,
+            job=None if args.pipeline_name is not None else (args.job or WORK_JOB),
             pipeline_name=args.pipeline_name,
             task_name=args.task_name,
             job_started_at=int(args.job_started_at) if args.job_started_at else None,
