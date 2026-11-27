@@ -23,7 +23,7 @@ flowchart TD
   subgraph plan["plan - before the article is read"]
     signals["source tier, feed weight, feed reliability,<br/>carriage, watchlist, lens, age"] --> rank["rank.score<br/>writes rank_score, once, and never again"]
   end
-  subgraph assemble["assemble - after the read, five times a day"]
+  subgraph assemble["assemble - after each scheduled read"]
     rank --> fold["collapse_same_story<br/>the veto, the headline joiner,<br/>then the weighted score over the floor"]
     fold --> stream["placement.place<br/>orders inside what each run added,<br/>then the desk rules and the head frame"]
     fold --> lead["leading_stories<br/>a weighted score across the WHOLE day"]
@@ -48,7 +48,7 @@ orders, because it decides which story of a group a reader meets at all. The
 stream reads no clock - the same day placed again at a later hour would
 re-order a block somebody has already read. And the block reads one, because it
 is the only order taken across the whole day and so the only place a story found
-at 02:20 is ever weighed against one found at 18:20.
+in an earlier run is ever weighed against one found in a later run.
 
 ### The weighted score that chooses the leading block
 

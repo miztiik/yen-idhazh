@@ -111,7 +111,10 @@ The published ledger files by the day the published tree itself uses. The assemb
 
 Its read carries `collect.published_window_days`, and the committed config sets that to `-1`. So today every day is read, one held month at a time, and the answer is every address ever published. **The day grain is what makes a finite cover possible at all**: it names the days in range and reads those days and no others. Until a window is set, the grain buys a file of its own for every writer, and not a faster read.
 
-Size it from the ceiling. A run plans at most `run.safety_ceiling_per_run` items, which the committed config sets to 80, and the schedule fires five times a day - so a day writes at most 400 rows and a year at most about 146,000.
+Size it from the configured ceilings. The per-run and per-day limits live in
+[`config/idhazh.json`](../../../config/idhazh.json), and the scheduled triggers
+live in [the digest workflow](../../../.github/workflows/digest.yml). The
+published ledger's maximum daily size follows the configured day ceiling.
 
 The whole read folds one held month into the answer before it reads the next, whatever the history holds. `backend/tests/test_ledger.py::test_the_unbounded_cover_reads_one_held_month_at_a_time` builds six months and checks that the unbounded path asks for each held month. This is a behavior check, not a peak-memory measurement. See [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md).
 

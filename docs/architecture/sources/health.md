@@ -559,7 +559,11 @@ page continues to describe the current warning-only and retirement policy.
 
 Retirement of a **source** is a person moving a feed into the `retired` key of `config/sources.json`. Quarantine is a run declining to ask, based on rows it wrote itself. Retirement of an **address** is a third thing, and it is a row under `state/` for the same reason quarantine is: a run may write evidence about curation and may never write curation.
 
-Keeping those separate is what makes a bad afternoon survivable. A run that could edit config would, over one bad week, quietly delete sources nobody voted to remove - and the diff would be authored by a robot at 06:20 on a Sunday. What the run may do instead is stop asking one address and say in a committed row why, which a person can read, argue with, and reverse by editing one line.
+Keeping those separate is what makes a bad afternoon survivable. A run that
+could edit config would, over one bad week, quietly delete sources nobody voted
+to remove - and the diff would be authored by a robot during a scheduled run.
+What the run may do instead is stop asking one address and say in a committed
+row why, which a person can read, argue with, and reverse by editing one line.
 
 ## Two readers, one record
 
@@ -672,7 +676,7 @@ silencing a feed on evidence the run cannot verify.
 | Retiring an address on five `410` results rather than five distinct runs | A job that is re-run keeps its run id, so one bad afternoon retrying itself would retire an address on its own. |
 | Letting an empty `200` clear the pending `410` count | It is evidence that the feed is broken and no evidence that the address is alive, so it would let a dead server launder its record by returning an empty document. |
 | Dropping every resting endpoint from the feed floor | A rest lifts itself, so one afternoon of outages would take a desk dark for a problem that was over by the evening. |
-| Backfilling an endpoint key so a retirement could rest on older rows | The address may have moved since, so the retirement would be filed against one that never failed. Waiting five runs costs a day and buys a decision that is true. |
+| Backfilling an endpoint key so a retirement could rest on older rows | The address may have moved since, so the retirement would be filed against one that never failed. Waiting five runs can take less than a day on the current schedule and buys a decision that is true. |
 | Persisting a mutable status per feed instead of deriving it | A flag is a read-modify-write over the whole history, and two runs racing on it lose rows. Every state here but the retirement is derived from immutable events, and the retirement is the one that is permanent. |
 | Writing no health row for a retired address | The ledger means one row per feed per run, and the console's denominator reads it. A desk with a silent feed would look like a desk with fewer feeds. |
 | Logging feed results instead of committing them | A log is gone with the run. The next run needs to read what the last four did (Guardrail #1). |

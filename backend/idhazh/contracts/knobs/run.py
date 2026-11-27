@@ -23,26 +23,22 @@ class RunConfig(Model):
             "uploads nothing, so the items it held are lost. It is a guardrail and it "
             "only ever refuses - it never chooses content, ranks it, or reorders it. "
             "It began as a crash guard against a mis-parsed feed and supply overtook "
-            "it: items_planned has been exactly this number on every run since "
-            "2026-08-25. Maintainer decision, 2026-09-05: 80, down from 160. What it is "
-            "NOT is a bound on the day - the day runs five times, so 80 here publishes "
-            "about 400. safety_ceiling_per_day is the one that answers that."
+            "it: items_planned has matched this ceiling on every run since "
+            "2026-08-25. The configured value is in config/idhazh.json. What it is "
+            "NOT is a bound on the day - use safety_ceiling_per_day for that, "
+            "configured in the same file."
         ),
     )
     safety_ceiling_per_day: int = Field(
-        default=400,
+        default=640,
         ge=1,
         description=(
-            "What the whole day may publish, across every run of it. The per-run "
-            "ceiling could never answer this: the day runs five times, so anybody "
-            "reading 80 and picturing an 80-item day is wrong by a factor of five. "
-            "A guardrail like its neighbour - it only ever refuses, and a day under it "
-            "is untouched. It counts what earlier runs of this date actually put in "
-            "front of a reader, so a run that failed to publish costs the day nothing. "
-            "The default is the arithmetic of the design that already ships - five "
-            "runs at safety_ceiling_per_run - so turning it on changes no day that has "
-            "ever been published and only refuses a runaway. Lowering it is an "
-            "editorial decision about how long a day should be, and it is the maintainer's."
+            "What the whole day may publish, across every run of it. The configured "
+            "value is in config/idhazh.json. A guardrail like its neighbour - it only "
+            "ever refuses, and a day under it is untouched. It counts what earlier "
+            "runs of this date actually put in front of a reader, so a run that failed "
+            "to publish costs the day nothing. Lowering it is an editorial decision "
+            "about how long a day should be, and it is the maintainer's."
         ),
     )
     shard_size: int = Field(
@@ -52,45 +48,36 @@ class RunConfig(Model):
             "URLs per worker VM. Set by measured model-load amortization, not by "
             "taste. It does not decide the fan-out on its own and has not since the "
             "run ceiling came down: the fan-out is "
-            "min(ceil(safety_ceiling_per_run / shard_size), max_parallel), which is "
-            "min(16, 4) at the committed numbers, so max_parallel binds and a worker "
-            "draws 20 items. Re-derived on 2026-09-14 against the two-span item and "
-            "left here: it would have to rise above 20 to move the fan-out at all, "
-            "and a worker carrying more items is the opposite of what a longer item "
-            "wants."
+            "min(ceil(safety_ceiling_per_run / shard_size), max_parallel), so this "
+            "setting changes the shard size only when it limits that calculation. "
+            "The committed settings are in config/idhazh.json. Re-derived on "
+            "2026-09-14 against the two-span item; a worker carrying more items is "
+            "the opposite of what a longer item wants."
         ),
     )
     max_parallel: int = Field(
         default=8,
         ge=1,
         description=(
-            "The most workers a run may derive for itself. Eight uses the full "
-            "worker count supported by digest.yml; a manual dispatch may choose "
-            "any count from one through eight."
+            "The most workers a run may derive for itself. The workflow supports "
+            "the configured width for scheduled runs and bounds the manual choices."
         ),
     )
     shard_timeout_minutes: int = Field(
         default=200,
         ge=1,
         description=(
-            "The work job's own timeout, which digest.yml reads from here. A backstop, "
+            "The work job's own timeout, which digest.yml reads from "
+            "config/idhazh.json. A backstop, "
             "never a budget: a worker has no clock of its own, and one killed at this "
             "bound uploads nothing, so the run loses every item that worker held. It "
-            "rose to 200 from 150 as headroom for a second model call an item, not "
-            "because any worker got slower - at run.safety_ceiling_per_run "
-            "of 80 a worker draws 20 items, half of the 40 it drew before, so the base "
-            "work roughly halves. An item has made one call since 2026-11-17, and the "
-            "value was not lowered with it. Sized from the worst measured shard, not "
-            "the median: over 80 shard rows on 2026-09-02 the worst used 135.4 minutes "
-            "of the old 150-minute bound and the median used 78.5. The worst of those "
-            "80 rows carried 40 items, so the worst measured item is 203.1 s; the "
-            "item's one call opens with a 256-token thinking span, which is 42.6 s at "
-            "the measured 6.01 +/- 0.11 tokens a second (2026-08-23, ubuntu-latest, "
-            "EPYC 9V74, llama.cpp b10598, three repeats), so the derived worst item is "
-            "245.7 s and a 20-item worker's worst shard is 81.9 minutes, which 200 "
-            "holds 2.4 times over. 200 is 56 percent of the six-hour platform "
-            "ceiling, well inside Guardrail #2. A slow worker is still answered by "
-            "lowering the ceiling, never by raising this."
+            "was increased as headroom for a planned second model call per item, "
+            "not because any worker got slower. The pipeline has made one call per "
+            "item since 2026-11-17, and the timeout was not lowered with it. It is "
+            "sized from the worst measured shard, not the median; the measurements "
+            "are documented in docs/reference/pipeline-cost.md. A slow worker is "
+            "still answered by lowering safety_ceiling_per_run, never by raising "
+            "this."
         ),
     )
     shard_wrap_up_minutes: int = Field(

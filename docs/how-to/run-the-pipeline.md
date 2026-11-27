@@ -240,10 +240,10 @@ strikes and no inherited retirement
 
 ## In CI
 
-`.github/workflows/digest.yml`, displayed as `Content refresh`, starts at 02:20,
-06:20, 10:20, 14:20, and 18:20 UTC. A plan job loads no weights. It files the
-day's plan in the run-plan ledger and hands that day's folder of plans to the
-later jobs, and every step after it names its run with `--execution`
+`.github/workflows/digest.yml`, displayed as `Content refresh`, declares the
+UTC schedule. A plan job loads no weights. It files the day's plan in the
+run-plan ledger and hands that day's folder of plans to the later jobs, and
+every step after it names its run with `--execution`
 ([../architecture/contracts/state-ledgers.md](../architecture/contracts/state-ledgers.md)).
 A matrix of worker jobs each restores the weights once and works a shard. The
 plan records either the count derived from its final items and run config or

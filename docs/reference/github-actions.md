@@ -11,11 +11,11 @@ All schedules and run dates are UTC. Every workflow supports manual dispatch.
 | File | Display name | Automatic trigger | Purpose |
 | --- | --- | --- | --- |
 | `ci.yml` | `CI` | Pull request; push to `main` | Backend, native TypeScript, site and browser checks |
-| `digest.yml` | `Content refresh` | `20 2 * * *`, `20 6 * * *`, `20 10 * * *`, `20 14 * * *`, `20 18 * * *` | Digest and production state |
-| `llm-council.yml` | `LLM-COUNCIL` | `0 22 * * *` | Model judges' verdicts |
-| `pages.yml` | `Pages publication` | Every 30 minutes; successful `Content refresh` or `CI` on `main`; manual dispatch | Static site |
-| `drift.yml` | `Drift review` | `0 8 * * 0` | Quality drift review |
-| `idhazh-gardener.yml` | `Idhazh Gardener` | `40 0 * * *` | Retention and history maintenance |
+| `digest.yml` | `Content refresh` | Scheduled in UTC; see [workflow](../../.github/workflows/digest.yml) | Digest and production state |
+| `llm-council.yml` | `LLM-COUNCIL` | Scheduled in UTC; see [workflow](../../.github/workflows/llm-council.yml) | Model judges' verdicts |
+| `pages.yml` | `Pages publication` | Scheduled; successful `Content refresh` or `CI` on `main`; manual dispatch; see [workflow](../../.github/workflows/pages.yml) | Static site |
+| `drift.yml` | `Drift review` | Scheduled in UTC; see [workflow](../../.github/workflows/drift.yml) | Quality drift review |
+| `idhazh-gardener.yml` | `Idhazh Gardener` | Scheduled in UTC; see [workflow](../../.github/workflows/idhazh-gardener.yml) | Retention and history maintenance |
 | `backfill.yml` | `Vector backfill` | none | Repair closed days' vectors |
 | `digest-recovery.yml` | `Digest assembly recovery` | none | Complete assembly from retained worker artifacts |
 | `idhazh-pipeline-tests.yaml` | `Pipeline tests` | none | Check a model with real articles |

@@ -47,10 +47,32 @@ What stayed with the work shard: `run.shard_timeout_minutes` and `run.shard_wrap
 
 A guard, an alarm and a limit look identical in JSON, so the name and the comment carry the whole difference:
 
-- `run.safety_ceiling_per_run` (80) **was** a crash guard and is now an editorial cap, and the name is the last thing that has not caught up. `items_planned` has been exactly the ceiling on every run since 2026-08-25, so supply overtook the guard and what it bounds today is the size of a run. Maintainer decision, 2026-09-05: it comes down to 80 from 160, and a day publishes half as many stories on purpose - the gain is that those 80 slots go to articles worth reading rather than to a second copy of one already chosen or a feed that has been publishing badly - see [../../architecture/sources/discovery.md](../../architecture/sources/discovery.md). Which half is dropped is an editorial call and not an arbitrary cut: a duplicate goes before a desk's only story. Lowering it also shrinks the worst case every downstream bound is checked against - a smaller run is a smaller worst shard - see [Design rationale](#design-rationale).
+- `run.safety_ceiling_per_run` is a **per-run safety ceiling**, configured in
+  [`config/idhazh.json`](../../../config/idhazh.json). `items_planned` has
+  matched the configured ceiling on every run since 2026-08-25, so supply
+  overtook the original crash guard and it now bounds the size of a run.
+  Maintainer decision, 2026-09-05: lower the ceiling so a run gives up items
+  less likely to be worth reading, such as a second copy of a story already
+  chosen or an item from a feed publishing badly - see
+  [../../architecture/sources/discovery.md](../../architecture/sources/discovery.md).
+  Which items are dropped is an editorial call and not an arbitrary cut: a
+  duplicate goes before a desk's only story. Lowering the ceiling also shrinks
+  the worst case every downstream bound is checked against - a smaller run is
+  a smaller worst shard - see [Design rationale](#design-rationale).
 - **the summarize entry carries no decode cap, and that is a decision rather than an omission.** It held two until 2026-09-21 - `max_answer_tokens` at 900 and `max_think_tokens` at null - and each sent a number where llama-server's own default is already unbounded by anything but the window, on a server started with no prediction flag. The answer cap guarded the single call `validate` sends and never reached the call a day actually makes. That call has a budget of its own: it runs to the model file's response limit, `sampling.max_tokens`, 8,192 in every committed model file. The thinking cap is the worked example of this section failing the other way: 256 was never read off any of these weights, it sat below every published thinking budget we could find, and it landed in the band where a thought is **cut rather than finished**, which scores worse than no thought at the same budget ([arxiv 2504.09858](https://arxiv.org/abs/2504.09858)). Maintainer ruling, 2026-09-17, made it null; on 2026-09-21 both fields went. What bounds a decode now already existed and already fails loudly per item: `request_timeout_minutes` lands `model_timed_out`, and the window with no context shift lands `context_exceeded`. A config still spelling either name, or the older `max_output_tokens`, is refused by name.
 - `models.summarizer.request_timeout_minutes` (22.1) is a **per-request guard**. It limits one summarizer POST, not the shard. It sits beside the sampling block rather than inside it, because it is how long the client waits and never goes on the wire - a key inside that block is splatted into the request body. It protects the day from one model request that accepts a connection and never replies: that item records `model_timed_out`, and the worker continues. The default is sized from the authoritative runner measurements in [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md): the worst 8B long article plus one cold prompt prefix, doubled. `run.shard_timeout_minutes` stays the outer bound for the whole shard.
-- `run.shard_timeout_minutes` (200) is a **job backstop**, and it is the outer bound the previous line hands off to. The `work` job reads it, so this is the only place the number is written. It is not a budget: the stage has no clock of its own, and a worker killed here uploads nothing, so the run loses every item that worker held rather than the tail it could not reach. It rose to 200 from 150 as headroom for a two-call summariser, not because a worker got slower: at the 80-item ceiling a worker draws 20 items, half of the 40 it drew before, so the base work roughly halves and 150 alone would then have been slack. The room was banked before that design landed, because a second model call an item takes the worst shard past 150 and a killed worker uploads nothing. The pipeline has made one call an item since 2026-11-17, and the value was not lowered with it. It is sized from the worst measured shard, not the median - 135.4 minutes of the old 150 over 80 shard rows on 2026-09-02, against a 78.5-minute median ([../../reference/pipeline-cost.md](../../reference/pipeline-cost.md#what-a-work-shard-costs)) - and 200 is 56 percent of the six-hour platform ceiling. A worker that runs long is still answered by lowering `run.safety_ceiling_per_run`, never by raising this (Guardrail #2).
+- `run.shard_timeout_minutes` is a **job backstop**, and it is the outer
+  bound the previous line hands off to. Its current value is in
+  [`config/idhazh.json`](../../../config/idhazh.json). It is not a budget: the
+  stage has no clock of its own, and a worker killed here uploads nothing, so
+  the run loses every item that worker held rather than the tail it could not
+  reach. It was raised as headroom for a planned two-call summariser, not
+  because a worker got slower. The pipeline has made one call per item since
+  2026-11-17, and the timeout was not lowered with it. It is sized from the
+  worst measured shard, not the median; the measurements are in
+  [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md#what-a-work-shard-costs).
+  A worker that runs long is still answered by lowering
+  `run.safety_ceiling_per_run`, never by raising this (Guardrail #2).
 - `collect.settled_failure_codes` is a **memory**, not a guard. It names the failure codes that will not change before tomorrow, and an address that failed today with one of them is not planned again today. Absent from it - and therefore retried - are the codes that can change within a day: a rate limit, a network error, a server error, an unreachable model. Measured over 2026-08-24 to 2026-08-29, 403 same-day repeats of a settled failure bought 2 items ([../../architecture/sources/freshness.md](../../architecture/sources/freshness.md)). An empty list restores the old behaviour exactly.
 - `run.visual_planner_budget_minutes` (40) was a **stage budget** and is gone. It said how long the separate visual planner stage could spend before it stopped asking the model and left the rest of the day undecided, sized *below* the `visuals` job's 50-minute timeout because a job killed at its timeout skips its upload step and loses every decision it had already made. Plan 11 row #6 retired the stage, the job and the knob on 2026-09-13: a picture is now decided inside the shard that read the article, so the only clock over it is `run.shard_timeout_minutes` ([../../architecture/publishing/visuals.md](../../architecture/publishing/visuals.md)).
 - `retention.site_budget_mb` (800) is an **alarm**: it logs the remaining headroom, fails no build and deletes nothing. Its 224 MiB margin below the platform cap gives time to respond. The planning target is 14 published days of warning, a maintenance allowance rather than a measured quantity. Check that margin against current built-site growth before claiming how many days it buys ([../../reference/site-weight.md](../../reference/site-weight.md#warning-and-hard-cap)). Deletion is governed separately by the [retention policy](../../architecture/publishing/retention.md).
@@ -65,13 +87,13 @@ A guard set near the working range is the worst of both. It fires on good runs, 
 
 ## Design rationale
 
-**`run.max_parallel` rose from four to eight on 2026-10-07.** The maintainer chose
-the full worker width already supported by `digest.yml` for scheduled runs and
-the manual default. At the 80-item run ceiling, this halves the largest shard
-from 20 items to 10. The trade-off is more runner time for model downloads and
-initialization; the earlier eight-worker run published successfully and its
-slowest worker took 53.4 minutes rather than 85.6 minutes at four workers.
-Authority: maintainer, 2026-10-07.
+**`run.max_parallel` increased on 2026-10-07.** The maintainer chose the full
+worker width already supported by `digest.yml` for scheduled runs and the
+manual default. At the configured per-run ceiling, this reduces the largest
+shard. The trade-off is more runner time for model downloads and initialization;
+an earlier run at the wider setting published successfully and its slowest
+worker was faster than a run at the previous setting. Authority: maintainer,
+2026-10-07.
 
 **`run.safety_ceiling_per_run` moved from 200 to 160 on 2026-08-26.** A guard is still sized, and this one is sized by the slowest thing that has to finish a full day of it. Two bounds disagreed with 200. An automatic run derives `min(ceil(items / run.shard_size), run.max_parallel)` = four shards, so 200 hands a worker 50 items; against the Qwen3.5-9B candidate that derives to 318 minutes one way and 345 the other, over a 330-minute job timeout that nobody may raise (Guardrail #2). At 160 the same arithmetic gives 40 items, 254 and 276 minutes, and clears both. The route stage says the same thing from the other side: its measured slow-host capacity is 166 items in a 50-minute budget, so 200 and the router never agreed and 160 does. The largest day ever planned is 149 items, so the move removes nothing a reader has ever had. The lever was the ceiling rather than the timeout, because the timeout is the platform; and rather than the shard count, because at the time `run.max_parallel` was four and `route` was unsharded either way ([../../reference/pipeline-cost.md](../../reference/pipeline-cost.md)). Authority: Carmack.
 
@@ -85,9 +107,22 @@ Authority: maintainer, 2026-10-07.
 
 **Before 2026-10-07, `run.max_parallel` read 4.** Eight workers made the day ready about half an hour sooner and cost more machine time, while doing nothing for `route`, which is unsharded and starts after every worker has finished. The maintainer changed that trade-off on 2026-10-07 and raised the cap to eight.
 
-**The `work` job's bound came down from 330 to `run.shard_timeout_minutes` on 2026-08-27, and the config number did not move.** Neither 330 nor 150 had a recorded basis, so the direction was decided by reading the wall-clock of all 106 `work` jobs the repository has: across 16 full days at four workers the slowest worker of a run took 83.5 to 117.5 minutes, and at the 40-item ceiling then in force the worst was 94.5. 150 was half again that; 330 was 3.5x it, and more than half the six-hour platform maximum. So the workflow's number was the wrong one and it now reads this one - the number lives in config and the job bound reads it, with the reason written in the workflow. A bound above about 165 minutes could not be honoured while the `visuals` job ran serially after the shard: the scheduled runs are four hours apart and share one concurrency group with `cancel-in-progress: false`, so at 330 a single hung worker delayed the next two digests ([../../reference/pipeline-cost.md](../../reference/pipeline-cost.md#what-a-work-shard-costs)). That job retired on 2026-09-13, which hands its 50 minutes back to the gap between runs rather than to this bound. Authority: Carmack.
+**The `work` job's bound moved to `run.shard_timeout_minutes` on 2026-08-27, and the config number did not move.** Neither its earlier workflow value nor the previous config value had a recorded basis, so the direction was decided by reading the wall-clock of all 106 `work` jobs the repository has: across 16 full days at four workers the slowest worker of a run took 83.5 to 117.5 minutes, and at the configured item ceiling then in force the worst was 94.5. The workflow now reads the configured value, with the reason written in the workflow. A long bound could not be honoured while the `visuals` job ran serially after the shard: scheduled runs share one concurrency group with `cancel-in-progress: false`, so a single hung worker could delay later digests ([../../reference/pipeline-cost.md](../../reference/pipeline-cost.md#what-a-work-shard-costs)). That job retired on 2026-09-13, which hands its former runtime back to the gap between runs rather than to this bound. Authority: Carmack.
 
-**Both numbers moved on 2026-09-05, and the ceiling's move is the editorial one.** `run.safety_ceiling_per_run` came down from 160 to 80: a day now publishes half as many stories on purpose, and the slots it gives up were going to a second copy of a story already chosen or to a feed that had been publishing badly, not to anything a reader would miss (maintainer, 2026-09-05; the source sweep is in [../../architecture/sources/discovery.md](../../architecture/sources/discovery.md)). `run.shard_timeout_minutes` went the other way, 150 to 200, and it is not a response to a slower worker - at 80 items a worker draws 20, half of the 40 it drew before, so the base work roughly halves and 150 alone would have been slack. The rise was headroom banked for a two-call summariser, whose second model call an item took the worst shard past 150; a killed worker uploads nothing, so the room was bought before that design landed rather than after it killed a run. The pipeline has made one call an item since 2026-11-17, and the value was not lowered with it. Sized from the worst measured shard, not the median - 135.4 minutes of the old 150 over 80 shard rows on 2026-09-02, against a 78.5-minute median - and 200 is 56 percent of the six-hour platform ceiling, which nobody may move (Guardrail #2). Authority: maintainer and Carmack.
+**The ceiling and worker timeout moved together on 2026-09-05.** The
+`run.safety_ceiling_per_run` change was editorial: it reduced the chance of
+publishing a second copy of a story already chosen or an item from a feed
+publishing badly (maintainer, 2026-09-05; the source sweep is in
+[../../architecture/sources/discovery.md](../../architecture/sources/discovery.md)).
+The `run.shard_timeout_minutes` change added headroom for a planned two-call
+summariser, whose second model call per item could take a worker past its
+previous bound. A killed worker uploads nothing, so the room was bought before
+that design landed rather than after it killed a run. The pipeline has made one
+call per item since 2026-11-17, and the timeout was not lowered with it. The
+timeout remains sized from the worst measured shard, not the median; the
+measurements and rationale are in
+[../../reference/pipeline-cost.md](../../reference/pipeline-cost.md#what-a-work-shard-costs).
+Authority: maintainer and Carmack.
 
 ## Chart evidence bounds
 
