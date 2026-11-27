@@ -24,19 +24,19 @@ import { resolveConsoleStyle, CONSOLE_FONT_FACES, CONSOLE_LINECAPS } from './fro
 import { renderFrameCss } from './frontend/scripts/build-frame-css.mjs';
 const input = JSON.parse(readFileSync(0, 'utf8'));
 console.log(JSON.stringify({
-    style: resolveConsoleStyle(input),
+    style: resolveConsoleStyle(input.console_style),
     faces: CONSOLE_FONT_FACES,
     caps: CONSOLE_LINECAPS,
-    css: await renderFrameCss({console_style: input})
+    css: await renderFrameCss(input)
 }));
 """
 
 
-def frontend(style: object) -> dict[str, object]:
+def frontend(style: object, **appearance: object) -> dict[str, object]:
     result = subprocess.run(
         ["node", "--input-type=module", "-e", SCRIPT],
         cwd=ROOT,
-        input=json.dumps(style),
+        input=json.dumps({"console_style": style, **appearance}),
         text=True,
         capture_output=True,
         check=True,
@@ -93,3 +93,28 @@ def test_real_css_producer_substitutes_nondefault_style_without_changing_reader_
     assert f"--operation-written: {style.colors.light.operation_written};" in operator
     assert f"--operation-deferred: {style.colors.dark.operation_deferred};" in operator
     assert f"--operation-failed: {style.colors.dark.operation_failed};" in operator
+
+
+def test_story_comparison_fills_follow_reader_settings_without_repainting_console() -> None:
+    old = AppearanceConfig.model_validate({"version": "2026-11-26"}).story_comparison_colors
+    override = "#984955"
+    tuned = AppearanceConfig.model_validate(
+        {"version": "2026-11-26", "story_comparison_colors": {"dark": {"below_zero": override}}}
+    ).story_comparison_colors
+    outputs = []
+    for colors in (old, tuned):
+        rendered = frontend({}, story_comparison_colors=colors.model_dump(mode="json"))["css"]
+        assert isinstance(rendered, str)
+        reader, operator = rendered.split("/* The selector includes the outer canvas", 1)
+        dark, light = reader.split("[data-theme='light'] {", 1)
+        for mode, css in ((colors.dark, dark), (colors.light, light)):
+            expected = {
+                f"--story-chart-{role.replace('_', '-')}: {value};"
+                for role, value in mode.model_dump().items()
+            }
+            assert {line.strip() for line in css.splitlines() if "--story-chart-" in line} == expected
+        outputs.append((reader, operator))
+    (before, before_operator), (after, after_operator) = outputs
+    assert f"--story-chart-below-zero: {override};" in after
+    assert after == before.replace(old.dark.below_zero, override)
+    assert after_operator == before_operator

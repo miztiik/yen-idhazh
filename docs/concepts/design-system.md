@@ -1,6 +1,6 @@
 # Design System
 
-**Last Updated**: 2026-11-25
+**Last Updated**: 2026-11-27
 
 Shared rules for typography, layout, colour, motion and controls. [Console design](console-design.md) owns panel-specific presentation; [appearance configuration](config/appearance.md) owns tunable values.
 
@@ -28,7 +28,7 @@ Inline styles are for genuinely dynamic values such as coordinates or computed w
 The console's `console_style` family is generated over the entire operator page,
 including its canvas and header, before paint. It supplies neutral light/dark
 surfaces, actions, six paired type roles, compact controls and panel spacing.
-Reader tokens remain unchanged. Ordinary single-measure charts use violet for
+These overrides are Console-only. Ordinary single-measure charts use violet for
 their marks and readings, not the first category colour. All Console
 categorical stacks take flat fills from one shared light and dark palette.
 Fetch is cyan, Extract is cobalt, Summarize is berry and Analyze uses charcoal in light mode
@@ -181,10 +181,14 @@ Both are untrusted text, never markup. Missing framing takes no reserved space.
 Bars and dots draw in columns when each category or series label and its exact
 reading fit side by side beneath the mark. Otherwise they use horizontal rows,
 keeping the label and reading with their mark and wrapping text when needed.
-The same fit rule applies at every width. A single measure uses one colour
-without a spotlight. Declared groups keep their own labels and colours; do not
-add a legend that repeats those labels. Other families retain their own emphasis
-and series cues.
+The same fit rule applies at every width. A comparison uses one measure fill
+unless it distinguishes named groups or uses a zero baseline to show both
+positive and negative bars in the same recorded unit. Named groups take
+precedence over sign and keep their own labels; do not add a legend that
+repeats those labels. Green and red on eligible bars mean above and below zero,
+not improvement or decline in quality. Zero is neutral; keep the zero line and
+exact readings so colour is never the only cue. Other families retain their
+own emphasis and series cues.
 Bars rank by numeric value, largest first, with original order for equal values.
 The full row and accessible reading order move together, including source values.
 Other chart families keep their own semantic order. The accessible name

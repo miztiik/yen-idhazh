@@ -24,7 +24,7 @@ answer to the objection, not a refusal of the knob.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import ClassVar, Final, Self
+from typing import Annotated, ClassVar, Final, Self
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
@@ -575,6 +575,38 @@ class MotionConfig(Model):
         return self
 
 
+StoryComparisonFill = Annotated[str, Field(pattern=HEX_COLOUR)]
+
+
+class LightStoryComparisonColors(Model):
+    """Fill roles on the light reading card, not category or status colours."""
+
+    measure: StoryComparisonFill = "#6929c4"
+    above_zero: StoryComparisonFill = "#206e49"
+    below_zero: StoryComparisonFill = "#a02b43"
+
+    @model_validator(mode="after")
+    def _sign_colors_differ(self) -> Self:
+        if self.above_zero == self.below_zero:
+            raise ValueError("above_zero and below_zero must use different fills")
+        return self
+
+
+class DarkStoryComparisonColors(LightStoryComparisonColors):
+    """The same fill roles on the dark reading card."""
+
+    measure: StoryComparisonFill = "#a56eff"
+    above_zero: StoryComparisonFill = "#64bb88"
+    below_zero: StoryComparisonFill = "#bb4e5a"
+
+
+class StoryComparisonColors(Model):
+    """Theme-specific fills for ungrouped story bars and dots."""
+
+    light: LightStoryComparisonColors = Field(default_factory=LightStoryComparisonColors)
+    dark: DarkStoryComparisonColors = Field(default_factory=DarkStoryComparisonColors)
+
+
 class AppearanceConfig(Contract):
     """`config/appearance.json` - everything the published surface is drawn from."""
 
@@ -584,6 +616,7 @@ class AppearanceConfig(Contract):
             "readCompatibility": (
                 "additive; absent archive controls and console_style blocks/leaves use "
                 "declared defaults, including measurement, memory scale and Operations colors; "
+                "absent story comparison color settings use declared defaults; "
                 "style arrays replace whole; numeric console frame "
                 "maxima retain their caps and null selects the full window; "
                 "chart.palette adds spectral and piyg while prior choices remain accepted; "
@@ -592,6 +625,11 @@ class AppearanceConfig(Contract):
         }
     )
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-11-27",
+            change="Add theme fills for ordinary and signed story comparisons.",
+            why="Older appearance files inherit the reader fills without changing chart data.",
+        ),
         ChangelogEntry(
             version="2026-11-26",
             change="Set separate light and dark status colors for Operations marks.",
@@ -606,11 +644,6 @@ class AppearanceConfig(Contract):
             version="2026-11-20",
             change="Separate ordinary console measurements from category colors.",
             why="Past configs use the default measurement color and keep explicit categories.",
-        ),
-        ChangelogEntry(
-            version="2026-11-15",
-            change="Remove the console source-doubt ranking limit.",
-            why="Historical configs discard the retired limit without restoring the ranking.",
         ),
         ChangelogEntry(
             version="2026-09-30",
@@ -635,6 +668,7 @@ class AppearanceConfig(Contract):
     frame: FrameConfig = Field(default_factory=FrameConfig)
     theme: ThemeConfig = Field(default_factory=ThemeConfig)
     chart: ChartConfig = Field(default_factory=ChartConfig)
+    story_comparison_colors: StoryComparisonColors = Field(default_factory=StoryComparisonColors)
     icons: IconsConfig = Field(default_factory=IconsConfig)
     motion: MotionConfig = Field(default_factory=MotionConfig)
 

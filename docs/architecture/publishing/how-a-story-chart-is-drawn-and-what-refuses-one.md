@@ -1,6 +1,6 @@
 # How a story chart is drawn, and what refuses one
 
-**Last Updated**: 2026-11-25
+**Last Updated**: 2026-11-27
 
 A story that carries a chart carries a pointer at its marks, and the reader's
 browser is what turns those marks into a picture. This page holds that path: who
@@ -20,7 +20,9 @@ become markup in our own origin. The routes this drawing arrives on are
 
 | What is drawn | Token | Why that one |
 | --- | --- | --- |
-| Bars, dots, slope points/lines, line-series paths/points, scatter points and bubbles | `--chart-1` through `--chart-8` | The categorical chart ramp. It holds no green, amber or red, so a mark cannot read as a status |
+| Ordinary bars and dots | `--story-chart-measure` | A measure is not a group, even when the bars are ranked |
+| Bars on both sides of zero in one recorded unit, without distinct groups | `--story-chart-above-zero`, `--story-chart-below-zero` | Signed position, not a verdict; zero keeps the measure fill |
+| Grouped bars and dots; slope points/lines, line-series paths/points, scatter points and bubbles | `--chart-1` through `--chart-8` | Category or emphasis, not signed position or status |
 | Names, time labels and units | `--color-text-secondary` | Type on the card, read the way the reader note above it is read. The chart ramp is for marks that carry no word |
 | Figures and column labels | `--color-text` | A reader reads these as values or time labels, so they take the page's own ink |
 | Bar and dot baselines (`line.axis`) | `--chart-axis` | The token every console chart already draws an axis with, so there is one answer here rather than two |
@@ -127,6 +129,14 @@ silently narrowing the comparison.
 Bars sort descending by numeric value, with source order for ties. Each category
 moves with its quantity and source text, including in the keyboard description.
 Bars start at zero; dots show their tighter range and say when it excludes zero.
+Group colours follow the original series order, not the sorted bars. For an
+ungrouped bar comparison, the browser already has the signed values and the
+unit. Paint can follow the existing zero baseline without changing the published
+shape or its renderer version. A unit such as percent does not establish that
+the number is a change or an improvement. The role stays neutral for one-sided
+bars, missing or different units, and ungrouped dots instead of guessing those
+semantics from titles. Rank alone does not require another colour scale: bar
+length already carries magnitude.
 Marks, guides and ticks use the same linear scale. The chart chooses one
 magnitude for ticks from the configured abbreviation threshold and spells it out
 with the unit only when every reading carries the same unit. Each mark's

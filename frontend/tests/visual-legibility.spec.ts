@@ -7,6 +7,8 @@ import { drawVisual, statedDrawing } from '../src/lib/visual/bar';
 import { chartConfig, storyChartGeometryConfig } from '../src/lib/server/config';
 import { fitChartGeometry, fitChartTicks } from '../src/lib/visual/viewport';
 import { isChartKind } from '../src/lib/payload/project';
+import type { ComparisonColorToken } from '../src/lib/visual/comparison-colors';
+import type { ChartPaletteToken } from '../src/lib/charts/theme';
 import { dayReady } from './support/day-ready';
 import { formatNumber, numberFormat } from './support/number-format';
 import { CANARY, newestDate, payloadOf } from './support/published';
@@ -14,7 +16,9 @@ import { CANARY, newestDate, payloadOf } from './support/published';
 test.use({ viewport: { width: 390, height: 844 } });
 const geometry = storyChartGeometryConfig();
 
-async function checkComparison(figure: Locator, data: VisualData) {
+async function checkComparison(
+	figure: Locator, data: VisualData, colors: readonly (ComparisonColorToken | ChartPaletteToken)[]
+) {
 	const held = new Map(data.marks.map((mark) => [mark.mark_id, mark]));
 	const readings = data.encoding.quantity.map((id, index) => {
 		const quantity = held.get(id)!;
@@ -41,12 +45,23 @@ async function checkComparison(figure: Locator, data: VisualData) {
 		await expect(group.locator('rect.bar title, circle.dot title')).toContainText(`${name} ${value}`);
 	}
 
-	const result = await figure.evaluate((node) => {
+	const result = await figure.evaluate((node, colors) => {
 		const plot = node.querySelector<SVGSVGElement>('svg')!;
+		const probe = document.createElement('span');
+		probe.hidden = true;
+		node.append(probe);
+		const paintMatchesTheme = [...plot.querySelectorAll('rect.bar, circle.dot')].every((mark, index) => {
+			const color = colors[index];
+			if (!getComputedStyle(mark).getPropertyValue(color).trim()) return false;
+			probe.style.color = `var(${color})`;
+			return getComputedStyle(mark).fill === getComputedStyle(probe).color;
+		});
+		probe.remove();
 		const separated = (first: DOMRect, second: DOMRect) =>
 			first.right <= second.left || second.right <= first.left ||
 			first.bottom <= second.top || second.bottom <= first.top;
 		return {
+			paintMatchesTheme,
 			noOverlap: [...plot.querySelectorAll('.comparison-row')].every((row) => {
 				const name = row.querySelector('.name')!.getBoundingClientRect();
 				const reading = row.querySelector('.figure')!.getBoundingClientRect();
@@ -61,8 +76,8 @@ async function checkComparison(figure: Locator, data: VisualData) {
 			noOverflow: node.scrollWidth <= node.clientWidth &&
 				document.documentElement.scrollWidth <= document.documentElement.clientWidth
 		};
-	});
-	expect(result).toEqual({ noOverlap: true, labelsFit: true, noOverflow: true });
+	}, colors);
+	expect(result).toEqual({ paintMatchesTheme: true, noOverlap: true, labelsFit: true, noOverflow: true });
 }
 
 test('reader labels clear the text floor without scaling, and every mark survives navigation and reload', async ({ page }) => {
@@ -235,7 +250,8 @@ test('reader labels clear the text floor without scaling, and every mark survive
 			if (data.caption) await expect(caption).toHaveText(data.caption);
 			await expect(figure.getByText(/^(Horizontal|Vertical):$/)).toHaveCount(0);
 			if (expected.type === 'bar' || expected.type === 'dot') {
-				await checkComparison(figure, data);
+				const marks = expected.type === 'bar' ? expected.bars : expected.dots;
+				await checkComparison(figure, data, marks.map(({ color }) => color));
 				if (id === comparisonId) {
 					const narrow = page.viewportSize()!.width === 390;
 					await expect(svg.locator('[data-comparison-orientation]'))

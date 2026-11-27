@@ -522,7 +522,7 @@ test.describe('what may not be drawn', () => {
         );
     });
     test('bar orientation follows label fit and retains the signed zero baseline', () => {
-        const data = compiled([-10, 20, 30, 40]);
+        const data = compiled([-10, 0, 30, 40]);
         const short = drawBars(data, 360, formatNumber, geometry);
         expect(short.orientation).toBe('vertical');
         data.marks[0].text = 'Northern Atlantic offshore development';
@@ -531,6 +531,10 @@ test.describe('what may not be drawn', () => {
         expect(narrow.orientation).toBe('horizontal');
         expect(wide.orientation).toBe('vertical');
         expect(statedBars(wide)).toBe(statedBars(narrow));
+        expect(narrow.bars.map(({ color }) => color)).toEqual([
+            '--story-chart-above-zero', '--story-chart-above-zero',
+            '--story-chart-measure', '--story-chart-below-zero'
+        ]);
 
         const xZero = narrow.axis.ticks.find((tick) => tick.value === 0)!.line.x1;
         const yZero = wide.axis.ticks.find((tick) => tick.value === 0)!.line.y1;
@@ -538,12 +542,48 @@ test.describe('what may not be drawn', () => {
             const column = wide.bars[index];
             const negative = Number(bar.stated) < 0;
             expect(column.displayed).toBe(bar.displayed);
+            expect(column.color).toBe(bar.color);
             expect(negative ? bar.x + bar.width : bar.x).toBeCloseTo(xZero);
             expect(negative ? column.y : column.y + column.height).toBeCloseTo(yZero);
             expect(bar.x + bar.width).toBeLessThanOrEqual(narrow.width);
             expect(column.x + column.width).toBeLessThanOrEqual(wide.width);
         }
         expect(drawBars(data, 360.75, formatNumber, geometry)).toEqual(narrow);
+    });
+    test('one-sided bars, incomparable units and dots use the ordinary fill', () => {
+        const mixed = compiled([-10, 0, 30, 40]);
+        const noUnit = compiled([-10, 0, 30, 40]);
+        noUnit.marks.forEach((mark) => { mark.unit = null; });
+        const differentUnits = compiled([-10, 0, 30, 40]);
+        differentUnits.marks[1].unit = 'GW';
+        for (const data of [compiled([0, 20, 30, 40]), compiled([-10, -20, -30, 0]), noUnit, differentUnits]) {
+            const bars = drawBars(data, 600, formatNumber, geometry).bars;
+            expect(new Set(bars.map(({ color }) => color))).toEqual(new Set(['--story-chart-measure']));
+        }
+        const dots = drawDots({ ...mixed, type: 'dot' }, 600, formatNumber, geometry).dots;
+        expect(new Set(dots.map(({ color }) => color))).toEqual(new Set(['--story-chart-measure']));
+    });
+    test('meaningful groups keep their colours in source order even when signed bars sort', () => {
+        const grouped = compiled([-10, 40, 30, -20]);
+        for (const [index, text] of ['Before', 'After', 'Before', 'After'].entries()) {
+            const mark_id = `m${8 + index}`;
+            grouped.marks.push({
+                mark_id, text, label_source: 'model', time: null, value: null,
+                unit: null, source_text: null, element_id: null, derived: null
+            });
+            grouped.encoding.series.push(mark_id);
+        }
+        expect(refusedVisualData(grouped)).toBeNull();
+        const bars = drawBars(grouped, 600, formatNumber, geometry).bars;
+        expect(bars.map(({ name, color }) => [name, color])).toEqual([
+            ['B (After)', '--chart-2'], ['C (Before)', '--chart-1'],
+            ['A (Before)', '--chart-1'], ['D (After)', '--chart-2']
+        ]);
+        for (const id of grouped.encoding.series) grouped.marks.find((mark) => mark.mark_id === id)!.text = 'Before';
+        expect(drawBars(grouped, 600, formatNumber, geometry).bars.map(({ color }) => color)).toEqual([
+            '--story-chart-above-zero', '--story-chart-above-zero',
+            '--story-chart-below-zero', '--story-chart-below-zero'
+        ]);
     });
     test('digest bars retain the article wording', () => {
         for (const value of [1_000, 12_345, 1_234_567, 2_400_000, 8_900_000_000, 7_800_000_000_000]) {
