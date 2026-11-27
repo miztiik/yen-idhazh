@@ -1,6 +1,6 @@
 # How the content-similarity judge follows its thresholds
 
-**Last Updated**: 2026-11-24
+**Last Updated**: 2026-11-27
 
 Which pairs of stories does the nightly judge read, what does it keep about each, and
 where do its two thresholds sit and move? This page owns the nightly draw, the rows it
@@ -186,39 +186,55 @@ A score on an edge belongs to the slice above it, and the top slice holds 1.0, w
 shared headline scores outright. The last coarse slice is the remainder when the middle
 does not divide by `draw.coarse_slice_width`.
 
+Multi-slice buckets (`lower_thin`, `middle_coarse`, `upper_thin`) auto-coarsen from their
+planned budget `B` (`DrawConfig.bucket_budgets()`) and `draw.min_pairs_per_slice`:
+
+- When a bucket's span has zero grid ticks (for example, `middle_coarse` when the
+  thresholds sit exactly two thin runs apart), it emits zero slices.
+- When `B` is zero under a tiny `draw.pair_budget`, the bucket emits one full-span slice
+  so the grid still partitions -1 to 1 contiguously, and the allocator assigns it zero
+  pairs.
+- When `B >= 1`, the bucket allows at most `max(1, B // draw.min_pairs_per_slice)` slices
+  and widens its step to `max(base_step, ceil(span_ticks / max_slices))`, so every funded
+  bucket emits at most `B` slices and never starves a non-empty slice.
+
 ## How many pairs each slice gives
 
 [`draw_allocation.py`](../../../backend/idhazh/similarity/draw_allocation.py) takes the
 night's pairs in each slice and the budget, and gives each slice a whole number.
 
-1. **The two ends go first.** Each takes its weight's share of `draw.pair_budget`,
-   raised to its minimum, lowered to its maximum and never past what it holds. At 150
-   pairs the similar end's share is 9 and its maximum is 6, and the dissimilar end's is
-   6 and its maximum is 4, so the two maxima bind and the ends take 6 and 4.
-2. **What is left is split by weight** among `lower_thin`, `upper_thin` and
-   `middle_coarse`, at 40, 30 and 20. 140 pairs is 62.2, 46.7 and 31.1, and the pair the
-   fractions leave over goes to the largest fraction: 62, 47 and 31.
-3. **Inside a bucket every slice gets an equal share**, at least one pair when it holds
-   any. A slice that holds fewer pairs than its share takes them all and the others
-   split what it leaves.
-4. **A bucket that cannot spend its share hands the rest on**, heaviest weight first. A
-   night judges fewer pairs than its budget only when every slice between the thresholds
-   is spent.
+1. **All five buckets split `draw.pair_budget` by largest remainder.**
+   `DrawConfig.bucket_budgets()` splits `draw.pair_budget` in proportion to the five
+   relative weights in `draw.bucket_weights` (`fully_dissimilar`, `lower_thin`,
+   `middle_coarse`, `upper_thin`, `fully_similar`), breaking remainder ties by descending
+   weight and then score order. At 150 pairs with weights 4, 40, 20, 30 and 6, the five
+   planned ceilings are 6, 60, 30, 45 and 9.
+2. **Each bucket stops at its planned ceiling; unspent pairs stay unspent.** A bucket
+   that holds fewer pairs than its ceiling - including a short lightly sampled end or a
+   sparse interior bucket - never hands leftover pairs to another bucket. Sparse nights
+   therefore draw fewer than `draw.pair_budget` pairs rather than padding busier buckets.
+3. **Inside a bucket, slices share the ceiling evenly up to a relative per-slice cap.**
+   Before sharing ceiling `B` across `k` slices, each slice pool is capped at
+   `ceil((B / k) * draw.slice_overflow_factor)`. At the default `1.0`, no slice absorbs
+   extra pairs when sibling slices are sparse; raising the factor scales sibling capacity
+   linearly with `draw.pair_budget` without exceeding `B`.
 
-At the committed settings, on a night where every slice but the similar end holds more
-than its share, the 150 pairs fall like this:
+At the committed settings, on a night where every slice holds at least its share, the 150
+pairs fall like this:
 
 | Bucket | Pairs a slice, lowest slice first | Pairs |
 | --- | --- | ---: |
-| `fully_dissimilar` | 4 | 4 |
-| `lower_thin` | 11, 11, 10, 10, 10, 10 | 62 |
-| `middle_coarse` | 11, 10, 10 | 31 |
-| `upper_thin` | 8, 8, 8, 8, 8, 7 | 47 |
-| `fully_similar` | 6 | 6 |
+| `fully_dissimilar` | 6 | 6 |
+| `lower_thin` | 10, 10, 10, 10, 10, 10 | 60 |
+| `middle_coarse` | 10, 10, 10 | 30 |
+| `upper_thin` | 8, 8, 8, 7, 7, 7 | 45 |
+| `fully_similar` | 9 | 9 |
 
-A budget too small to give every slice that holds a pair one pair of its own is refused
-by name, before anything is written: a slice that quietly took none would be filed under
-no chance. The refusal is a setting to raise, and cannot arise at 150.
+Because `slice_grid` auto-coarsens every funded multi-slice bucket to at most `B` slices,
+any `draw.pair_budget >= 1` produces a drawable grid where every non-empty slice in a
+funded bucket gets at least one pair. `allocate` still refuses a mismatched, uncoarsened
+slice list whose non-empty slices exceed a funded bucket's ceiling, so a slice is never
+quietly filed under zero chance.
 
 Within a slice the pairs go in a fixed order: a hash of the night's date, the scorer's
 stamp and the pair's two ids, with no seed. A seed is a knob somebody can turn until the
@@ -746,12 +762,13 @@ below 0.88 had been judged, so they are provisional until the first seven real n
 
 | Key | Default | What it sets |
 | --- | ---: | --- |
-| `draw.pair_budget` | 150 | Live pairs a night. The judge refuses a draw its shards cannot finish inside the council's window |
+| `draw.pair_budget` | 150 | Maximum live pairs a night. Sparse nights may draw fewer. The judge refuses a full budget its shards cannot finish inside the council's window |
 | `draw.slice_width` | 0.01 | Thin slice width, and the grid every edge sits on |
 | `draw.thin_slices_each_end` | 6 | Thin slices at each threshold |
 | `draw.coarse_slice_width` | 0.04 | Coarse slice width, a whole number of thin slices |
-| `draw.bucket_weights` | 40, 30, 20 | Lower thin, upper thin and coarse shares of what the ends leave |
-| `draw.fully_similar`, `draw.fully_dissimilar` | weight 6, 4; minimum 2, 1; maximum 6, 4 | The two lightly sampled ends |
+| `draw.bucket_weights` | 4, 40, 20, 30, 6 | Relative weights for `fully_dissimilar`, `lower_thin`, `middle_coarse`, `upper_thin` and `fully_similar` |
+| `draw.slice_overflow_factor` | 1.0 | Multiplier on each bucket's average per-slice share (`ceil((B / k) * factor)`) capping sibling absorption inside a bucket |
+| `draw.min_pairs_per_slice` | 1 | Target minimum planned pairs per slice in funded multi-slice buckets; smaller budgets coarsen slice steps automatically |
 | `draw.thresholds_lookback_days` | 14 | How old the newest threshold-history row may be |
 | `diagnostics.cutoff` | 0.87 | Score compared with the sampled judge answers; does not change the draw or publication |
 | `diagnostics.score_bins` | 40 | Equal-width bins over the full pre-draw score pool |
@@ -805,7 +822,7 @@ rows, and a setting changes by an edit that bumps its file's `version`
 | First council run | Older nights with no `pair-verdicts` row are named one a night, newest first, until the 7-night window has slid past the rest | A night that has rows and is named again is a fault in the scheduler's read ([which nights](#which-nights-the-judge-is-behind-on)) |
 | First gardener run | Three compaction tasks for this judge: `pair-verdicts`, `threshold-history` and `holdout-pairs` | A ledger missing from the list is never packed: its compaction declaration or its name in the gardener's task list is missing ([adding a ledger](../contracts/ledger-registry.md#onboarding-and-offboarding)) |
 | First 7 real nights | Per threshold, whether `usable_pairs_used` reached `minimum_usable_pairs` (240), and where `estimate` sits against the configured start (0.70 and 0.93) | Short of 240: raise `draw.pair_budget` (the guard has [room](#the-known-answer-pairs)) or reweight `draw.bucket_weights`. Far from its start: nothing to edit, because the threshold walks to the estimate and a start is read only while no row is in the last 14 days. A `thresholds` setting the rows contradict is re-derived from them |
-| First week | The share of usable `fully_dissimilar` pairs answered YES: at most 28 pairs, 4 a night | More than 1 in 20 (2 of 28 is 7 percent, 1 of 28 is 3.6 percent): move `lower_share_level` from 0.05 to 0.10 ([why](#design-rationale)) |
+| First week | The share of usable `fully_dissimilar` pairs answered YES: 4 percent of `draw.pair_budget` a night (at most 42 pairs over 7 nights at 150) | More than 1 in 20 (3 of 42 is 7.1 percent, 2 of 42 is 4.8 percent): move `lower_share_level` from 0.05 to 0.10 ([why](#design-rationale)) |
 | First 14 real nights | Per threshold, the nights held as `fit_failed` with `usable_pairs_used` of at least 240 | Three in a row on one threshold: the window cannot place it, so price a rule ([why none is added](#design-rationale)) |
 | First 14 real nights | Nights that have pair rows and no history row | Each is a failed review: it is not named again, and the next night follows the newest earlier row. The collecting job's log has the error |
 | First 14 real nights | By `run_id`, the share of a night's pair rows that a later run filed again for the same night. It was 24 percent over the old design's 14 nights | Above 10 percent: build a re-run that judges only what it lacks ([why not yet](#design-rationale)) |
@@ -834,6 +851,16 @@ night would spend most of its pairs far below the lower threshold, where the ans
 almost always NO and tells nothing. Cutting the range into slices lets the draw spend
 its pairs where the answer is mixed, and the sampling chance lets the lightly sampled
 rest still count for what it holds.
+
+**No cross-bucket padding, relative per-slice caps, and budget-driven coarsening.**
+Reassigning unspent pairs from sparse upper or middle buckets into `lower_thin` spent
+model time padding already-dense lower scores just to hit `draw.pair_budget`, while
+hardcoded minimum and maximum counts on the ends failed to scale when `draw.pair_budget`
+moved. Splitting `draw.pair_budget` proportionally across all five buckets via one
+helper (`DrawConfig.bucket_budgets()`), leaving unspent bucket capacity unused, capping
+each slice at `ceil((B / k) * draw.slice_overflow_factor)`, and auto-coarsening funded
+multi-slice buckets from `draw.min_pairs_per_slice` make every ceiling and slice count
+scale from config with no fixed pair floor or crash at small budgets.
 
 **The grid rounds outward.** A threshold between two grid lines would otherwise split a
 slice, and a slice that straddles a threshold belongs to neither bucket. Rounding the

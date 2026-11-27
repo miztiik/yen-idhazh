@@ -8,20 +8,14 @@
     "thin_slices_each_end": 6,
     "coarse_slice_width": 0.04,
     "bucket_weights": {
+      "fully_dissimilar": 4,
       "lower_thin": 40,
+      "middle_coarse": 20,
       "upper_thin": 30,
-      "middle_coarse": 20
+      "fully_similar": 6
     },
-    "fully_similar": {
-      "weight": 6,
-      "minimum": 2,
-      "maximum": 6
-    },
-    "fully_dissimilar": {
-      "weight": 4,
-      "minimum": 1,
-      "maximum": 4
-    },
+    "slice_overflow_factor": 1.0,
+    "min_pairs_per_slice": 1,
     "thresholds_lookback_days": 14
   },
   "thresholds": {
@@ -57,5 +51,5 @@
   },
   "flush_every_pairs": 1,
   "judge_temperature": 0.0,
-  "version": "2026-11-26"
+  "version": "2026-11-27"
 }

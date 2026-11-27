@@ -117,7 +117,31 @@ def test_a_missing_owned_knob_is_refused_at_the_judge_reader(tmp_path: Path, key
     [
         ("draw", {"slice_width": 0.03}, "does not divide 1"),
         ("draw", {"coarse_slice_width": 0.035}, "whole number of"),
-        ("draw", {"fully_similar": {"weight": 6, "minimum": 7, "maximum": 6}}, "above the maximum"),
+        ("draw", {"slice_overflow_factor": 0.99}, "slice_overflow_factor"),
+        ("draw", {"min_pairs_per_slice": 0}, "min_pairs_per_slice"),
+        (
+            "draw",
+            {
+                "bucket_weights": {
+                    "fully_dissimilar": 0,
+                    "lower_thin": 40,
+                    "middle_coarse": 20,
+                    "upper_thin": 30,
+                    "fully_similar": 6,
+                }
+            },
+            "fully_dissimilar",
+        ),
+        (
+            "draw",
+            {"fully_similar": {"weight": 6, "minimum": 2, "maximum": 6}},
+            "fully_similar",
+        ),
+        (
+            "draw",
+            {"fully_dissimilar": {"weight": 4, "minimum": 1, "maximum": 4}},
+            "fully_dissimilar",
+        ),
         ("draw", {"pair_budget": 0}, "pair_budget"),
         ("draw", {"unknown_knob": 1}, "unknown_knob"),
         ("thresholds", {"upper_start": 0.8}, "need 0.1200"),
@@ -188,6 +212,72 @@ def test_the_versions_a_night_read_are_one_line_of_ascii_json_keyed_by_file(
         '{"judges/content-similarity-canaries.json":"2026-11-18",'
         '"judges/content-similarity-judge.json":"2026-11-17"}'
     )
+
+
+def test_draw_bucket_budgets_splits_by_largest_remainder_and_deterministic_ties() -> None:
+    from idhazh.contracts.knobs.content_similarity_judge import DrawBucketWeights, DrawConfig
+    from idhazh.contracts.story_similarity_pair_verdict import PairBucket
+
+    draw = judge_settings.load(CONFIG_DIR).draw
+    assert draw.bucket_budgets() == {
+        PairBucket.FULLY_DISSIMILAR: 6,
+        PairBucket.LOWER_THIN: 60,
+        PairBucket.MIDDLE_COARSE: 30,
+        PairBucket.UPPER_THIN: 45,
+        PairBucket.FULLY_SIMILAR: 9,
+    }
+
+    # Remainder tie (5 vs 5 out of 10) breaks by descending weight (3 beats 1).
+    weight_tie = draw.model_copy(
+        update={
+            "pair_budget": 5,
+            "bucket_weights": DrawBucketWeights(
+                fully_dissimilar=1,
+                lower_thin=3,
+                middle_coarse=2,
+                upper_thin=2,
+                fully_similar=2,
+            ),
+        }
+    )
+    assert weight_tie.bucket_budgets() == {
+        PairBucket.FULLY_DISSIMILAR: 0,
+        PairBucket.LOWER_THIN: 2,
+        PairBucket.MIDDLE_COARSE: 1,
+        PairBucket.UPPER_THIN: 1,
+        PairBucket.FULLY_SIMILAR: 1,
+    }
+
+    # Equal remainder and equal weight break by score order.
+    score_tie = draw.model_copy(
+        update={
+            "pair_budget": 7,
+            "bucket_weights": DrawBucketWeights(
+                fully_dissimilar=1,
+                lower_thin=1,
+                middle_coarse=1,
+                upper_thin=1,
+                fully_similar=1,
+            ),
+        }
+    )
+    assert score_tie.bucket_budgets() == {
+        PairBucket.FULLY_DISSIMILAR: 2,
+        PairBucket.LOWER_THIN: 2,
+        PairBucket.MIDDLE_COARSE: 1,
+        PairBucket.UPPER_THIN: 1,
+        PairBucket.FULLY_SIMILAR: 1,
+    }
+
+    raw_draw = committed("draw")
+    raw_draw.pop("slice_overflow_factor")
+    raw_draw.pop("min_pairs_per_slice")
+    defaulted = DrawConfig.model_validate(raw_draw)
+    assert (defaulted.slice_overflow_factor, defaulted.min_pairs_per_slice) == (1.0, 1)
+
+    for bad in (float("nan"), float("inf")):
+        with pytest.raises(ValueError):
+            DrawConfig.model_validate(committed("draw") | {"slice_overflow_factor": bad})
 
 
 def test_offline_settings_use_their_own_named_file_and_defaults(tmp_path: Path) -> None:
