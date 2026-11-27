@@ -1,6 +1,7 @@
 import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
+import council from '../config/llm_council.json';
 import { assetBaseUrl, encoderSource } from './asset-base.js';
 import { assistConfig, chartConfig, consoleConfig, engineExtensionRepository, explorerConfig, frameConfig, iconsConfig, ledgerArchiveBaseUrl, routeConsoles, uiConfig } from './src/lib/server/config';
 import { queryEngineAssetModule } from './scripts/query-engine-assets';
@@ -64,6 +65,7 @@ export default defineConfig({
 		__ARCHIVE_BASE_URL__: JSON.stringify(ledgerArchiveBaseUrl()),
 		__CONSOLE__: JSON.stringify({ shared: consoleConfig(), routes: routeConsoles(), hover_readout: chart.hover_readout }),
 		__OPERATIONS_CHART__: JSON.stringify({ tick_density: chart.tick_density, readout_max_share: chart.readout_max_share }),
+		__OPERATIONS_JUDGE_NAMES__: JSON.stringify(council.judge_names),
 		__EXPLORER_CONFIG__: JSON.stringify(explorerConfig()),
 		__FRAME_CONFIG__: JSON.stringify(frameConfig()),
 		// The icon line width in screen pixels. Icon.svelte converts it to Lucide's 24-unit grid.

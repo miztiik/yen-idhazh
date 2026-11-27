@@ -21,6 +21,8 @@ export interface WindowSource {
 	readonly ready: boolean;
 	/** Optional replacement for the window's evidence sentence. */
 	readonly statusLine?: string | null;
+	/** Additional source context, separate from the window on display. */
+	readonly sourceNotes?: readonly string[];
 	readonly record?: RecordWindow | null;
 	/** Private evidence keeps its published-day endpoint, independent of the native record. */
 	readonly publishedWindow?: TimeWindow | null;

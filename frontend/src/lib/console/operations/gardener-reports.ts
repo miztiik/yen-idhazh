@@ -13,6 +13,10 @@ const RECOVERY_LABEL = {
 const count = (value: Row[string] | undefined) =>
 	typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
 
+export function gardenerFaultLabel(fault: string): string {
+	return fault === 'packed-file-unreadable' ? 'Pack unreadable' : fault.replaceAll('-', ' ');
+}
+
 function recoveryNotes(value: Row[string] | undefined) {
 	const reports: { label: string; subject: string }[] = [];
 	if (value === null) return { reports, partial: true };
@@ -80,7 +84,7 @@ interface TaskReport {
 	resume: string | null;
 }
 
-export function gardenerOutcomeLanes(calendar: readonly string[], byDay: ReadonlyMap<string, readonly TaskReport[]>) {
+export function gardenerOutcomeLanes(calendar: readonly string[], byDay: ReadonlyMap<string, readonly TaskReport[]>, noReport = 'No task report') {
 	const tracks = calendar.map((day) => {
 		const tasks = byDay.get(day)?.filter((task) => !task.dryRun);
 		return {
@@ -101,8 +105,8 @@ export function gardenerOutcomeLanes(calendar: readonly string[], byDay: Readonl
 			return {
 				state, draw: reports.length > 0,
 				links: state === 'deferred' ? { before: before !== null, after: after !== null } : undefined,
-				caption: after !== null && before !== after ? after.replaceAll('-', ' ') : undefined,
-				text: reports.length === 0 ? (track.reported ? 'None in reported tasks' : 'No task report') :
+				caption: after !== null && before !== after ? gardenerFaultLabel(after) : undefined,
+				text: reports.length === 0 ? (track.reported ? 'None in reported tasks' : noReport) :
 					`${reports.length} ${state === 'recovered' ? 'recovery notes' : 'task reports'}`
 			};
 		})

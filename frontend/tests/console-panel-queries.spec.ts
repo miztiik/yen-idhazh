@@ -33,7 +33,7 @@ import { slowestArticles } from '../src/lib/console/pipelines/slowest-articles';
 import { PANEL_QUERIES } from '../src/lib/console/machine/records';
 import { rankedList } from '../src/lib/charts/d3/rankedList';
 import { numberFormat } from './support/number-format';
-import { councilAttemptLink, councilJudges, councilHistory, councilPartCounts } from '../src/lib/console/council-runs';
+import { councilActivity, councilJudges, councilHistory, councilPartCounts } from '../src/lib/console/council-runs';
 import { compactActivity } from '../src/lib/console/operations/gardener-activity';
 import { gardenerOutcomeLanes, gardenerReports } from '../src/lib/console/operations/gardener-reports';
 import type { CompactWriteTrack } from '../src/lib/data/compact-file-writes';
@@ -42,7 +42,7 @@ const PRESETS = [3, 7, 30] as const;
 
 test('Council keeps judge widths, older digests and retries separate on the UTC execution axis', () => {
 	const prep: Row = {
-		date: '2026-11-23', run_id: '2026-11-24-45335697395', attempt: 2, job: 'save_council_results',
+		date: '2026-11-23', run_id: '2026-11-24-45335697395', attempt: 2,
 		judge_id: 'example-judge', started_at: '2026-11-24T23:57:00Z', evaluation_step: 'select_judge_work',
 		work_part_index: null, work_part_count: 2, outcome: 'completed'
 	};
@@ -67,9 +67,28 @@ test('Council keeps judge widths, older digests and retries separate on the UTC 
 	expect(judges[2].days.get('2026-11-24')).toMatchObject([{ expected: 0, noWork: true }]);
 	expect(councilJudges(history.attempts, { start: '2026-11-25', end: '2026-11-25' }).map(({ judge }) => judge))
 		.toEqual(['example-judge']);
-	const chosen = retryTwo.attempt;
-	expect(councilAttemptLink(chosen, 'https://code.example/project/source')).toBe('https://code.example/project/source/actions/runs/45335697395/attempts/2');
-	expect(councilAttemptLink({ ...chosen, saveJob: false }, 'https://code.example/project/source')).toBeNull();
+});
+
+test('Council activity distinguishes reported steps, explicit no work, and silence by UTC step day', () => {
+	const prep: Row = {
+		date: '2026-11-20', run_id: '2026-11-24-45335697395', attempt: 1,
+		judge_id: 'example-judge', started_at: '2026-11-24T23:57:00Z', evaluation_step: 'select_judge_work',
+		work_part_index: null, work_part_count: 2, outcome: 'completed'
+	};
+	const history = councilHistory([
+		prep,
+		{ ...prep, started_at: '2026-11-25T00:01:00Z', evaluation_step: 'evaluate_work_part', work_part_index: 0, outcome: 'failed' },
+		{ ...prep, date: '2026-11-21', work_part_count: 0, outcome: 'nothing_to_do' },
+		{ ...prep, judge_id: 'quiet-judge', work_part_count: 0, outcome: 'nothing_to_do' },
+		{ ...prep, judge_id: 'historic-judge', started_at: '2026-11-23T23:57:00Z' }
+	]);
+	const lanes = councilActivity(history.attempts, ['configured-judge'], ['2026-11-24', '2026-11-25']);
+	expect(lanes.map(({ name, cells }) => [name, ...cells.map(({ state }) => state)])).toEqual([
+		['configured judge', 'unreported', 'unreported'],
+		['example judge', 'reported', 'reported'],
+		['historic judge', 'unreported', 'unreported'],
+		['quiet judge', 'checked', 'unreported']
+	]);
 });
 
 test('the compaction grid keeps the full UTC window and clips milestones by write date', () => {
@@ -89,6 +108,7 @@ test('the compaction grid keeps the full UTC window and clips milestones by writ
 	expect(view.lanes[0].cells[0]).toMatchObject({ state: 'unavailable', draw: true });
 	expect(view.lanes[1].cells[0].draw).toBe(false);
 	expect(view.lanes[1].cells[2]).toMatchObject({ state: 'written', draw: true });
+	expect(view.lanes[0].cells[4]).toMatchObject({ state: 'written', text: '1 pack written' });
 	expect(view.lanes[2].cells[4]).toMatchObject({ state: 'written', draw: true });
 	const narrow = { start: '2026-11-16', end: '2026-11-17' };
 	expect(compactActivity({ daily, monthly, yearly }, narrow, 2).monthly).toBeNull();
@@ -114,6 +134,7 @@ test('Gardener links only observed consecutive deferrals and does not plot a cle
 	expect(deferred.cells.map(({ draw, links }) => [draw, links?.after])).toEqual([
 		[false, false], [true, true], [true, false], [false, false], [false, false]
 	]);
+	expect(deferred.cells[1].caption).toBe('Pack unreadable');
 	expect(byDay.get('2026-11-15')).toMatchObject([{ dryRun: true, checked: 33, selected: 25, deleted: 10 }]);
 	expect(recovery.cells[4].draw).toBe(true);
 });

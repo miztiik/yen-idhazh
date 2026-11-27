@@ -6,11 +6,11 @@
 	import { useChartLabels } from '$lib/charts/label-context';
 	import { columnPick, pointerReadout, readoutMarks, readoutOf } from '$lib/charts/readout';
 	import { axisLabels, slotCellFor } from '$lib/charts/run-history';
-	import { councilAttemptLink, councilOutcomeLabel, councilPartCounts, type CouncilWork } from '$lib/console/council-runs';
+	import { councilOutcomeLabel, councilPartCounts, type CouncilWork } from '$lib/console/council-runs';
 	import { longDate } from '$lib/format';
 
-	let { judge, days, calendar, repoUrl, width, density, maxShare }: {
-		judge: string; days: ReadonlyMap<string, readonly CouncilWork[]>; calendar: readonly string[]; repoUrl: string;
+	let { judge, days, calendar, width, density, maxShare }: {
+		judge: string; days: ReadonlyMap<string, readonly CouncilWork[]>; calendar: readonly string[];
 		width: number; density: number; maxShare: number;
 	} = $props();
 	const labels = useChartLabels();
@@ -118,7 +118,6 @@
 			<ul>
 				{#each selected as work (work.key)}
 					{@const counts = councilPartCounts(work)}
-					{@const link = councilAttemptLink(work.attempt, repoUrl)}
 					<li>
 						<strong>{longDate(work.digest)} UTC</strong> / Attempt {work.attempt.attempt}
 						{#if work.noWork}/ No work assigned
@@ -128,7 +127,6 @@
 							{#if counts.failed} / {counts.failed} failed{/if}
 							/ Combine: {councilOutcomeLabel(work.combine)}
 						{/if}
-						{#if link}<a href={link}>Open recorded attempt</a>{/if}
 					</li>
 				{/each}
 			</ul>
@@ -158,7 +156,6 @@
 		background-size: 100% calc(100% / var(--parts));
 	}
 	[data-outcome='completed'] { background: var(--operation-written); }
-	.parts [data-outcome='completed'] { background: color-mix(in srgb, var(--operation-written) 65%, var(--color-surface)); }
 	[data-outcome='stopped_on_deadline'] { background: var(--operation-deferred); }
 	[data-outcome='failed'] { background: var(--operation-failed); }
 	.parts [data-outcome='stopped_on_deadline'], .key [data-outcome='stopped_on_deadline'] {
@@ -180,5 +177,4 @@
 	.compact-days input { accent-color: var(--color-accent); }
 	summary { cursor: pointer; }
 	ul { margin-block: var(--space-1); padding-inline-start: var(--space-4); }
-	a { color: var(--color-accent); text-decoration: underline; }
 </style>
