@@ -1,0 +1,45 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Electricity source",
+    "y": "Share of electricity generation"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "energy-wn3s8x2zbdmj8gze",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Solar a decade ago","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Solar through October 2026","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Hydropower in 2026","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-563-565","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "1"},
+    {"derived": null,"element_id": "quantity-631-634","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "%","value": "13"},
+    {"derived": null,"element_id": "quantity-687-690","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "%","value": "13"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Share of China's Electricity Generation by Source",
+  "type": "bar",
+  "version": "2026-11-25"
+}

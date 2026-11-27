@@ -1,0 +1,49 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Time period",
+    "y": "Share price change percentage"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m4",
+      "m5",
+      "m6",
+      "m7"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-evmcsj0sgbn49nyv",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Past week","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Past month","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "This calendar year","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m3","source_text": null,"text": "Past year","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-1343-1349","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "%","value": "12.24"},
+    {"derived": null,"element_id": "quantity-1371-1377","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "%","value": "14.9"},
+    {"derived": {"bin_lower": null,"bin_upper": null,"function": "negative_magnitude","inputs": ["quantity-1429-1435"],"source_unit": null,"unit": "%","unit_table_version": null,"value": "-19.6","version": "2026-11-25"},"element_id": null,"mark_id": "m6","source_text": "19.60%","text": null,"time": null,"unit": "%","value": "-19.6"},
+    {"derived": {"bin_lower": null,"bin_upper": null,"function": "negative_magnitude","inputs": ["quantity-1481-1487"],"source_unit": null,"unit": "%","unit_table_version": null,"value": "-27.73","version": "2026-11-25"},"element_id": null,"mark_id": "m7","source_text": "27.73%","text": null,"time": null,"unit": "%","value": "-27.73"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Waaree Renewable Technologies share price movement across periods",
+  "type": "bar",
+  "version": "2026-11-25"
+}
