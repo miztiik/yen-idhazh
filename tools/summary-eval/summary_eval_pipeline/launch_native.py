@@ -1,37 +1,10 @@
-"""Exec the native process only after armed protection still identifies its expected parent."""
+"""Use the same parent-death bootstrap for native generation workers."""
 
-import os
-import shutil
 import sys
 from pathlib import Path
 
+backend_root = str(Path(__file__).resolve().parents[3] / "backend")
+if backend_root not in sys.path:
+    sys.path.insert(0, backend_root)
 
-def parent_bound_command(command: list[str]) -> list[str]:
-    wrapper = shutil.which("setpriv")
-    if sys.platform != "linux" or wrapper is None:
-        raise OSError("Native parent-death protection requires Linux setpriv.")
-    return [
-        wrapper,
-        "--pdeathsig=KILL",
-        "--",
-        sys.executable,
-        str(Path(__file__).resolve()),
-        str(os.getpid()),
-        *command,
-    ]
-
-
-def main() -> None:
-    try:
-        expected_parent = int(sys.argv[1])
-        command = sys.argv[2:]
-        # setpriv has armed SIGKILL before this same-PID bootstrap starts.
-        if expected_parent <= 0 or os.getppid() != expected_parent or not command:
-            raise SystemExit(1)
-        os.execv(command[0], command)
-    except (OSError, ValueError, IndexError):
-        raise SystemExit(1) from None
-
-
-if __name__ == "__main__":
-    main()
+from utilities.own_native_model import parent_bound_command as parent_bound_command  # noqa: E402

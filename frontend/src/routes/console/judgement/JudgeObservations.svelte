@@ -6,7 +6,8 @@
 	import { daysInWindow, type TimeWindow } from '$lib/charts/viewport';
 	import { judgeCanaries } from '$lib/console/judge-canaries';
 	import {
-		exactJudgeDay, judgeDayAbsence, judgeRange, latestJudgeReadings, matchesJudgeAttempt, selectedJudgeDate,
+		exactJudgeDay, judgeDayAbsence, judgeModelRule, judgeRange, latestJudgeReadings, matchesJudgeAttempt,
+		recordedJudgeModel, selectedJudgeDate,
 		type JudgeIdentity, type JudgeReading
 	} from '$lib/console/judge-observations';
 	import { judgeDayQuery, judgeDrawTrialQuery, judgeHistoryQuery } from '$lib/console/queries/judgement';
@@ -54,6 +55,9 @@
 	const readings = $derived(current?.readings ?? noReadings);
 	const selected = $derived(selectedJudgeDate(calendar, held, readings));
 	const selectedReading = $derived(readings.get(selected));
+	const model = $derived(recordedJudgeModel(selectedReading));
+	const modelRule = $derived(judgeModelRule(calendar, readings));
+	const modelChange = $derived(modelRule.changes.at(-1));
 	const identity = $derived(selectedReading?.identity ?? null);
 	const legacyCanaries = $derived(rules.trialBins == null && selectedReading ? judgeCanaries(selectedReading.cells) : null);
 	const detailAnswer = $derived(identity !== null && day?.identity === identity ? day.answer : 'pending');
@@ -166,11 +170,17 @@
 					{#each calendar as date (date)}<option value={date}>{longDate(date)}</option>{/each}
 				</select>
 			</label>
+			{#if selectedReading}
+				<p>Judge model for selected digest: <strong>{model ?? 'Not recorded'}</strong></p>
+			{/if}
+			{#if modelChange}
+				<p>{modelChange.words}. First observed on the {longDate(modelChange.date)} UTC digest.</p>
+			{/if}
 			{#each notes as note}<p>{note}</p>{/each}
 		</div>
 		{#each group.panels as id (id)}
 			{#if id === 'judge-coverage'}
-				<JudgeCoverage {calendar} {windowDays} {readings} {selected} {detail} {historyState}
+				<JudgeCoverage {calendar} {windowDays} {readings} {selected} {detail} {historyState} rule={modelRule}
 					trialDraws={rules.trialBins == null ? null : drawRows} {dayNote} {noteFor} {knobs} {chart} onPick={pick} />
 			{:else if id === 'judge-score-ranges'}
 				<JudgeScoreRanges {selected} {detail} {detailState} {dayNote} thin={rules.thin} {knobs} {chart}
@@ -207,6 +217,7 @@
 	.digest-control p {
 		margin: 0;
 		color: var(--color-text-secondary);
+		overflow-wrap: anywhere;
 	}
 	label {
 		display: flex;

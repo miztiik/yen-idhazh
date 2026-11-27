@@ -1,5 +1,5 @@
 name: Model server
-description: Restore or fetch the pinned runtime and weights, check the bytes, and leave a healthy llama-server answering.
+description: Prepare pinned runtime and weights, and by default start and check llama-server.
 
 inputs:
   github_token:
@@ -15,7 +15,8 @@ inputs:
       is always loopback. An input rather than an inherited variable: it keeps
       its one home in the caller, and this is what carries it across the
       boundary, where an inherited value would be a dependency nothing declares.
-    required: true
+      Required only when launching the server.
+    required: false
   llama_cpp_build:
     description: >-
       The llama.cpp build tag, as the pin step published it. It names the cache
@@ -33,6 +34,14 @@ inputs:
     description: Retain the launched process identity for the caller's final serving observation.
     required: false
     default: 'false'
+  prepare_only:
+    description: Prepare the explicitly named assets without launching or probing a server.
+    required: false
+    default: 'false'
+  models_file:
+    description: Config-relative model declaration, required in prepare-only mode.
+    required: false
+    default: ''
 
 # Six steps, and the two workflows that run them ran them as two copies. They
 # were the same steps in the same order, differing only in the job each read its
@@ -54,11 +63,8 @@ inputs:
 # them into a download. The reader is called here now, so those facts never
 # leave the file that holds them.
 #
-# This action names one model role, `summarize`, and no caller chooses it. That
-# is not an oversight. The two callers share ONE cache entry because they open
-# the same bytes, and a caller serving a different model needs a different key,
-# a different digest and a different alias to assert - which is a design change
-# rather than a parameter.
+# The existing launch mode still follows the summarizer pointer. An asset-only
+# caller owns its own selection, readiness and process lifetime.
 outputs:
   weights_path:
     description: 'The landed relative path of the weights, as the reader composed it.'
@@ -87,10 +93,33 @@ runs:
       shell: bash
       env:
         CONFIG_ROOT: ${{ inputs.config_root }}
+        PREPARE_ONLY: ${{ inputs.prepare_only }}
+        MODELS_FILE: ${{ inputs.models_file }}
+        LLAMA_CPP_BUILD: ${{ inputs.llama_cpp_build }}
+        PROBE_URL: ${{ inputs.probe_url }}
       run: |
         set -euo pipefail
-        PUBLISHED=$(python3 backend/utilities/model_refs.py describe-pinned-model \
-          --config-root "$CONFIG_ROOT")
+        case "$PREPARE_ONLY" in
+          true)
+            EXPECTED=$(python3 backend/utilities/model_runtime.py print-pinned-build)
+            if [[ "$EXPECTED" != "llama_cpp_build=$LLAMA_CPP_BUILD" ]]; then
+              echo "llama_cpp_build does not match the committed runtime pin" >&2
+              exit 1
+            fi
+            PUBLISHED=$(python3 backend/utilities/model_refs.py describe-named-model \
+              --config-root "$CONFIG_ROOT" --models-file="$MODELS_FILE")
+            ;;
+          false)
+            : "${PROBE_URL:?probe_url is required when launching the server}"
+            if [[ -n "$MODELS_FILE" ]]; then
+              echo "models_file is accepted only with prepare_only: true" >&2
+              exit 1
+            fi
+            PUBLISHED=$(python3 backend/utilities/model_refs.py describe-pinned-model \
+              --config-root "$CONFIG_ROOT")
+            ;;
+          *) echo "prepare_only must be true or false" >&2; exit 1 ;;
+        esac
         echo "$PUBLISHED" | grep -Eq '^summarizer_cache_key=[0-9a-f]{64}$' || {
           echo "the reader published no 64-character cache key" >&2
           echo "$PUBLISHED" >&2
@@ -136,11 +165,14 @@ runs:
       env:
         GITHUB_TOKEN: ${{ inputs.github_token }}
         CONFIG_ROOT: ${{ inputs.config_root }}
+        PREPARE_ONLY: ${{ inputs.prepare_only }}
+        MODELS_FILE: ${{ inputs.models_file }}
       run: |
         set -euo pipefail
+        ARGS=(--config-root "$CONFIG_ROOT")
+        if [[ "$PREPARE_ONLY" == true ]]; then ARGS+=(--models-file="$MODELS_FILE"); fi
         python3 backend/utilities/model_runtime.py install-runtime
-        python3 backend/utilities/model_runtime.py download-model-files \
-          --config-root "$CONFIG_ROOT"
+        python3 backend/utilities/model_runtime.py download-model-files "${ARGS[@]}"
 
     # No `if:`. This runs on a cache hit as well as a miss, because a restored
     # entry is the one case where nobody watched the bytes arrive. It sits
@@ -161,10 +193,13 @@ runs:
       shell: bash
       env:
         CONFIG_ROOT: ${{ inputs.config_root }}
+        PREPARE_ONLY: ${{ inputs.prepare_only }}
+        MODELS_FILE: ${{ inputs.models_file }}
       run: |
         set -euo pipefail
-        python3 backend/utilities/model_runtime.py verify-model-files \
-          --config-root "$CONFIG_ROOT"
+        ARGS=(--config-root "$CONFIG_ROOT")
+        if [[ "$PREPARE_ONLY" == true ]]; then ARGS+=(--models-file="$MODELS_FILE"); fi
+        python3 backend/utilities/model_runtime.py verify-model-files "${ARGS[@]}"
 
     # One server a job, and one job a runner. Four servers on four logical CPUs
     # is an experiment this repository has already run: `llama-server` at 8
@@ -178,6 +213,7 @@ runs:
     # is the one that config describes. The port is not named here either: the
     # command reads it back out of that root's `model_server.base_url`.
     - name: Start the model
+      if: inputs.prepare_only != 'true'
       shell: bash
       env:
         CONFIG_ROOT: ${{ inputs.config_root }}
@@ -190,6 +226,7 @@ runs:
           --config-root "$CONFIG_ROOT" "${SERVING[@]}"
 
     - name: Check model health
+      if: inputs.prepare_only != 'true'
       shell: bash
       env:
         PROBE_URL: ${{ inputs.probe_url }}

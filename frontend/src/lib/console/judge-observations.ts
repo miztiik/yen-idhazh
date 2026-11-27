@@ -2,6 +2,7 @@
 import type { LedgerReach, Row } from '../data/ledger';
 import { isDay } from '../data/slice-shapes';
 import { daysBetween, type TimeWindow } from '../charts/viewport';
+import type { RuleChange } from '../charts/d3/model-rule';
 import { formatNumber, MAX_SIGNIFICANT_DIGITS, type NumberFormatConfig } from '../number-format';
 import { compareRuns } from './queries/shared';
 import type { Range } from './queries/window';
@@ -47,6 +48,25 @@ export function latestJudgeReadings(rows: readonly Row[]): ReadonlyMap<string, J
 	}
 	if (unidentified > 0) console.warn(`[judgement] ${unidentified} packed threshold-history rows had no usable date, run and attempt.`);
 	return latest;
+}
+
+export function recordedJudgeModel(reading: JudgeReading | undefined): string | null {
+	const value = reading?.cells.judge_model;
+	return typeof value === 'string' && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value) ? value : null;
+}
+
+export function judgeModelRule(calendar: readonly string[], readings: ReadonlyMap<string, JudgeReading>) {
+	const changes: RuleChange[] = [];
+	let previous: string | null = null;
+	for (const date of calendar) {
+		const model = recordedJudgeModel(readings.get(date));
+		if (model === null) continue;
+		if (previous !== null && previous !== model) {
+			changes.push({ date, kind: 'settings', words: `Judge model: ${previous} to ${model}` });
+		}
+		previous = model;
+	}
+	return { changes, note: null };
 }
 
 export function exactJudgeDay(rows: readonly Row[], identity: JudgeIdentity): Row | null {

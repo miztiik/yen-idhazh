@@ -23,6 +23,7 @@ from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.publication_receipt import PublicationReceipt
 from idhazh.contracts.task_performance import TaskPerformanceRow
 from idhazh.council import outcome, performance, registry, session
+from idhazh.council.model_selection import bind_model
 from idhazh.ledger.keys import HOST_FINGERPRINT_KEY
 from idhazh.ledger.raw_files import load_current_rows
 from idhazh.llm.serving_metrics import serving_measurement
@@ -301,7 +302,10 @@ def test_council_lands_original_runner_bytes_and_keeps_trials_private(
         version=Selection.schema_version(), run_id="2026-10-10-123", attempt=1, git_sha=revision,
         mode="manual", anchor_date=judged, window=(judged,),
         judges=(
-            SelectedJudge(tenant=active, status=JudgeLifecycleStatus.ACTIVE, dates=(judged,), shards=5),
+            SelectedJudge(
+                tenant=active, status=JudgeLifecycleStatus.ACTIVE, dates=(judged,), shards=5,
+                model=bind_model(settings.council, active),
+            ),
             SelectedJudge(tenant=paused, status=JudgeLifecycleStatus.PAUSED, dates=(judged,), shards=1),
         ),
     )

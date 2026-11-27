@@ -42,14 +42,19 @@ import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Sequence
+from contextlib import AbstractContextManager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import IO, TYPE_CHECKING, Final
+
+if not __package__:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from utilities import model_refs
 
 if TYPE_CHECKING:
     from idhazh.contracts.task_performance import TaskPerformanceOutcome
+    from utilities.own_native_model import OwnedNativeModel
 
 #: The pin: which llama.cpp build, which asset of that release, and the digest
 #: of the archive that asset is. One home, because it used to be written in six
@@ -122,9 +127,6 @@ LOCKED_MEMORY_ROW: Final = "Max locked memory"
 #: refuses one of its own flags is gone in well under a second, so two seconds
 #: separates that from a server still reading weights.
 START_GRACE_SECONDS: Final = 2.0
-
-#: Budget the final scrape before the workflow still needs to publish and upload.
-METRICS_READ_TIMEOUT_SECONDS: Final = 30
 
 #: How much of the server log a start-up failure carries out with it. The
 #: refused flag is named in the last few lines, and the log dies with the runner.
@@ -356,11 +358,12 @@ def install_runtime() -> None:
     _say(f"llama.cpp {pin['build']} installed into {BIN_DIR.as_posix()}")
 
 
-def _declared(config_root: Path) -> list[model_refs.ModelFile]:
-    files = model_refs.list_model_files(config_root)
-    if not files:
-        raise SystemExit(f"{config_root.as_posix()} declares no model file to fetch")
-    return files
+def _declared(config_root: Path, models_file: str | None = None) -> list[model_refs.ModelFile]:
+    return (
+        model_refs.list_model_files(config_root)
+        if models_file is None
+        else model_refs.named_model_files(config_root, models_file)
+    )
 
 
 def _matches(one: model_refs.ModelFile, landed: Path) -> bool:
@@ -370,7 +373,7 @@ def _matches(one: model_refs.ModelFile, landed: Path) -> bool:
     return _digest_of(landed) == one.sha256
 
 
-def download_model_files(config_root: Path) -> None:
+def download_model_files(config_root: Path, *, models_file: str | None = None) -> None:
     """Fetch every file the model declares, and prove each one before it counts.
 
     Every file, in declared order, because the cache key names every one of
@@ -380,7 +383,7 @@ def download_model_files(config_root: Path) -> None:
     fewer files than the entry declares is the one door the cache's own
     `post-if: success()` cannot see.
     """
-    files = _declared(config_root)
+    files = _declared(config_root, models_file)
     downloaded = 0
     kept = 0
     for one in files:
@@ -426,14 +429,18 @@ def download_model_files(config_root: Path) -> None:
     _say(f"{len(files)} declared, {downloaded} downloaded, {kept} already here")
 
 
-def verify_model_files(config_root: Path) -> None:
+def verify_model_files(config_root: Path, *, models_file: str | None = None) -> None:
     """Check every declared file against its recorded digest and its declared size.
 
     This is the half that runs on a cache hit, where nothing was downloaded and
     nobody watched the bytes arrive. It reads the declaration rather than being
     handed a filename, so it cannot cover fewer files than the key digested.
     """
-    files = _declared(config_root)
+    _verify_files(_declared(config_root, models_file), config_root)
+
+
+def _verify_files(files: Sequence[model_refs.ModelFile], config_root: Path) -> None:
+    """Verify the already selected files without reading another selection."""
     for one in files:
         landed = Path(one.landed_path)
         if not landed.is_file():
@@ -493,6 +500,19 @@ def _raise_the_locked_memory_limit() -> None:
     # The pair is the proof the call landed. One line alone says what was asked
     # for rather than what happened.
     _say(f"locked-memory limit after: {_locked_memory_limit()}")
+
+
+def own_native_model(
+    config_root: Path, *, models_file: str, startup_seconds: float,
+) -> AbstractContextManager[OwnedNativeModel]:
+    """Give the native owner this runner's binary, asset verifier and memlock setup."""
+    from utilities.own_native_model import own_named_model
+
+    return own_named_model(
+        config_root, models_file=models_file, startup_seconds=startup_seconds,
+        binary=SERVER_BINARY, verify_files=_verify_files,
+        prepare_memlock=_raise_the_locked_memory_limit,
+    )
 
 
 def refuse_a_server_that_died_at_startup(
@@ -621,31 +641,34 @@ def close_serving_observation(
     from idhazh.contracts.knobs.model_server import port_of_base_url, resolve_base_url
     from idhazh.contracts.model_server_pin import ModelServerPin
     from idhazh.llm.server import loopback_url
-    from idhazh.llm.serving_metrics import CAPTURE_BYTES, retain_serving_capture
     from idhazh.telemetry.host import process_start_ticks
+    from utilities.own_native_model import (
+        SERVING_COUNTERS_PATH,
+        capture_serving_observation,
+        observation_unavailable,
+    )
 
-    def unavailable(reason: str) -> None:
-        print(f"::warning title=Model serving observation::{reason}", file=sys.stderr)
-
-    counters_path = Path("llama-metrics.prom")
+    counters_path = SERVING_COUNTERS_PATH
     counters_path.unlink(missing_ok=True)
     try:
         pin = ModelServerPin.read(Path(f"{name}.pin.json"))
     except (OSError, ValueError):
-        unavailable("process_pin_unavailable")
+        observation_unavailable("process_pin_unavailable")
         return None
 
     def alive() -> bool:
-        return process_start_ticks(pin.pid) == pin.start_ticks
+        observed: int | None = process_start_ticks(pin.pid)
+        expected: int = pin.start_ticks
+        return observed == expected
 
-    def owns_listener(port: int) -> bool:
+    def owns_bound_port(port: int) -> bool:
         try:
             listeners = subprocess.run(
                 ["ss", "-Hlnpt", "sport", "=", f":{port}"],
                 capture_output=True, check=True, text=True, timeout=START_GRACE_SECONDS,
             ).stdout.splitlines()
         except (OSError, subprocess.SubprocessError) as error:
-            unavailable(f"metrics_listener_inspection_failed_{type(error).__name__}")
+            observation_unavailable(f"metrics_listener_inspection_failed_{type(error).__name__}")
             return False
         return (
             len(listeners) == 1
@@ -654,11 +677,11 @@ def close_serving_observation(
         )
 
     if not alive():
-        unavailable("owned_process_not_live")
+        observation_unavailable("owned_process_not_live")
         return None
     # The pinned runtime has no confirmed weights-only end marker. Its legacy
     # startup markers and post-evaluation load timer both include other work.
-    unavailable("weights_load_boundary_unobserved")
+    observation_unavailable("weights_load_boundary_unobserved")
     try:
         settings = config.load(config_root)
         entry = settings.models.summarizer
@@ -666,49 +689,10 @@ def close_serving_observation(
         port = port_of_base_url(base)
         if base != loopback_url(port):
             raise ValueError("model serving metrics require the configured local launcher address")
-        if "--metrics" not in entry.server:
-            unavailable("metrics_configured_off")
-            return None
-        # Do not attribute counters from another healthy process on the runner.
-        if not owns_listener(port):
-            unavailable("metrics_listener_unverified")
-            return None
-        try:
-            # curl keeps the previous whole-request deadline; no redirects, proxy or retries.
-            flags = [
-                "--fail", "--silent", "--show-error", "--noproxy", "*",
-                "--max-time", str(METRICS_READ_TIMEOUT_SECONDS),
-                "--max-filesize", str(CAPTURE_BYTES),
-            ]
-            reply = subprocess.run(
-                ["curl", "--disable", *flags, base + "/metrics"],
-                stdout=subprocess.PIPE, check=False,
-            )
-        except OSError:
-            unavailable("metrics_unreadable")
-            return None
-        if reply.returncode != 0:
-            unavailable("metrics_unreadable")
-            return None
-        if not owns_listener(port):
-            unavailable("metrics_listener_changed_during_read")
-            return None
-        if len(reply.stdout) > CAPTURE_BYTES:
-            unavailable("metrics_exceed_capture_bound")
-            return None
-        observed_at = datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
-        try:
-            measurement = retain_serving_capture(
-                counters_path, reply.stdout, subject_id=entry.id, outcome=outcome,
-                started_at=pin.started_at, finished_at=observed_at,
-            )
-        except ValueError:
-            unavailable("prompt_pair_invalid")
-            return None
-        if measurement is None:
-            unavailable("prompt_pair_incomplete")
-            return None
-        return measurement
+        return capture_serving_observation(
+            pin, base, entry.id, outcome, counters_path,
+            enabled="--metrics" in entry.server, owns_port=lambda: owns_bound_port(port),
+        )
     finally:
         stop_pinned_server(pin.pid, pin.start_ticks)
 
@@ -799,8 +783,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     verbs.add_parser("print-pinned-build", help="Say which llama.cpp build this run installs.")
     verbs.add_parser("install-runtime", help="Put the pinned llama.cpp build on this runner.")
-    rooted("download-model-files", "Fetch every file the model declares.")
-    rooted("verify-model-files", "Check every declared file against what the entry records.")
+    download = rooted("download-model-files", "Fetch every file the model declares.")
+    verify = rooted("verify-model-files", "Check every declared file against the declared digest.")
+    for asset_command in (download, verify):
+        asset_command.add_argument("--models-file", help="Explicit path under config/models/.")
     describe = rooted("describe-request", "Export the selected validated request settings as JSON.")
     describe.add_argument(
         "--prove-runtime",
@@ -819,8 +805,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     ran: dict[str, Callable[[], None]] = {
         "print-pinned-build": lambda: _say(f"{PIN_OUTPUT_KEY}={_pin()['build']}"),
         "install-runtime": install_runtime,
-        "download-model-files": lambda: download_model_files(args.config_root),
-        "verify-model-files": lambda: verify_model_files(args.config_root),
+        "download-model-files": lambda: download_model_files(
+            args.config_root, models_file=args.models_file,
+        ),
+        "verify-model-files": lambda: verify_model_files(
+            args.config_root, models_file=args.models_file,
+        ),
         "describe-request": lambda: describe_request(
             args.config_root, prove_runtime=args.prove_runtime
         ),

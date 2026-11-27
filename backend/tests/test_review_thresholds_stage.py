@@ -54,6 +54,7 @@ from idhazh.contracts.story_similarity_diagnostics import (
     read_diagnostic_text,
 )
 from idhazh.contracts.story_similarity_pair_verdict import StorySimilarityPairVerdict
+from idhazh.contracts.story_similarity_score_pool import ContentSimilarityScorePool
 from idhazh.contracts.story_similarity_threshold_history_row import (
     StorySimilarityThresholdHistoryRow,
     ThresholdHoldReason,
@@ -90,6 +91,25 @@ EVALUATION_PAIRS: Final = (
 
 def _pool(counts: tuple[int, ...]) -> ScorePoolHistogram:
     return ScorePoolHistogram(stamp=RECIPE, edges=(-1.0, -0.5, 0.0, 0.5, 1.0), counts=counts)
+
+
+@pytest.mark.parametrize("fault", ["not-json", "date", "run_id", "attempt"])
+def test_an_unusable_score_pool_supplies_no_histogram(tmp_path: Path, fault: str) -> None:
+    path = tmp_path / "score-pool.json"
+    pool = ContentSimilarityScorePool(
+        version=ContentSimilarityScorePool.schema_version(),
+        date=DRIFT_DATE, run_id=DRIFT_RUN, attempt=1, histogram=_pool((1, 0, 0, 0)),
+    )
+    other = {"date": FIT_DAY, "run_id": FIT_RUN, "attempt": pool.attempt + 1}
+    text = (
+        "not JSON" if fault == "not-json"
+        else pool.model_copy(update={fault: other[fault]}).to_json()
+    )
+    path.write_text(text, encoding="utf-8")
+
+    assert review_thresholds._prepared_histogram(
+        path, date=pool.date, run_id=pool.run_id, attempt=pool.attempt,
+    ) is None
 
 
 def _history(

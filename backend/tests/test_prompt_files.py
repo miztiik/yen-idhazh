@@ -229,7 +229,8 @@ def test_real_consumers_and_stamps_follow_two_selected_roots(tmp_path: Path) -> 
         assert built.system == summarize.system_prompt(settings.app.summarize, **options)
         plain = settings.models.summarizer.model_copy(update={"thinking_close": None})
         settings = dataclasses.replace(
-            settings, models=settings.models.model_copy(update={"summarizer": plain, "judge": None})
+            settings, models=settings.models.model_copy(update={"summarizer": plain, "judge": None}),
+            explicit_models_file=settings.app.models_file,
         )
         replies = ProtocolReplies(native_reply("YES"))
         left, right = item("First report.", 1), item("Second report.", 2)

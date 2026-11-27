@@ -4,6 +4,7 @@
 	import DateSeries from '$lib/charts/d3/DateSeries.svelte';
 	import { dateSeries } from '$lib/charts/d3/dateSeries';
 	import { emptyState } from '$lib/charts/d3/empty';
+	import type { ModelRule } from '$lib/charts/d3/model-rule';
 	import { MARGIN, chartWidth, observeWidth } from '$lib/charts/frame';
 	import { useChartFrame } from '$lib/charts/label-context';
 	import { readoutOf } from '$lib/charts/readout';
@@ -16,7 +17,7 @@
 	import type { ChartConfig, ConsoleConfig } from '$lib/server/config';
 	import { OUTCOME_STYLE } from './judge-trial-style';
 
-	let { calendar, windowDays, readings, selected, detail, trialDraws = null, historyState, dayNote, noteFor, knobs, chart, onPick }: {
+	let { calendar, windowDays, readings, selected, detail, trialDraws = null, historyState, rule, dayNote, noteFor, knobs, chart, onPick }: {
 		calendar: readonly string[];
 		windowDays: number;
 		readings: ReadonlyMap<string, JudgeReading>;
@@ -24,6 +25,7 @@
 		detail: Row | null;
 		trialDraws?: ReadonlyMap<string, Row> | null;
 		historyState: PanelState;
+		rule: ModelRule;
 		dayNote: string;
 		noteFor: (date: string) => string;
 		knobs: ConsoleConfig;
@@ -33,7 +35,6 @@
 
 	const name = 'judge-coverage';
 	const label = 'Daily counts of pairs drawn and returned';
-	const rule = { declined: 'A nightly judge draw does not compare summary settings.' };
 	const legacyParts = [
 		{ label: 'Agreed YES or NO', token: '--chart-4', part: 'binary' },
 		{ label: 'Other returned', token: '--chart-3', part: 'other' },
@@ -108,7 +109,6 @@
 <Panel id={name} title="Pairs drawn and returned" heading="h3" wide>
 	<div use:observeWidth={(next) => measured = next} data-windowed={name} data-window-days={windowDays}
 		data-panel-question="How many drawn pairs did the judge return?"
-		data-model-rule="no" data-model-rule-name={name} data-model-rule-none={rule.declined}
 		data-judge-digest={selected}>
 		<div class="judge-summary">
 			<p data-lede>

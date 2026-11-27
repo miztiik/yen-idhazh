@@ -198,7 +198,7 @@ def capture_file(
 ) -> tuple[EvaluationRun, Path]:
     """Only this explicit operation creates the production model reader."""
     evaluation = EvaluationSet.read(set_path)
-    settings = config.load(config_dir)
+    settings = judge_settings.load_runtime(config_dir)
     validate_inputs(
         evaluation, max_cases=judge_settings.load_evaluation(config_dir).max_cases,
     )

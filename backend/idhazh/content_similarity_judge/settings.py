@@ -22,6 +22,17 @@ JUDGE_FILE: Final = "judges/content-similarity-judge.json"
 CANARY_FILE: Final = "judges/content-similarity-canaries.json"
 
 
+def load_runtime(config_dir: Path | None = None) -> config.Settings:
+    """Load the explicitly configured judge model and the shared non-model settings."""
+    root = config.DEFAULT_CONFIG_DIR if config_dir is None else config_dir
+    council = config.load_council(root)
+    name = Path(JUDGE_FILE).stem
+    models_file = config.judge_models_file(council, name)
+    if models_file is None:
+        raise ValueError(f"config/{JUDGE_FILE} must declare a model to judge pairs")
+    return config.load(root, models_file=models_file)
+
+
 def _refuse_a_version_that_is_not_a_past_date(version: str, *, file: str) -> None:
     """A revision date names the UTC day of an edit, so that day exists and has arrived.
 

@@ -216,8 +216,16 @@ only that exact reading. A packed period's end is not a run date. Legacy nulls,
 unavailable measurements and dates not yet published are distinct from a
 measured zero. Useful partial evidence stays visible.
 
-All five panels use the shared frame and explicitly decline a comparison with
-summary settings. Data explorer can query the packed `pair-verdicts` and
+The digest control shows the selected reading's recorded judge model. The
+**Pairs drawn and returned** timeline uses the shared change divider and
+readout on the first displayed UTC digest with a different recorded model.
+It compares successive known identities from the newest attempt for each
+digest. Missing identities, the first known reading and configuration edits
+alone do not create a marker. A divider is where the change was observed in
+the data, not a deployment time. Incoming score drift is measured before
+judging, so it does not carry this divider.
+
+Data explorer can query the packed `pair-verdicts` and
 `threshold-history` rows, including metrics not drawn here. See the [nightly judge
 flow](how-the-content-similarity-judge-follows-its-thresholds.md#what-threshold-history-stores)
 for how those readings are produced.

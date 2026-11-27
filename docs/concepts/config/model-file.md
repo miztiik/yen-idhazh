@@ -5,8 +5,9 @@
 What `config/` says about a set of weights: which model runs, what runtime
 settings are declared for those exact bytes, how a turn is written for it, and
 what sizes the corpus that trains the next one. Everything here is a fact about
-one model, so it lives in one file of its own and `config/idhazh.json` carries
-only a pointer. What a knob is, and what is not one, is [../config.md](../config.md).
+one model, so it lives in one file of its own. Digest and Council each name a
+preset in their own settings. What a knob is, and what is not one, is
+[../config.md](../config.md).
 
 ## `config/models/<name>.json` - one file per model, and a pointer
 
@@ -34,6 +35,20 @@ output-limit or decoding keys. Request-builder tests own those wire details.
 **`config/idhazh.json` still carrying a `models` block is refused by name**, and refused rather than lifted onto the new file: a lift would read one model out of the old block while `models_file` named another file, and the run would stand a server up on whichever won.
 
 **Both files travel with the run.** `Settings.digests` records the pointer file and the model file it names, because the pointer moving and the file it points at being re-tuned are two different edits and a record that held only one of them could not tell them apart.
+
+## Council selects its own preset
+
+Set `models_file` in `config/judges/content-similarity-judge.json` to a
+committed preset relative to `config/`. Naming the same preset as Digest is
+allowed, but it must be explicit. Missing or invalid selections stop Council
+before work is prepared. Restore the previous judge pointer to roll back;
+neither edit changes `config/idhazh.json.models_file`.
+
+Existing presets call the served entry `summarizer`. That is the preset's
+format, not a fallback to Digest, and the older optional `judge` block does not
+select Council weights. Use a preset that supports the judge's template,
+tokenizer, verdict grammar and selected-token probabilities and fits the
+Council runner. Model identity remains in the verdict history.
 
 ### Design rationale
 

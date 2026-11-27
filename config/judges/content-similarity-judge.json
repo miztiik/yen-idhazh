@@ -1,6 +1,7 @@
 {
   "lifecycle_status": "active",
   "runs_model": true,
+  "models_file": "models/qwen3.8-9b-q5km-distill.json",
   "draw": {
     "pair_budget": 150,
     "slice_width": 0.01,
@@ -56,5 +57,5 @@
   },
   "flush_every_pairs": 1,
   "judge_temperature": 0.0,
-  "version": "2026-11-21"
+  "version": "2026-11-26"
 }

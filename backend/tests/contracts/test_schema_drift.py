@@ -166,7 +166,12 @@ def test_fixture_round_trips_without_losing_values(path: Path) -> None:
                     if key != "prompt_iterations"
                 },
             }
-        assert json.loads(once) == expected
+        actual = json.loads(once)
+        if contract.__schema_stem__ == "council-selection":
+            for saved, written in zip(original["judges"], actual["judges"], strict=True):
+                if "model" not in saved and written.get("model") is None:
+                    written.pop("model", None)
+        assert actual == expected
     else:
         assert original["version"] < record.version
         assert record.version == contract.schema_version()

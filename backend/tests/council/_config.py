@@ -12,6 +12,7 @@ from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.council_invocation import SelectedJudge, Selection
 from idhazh.contracts.knobs.council import CouncilConfig
 from idhazh.council import night_plan, registry
+from idhazh.council.model_selection import bind_model
 
 RUN_ID = "2026-09-21-456"
 COMMIT = "a" * 40
@@ -45,6 +46,7 @@ def selection(
                 status=council.declaration(host.judge_id).lifecycle_status,
                 dates=(date,),
                 shards=min(council.shards, host.shard_count),
+                model=bind_model(council, host.judge_id),
             )
             for host in registry.tenants(council.running(), council=council)
         ),
@@ -104,7 +106,11 @@ def copy_config(root: Path) -> Path:
     )
     for name in council.judge_names:
         (target / "judges").mkdir(exist_ok=True)
-        shutil.copyfile(CONFIG_DIR / "judges" / f"{name}.json", target / "judges" / f"{name}.json")
+        source = CONFIG_DIR / "judges" / f"{name}.json"
+        shutil.copyfile(source, target / "judges" / f"{name}.json")
+        preset = json.loads(source.read_text(encoding="utf-8")).get("models_file")
+        if preset is not None:
+            shutil.copyfile(CONFIG_DIR / preset, target / preset)
     return target
 
 

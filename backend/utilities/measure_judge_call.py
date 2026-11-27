@@ -48,6 +48,7 @@ from pathlib import Path
 from typing import Any, Final, TextIO
 
 from idhazh import config
+from idhazh.content_similarity_judge import settings as judge_settings
 from idhazh.contracts.base import derive_text_digest, derive_url_key
 from idhazh.contracts.digest_day import DigestDay, DigestItem
 from idhazh.contracts.knobs.placement import SECONDS_A_CALL
@@ -811,7 +812,7 @@ def take_the_readings(args: argparse.Namespace, settings: config.Settings) -> Su
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
-    settings = config.load(args.config)
+    settings = judge_settings.load_runtime(args.config)
 
     if args.report:
         summary = summarise(read_readings(args.readings))

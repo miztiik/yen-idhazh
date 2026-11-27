@@ -8,6 +8,7 @@ from pathlib import Path
 
 from pydantic import Field, PrivateAttr, TypeAdapter, field_validator
 
+from idhazh.contracts.app_config import ModelsFile
 from idhazh.contracts.base import DateStamp, Model, Slug, TaskName
 
 
@@ -39,6 +40,12 @@ class JudgeDeclaration(Model):
 
     lifecycle_status: JudgeLifecycleStatus
     runs_model: bool = Field(strict=True)
+
+
+class JudgeModelSource(Model):
+    """The explicit preset reference read only when this judge is selected."""
+
+    models_file: ModelsFile | None = None
 
 
 class JudgeRefusalError(ValueError):

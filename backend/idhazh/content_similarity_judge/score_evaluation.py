@@ -391,7 +391,7 @@ def score_files(
     output_root: Path, config_dir: Path,
 ) -> tuple[EvaluationReport, Path]:
     """Score only the named saved documents, with no model initialization or network."""
-    settings = config.load(config_dir)
+    settings = judge_settings.load_runtime(config_dir)
     report = score(
         EvaluationSet.read(set_path),
         None if labels_path is None else EvaluationLabels.read(labels_path),

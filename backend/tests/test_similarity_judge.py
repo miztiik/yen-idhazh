@@ -104,7 +104,7 @@ def _spells(vocabulary: dict[str, Any]) -> Callable[[str], list[str]]:
 
 
 def _settings() -> config.Settings:
-    settings = config.load(CONFIG_DIR)
+    settings = config.load(CONFIG_DIR, models_file=config.load_app(CONFIG_DIR).models_file)
     raw = settings.models.model_dump(mode="json")
     raw["summarizer"] |= {"thinking_close": None, "thinking_kwarg": "reasoning"}
     return dataclasses.replace(
@@ -154,7 +154,7 @@ def _settings_flushing_every(root: Path, pairs: int) -> config.Settings:
 
 
 def _settings_judging_behind_a_thinking_span() -> config.Settings:
-    """Enable reasoning explicitly on a judge sharing the summarizer's weights."""
+    """Enable reasoning explicitly on the selected preset."""
     settings = _settings()
     plain = settings.models.model_dump(mode="json")
     plain["summarizer"] |= {"thinking_close": None}
@@ -163,7 +163,7 @@ def _settings_judging_behind_a_thinking_span() -> config.Settings:
         "thinking_kwarg": "reasoning",
     }
     models = ModelsConfig.model_validate(
-        plain | {"judge": thinking}
+        plain | {"summarizer": thinking}
     )
     return dataclasses.replace(settings, models=models)
 
@@ -861,8 +861,7 @@ def test_a_pair_whose_first_reading_was_refused_still_makes_its_second_call() ->
     assert result.grammar_applied is False, "one call outside the grammar makes the pair false"
 
 
-def test_a_settings_with_no_judge_role_decodes_one_span_and_says_so() -> None:
-    """The committed default. A fresh clone judges exactly as it judges today."""
+def test_a_preset_without_reasoning_decodes_one_span_and_says_so() -> None:
     day = _a_day()
     settings = _settings()
     with ProtocolReplies(_reply("two-events")) as server:
@@ -882,18 +881,9 @@ def test_a_settings_with_no_judge_role_decodes_one_span_and_says_so() -> None:
     assert len(decodes) == 1
 
 
-@pytest.mark.parametrize("separate_judge", [False, True])
-def test_judging_selects_its_declared_role_or_the_summarizer(separate_judge: bool) -> None:
-    """Select the optional judge entry, or fall back to the summarizer."""
-    settings = _settings()
-    summarizer = settings.models.summarizer.model_copy(update={"sampling": {}})
-    judging = summarizer.model_copy() if separate_judge else None
-    settings = dataclasses.replace(
-        settings,
-        models=ModelsConfig.model_validate({"summarizer": summarizer, "judge": judging}),
-    )
-
-    assert judge.entry_of(settings) is (judging if separate_judge else summarizer)
+def test_judging_refuses_shared_digest_settings_without_an_explicit_selection() -> None:
+    with pytest.raises(ValueError, match="requires an explicit model preset"):
+        judge.entry_of(config.load(CONFIG_DIR))
 
 
 def test_a_verdict_is_the_word_and_at_most_one_leading_space() -> None:
