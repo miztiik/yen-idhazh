@@ -10,6 +10,7 @@ New designs, charts and visuals render in the browser. Do not add prerendered da
 
 - Home, dated, topic and archive pages share one full-window reading shell with configured gutters. Story prose fills the card's content width, including search results and fragment-linked stories.
 - The console fills the available window by default, after its labelled rail and configured gutters. A configured numeric console maximum remains available; every mounted drawing measures its own content width.
+- The site footer's background and top rule reach both viewport edges. Its links and controls stay aligned to the same content frame as the rest of the page.
 - Keep an item's hierarchy to title, summary and provenance. Use the configured display face for titles and the reading face for prose; data uses tabular numerals.
 - Keep article type readable on phones. Reduce columns before reducing prose size. Pair each size token with its leading token.
 - Edition headers, topic controls and the leading-story index are unboxed. Story cards retain their surfaces and edges.

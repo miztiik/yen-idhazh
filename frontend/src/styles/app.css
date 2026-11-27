@@ -161,16 +161,17 @@ body {
 	min-height: 100dvh;
 }
 
-/* --- The frame ----------------------------------------------------------
-   The shell is fluid to a named maximum. The reading measure is NOT here; it
-   sits on the text elements that need it, because a measure on the shell gives
-   the whole application a paragraph's width (design-system.md). */
+/* The inner frame carries the content width and gutters, not the footer band. */
 .frame {
 	--story-text-inset: calc(var(--story-card-padding) + 1px);
+	--frame-content-width: var(--frame-reading);
+}
+
+.frame-content, .frame > [data-site-header] {
 	width: 100%;
 	margin-inline: auto;
 	padding-inline: var(--gutter);
-	max-width: var(--frame-reading);
+	max-width: var(--frame-content-width);
 }
 
 .frame.with-source-marks {
@@ -180,7 +181,7 @@ body {
 /* Every digest address and the archive use the configured window gutters. */
 .frame:has([data-surface='reading']),
 .frame:has([data-surface='archive']) {
-	max-width: none;
+	--frame-content-width: none;
 }
 
 /* An instrument has tables and charts where a digest has sentences, so it is
@@ -193,7 +194,7 @@ body {
    question the markup already knows. Unsupported `:has()` falls back to the
    reading frame, which is narrower but correct. */
 .frame:has([data-surface='operator']) {
-	max-width: var(--frame-console);
+	--frame-content-width: var(--frame-console);
 }
 
 /* Operator tokens are generated on the root, so chrome and drawings agree. */
@@ -267,7 +268,7 @@ body {
    above reads the operator surface. Its shared footer remains after the
    workbench's actual minimum content, not beneath overflowing panels. */
 .frame:has([data-console-chrome='workbench']) {
-	max-width: none;
+	--frame-content-width: none;
 }
 
 html:has([data-surface='operator']) { scroll-padding-block-start: var(--console-toolbar-height, 0px); }

@@ -58,7 +58,7 @@
 	{#if data?.ui}
 		<SiteHeader title={data.ui.site_title} showTheme={!operator} />
 	{/if}
-	<main>
+	<main class="frame-content">
 		{@render children()}
 	</main>
 	{#if data?.ui && page.route.id !== '/archive'}
