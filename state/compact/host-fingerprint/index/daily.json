@@ -55,7 +55,8 @@
     {"bytes": 19240,"covers": "2026-11-21","rows": 53},
     {"bytes": 21087,"covers": "2026-11-22","rows": 83},
     {"bytes": 18061,"covers": "2026-11-23","rows": 32},
-    {"bytes": 19108,"covers": "2026-11-24","rows": 50}
+    {"bytes": 19108,"covers": "2026-11-24","rows": 50},
+    {"bytes": 20746,"covers": "2026-11-25","rows": 79}
   ],
   "ledger": "host-fingerprint",
   "period": "daily",

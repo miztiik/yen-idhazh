@@ -54,7 +54,9 @@
     {"bytes": 6821,"covers": "2026-11-20","rows": 8},
     {"bytes": 6913,"covers": "2026-11-21","rows": 9},
     {"bytes": 6909,"covers": "2026-11-22","rows": 9},
-    {"bytes": 6689,"covers": "2026-11-23","rows": 6}
+    {"bytes": 6689,"covers": "2026-11-23","rows": 6},
+    {"bytes": 6820,"covers": "2026-11-24","rows": 8},
+    {"bytes": 6769,"covers": "2026-11-25","rows": 7}
   ],
   "ledger": "run-shards",
   "period": "daily",

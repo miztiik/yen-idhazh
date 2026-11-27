@@ -54,7 +54,9 @@
     {"bytes": 9455,"covers": "2026-11-20","rows": 6},
     {"bytes": 9461,"covers": "2026-11-21","rows": 6},
     {"bytes": 9440,"covers": "2026-11-22","rows": 6},
-    {"bytes": 9474,"covers": "2026-11-23","rows": 6}
+    {"bytes": 9474,"covers": "2026-11-23","rows": 6},
+    {"bytes": 9453,"covers": "2026-11-24","rows": 6},
+    {"bytes": 9455,"covers": "2026-11-25","rows": 6}
   ],
   "ledger": "council-run-records",
   "period": "daily",
