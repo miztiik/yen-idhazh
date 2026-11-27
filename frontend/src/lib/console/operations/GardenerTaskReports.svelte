@@ -55,7 +55,7 @@
 			<section class="cleanup">
 				<h4>{label} / {task.dryRun ? 'Preview' : 'Cleanup report'}</h4>
 				{#each counts as item (item.label)}
-					<p><span>{item.label}</span>
+					<p class="cleanup-count"><span>{item.label}</span>
 						{#if item.value !== null && task.checked !== null && task.checked > 0 && item.value <= task.checked}
 							<meter aria-label={item.label} min="0" max={task.checked} value={item.value}></meter>
 						{:else}<span></span>{/if}
@@ -78,7 +78,7 @@
 	.detail { display: block; }
 	summary { cursor: pointer; }
 	.cleanup { border-block-start: 1px solid var(--color-rule); padding-block: var(--space-2); }
-	.cleanup p { display: grid; grid-template-columns: max-content minmax(0, 1fr) auto; gap: var(--space-2); align-items: center; }
+	.cleanup-count { display: grid; grid-template-columns: max-content minmax(0, 1fr) auto; gap: var(--space-2); align-items: center; }
 	meter { appearance: none; inline-size: 100%; block-size: var(--space-2); background: var(--color-surface-sunken); }
 	meter::-webkit-meter-bar { background: var(--color-surface-sunken); border: 0; border-radius: 0; }
 	meter::-webkit-meter-optimum-value { background: var(--operation-written); }

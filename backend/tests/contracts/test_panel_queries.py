@@ -130,7 +130,7 @@ EXPECTED_COLUMNS: Final[Mapping[str, tuple[str, ...]]] = {
     "sourceCutsQuery": ("date", "source_id", "url_key", "source_words_before_cap", "source_words"),
     "whyChosenQuery": ("date", "run_id", "item_id", "source_id", "selection_score", "authority_score", "tier_score", "feed_weight", "feed_reliability", "recency_bonus", "lens_bonus", "watchlist_bonus", "carriage_step"),
     "councilRunsQuery": (
-        "date", "run_id", "attempt", "job", "judge_id", "started_at", "evaluation_step",
+        "date", "run_id", "attempt", "judge_id", "started_at", "evaluation_step",
         "work_part_index", "work_part_count", "outcome",
     ),
     "judgeDayQuery": (
