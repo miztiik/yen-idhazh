@@ -67,7 +67,8 @@ class RunConfig(Model):
         default=200,
         ge=1,
         description=(
-            "The work job's own timeout, which digest.yml reads from config/idhazh.json. A backstop, "
+            "The work job's own timeout, which digest.yml reads from "
+            "config/idhazh.json. A backstop, "
             "never a budget: a worker has no clock of its own, and one killed at this "
             "bound uploads nothing, so the run loses every item that worker held. It "
             "was increased as headroom for a planned second model call per item, "
