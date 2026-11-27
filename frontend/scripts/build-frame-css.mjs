@@ -1,9 +1,10 @@
-/** Emit configured frame and console-only tokens before the first paint. */
+/** Emit configured frame and chart tokens before the first paint. */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveConsoleStyle } from '../src/lib/console/console-style.ts';
+import { COMPARISON_COLORS } from '../src/lib/visual/comparison-colors.ts';
 
 /**
  * @typedef {import('../src/lib/console/console-style.ts').ConsoleStyleConfig} ConsoleStyleConfig
@@ -14,6 +15,7 @@ import { resolveConsoleStyle } from '../src/lib/console/console-style.ts';
  * @typedef {import('../src/lib/server/config.ts').ThemeConfig} ThemeConfig
  * @typedef {import('../src/lib/server/config.ts').MotionConfig} MotionConfig
  * @typedef {import('../src/lib/server/config.ts').ChartConfig} ChartConfig
+ * @typedef {import('../src/lib/visual/comparison-colors.ts').StoryComparisonColors} StoryComparisonColors
  * @typedef {Record<string, string | number>} CssTokens
  */
 
@@ -36,6 +38,13 @@ const DEFAULTS = {
 /** @param {CssTokens} values */
 function declarations(values) {
 	return Object.entries(values).map(([key, value]) => `\t--${key}: ${value};`).join('\n');
+}
+
+/** @param {StoryComparisonColors['light'] | undefined} colors */
+function comparisonDeclarations(colors) {
+	if (colors === undefined) return '';
+	const roles = /** @type {(keyof typeof COMPARISON_COLORS)[]} */ (Object.keys(COMPARISON_COLORS));
+	return roles.map((role) => `\n\t${COMPARISON_COLORS[role]}: ${colors[role]};`).join('');
 }
 
 /** @param {ConsoleShadow} value @param {boolean} enabled */
@@ -108,7 +117,7 @@ async function consoleColors(style, mode, theme, choice) {
 
 /**
  * Callers supply repository-authored, native-validated appearance values.
- * @param {{frame?: Partial<FrameConfig>, theme?: Partial<ThemeConfig>, motion?: Partial<MotionConfig>, chart?: Partial<ChartConfig>, console_style?: ConsoleStyleInput}} raw
+ * @param {{frame?: Partial<FrameConfig>, theme?: Partial<ThemeConfig>, motion?: Partial<MotionConfig>, chart?: Partial<ChartConfig>, console_style?: ConsoleStyleInput, story_comparison_colors?: StoryComparisonColors}} raw
  */
 export async function renderFrameCss(raw = {}) {
 	const frame = { ...DEFAULTS, ...raw.frame };
@@ -170,11 +179,11 @@ ${declarations({
 
 :root,
 [data-theme='dark'] {
-${declarations({ 'movement-good': theme.movement_good_dark, 'movement-bad': theme.movement_bad_dark })}
+${declarations({ 'movement-good': theme.movement_good_dark, 'movement-bad': theme.movement_bad_dark })}${comparisonDeclarations(raw.story_comparison_colors?.dark)}
 }
 
 [data-theme='light'] {
-${declarations({ 'movement-good': theme.movement_good_light, 'movement-bad': theme.movement_bad_light })}
+${declarations({ 'movement-good': theme.movement_good_light, 'movement-bad': theme.movement_bad_light })}${comparisonDeclarations(raw.story_comparison_colors?.light)}
 }
 
 /* The selector includes the outer canvas and header, never a reading route. */

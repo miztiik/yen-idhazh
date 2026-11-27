@@ -17,11 +17,17 @@
 [data-theme='dark'] {
 	--movement-good: #7fc9ae;
 	--movement-bad: #e3a396;
+	--story-chart-measure: #a56eff;
+	--story-chart-above-zero: #64bb88;
+	--story-chart-below-zero: #bb4e5a;
 }
 
 [data-theme='light'] {
 	--movement-good: #2f6f5e;
 	--movement-bad: #96453a;
+	--story-chart-measure: #6929c4;
+	--story-chart-above-zero: #206e49;
+	--story-chart-below-zero: #a02b43;
 }
 
 /* The selector includes the outer canvas and header, never a reading route. */

@@ -315,6 +315,18 @@
     "duration_fast_ms": 120,
     "enabled": true
   },
+  "story_comparison_colors": {
+    "dark": {
+      "above_zero": "#70bd94",
+      "below_zero": "#ba5860",
+      "measure": "#ad91ec"
+    },
+    "light": {
+      "above_zero": "#2d6d50",
+      "below_zero": "#9e4150",
+      "measure": "#6642a1"
+    }
+  },
   "theme": {
     "display_face_enabled": true,
     "elevation_enabled": true,
@@ -325,5 +337,5 @@
     "movement_good_light": "#2f6f5e",
     "surface_tint_alpha": 0.07
   },
-  "version": "2026-11-10"
+  "version": "2026-11-27"
 }

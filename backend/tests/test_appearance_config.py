@@ -90,6 +90,12 @@ def test_story_chart_geometry_refuses_unusable_dash_arrays() -> None:
             StoryChartGeometryConfig.model_validate(invalid)
 
 
+def test_story_comparison_signs_need_distinct_paint() -> None:
+    colors = {"dark": {"above_zero": "#884455", "below_zero": "#884455"}}
+    with pytest.raises(ValidationError, match="different fills"):
+        AppearanceConfig.model_validate({"story_comparison_colors": colors})
+
+
 @pytest.mark.parametrize(
     "style",
     [

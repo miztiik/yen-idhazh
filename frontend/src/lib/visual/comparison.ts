@@ -1,11 +1,12 @@
 /** Fit a story comparison's exact readings and place its marks on one shared scale. */
 import { scaleLinear } from 'd3-scale';
 import { DEFAULT_CHART_LABELS, labelGutter, labelWidth, thinLabels, tickAnchor, type ChartLabels, type TickAnchor } from '../charts/frame';
-import { PALETTE } from '../charts/theme';
+import { PALETTE, type ChartPaletteToken } from '../charts/theme';
 import { numberFormatter, type NumberFormatConfig, type NumberFormatter } from '../number-format';
 import type { VisualData } from '../payload/types';
 import type { StoryChartGeometryConfig } from '../server/config';
 import type { DrawingBase } from './bar';
+import { COMPARISON_COLORS, type ComparisonColorToken } from './comparison-colors';
 
 export interface ComparisonText {
 	x: number;
@@ -20,7 +21,7 @@ interface ComparisonFact {
 	stated: string;
 	sourceText: string | null;
 	displayed: string;
-	color: (typeof PALETTE)[number];
+	color: ChartPaletteToken | ComparisonColorToken;
 }
 
 interface ComparisonRow extends ComparisonFact {
@@ -241,7 +242,7 @@ function drawComparison(
 	const rows = data.encoding.quantity.map((id, index) => {
 		const quantity = held.get(id)!;
 		const category = held.get(data.encoding.category[index])!.text!;
-		const series = held.get(data.encoding.series[index])?.text;
+		const series = held.get(data.encoding.series[index])?.text ?? '';
 		const name = series && series !== category ? `${category} (${series})` : category;
 		const unit = quantity.unit?.trim() || null;
 		const stated = quantity.value!;
@@ -259,6 +260,15 @@ function drawComparison(
 	if (type === 'bar') rows.sort((a, b) => b.value - a.value);
 
 	const values = rows.map((row) => row.value);
+	const unit = rows.every((row) => row.unit === rows[0].unit) ? rows[0].unit : null;
+	const signed = type === 'bar' && unit !== null
+		&& values.some((value) => value > 0) && values.some((value) => value < 0);
+	function fillFor(group: string, value: number): ComparisonFact['color'] {
+		if (series.length > 1) return PALETTE[series.indexOf(group)];
+		if (signed && value > 0) return COMPARISON_COLORS.above_zero;
+		if (signed && value < 0) return COMPARISON_COLORS.below_zero;
+		return COMPARISON_COLORS.measure;
+	}
 	const width = Math.max(0, Math.floor(room));
 	const ticks = options?.tickDensity ?? rows.length;
 	const low = type === 'bar' ? Math.min(...values, 0) : Math.min(...values);
@@ -287,7 +297,7 @@ function drawComparison(
 	const placed = rows.map(({ id, name, stated, sourceText, displayed, value, series: group }, index) => ({
 		id, name, stated, sourceText, displayed,
 		...layout.rows[index],
-		color: PALETTE[series.indexOf(group)],
+		color: fillFor(group, value),
 		at: scale(value)
 	}));
 	const tickLabels = stops.map((value, index) => ({
@@ -296,7 +306,6 @@ function drawComparison(
 	}));
 	const tickMetrics = vertical ? { ...labels, measure: () => leading, tracking: 0 } : labels;
 	const shown = new Set(thinLabels(tickLabels, tickMetrics, gap).map(({ value }) => value));
-	const unit = rows.every((row) => row.unit === rows[0].unit) ? rows[0].unit : null;
 	const unitText = [scaled.magnitude, unit].filter(Boolean).join(' ');
 	const tight = type === 'dot' && (minimum > 0 || maximum < 0);
 	const axisName = [unitText, tight ? 'zero not shown' : ''].filter(Boolean).join('; ');
