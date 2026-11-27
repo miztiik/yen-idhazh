@@ -11,10 +11,10 @@
 	import type { OperationReading, PackTracks } from './operation-reads.svelte';
 	import GardenerTaskReports from './GardenerTaskReports.svelte';
 
-	let { viewport, days, knobs, chart, tracks, reading }: {
+	let { viewport, days, knobs, chart, tracks, reading, busy, onRetryPacks }: {
 		viewport: TimeWindow; days: number; knobs: ConsoleConfig;
 		chart: Pick<ChartConfig, 'tick_density' | 'readout_max_share'>;
-		tracks: PackTracks; reading: OperationReading;
+		tracks: PackTracks; reading: OperationReading; busy: boolean; onRetryPacks: () => void;
 	} = $props();
 	let picked = $state<string | null>(null);
 	const view = $derived(compactActivity(tracks, viewport, days));
@@ -93,6 +93,7 @@
 					{/each}
 					{#each errors as error (error)}<li>{error}</li>{/each}
 				</ul>
+				{#if errors.length}<button type="button" disabled={busy} onclick={onRetryPacks}>Retry pack check</button>{/if}
 			</details>
 		{/if}
 		</Reserved>
@@ -100,7 +101,7 @@
 </Panel>
 
 <style>
-	.maintenance { display: grid; gap: var(--space-2); overflow-wrap: anywhere; }
+	.maintenance { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-2); overflow-wrap: anywhere; }
 	.lead { display: flex; align-items: start; justify-content: space-between; flex-wrap: wrap; gap: var(--space-3); }
 	p, dd, dl { margin: 0; }
 	.note, .receipt, details { color: var(--color-text-secondary); font-size: var(--console-small-size); }
@@ -114,5 +115,6 @@
 	.receipt { background: var(--color-surface-raised); border: 1px solid var(--color-rule); border-radius: var(--console-control-radius); padding: var(--space-2) var(--space-3); }
 	dt { font-weight: 600; color: var(--color-text); }
 	summary { cursor: pointer; }
+	button { text-decoration: underline; }
 	ul { margin-block: var(--space-1); padding-inline-start: var(--space-4); }
 </style>

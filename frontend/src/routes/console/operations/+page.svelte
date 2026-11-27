@@ -53,7 +53,8 @@
 					{#if id === 'council-runs'}
 						<CouncilRunsPanel {viewport} {knobs} {chart} reading={reads.council} />
 					{:else if id === 'gardener-activity'}
-						<GardenerActivity {viewport} {days} {knobs} {chart} tracks={reads.tracks} reading={reads.gardener} />
+						<GardenerActivity {viewport} {days} {knobs} {chart} tracks={reads.tracks} reading={reads.gardener}
+							busy={reads.busy} onRetryPacks={reads.retryPacks} />
 					{/if}
 				{/each}
 			</PanelGroup>
