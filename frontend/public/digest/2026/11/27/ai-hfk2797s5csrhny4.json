@@ -1,0 +1,45 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Model / workload category",
+    "y": "Reported gain over baseline"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "ai-hfk2797s5csrhny4",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "DeepSeek-V4.1-Flash SWE 64K","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Hy4 flash general tasks, temp 0","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Long-context and agentic acceptance","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-700-703","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "81"},
+    {"derived": {"bin_lower": null,"bin_upper": null,"function": "negative_magnitude","inputs": ["quantity-837-841"],"source_unit": null,"unit": "%","unit_table_version": null,"value": "-3.9","version": "2026-11-25"},"element_id": null,"mark_id": "m4","source_text": "3.9%","text": null,"time": null,"unit": "%","value": "-3.9"},
+    {"derived": null,"element_id": "quantity-2832-2837","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "%","value": "10.5"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "DFly2 Reported Gains vs Same-Recipe DSpark Baselines",
+  "type": "bar",
+  "version": "2026-11-25"
+}

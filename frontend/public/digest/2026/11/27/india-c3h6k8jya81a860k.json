@@ -1,0 +1,57 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Economic indicator",
+    "y": "Value"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m6",
+      "m7",
+      "m8",
+      "m9",
+      "m10",
+      "m11"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-c3h6k8jya81a860k",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Q2 GDP growth %","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "GVA growth %","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Inflation upper threshold %","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m3","source_text": null,"text": "Target inflation FY28 %","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m4","source_text": null,"text": "Terminal policy rate %","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m5","source_text": null,"text": "Projected bond yield %","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-587-591","mark_id": "m6","source_text": null,"text": null,"time": null,"unit": "%","value": "7.6"},
+    {"derived": null,"element_id": "quantity-642-646","mark_id": "m7","source_text": null,"text": null,"time": null,"unit": "%","value": "8.3"},
+    {"derived": null,"element_id": "quantity-1009-1011","mark_id": "m8","source_text": null,"text": null,"time": null,"unit": "%","value": "6"},
+    {"derived": null,"element_id": "quantity-1661-1663","mark_id": "m9","source_text": null,"text": null,"time": null,"unit": "%","value": "5"},
+    {"derived": null,"element_id": "quantity-1745-1749","mark_id": "m10","source_text": null,"text": null,"time": null,"unit": "%","value": "6.5"},
+    {"derived": null,"element_id": "quantity-2262-2266","mark_id": "m11","source_text": null,"text": null,"time": null,"unit": "%","value": "7.5"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Key Economic Figures in Axis Bank Report",
+  "type": "bar",
+  "version": "2026-11-25"
+}

@@ -1,0 +1,53 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Language version",
+    "y": "Day 22 gross in crore"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3",
+      "m4"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m5",
+      "m6",
+      "m7",
+      "m8",
+      "m9"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-8hk6hfas1trtr46f",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Hindi version","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Malayalam version","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Kannada version","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m3","source_text": null,"text": "Tamil version","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m4","source_text": null,"text": "Telugu version","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-376-386","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": null,"value": "67500000"},
+    {"derived": null,"element_id": "quantity-438-445","mark_id": "m6","source_text": null,"text": null,"time": null,"unit": null,"value": "10000000"},
+    {"derived": null,"element_id": "quantity-489-496","mark_id": "m7","source_text": null,"text": null,"time": null,"unit": null,"value": "8500000"},
+    {"derived": null,"element_id": "quantity-545-552","mark_id": "m8","source_text": null,"text": null,"time": null,"unit": null,"value": "7500000"},
+    {"derived": null,"element_id": "quantity-595-602","mark_id": "m9","source_text": null,"text": null,"time": null,"unit": null,"value": "3000000"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Ramayana Day 22 Gross by Language Version",
+  "type": "bar",
+  "version": "2026-11-25"
+}

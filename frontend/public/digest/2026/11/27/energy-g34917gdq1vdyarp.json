@@ -1,0 +1,45 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Osmotic power plant and operator",
+    "y": "Installed electrical capacity"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "energy-g34917gdq1vdyarp",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "SaltPower pilot plant, Denmark (100 kW)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Statkraft prototype at Tofte, Norway (~4 kW)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Mamizupia plant, Japan (about 110 kW)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-2327-2333","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "kw","value": "100"},
+    {"derived": null,"element_id": "quantity-3266-3270","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "kw","value": "4"},
+    {"derived": null,"element_id": "quantity-3924-3930","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "kw","value": "110"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Power Output of Operating Osmotic Plants",
+  "type": "bar",
+  "version": "2026-11-25"
+}

@@ -1,0 +1,53 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Age group or comparison point",
+    "y": "Share of votes, percent"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3",
+      "m4"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m5",
+      "m6",
+      "m7",
+      "m8",
+      "m9"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "world-fr81fbbqstdpc0hc",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Voters aged 18-24, current","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "PSOE supporters (all ages)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Voters aged 18-24, in 2023","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m3","source_text": null,"text": "Ages 25-34, last election","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m4","source_text": null,"text": "Ages 25-34, in 2026","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-900-912","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "%","value": "23.2"},
+    {"derived": null,"element_id": "quantity-1104-1114","mark_id": "m6","source_text": null,"text": null,"time": null,"unit": "%","value": "22"},
+    {"derived": null,"element_id": "quantity-1291-1303","mark_id": "m7","source_text": null,"text": null,"time": null,"unit": "%","value": "15.4"},
+    {"derived": null,"element_id": "quantity-1499-1509","mark_id": "m8","source_text": null,"text": null,"time": null,"unit": "%","value": "15"},
+    {"derived": null,"element_id": "quantity-1538-1548","mark_id": "m9","source_text": null,"text": null,"time": null,"unit": "%","value": "22"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Vox support among Spanish voters by age group",
+  "type": "bar",
+  "version": "2026-11-25"
+}

@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Project",
+    "y": "Estimated cost (Rs crore)"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-681mjddnfb1yxcs7",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Agra-Lucknow Expressway (EPC model)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Planned expressway length","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-1032-1044","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": null,"value": "150000000000"},
+    {"derived": null,"element_id": "quantity-589-592","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": null,"value": "302"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Cost of Agra-Lucknow Expressway under EPC model",
+  "type": "bar",
+  "version": "2026-11-25"
+}

@@ -1,0 +1,57 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Stage of grid connection process",
+    "y": "Grid capacity in gigawatts"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m6",
+      "m7",
+      "m8",
+      "m9",
+      "m10",
+      "m11"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "energy-ssjfhxpxbaxgz2e6",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Total asked for (GW)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "National peak demand (GW)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Connected today (GW)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m3","source_text": null,"text": "Reserved capacity (GW)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m4","source_text": null,"text": "In queue (GW)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m5","source_text": null,"text": "At inquiry stage (GW)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-479-491","mark_id": "m6","source_text": null,"text": null,"time": null,"unit": "gigawatt","value": "34"},
+    {"derived": null,"element_id": "quantity-566-571","mark_id": "m7","source_text": null,"text": null,"time": null,"unit": "gw","value": "25"},
+    {"derived": null,"element_id": "quantity-578-584","mark_id": "m8","source_text": null,"text": null,"time": null,"unit": "gw","value": "0.8"},
+    {"derived": null,"element_id": "quantity-613-619","mark_id": "m9","source_text": null,"text": null,"time": null,"unit": "gw","value": "4.2"},
+    {"derived": null,"element_id": "quantity-645-652","mark_id": "m10","source_text": null,"text": null,"time": null,"unit": "gw","value": "10.8"},
+    {"derived": null,"element_id": "quantity-674-679","mark_id": "m11","source_text": null,"text": null,"time": null,"unit": "gw","value": "18"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Norway Data Center Grid Capacity by Stage",
+  "type": "bar",
+  "version": "2026-11-25"
+}

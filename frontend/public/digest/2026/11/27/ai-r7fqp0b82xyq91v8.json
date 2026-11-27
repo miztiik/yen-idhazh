@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Worker group",
+    "y": "Percentage seeing higher income"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "ai-r7fqp0b82xyq91v8",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Voluntary switchers (2025-2026)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Job stayers (2025-2026)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-1485-1488","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "%","value": "67"},
+    {"derived": null,"element_id": "quantity-1559-1562","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "61"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Share of Workers Seeing Real Income Gains After Switching Jobs",
+  "type": "bar",
+  "version": "2026-11-25"
+}

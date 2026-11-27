@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "BoP/EPC or desulphurisation capacity delivered in India (GW)",
+    "y": "Capacity"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "energy-3dbzbs2q3158dfk9",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "BoP and EPC projects delivered (GW)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Flue gas desulphurisation capacity covered (GW)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-1212-1216","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "gw","value": "5"},
+    {"derived": null,"element_id": "quantity-1313-1317","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "gw","value": "9"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Tata Projects' Thermal Power Delivery Scale",
+  "type": "bar",
+  "version": "2026-11-25"
+}

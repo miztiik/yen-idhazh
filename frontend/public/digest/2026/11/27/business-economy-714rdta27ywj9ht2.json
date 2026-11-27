@@ -1,0 +1,49 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Forecast scenario / source",
+    "y": "Terminal or projected inflation rate (percent)"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m4",
+      "m5",
+      "m6",
+      "m7"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "business-economy-714rdta27ywj9ht2",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Reuters analyst median","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Reuters upper bound","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Oxford Economics terminal rate","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m3","source_text": null,"text": "Oxford Economics headline inflation","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-3345-3358","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "%","value": "1.75"},
+    {"derived": null,"element_id": "quantity-3362-3374","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "%","value": "2"},
+    {"derived": null,"element_id": "quantity-4066-4079","mark_id": "m6","source_text": null,"text": null,"time": null,"unit": "%","value": "1.75"},
+    {"derived": null,"element_id": "quantity-3906-3916","mark_id": "m7","source_text": null,"text": null,"time": null,"unit": "%","value": "2"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Analyst Forecasts for BOJ Terminal Policy Rate and Inflation",
+  "type": "bar",
+  "version": "2026-11-25"
+}
