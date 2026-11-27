@@ -112,3 +112,58 @@ def test_thresholds_the_slices_cannot_be_cut_from_are_refused(
     """A draw cut from thresholds it cannot honour would file pairs under no explainable slice."""
     with pytest.raises(ValueError, match=refused):
         slice_grid(lower, upper, draw=DRAW)
+
+
+def test_small_pair_budget_auto_coarsens_multi_slice_buckets_without_gaps() -> None:
+    """At pair_budget=7, bucket ceilings 0/3/1/2/1 coarsen slices so every funded slice fits."""
+    small = DRAW.model_copy(update={"pair_budget": 7})
+    cut = [(one.bucket.value, one.low, one.high) for one in slice_grid(0.70, 0.93, draw=small).slices]
+
+    assert cut == [
+        ("fully_dissimilar", -1.0, 0.70),
+        ("lower_thin", 0.70, 0.72),
+        ("lower_thin", 0.72, 0.74),
+        ("lower_thin", 0.74, 0.76),
+        ("middle_coarse", 0.76, 0.87),
+        ("upper_thin", 0.87, 0.90),
+        ("upper_thin", 0.90, 0.93),
+        ("fully_similar", 0.93, 1.0),
+    ]
+    assert all(earlier[2] == later[1] for earlier, later in itertools.pairwise(cut))
+
+
+def test_unfunded_buckets_and_empty_middle_span_keep_the_grid_contiguous() -> None:
+    """Budget=0 buckets emit one full-span slice; zero-width middle emits no slices."""
+    tiny = DRAW.model_copy(update={"pair_budget": 1})
+    cut = [(one.bucket.value, one.low, one.high) for one in slice_grid(0.70, 0.93, draw=tiny).slices]
+
+    assert cut == [
+        ("fully_dissimilar", -1.0, 0.70),
+        ("lower_thin", 0.70, 0.76),
+        ("middle_coarse", 0.76, 0.87),
+        ("upper_thin", 0.87, 0.93),
+        ("fully_similar", 0.93, 1.0),
+    ]
+
+    no_middle = edges(0.70, 0.82)
+    assert not any(bucket == "middle_coarse" for bucket, _, _ in no_middle)
+    assert all(earlier[2] == later[1] for earlier, later in itertools.pairwise(no_middle))
+
+
+def test_min_pairs_per_slice_coarsens_funded_buckets() -> None:
+    """Raising min_pairs_per_slice widens steps so funded buckets emit fewer slices."""
+    coarser = DRAW.model_copy(update={"min_pairs_per_slice": 15})
+    cut = [
+        (one.bucket.value, one.low, one.high)
+        for one in slice_grid(0.70, 0.93, draw=coarser).slices
+    ]
+
+    assert [slice_[1:] for slice_ in cut if slice_[0] == "lower_thin"] == [
+        (0.70, 0.72), (0.72, 0.74), (0.74, 0.76)
+    ]
+    assert [slice_[1:] for slice_ in cut if slice_[0] == "middle_coarse"] == [
+        (0.76, 0.82), (0.82, 0.87)
+    ]
+    assert [slice_[1:] for slice_ in cut if slice_[0] == "upper_thin"] == [
+        (0.87, 0.89), (0.89, 0.91), (0.91, 0.93)
+    ]

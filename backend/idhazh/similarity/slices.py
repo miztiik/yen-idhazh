@@ -9,7 +9,9 @@ ends at the upper one, and coarse slices fill what lies between the two runs.
 Every edge is a whole number of thin slices, because the thresholds are real numbers and
 `floor(0.58 / 0.01)` is 57 in floating point. The grid is counted in whole slices, the lower
 threshold rounds down onto it and the upper one rounds up, so a lightly sampled end never
-reaches past the threshold it lies beyond.
+reaches past the threshold it lies beyond. Multi-slice buckets widen their step when their
+planned pair budget cannot fund finer slices at `min_pairs_per_slice`, so every non-empty
+slice in a funded bucket receives at least one pair for any `pair_budget >= 1`.
 
 Nothing here reads a file, a config file or a clock.
 """
@@ -54,6 +56,32 @@ class SliceGrid:
         return max(bisect.bisect_right(self._lows, score) - 1, 0)
 
 
+def _partition_bucket(
+    bucket: PairBucket,
+    start_tick: int,
+    end_tick: int,
+    *,
+    base_step: int,
+    budget: int,
+    min_pairs_per_slice: int,
+) -> list[tuple[PairBucket, int, int]]:
+    """Cut `[start_tick, end_tick)` into ticks that `budget` can fund without starving a slice."""
+    span_ticks = end_tick - start_tick
+    if span_ticks == 0:
+        return []
+    if budget == 0:
+        return [(bucket, start_tick, end_tick)]
+    max_slices = max(1, budget // min_pairs_per_slice)
+    effective_step = max(base_step, (span_ticks + max_slices - 1) // max_slices)
+    cuts: list[tuple[PairBucket, int, int]] = []
+    tick = start_tick
+    while tick < end_tick:
+        top = min(tick + effective_step, end_tick)
+        cuts.append((bucket, tick, top))
+        tick = top
+    return cuts
+
+
 def slice_grid(lower: float, upper: float, *, draw: DrawConfig) -> SliceGrid:
     """The slices for these thresholds.
 
@@ -78,14 +106,32 @@ def slice_grid(lower: float, upper: float, *, draw: DrawConfig) -> SliceGrid:
             f"{draw.slice_width} at each end"
         )
 
+    budgets = draw.bucket_budgets()
     cuts: list[tuple[PairBucket, int, int]] = [(PairBucket.FULLY_DISSIMILAR, -per_unit, lower_tick)]
-    cuts += [(PairBucket.LOWER_THIN, tick, tick + 1) for tick in range(lower_tick, middle_start)]
-    tick = middle_start
-    while tick < middle_end:
-        top = min(tick + coarse, middle_end)
-        cuts.append((PairBucket.MIDDLE_COARSE, tick, top))
-        tick = top
-    cuts += [(PairBucket.UPPER_THIN, tick, tick + 1) for tick in range(middle_end, upper_tick)]
+    cuts += _partition_bucket(
+        PairBucket.LOWER_THIN,
+        lower_tick,
+        middle_start,
+        base_step=1,
+        budget=budgets[PairBucket.LOWER_THIN],
+        min_pairs_per_slice=draw.min_pairs_per_slice,
+    )
+    cuts += _partition_bucket(
+        PairBucket.MIDDLE_COARSE,
+        middle_start,
+        middle_end,
+        base_step=coarse,
+        budget=budgets[PairBucket.MIDDLE_COARSE],
+        min_pairs_per_slice=draw.min_pairs_per_slice,
+    )
+    cuts += _partition_bucket(
+        PairBucket.UPPER_THIN,
+        middle_end,
+        upper_tick,
+        base_step=1,
+        budget=budgets[PairBucket.UPPER_THIN],
+        min_pairs_per_slice=draw.min_pairs_per_slice,
+    )
     cuts.append((PairBucket.FULLY_SIMILAR, upper_tick, per_unit))
     return SliceGrid(
         tuple(Slice(bucket, low / per_unit, high / per_unit) for bucket, low, high in cuts)

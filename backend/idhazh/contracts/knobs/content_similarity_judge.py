@@ -13,6 +13,7 @@ from idhazh.contracts.story_similarity_diagnostics import (
     ProbabilityBins,
     ScoreCutoff,
 )
+from idhazh.contracts.story_similarity_pair_verdict import PairBucket
 
 #: How far a quotient may sit from a whole number and still be one. A width such as 0.04 over
 #: 0.01 is 4.000000000000001 in floating point, and the grid is counted in whole slices.
@@ -40,57 +41,31 @@ def threshold_ticks(lower: float, upper: float, *, slice_width: float) -> tuple[
 
 
 class DrawBucketWeights(Model):
-    """How the pairs left after the two lightly sampled ends are shared among the three buckets
-    between the thresholds."""
+    """How `pair_budget` is split proportionally across all five score buckets."""
 
+    fully_dissimilar: int = Field(
+        ge=1,
+        description=(
+            "Weight of the lightly sampled end below the lower bound threshold. Weights are "
+            "relative: only their proportions across all five buckets matter."
+        ),
+    )
     lower_thin: int = Field(
         ge=1,
-        description=(
-            "Weight of the thin slices that start at the lower bound threshold. Weights are "
-            "relative: only their proportions matter. A bucket with no pairs hands its share on "
-            "in descending weight order."
-        ),
-    )
-    upper_thin: int = Field(
-        ge=1, description="Weight of the thin slices that end at the upper bound threshold."
+        description="Weight of the thin slices that start at the lower bound threshold.",
     )
     middle_coarse: int = Field(
-        ge=1, description="Weight of the coarse slices that fill the range between the two runs."
-    )
-
-
-class LightBucketDraw(Model):
-    """How many pairs one lightly sampled end of the score range gives a night."""
-
-    weight: int = Field(
         ge=1,
-        description=(
-            "The end's weight against the three weights in `bucket_weights` and the other end's: "
-            "its target is the budget times its weight over the sum of all five, rounded to a "
-            "whole pair."
-        ),
+        description="Weight of the coarse slices that fill the range between the two thin runs.",
     )
-    minimum: int = Field(
-        ge=0,
-        description=(
-            "The fewest pairs taken when the end holds that many. The target is raised to it."
-        ),
-    )
-    maximum: int = Field(
+    upper_thin: int = Field(
         ge=1,
-        description=(
-            "The most pairs taken. The target is lowered to it, and the pairs it frees go to the "
-            "buckets between the thresholds."
-        ),
+        description="Weight of the thin slices that end at the upper bound threshold.",
     )
-
-    @model_validator(mode="after")
-    def _the_minimum_does_not_pass_the_maximum(self) -> Self:
-        if self.minimum > self.maximum:
-            raise ValueError(
-                f"the minimum of {self.minimum} pairs is above the maximum of {self.maximum}"
-            )
-        return self
+    fully_similar: int = Field(
+        ge=1,
+        description="Weight of the lightly sampled end above the upper bound threshold.",
+    )
 
 
 class DrawConfig(Model):
@@ -99,9 +74,9 @@ class DrawConfig(Model):
     pair_budget: int = Field(
         ge=1,
         description=(
-            "Live pairs a night to judge, shared over the council's shards. 150 over four shards "
-            "is 38 pairs a shard, which costs 1 hour 10 minutes at the measured worst of 110.98 "
-            "seconds a pair. The judge refuses a draw that cannot fit the council's window."
+            "Maximum live pairs a night to judge, shared over the council's shards. Sparse "
+            "nights may draw fewer when buckets cannot fill their planned ceilings. The judge "
+            "refuses a draw whose full budget cannot fit the council's window."
         ),
     )
     slice_width: float = Field(
@@ -129,11 +104,22 @@ class DrawConfig(Model):
         ),
     )
     bucket_weights: DrawBucketWeights
-    fully_similar: LightBucketDraw = Field(
-        description="The sample above the upper bound threshold, checked lightly as a live canary."
+    slice_overflow_factor: float = Field(
+        default=1.0,
+        ge=1.0,
+        allow_inf_nan=False,
+        description=(
+            "Multiplier on each bucket's average per-slice share that caps how many pairs one "
+            "slice may absorb when sibling slices are sparse. At 1.0 no slice exceeds ceil(B / k)."
+        ),
     )
-    fully_dissimilar: LightBucketDraw = Field(
-        description="The sample below the lower bound threshold, checked lightly as a live canary."
+    min_pairs_per_slice: int = Field(
+        default=1,
+        ge=1,
+        description=(
+            "Target minimum planned pairs per slice when a bucket is funded. Multi-slice buckets "
+            "coarsen their grid step when their budget cannot fund finer slices at this floor."
+        ),
     )
     thresholds_lookback_days: int = Field(
         ge=1,
@@ -142,6 +128,35 @@ class DrawConfig(Model):
             "sets the thresholds the draw follows. With none inside it, the configured starts do."
         ),
     )
+
+    def bucket_budgets(self) -> dict[PairBucket, int]:
+        """Split `pair_budget` across the five buckets by largest remainder.
+
+        Remainder ties break by descending bucket weight, then score order, so slice cutting
+        and draw allocation read one integer ceiling per bucket.
+        """
+        weights: dict[PairBucket, int] = {
+            PairBucket.FULLY_DISSIMILAR: self.bucket_weights.fully_dissimilar,
+            PairBucket.LOWER_THIN: self.bucket_weights.lower_thin,
+            PairBucket.MIDDLE_COARSE: self.bucket_weights.middle_coarse,
+            PairBucket.UPPER_THIN: self.bucket_weights.upper_thin,
+            PairBucket.FULLY_SIMILAR: self.bucket_weights.fully_similar,
+        }
+        total = self.pair_budget
+        whole = sum(weights.values())
+        shares = {bucket: total * weight // whole for bucket, weight in weights.items()}
+        leftover = total - sum(shares.values())
+        by_remainder = sorted(
+            enumerate(PairBucket),
+            key=lambda item: (
+                -((total * weights[item[1]]) % whole),
+                -weights[item[1]],
+                item[0],
+            ),
+        )
+        for _, bucket in by_remainder[:leftover]:
+            shares[bucket] += 1
+        return shares
 
     @model_validator(mode="after")
     def _the_slices_lie_on_one_grid(self) -> Self:

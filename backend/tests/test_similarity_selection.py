@@ -227,19 +227,18 @@ def test_a_pair_of_addresses_is_kept_once_and_as_the_night_s_own_copy() -> None:
 
 
 def test_each_slice_gives_the_number_the_allocation_names_and_the_row_says_what_it_held() -> None:
-    """A hand-worked night: every slice holds more than its share except the similar end.
+    """A hand-worked night: every slice holds enough to fill its proportional ceiling.
 
-    Under the committed starts 150 pairs go 4 to the dissimilar end, 62, 31 and 47 to the
-    thin lower, coarse and thin upper slices, and the similar end holds 9 and gives its
-    maximum of 6. Each pair says how many its slice held and how many the draw took.
+    Under the committed starts 150 pairs go 6 to the dissimilar end, 60, 30 and 45 to the
+    thin lower, coarse and thin upper slices, and 9 to the similar end. Each pair says how
+    many its slice held and how many the draw took.
     """
     drawn = select(
         a_night_of_pairs(), lower=0.70, upper=0.93, draw=DRAW, date=DATE, stamp=stamp()
     )
 
-    assert [taken_by_slice(drawn)[edges] for edges in SLICE_EDGES] == [
-        4, 11, 11, 10, 10, 10, 10, 11, 10, 10, 8, 8, 8, 8, 8, 7, 6,
-    ]
+    expected = [6, 10, 10, 10, 10, 10, 10, 10, 10, 10, 8, 8, 8, 7, 7, 7, 9]
+    assert [taken_by_slice(drawn)[edges] for edges in SLICE_EDGES] == expected
     assert len(drawn.taken) == DRAW.pair_budget
     assert drawn.pairs_available == sum(HELD)
     assert {
@@ -247,11 +246,25 @@ def test_each_slice_gives_the_number_the_allocation_names_and_the_row_says_what_
         for one in drawn.taken
     } == {
         (edges, held, given)
-        for edges, held, given in zip(
-            SLICE_EDGES, HELD, [4, 11, 11, 10, 10, 10, 10, 11, 10, 10, 8, 8, 8, 8, 8, 7, 6],
-            strict=True,
-        )
+        for edges, held, given in zip(SLICE_EDGES, HELD, expected, strict=True)
     }
+
+
+def test_select_leaves_unspent_budget_unused_and_auto_coarsens_small_budgets() -> None:
+    """Sparse buckets draw fewer than pair_budget pairs, and small budgets select without error."""
+    sparse_held = [5000, *[30] * 6, *[0] * 3, *[0] * 6, 0]
+    sparse = select(
+        a_night_of_pairs(sparse_held), lower=0.70, upper=0.93, draw=DRAW, date=DATE, stamp=stamp()
+    )
+    by_bucket = Counter(one.slice.bucket for one in sparse.taken)
+    assert by_bucket == {PairBucket.FULLY_DISSIMILAR: 6, PairBucket.LOWER_THIN: 60}
+    assert len(sparse.taken) == 66 < DRAW.pair_budget
+
+    small = DRAW.model_copy(update={"pair_budget": 7})
+    coarsened = select(
+        a_night_of_pairs(), lower=0.70, upper=0.93, draw=small, date=DATE, stamp=stamp()
+    )
+    assert len(coarsened.taken) == 7
 
 
 def test_a_pair_scoring_below_zero_is_drawn() -> None:
