@@ -534,7 +534,7 @@
     {"bytes": 1360,"items": 0,"path": "digest/2026/11/27/business-economy-qm3sa7k0dya79dxr.json","root": "public"},
     {"bytes": 1390,"items": 0,"path": "digest/2026/11/27/business-economy-r3ear1nbvjbcxbz0.json","root": "public"},
     {"bytes": 1423,"items": 0,"path": "digest/2026/11/27/business-economy-vb7kgy9bhs99f728.json","root": "public"},
-    {"bytes": 925240,"items": 318,"path": "digest/2026/11/27/digest.json","root": "public"},
+    {"bytes": 910254,"items": 318,"path": "digest/2026/11/27/digest.json","root": "public"},
     {"bytes": 1442,"items": 0,"path": "digest/2026/11/27/energy-3dbzbs2q3158dfk9.json","root": "public"},
     {"bytes": 1605,"items": 0,"path": "digest/2026/11/27/energy-4e5d9d7r2s3qyydv.json","root": "public"},
     {"bytes": 1443,"items": 0,"path": "digest/2026/11/27/energy-6wb8zkevrv87r98h.json","root": "public"},
@@ -1006,7 +1006,7 @@
     {"bytes": 5626,"items": 0,"path": "raw/run-shards/2026/10/11/01a12c0c-ffa5-8f85-9fd8-de8fc15684f8.parquet","root": "state"},
     {"bytes": 5682,"items": 0,"path": "raw/run-shards/2026/10/11/01a12d2f-f6c6-8e13-968b-e5d8f66aa6c4.parquet","root": "state"}
   ],
-  "total_bytes": 104316182,
+  "total_bytes": 104301196,
   "total_items": 34878,
   "version": "2026-10-03T13:33"
 }
