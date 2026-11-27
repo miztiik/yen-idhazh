@@ -77,8 +77,8 @@
 		data-panel-question="How much did the mix of incoming pair scores change?"
 		data-model-rule="no" data-model-rule-name={name} data-model-rule-none={rule.declined}>
 		<div class="drift-reading" data-judge-digest={selected}>
-			<p data-comparison="The full incoming score pool against its saved baseline.">
-				Population Stability Index (PSI) compares the full pool of eligible pair scores, not just the judged sample.
+			<p data-comparison="The eligible pairs score pool against its saved baseline.">
+				Population Stability Index (PSI) compares the eligible pairs score pool, not just the judged sample.
 			</p>
 			<p data-lede><strong>{longDate(selected)}</strong> (UTC digest).
 				{#if selectedPsi !== null}
