@@ -54,7 +54,8 @@
     {"covers": "2026-11-21","state": "empty"},
     {"covers": "2026-11-22","state": "empty"},
     {"covers": "2026-11-23","state": "empty"},
-    {"covers": "2026-11-24","state": "empty"}
+    {"covers": "2026-11-24","state": "empty"},
+    {"covers": "2026-11-25","state": "empty"}
   ],
   "entries": [],
   "ledger": "holdout-pairs",
