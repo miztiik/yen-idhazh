@@ -81,7 +81,7 @@ def window(tmp_path: Path, app: AppConfig) -> Path:
 
 def an_answer() -> str:
     """A target the decoder would accept."""
-    return json.dumps({"title": "A title", "paragraphs": ["a few words"]})
+    return json.dumps({"title": "A title", "summary": "a few words"})
 
 
 # --- reading the stratification off a row ----------------------------------

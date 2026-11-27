@@ -326,7 +326,7 @@ def test_a_folded_value_is_accepted_by_the_column_it_was_folded_for(case: str) -
 def test_the_reason_writer_keeps_the_original_text_or_writes_null(case: str) -> None:
     raw = HOSTILE[case]
     reply = parse_summarize_and_plan(json.dumps({
-        "summary": {"title": "Wind awards", "paragraphs": ["Countries announced wind awards."]},
+        "summary": {"title": "Wind awards", "summary": "Countries announced wind awards."},
         "visual": None,
         "model_reason": raw,
     }))

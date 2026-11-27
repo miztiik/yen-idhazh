@@ -1,6 +1,6 @@
 # The Summarizer Prompt
 
-**Last Updated**: 2026-11-26
+**Last Updated**: 2026-11-27
 
 What the model reads and writes, and what the pipeline validates. Prompt
 wording is not a security control: sanitization and validated output shapes
@@ -57,7 +57,7 @@ Keep editorial wording shared across models. Model-specific turn markers and tem
 
 ## A reply is published as the model wrote it
 
-No length decides whether a reply publishes, and nothing shortens one. The prompt asks for no fixed word or sentence limits either; instead it asks for length proportional to the article's information density (one short paragraph for a brief update, multiple short paragraphs for a dense or multi-part report, with no padding). A reply that holds its shape - a non-empty `title` and a non-empty `paragraphs` array of non-empty strings - is joined on blank lines and published word for word, however long or short. Its words meet one check, the [address rule](#the-shape-is-not-the-whole-check); its whitespace is tidied as [the next section](#paragraphs-follow-the-models-prose) says. A summary that is empty once that tidying is done fails the item as `bad_shape`.
+No length decides whether a reply publishes, and nothing shortens one. The prompt sets no hard word ceiling; instead it gives soft paragraph-and-sentence depth guides (1 paragraph of 2 to 4 sentences for a brief update, 2 paragraphs of 3 to 5 sentences for a standard report, 3 to 4 paragraphs of 3 to 5 sentences for a long or multi-part report, with no padding). A reply that holds its shape - a non-empty `title` and a non-empty `summary` string - is published word for word, however long or short. Its words meet one check, the [address rule](#the-shape-is-not-the-whole-check); its whitespace is tidied as [the next section](#paragraphs-follow-the-models-prose) says. A summary that is empty once that tidying is done fails the item as `bad_shape`.
 
 The decoder's grammar bounds neither field above, so a long reply is neither cut off mid-field nor refused. Only the call's response limit ([below](#the-output-budget)) ends one early. There is no automatic retry.
 
@@ -66,25 +66,25 @@ Do not add a cut, a floor or a character limit to a reply. A sentence splitter c
 ## Paragraphs follow the model's prose
 
 There is no paragraph-count cap or word threshold for a paragraph break.
-The transient draft model (`SummaryDraft`) decodes `paragraphs: list[str]`
-(at least one non-empty item, `extra="forbid"`), and `parse_draft` joins those
-entries with one blank line (`\n\n`) and runs `normalize_prose()` so the
-persisted `Summary.summary` contract and the frontend remain unchanged.
-Prose normalization rejoins a lone newline inside an element, collapses
-repeated blank lines, drops whitespace-only entries, and replaces other
-control characters with spaces. Recorded drafts written under the earlier
-single-string `summary` key remain readable on the read side when `paragraphs`
-is absent.
+The transient draft model (`SummaryDraft`) decodes `summary: str`
+(non-empty, `extra="forbid"`), and `parse_draft` runs `normalize_prose()` so
+the persisted `Summary.summary` contract and the frontend remain unchanged.
+One blank line (`\n\n`) separates paragraphs. Prose normalization rejoins a
+lone newline, collapses repeated blank lines, drops whitespace-only blocks, and
+replaces other control characters with spaces. Recorded drafts written under
+the temporary `paragraphs: list[str]` shape remain readable on the read side
+when `summary` is absent.
 
 Preserve every nonempty paragraph.
 
-The digest prompt (`config/prompts/write-digest-summary.txt`) asks for a
-one-sentence lead stating the central finding followed by tight paragraphs of
-evidence, caveats, and substantive responses in plain, direct sentences,
-dropping chronological play-by-play. It forbids straight double quotes (`"`)
-inside `title` and `paragraphs` (paraphrase speech; use single quotes `'...'`
-when a short term must be quoted) so constrained JSON decoding does not close
-a string mid-sentence.
+The digest prompt (`config/prompts/write-digest-summary.txt`) asks for cohesive
+continuous prose with explicit `\n\n` breaks between paragraphs inside the
+`"summary"` JSON string, anchored to 2 to 5 sentences per paragraph across
+three soft depth bands so summaries avoid both single-block walls of text and
+one-sentence fragments. It forbids straight double quotes (`"`) inside `title`
+and `summary` (paraphrase speech; use single quotes `'...'` when a short term
+must be quoted) so constrained JSON decoding does not close a string
+mid-sentence.
 
 If extraction read only part of the article, state that limitation on the item. Asking for fewer summary words does not tell the reader that part of the source was missing.
 
@@ -111,7 +111,7 @@ sends it:
 
 - **The system turn** is `write-digest-summary.txt`, unchanged, with a short
   `plan-visual.txt` addendum for a chart-capable request. The addendum forbids
-  evidence IDs or parenthetical citations inside `title` and `paragraphs`, and
+  evidence IDs or parenthetical citations inside `title` and `summary`, and
   names the exact same forms as the reply schema.
 - **The user turn** is one sanitized, fenced block containing the headline and
   article body, unchanged and without markers. A chart-capable request adds
@@ -279,7 +279,7 @@ Re-tokenize the complete rendered requests for a candidate model. Recorded incum
 | Certainty | Preserve the difference between proposal, forecast, claim and result |
 | Faithfulness | Preserve source facts, names and figures without invention |
 | Quoting | Paraphrase speech; forbid straight double quotes inside JSON fields and use single quotes for short quoted terms |
-| Voice | Plain, neutral third-person reporting in direct, one-idea sentences |
+| Voice | Plain, neutral third-person prose in cohesive 2 to 5 sentence paragraphs separated by `\n\n` |
 
 ## The title is ours, and the source's is only a fallback
 
@@ -335,14 +335,21 @@ and call flows, not one shared summary instruction or a scanned prompt registry.
 The exact evidence spans stay in the backend. These invariants prove the
 transport and refusal rules, not the model's live chart selection rate.
 
-**Why decode `paragraphs: list[str]` and forbid straight double quotes in the digest prompt.**
-Under constrained JSON decoding, an unescaped straight double quote inside a
-single `summary` string closes the JSON string early and truncates the item
-mid-sentence (measured 42 of 400 items on 2026-11-26), while single-string
-decoding also encourages walls of text. Moving paragraph breaks into the
-transient `SummaryDraft.paragraphs` array and instructing the model to
-paraphrase or use single quotes fixes both failure modes at the decode boundary
-while keeping `Summary.summary`, persisted digests, and the frontend unchanged.
+**Why `SummaryDraft` decodes a single `summary: str` with explicit `\n\n` breaks and single quotes.**
+Decoding an unbounded `paragraphs: list[str]` array created a grammar trap on
+combined summary-and-visual calls: after a paragraph string closed, the grammar
+admitted either `,` (another paragraph element) or `]}` (exit to `visual`), so
+the model emitted pipeline vocabulary (`visual_type_null`, `model_reason_null`)
+and escaped JSON as extra summary paragraphs on 30 of 260 items across 4 runs on
+2026-11-27 (0 of 400 on 2026-11-26 under `summary: str`), while also splitting
+clean prose into choppy 1-to-2 sentence paragraphs. Reverting `SummaryDraft` to
+`summary: str` closes directly into `},"visual":` with no array-comma ambiguity,
+while keeping the single-quote rule against premature JSON string closure
+(42 of 400 truncated on 2026-11-26 before the rule) and explicitly instructing
+literal `\n\n` paragraph breaks across three soft depth bands so constrained
+JSON decoding produces balanced 2-to-5 sentence paragraphs without walls of
+text. Read-side compatibility for recorded `paragraphs: list[str]` payloads is
+kept without touching persisted `Summary.summary`, digests, or the frontend.
 
 **Why non-prose `ev`/`dt` IDs, one-line local snippets, and `reading`-before-`label` decode order.**
 Prose-like `q`/`d` IDs combined with the verb "Cite" caused models to leak
