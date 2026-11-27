@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Economic indicator",
+    "y": "Magnitude (percent)"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "world-7423zccffs4xb9xw",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Deficit as share of GDP","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Debt level","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-2283-2285","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "%","value": "6"},
+    {"derived": {"bin_lower": null,"bin_upper": null,"function": "negative_magnitude","inputs": ["quantity-2309-2313"],"source_unit": null,"unit": "%","unit_table_version": null,"value": "-120","version": "2026-11-25"},"element_id": null,"mark_id": "m3","source_text": "120%","text": null,"time": null,"unit": "%","value": "-120"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "France's Economic Stress Indicators Cited in Coverage of De Cos Appointment",
+  "type": "bar",
+  "version": "2026-11-25"
+}
