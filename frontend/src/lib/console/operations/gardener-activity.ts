@@ -45,12 +45,11 @@ export function compactActivity(tracks: Tracks, window: TimeWindow, requestedDay
 				const narrowed = period === 'daily' && track !== undefined && track.days < requestedDays;
 				const uncertain = track === undefined || track.omitted || track.issues.length > 0 || narrowed;
 				const state = written.length > 0 ? 'written' : uncertain ? 'unavailable' : 'checked';
-				const text = written.length > 0 ? `${written.length} published ${written.length === 1 ? 'file' : 'files'}`
-					: track === undefined ? 'Checking files'
-					: track.omitted ? 'Not checked'
-					: narrowed ? 'No write verified in the shorter read'
-					: uncertain ? 'Evidence incomplete' : 'No write found in checked files';
-				return { state, text, draw: period === 'daily' || written.length > 0 } as const;
+				const text = written.length > 0 ? `${written.length} ${written.length === 1 ? 'pack' : 'packs'} written`
+					: track === undefined ? 'Checking packs'
+					: track.omitted || narrowed ? 'Read limit'
+					: uncertain ? 'Incomplete check' : 'No write found';
+				return { state, text, draw: (period === 'daily' && track !== undefined) || written.length > 0 } as const;
 			});
 			return { name: PERIOD_LABEL[period], cells };
 		})

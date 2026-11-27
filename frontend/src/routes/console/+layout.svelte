@@ -123,6 +123,7 @@
 					<summary>Data sources</summary>
 					<div class="console-date-readings">
 						<p>Published charts use data included at build time. Browser-loaded charts read packed records, not live raw files. A panel names dates only when they differ from its shared window.</p>
+						{#each windowSource.sourceNotes ?? [] as note (note)}<p>{note}</p>{/each}
 						{#if completeness.kind !== 'unread'}
 							{@const finished = new Date(completeness.finished).toISOString()}
 							<p>Site built: <time datetime={finished}>{shortDate(finished.slice(0, 10))}, {clockUtc(finished)}</time>.</p>

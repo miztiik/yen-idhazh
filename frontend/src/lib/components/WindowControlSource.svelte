@@ -15,6 +15,7 @@
 		record = null,
 		publishedWindow = null,
 		statusLine = null,
+		sourceNotes = [],
 		onChange
 	}: {
 		route: ConsoleDestinationId;
@@ -28,6 +29,7 @@
 		record?: RecordWindow | null;
 		publishedWindow?: TimeWindow | null;
 		statusLine?: string | null;
+		sourceNotes?: readonly string[];
 		onChange: (days: number) => void;
 	} = $props();
 
@@ -55,6 +57,9 @@
 		},
 		get statusLine() {
 			return statusLine;
+		},
+		get sourceNotes() {
+			return sourceNotes;
 		},
 		monthsFor: (preset) => monthsFor(preset),
 		onChange: (preset) => onChange(preset)

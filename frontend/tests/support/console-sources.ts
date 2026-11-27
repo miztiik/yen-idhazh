@@ -68,7 +68,7 @@ export const SOURCE_INPUTS: Readonly<Record<string, readonly string[]>> = {
 		'item-time-split.ts', 'query-groups.ts', 'record-window.ts', 'run-health.ts', 'slowest-articles.ts',
 		'run-timeline.ts', 'site-cost-per-item.ts', 'stage-timings.ts', 'visual-attempts.ts', 'visual-refusals.ts'
 	],
-	'src/lib/console/operations': ['GardenerActivity.svelte', 'GardenerTaskReports.svelte', 'gardener-activity.ts', 'gardener-reports.ts'],
+	'src/lib/console/operations': ['GardenerActivity.svelte', 'GardenerTaskReports.svelte', 'gardener-activity.ts', 'gardener-reports.ts', 'operation-reads.svelte.ts'],
 	'src/lib/console/model': [
 		'rows.ts', 'call-ending.ts', 'faithfulness.ts', 'summary-length.ts',
 		'model-throughput.ts', 'model-rule.ts', 'cost.ts', 'item-cost.ts', 'ItemCost.svelte', 'Query.svelte', 'Series.svelte',

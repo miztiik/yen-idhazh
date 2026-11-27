@@ -2,8 +2,9 @@
 import type { LedgerReach, SliceResult } from '../data/ledger';
 
 export type RouteState = 'loading' | 'ok' | 'quiet' | 'missing' | 'unreachable';
+export type QueryStanding = Pick<SliceResult | LedgerReach, 'state'> | 'pending';
 
-export function tallyAsks(answers: readonly (SliceResult | LedgerReach | 'pending')[]): {
+export function tallyAsks(answers: readonly QueryStanding[]): {
 	readonly state: RouteState; readonly missing: number; readonly unreachable: number
 } {
 	const missing = answers.filter((answer) => answer !== 'pending' && answer.state === 'missing').length;

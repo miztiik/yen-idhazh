@@ -9,7 +9,6 @@ type Outcome = typeof COUNCIL_OUTCOMES[number];
 const OUTCOME_LABEL: Record<Outcome, string> = {
 	completed: 'Completed', stopped_on_deadline: 'Stopped at deadline', nothing_to_do: 'No work', failed: 'Failed'
 };
-const SAVE_JOB = 'save_council_results';
 const RUN_ID = /^(\d{4}-\d{2}-\d{2})-([1-9]\d*)$/;
 
 export interface CouncilStep {
@@ -24,9 +23,7 @@ export interface CouncilStep {
 
 export interface CouncilAttempt {
 	key: string;
-	runId: string;
 	attempt: number;
-	saveJob: boolean;
 	steps: CouncilStep[];
 }
 
@@ -51,8 +48,7 @@ export function councilHistory(rows: readonly Row[]) {
 			continue;
 		}
 		const key = `${run_id}/${attempt}`;
-		const held = attempts.get(key) ?? { key, runId: run_id, attempt, saveJob: true, steps: [] };
-		held.saveJob &&= row.job === SAVE_JOB;
+		const held = attempts.get(key) ?? { key, attempt, steps: [] };
 		held.steps.push({ date, judge: judge_id, startedAt: started_at, step, outcome,
 			part: typeof work_part_index === 'number' ? work_part_index : null, width: work_part_count });
 		attempts.set(key, held);
@@ -143,12 +139,26 @@ export function councilOutcomeLabel(value: Outcome | null): string {
 	return value === null ? 'Not reported' : OUTCOME_LABEL[value];
 }
 
-export function councilAttemptLink(attempt: CouncilAttempt, configuredRepo: string): string | null {
-	const run = RUN_ID.exec(attempt.runId);
-	if (!attempt.saveJob || !run || !isDay(run[1]) || !Number.isSafeInteger(attempt.attempt) || attempt.attempt < 1) return null;
-	const repo = URL.parse(configuredRepo);
-	if (repo === null || repo.protocol !== 'https:' || repo.username || repo.password || repo.search || repo.hash
-		|| !/^\/[^/]+\/[^/]+\/?$/.test(repo.pathname)) return null;
-	repo.pathname = `${repo.pathname.replace(/\/$/, '')}/actions/runs/${run[2]}/attempts/${attempt.attempt}`;
-	return repo.href;
+/** Each step counts on its own execution day. Silence is never an explicit no-work result. */
+export function councilActivity(attempts: readonly CouncilAttempt[], roster: readonly string[], calendar: readonly string[]) {
+	type Activity = 'reported' | 'checked';
+	const byJudge = new Map<string, Map<string, Activity>>(roster.map((judge) => [judge, new Map()]));
+	const inWindow = new Set(calendar);
+	for (const { steps } of attempts) {
+		for (const step of steps) {
+			const days = byJudge.get(step.judge) ?? new Map<string, Activity>();
+			byJudge.set(step.judge, days);
+			const day = step.startedAt.slice(0, 10);
+			if (!inWindow.has(day)) continue;
+			if (step.outcome !== 'nothing_to_do') days.set(day, 'reported');
+			else if (!days.has(day)) days.set(day, 'checked');
+		}
+	}
+	return [...byJudge].sort(([a], [b]) => a.localeCompare(b)).map(([judge, days]) => ({
+		name: judge.replaceAll('-', ' '),
+		cells: calendar.map((date) => {
+			const state = days.get(date) ?? 'unreported';
+			return { state, text: state === 'reported' ? 'Step reported' : state === 'checked' ? 'No work assigned' : 'No report' } as const;
+		})
+	}));
 }

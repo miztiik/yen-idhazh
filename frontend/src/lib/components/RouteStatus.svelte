@@ -1,9 +1,8 @@
 <script lang="ts">
 	/** Keep loading, absent and failed record reads visible without repeating successful scope. */
 	import { onMount, type Snippet } from 'svelte';
-	import type { RouteId } from '$lib/console/band';
-	import type { LedgerReach, SliceResult } from '$lib/data/ledger';
-	import { tallyAsks } from '$lib/console/query-state';
+	import type { ConsoleDestinationId } from '$lib/console/console-destinations';
+	import { tallyAsks, type QueryStanding } from '$lib/console/query-state';
 	import { routeStanding } from '$lib/console/waiting';
 
 	let {
@@ -17,8 +16,8 @@
 		onRetry,
 		children
 	}: {
-		route: RouteId;
-		answers?: readonly (SliceResult | LedgerReach | 'pending')[];
+		route: ConsoleDestinationId;
+		answers?: readonly QueryStanding[];
 		days: number;
 		through?: string | null;
 		settledSuffix?: string;
