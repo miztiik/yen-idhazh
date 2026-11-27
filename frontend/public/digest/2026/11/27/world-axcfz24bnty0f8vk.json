@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Team vs. opponent",
+    "y": "Final score"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "world-axcfz24bnty0f8vk",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Mali vs. Vietnam","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "C\u00f4te d'Ivoire vs. Jamaica","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-73-74","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": null,"value": "2"},
+    {"derived": null,"element_id": "quantity-1233-1234","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": null,"value": "3"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Scores in Knockout-Qualifying Matches",
+  "type": "bar",
+  "version": "2026-11-25"
+}

@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Model",
+    "y": "Percent faster to hit usage limits"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "ai-qsd8bg7baq2697fb",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "GPT-6.2 Astra","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Sol","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-594-597","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "%","value": "40"},
+    {"derived": null,"element_id": "quantity-626-629","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "25"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Faster limit reach after OpenAI billing fix",
+  "type": "bar",
+  "version": "2026-11-25"
+}

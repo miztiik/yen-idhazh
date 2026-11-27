@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Reporting period",
+    "y": "Profit growth rate"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "business-economy-g6cem9t8mgtqm312",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "January-October","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "January-September","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-58-69","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "%","value": "16"},
+    {"derived": null,"element_id": "quantity-207-220","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "15.5"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "China Industrial Profit Growth by Period",
+  "type": "bar",
+  "version": "2026-11-25"
+}

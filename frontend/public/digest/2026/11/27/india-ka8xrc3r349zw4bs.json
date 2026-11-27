@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Party that led in 2024 Lok Sabha election",
+    "y": "Average percentage of electorate deleted"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-ka8xrc3r349zw4bs",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "BJP-led seats","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Samajwadi Party-led seats","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-2542-2547","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "%","value": "12.9"},
+    {"derived": null,"element_id": "quantity-2568-2573","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "10.7"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Average voter deletion by party lead in UP assembly seats",
+  "type": "bar",
+  "version": "2026-11-25"
+}

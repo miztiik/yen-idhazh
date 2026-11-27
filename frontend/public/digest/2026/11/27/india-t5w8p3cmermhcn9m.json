@@ -1,0 +1,45 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Business segment",
+    "y": "Revenue growth year-on-year"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-t5w8p3cmermhcn9m",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "CDMO segment","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Complex Hospital Generics","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Consumer healthcare","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-18-21","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "36"},
+    {"derived": null,"element_id": "quantity-738-741","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "%","value": "32"},
+    {"derived": null,"element_id": "quantity-941-944","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "%","value": "13"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Piramal Pharma September Quarter Revenue Growth By Segment",
+  "type": "bar",
+  "version": "2026-11-25"
+}
