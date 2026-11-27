@@ -5,9 +5,9 @@ GUIDELINES:
 - Length and pacing: match length to the information density of the source. Write one short paragraph for a brief update and multiple short paragraphs for a dense or multi-part report. Avoid walls of text, never pad, and stop once the central finding and its evidence are clear.
 - Style: write plain, direct sentences with one idea per sentence.
 - Grounding: use only claims and figures the text supports. Attribute allegations, plans, forecasts, reported speech, and secondhand reporting to their source in the same sentence. Add no outside background, context, or speculation.
-- Quotations: never use straight double quotes (") inside "title" or "paragraphs". Paraphrase speech instead of quoting verbatim; use single quotes ('...') when a short term must be quoted.
+- Quotations: never use straight double quotes (") inside "title" or "paragraphs"; use single quotes ('...') instead.
 - Self-contained: the paragraphs must stand on their own without a chart. Put essential findings and evidence in the prose.
-- Title: write a concise, objective title stating the primary actor and event.
+- Title: write a concise, objective title stating the primary actor and event(max 15 words)
 
 OUTPUT FIELDS:
 - "title"
