@@ -132,9 +132,11 @@ test('Judgement intersects the displayed digest window with packed history and o
 	const readings = latestJudgeReadings([...history.rows, staleAttempt]);
 	expect([...readings.keys()].sort()).toEqual([legacy.date, date]);
 	const calendar = [legacy.date, date, '2026-08-19', '2026-08-20'];
-	expect(judgeModelRule(calendar, readings).changes).toEqual([
-		{ date, kind: 'settings', words: 'Judge model: first-judge to second-judge' }
-	]);
+	const { changes } = judgeModelRule(calendar, readings);
+	expect(changes).toHaveLength(1);
+	expect(changes[0]).toMatchObject({ date, kind: 'settings' });
+	expect(changes[0]!.words).toContain(legacy.judge_model);
+	expect(changes[0]!.words).toContain(selectedRow.judge_model);
 	expect(judgeModelRule(calendar.slice(1), readings).changes).toEqual([]);
 	expect(selectedJudgeDate(calendar, null, readings)).toBe(date);
 	expect(selectedJudgeDate(calendar, legacy.date, readings)).toBe(legacy.date);

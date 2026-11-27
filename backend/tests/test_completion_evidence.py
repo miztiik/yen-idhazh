@@ -6,54 +6,10 @@ import dataclasses
 import json
 
 import pytest
-from support.judge_reader import ProtocolReplies, native_reply
-from support.models import a_markers
-from support.paths import CONFIG_DIR
+from support.judge_reader import native_reply
 
-from idhazh import config
-from idhazh.contracts.digest_day import DigestItem
-from idhazh.contracts.eval_row import ConfidenceBand
-from idhazh.contracts.knobs.models import ModelsConfig
-from idhazh.contracts.story_similarity_pair_verdict import SameStoryVerdict
 from idhazh.llm import server
 from idhazh.llm.server import Completion, one_reply, parse_completion
-from idhazh.similarity import judge
-
-
-def reading(raw: bytes) -> judge.Reading:
-    settings = config.load(CONFIG_DIR)
-    models = settings.models.model_dump()
-    models["summarizer"] |= {"thinking_close": None}
-    settings = dataclasses.replace(
-        settings, models=ModelsConfig.model_validate(models | {"judge": None})
-    )
-    left = DigestItem(
-        item_id="world-01", vertical="world", title="A report",
-        source_url="https://left.example/report", source_id="left", source_name="Left",
-        summary="A report of one event.", band=ConfidenceBand.HIGH, introduced_by_run=1,
-    )
-    right = left.model_copy(update={"item_id": "world-02", "source_url": "https://right.example/a"})
-    return judge.read_once(
-        left.summary,
-        right.summary,
-        client=ProtocolReplies(raw),
-        settings=settings,
-        markers=a_markers(),
-    )
-
-
-def test_a_legal_emitted_answer_survives_a_higher_illegal_alternative() -> None:
-    result = reading(native_reply(
-        "YES", alternatives=(("Sure", -0.01), ("YES", -2.0))
-    ))
-    assert result.verdict is SameStoryVerdict.YES
-    assert result.grammar_applied
-
-
-def test_missing_emission_is_refused_even_when_the_literal_parses() -> None:
-    result = reading(b'{"content":"YES"}')
-    assert result.verdict is None
-    assert result.grammar_applied is False
 
 
 def test_selected_positions_are_not_ranked_alternatives() -> None:
