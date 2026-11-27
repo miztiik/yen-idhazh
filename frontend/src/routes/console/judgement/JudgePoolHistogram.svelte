@@ -64,13 +64,13 @@
 	});
 </script>
 
-<Panel title="Full score pool" heading="h3" wide>
+<Panel title="All eligible pairs score pool" heading="h3" wide>
 	<div use:revealJudgeTrial={() => near = true} use:observeWidth={(next) => measured = next}
 		data-judge-digest={selected} data-panel-question="Where did scores fall before sampling?"
-		data-model-rule="no" data-model-rule-name={name} data-model-rule-none="The full pool uses the saved scorer and pair rule.">
-		<p data-lede>{longDate(selected)} UTC. Shares of all eligible pairs before the judge draw.</p>
+		data-model-rule="no" data-model-rule-name={name} data-model-rule-none="The eligible pairs score pool uses the saved scorer and pair rule.">
+		<p data-lede>{longDate(selected)} UTC. Shares of all eligible cross-outlet pairs for this digest before sampling (same-day pairs plus target-to-prior-day pairs inside the configured cross-day window, deduplicated by canonical URL pair).</p>
 		{#if pool && pool.total > 0}
-			<p data-comparison="Current full pool against its saved comparable baseline when available.">
+			<p data-comparison="Current eligible pairs score pool against its saved comparable baseline when available.">
 				{number(pool.total, { exact: true })} eligible pairs across {number(pool.counts.length, { exact: true })} saved score bins.
 				{#if baseline}
 					Filled: this digest. Outline: {number(baseline.total, { exact: true })} reference pairs pooled before taking shares.
@@ -78,7 +78,7 @@
 			</p>
 		{/if}
 		{#if near && answer !== 'pending'}
-			<Distribution geometry={plot} empty={emptyState('quiet', note)} {name} label="Full eligible pair-score histogram"
+			<Distribution geometry={plot} empty={emptyState('quiet', note)} {name} label="Score histogram of all eligible cross-outlet pairs"
 				{width} height={knobs.chart_height} binLabel="Eligible pairs" readoutMaxShare={chart.readout_max_share} />
 		{:else}
 			<p>{note}</p>
@@ -91,7 +91,7 @@
 			<p>PSI: {judgeStatus(detail.score_drift_status, DRIFT_STATUS)}</p>
 		{/if}
 		{#if answer !== 'pending' && answer.state === 'unreachable'}
-			<button type="button" onclick={inWindow ? history.retry : day.retry}>Retry full score pool</button>
+			<button type="button" onclick={inWindow ? history.retry : day.retry}>Retry eligible pairs score pool</button>
 		{/if}
 	</div>
 </Panel>

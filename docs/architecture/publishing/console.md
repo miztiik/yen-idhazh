@@ -1,6 +1,6 @@
 # Which console panel answers what
 
-**Last Updated**: 2026-11-24
+**Last Updated**: 2026-11-27
 
 The console tells an operator what happened to the pipeline; the digest tells a
 reader what happened in the world. This page owns the routes and panel placement.
@@ -198,7 +198,7 @@ The nightly Council record does not change what is merged:
   that did not return, with the drawn total printed above it. Gaps between
   ranges say **Not drawn**, not zero. When the labels or stacks cannot fit,
   compact rows keep the same counts and YES share among agreed YES/NO answers.
-- `pair-score-drift` compares the full score mix with its saved baseline.
+- `pair-score-drift` compares the eligible pairs score pool with its saved baseline.
   The route config supplies the two PSI guides, inclusive at both ends of the
   Moderate band. A gap breaks the line. The rules of thumb do not send alerts
   or change a job.
@@ -269,11 +269,14 @@ Remove trial-only views and reads after the usage review unless chosen to stay.
   It uses equally scored agreed YES/NO pairs together, and marks the lower
   and upper draw bounds, reporting cutoff and saved 90% recall point with
   filled shapes. Neither view measures accuracy against human labels.
-- **Full score pool and PSI:** The histogram uses the stored full-pool
-  score bins, not records of what the judge was sent. It can draw without a
-  reference. An outline compares the saved reference only when all of its
-  named histograms are present and verify; the stored PSI point and its
-  availability reason are independent of whether the overlay can be drawn.
+- **All eligible pairs score pool and PSI:** The histogram uses the stored
+  score bins for all eligible cross-outlet pairs for the selected UTC digest
+  (same-day pairs plus target-to-prior-day pairs inside the configured
+  cross-day window, deduplicated by canonical URL pair) before sampling, not
+  records of what the judge was sent. It can draw without a reference. An
+  outline compares the saved reference only when all of its named histograms
+  are present and verify; the stored PSI point and its availability reason
+  are independent of whether the overlay can be drawn.
 - **Canaries:** Three timelines, one per saved expected answer (YES, UNCLEAR,
   NO), align a 0%-100% match line above daily blocks. Each block uses that
   digest attempt's saved expected pairs as its denominator. Agreed YES is

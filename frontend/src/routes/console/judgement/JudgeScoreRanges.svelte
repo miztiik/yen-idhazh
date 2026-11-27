@@ -92,7 +92,7 @@
 		<h4>Answers by score range</h4>
 		<p data-comparison="Agreed YES against agreed NO in each score range.">
 			{trial ? 'Each bar is 100% of the pairs drawn in its range. The count shows how much evidence each bar has.'
-				: 'Counts describe only the pairs drawn for this digest, not the full score pool.'}
+				: 'Counts describe only the pairs drawn for this digest, not the eligible pairs score pool.'}
 		</p>
 		<Reserved record panelState={detailState} {width} height={knobs.chart_height} {name} {label}>
 			{#if slices !== null && slices.length > 0}

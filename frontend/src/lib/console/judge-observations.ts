@@ -129,7 +129,7 @@ export const SAMPLE_STATUS = {
 
 export const DRIFT_STATUS = {
 	measured: null,
-	no_histogram: 'Not measured: no full-pool histogram was recorded.',
+	no_histogram: 'Not measured: no eligible pairs score pool histogram was recorded.',
 	empty_pool: 'Not measured: the eligible score pool was empty.',
 	insufficient_baseline: 'Not measured: too few comparable baseline days.'
 } as const;

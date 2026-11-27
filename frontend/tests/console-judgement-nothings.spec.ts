@@ -38,6 +38,7 @@ test('a missing ledger, an unpublished day, a legacy row and no measurement are 
 	expect(judgeDayAbsence(day, { state: 'quiet' }, reach)).toBe('Not published yet.');
 	expect(judgeDayAbsence('2026-08-18', { state: 'quiet' }, reach)).toBe('Not recorded.');
 	expect(judgeStatus(null, DRIFT_STATUS)).toBe('Not recorded.');
+	expect(judgeStatus('no_histogram', DRIFT_STATUS)).toContain('eligible pairs score pool');
 	expect(judgeStatus('empty_pool', DRIFT_STATUS)).toContain('eligible score pool was empty');
 	expect(judgeStatus('no_reference_fit', PROBABILITY_STATUS)).toContain('No comparable prior fit');
 	expect(judgeStatus('no_eligible_pairs', PROBABILITY_STATUS)).toContain('No new agreed pairs');

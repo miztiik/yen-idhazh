@@ -73,7 +73,7 @@
 <Panel title="Judge outcomes over time" heading="h3" wide>
 	<div data-panel-question="Which scores and dates had repeatable verdicts?" data-model-rule="no"
 		data-model-rule-name="judge-verdict-heatmaps" data-model-rule-none="The annotations describe recorded judge and scorer settings.">
-		<p data-lede>These heatmaps count recorded verdicts, not every pair drawn or the full score pool. Hatched cells have no evidence for the plotted measure.</p>
+		<p data-lede>These heatmaps count recorded verdicts, not every pair drawn or the eligible pairs score pool. Hatched cells have no evidence for the plotted measure.</p>
 		{#if status}
 			<p>{status}</p>
 		{:else if dates.length}
