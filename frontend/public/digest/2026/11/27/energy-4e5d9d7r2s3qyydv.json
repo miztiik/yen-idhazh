@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Metric",
+    "y": "Amount in billions USD"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "energy-4e5d9d7r2s3qyydv",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Reported revenue (excluding royalties and taxes)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Expected revenue","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-2605-2619","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "$","value": "18780000000"},
+    {"derived": {"bin_lower": null,"bin_upper": null,"function": "negative_magnitude","inputs": ["quantity-2641-2652"],"source_unit": null,"unit": "$","unit_table_version": null,"value": "-27000000000","version": "2026-11-25"},"element_id": null,"mark_id": "m3","source_text": "$27 billion","text": null,"time": null,"unit": "$","value": "-27000000000"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Libya Oil Revenue vs. Expected Earnings (2025)",
+  "type": "bar",
+  "version": "2026-11-25"
+}

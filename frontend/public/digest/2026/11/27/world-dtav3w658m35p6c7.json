@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Farmer responses measured by the study",
+    "y": "Share of surveyed households"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "world-dtav3w658m35p6c7",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Savings, investment and meat production as main purpose","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Practised uncontrolled mating","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-4393-4398","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "%","value": "48.8"},
+    {"derived": null,"element_id": "quantity-4556-4559","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "90"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Smallholder sheep farmers' reported purposes and mating practices in Limpopo",
+  "type": "bar",
+  "version": "2026-11-25"
+}

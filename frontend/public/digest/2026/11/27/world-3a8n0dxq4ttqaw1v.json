@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Population group",
+    "y": "Average unemployment rate"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "world-3a8n0dxq4ttqaw1v",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Youth (aged 15-35)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "National","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-196-202","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "%","value": "56.78"},
+    {"derived": null,"element_id": "quantity-390-395","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "33.9"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Unemployment rates in South Africa, by group",
+  "type": "bar",
+  "version": "2026-11-25"
+}

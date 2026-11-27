@@ -1,0 +1,49 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Index or futures, by country",
+    "y": "Percentage change"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m4",
+      "m5",
+      "m6",
+      "m7"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "ai-23kahq3sm5tpxc39",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "S&P 500 futures (weekly)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Nikkei (November)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "MSCI Asia-Pacific ex-Japan (November)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m3","source_text": null,"text": "Brent crude (November)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-719-721","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "%","value": "1"},
+    {"derived": {"bin_lower": null,"bin_upper": null,"function": "negative_magnitude","inputs": ["quantity-832-836"],"source_unit": null,"unit": "%","unit_table_version": null,"value": "-8.4","version": "2026-11-25"},"element_id": null,"mark_id": "m5","source_text": "8.4%","text": null,"time": null,"unit": "%","value": "-8.4"},
+    {"derived": {"bin_lower": null,"bin_upper": null,"function": "negative_magnitude","inputs": ["quantity-1150-1154"],"source_unit": null,"unit": "%","unit_table_version": null,"value": "-8.2","version": "2026-11-25"},"element_id": null,"mark_id": "m6","source_text": "8.2%","text": null,"time": null,"unit": "%","value": "-8.2"},
+    {"derived": {"bin_lower": null,"bin_upper": null,"function": "negative_magnitude","inputs": ["quantity-585-588"],"source_unit": null,"unit": "%","unit_table_version": null,"value": "-18","version": "2026-11-25"},"element_id": null,"mark_id": "m7","source_text": "18%","text": null,"time": null,"unit": "%","value": "-18"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Asian equity index moves in late November 2025",
+  "type": "bar",
+  "version": "2026-11-25"
+}

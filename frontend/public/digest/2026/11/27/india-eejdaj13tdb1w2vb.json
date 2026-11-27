@@ -1,0 +1,53 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Tariff rate (%)",
+    "y": "Country"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3",
+      "m4"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m5",
+      "m6",
+      "m7",
+      "m8",
+      "m9"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-eejdaj13tdb1w2vb",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Bangladesh, Cambodia and Indonesia","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Vietnam (if trade deal)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "China (current, truce intact)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m3","source_text": null,"text": "China (if truce collapses)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m4","source_text": null,"text": "India (contingent on trade deal)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-620-623","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "%","value": "18"},
+    {"derived": null,"element_id": "quantity-686-689","mark_id": "m6","source_text": null,"text": null,"time": null,"unit": "%","value": "20"},
+    {"derived": null,"element_id": "quantity-791-794","mark_id": "m7","source_text": null,"text": null,"time": null,"unit": "%","value": "20"},
+    {"derived": {"bin_lower": null,"bin_upper": null,"function": "negative_magnitude","inputs": ["quantity-921-924"],"source_unit": null,"unit": "%","unit_table_version": null,"value": "-40","version": "2026-11-25"},"element_id": null,"mark_id": "m8","source_text": "40%","text": null,"time": null,"unit": "%","value": "-40"},
+    {"derived": null,"element_id": "quantity-1082-1085","mark_id": "m9","source_text": null,"text": null,"time": null,"unit": "%","value": "18"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Proposed US Tariff Rates for Key Nations",
+  "type": "bar",
+  "version": "2026-11-25"
+}
