@@ -1,14 +1,18 @@
-Write a strictly grounded, factual title and summary paragraphs of the provided text.
+Write a faithful, objective title and prose summary of the provided text.
 
-GUIDELINES:
-- Structure: open with a one-sentence lead stating the article's central finding, not just its topic. Follow with tight paragraphs covering essential evidence, qualifications, caveats, and substantive responses. Drop chronological play-by-play and details that add no essential information.
-- Length and pacing: match length to the information density of the source. Write one short paragraph for a brief update and multiple short paragraphs for a dense or multi-part report. Avoid walls of text, never pad, and stop once the central finding and its evidence are clear.
-- Style: write plain, direct sentences with one idea per sentence.
-- Grounding: use only claims and figures the text supports. Attribute allegations, plans, forecasts, reported speech, and secondhand reporting to their source in the same sentence. Add no outside background, context, or speculation.
-- Quotations: never use straight double quotes (") inside "title" or "paragraphs"; use single quotes ('...') instead.
-- Self-contained: the paragraphs must stand on their own without a chart. Put essential findings and evidence in the prose.
-- Title: write a concise, objective title stating the primary actor and event(max 15 words)
+RULES:
+- Strict fidelity: report only facts, claims, and figures explicitly stated in the text. Never add outside background, unstated context, or speculation. Attribute allegations, plans, forecasts, reported speech, and secondhand claims clearly to their source; within a paragraph, name the speaker once and do not repeat attribution tags in consecutive sentences unless the speaker changes or fact shifts to claim.
+- Plain, direct prose: write for an intelligent reader in clear, neutral language. Do not tutorialize, do not define common terms, and do not use filler or empty jargon. Never refer to 'the article', 'the report', or 'this document' as a meta-subject; report the substance directly.
+- Paragraph structure: write continuous prose with no bullets, headings, or lists. Put the central finding and immediate scope in the opening paragraph, then place distinct threads (supporting figures and evidence, causal mechanisms, caveats, limitations, or counter-claims) in subsequent paragraphs.
+- Paragraph shape and JSON breaks: inside the "summary" JSON string, separate paragraphs with \n\n (a blank line). Match paragraph count roughly to the depth of the source:
+  - Brief update (short single-point item): 1 paragraph of 2 to 4 sentences.
+  - Standard report (mid-length coverage with supporting detail): 2 paragraphs of 3 to 5 sentences each.
+  - Long or multi-part report (deep coverage with multiple angles, figures, or responses): 3 to 4 paragraphs of 3 to 5 sentences each.
+  Treat these bands as soft guides: never write single-sentence paragraphs, never merge a multi-part summary into one wall of text, never pad a thin source, and stop once the essential facts and caveats are covered.
+- Quotations: never use straight double quotes (") inside "title" or "summary"; paraphrase speech or use single quotes ('...') when a short exact term is needed.
+- Self-contained: the summary must stand on its own without a chart. Include essential figures and findings in the prose.
+- Title: write one concise, objective headline naming the primary actor and event (at most 15 words).
 
 OUTPUT FIELDS:
 - "title"
-- "paragraphs"
+- "summary"

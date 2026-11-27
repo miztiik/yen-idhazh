@@ -57,7 +57,6 @@ from idhazh.contracts.base import (
     compact_json,
     derive_output_digest,
     derive_text_digest,
-    paragraphs_of,
 )
 from idhazh.contracts.corpus import ChatRole, ChatTurn, CorpusMeta, CorpusRow
 from idhazh.contracts.eval_row import EvalRow
@@ -347,7 +346,7 @@ def _target(summary: Summary) -> str | None:
     try:
         draft = summarize.SummaryDraft(
             title=summary.title,
-            paragraphs=paragraphs_of(summary.summary),
+            summary=summary.summary,
         )
     except ValidationError:
         return None

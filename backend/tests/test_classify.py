@@ -159,10 +159,10 @@ def a_reply(decline: bool = False, /, **changed: object) -> str:
     return json.dumps({
         "summary": {
             "title": "Four countries approve offshore wind",
-            "paragraphs": [
-                "Four countries approved offshore wind capacity this week.",
-                "Denmark's award was the largest, and the other three followed with smaller ones.",
-            ],
+            "summary": (
+                "Four countries approved offshore wind capacity this week. Denmark's award was "
+                "the largest, and the other three followed with smaller ones."
+            ),
         },
         "visual": None if decline else {
             "type": "bar",
@@ -352,7 +352,7 @@ class TestTheSummarizeAndPlanOracle:
     ) -> None:
         payload = a_request(dense)
 
-        assert set(payload["json_schema"]["properties"]) == {"title", "paragraphs"}
+        assert set(payload["json_schema"]["properties"]) == {"title", "summary"}
         assert "Available chart types:" not in payload["prompt"]
         assert summary_user_turn(dense.title or "", dense.text or "").endswith(FENCE_CLOSE)
 
@@ -732,7 +732,7 @@ def test_runner_only_recovers_a_chart_when_its_summary_and_visual_pass(
     raw = a_reply()
     if case == "summary-refused":
         sourced = json.loads(raw)
-        sourced["summary"]["paragraphs"] = ["It carries a link: https://example.test/path"]
+        sourced["summary"]["summary"] = "It carries a link: https://example.test/path"
         raw = json.dumps(sourced)
     if case == "visual-cut":
         content = raw[:raw.index('"rows":') + len('"rows":')]
@@ -829,12 +829,12 @@ class TestARepliedCutByTheBudget:
         assert summary.status is SummaryStatus.OK
         assert summary.summary and "34 percent" in summary.summary
 
-    def test_a_cut_paragraphs_reply_recovers_and_a_summary_only_reply_does_not_false_match(
+    def test_a_cut_summary_reply_recovers_and_a_summary_only_reply_does_not_false_match(
         self, article_ok: Article
     ) -> None:
         cut_content = (
             '{"summary": {"title": "Wind awards", '
-            '"paragraphs": ["Lead finding.", "Supporting evidence."]}, '
+            '"summary": "Lead finding.\\n\\nSupporting evidence."}, '
             '"visual": {"type": "bar", "rows": ['
         )
         recovered = recovered_completion(Completion(content=cut_content, finish_reason="length"))
@@ -842,14 +842,14 @@ class TestARepliedCutByTheBudget:
         assert recovered.finish_reason == "stop"
 
         summary = summarize.to_summary(
-            article_ok, recovered, model_id="m", generated_at="2026-11-26T00:00:00Z"
+            article_ok, recovered, model_id="m", generated_at="2026-11-27T00:00:00Z"
         )
         assert summary.status is SummaryStatus.OK
         assert summary.summary == "Lead finding.\n\nSupporting evidence."
 
         summary_only = json.dumps({
             "title": "Report",
-            "paragraphs": ['The text mentions "summary": {"a": 1} in prose.'],
+            "summary": 'The text mentions "summary": {"a": 1} in prose.',
         })
         assert recovered_completion(Completion(content=summary_only, finish_reason="stop")) is None
 
