@@ -55,7 +55,8 @@
     {"bytes": 84909,"covers": "2026-11-21","rows": 2225},
     {"bytes": 155477,"covers": "2026-11-22","rows": 4240},
     {"bytes": 100821,"covers": "2026-11-23","rows": 2670},
-    {"bytes": 110324,"covers": "2026-11-24","rows": 2948}
+    {"bytes": 110324,"covers": "2026-11-24","rows": 2948},
+    {"bytes": 111536,"covers": "2026-11-25","rows": 2985}
   ],
   "ledger": "seen",
   "period": "daily",

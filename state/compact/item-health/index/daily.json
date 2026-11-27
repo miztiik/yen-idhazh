@@ -55,7 +55,8 @@
     {"bytes": 187174,"covers": "2026-11-21","rows": 487},
     {"bytes": 191240,"covers": "2026-11-22","rows": 512},
     {"bytes": 180472,"covers": "2026-11-23","rows": 463},
-    {"bytes": 184999,"covers": "2026-11-24","rows": 480}
+    {"bytes": 184999,"covers": "2026-11-24","rows": 480},
+    {"bytes": 198775,"covers": "2026-11-25","rows": 542}
   ],
   "ledger": "item-health",
   "period": "daily",
