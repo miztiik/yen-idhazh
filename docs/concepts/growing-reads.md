@@ -549,9 +549,10 @@ Every entry above is a READ whose cost grows with what the pipeline has piled
 up. The guardrail's sentence does not say "read": a step is suspect when its
 cost rises because the repository accumulated more data, without any change to
 the question being answered. A ledger that files one file per writer per day is
-exactly that step. 99 writers a day over a 14-month retention window is about
-33,800 files at five runs a day, and `git add`, a clone and a checkout all rise
-roughly linearly with the file count, so that cost lands on every job.
+exactly that step. The former schedule's projection is no longer current;
+estimate file growth from the schedule in the digest workflow and the configured
+retention. `git add`, a clone and a checkout all rise roughly linearly with the
+file count, so that cost lands on every job.
 
 **The CSV day trees answered it with a fold, and the ledger door answers it
 now.** The gardener's closed-day fold settled each closed CSV day into one

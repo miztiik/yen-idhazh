@@ -2,7 +2,10 @@
 
 **Last Updated**: 2026-11-16
 
-Where the pipeline writes what a reader reads, what a reader's URL looks like, and what a day is once five runs have added to it. Assemble is the stage that produces all of it ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape it writes into and the promises that shape makes.
+Where the pipeline writes what a reader reads, what a reader's URL looks like,
+and what a day is as scheduled runs add to it. Assemble is the stage that
+produces all of it ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md));
+this page owns the shape it writes into and the promises that shape makes.
 
 What happens to any of it afterwards is the other half, and it is [retention.md](retention.md): unpublishing a day, what bounds the committed state tree, and the eval rows that are kept for ever.
 
@@ -12,7 +15,7 @@ Seven pages, one question each. Arrive at the one holding your question and stop
 
 | Page | The question it answers |
 | --- | --- |
-| this one | Where a file goes, what a reader's address is, and what a day is once five runs have added to it |
+| this one | Where a file goes, what a reader's address is, and how scheduled runs add to a day |
 | [publication-inventory.md](publication-inventory.md) | How a static build obtains named days and files without walking the archive |
 | [what-a-published-item-says-about-itself.md](what-a-published-item-says-about-itself.md) | Why is this story here, whose clock is that time, and what does an absent field mean |
 | [how-a-day-is-ordered-and-what-each-desk-published.md](how-a-day-is-ordered-and-what-each-desk-published.md) | What order the page comes in, what chooses the leading block, and why a desk ran what it ran |
@@ -142,9 +145,9 @@ defines why confidence diagnostics remain recorded but produce no reader warning
 **`items_failed` and `partial` are two readings of one set**, so the fold
 derives both from it: the union of every block's failed item ids, less the items
 that did publish. Reading `partial` off the blocks instead - true if any block
-said so - is monotonic, so an article that failed at 02:20 and landed at 06:20
-would report `partial` true beside `items_failed` zero, which the contract
-refuses.
+said so - is monotonic, so an article that failed in an earlier run and landed
+in a later run would report `partial` true beside `items_failed` zero, which
+the contract refuses.
 
 What the push does with a block, and why a `digest.json` two runs both computed
 used to lose the day, is
@@ -158,7 +161,7 @@ A day is one JSON payload carrying every item. A vertical route is a filter over
 
 The consequence worth protecting: **rendering any page costs at most two requests, no matter how old the archive is.** Any scheme whose request count or index size grows with total history is rejected on sight, at any granularity. A per-item file multiplies requests and defeats compression - a small body never warms the gzip dictionary, where a whole day reaches the measured prose ratio. A global index of everything ever published grows without bound on the hot path.
 
-**One page already breaks that rule, and there is now a number on it.** `/archive/` inlines every committed day so on-device search can see the whole corpus, which is the global-index alternative below in everything but name. Measured 2026-08-26 over the six committed days, 2,121 items, at the gzip level the Pages edge actually serves: a browse entry - item id, date, vertical, title - costs **45.5 bytes**, and one committed int8 vector costs **249.8 bytes** ([Current archive sizing guidance](../../reference/site-weight.md)). A 30-day month is therefore 482 KB of browse entries and 2.6 MB of vectors at the rate those six days ran, and 1.07 MB and 6.0 MB at the ceiling that five runs of 160 items a day allows. The granularity and the budget that answer it - a month, and 1.5 MB - are in [what-a-month-shard-holds-and-how-it-reaches-a-browser.md](what-a-month-shard-holds-and-how-it-reaches-a-browser.md).
+**One page already breaks that rule, and there is now a number on it.** `/archive/` inlines every committed day so on-device search can see the whole corpus, which is the global-index alternative below in everything but name. Measured 2026-08-26 over the six committed days, 2,121 items, at the gzip level the Pages edge actually serves: a browse entry - item id, date, vertical, title - costs **45.5 bytes**, and one committed int8 vector costs **249.8 bytes** ([Current archive sizing guidance](../../reference/site-weight.md)). A 30-day month is therefore 482 KB of browse entries and 2.6 MB of vectors at the rate those six days ran. Recompute the former schedule-based stress projection from the current workflow schedule and configured run ceilings. The granularity and budget that answer it are in [what-a-month-shard-holds-and-how-it-reaches-a-browser.md](what-a-month-shard-holds-and-how-it-reaches-a-browser.md).
 
 ## Two rules a reading page owes an address
 

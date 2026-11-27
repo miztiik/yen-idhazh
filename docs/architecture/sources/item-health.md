@@ -712,8 +712,8 @@ older generation rather than to look for it
 Everything here is a property of the ledger, not a bug in it. Read them before
 quoting a number off this file.
 
-**A row is one item-run, not one item.** The day runs five times and every run
-writes a row for every item it planned. Measured on the committed
+**A row is one item-run, not one item.** Each scheduled run writes a row for
+every item it planned. Measured on the committed
 `state/item-health/2026-08.csv` at 1200 rows (2026-08-25): 1067 distinct
 `url_key`, so 1.12 rows per address. `COUNT(*)` over-counts anything a person
 would call "articles". Group by `url_key`, and pick a run with `run_id` when the
@@ -1035,7 +1035,7 @@ by the row identity above. Authority: Fowler, over Carmack's original ruling.
 | Record the rates instead of the counts | A stored rate cannot be re-aggregated across a day, a week, or the four workers. Record what was measured; divide on read. |
 | Prune the ledger on a retention schedule | The rows worth keeping longest are the ones from the worst days, and those are the first a size-driven prune would take. Windows are a read-side parameter instead. |
 | Restore a public monthly telemetry mirror | Pipelines already reads native ledger files through its declared query door; a second producer and row contract would duplicate those facts. |
-| One row per item, updated as the item progresses | An update is a read-modify-write over the whole history, and two runs racing on that lose rows. Append is what makes the file safe for five runs a day. |
+| One row per item, updated as the item progresses | An update is a read-modify-write over the whole history, and two runs racing on that lose rows. Append is what makes the file safe for eight runs a day. |
 | Keep the worker's rows in the `items-*` artifact and raise its retention | The artifact is never committed and expires, so a longer retention delays the loss rather than preventing it. The committed row is what a later run and the console read. |
 | Let a worker record every item it was planned, not only the settled ones | An item the shard was interrupted on would be filed as a failure, and an append-only ledger cannot take that back. |
 | Add a visual-planning or render outcome column | Neither is a terminal item stage: a render failure degrades an item, never fails it. The run manifest and the day payload already carry what the planner did. |

@@ -83,10 +83,9 @@ from idhazh.telemetry.publish import (
 #: host, and a knob would invite raising it instead of shrinking the site.
 PAGES_CAP_BYTES: Final = 1024 * 1024 * 1024
 
-#: Squares the band draws before it starts counting instead. The schedule fires
-#: five runs a day, so twelve covers every day on record with room to spare.
-#: Past that a row of squares stops being a row and becomes a chart, and the
-#: band is not where a chart goes.
+#: Recent run squares the band draws before it starts counting instead. Past
+#: that a row of squares stops being a row and becomes a chart, and the band is
+#: not where a chart goes.
 BAND_RUN_SQUARES: Final = 12
 
 #: How loud a route's worst state is. Ranked rather than coloured - the strip

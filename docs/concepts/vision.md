@@ -20,11 +20,11 @@ The two audiences are why the two surfaces are held to different standards, and 
 
 ## The shape
 
-A run starts at 02:20, 06:20, 10:20, 14:20, and 18:20 UTC inside GitHub Actions,
-and commits what it produced. All five runs of a day append to the same dated
-digest, so the day grows through the day. A reader later opens a static page.
-Nothing computes at read time, so there is no server to run, nothing to scale,
-and nothing that can be down. See
+A run follows the UTC schedule declared in GitHub Actions and commits what it
+produced. Each scheduled run appends to the same dated digest, so the day grows
+through the day. A reader later opens a static page. Nothing computes at read
+time, so there is no server to run, nothing to scale, and nothing that can be
+down. See
 [../reference/github-actions.md](../reference/github-actions.md) for the exact
 trigger contract.
 
@@ -85,7 +85,7 @@ Three, in the order they bite:
 
 Not compute. The order in which limits bite is: how many good articles a day the sources actually supply, then how many summaries a person will read, then artifact storage, then repository growth, and only far behind all of those, concurrency.
 
-Note what is *not* what bounds a day: a reader's clock. Skimmability is held by ordering and hierarchy - the best items first, a long day a scroll rather than a truncation ([digest.md](digest.md)) - not by the ceiling. Supply, the score and `max_per_source` decide the shape of a day, and `run.safety_ceiling_per_run` bounds its size - a number that began as a crash guard, was overtaken by supply, and is now knowingly an editorial cap, brought down from 160 to 80 on 2026-09-05 so a day carries fewer but better-chosen stories ([../architecture/sources/freshness.md](../architecture/sources/freshness.md)). Making the day bigger is still a source-diversity question first: the ceiling binds where 27 percent of a run was being spent on sources that could not be read.
+Note what is *not* what bounds a day: a reader's clock. Skimmability is held by ordering and hierarchy - the best items first, a long day a scroll rather than a truncation ([digest.md](digest.md)) - not by the ceiling. Supply, the score and `max_per_source` decide the shape of a day, and `run.safety_ceiling_per_run` bounds its size. Its configured value is in [`config/idhazh.json`](../../config/idhazh.json); its purpose and rationale are in [freshness.md](../architecture/sources/freshness.md). Making the day bigger is still a source-diversity question first: the ceiling binds where 27 percent of a run was being spent on sources that could not be read.
 
 ## Design rationale
 

@@ -598,7 +598,8 @@ def _counterfactual_rows(
     can be carried by feeds on two desks, and then it is scored twice - once on
     each - while the day plans it once. Matching on the address alone marks both
     rows taken, and the ledger says the run took more stories than it did:
-    measured on 2026-09-14, 87 rows claimed a day of 80 items.
+    measured on 2026-09-14, 87 rows claimed a day had reached its configured
+    item ceiling.
     """
     taken = {(item.vertical, item.url_key) for item in items}
     rows: list[CounterfactualScoreRow] = []
@@ -741,8 +742,8 @@ def _within_ceiling(items: list[PlannedItem], *, ceiling: int) -> list[PlannedIt
     protects is the worker - this number sizes the worst case a work shard has to
     finish, and a worker killed at `run.shard_timeout_minutes` uploads nothing.
 
-    It cannot bound the day, because the day runs five times.
-    `_within_day_ceiling` is the one that does.
+    It cannot bound the day. `_within_day_ceiling` applies the separate
+    configured day ceiling.
     """
     if len(items) <= ceiling:
         return items
@@ -757,9 +758,8 @@ def _within_day_ceiling(
 ) -> list[PlannedItem]:
     """What the whole day may publish, across every run of it.
 
-    Its neighbour above bounds one run, and a person reading `80` and picturing
-    an 80-item day is wrong by a factor of five - five runs at 80 publish about
-    400. Two different things needed bounding and one knob was doing both badly.
+    Its neighbour above bounds one run. The two configured limits answer
+    different questions and are applied independently.
 
     **A guardrail, not a rule**, on the same terms: it refuses and does nothing
     else. `published_today` is what earlier runs of this date actually put in

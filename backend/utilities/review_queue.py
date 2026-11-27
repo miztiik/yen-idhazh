@@ -98,12 +98,12 @@ DEFAULT_OUT: Final = Path("backend/var/review")
 #: picture, so from it alone a refused chart and an undrafted one look the same.
 DEFAULT_RUN_ROOT: Final = Path("backend/var/run")
 
-#: What one day's tree may weigh. Worst case measured from the shape rather than
-#: from a run: `run.safety_ceiling_per_run` is 80 items a run and five runs a
-#: day, and a published day's whole rendered set has measured 324,580 bytes
+#: What one day's tree may weigh. Worst case is measured from the shape rather
+#: than from a run: item ceilings are declared in `config/idhazh.json`, and a
+#: published day's whole rendered set measured 324,580 bytes
 #: (docs/concepts/adaptive-pruning.md, 2026-09-13). Five megabytes is several
 #: times that, so the bound fires when the shape of the tree changes and never
-#: on a busy day. Carmack, 2026-09-13.
+#: on a busy day.
 DEFAULT_BUDGET_MB: Final = 5
 
 #: What one card costs in the sheet, for weighing the tree before it is written.

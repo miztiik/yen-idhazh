@@ -163,9 +163,9 @@ marks in one colour render their dense middle as a solid area, so the only marks
 anybody acts on - a summary of three words, or one far longer than the rest - are
 the ones the block hides. Three marks a run keep both ends and lose the block.
 
-**Per run and never per day.** A day holds up to five runs, and a run is one
-model reading one set of articles under one set of settings, so it is the
-smallest thing on this page that a change can be attributed to.
+**Per run and never per day.** A run is one model reading one set of articles
+under one set of settings, so it is the smallest thing on this page that a
+change can be attributed to.
 
 **Nothing on the chart says what a summary should have been.** The model is asked
 for no length, so the chart draws no target line, no shaded band and no

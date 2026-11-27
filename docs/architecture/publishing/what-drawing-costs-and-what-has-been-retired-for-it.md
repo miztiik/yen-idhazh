@@ -57,9 +57,10 @@ vertical, never a suffix.
 **The planner skips an item the day's committed digest already carries.** `build_day` keeps an
 already-published item and discards the new run's copy, for crash consistency between the day write
 and the ledger append rather than to hold a reading order steady. So a later run's decision for one
-of those items is computed, written, read back and thrown away. A day runs five times: without the
-skip, run 2 spends its whole budget re-deciding run 1's items at 20 to 40 measured seconds each,
-and the items it actually introduced queue behind them. This is the resumability invariant the rest
+of those items is computed, written, read back and thrown away. Without the
+skip, later runs could spend their budget re-deciding earlier items at 20 to 40
+measured seconds each, and the items they actually introduce queue behind them.
+This is the resumability invariant the rest
 of the pipeline already holds - a re-run costs only the unfinished items - applied to the one stage
 that did not. It reads the committed `digest.json` the same way the asset counter reads the
 committed directory, so it needs no handshake with the assembler.

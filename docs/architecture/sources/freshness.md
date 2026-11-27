@@ -16,41 +16,38 @@ first sight. Unknown age stays eligible with null timing and zero recency;
 the cutoff is policy, not proof of freshness. The native pipeline rules below
 do not configure that planner.
 
-## The run happens five times each day
+## The run schedule
 
-The runs start at 02:20, 06:20, 10:20, 14:20, and 18:20 UTC, expressed as
-`20 2,6,10,14,18 * * *`. The digest is a thing you open in the morning and again
-after lunch, and a once-a-day run makes the afternoon read stale by
-construction. The exact workflow trigger contract is
+The UTC schedule is declared in the
+[digest workflow](../../../.github/workflows/digest.yml). The digest is a thing
+you open in the morning and again after lunch, and a less frequent run makes the
+afternoon read stale by construction. The exact workflow trigger contract is
 [../../reference/github-actions.md](../../reference/github-actions.md).
 
-**The 02:20 slot exists so the morning read is not waiting on the pipeline.** A
-scheduled run was measured starting 40 to 70 minutes after its cron minute and
-taking 164 to 184 minutes end to end (`ubuntu-latest`, 2026-08-23/24, n=3), and
-at those figures a first slot at 06:20 did not publish until about 10:30 while
-one at 02:20 publishes before 06:30. **The start is later now.** Read on
-2026-09-28 over 60 scheduled runs from 2026-09-16 to 28: full runs took 147 to
-201 minutes, no run was created before 07:23 UTC, and the last run of each day
-ended by 00:52. The runs arrive about 07:45, 11:45, 15:00, 18:25 and 21:30, so
-either the 02:20 slot is dropped or every slot starts three to five and a half
-hours late - the run list read here does not say which slot made each run. The
-slot also closes the gap after 18:20, so a story that
-broke late in the evening is read at the top of the next day rather than eight
-hours into it.
+**The earliest scheduled slot exists so the morning read is not waiting on the
+pipeline.** Historical run measurements showed that GitHub start delays and
+long runtimes can push publication later than intended. More recent run-list
+evidence also showed that scheduled jobs may start late, but the list did not
+identify which configured slot produced each run. The workflow is the source
+for the current schedule. Its early slot closes the overnight gap, so a story
+that broke late in the evening can be read near the start of the next UTC day.
 
-Twenty past the hour, not the top of it. GitHub queues scheduled jobs by load, and the top of every hour is when everyone else asks.
+The workflow keeps scheduled runs off the hour to reduce scheduler contention.
 
-The slots are four hours apart and a run takes under three, so two runs normally
-do not overlap. When one does - a late slot, or a dispatch fired during a run -
-both work. Nothing queues a content refresh run behind another, because every
-row each run commits lands under that run's own name and the read settles them
+Scheduled runs can overlap when start delays and runtimes cross. Nothing queues
+a content refresh run behind another, because every row each run commits lands
+under that run's own name and the read settles them
 ([../publishing/committing.md](../publishing/committing.md#the-caller-owns-recovery-policy)).
 
-Five runs share one day. They append to the same dated digest rather than replacing it, so the day grows through the day. That is only safe because an item's identity does not depend on its rank - see below.
+Scheduled runs for the same UTC date append to one dated digest rather than
+replacing it, so the day grows through the day. That is only safe because an
+item's identity does not depend on its rank - see below.
 
 ## Age is a gate first and a weight second
 
-An article older than `max_age_hours` (24.0) is not added. It is not ranked, not summarized, and never reaches a reader.
+An article older than the configured `max_age_hours` in
+[`config/idhazh.json`](../../../config/idhazh.json) is not added. It is not
+ranked, not summarized, and never reaches a reader.
 
 Inside that window age still moves the score:
 
@@ -58,7 +55,9 @@ Inside that window age still moves the score:
 recency_bonus = recency_weight * 0.5 ** (age_hours / recency_half_life_hours)
 ```
 
-With the shipped values (`recency_weight` 0.6, `recency_half_life_hours` 18.0) a brand-new article carries +0.6, an 18-hour-old one +0.3, and one at the edge of the window +0.23. The gate decides what may be published; the bonus decides the order of what is left.
+The configured recency weight and half-life determine how much freshness moves
+an article's score. The gate decides what may be published; the bonus decides
+the order of what is left.
 
 **This reverses the rule that stood until 2026-08-30**, and the entry under "Design rationale" says what the measurement was.
 
@@ -223,7 +222,7 @@ ledger the moment an item settles, so the next run of the day sees it.
 whole rule: a robots refusal, a 404, a paywall, a page with no prose. Absent from
 the list, and therefore retried, are `http_rate_limited`, `network_error`,
 `http_server_error`, `model_unreachable` and `context_exceeded` - a rate limit
-answers differently at 18:20 than it did at 02:20, and a run that treated it as
+answers differently in a later run than it did in an earlier run, and a run that treated it as
 final would throw away an article for being briefly unlucky.
 
 The window is the day, not the address's lifetime. A metered paywall resets, a
@@ -246,24 +245,24 @@ It used to be the rank position. That broke the moment a day had more than one r
 
 ## What sizes a run
 
-There is no daily item cap and no per-vertical cap. What a day publishes is what survives the score, `max_per_source` (2), which stops one prolific outlet filling a vertical in one run, and `max_source_share_per_day` (0.05), which stops one filling the day.
+Content selection has no separate editorial daily or per-vertical cap. The
+per-source and day-share limits are configured in
+[`config/idhazh.json`](../../../config/idhazh.json).
 
-**`run.safety_ceiling_per_run` (80) is what sizes a run, and its name says
-otherwise.** A guard sitting inside the working range is a cap, whatever it is
-called: `items_planned` has been **exactly the ceiling on every run** since
-2026-08-25, first at 200, then 160, and now 80
-([../../reference/pipeline-cost.md](../../reference/pipeline-cost.md)). Supply
-overtook the guard.
+**`run.safety_ceiling_per_run` sizes a run, and its name says otherwise.** A
+guard sitting inside the working range is a cap, whatever it is called:
+`items_planned` has matched the configured ceiling on every run since
+2026-08-25 ([../../reference/pipeline-cost.md](../../reference/pipeline-cost.md)).
+Supply overtook the guard.
 
-It is now a cap on purpose. Maintainer decision, 2026-09-05: the number comes down to
-80 from 160, so a day publishes half as many stories and the gain is that those
-80 slots go to articles worth reading - the source sweep in
+It is now a cap on purpose. The maintainer's decision to lower the configured
+ceiling kept a run focused on articles worth reading - the source sweep in
 [discovery.md](discovery.md) and the same-day failure memory above - rather than
-to a second copy of a story already chosen. Which half is dropped is an editorial
+a second copy of a story already chosen. Which items are dropped is an editorial
 call and not an arbitrary cut: a duplicate goes before a desk's only story.
-Lowering the ceiling also shrinks the worst case `run.shard_timeout_minutes` is
-checked against, because a smaller run is a smaller worst shard, and **a worker
-killed at that bound uploads nothing**.
+Lowering the ceiling also shrinks the worst case the configured shard timeout
+is checked against, because a smaller run is a smaller worst shard, and **a
+worker killed at that bound uploads nothing**.
 
 What still bounds the number from above is the worst case the `work` and `visuals`
 jobs both have to finish ([../../concepts/config/run-limits.md](../../concepts/config/run-limits.md)).
@@ -272,22 +271,22 @@ rather than a quiet re-derivation.
 
 ## What sizes a day
 
-`run.safety_ceiling_per_run` could never answer this, and it was doing it badly. **The day runs five times.** Anybody reading `80` and picturing an 80-item day is wrong by a factor of five - a number a person set at 80 publishes about 400.
+`run.safety_ceiling_per_run` could never answer this, and it was doing it badly. The per-run and per-day ceilings are separate settings in [`config/idhazh.json`](../../../config/idhazh.json).
 
-So there are two ceilings and each one answers its own question. `run.safety_ceiling_per_run` (80) is what one run may hand the workers, and what it protects is the worker: it sizes the worst case a shard has to finish, and a worker killed at `run.shard_timeout_minutes` uploads nothing. `run.safety_ceiling_per_day` (400) is what the whole day may publish, across every run of it.
+The per-run ceiling is what one run may hand the workers, and what it protects is the worker: it sizes the worst case a shard has to finish, and a worker killed at `run.shard_timeout_minutes` uploads nothing. The per-day ceiling limits what the whole day may publish across all its runs.
 
 **Both are guardrails, not rules.** They only ever refuse. Neither chooses content, ranks it, or reorders it - they bound how much the content-picker may hand over, and a day under its ceiling is untouched. When the day ceiling binds, it drops the weakest of what **this** run planned, on the same rank order the run ceiling uses. It never reaches back into a day that has already published; that day is finished.
 
 What it counts is what earlier runs of this date actually put in front of a reader, read off the item-health shard for the date. A run that planned an item and then failed to publish it costs the day nothing.
 
-The committed pair is `80` and `400`, which is five runs at the run ceiling. That is the arithmetic of the design that already ships, so turning the day ceiling on changes no day that has ever been published and only refuses a runaway. **Lowering it is an editorial decision about how long a day should be**, and it is the maintainer's to make, not this page's.
+The configured day ceiling protects the whole day's output while the per-run ceiling protects each worker. The limits only refuse excess items; they do not choose content. **Lowering the day ceiling is an editorial decision about how long a day should be**, and it is the maintainer's to make, not this page's.
 
 ## How much of a day one publication may be
 
 `max_per_source` counts a desk in a run. A feed is configured against exactly
-one vertical, so a feed's ceiling for a whole day is that count times the runs
-the day had - two per run, five runs, ten items - and until 2026-08-31 nothing
-counted it and nothing turned it into a share.
+one vertical, so a feed's ceiling for a whole day is that count times the
+scheduled runs the day had, before the global day ceiling applies. Until
+2026-08-31 nothing counted it and nothing turned it into a share.
 
 **A fixed count is a moving share, and that is the whole reason for the second
 knob.** Measured 2026-08-31 over the eleven committed days:
@@ -367,14 +366,16 @@ It runs straight after the address collapse and before everything else, so the s
 
 ## Design rationale
 
-The fifth slot was added at 02:20 rather than 22:20. Both are one more attempt
-and both cost the same runner time. A 22:20 slot would add to a UTC day that is
-about to end, so its work is visible for under two hours before the date rolls.
-02:20 puts the same work at the front of the day a reader is about to open, and
-the articles it would have caught at 22:20 are still in the pool four hours
-later, well inside `max_age_hours`.
+The early slot was chosen instead of a late-night slot. Both add an attempt and
+cost runner time, but the early slot puts the work near the start of the UTC
+day a reader is about to open. Articles from late evening remain in the pool
+until that slot, within the configured `max_age_hours`.
 
-The daily cap was removed because it was answering a question nobody had asked. It decided in advance that twenty articles was the right number of good articles for a day, which is not a thing that can be known in advance - some days have thirty worth reading and some have six. The score already orders them; a cap only truncates the order at an arbitrary point. Supply and the score are the honest answer, and the ceiling catches the failure mode a cap was accidentally also catching.
+The editorial daily cap was removed because it decided in advance how many good
+articles a day should contain, which cannot be known in advance. The score
+orders the articles; a cap only truncates that order. Supply and score are the
+honest answer, and the operational ceiling catches the failure mode the
+editorial cap was also catching.
 
 **Reader dissented, and the dissent stays on the record.** Their case: 146 feeds produce roughly 60 fresh items a day, AI holds about a third of them, and with no per-vertical ceiling AI eats the page. They named this the one change in the set that cannot be patched later, and they brought evidence rather than a worry - the 2026-08-21 page published four items, all AI, and the words Energy, India, World and Business do not appear on it. The counter is that `max_per_source` and each vertical's collection feed floor already spread a day, and that if the prediction holds the correction is a number in `config/idhazh.json` rather than a code change. The test is falsifiable and worth running: **if most days come out one-vertical, Reader was right, and the fix belongs in the source list rather than in a cap.**
 
@@ -470,7 +471,7 @@ refused it.
 | The bound it adds already exists one stage later, and it is a clock rather than a count | `cli.stage_visual_planner` stopped its loop at `run.visual_planner_budget_minutes` (40 minutes), inside the `visuals` job's 50-minute timeout. A count has to be set for the worst host, so the number that fits a slow host leaves a fast one idle. The planner-side version of the same proposal was refused for the same reason - see [../publishing/what-drawing-costs-and-what-has-been-retired-for-it.md](../publishing/what-drawing-costs-and-what-has-been-retired-for-it.md). Both that stage and its clock retired on 2026-09-13; the shard timeout is the bound now, and it is still a clock. |
 | The loss it answered is already prevented | The `visuals` artifact upload in `.github/workflows/digest.yml` carries `if: always`. A visuals stage that runs out of clock still hands over every decision it made. What cost four of the six runs on 2026-08-24/25 their visuals was a cancelled job skipping an upload step that had no condition on it. That step has one now. |
 | The number behind it is contaminated | The 20.7 s and 40.3 s per-item planning figures were measured over 703 items that all ran with `diagram` in `visuals.enabled_kinds`, so the model was asked about every one of them: `asked=False` appears zero times in all 703. `diagram` is off now, and with it off a measured 68 of 145 items (46.9 percent) never reach the model at all. |
-| It throttles the wrong stage, and a reader pays for it | A plan-stage budget bounds what `summarize` is handed, in order to protect `visuals`. `summarize` runs as four worker jobs by default, eight at the ceiling, and has no stage clock at all - its only bound is the `work` job's timeout, which is `run.shard_timeout_minutes` and is 200 minutes. `visuals` is one job with a 40-minute stage clock. On 2026-08-24 the committed digest carries **731 items**; a 59-item budget over five runs caps that day at 295 and deletes about 436 of them. |
+| It throttles the wrong stage, and a reader pays for it | A plan-stage budget bounds what `summarize` is handed, in order to protect `visuals`. Worker parallelism and the work-job timeout are configured in `config/idhazh.json`; visuals has its own stage clock. On 2026-08-24 the committed digest carries **731 items**; a proposed budget capped that day's output and deleted hundreds of items. |
 
 **The corrected cost, labelled an estimate because that is what it is (Guardrail
 #10).** Multiply the measured per-item cost by the measured share that still
@@ -483,8 +484,8 @@ of the fast-host one, so the knob would have been set from a number the
 configuration change had already moved.
 
 **The real cause is named here and fixed nowhere.** `rank.plan_vertical` orders
-candidates and then admits all of them - `_take` refuses only what
-`max_per_source` (2) refuses. **There is no score floor anywhere in the
+candidates and then admits all of them - `_take` refuses only what the
+configured `max_per_source` limit refuses. **There is no score floor anywhere in the
 pipeline.** The other bounds are `run.safety_ceiling_per_run` and
 `run.safety_ceiling_per_day`, and both are guardrails that refuse without
 choosing: the plan job on

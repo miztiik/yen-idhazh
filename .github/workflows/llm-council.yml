@@ -31,10 +31,10 @@ name: LLM-COUNCIL
 
 on:
   schedule:
-    # 22:00 UTC. The last digest cron is 20 18 * * *, and a scheduled run there
-    # starts 40-70 minutes late and then takes 164-184 minutes (ubuntu-latest,
-    # 2026-08-23/24, n=3), so it normally finishes between 21:44 and 22:34. The
-    # first 34 minutes of a council run can therefore land inside the tail of a
+    # The final digest slot is declared in digest.yml. If it has the same
+    # 40-70-minute start delay and 164-184-minute runtime measured on
+    # 2026-08-23/24 (ubuntu-latest, n=3) for the old 18:20 slot, it may finish
+    # between 23:44 and 00:34 UTC. The council run can therefore overlap its
     # publish. Both push to `main` and the settle's commit call already handles
     # that; what the overlap costs is a queued cache restore, never a failed run.
     - cron: '0 22 * * *'

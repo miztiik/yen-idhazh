@@ -345,7 +345,8 @@ only way they differ:
 
  **How far back it reaches is set by `items-*` artifact retention, which is
  seven days.** Measured 2026-08-29: one run's four shards are 555,842 bytes, so
- a week of five runs a day is 18.6 MB against the 500 MB Guardrail #2 allows.
+ weekly artifact volume depends on the digest schedule and the retention declared
+ in the workflow; use those settings to estimate the current total.
 - **`refill`** reaches everything older than that, because the committed ledger
  and the committed digest hold between them every half of a training row except
  the article body - and the body has an address. The eval ledger names the
