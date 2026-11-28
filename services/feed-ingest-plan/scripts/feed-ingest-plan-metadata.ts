@@ -1,10 +1,11 @@
 /** Which five registered raw ledgers may this workflow deliver? */
 import { lstat, realpath } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
 import {
   DateStampSchema, HostFingerprintRowSchema, HOST_FINGERPRINT_PRODUCER,
-  HOST_HARDWARE_VERSION, HostHardwareRowSchema, PlannerLedgerNameSchema, WriterIdentitySchema,
+  HOST_HARDWARE_VERSION, HostHardwareRowSchema, JobNameSchema, PlannerLedgerNameSchema, WriterIdentitySchema,
 } from "../../../packages/common-contracts/src/index";
 import type { HostFingerprintRow, HostHardwareRow } from "../../../packages/common-contracts/src/index";
 import type { LedgerRegistration, LedgerRowContract } from "../../../packages/ledger-file-writer/src/index";
@@ -14,7 +15,7 @@ import { plannerContracts } from "./feed-ingest-plan-verification";
 
 export const ExecutionIdentitySchema = z.strictObject({
   run_id: WriterIdentitySchema.shape.run_id, attempt: WriterIdentitySchema.shape.attempt,
-  git_sha: WriterIdentitySchema.shape.git_sha,
+  git_sha: WriterIdentitySchema.shape.git_sha, job: JobNameSchema,
 });
 export type ExecutionIdentity = z.infer<typeof ExecutionIdentitySchema>;
 const LedgerSchema = z.enum([...PlannerLedgerNameSchema.options, "host-fingerprint"]);
@@ -64,9 +65,10 @@ export async function readMetadataRegistrations(path: string | URL): Promise<Met
 }
 
 export function hostWriter(identity: ExecutionIdentity, historical = false) {
+  const { job, ...execution } = ExecutionIdentitySchema.parse(identity);
   return WriterIdentitySchema.parse({
-    ...ExecutionIdentitySchema.parse(identity), job: historical ? null : "isolated-plan", pipeline_name: "feed-ingest-plan",
-    task_name: "isolated-plan", shard: 0, producer: HOST_FINGERPRINT_PRODUCER,
+    ...execution, job: historical ? null : job, pipeline_name: "feed-ingest-plan",
+    task_name: job, shard: 0, producer: HOST_FINGERPRINT_PRODUCER,
   });
 }
 
@@ -118,7 +120,7 @@ export async function verifyMetadataFile(root: string, path: string, registratio
       || actual.envelope.covers !== named.covers || actual.envelope.file_id !== named.file_id
       || actual.rows.length !== 1 || actual.rows[0]!.row.date !== named.covers
       || actual.rows[0]!.row.version !== actual.envelope.row_schema_version
-      || Object.entries(writer).some(([key, value]) => actual.envelope.identity[key as keyof typeof writer] !== value)) {
+      || !isDeepStrictEqual(actual.envelope.identity, writer)) {
       throw new Error("delivery: host output differs from its current execution identity");
     }
     return { ...named, envelope: actual.envelope, rows: actual.rows.map(stored => projectPlannerHost(stored.row)),

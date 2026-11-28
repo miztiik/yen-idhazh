@@ -1,6 +1,7 @@
 /** Which actual host fingerprint belongs to one planner API run? */
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
 import {
   FingerprintRequestSchema, SelectedSettingsSchema, loadConfig as loadFingerprintConfig,
@@ -9,7 +10,7 @@ import { pinFingerprintTarget } from "../../host-fingerprints/src/inspect/cpu-ca
 import { requestFingerprint } from "../../host-fingerprints/src/api/local-fingerprint";
 import { writeJsonLine } from "../src/logging/structured-logger";
 import { describePlanError } from "../src/api/plan-request";
-import { ExecutionIdentitySchema, hostWriter } from "./feed-ingest-plan-metadata";
+import { hostWriter } from "./feed-ingest-plan-metadata";
 import type { ExecutionIdentity, MetadataRegistrations } from "./feed-ingest-plan-metadata";
 import { ReadableFingerprintWrittenSchema, verifyHostFingerprint } from "./feed-ingest-plan-host-verification";
 
@@ -26,10 +27,17 @@ export const WorkflowHostFingerprintSchema = z.strictObject({
 export type WorkflowHostFingerprint = z.infer<typeof WorkflowHostFingerprintSchema>;
 
 function hostRequest(identity: ExecutionIdentity) {
-  const captured = ExecutionIdentitySchema.parse(identity);
+  const writer = hostWriter(identity);
   return FingerprintRequestSchema.parse({
-    date: captured.run_id.slice(0, 10), writer: hostWriter(captured),
+    date: writer.run_id.slice(0, 10), writer,
   });
+}
+
+export function verifyWorkflowHostRequest(request: WorkflowHostFingerprint["host_request"], identity: ExecutionIdentity) {
+  const writer = hostWriter(identity, request.writer.job === null);
+  if (request.date !== writer.run_id.slice(0, 10) || !isDeepStrictEqual(request.writer, writer)) {
+    throw new Error("Fingerprint request differs from the workflow execution identity");
+  }
 }
 
 function writeHostEvidence(directory: string, evidence: WorkflowHostFingerprint) {
@@ -51,10 +59,7 @@ export async function retainWorkflowHostFailure(
   const file = Bun.file(join(input.directory, "host-fingerprint.json"));
   if (await file.exists()) {
     const previous = WorkflowHostFingerprintSchema.parse(await file.json());
-    if (previous.host_request.date !== request.date || ![request.writer, hostWriter(input.identity, true)]
-      .some(writer => JSON.stringify(previous.host_request.writer) === JSON.stringify(writer))) {
-      throw new Error("Fingerprint evidence belongs to another invocation");
-    }
+    verifyWorkflowHostRequest(previous.host_request, input.identity);
     return;
   }
   await writeHostEvidence(input.directory, { host_request: request, host: failedHostEvidence(input, error) });
@@ -65,9 +70,8 @@ export async function captureWorkflowHostFingerprint(input: {
   identity: ExecutionIdentity; registrations: MetadataRegistrations;
   origin?: string; signal?: AbortSignal;
 }) {
-  const identity = ExecutionIdentitySchema.parse(input.identity);
+  const request = hostRequest(input.identity);
   const settings = SelectedSettingsSchema.parse(await Bun.file(join(input.root, "config", "idhazh.json")).json());
-  const request = hostRequest(identity);
   const evidence: WorkflowHostFingerprint = {
     host_request: request,
     host: { status: "unavailable", reason: "Host collection has not finished" },
@@ -85,7 +89,7 @@ export async function captureWorkflowHostFingerprint(input: {
       const target = await pinFingerprintTarget(process.pid, config);
       const result = await requestFingerprint(input.origin, { ...request, target }, config, settings, input.signal);
       if (result.status !== "written") throw new Error("Enabled host instrument did not persist a fingerprint");
-      await verifyHostFingerprint(input.stateRoot, result, input.registrations, identity);
+      await verifyHostFingerprint(input.stateRoot, result, input.registrations, input.identity);
       evidence.host = { ...result, status: "recorded" };
     } catch (error) {
       evidence.host = failedHostEvidence(input, error);

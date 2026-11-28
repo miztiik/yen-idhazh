@@ -15,6 +15,7 @@ import {
 import { workflowReportFilename } from "./feed-ingest-plan-report";
 import { describePlanError } from "../src/api/plan-request";
 import { prepareServerArtifacts } from "./feed-ingest-plan-server-artifacts";
+import { readWorkflowJob } from "./feed-ingest-plan-workflow-inputs";
 
 // This separate upload directory is an artifact packaging protocol, not a content or retention setting.
 export const RAW_DOCUMENT_ARTIFACT_DIRECTORY = "raw-document-artifacts";
@@ -36,10 +37,11 @@ async function preparePrivateDiagnostic(input: {
 
 export async function prepareWorkflowArtifacts(input: {
   root: string; directory: string; runNumber: string; attempt: number; outputPath?: string;
-  gitSha?: string;
-  identity?: ExecutionIdentity; registrations?: MetadataRegistrations;
   dumpRawDocumentContents?: boolean; runId?: string; reportFilename?: string;
-}) {
+} & (
+  | { gitSha: string; job: string; identity?: never; registrations?: never }
+  | { identity: ExecutionIdentity; registrations: MetadataRegistrations; gitSha?: never; job?: never }
+)) {
   // Actions run numbers and attempt numbers form filenames, never fetched text.
   const run = z.string().regex(/^\d+$/).parse(input.runNumber);
   const attempt = WriterIdentitySchema.shape.attempt.parse(input.attempt);
@@ -121,9 +123,9 @@ export async function prepareWorkflowArtifacts(input: {
     if (failures.length) throw new AggregateError(failures, "Diagnostic artifact preparation failed");
     return outputs;
   }
-  const context = input.identity !== undefined && input.registrations !== undefined
-    ? { identity: input.identity, registrations: input.registrations }
-    : await readWorkflowDeliveryContext({ ...input, gitSha });
+  const context = input.identity === undefined
+    ? await readWorkflowDeliveryContext({ ...input, gitSha })
+    : { identity: input.identity, registrations: input.registrations };
   const { paths, response, failures: metadataFailures } = await collectWorkflowFiles({ ...input, ...context });
   failures.push(...metadataFailures);
   const deliveryFile = Bun.file(join(input.directory, "delivery-result.json"));
@@ -156,7 +158,7 @@ if (import.meta.main) {
   await prepareWorkflowArtifacts({
     root: process.cwd(), directory: join(RUNNER_TEMP, "feed-ingest-plan"),
     runNumber: GITHUB_RUN_ID, attempt: Number(GITHUB_RUN_ATTEMPT), outputPath: GITHUB_OUTPUT,
-    gitSha: GITHUB_SHA,
+    gitSha: GITHUB_SHA, job: readWorkflowJob(process.env),
     dumpRawDocumentContents: DUMP_RAW_DOCUMENT_CONTENTS === undefined ? false : parseRawDocumentDumpControl(DUMP_RAW_DOCUMENT_CONTENTS),
     ...(RUN_ID === undefined || RUN_ID === "" ? {} : { runId: RUN_ID }),
   });

@@ -2,7 +2,7 @@
 import { lstat, realpath, rm } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { z } from "zod";
-import { CommitShaSchema } from "@idhazh/common-contracts";
+import { CommitShaSchema, JobNameSchema } from "@idhazh/common-contracts";
 import { describePlanError, PlanError } from "../src/api/plan-request";
 import { collectWorkflowFiles, readWorkflowDeliveryContext } from "./feed-ingest-plan-current-files";
 import { isMetadataDeliveryConfirmed, MetadataDeliveryResultSchema } from "./feed-ingest-plan-delivery-result";
@@ -11,6 +11,7 @@ import { articleEntitiesFilename, rawDocumentContentsFilename } from "../src/sel
 import { ARTICLE_ENTITY_ARTIFACT_DIRECTORY, RAW_DOCUMENT_ARTIFACT_DIRECTORY } from "./feed-ingest-plan-artifacts";
 import { capturePlannerFailure, runtimeFailureExecution } from "../src/api/plan-failure";
 import { SERVER_LOG_ARTIFACT_DIRECTORY } from "./feed-ingest-plan-server-artifacts";
+import { readWorkflowJob } from "./feed-ingest-plan-workflow-inputs";
 
 const OutcomeSchema = z.enum(["success", "failure", "cancelled", "skipped"]);
 
@@ -32,7 +33,7 @@ async function ownedRunDirectory(root: string, temporaryRoot: string) {
 
 export async function finishRunOutput(input: {
   root: string; temporaryRoot: string; runNumber: string; attempt: number;
-  gitSha: string;
+  gitSha: string; job: string;
   collectionOutcome: unknown; planningComplete: unknown; finalizationOutcome: unknown;
   uploadOutcome: unknown; artifactId?: string;
   dumpRawDocumentContents?: boolean; rawDocumentContents?: string; runId?: string;
@@ -42,6 +43,7 @@ export async function finishRunOutput(input: {
   serverLogs?: string; serverUploadOutcome?: unknown; serverArtifactId?: string;
 }) {
   const gitSha = CommitShaSchema.parse(input.gitSha);
+  const job = JobNameSchema.parse(input.job);
   const collection = OutcomeSchema.parse(input.collectionOutcome);
   const finalization = OutcomeSchema.parse(input.finalizationOutcome);
   const upload = OutcomeSchema.parse(input.uploadOutcome);
@@ -97,7 +99,7 @@ export async function finishRunOutput(input: {
     try {
       const directory = await ownedRunDirectory(input.root, input.temporaryRoot);
       operation = "verify-metadata";
-      const context = await readWorkflowDeliveryContext({ ...input, directory, gitSha });
+      const context = await readWorkflowDeliveryContext({ ...input, directory, gitSha, job });
       const completed = await collectWorkflowFiles({ ...input, directory, ...context });
       if (completed.failures.length) throw new AggregateError(completed.failures, "Cleanup found invalid completed output");
       operation = "confirm-delivery";
@@ -139,7 +141,7 @@ if (import.meta.main) {
     if (!RUNNER_TEMP || !GITHUB_RUN_ID || !GITHUB_RUN_ATTEMPT || !GITHUB_SHA) throw new Error("Workflow completion controls are missing");
     await finishRunOutput({
       root: process.cwd(), temporaryRoot: RUNNER_TEMP, runNumber: GITHUB_RUN_ID, attempt: Number(GITHUB_RUN_ATTEMPT),
-      gitSha: GITHUB_SHA,
+      gitSha: GITHUB_SHA, job: readWorkflowJob(process.env),
       ...(RUN_ID === undefined || RUN_ID === "" ? {} : { runId: RUN_ID }),
       collectionOutcome: COLLECTION_OUTCOME, planningComplete: PLANNING_COMPLETE,
       finalizationOutcome: FINALIZATION_OUTCOME, uploadOutcome: UPLOAD_OUTCOME,

@@ -131,14 +131,14 @@ test("actual parse failures write and package metadata under one validated gener
     const packaging = join(fixture.directory, "packaging");
     const outputs = await prepareWorkflowArtifacts({
       root: fixture.directory, directory: packaging, runNumber: fetched.run_id.slice(11),
-      runId: fetched.run_id, attempt: 3, gitSha: fixture.runtime.git_sha, dumpRawDocumentContents: true,
+      runId: fetched.run_id, attempt: 3, gitSha: fixture.runtime.git_sha, job: "isolated-plan", dumpRawDocumentContents: true,
     });
     expect(outputs.raw_document_contents).toBe(`raw-document-artifacts/${filename}`);
     if (outputs.raw_document_contents === undefined) throw new Error("Failed parse metadata was not packaged");
     expect(await readFile(join(packaging, outputs.raw_document_contents!), "utf8")).toBe(text);
     const finish = {
       root: fixture.directory, temporaryRoot: packaging, runNumber: fetched.run_id.slice(11),
-      runId: fetched.run_id, attempt: 3, gitSha: fixture.runtime.git_sha,
+      runId: fetched.run_id, attempt: 3, gitSha: fixture.runtime.git_sha, job: "isolated-plan",
       collectionOutcome: "failure", planningComplete: "false", finalizationOutcome: "failure",
       uploadOutcome: "success", artifactId: "123", dumpRawDocumentContents: true,
       rawDocumentContents: outputs.raw_document_contents, rawUploadOutcome: "failure",

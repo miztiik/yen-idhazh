@@ -1,7 +1,8 @@
 /** Prepare bounded history, effective settings and execution evidence for one workflow invocation. */
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { CommitShaSchema, createRootContext, PositiveCountSchema } from "@idhazh/common-contracts";
+import { CommitShaSchema, createRootContext, JobNameSchema, PositiveCountSchema } from "@idhazh/common-contracts";
+import { z } from "zod";
 import { loadPlanInputs } from "../src/load-plan-inputs";
 import { parseCliRequest } from "../src/api/plan-request";
 import { parseGlobalAgeCeiling, resolveRunPolicy, RunPolicyOverridesSchema } from "../src/config/resolve-run-policy";
@@ -11,6 +12,12 @@ import { parseRawDocumentDumpControl, ServiceSettingsSchema } from "../src/confi
 import { WorkflowPolicySchema } from "./feed-ingest-plan-policy-report";
 import { readMetadataRegistrations } from "./feed-ingest-plan-metadata";
 import { createPlannerStartup } from "./feed-ingest-plan-supervisor";
+
+const WorkflowJobEnvironmentSchema = z.object({ GITHUB_JOB: JobNameSchema });
+
+export function readWorkflowJob(environment: Record<string, string | undefined>) {
+  return WorkflowJobEnvironmentSchema.parse(environment).GITHUB_JOB;
+}
 
 export function readWorkflowRequest(environment: Record<string, string | undefined>): {
   request: PlanRequest; policy_overrides: RunPolicyOverrides;
@@ -36,6 +43,7 @@ export async function preparePlannerWorkflow(root: string, environment: Record<s
     : parseRawDocumentDumpControl(environment.DUMP_RAW_DOCUMENT_CONTENTS);
   const { RUNNER_TEMP, GITHUB_OUTPUT, GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT } = environment;
   if (!RUNNER_TEMP || !GITHUB_OUTPUT || !GITHUB_RUN_ID || !GITHUB_RUN_ATTEMPT) throw new Error("Workflow execution controls are missing");
+  const job = readWorkflowJob(environment);
   const gitSha = CommitShaSchema.parse(environment.GITHUB_SHA);
   const directory = join(RUNNER_TEMP, "feed-ingest-plan");
   const inputs = await loadPlanInputs(root);
@@ -54,7 +62,7 @@ export async function preparePlannerWorkflow(root: string, environment: Record<s
     parser_concurrency: inputs.settings.listener.parser_concurrency,
   })));
   const identity = { run_id: `${captured.toISOString().slice(0, 10)}-${GITHUB_RUN_ID}`,
-    attempt, git_sha: gitSha };
+    attempt, git_sha: gitSha, job };
   const registryPath = join(root, inputs.settings.inputs.registrations);
   const registrations = await readMetadataRegistrations(registryPath);
   const startup = createPlannerStartup(inputs, {

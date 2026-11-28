@@ -21,7 +21,7 @@ import { createMachineApp } from "@idhazh/host-probes/machine-app";
 import { loadHonoSettings } from "@idhazh/serve-pipeline-apis/settings";
 import { loadConfig as loadProbeConfig } from "../../host-probes/src/config";
 
-const identity = { run_id: "2026-10-21-700", attempt: 1, git_sha: "a".repeat(40) };
+const identity = { run_id: "2026-10-21-700", attempt: 1, git_sha: "a".repeat(40), job: "isolated-plan" };
 
 test("a finite machine startup failure preserves completed fingerprint evidence without starting planning", async () => {
   const f = await fixture();
@@ -136,6 +136,7 @@ test("workflow collection retains the actual host fingerprint beside planner fil
     expect(saved).toEqual(evidence);
     expect(saved.host.status).toBe("recorded");
     if (saved.host.status !== "recorded") throw new Error("The host fingerprint must be recorded");
+    expect(saved.host.row.job).toBe("isolated-plan");
     expect(saved.host.row.task_name).toBe("isolated-plan");
     expect(saved.host.files).toHaveLength(1);
     const completed = await collectWorkflowFiles({
@@ -194,6 +195,8 @@ test("native file validation refuses foreign receipts, provenance, altered rows 
       { ...identity, attempt: 2 })).rejects.toThrow("execution identity");
     await expect(verifyHostFingerprint(state, host.response, host.registrations,
       { ...identity, git_sha: "b".repeat(40) })).rejects.toThrow("execution identity");
+    await expect(verifyHostFingerprint(state, host.response, host.registrations,
+      { ...identity, job: "plan-typescript" })).rejects.toThrow("execution identity");
     await expect(verifyHostFingerprint(state, host.response, { ...host.registrations,
       "host-fingerprint": { ...host.registrations["host-fingerprint"], prefix: ["other-host"] } }, identity)).rejects.toThrow("exact current");
     const escaped = join(f.directory, "escaped");

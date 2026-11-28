@@ -45,21 +45,27 @@ operator console, not on the news-reading pages.
 recorder or leave host telemetry out. Existing historical readings and recovery
 backups are not rewritten.
 
-The manual feed planner workflow starts the
+The digest and manual TypeScript feed planner jobs start the
 [independent machine API server](serve-pipeline-apis.md) on the same
-runner, verifies that exact child through HTTP, and submits the date, writer
-identity and an optional process pin before planning. The caller is pipeline `feed-ingest-plan`, task
-`isolated-plan`, shard 0. It uses the committed instrument, placement and
-task-selected copy controls without overriding the copy-task list. A
-disabled instrument is an explicit skip with no host write or machine listener.
+runner as their planner, verify that child through HTTP, and submit the date,
+writer identity and an optional process pin before planning. Both use pipeline
+`feed-ingest-plan` and shard 0. The validated `GITHUB_JOB` supplies both `job`
+and `task_name`: `plan-typescript` for digest and `isolated-plan` for manual
+runs. A missing or invalid job fails the workflow adapter. The caller uses the
+committed instrument, placement and task-selected copy controls without
+overriding the copy-task list. A disabled instrument is an explicit skip with
+no host write or machine listener.
 The finite machine task stops after success or failure; the planning task
 uses its own server and retains its independently completed output.
 
 The API writes its raw Parquet under the caller's run state root.
 `host-fingerprint.json` retains the request identity, validated row, unavailable
-reasons and completed file receipts. The caller checks those receipts against
-actual Parquet before adding the host file to the planner metadata commit and
-recovery path. Host persistence or validation failure remains failed evidence,
+reasons and completed file receipts. Capture, delivery, recovery and cleanup
+verify the request and original Parquet against the workflow job, independently
+of the receipt. The delivery child receives the expected job over its private
+startup pipe, never in the HTTP request. A retained file with a null job is
+readable for delivery only when its task matches that invocation. Host
+persistence or validation failure remains failed evidence,
 not a fabricated row. Missing hardware stays unavailable. The Markdown report
 shows L3 and total machine RAM capacity in MiB; stored `l3_cache_bytes` and the
 hardware hash do not change. The manual workflow does not collect a live
