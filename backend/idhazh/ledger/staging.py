@@ -136,11 +136,8 @@ REGISTRY: Final[dict[LedgerName, LedgerStaging]] = {
         job_labels=frozenset({"work", "assemble"}),
     ),
     LedgerName.HOST_FINGERPRINT: LedgerStaging(
-        writer=(
-            "TypeScript Host Fingerprints API writes the opening hardware capture; "
-            "the explicit Python rollback uses silicon.stage_fingerprint and .stage_job_clock"
-        ),
-        symbol="idhazh.telemetry.silicon.stage_fingerprint",
+        writer="TypeScript Host Fingerprints API writes the opening hardware capture",
+        symbol=None,
         job_labels=frozenset({"plan", "work", "assemble"}),
     ),
     LedgerName.TASK_PERFORMANCE: LedgerStaging(

@@ -39,8 +39,8 @@ Table C - Implementation sequence.
 | C4 | 4 | Record Council and gardener tasks | 3 | D | DONE | council-and-gardener-performance | - | Council and gardener performance |
 | C5 | 5 | Migrate console and audit readers and retire the live CI clock | 4 | E | DONE | task-performance-readers | - | Task Performance readers |
 | C6 | 6 | Build TypeScript parity for item and shard probes | 4 | F | DONE | typescript-probe-parity | - | TypeScript probe parity |
-| C7 | 7 | Switch host collection to TypeScript and narrow fingerprints | 5, 6 | G | IN-FLIGHT | typescript-host-cutover | - | TypeScript host cutover |
-| C8 | 8 | Remove Python host collection and its rollout option | 7 | H | PENDING | - | - | - |
+| C7 | 7 | Switch host collection to TypeScript and narrow fingerprints | 5, 6 | G | DONE | typescript-host-cutover | #2181, #2182 | TypeScript host cutover |
+| C8 | 8 | Remove Python host collection and its rollout option | 7 | H | IN-FLIGHT | retire-python-host-telemetry | - | Retire Python host telemetry |
 
 ## 2 - Row #1 - Declare and pack task performance records
 

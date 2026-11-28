@@ -748,6 +748,14 @@ test.describe('the Hardware browser redraws, from stated readings', () => {
 			const keys = machineKeys(jobs);
 			expect(keys(jobs[0]).key).not.toBe(keys(jobs[1]).key);
 		});
+		test('the retained read shape can supply Speed but hardware-only input cannot', () => {
+			const versions = ['2026-10-10', '2026-11-28', '2026-11-26'];
+			const rates = versions.map((version) => fleetJobs([{
+				...modern, version, pipeline_name: 'digest', task_name: 'work',
+				server_prompt_tokens: 100, server_prompt_seconds: 2
+			}])[0]?.rate);
+			expect(rates).toEqual([50, 50, null]);
+		});
 		test('unsupported or inconsistent host algorithms refuse the run rather than vanish; raw day and shard faults survive', () => {
 			for (const bad of [{ ...modern, version: '2099-01-01' }, { ...modern, fingerprint_version: 3 },
 				{ ...modern, fingerprint: null }, { ...modern, version: null }]) {

@@ -21,7 +21,6 @@ import sys
 import time
 import urllib.request
 from collections.abc import Iterable, Mapping, Sequence
-from contextlib import nullcontext
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final, cast
@@ -197,33 +196,6 @@ def download(ref: ModelRef, remote: RemoteFile, models_dir: Path) -> tuple[Path,
     return destination, time.monotonic() - started
 
 
-def _key_values(path: Path) -> dict[str, int | str]:
-    if not path.is_file():
-        return {}
-    values: dict[str, int | str] = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
-        key, _, raw = line.partition(" ")
-        values[key] = int(raw) if raw.isdigit() else raw
-    return values
-
-
-def resource_snapshot(*, memory_profiling_enabled: bool = True) -> dict[str, object]:
-    root = Path("/sys/fs/cgroup")
-    result: dict[str, object] = {
-        "cpu_stat": _key_values(root / "cpu.stat"),
-        "cpu_pressure": _key_values(root / "cpu.pressure"),
-    }
-    if not memory_profiling_enabled:
-        return result
-    return {
-        **result,
-        "memory_events": _key_values(root / "memory.events"),
-        "memory_peak": (root / "memory.peak").read_text(encoding="utf-8").strip()
-        if (root / "memory.peak").is_file()
-        else None,
-    }
-
-
 def bench_command(
     *,
     binary: Path,
@@ -277,11 +249,9 @@ def run_benchmarks(
     def observe() -> dict[str, object] | None:
         if host_mode == "off":
             return {}
-        if host_mode == "typescript":
-            return native_diagnostics.cgroup_snapshot(
-                memory_profiling_enabled=memory_profiling_enabled,
-            )
-        return resource_snapshot(memory_profiling_enabled=memory_profiling_enabled)
+        return native_diagnostics.cgroup_snapshot(
+            memory_profiling_enabled=memory_profiling_enabled,
+        )
 
     with output.open("wb") as stream:
         for model in models:
@@ -945,7 +915,7 @@ def run_bench(args: argparse.Namespace) -> int:
     from idhazh import config
     from idhazh.contracts.base import ServerJob
     from idhazh.stages import common
-    from idhazh.telemetry import task_telemetry
+    from idhazh.telemetry import native_capture
 
     settings = config.with_memory_profiling_override(
         config.load(getattr(args, "config", Path("config"))),
@@ -974,33 +944,28 @@ def run_bench(args: argparse.Namespace) -> int:
         with args.weights_report.open("a", encoding="utf-8", newline="\n") as report:
             report.write(f"{ref} {source} bytes={remote.bytes} sha256={remote.sha256}\n")
 
-    machine = (
-        task_telemetry.record(
+    if all(getattr(args, name, None) for name in ("date", "execution", "commit")):
+        native_capture.file_opening(
             date=args.date,
-            run_id=f"{args.date}-{args.execution}",
+            writer=native_capture.writer_for_task(
+                f"{args.date}-{args.execution}", args.commit, job=ServerJob.RUNTIME,
+                pipeline="llm-runtime", task="benchmark",
+            ),
             settings=settings,
-            state_root=common.state_root_of(settings, base=common.STATE_ROOT),
-            commit_sha=args.commit,
-            job=ServerJob.RUNTIME,
-            pipeline_name="llm-runtime" if selected == "typescript" else None,
-            task_name="benchmark" if selected == "typescript" else None,
+            state=common.state_root_of(settings, base=common.STATE_ROOT),
         )
-        if all(getattr(args, name, None) for name in ("date", "execution", "commit"))
-        else nullcontext()
+    rows = run_benchmarks(
+        binary=binary,
+        models=models,
+        threads=threads,
+        prompt_tokens=prompt_tokens,
+        generation_tokens=args.generation_tokens,
+        repeats=args.repeats,
+        output=args.output,
+        resources_report=args.resources_report,
+        memory_profiling_enabled=memory,
+        host_mode=selected,
     )
-    with machine:
-        rows = run_benchmarks(
-            binary=binary,
-            models=models,
-            threads=threads,
-            prompt_tokens=prompt_tokens,
-            generation_tokens=args.generation_tokens,
-            repeats=args.repeats,
-            output=args.output,
-            resources_report=args.resources_report,
-            memory_profiling_enabled=memory,
-            host_mode=selected,
-        )
     subprocess.run(
         [sys.executable, str(Path(__file__).with_name("summarise_bench.py")), str(args.output)],
         check=True,

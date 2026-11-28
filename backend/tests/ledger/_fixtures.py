@@ -34,7 +34,7 @@ FIXTURE_NAMES = {
     "host-fingerprint-row": (
         "a-machine-that-reported-nothing.json",
         "every-reading-taken.json",
-        "the-clock-a-job-kept.json",
+        "a-model-serving-reading.json",
     ),
     "published-row": ("one-item.json",),
     "seen-row": ("first-sight.json",),

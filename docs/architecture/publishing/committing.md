@@ -59,10 +59,9 @@ the other jobs can deliver only their own task. Before delivery it checks
 the exact registered path, stored-row digest, file bytes and complete
 pipeline/task writer identity. A host reference must agree with the exact
 verified opening capture for the same execution. The opening can land by
-itself, even if the job produced no plan or closed task. The default TypeScript
-path never rewrites it: the model's serving measurements go to Task Performance.
-Explicit Python rollback retains the old host clock; legacy publication
-receipts alone do not authorize native task files.
+itself, even if the job produced no plan or closed task. Serving measurements
+go to Task Performance without rewriting the opening. Ordinary digest
+publication receipts alone do not authorize those task files.
 
 The [gardener control append](idhazh-gardener.md#control-runner-evidence) admits
 only named control receipts in the run's UTC day for the declared producer
@@ -140,8 +139,7 @@ attribution tags.
 
 Each score invocation keeps machine evidence separate from its reading and
 vectors. Its `host-record-<encoder>` artifact includes only its completed native
-fingerprint and Task Performance writes and receipts. Python rollback retains
-only its own completed fingerprint writes. Telemetry off produces no host
+fingerprint and Task Performance writes and receipts. Telemetry off produces no host
 artifact. No checkout ledger directory is used as artifact input.
 
 ## The deadline bounds retries

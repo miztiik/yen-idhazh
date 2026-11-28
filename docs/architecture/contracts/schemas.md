@@ -202,15 +202,14 @@ stamps, its recursive type check permits missing nullable struct fields,
 including structs inside lists. Existing nested field order, types, nullability
 and list element types must still agree; missing required nested fields fail.
 This is normally a metadata check, not a row migration or a reason to rewrite
-old files. The current host fingerprint stamp also checks the original rows
+old files. Current host layouts also check the original rows
 to tell a hardware-only file from a declared mixed pack.
 
 `HostHardwareRow` requires the dated `2026-11-26` stamp and generic pipeline and
 task. An actual workflow job may differ from its task, or be null when unknown.
 The original-envelope protocol permits that distinction only for the host
-fingerprint producer and ledger. `HostFingerprintRow` is the normalized reader
-and keeps its previous write shape for explicit Python rollback. It can expose
-historical timing values without giving new hardware writes those fields.
+fingerprint producer and ledger. The `2026-11-28` `HostFingerprintRow` is the
+normalized read view; it exposes hardware and retained model measurements.
 The [compaction rules](../publishing/ledger-compaction.md#host-fingerprint-packing)
 own how the two generations share a physical file without rewriting row stamps.
 
@@ -222,12 +221,11 @@ and the two closed sets `SERVER_JOB` and `WATCHED_FLAG`. It owns types and
 vocabularies, not a record loader. What each field means stays on the Pydantic
 model.
 
-The host row is stamped `2026-10-26`. Its optional
 `machine_memory_total_mib` records total kernel-visible RAM in MiB, not task
 memory. Older rows retain their version and leave unmeasured capacity null;
-the hardware hash and existing timing/model fields are unchanged. The
+the hardware hash is unchanged. The
 [host collection boundary](../../reference/host-metrics.md#design-rationale)
-records why the HTTP API does not accept those timing/model inputs.
+keeps work and model readings out of native hardware captures.
 Native questions in
 `frontend/src/lib/console/queries/machine.ts` request the finite legacy CPU
 columns beside the corrected columns. `frontend/src/lib/data/host-fingerprint.ts`
@@ -520,13 +518,11 @@ this migration only while a committed band still carries `months`.
 
 `HostFingerprintRow` could have been a list on `RunRecord`, and four things say it should not be. **Grain**: a manifest run record is one run and a host record is one job, so the manifest would grow a variable-length list keyed by something it does not otherwise carry. **Producer**: the manifest is written by `assemble`, in another job hours later, so the numbers would have to travel inside the `items-*` artifact - which expires and is never committed, and a cancelled shard's readings are the ones most worth having. **Audience**: `run.json` is a published payload a reader's browser fetches, and this is measurement evidence, which belongs under `state/` where nothing is served. **Timing**: a concurrent branch was also opening `RunManifest`, and two branches stamping one contract's changelog on the same date raise `TypeError` at import.
 
-**Historical host files retain their original readings.** The host contract still
-validates its old clock, load time and prompt counters. The
+**Historical model readings remain readable.** The
 [Hardware publication contract](../publishing/console-machine.md#what-may-not-be-pooled)
-defines when the legacy prompt pair is read; the other timing fields no longer
-feed the console or the offline ledger report.
-
-**The readings arrive as raw text the job printed** - llama-server's own log, its `GET /metrics` body - and every derivation happens in `telemetry.silicon`, beside the stage that writes the row. A shell that computes a percentage is a second place the arithmetic lives and no place it can be tested; a Python function over text the caller opened is one place, and its oracle is the real captures under `tests/fixtures/runtime/`.
+defines when the legacy prompt pair is read. New serving observations use the
+server's own `GET /metrics` body, decoded by `idhazh.llm.serving_metrics` before
+the caller records evidence through Host Probes.
 
 What would overturn it: a published surface that needs the raw readings, which would make them a published payload; or a run that stops being sharded, which would make job grain and run grain the same thing and the manifest the cheaper home.
 

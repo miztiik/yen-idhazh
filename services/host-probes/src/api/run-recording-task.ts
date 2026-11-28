@@ -14,8 +14,6 @@ async function run() {
   const env: NodeJS.ProcessEnv = { ...process.env };
   delete env.IDHAZH_MACHINE_API_ORIGIN;
   delete env.IDHAZH_MACHINE_API_STATE_ROOT;
-  const legacy = env.IDHAZH_MACHINE_LEGACY_OPENING_WRITER;
-  delete env.IDHAZH_MACHINE_LEGACY_OPENING_WRITER;
   const cancellation = new AbortController();
   let signalChild: ((signal: NodeJS.Signals) => void) | undefined;
   let commandExit: Promise<number> | undefined;
@@ -53,7 +51,6 @@ async function run() {
       run_id: runId, attempt: Number(attempt), pipeline_name: pipeline, shard: Number(shard),
       git_sha: gitSha, accounting_days: days?.split(","),
       ...(env.GITHUB_JOB === undefined ? {} : { runner_job: env.GITHUB_JOB }),
-      ...(legacy === undefined ? {} : { legacy_opening_writer: JSON.parse(legacy) }),
     });
     if (memory !== "on" && memory !== "off") throw new Error("Invalid resolved memory selection");
     const [server, probes] = await Promise.all([

@@ -4,15 +4,12 @@ from __future__ import annotations
 
 import os
 import sys
-from collections.abc import Callable
-from contextlib import nullcontext
-from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from idhazh import completed_writes, config, event_lines, run_context
+from idhazh import config, event_lines, run_context
 from idhazh.contracts.council_events import CouncilExit, CouncilProgram, NightPublished
 from idhazh.contracts.council_invocation import Cell, ShardReport
 from idhazh.contracts.knobs.council import CouncilConfig, CouncilTask
@@ -31,8 +28,8 @@ from idhazh.council.registry import tenants
 from idhazh.council.selection import Selection, from_environment
 from idhazh.council.tenancy import Tenant
 from idhazh.ledger.staging import staged_path
-from idhazh.telemetry import machine_api, machine_evidence, task_telemetry
-from idhazh.telemetry.host_control import mode as host_mode
+from idhazh.telemetry import machine_api, machine_evidence
+from idhazh.telemetry.host_control import enabled as host_enabled
 from utilities import council_machine_delivery
 from utilities.council_matrix import VENUE_LEDGERS
 from utilities.publication_evidence import identified
@@ -50,8 +47,6 @@ def settle_and_publish(
     run_id: str,
     commit_sha: str,
     config_root: Path,
-    started_at: datetime | None = None,
-    clock: Callable[[], datetime] = task_telemetry.utc_now,
     units_failed: bool = False,
     selection: Selection,
     matrix: str | None = None,
@@ -70,8 +65,7 @@ def settle_and_publish(
         raise SystemExit(CouncilExit.REFUSED)
     dates = selection.dates
     active = selected.names(publish=True)
-    collector = host_mode(settings.app.observability)
-    instrumented = collector != "off"
+    instrumented = host_enabled(settings.app.observability)
     warn_opening = (
         opening_attempted and instrumented and settings.app.observability.host_fingerprint
     )
@@ -252,49 +246,30 @@ def settle_and_publish(
             ))
             return CouncilExit.FAILED
 
-    machine_paths: list[Path] = []
-    with completed_writes.collect() as legacy_evidence:
-        machine = (
-            task_telemetry.record(
-                date=run_identity.opened_on(run_id),
+    for date in dates:
+        try:
+            results = session.settle(
+                settings.council,
+                date=date,
                 run_id=run_id,
-                settings=settings,
-                state_root=repo / "state",
+                state_dir=repo / "state",
                 commit_sha=commit_sha,
-                job=identity.job,
-                attempt=identity.attempt,
-                started_at=started_at,
-                clock=clock,
-                capture_opening=not opening_attempted and opening is None,
+                completed=completed,
+                selection=selected,
+                prepare_inputs=partial(prepare_inputs, date=date),
+                reports=reports,
             )
-            if active and collector == "python"
-            else nullcontext(machine_paths)
-        )
-        with machine as machine_paths:
-            for date in dates:
-                try:
-                    results = session.settle(
-                        settings.council,
-                        date=date,
-                        run_id=run_id,
-                        state_dir=repo / "state",
-                        commit_sha=commit_sha,
-                        completed=completed,
-                        selection=selected,
-                        prepare_inputs=partial(prepare_inputs, date=date),
-                        reports=reports,
-                    )
-                    task_failed = bool(outcome.of_results(results)) or task_failed
-                except Exception as error:
-                    if work_files.fatal(error):
-                        if work_files.integrity_failure(error):
-                            integrity_failed = IntegrityError("council file integrity failed")
-                            task_failed = True
-                            event_log.failed(error)
-                            break
-                        raise
+            task_failed = bool(outcome.of_results(results)) or task_failed
+        except Exception as error:
+            if work_files.fatal(error):
+                if work_files.integrity_failure(error):
+                    integrity_failed = IntegrityError("council file integrity failed")
                     task_failed = True
                     event_log.failed(error)
+                    break
+                raise
+            task_failed = True
+            event_log.failed(error)
     if active:
         try:
             for judge in selected.judges if instrumented else ():
@@ -306,13 +281,6 @@ def settle_and_publish(
                     if settled_proof is not None:
                         machine_evidence.verify_host_link(settled_proof, opening)
                         include_machine(settled_proof)
-            machine_completed = dict(legacy_evidence)
-            for path in machine_paths:
-                if path not in machine_completed:
-                    relative = path.relative_to(repo).as_posix()
-                    raise IntegrityError("machine output has no completed evidence", (relative,))
-            if machine_paths:
-                completed(None, {path: machine_completed[path] for path in machine_paths})
         except (ValueError, OSError) as error:
             integrity_failed = (
                 error if isinstance(error, IntegrityError) else IntegrityError(str(error))
@@ -458,7 +426,6 @@ def _main(argv: list[str] | None = None, *, report: run_summary.Report | None = 
     parser.add_argument("--date", action="append", default=[])
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--commit", required=True)
-    parser.add_argument("--job-started-at", type=int)
     parser.add_argument("--opening-attempted", action="store_true")
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())
     parser.add_argument("--config-root", type=Path, default=Path("config"))
@@ -485,9 +452,6 @@ def _main(argv: list[str] | None = None, *, report: run_summary.Report | None = 
         matrix=args.matrix,
         report=report,
         opening_attempted=args.opening_attempted,
-        started_at=datetime.fromtimestamp(args.job_started_at, UTC)
-        if args.job_started_at is not None
-        else None,
         units_failed=args.units_result in ("failure", "cancelled")
         or args.planning_result in ("failure", "cancelled", "skipped")
         or (report is not None and report.failed),

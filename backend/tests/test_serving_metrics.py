@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import pytest
+from support.paths import FIXTURES_DIR
 
 from idhazh.llm.serving_metrics import (
     CAPTURE_BYTES,
@@ -62,3 +63,11 @@ def test_legacy_startup_markers_survive_a_long_inference_log(tmp_path: Path) -> 
         + b"x" * CAPTURE_BYTES
     )
     assert legacy_model_load_ms(read_startup_log(log)) == 2000.0
+
+
+def test_recorded_server_sources_keep_load_and_prompt_values() -> None:
+    runtime = FIXTURES_DIR / "runtime"
+    startup = runtime / "2026-08-29-3-shard-0.server-head.txt"
+    scrape = runtime / "2026-08-26-5-shard-0.prom"
+    assert legacy_model_load_ms(read_startup_log(startup)) == pytest.approx(3797.640)
+    assert server_prompt_totals(scrape.read_text(encoding="utf-8")) == (30538, 2795.15)

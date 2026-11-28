@@ -42,10 +42,8 @@ WAKE_SHARD = 3
 def a_config_with_no_bandwidth_probe(root: Path) -> Path:
     """The committed config, with the one reading that wants a spare gigabyte off.
 
-    Guardrail #6: the knob switches it, so this moves the knob rather than the
-    code. What the bandwidth reading measures is driven over built text in
-    `tests/test_silicon.py`; what this file asks is whether the verb runs at all
-    for a job with no plan behind it.
+    This test asks whether the verb runs for a job with no plan behind it,
+    not whether it can measure bandwidth or contact the placement service.
     """
     target = root / "config"
     _copy_config(target)
@@ -110,45 +108,6 @@ def test_the_fingerprint_verb_records_a_machine_on_a_day_no_run_planned(
     )
     assert not ledger.raw_root(common.STATE_ROOT, LedgerName.RUN_PLAN).exists(), (
         "the verb read no plan, so it may not have written one either"
-    )
-
-
-def test_the_explicit_python_rollback_closes_that_row_without_a_plan_either(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Both halves or neither: a probe nothing can close is a half-row for ever.
-
-    The clock step reads back the row this job's own probe filed and files the
-    whole row again under the same writer, so the two verbs have to agree about
-    the run they are filing for. They agree here because both are handed the
-    same address rather than each recovering one.
-    """
-    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "1")
-    monkeypatch.setenv("IDHAZH_HOST_TELEMETRY_MODE", "python")
-    config_dir = a_config_with_no_bandwidth_probe(tmp_path)
-    address = [
-        "--config",
-        str(config_dir),
-        "--date",
-        WAKE_DAY,
-        "--execution",
-        WAKE_EXECUTION,
-        "--commit",
-        SEED_COMMIT,
-        "--job",
-        ServerJob.HISTORY.value,
-    ]
-
-    assert cli.main(["fingerprint", *address]) == 0
-    assert cli.main(["job-clock", *address, "--job-started-at", "1"]) == 0
-
-    (row,) = ledger.load_days(
-        common.STATE_ROOT, LedgerName.HOST_FINGERPRINT, [WAKE_DAY], model=HostFingerprintRow
-    )
-    assert row.measured_at is not None, "the clock carries the probe's reading"
-    assert row.job_seconds is not None, "the clock filled the cell only it can know"
-    assert len({held.envelope.unit_id for held in _raw(common.STATE_ROOT)}) == 1, (
-        "one job, one writer, one work unit - however many verbs filed for it"
     )
 
 

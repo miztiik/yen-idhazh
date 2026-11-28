@@ -7,21 +7,21 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from idhazh.contracts.base import ServerJob
-from idhazh.contracts.file_envelope import WriterIdentity
+from idhazh.contracts.file_envelope import HOST_FINGERPRINT_PRODUCER, WriterIdentity
 from idhazh.publication_paths import IntegrityError
-from idhazh.telemetry import machine_api, machine_evidence, silicon, task_probe
+from idhazh.telemetry import machine_api, machine_evidence, task_probe
 from idhazh.telemetry.host_control import HostTelemetryMode
 
 PIPELINE = "gardener"
 
 
-def opening_file(execution: WriterIdentity, *, native: bool) -> machine_evidence.ExpectedFile:
+def opening_file(execution: WriterIdentity) -> machine_evidence.ExpectedFile:
     return machine_evidence.ExpectedFile(
         WriterIdentity.for_pipeline_task(
             run_id=execution.run_id, attempt=execution.attempt, shard=execution.shard,
-            git_sha=execution.git_sha, producer=silicon.PRODUCER, pipeline_name=PIPELINE,
-            task_name=ServerJob.RUN_TASKS, job=execution.job if native else None,
-        ), execution.run_id[:10], native=native,
+            git_sha=execution.git_sha, producer=HOST_FINGERPRINT_PRODUCER, pipeline_name=PIPELINE,
+            task_name=ServerJob.RUN_TASKS, job=execution.job,
+        ), execution.run_id[:10],
     )
 
 
@@ -30,51 +30,34 @@ def task_file(execution: WriterIdentity, name: str) -> machine_evidence.Expected
 
 
 def record_in_private(
-    repo: Path, execution: WriterIdentity, paths: Sequence[Path], *,
+    repo: Path, execution: WriterIdentity, *,
     collector: HostTelemetryMode, capture_fingerprint: bool,
 ) -> task_probe.Recording | None:
     if collector == "off":
         return None
-    native = collector == "typescript"
     if not os.environ.get(machine_api.ORIGIN_ENV):
-        if native and capture_fingerprint:
+        if capture_fingerprint:
             machine_api.warn("Gardener shard fingerprint unavailable: no machine listener")
         return None
-    expected = opening_file(execution, native=native)
-    if native:
-        if (actual := os.environ.get("GITHUB_JOB")) and actual != execution.job:
-            raise IntegrityError("opening fingerprint does not name this gardener shard job")
-        opening = None
-        if capture_fingerprint:
-            destination = machine_api.private_state(repo).parent
-            opening = machine_evidence.read_receipt(destination, expected)
-            if opening is None:
-                try:
-                    opening = machine_evidence.capture_opening(repo, destination, expected)
-                except machine_api.MachineApiError as error:
-                    machine_api.unavailable(ServerJob.RUN_TASKS, "opening fingerprint", error)
-        return task_probe.Recording.for_job(repo, opening)
-
+    expected = opening_file(execution)
+    if (actual := os.environ.get("GITHUB_JOB")) and actual != execution.job:
+        raise IntegrityError("opening fingerprint does not name this gardener shard job")
     opening = None
-    try:
-        if paths:
-            (path,) = paths
-            opening = machine_evidence.verify_file(
-                repo, path.relative_to(repo).as_posix(), expected,
-            )
-        recording = task_probe.Recording.for_job(repo, opening)
-        if recording is not None and opening is not None:
-            opening.save_receipt(recording.private, expected)
-        return recording
-    except (OSError, ValueError) as error:
-        machine_api.unavailable(ServerJob.RUN_TASKS, "opening evidence", error)
-        return None
+    if capture_fingerprint:
+        destination = machine_api.private_state(repo).parent
+        opening = machine_evidence.read_receipt(destination, expected)
+        if opening is None:
+            try:
+                opening = machine_evidence.capture_opening(repo, destination, expected)
+            except machine_api.MachineApiError as error:
+                machine_api.unavailable(ServerJob.RUN_TASKS, "opening fingerprint", error)
+    return task_probe.Recording.for_job(repo, opening)
 
 
 def append_evidence(
-    private: Path, execution: WriterIdentity, names: Sequence[str], *, native: bool,
+    private: Path, execution: WriterIdentity, names: Sequence[str],
 ) -> tuple[machine_evidence.VerifiedFile | None, tuple[machine_evidence.VerifiedFile, ...]]:
-    opening = machine_evidence.read_receipt(private, opening_file(execution, native=native))
+    opening = machine_evidence.read_receipt(private, opening_file(execution))
     proofs = []
     for name in names:
         proof = machine_evidence.read_receipt(private, task_file(execution, name))

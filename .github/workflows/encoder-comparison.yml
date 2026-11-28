@@ -32,12 +32,11 @@ on:
         type: boolean
         default: false
       host_telemetry:
-        description: 'Native host collector, explicit Python rollback, or off'
+        description: 'TypeScript host telemetry or off'
         type: choice
         default: typescript
         options:
           - typescript
-          - python
           - 'off'
       memory_profiling:
         description: 'OS memory and fault collection; inherit reads shared config'
@@ -178,21 +177,6 @@ jobs:
         with:
           name: pair-set
 
-      # Which machine this shard drew, before anything heavy runs. Two runs of
-      # one encoder came back 10x apart - 8.4 articles a second and then 0.8 -
-      # while three other encoders repeated to within one percent. A processor
-      # model and its cache size say whether that was the silicon or the model,
-      # and nothing else in the reading could tell them apart.
-      - name: What machine this shard drew
-        if: env.IDHAZH_HOST_TELEMETRY_MODE == 'python'
-        run: |
-          set -euo pipefail
-          {
-            echo "processors: $(nproc)"
-            grep -m1 'model name' /proc/cpuinfo || true
-            lscpu | grep -E 'L3 cache|Model name|CPU max MHz' || true
-          } | tee -a "host.log"
-
       # The processor-only build. The runner has no graphics card, and the
       # default wheel drags several gigabytes of card support behind it.
       - name: Install the encoder runtime
@@ -285,15 +269,6 @@ jobs:
           path: |
             ${{ steps.score.outputs.host_record }}/**/*.parquet
             ${{ steps.score.outputs.host_record }}/**/*.json
-          retention-days: 7
-          if-no-files-found: ignore
-
-      - name: Upload the encoder host log
-        if: always() && env.IDHAZH_HOST_TELEMETRY_MODE == 'python'
-        uses: actions/upload-artifact@v4
-        with:
-          name: host-log-${{ matrix.encoder }}
-          path: host.log
           retention-days: 7
           if-no-files-found: ignore
 

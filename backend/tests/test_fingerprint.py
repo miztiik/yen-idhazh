@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
-from pathlib import Path
 from string import Template
 from typing import Final
 
@@ -46,7 +45,6 @@ from idhazh.fingerprint import (
     PROSE_INPUTS,
     UNRECORDED_BUILD,
     build_inputs,
-    host_cpu,
     prose_changed_alone,
     runner_class,
     runtime_build,
@@ -596,20 +594,3 @@ def test_a_developer_machine_is_a_class_of_its_own() -> None:
 def test_a_runner_that_did_not_name_its_class_is_not_called_a_laptop() -> None:
     """Inside Actions and unnamed is a third answer, not the local one."""
     assert runner_class({"GITHUB_ACTIONS": "true"}).startswith("github/")
-
-
-def test_the_host_cpu_names_the_part_and_not_the_architecture(tmp_path: Path) -> None:
-    """`x86_64` is the same string on every runner, so it explains no violation."""
-    cpuinfo = tmp_path / "cpuinfo"
-    cpuinfo.write_text(
-        "processor\t: 0\nvendor_id\t: GenuineIntel\n"
-        "model name\t: Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz\n"
-        "cache size\t: 49152 KB\n",
-        encoding="utf-8",
-    )
-    assert host_cpu(cpuinfo) == "Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz"
-
-
-def test_a_host_that_names_no_processor_still_answers(tmp_path: Path) -> None:
-    """The field is required, and an empty one would fail the row it explains."""
-    assert host_cpu(tmp_path / "absent").strip()

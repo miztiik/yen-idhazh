@@ -281,12 +281,10 @@ def stage_pairs(args: argparse.Namespace) -> None:
 
 
 def stage_score(args: argparse.Namespace) -> None:
-    from contextlib import nullcontext
-
     from idhazh import config
     from idhazh.contracts.base import ServerJob
     from idhazh.stages import common
-    from idhazh.telemetry import machine_api, machine_evidence, task_probe, task_telemetry
+    from idhazh.telemetry import machine_api, machine_evidence, native_capture, task_probe
     from idhazh.telemetry.host_control import memory_override, mode
     from utilities.encoder_host_record import stage_local_host
 
@@ -300,24 +298,24 @@ def stage_score(args: argparse.Namespace) -> None:
     commit = args.commit or os.environ.get("GITHUB_SHA")
     date = date or time.strftime("%Y-%m-%d", time.gmtime())
     def score() -> bool:
-        return _score(args, memory_profiling_enabled=memory, native_memory=selected == "typescript")
+        return _score(args, memory_profiling_enabled=memory)
 
-    if not execution or not commit:
+    if not execution or not commit or selected == "off":
         score()
         return
     run_id = f"{date}-{execution}"
     pipeline = "encoder-comparison"
     task = "score"
-    bundle = args.host_record_dir if selected != "off" else None
+    bundle = args.host_record_dir
     if bundle is not None:
         bundle.mkdir()
-    if selected == "typescript" and machine_api.job_runtime_expected():
-        writer = task_telemetry.native_writer(
+    if machine_api.job_runtime_expected():
+        writer = native_capture.writer_for_task(
             run_id, commit, pipeline=pipeline, task=task, shard=args.shard,
         )
         repo = config.REPO_ROOT
         store = repo if bundle is None else bundle
-        expected = machine_evidence.ExpectedFile(writer, date, native=True)
+        expected = machine_evidence.ExpectedFile(writer, date)
         opening = None
         if host_settings.app.observability.host_fingerprint:
             try:
@@ -330,22 +328,20 @@ def stage_score(args: argparse.Namespace) -> None:
             if not score():
                 closed.outcome = "error"
         return
-    state = (
-        nullcontext(common.state_root_of(host_settings, base=common.STATE_ROOT))
-        if bundle is None else stage_local_host(bundle, date)
+    writer = native_capture.writer_for_task(
+        run_id, commit, job=ServerJob.COLLECT, pipeline=pipeline, task=task, shard=args.shard,
     )
-    with state as state_root, task_telemetry.record(
-        date=date,
-        run_id=run_id,
-        settings=host_settings,
-        state_root=state_root,
-        commit_sha=commit,
-        job=ServerJob.COLLECT,
-        pipeline_name=pipeline if selected == "typescript" else None,
-        task_name=task if selected == "typescript" else None,
-        shard=args.shard,
-    ):
-        score()
+    if bundle is None:
+        native_capture.file_opening(
+            date=date, writer=writer, settings=host_settings,
+            state=common.state_root_of(host_settings, base=common.STATE_ROOT),
+        )
+    else:
+        with stage_local_host(bundle, date) as state:
+            native_capture.file_opening(
+                date=date, writer=writer, settings=host_settings, state=state,
+            )
+    score()
 
 
 def resolve_encoder_thread_count(
@@ -356,7 +352,7 @@ def resolve_encoder_thread_count(
 
 
 def _score(
-    args: argparse.Namespace, *, memory_profiling_enabled: bool, native_memory: bool,
+    args: argparse.Namespace, *, memory_profiling_enabled: bool,
 ) -> bool:
     """Encode in batches, writing the reading after every one.
 
@@ -412,18 +408,9 @@ def _score(
     def peak_memory_gb() -> float | None:
         if not memory_profiling_enabled:
             return None
-        if native_memory:
-            from idhazh.telemetry.native_diagnostics import peak_memory_gib
+        from idhazh.telemetry.native_diagnostics import peak_memory_gib
 
-            return peak_memory_gib()
-        if sys.platform == "win32":
-            return None
-        else:
-            import resource
-
-            return round(
-                resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (1024 * 1024), 2
-            )
+        return peak_memory_gib()
 
     save()
     print(f"{chosen['slug']}: loading {chosen['model_id']}", flush=True)

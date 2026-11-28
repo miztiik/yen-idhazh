@@ -384,10 +384,8 @@ class ObservabilityConfig(Model):
         copies of the eval and feed-health ledgers that nothing ever fetched; the
         ledgers stay and keep their own ages.
 
-        `runtime_counters_scrape` has no successor either. It switched off a row
-        in `state/runtime-counters.csv`, and that ledger is gone: the four cells a
-        reader still wants are on the host row, which `job-clock` writes from the
-        same scrape. Honouring the flag would now switch off nothing at all.
+        `runtime_counters_scrape` has no successor. It switched off a retired
+        CSV ledger, not the serving observations in Task Performance.
 
         Refused rather than ignored, and refused rather than carried forward: a
         number left here would be read by nothing, and an operator who changed it

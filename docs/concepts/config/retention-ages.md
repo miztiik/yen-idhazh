@@ -54,7 +54,7 @@ instrument. Their retained values do not change collection.
 
 **An instrument that did not run writes an empty cell, never a zero.** A switch
 here decides whether a row is written; it never changes the shape of a row. The
-rule is stated twice already - in `silicon.server_prompt_totals` ("empty is not
+rule is stated twice already - in `idhazh.llm.serving_metrics.server_prompt_totals` ("empty is not
 zero") and in the degrade rules of
 [../../architecture/publishing/telemetry-series.md](../../architecture/publishing/telemetry-series.md)
 ("`<1`, never `0`") - and this block is bound by both rather than restating them

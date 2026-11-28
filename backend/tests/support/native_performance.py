@@ -64,9 +64,7 @@ def write_batches(batches: Sequence[Batch]) -> tuple[VerifiedFile, ...]:
         if host is not None:
             host.place(batch.private)
             days.add(host.envelope.covers)
-            if host.envelope.identity.pipeline_name is None:
-                execution["legacy_opening_writer"] = host.envelope.identity.model_dump(mode="json")
-            elif host.envelope.identity.job is not None:
+            if host.envelope.identity.job is not None:
                 execution["runner_job"] = host.envelope.identity.job
         execution["accounting_days"] = sorted(days)
         this_run.append({

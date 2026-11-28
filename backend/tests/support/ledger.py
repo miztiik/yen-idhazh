@@ -11,18 +11,21 @@ from idhazh import ledger
 from idhazh.contracts.base import Contract, ServerJob
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow
-from idhazh.contracts.file_envelope import Period, RowIdentity, WriterIdentity
+from idhazh.contracts.file_envelope import (
+    HOST_FINGERPRINT_PRODUCER,
+    Period,
+    RowIdentity,
+    WriterIdentity,
+)
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.ledger_index import CompactEntry, CompactIndex
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.evals import writer as eval_writer
 from idhazh.stages import plan as plan_stage
-from idhazh.telemetry import silicon
 
 SEED_COMMIT: Final = "0" * 40
 _SEED_CALLS: Final = itertools.count(1)
-_HOST_PRODUCER: Final = silicon.PRODUCER
 
 #: The writer a compact file names: a compaction, not the rows' own writers.
 COMPACTION: Final = WriterIdentity(
@@ -122,7 +125,7 @@ def seed_host_fingerprint(
             ledger=LedgerName.HOST_FINGERPRINT,
             covers=held[0].date,
             identity=writer_identity(
-                run_id, attempt=attempt, job=job, shard=shard, producer=_HOST_PRODUCER
+                run_id, attempt=attempt, job=job, shard=shard, producer=HOST_FINGERPRINT_PRODUCER
             ),
         ):
             filed += len(held)

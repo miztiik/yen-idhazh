@@ -11,7 +11,7 @@ test("retains every recorded host field without a backend source dependency", as
   expect(Object.keys(row)).toEqual(Object.keys(fixture.columns));
   expect(row.fingerprint).toBe(createHash("sha256").update(fixture.identity_ascii_json, "ascii").digest("hex").slice(0, 16));
 });
-test("algorithm 2 excludes capacity, microcode, placement, clocks and caller context", async () => {
+test("algorithm 2 excludes capacity, microcode, placement and caller context", async () => {
   const { row } = await Bun.file(fixtureUrl).json();
   expect(fingerprintV2(row)).toBe("27f9cc4dc522f48d");
   expect(fingerprintV2({ ...row, cpu_allowed_processors: 1, machine_memory_total_mib: 1, microcode: "changed", cpu_model: row.cpu_model })).toBe(row.fingerprint);
@@ -47,6 +47,8 @@ test("accepts supported normalized versions without changing recorded cells", as
     const row = HostFingerprintRowSchema.parse({ ...historical, version });
     expect(row.version).toBe(version);
     expect(row.machine_memory_total_mib).toBeNull();
-    expect(row.job_seconds).toBe(historical.job_seconds);
+    expect(row.model_load_ms).toBe(historical.model_load_ms);
+    expect(row.server_prompt_tokens).toBe(historical.server_prompt_tokens);
+    expect(row.server_prompt_seconds).toBe(historical.server_prompt_seconds);
   }
 });

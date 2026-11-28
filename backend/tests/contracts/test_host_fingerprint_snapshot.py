@@ -18,7 +18,7 @@ from idhazh.ledger.arrow_schema import ColumnType, columns_of
 
 pytestmark = pytest.mark.contract
 
-_REMOVED: Final = {"job_seconds", "model_load_ms", "server_prompt_tokens", "server_prompt_seconds"}
+_MODEL_FIELDS: Final = {"model_load_ms", "server_prompt_tokens", "server_prompt_seconds"}
 
 
 def _snapshot() -> dict[str, Any]:
@@ -46,19 +46,19 @@ def test_current_capture_keeps_native_hardware_and_requires_its_own_dated_shape(
     snapshot = _snapshot()
     record = snapshot["row"]
     hardware = (
-        {key: value for key, value in record.items() if key not in _REMOVED}
+        {key: value for key, value in record.items() if key not in _MODEL_FIELDS}
         | {"version": HOST_HARDWARE_VERSION, "job": "record-hardware"}
     )
     captured = HostHardwareRow.model_validate(hardware)
     assert captured.model_dump(mode="json") == hardware
     assert captured.fingerprint == record["fingerprint"]
     assert [(column.name, str(column.type)) for column in columns_of(HostHardwareRow)] == [
-        (name, type_) for name, type_ in snapshot["columns"].items() if name not in _REMOVED
+        (name, type_) for name, type_ in snapshot["columns"].items() if name not in _MODEL_FIELDS
     ]
     for field in ("version", "pipeline_name", "task_name"):
         with pytest.raises(ValidationError, match=field):
             HostHardwareRow.model_validate({k: v for k, v in hardware.items() if k != field})
-    for field in _REMOVED:
+    for field in _MODEL_FIELDS:
         with pytest.raises(ValidationError, match=field):
             HostHardwareRow.model_validate({**hardware, field: None})
     with pytest.raises(ValidationError, match="version"):

@@ -156,11 +156,10 @@ wait visible in both themes without inventing progress, data or a status hue.
 The route still owns the one delayed animation switch, reserved dimensions stay
 fixed, and reduced motion removes the gradient entirely.
 
-The packed canary replays the machine producer's two actual writes. Each job
-uses its own run, attempt, job, shard and `telemetry.silicon` producer. The clock
-writer reads its saved probe and files one complete row; the ledger keeps that
-later file, not a union of partial rows. Sixteen raw records become fifteen
-jobs, with the probe fields and completion clocks retained and siblings intact.
+The packed canary exercises older hardware and model readings beside native
+hardware and serving rows. It checks that Speed chooses an exact linked
+serving observation before the retained model counter pair and never borrows
+another runner's measurement.
 
 ### 7. None of these is gated on a measurement
 

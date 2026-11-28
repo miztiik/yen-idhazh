@@ -3,28 +3,40 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import TYPE_CHECKING
 
-from idhazh import completed_writes, config, ledger
+from idhazh import completed_writes, config, ledger, run_context
 from idhazh.atomic_write import write_atomic_bytes
+from idhazh.contracts.base import JobName, PipelineName, TaskName
+from idhazh.contracts.file_envelope import HOST_FINGERPRINT_PRODUCER, WriterIdentity
 from idhazh.contracts.host_fingerprint import HostHardwareRow
 from idhazh.publication_paths import IntegrityError, safe_file
 from idhazh.telemetry import machine_api, machine_evidence
-
-if TYPE_CHECKING:
-    from idhazh.contracts.file_envelope import WriterIdentity
+from idhazh.telemetry.host_control import enabled
 
 _CLI = "services/host-fingerprints/src/index.ts"
+
+
+def writer_for_task(
+    run_id: str, commit_sha: str, *, pipeline: PipelineName, task: TaskName,
+    shard: int = 0, attempt: int | None = None, job: JobName | None = None,
+) -> WriterIdentity:
+    return WriterIdentity.for_pipeline_task(
+        run_id=run_id, git_sha=commit_sha, shard=shard,
+        job=job if job is not None else (os.environ.get("GITHUB_JOB") or None),
+        pipeline_name=pipeline, task_name=task, producer=HOST_FINGERPRINT_PRODUCER,
+        attempt=run_context.run_attempt() if attempt is None else attempt,
+    )
 
 
 def _capture(
     date: str, writer: WriterIdentity,
     settings: config.Settings | config.GardenerSettings, *, ask_placement: bool,
 ) -> machine_evidence.VerifiedFile | None:
-    expected = machine_evidence.ExpectedFile(writer, date, native=True)
+    expected = machine_evidence.ExpectedFile(writer, date)
     client = machine_api.MachineApi.for_job()
     if client is not None:
         response = client.fingerprint(date, writer, ask_placement=ask_placement)
@@ -70,7 +82,7 @@ def file_opening(
     date: str, writer: WriterIdentity, state: Path,
     settings: config.Settings | config.GardenerSettings, ask_placement: bool = True,
 ) -> tuple[HostHardwareRow | None, list[Path]]:
-    if not settings.app.observability.host_fingerprint:
+    if not enabled(settings.app.observability) or not settings.app.observability.host_fingerprint:
         return None, []
     try:
         reading = _capture(date, writer, settings, ask_placement=ask_placement)

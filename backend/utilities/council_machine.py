@@ -133,7 +133,6 @@ def main(argv: list[str] | None = None) -> int:
             days.extend(selection.dates)
         return machine_task.run(
             command, run_id=host.opening.writer.run_id, days=tuple(dict.fromkeys(days)),
-            legacy_opening=host.opening.writer if selected == "python" else None,
         )
     return 0
 

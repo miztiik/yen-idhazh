@@ -53,16 +53,6 @@ export const TaskPerformanceExecutionSchema = z.strictObject({
   accounting_days: z.array(TaskPerformanceRowSchema.shape.date).min(1)
     .refine(days => new Set(days).size === days.length, "accounting days must be distinct"),
   runner_job: JobNameSchema.optional(),
-  legacy_opening_writer: WriterIdentitySchema.optional(),
-}).superRefine((execution, context) => {
-  const writer = execution.legacy_opening_writer;
-  if (writer !== undefined && (writer.job === null || writer.pipeline_name !== null
-    || writer.task_name !== null || writer.run_id !== execution.run_id
-    || writer.attempt !== execution.attempt || writer.shard !== execution.shard
-    || writer.git_sha !== execution.git_sha)) {
-    context.addIssue({ code: "custom", path: ["legacy_opening_writer"],
-      message: "A legacy opening writer must belong to the launched execution" });
-  }
 });
 export type TaskPerformanceExecution = z.infer<typeof TaskPerformanceExecutionSchema>;
 

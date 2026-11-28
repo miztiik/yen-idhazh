@@ -15,7 +15,11 @@ from idhazh.contracts.file_envelope import (
     Tier,
     envelope_from_metadata,
 )
-from idhazh.contracts.host_fingerprint import HOST_HARDWARE_VERSION, HostFingerprintRow
+from idhazh.contracts.host_fingerprint import (
+    HOST_FINGERPRINT_VERSION,
+    HOST_HARDWARE_VERSION,
+    HostFingerprintRow,
+)
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.ledger import host_storage, keys, paths
 from idhazh.ledger.arrow_schema import ColumnType, LogicalType
@@ -192,7 +196,7 @@ def _check_file(
     faults: list[_Fault] = []
     file_stamp = envelope.row_schema_version
     host = ledger is LedgerName.HOST_FINGERPRINT
-    current_host = host and file_stamp == HOST_HARDWARE_VERSION
+    current_host = host and file_stamp in (HOST_HARDWARE_VERSION, HOST_FINGERPRINT_VERSION)
     if file_stamp > contract_stamp and not current_host:
         faults.append(
             _Fault(
@@ -216,7 +220,7 @@ def _check_file(
             expected = parquet.schema_of(columns)
             logical_types = {column.name: column.type for column in columns}
         if current_host:
-            contract_stamp = HOST_HARDWARE_VERSION
+            contract_stamp = file_stamp
     expected_names = set(expected.names)
     actual_names = set(actual.names)
     missing = sorted(expected_names - actual_names)

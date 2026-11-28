@@ -110,7 +110,7 @@ test('the saved throughput SQL binds with or without physical legacy columns', a
 		'import sys',
 		'import pyarrow.parquet as pq',
 		'table = pq.read_table(sys.argv[1])',
-		'legacy = ["job_seconds", "model_load_ms", "server_prompt_tokens", "server_prompt_seconds"]',
+		'legacy = ["model_load_ms", "server_prompt_tokens", "server_prompt_seconds"]',
 		'pq.write_table(table.drop_columns(legacy), sys.argv[2])'
 	].join('\n'), hostPath, hardwarePath]);
 	const host = await engine.register(readFileSync(hostPath));

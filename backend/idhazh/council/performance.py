@@ -11,13 +11,13 @@ from pathlib import Path
 from idhazh import config
 from idhazh.contracts.council_invocation import Cell
 from idhazh.contracts.council_run_record import ShardOutcome
-from idhazh.contracts.file_envelope import WriterIdentity
+from idhazh.contracts.file_envelope import HOST_FINGERPRINT_PRODUCER, WriterIdentity
 from idhazh.contracts.knobs.council import CouncilTask, task_name
 from idhazh.council import run_identity, work_files
 from idhazh.council.selection import Selection
 from idhazh.council.tenancy import ShardResult
-from idhazh.telemetry import machine_api, machine_evidence, silicon, task_probe
-from idhazh.telemetry.host_control import MODE_ENV, mode
+from idhazh.telemetry import machine_api, machine_evidence, task_probe
+from idhazh.telemetry.host_control import enabled
 
 PIPELINE = "council"
 
@@ -64,28 +64,11 @@ class Runner:
     def capture(self, settings: config.Settings) -> None:
         """Capture on this runner only, before any of its work starts."""
         knobs = settings.app.observability
-        selected = mode(knobs)
-        if selected == "off" or not knobs.host_fingerprint:
+        if not enabled(knobs) or not knobs.host_fingerprint:
             return
-        writer = self.opening.writer
         if machine_evidence.read_receipt(self.bundle, self.opening) is not None:
             return
-        if selected == "typescript":
-            machine_evidence.capture_opening(config.REPO_ROOT, self.bundle, self.opening)
-            return
-        _, paths = silicon.file_machine_row(
-            date=self.opening.date, run_id=writer.run_id, settings=settings,
-            state_root=self.bundle / machine_evidence.STATE, commit_sha=writer.git_sha,
-            job=writer.job, shard=writer.shard, attempt=writer.attempt,
-        )
-        if not paths:
-            machine_api.warn(f"Council opening fingerprint not written for {self.phase}")
-            return
-        (path,) = paths
-        proof = machine_evidence.verify_file(
-            self.bundle, path.relative_to(self.bundle).as_posix(), self.opening,
-        )
-        proof.save_receipt(self.bundle, self.opening)
+        machine_evidence.capture_opening(config.REPO_ROOT, self.bundle, self.opening)
 
     def recording(self, repo: Path) -> task_probe.Recording | None:
         if not os.environ.get(machine_api.ORIGIN_ENV):
@@ -116,14 +99,12 @@ def runner(
         trial = selection.trial(cell.tenant)
         if trial:
             bundle = work_files.invocation_root(bundle, selection, cell.tenant)
-    native = os.environ.get(MODE_ENV) != "python"
     writer = WriterIdentity(
         run_id=run_id, attempt=attempt, git_sha=git_sha, shard=shard,
-        job=phase.value if native else task,
-        pipeline_name=PIPELINE if native else None, task_name=task if native else None,
-        producer=silicon.PRODUCER,
+        job=phase.value, pipeline_name=PIPELINE, task_name=task,
+        producer=HOST_FINGERPRINT_PRODUCER,
     )
-    opening = machine_evidence.ExpectedFile(writer, day, native=native)
+    opening = machine_evidence.ExpectedFile(writer, day)
     return Runner(phase, root, bundle, opening, trial)
 
 

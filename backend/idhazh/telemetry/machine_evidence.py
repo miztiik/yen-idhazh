@@ -10,18 +10,13 @@ from typing import Final, Literal, overload
 from idhazh import ledger
 from idhazh.atomic_write import write_atomic, write_atomic_bytes
 from idhazh.contracts.file_envelope import FileEnvelope, Format, RowIdentity, Tier, WriterIdentity
-from idhazh.contracts.host_fingerprint import (
-    HOST_HARDWARE_VERSION,
-    HostFingerprintRow,
-    HostHardwareRow,
-)
+from idhazh.contracts.host_fingerprint import HostHardwareRow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.contracts.publication_receipt import PublicationReceipt
 from idhazh.contracts.task_performance import TaskPerformanceKind, TaskPerformanceRow
 from idhazh.ledger.filenames import file_id, unit_id
 from idhazh.publication_paths import IntegrityError, contains, safe_file
 from idhazh.telemetry import machine_api
-from idhazh.telemetry.silicon import CLOCK_CELLS
 
 HOST: Final = LedgerName.HOST_FINGERPRINT
 TASK: Final = LedgerName.TASK_PERFORMANCE
@@ -72,7 +67,6 @@ class ExpectedFile:
     date: str
     kind: TaskPerformanceKind | None = None
     subject: str | None = None
-    native: bool = False
 
     @property
     def ledger(self) -> LedgerName:
@@ -90,7 +84,7 @@ class VerifiedFile:
     data: bytes
     sha256: str
     envelope: FileEnvelope
-    row: HostFingerprintRow | HostHardwareRow | TaskPerformanceRow
+    row: HostHardwareRow | TaskPerformanceRow
 
     def place(self, root: Path) -> Path | None:
         """Copy only the original bytes; report which new file needs caller cleanup."""
@@ -120,7 +114,7 @@ class VerifiedFile:
 def verified_reading(
     path: str, data: bytes, *, name: Literal[LedgerName.HOST_FINGERPRINT], date: str,
     identity: WriterIdentity, kind: None = None, subject: str | None = None,
-) -> tuple[FileEnvelope, HostFingerprintRow | HostHardwareRow]: ...
+) -> tuple[FileEnvelope, HostHardwareRow]: ...
 
 
 @overload
@@ -133,15 +127,11 @@ def verified_reading(
 def verified_reading(
     path: str, data: bytes, *, name: LedgerName, date: str,
     identity: WriterIdentity, kind: TaskPerformanceKind | None = None, subject: str | None = None,
-) -> tuple[FileEnvelope, HostFingerprintRow | HostHardwareRow | TaskPerformanceRow]:
+) -> tuple[FileEnvelope, HostHardwareRow | TaskPerformanceRow]:
     envelope, (cells,) = verified_raw(
         STATE, path, data, name=name, date=date, identity=identity,
     )
-    row_model = (
-        HostHardwareRow if name is HOST and envelope.row_schema_version == HOST_HARDWARE_VERSION
-        else HostFingerprintRow if name is HOST
-        else TaskPerformanceRow
-    )
+    row_model = HostHardwareRow if name is HOST else TaskPerformanceRow
     row = row_model.model_validate({
         key: value for key, value in cells.items()
         if key not in RowIdentity.model_fields or key in row_model.model_fields
@@ -162,9 +152,6 @@ def verified_reading(
     if isinstance(row, HostHardwareRow):
         if row.job != identity.job or envelope.writer != NATIVE_PARQUET:
             raise IntegrityError("hardware capture is not from the native runner", (path,))
-    elif isinstance(row, HostFingerprintRow):
-        if row.job != identity.job or any(getattr(row, field) is not None for field in CLOCK_CELLS):
-            raise IntegrityError("fingerprint is not the execution's opening capture", (path,))
     elif (
         envelope.writer != NATIVE_PARQUET or row.task_kind != kind
         or (subject is not None and row.subject_id != subject)
@@ -191,8 +178,6 @@ def verify_file(
             kind=expected.kind, subject=expected.subject,
         )
     )
-    if expected.native and envelope.writer != NATIVE_PARQUET:
-        raise IntegrityError("opening fingerprint did not use the native writer", (path,))
     return VerifiedFile(path, data, digest, envelope, row)
 
 

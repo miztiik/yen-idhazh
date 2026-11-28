@@ -7,7 +7,6 @@ import logging
 import os
 import re
 import subprocess
-from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -156,8 +155,6 @@ def collect(repo: Path, monkeypatch: pytest.MonkeyPatch, *, prepare: bool = True
                 "2026-10-11-123",
                 "--commit",
                 git(repo, "rev-parse", "HEAD").strip(),
-                "--job-started-at",
-                str(int(datetime.now(UTC).timestamp())),
             ]
         )
     finally:

@@ -88,7 +88,6 @@ import logging
 import time
 import uuid
 from collections.abc import Callable, Mapping, Sequence
-from contextlib import nullcontext
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 from pathlib import Path, PurePosixPath
@@ -120,7 +119,7 @@ from idhazh.gardener.outcome import EXIT_INTEGRITY, EXIT_OK, EXIT_TASK_FAILED, O
 from idhazh.gardener.period_inputs import paths_for_task, scheduled_range
 from idhazh.ledger import staging
 from idhazh.site_weight import BYTES_PER_MB
-from idhazh.telemetry import task_probe, task_telemetry
+from idhazh.telemetry import native_capture, task_probe
 from idhazh.telemetry.host_control import mode as host_mode
 
 #: The name the record's writer carries in its envelope. This module writes it.
@@ -655,106 +654,92 @@ def run(
     too_heavy: str | None = None
     downloaded_bytes: int | None = None
     collector = host_mode(settings.app.observability)
-    no_local_writes: list[Path] = []
-    machine_context = (
-        task_telemetry.record(
-            date=run_id[:10],
-            run_id=run_id,
-            settings=settings,
-            state_root=state_dir,
-            commit_sha=git_sha,
-            job=job if standalone else None,
-            pipeline_name=performance.PIPELINE,
-            task_name=ServerJob.RUN_TASKS,
-            shard=shard,
-            attempt=attempt,
-            started_at=started,
-            clock=clock,
-        )
-        if collector == "python" or (collector == "typescript" and standalone)
-        else nullcontext(no_local_writes)
-    )
+    machine: list[Path] = []
     try:
-        with machine_context as machine:
-            recording = None if standalone else performance.record_in_private(
-                repo_root, identity, machine, collector=collector,
-                capture_fingerprint=settings.app.observability.host_fingerprint,
+        if standalone and collector == "typescript":
+            _, machine = native_capture.file_opening(
+                date=run_id[:10], writer=performance.opening_file(identity).writer,
+                state=state_dir, settings=settings,
             )
-            # Resolve ownership before the first task runs.
-            resolved = {
-                name: folders_of(name, settings.tasks, repo_root, committed_folders)
+        recording = None if standalone else performance.record_in_private(
+            repo_root, identity, collector=collector,
+            capture_fingerprint=settings.app.observability.host_fingerprint,
+        )
+        # Resolve ownership before the first task runs.
+        resolved = {
+            name: folders_of(name, settings.tasks, repo_root, committed_folders)
+            for name in names
+        }
+        covered = {name: listed_folders(settings.tasks[name], resolved[name]) for name in names}
+        period_ranges = {
+            name: period_range
+            if period_range is not None
+            else scheduled_range(name, settings.tasks[name], today)
+            for name in names
+        }
+        if listing is None:
+            period_paths = {
+                path
                 for name in names
-            }
-            covered = {name: listed_folders(settings.tasks[name], resolved[name]) for name in names}
-            period_ranges = {
-                name: period_range
-                if period_range is not None
-                else scheduled_range(name, settings.tasks[name], today)
-                for name in names
-            }
-            if listing is None:
-                period_paths = {
-                    path
-                    for name in names
-                    for path in paths_for_task(
-                        repo_root,
-                        name,
-                        settings.tasks[name],
-                        period_ranges[name],
-                        today=today,
-                    )
-                }
-                listing = FileListing.from_disk(
+                for path in paths_for_task(
                     repo_root,
-                    {folder for folders in covered.values() for folder in folders},
-                    paths=period_paths,
-                )
-            for name in names:
-                context = TaskContext(
-                    state_dir=state_dir,
-                    repo_root=repo_root,
+                    name,
+                    settings.tasks[name],
+                    period_ranges[name],
                     today=today,
-                    policy=settings.tasks[name],
-                    run_id=run_id,
-                    attempt=attempt,
-                    job=job,
-                    shard=shard,
-                    git_sha=git_sha,
-                    owned_folders=resolved[name].walk,
-                    listing=listing.within(covered[name]),
-                    first_ledger_year=settings.config.first_ledger_year,
-                    operator_range=operator_range,
-                    period_range=period_ranges[name],
                 )
-                event_log.emit(_planned(name, context, resolved[name], operator_range))
-                with task_probe.profile(recording, performance.task_file(identity, name)) as probe:
-                    done = _run_one(name, bound[name], context)
-                    if done.failed:
-                        probe.outcome = "error"
-                    elif done.outcome.stopped_because is StopReason.DEFERRED:
-                        probe.outcome = "cancelled"
-                finished.append(_said_finished(done))
-                _refuse_a_path_outside(done, settings.tasks, bound[name].owned_ledgers)
-                _refuse_an_append_outside(done, today.isoformat())
-                ran.append(done)
-                written, taken = _landed(done)
-                listing = listing.settled(written=written, deleted=taken)
-            downloaded = listing.downloaded()
-            if downloaded is not None:
-                downloaded_bytes = sum(downloaded.values())
-                too_heavy = over_the_ceiling(
-                    downloaded, ceiling_mb=settings.config.max_downloaded_mb, shard=shard
-                )
-            ended = clock().strftime(_INSTANT)
-            record = _record(
-                ran,
-                state_dir=state_dir,
-                today=today.isoformat(),
-                identity=identity,
-                ended=ended,
-                cone_bytes=weighed,
-                downloaded_bytes=downloaded_bytes,
+            }
+            listing = FileListing.from_disk(
+                repo_root,
+                {folder for folders in covered.values() for folder in folders},
+                paths=period_paths,
             )
+        for name in names:
+            context = TaskContext(
+                state_dir=state_dir,
+                repo_root=repo_root,
+                today=today,
+                policy=settings.tasks[name],
+                run_id=run_id,
+                attempt=attempt,
+                job=job,
+                shard=shard,
+                git_sha=git_sha,
+                owned_folders=resolved[name].walk,
+                listing=listing.within(covered[name]),
+                first_ledger_year=settings.config.first_ledger_year,
+                operator_range=operator_range,
+                period_range=period_ranges[name],
+            )
+            event_log.emit(_planned(name, context, resolved[name], operator_range))
+            with task_probe.profile(recording, performance.task_file(identity, name)) as probe:
+                done = _run_one(name, bound[name], context)
+                if done.failed:
+                    probe.outcome = "error"
+                elif done.outcome.stopped_because is StopReason.DEFERRED:
+                    probe.outcome = "cancelled"
+            finished.append(_said_finished(done))
+            _refuse_a_path_outside(done, settings.tasks, bound[name].owned_ledgers)
+            _refuse_an_append_outside(done, today.isoformat())
+            ran.append(done)
+            written, taken = _landed(done)
+            listing = listing.settled(written=written, deleted=taken)
+        downloaded = listing.downloaded()
+        if downloaded is not None:
+            downloaded_bytes = sum(downloaded.values())
+            too_heavy = over_the_ceiling(
+                downloaded, ceiling_mb=settings.config.max_downloaded_mb, shard=shard
+            )
+        ended = clock().strftime(_INSTANT)
+        record = _record(
+            ran,
+            state_dir=state_dir,
+            today=today.isoformat(),
+            identity=identity,
+            ended=ended,
+            cone_bytes=weighed,
+            downloaded_bytes=downloaded_bytes,
+        )
     except ShardRefusedError as refusal:
         # An ownership refusal must leave no machine files eligible for a commit.
         for path in machine:

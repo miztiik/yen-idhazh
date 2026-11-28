@@ -650,7 +650,7 @@ def machine_facts(
 #: serving pair has its own identity and cannot make two hardware rows conflict.
 _NOT_MACHINE_EVIDENCE: Final = frozenset({
     "date", "run_id", "job", "shard", "version",
-    "job_seconds", "model_load_ms", "server_prompt_tokens", "server_prompt_seconds",
+    "model_load_ms", "server_prompt_tokens", "server_prompt_seconds",
 })
 _MACHINE_CELLS: Final[tuple[str, ...]] = tuple(
     name

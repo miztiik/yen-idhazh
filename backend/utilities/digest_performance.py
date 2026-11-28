@@ -7,9 +7,9 @@ from pathlib import Path
 
 from idhazh import config
 from idhazh.contracts.base import ServerJob
-from idhazh.contracts.file_envelope import WriterIdentity
-from idhazh.telemetry import machine_api, machine_evidence, silicon, task_probe
-from idhazh.telemetry.host_control import mode
+from idhazh.contracts.file_envelope import HOST_FINGERPRINT_PRODUCER, WriterIdentity
+from idhazh.telemetry import machine_api, machine_evidence, task_probe
+from idhazh.telemetry.host_control import enabled
 from utilities.publication_request import IntegrityError
 
 PIPELINE = "digest"
@@ -38,68 +38,50 @@ def task_file(job: WriterIdentity, task: str, day: str) -> machine_evidence.Expe
     )
 
 
-def opening_file(
-    job: WriterIdentity, day: str, *, native: bool,
-) -> machine_evidence.ExpectedFile:
+def opening_file(job: WriterIdentity, day: str) -> machine_evidence.ExpectedFile:
     if job.job is None:
         raise IntegrityError("opening fingerprint requires its digest job")
     writer = WriterIdentity(
         run_id=job.run_id, attempt=job.attempt, shard=job.shard, git_sha=job.git_sha,
-        job=job.job, pipeline_name=PIPELINE if native else None,
-        task_name=job.job if native else None, producer=silicon.PRODUCER,
+        job=job.job, pipeline_name=PIPELINE,
+        task_name=job.job, producer=HOST_FINGERPRINT_PRODUCER,
     )
-    return machine_evidence.ExpectedFile(writer, day, native=native)
+    return machine_evidence.ExpectedFile(writer, day)
 
 
-def read_opening(
-    repo: Path, job: WriterIdentity, day: str, *, native: bool,
-) -> machine_evidence.VerifiedFile | None:
-    return machine_evidence.read_receipt(bundle(repo, job), opening_file(job, day, native=native))
+def read_opening(repo: Path, job: WriterIdentity, day: str) -> machine_evidence.VerifiedFile | None:
+    return machine_evidence.read_receipt(bundle(repo, job), opening_file(job, day))
 
 
 def capture(repo: Path, job: WriterIdentity, day: str, settings: config.Settings) -> None:
-    selected = mode(settings.app.observability)
-    if selected == "off" or not settings.app.observability.host_fingerprint:
+    if not enabled(settings.app.observability) or not settings.app.observability.host_fingerprint:
         return
     if (actual := os.environ.get("GITHUB_JOB")) and actual != job.job:
         raise IntegrityError("opening fingerprint does not name this digest runner")
-    expected = opening_file(job, day, native=selected == "typescript")
+    expected = opening_file(job, day)
     store = bundle(repo, job)
     if machine_evidence.read_receipt(store, expected) is not None:
         return
-    if selected == "typescript":
-        machine_evidence.capture_opening(repo, store, expected)
-        return
-    # The rollback clock still closes exactly this old job-scoped row.
-    _, paths = silicon.file_machine_row(
-        date=day, run_id=job.run_id, settings=settings, state_root=repo / machine_evidence.STATE,
-        commit_sha=job.git_sha, shard=job.shard, job=job.job, attempt=job.attempt,
-    )
-    if paths:
-        (path,) = paths
-        proof = machine_evidence.verify_file(repo, path.relative_to(repo).as_posix(), expected)
-        proof.save_receipt(store, expected)
+    machine_evidence.capture_opening(repo, store, expected)
 
 
-def recording(
-    repo: Path, job: WriterIdentity, day: str, *, native: bool,
-) -> task_probe.Recording | None:
+def recording(repo: Path, job: WriterIdentity, day: str) -> task_probe.Recording | None:
     if not os.environ.get(machine_api.ORIGIN_ENV):
         return None
     try:
-        opening = read_opening(repo, job, day, native=native)
+        opening = read_opening(repo, job, day)
     except (OSError, ValueError) as error:
         machine_api.unavailable(str(job.job), "opening evidence", error)
         return None
     return task_probe.Recording.for_job(repo, opening)
 
 
-def evidence(repo: Path, job: WriterIdentity, day: str, *, native: bool) -> dict[str, str]:
+def evidence(repo: Path, job: WriterIdentity, day: str) -> dict[str, str]:
     """Place the exact opening and only this job's verified closed tasks."""
     if job.job is None:
         raise IntegrityError("digest publication requires its job identity")
     store = bundle(repo, job)
-    opening = read_opening(repo, job, day, native=native)
+    opening = read_opening(repo, job, day)
     proofs = [] if opening is None else [opening]
     for task in TASKS[ServerJob(job.job)]:
         proof = machine_evidence.read_receipt(store, task_file(job, task, day))

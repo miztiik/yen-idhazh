@@ -3,24 +3,20 @@
 import json
 import shutil
 import time
-from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
 
 import pytest
-from _host_placement import refuse_external_placement
 from gardener._garden import an_origin, git, on_origin, quiet_git
 from support.native_performance import Batch, capture_openings, write_batches
 
 from idhazh import config, ledger
-from idhazh.contracts.base import ServerJob
 from idhazh.contracts.council_events import CouncilProgram
 from idhazh.contracts.council_invocation import Cell, SelectedJudge, Selection
 from idhazh.contracts.council_run_record import CouncilRunRecord
 from idhazh.contracts.host_fingerprint import HostFingerprintRow, HostHardwareRow
 from idhazh.contracts.knobs.council import CouncilTask, JudgeLifecycleStatus
 from idhazh.contracts.ledger_name import LedgerName
-from idhazh.contracts.publication_receipt import PublicationReceipt
 from idhazh.contracts.task_performance import TaskPerformanceRow
 from idhazh.council import outcome, performance, registry, session
 from idhazh.council.model_selection import bind_model
@@ -151,7 +147,7 @@ def test_many_tenants_and_later_dates_survive_a_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     quiet_git(tmp_path, monkeypatch)
-    monkeypatch.setenv("IDHAZH_HOST_TELEMETRY_MODE", "python")
+    monkeypatch.setenv("IDHAZH_HOST_TELEMETRY_MODE", "off")
     origin, repo = an_origin(
         tmp_path,
         {
@@ -174,27 +170,20 @@ def test_many_tenants_and_later_dates_survive_a_failure(
     forget(package)
     try:
         config_root = configuration(tmp_path, slugs)
-        set_host_fingerprint_placement(config_root, False)
         selected = prepared_selection(
             config_root,
             dates=("2026-10-09", "2026-10-08"),
             run_id="2026-10-09-123",
             commit_sha=git(repo, "rev-parse", "HEAD").strip(),
         )
-        with refuse_external_placement():
-            assert (
-                settle_and_publish(
-                    repo=repo,
-                    dates=selected.dates,
-                    run_id="2026-10-09-123",
-                    commit_sha=git(repo, "rev-parse", "HEAD").strip(),
-                    config_root=config_root,
-                    selection=selected,
-                    started_at=datetime(2026, 10, 9, 23, 59, tzinfo=UTC),
-                    clock=lambda: datetime(2026, 10, 10, 0, 2, tzinfo=UTC),
-                )
-                == 1
-            )
+        assert settle_and_publish(
+            repo=repo,
+            dates=selected.dates,
+            run_id="2026-10-09-123",
+            commit_sha=git(repo, "rev-parse", "HEAD").strip(),
+            config_root=config_root,
+            selection=selected,
+        ) == 1
         for slug in slugs:
             for date in ("2026-10-08", "2026-10-09"):
                 assert on_origin(origin, f"state/experiments/{slug}/{date}.json") == "completed\n"
@@ -207,40 +196,7 @@ def test_many_tenants_and_later_dates_survive_a_failure(
         assert len(rows) == 12
         assert sum(row.outcome == "failed" and row.fault == "raised" for row in rows) == 1
         assert sum(row.date == "2026-10-09" for row in rows) == 6
-        receipts = [
-            PublicationReceipt.read(path)
-            for path in (
-                repo / "backend" / "var" / "council" / "publication" / f"{index:04}.json"
-                for index in range(10)
-            )
-            if path.is_file()
-        ]
-        evidence = {path: digest for receipt in receipts for path, digest in receipt.writes.items()}
-        machine = {
-            path: digest
-            for path, digest in evidence.items()
-            if path.startswith("state/raw/host-fingerprint/")
-        }
-        assert len(machine) == 2, "both probe and closing clock must have receipts"
-        remote = Repository(origin, git_dir=origin)
-        for path in machine:
-            entry = remote.entry("main", path)
-            assert entry is not None, "a receipted machine write was never pushed"
-            assert remote.blob(entry.oid) == (repo / path).read_bytes()
-            assert "/2026/10/09/" in path, "machine belongs to opened night, not settled date"
-        host_rows = ledger.load_days(
-            repo / "state",
-            LedgerName.HOST_FINGERPRINT,
-            ["2026-10-08", "2026-10-09", "2026-10-10"],
-            model=HostFingerprintRow,
-        )
-        assert len(host_rows) == 1, "many dates and tenants still draw one collecting machine"
-        assert host_rows[0].job_seconds == 180
-        assert host_rows[0].memcpy_probe_mib == 0
-        assert host_rows[0].memcpy_gib_s is None
-        assert host_rows[0].job == ServerJob.SAVE_COUNCIL_RESULTS.value
-        assert host_rows[0].run_id == "2026-10-09-123"
-        assert host_rows[0].measured_at is not None
+        assert not ledger.raw_root(repo / "state", LedgerName.HOST_FINGERPRINT).exists()
     finally:
         forget(package)
 
@@ -442,7 +398,6 @@ def test_council_lands_original_runner_bytes_and_keeps_trials_private(
         key=HOST_FINGERPRINT_KEY, days={judged, "2026-10-10"},
     )
     assert len(settled) == expected_runners
-    assert all(row.job_seconds is None for row in settled), "TypeScript did not add a closing clock"
     assert {(row.job, row.task_name, row.shard) for row in settled} == {
         (proof.row.job, proof.row.task_name, proof.row.shard)
         for proof, allowed in captures if allowed and isinstance(proof.row, HostHardwareRow)

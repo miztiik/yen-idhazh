@@ -7,9 +7,9 @@ from datetime import date
 from enum import StrEnum
 from pathlib import Path
 
-from idhazh.contracts.file_envelope import WriterIdentity
+from idhazh.contracts.file_envelope import HOST_FINGERPRINT_PRODUCER, WriterIdentity
 from idhazh.gardener.performance import PIPELINE
-from idhazh.telemetry import machine_api, machine_evidence, silicon, task_probe
+from idhazh.telemetry import machine_api, machine_evidence, task_probe
 
 
 class Job(StrEnum):
@@ -40,9 +40,10 @@ def expected(
     return machine_evidence.ExpectedFile(
         WriterIdentity.for_pipeline_task(
             job=job, pipeline_name=PIPELINE, task_name=job,
-            shard=0, run_id=run_id, attempt=attempt, git_sha=revision, producer=silicon.PRODUCER,
+            shard=0, run_id=run_id, attempt=attempt, git_sha=revision,
+            producer=HOST_FINGERPRINT_PRODUCER,
         ),
-        day, native=True,
+        day,
     )
 
 
