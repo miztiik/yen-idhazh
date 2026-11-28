@@ -31,7 +31,6 @@ from idhazh.contracts.collection_prune import CollectionPruneRow, StopReason
 from idhazh.contracts.file_envelope import FileEnvelope, Period, WriterIdentity
 from idhazh.contracts.gardener_events import TaskFinished, TaskOutcome, TaskPlanned
 from idhazh.contracts.gardener_fault import GardenerFault
-from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.knobs.gardener import TaskKind
 from idhazh.contracts.ledger_index import CompactIndex
@@ -54,7 +53,6 @@ from ._garden import (
     git,
     on_origin,
     quiet_git,
-    read_origin,
     write,
 )
 from ._garden import task_package as a_package
@@ -185,7 +183,7 @@ def test_task_performance_compaction_lands_its_own_receipt_only_after_the_pass(
         producer=runner.PRODUCER, git_sha=source,
     )
     private = tmp_path / "machine"
-    expected = performance.opening_file(execution, native=True)
+    expected = performance.opening_file(execution)
     (opening,) = capture_openings(((private, expected),))
     old, own, foreign = write_batches((Batch(private, (
         (performance.task_file(execution, "old-work"), {"elapsed_ms": 5}, private),
@@ -271,7 +269,7 @@ def test_the_runner_writes_the_record_and_hands_back_what_to_land_without_pushin
     assert outcome.landing.message == "gardener: old-days on 2026-09-27"
 
 
-def test_a_typescript_shard_without_a_listener_does_not_collect_in_python(
+def test_a_shard_without_a_listener_records_work_without_host_evidence(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
 ) -> None:
     _, checkout, settings = a_garden(tmp_path, monkeypatch, "runner", RUNNER_FILES)
@@ -284,80 +282,6 @@ def test_a_typescript_shard_without_a_listener_does_not_collect_in_python(
     assert outcome.exit_code == EXIT_OK and outcome.landing is not None
     assert not ledger.raw_root(checkout / "state", LedgerName.HOST_FINGERPRINT).exists()
     assert "Gardener shard fingerprint unavailable: no machine listener" in caplog.text
-
-
-@pytest.mark.parametrize("land", [False, True], ids=["local", "pushed"])
-def test_a_shard_records_the_machine_it_drew_and_names_it_among_its_writes(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, land: bool
-) -> None:
-    """A wake that cannot say which machine it drew cannot explain its own cost.
-
-    The gardener was one of the two workflows that never recorded one, because
-    the probe used to read a run plan back and the gardener writes none. It can
-    now, and the row is filed inside the shard rather than beside it: the shard
-    declares every file it wrote and its publisher refuses one it did not, so a
-    row written by a step alongside would be a row nobody staged.
-
-    The fixture enables local collection, but selects neither bandwidth nor
-    external placement. These controls are loaded from its own config, not
-    inherited from production defaults. See `docs/reference/host-metrics.md`.
-    """
-    origin, checkout, settings = a_garden(tmp_path, monkeypatch, "runner", RUNNER_FILES)
-    monkeypatch.setenv("IDHAZH_HOST_TELEMETRY_MODE", "python")
-    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "9")
-
-    outcome, _ = ran(("old-days",), settings, checkout, "garden_tasks_ok", monkeypatch, land=land)
-
-    assert outcome.exit_code == EXIT_OK
-    assert outcome.landing is not None
-    rows = ledger.load_days(
-        checkout / ledger.STATE_DIRNAME,
-        LedgerName.HOST_FINGERPRINT,
-        [WAKE.date().isoformat()],
-        model=HostFingerprintRow,
-    )
-    assert len(rows) == 1, "a wake draws one machine a shard"
-    (machine,) = rows
-    assert machine.job is None
-    assert machine.pipeline_name == "gardener"
-    assert machine.task_name == "run-tasks"
-    assert machine.run_id == RUN_ID, "the row is filed under the run the wake was given"
-    assert machine.measured_at is not None, "the local host observation was not taken"
-    assert machine.cpu_target_measured_at == machine.measured_at
-    assert (
-        machine.vm_size,
-        machine.vm_location,
-        machine.vm_zone,
-        machine.vm_fault_domain,
-    ) == (None, None, None, None)
-    assert machine.memcpy_probe_mib == 0, "the wake timed a copy the knob did not ask for"
-    assert machine.memcpy_gib_s is None, "an untaken reading is absent, never a rate"
-    assert machine.job_seconds == 0, "the fixture's clock never advanced"
-
-    named = {
-        path
-        for path in outcome.landing.written_paths
-        if LedgerName.HOST_FINGERPRINT.value in path
-    }
-    assert len(named) == 2, (
-        f"the shard filed a machine row and did not name it among its writes: "
-        f"{sorted(outcome.landing.written_paths)}"
-    )
-    assert all((checkout / path).is_file() for path in named)
-    if land:
-        landed = read_origin(origin, tmp_path / "landed-host", *sorted(named))
-        assert all((landed / path).read_bytes() == (checkout / path).read_bytes() for path in named)
-    else:
-        assert all(on_origin(origin, path) is None for path in named)
-    files = ledger.list_raw_files(
-        checkout / ledger.STATE_DIRNAME, LedgerName.HOST_FINGERPRINT, days={WAKE.date().isoformat()}
-    )
-    assert {held.path.relative_to(checkout).as_posix() for held in files} == named
-    attempts = set()
-    for held in files:
-        assert isinstance(held.envelope, FileEnvelope)
-        attempts.add(held.envelope.identity.attempt)
-    assert attempts == {1}
 
 
 def test_a_shard_uses_its_loaded_fingerprint_switch(

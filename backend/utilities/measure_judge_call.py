@@ -63,7 +63,7 @@ from idhazh.llm.server import (
     token_pieces,
 )
 from idhazh.similarity import judge, prompt
-from idhazh.telemetry import native_diagnostics, silicon
+from idhazh.telemetry import native_diagnostics
 from idhazh.telemetry.host_control import mode as host_telemetry_mode
 
 #: How many calls one run takes: 50 pairs, each read twice. Twenty would give a
@@ -728,10 +728,7 @@ def conditions_of(
         prompt_files=settings.app.prompt_files, config_dir=settings.config_dir
     )
     selection = host_telemetry_mode(settings.app.observability)
-    processor = (
-        native_diagnostics.cpu_model() if selection == "typescript"
-        else silicon.host_cpu_model() if selection == "python" else None
-    )
+    processor = native_diagnostics.cpu_model() if selection == "typescript" else None
     return {
         "Processor": processor or "not reported by this host",
         "Runner": args.runner,

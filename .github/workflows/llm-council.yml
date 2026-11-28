@@ -49,12 +49,11 @@ on:
         required: true
         type: string
       host_telemetry:
-        description: 'TypeScript host telemetry, Python rollback, or off'
+        description: 'TypeScript host telemetry or off'
         type: choice
         default: typescript
         options:
           - typescript
-          - python
           - 'off'
       memory_profiling:
         description: 'OS memory and fault collection; inherit reads shared config'
@@ -435,9 +434,6 @@ jobs:
       COUNCIL_RUN_ID: ${{ needs.job_bounds.outputs.run_id }}
       IDHAZH_HOST_TELEMETRY_MODE: ${{ needs.job_bounds.outputs.host_telemetry_mode }}
     steps:
-      - name: Stamp the collecting job clock
-        run: echo "JOB_STARTED_AT=$(date -u +%s)" >> "$GITHUB_ENV"
-
       - uses: actions/checkout@v6
         with:
           fetch-depth: 1
@@ -505,7 +501,7 @@ jobs:
           python backend/utilities/council_machine.py measure --phase save_council_results --run-id "$COUNCIL_RUN_ID" -- \
             python backend/utilities/council_publish.py --opening-attempted \
             --run-id "$COUNCIL_RUN_ID" --commit "$COUNCIL_COMMIT" \
-            --job-started-at "$JOB_STARTED_AT" --units-result "$COUNCIL_UNITS_RESULT" \
+            --units-result "$COUNCIL_UNITS_RESULT" \
             --planning-result "$COUNCIL_PLANNING_RESULT" \
             --matrix "$COUNCIL_MATRIX"
 

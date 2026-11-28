@@ -153,18 +153,6 @@ Checks before trusting a test or build result. Commands belong in [run-the-gates
   python -m pytest -n 0 backend/tests/workflows/test_digest_recovery.py -k real_partial
   ```
 
-- **`test_silicon.py::test_the_probe_and_the_job_clock_settle_into_one_row` fails on CI with `5549 != 5550` and passes when its job is re-run; the figure comes from two separate clock readings.**
-  The test builds `job_started_at` from its own `int(time.time())`, and `stage_job_clock`
-  ends its interval with a separate `time.gmtime()` reading in whole seconds unless a
-  `finished_at` is passed. Two separate clock readings can disagree by a second without
-  the stage being wrong. Seen 2026-11-19 on the gates job of a pull request that did not
-  touch the stage: 1 failed and 7,131 passed, and the re-run of that job passed. The tell
-  is a result one second off the expected 5550. Re-run only the failed job before touching
-  the test:
-  ```powershell
-  gh run rerun <run-id> --failed --repo <account/repo>
-  ```
-
 - **A test that reads source text stays green when production code is edited
   in memory; it checks text, not behaviour.** To prove a test removable, apply
   the production edit it is named for in memory (rewrite the module's source

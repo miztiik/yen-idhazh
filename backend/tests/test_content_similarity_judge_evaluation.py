@@ -126,6 +126,7 @@ def evaluation(count: int = 1, **pair_changes: object) -> EvaluationSet:
 
 def host() -> HostFingerprintRow:
     return HostFingerprintRow(
+        version=HostFingerprintRow.schema_version(),
         date="2026-11-05", run_id="2026-11-05-1", job="operator", shard=0,
     )
 

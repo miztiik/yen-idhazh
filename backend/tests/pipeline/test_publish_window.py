@@ -10,7 +10,7 @@ import pytest
 from pydantic import ValidationError
 from pytest import MonkeyPatch
 from support.ledger import SEED_COMMIT
-from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
+from support.paths import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 
 from idhazh import assemble, atomic_write, config, ledger, rank, telemetry
 from idhazh.contracts.article import Article
@@ -33,7 +33,7 @@ from idhazh.stages.common import _item_payloads, _load_manifest, shard_of
 from idhazh.stages.plan import _next_run_n, stage_plan
 from idhazh.stages.record import stage_record
 from idhazh.stages.work import stage_work
-from idhazh.telemetry.silicon import stage_job_clock
+from idhazh.telemetry import native_capture
 
 from ._builders import (
     FULL_TEXT,
@@ -728,33 +728,21 @@ def test_an_item_whose_summary_is_not_written_yet_is_not_recorded(
 def test_the_two_ledgers_agree_about_which_shards_ran(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
-    """The Oracle for the shard column: the per-item file joins the per-job file.
-
-    Read speed varied 1.10x to 4.19x between the shards of one run over the seven
-    runs committed on 2026-08-30, so a rate pooled over a run averages away the
-    thing an operator needs to see. The join is `(run_id, shard)`, and it only
-    works if both files name the same set of workers - two ledgers that disagree
-    about how many machines ran cannot be put on one chart.
-    """
+    """Item rows and opening fingerprints agree on each native shard's identity."""
     run_plan = plan()
     settings = config.load(CONFIG_DIR)
     isolate_ledgers(tmp_path, monkeypatch)
     state = tmp_path / "state"
-    capture = FIXTURES_DIR / "runtime" / "2026-08-26-5-shard-3.prom"
-    captured = read_text(capture)
-    token_line = next(
-        line for line in captured.splitlines() if line.startswith("llamacpp:prompt_tokens_total ")
-    )
-    captured_tokens = int(token_line.split()[1])
-    expected_tokens = {}
-
     for shard in (0, 1):
-        expected_tokens[shard] = captured_tokens + shard * 17
-        shard_capture = tmp_path / f"shard-{shard}.prom"
-        shard_capture.write_text(
-            captured.replace(token_line, f"llamacpp:prompt_tokens_total {expected_tokens[shard]}"),
-            encoding="utf-8",
+        host, paths = native_capture.file_opening(
+            date=run_plan.date,
+            writer=native_capture.writer_for_task(
+                run_plan.run_id, SEED_COMMIT, pipeline="digest", task="work",
+                shard=shard, job=ServerJob.WORK,
+            ),
+            state=state, settings=settings, ask_placement=False,
         )
+        assert host is not None and len(paths) == 1
         with (
             with_an_analysis_service(settings) as read,
             a_server_that_refuses_every_completion() as server,
@@ -767,27 +755,20 @@ def test_the_two_ledgers_agree_about_which_shards_ran(
                 shard=shard,
                 shards=2,
                 model_endpoint=server.endpoint,
+                native_host=host,
             )
         stage_record(run_plan, settings=settings, commit_sha=SEED_COMMIT, shard=shard, shards=2)
-        stage_job_clock(
-            date=run_plan.date,
-            run_id=run_plan.run_id,
-            settings=settings,
-            state_root=common.STATE_ROOT,
-            commit_sha=SEED_COMMIT,
-            shard=shard,
-            metrics_path=shard_capture,
-        )
-
     rows = health_rows(state, run_plan.date)
     counted = ledger.load_days(
         state, LedgerName.HOST_FINGERPRINT, [run_plan.date], model=HostFingerprintRow
     )
 
-    assert {row.machine_shard for row in rows} == {row.shard for row in counted} == {0, 1}
-    assert {row.shard: row.server_prompt_tokens for row in counted} == expected_tokens, (
-        "each shard files what its own server counted"
-    )
+    assert {
+        (row.run_id, row.machine_pipeline_name, row.machine_task_name, row.machine_shard)
+        for row in rows
+    } == {
+        (row.run_id, row.pipeline_name, row.task_name, row.shard) for row in counted
+    } == {(run_plan.run_id, "digest", "work", 0), (run_plan.run_id, "digest", "work", 1)}
     assert len(rows) == len(run_plan.items)
     for shard in (0, 1):
         mine = {item.item_id for item in shard_of(run_plan, shard=shard, shards=2)}

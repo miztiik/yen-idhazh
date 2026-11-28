@@ -71,7 +71,7 @@ from idhazh.contracts.feed_health import (
     RobotsOutcome,
     derive_endpoint_key,
 )
-from idhazh.contracts.file_envelope import WriterIdentity
+from idhazh.contracts.file_envelope import HOST_FINGERPRINT_PRODUCER, WriterIdentity
 from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.host_fingerprint import (
     HOST_HARDWARE_VERSION,
@@ -106,7 +106,6 @@ from idhazh.gardener.file_listing import FileListing
 from idhazh.gardener.tasks import compaction
 from idhazh.render import asset_relpath, render_planned_visual
 from idhazh.render.write import write_bytes_atomic
-from idhazh.telemetry import silicon
 from idhazh.telemetry.host_prompt_totals import DIGEST_PIPELINE, SERVE_SUMMARIZER
 from idhazh.telemetry.publish import (
     console_band,
@@ -128,7 +127,7 @@ SCORE_ATTEMPT: Final = 1
 SCORE_JOB: Final = ServerJob.ASSEMBLE
 SCORE_SHARD: Final = 0
 
-#: The producer for the canary's item and score writers. Hosts use silicon's.
+#: The producer for the canary's item and score writers.
 PRODUCER: Final = "utilities.build_canary_day"
 
 type FixtureRow = ItemHealthRow | HostFingerprintRow
@@ -1572,7 +1571,8 @@ def _host_fixture_writer(row: HostFingerprintRow | HostHardwareRow) -> WriterIde
     if row.pipeline_name is not None and row.task_name is not None:
         return WriterIdentity(
             run_id=row.run_id, attempt=SCORE_ATTEMPT, shard=row.shard, git_sha=FIXTURE_SHA,
-            pipeline_name=row.pipeline_name, task_name=row.task_name, producer=silicon.PRODUCER,
+            pipeline_name=row.pipeline_name, task_name=row.task_name,
+            producer=HOST_FINGERPRINT_PRODUCER,
             job=row.job if isinstance(row, HostHardwareRow) else None,
         )
     return WriterIdentity(
@@ -1580,7 +1580,7 @@ def _host_fixture_writer(row: HostFingerprintRow | HostHardwareRow) -> WriterIde
         attempt=SCORE_ATTEMPT,
         job=row.job,
         shard=row.shard,
-        producer=silicon.PRODUCER,
+        producer=HOST_FINGERPRINT_PRODUCER,
         git_sha=FIXTURE_SHA,
     )
 

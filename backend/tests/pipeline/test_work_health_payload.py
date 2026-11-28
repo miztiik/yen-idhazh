@@ -26,7 +26,6 @@ import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import replace
-from itertools import count
 from pathlib import Path
 from typing import Any, Final
 
@@ -148,127 +147,6 @@ def test_the_file_is_the_row_the_shard_reported_cell_for_cell(
         assert json.loads(written[said.item_id].to_json()) == json.loads(said.to_json())
 
 
-#: Every host cell the sampler names, in the order the item-health doc lists
-#: them. Named once so a column added to the sampler moves one line here.
-HOST_COLUMNS: Final = (
-    "cpu_model",
-    "cpu_busy_pct",
-    "cpu_busy_max",
-    "cpu_busy_min",
-    "cpu_steal_pct",
-    "load_1m",
-    "llama_rss_bytes",
-    "llama_rss_anon_bytes",
-    "llama_rss_peak_bytes",
-    "llama_major_faults",
-    "python_rss_bytes",
-    "python_rss_anon_bytes",
-    "os_mem_available_bytes",
-    "os_mem_total_bytes",
-    "os_mem_cached_bytes",
-    "os_swap_free_bytes",
-    "os_swap_total_bytes",
-    "os_mem_available_min_bytes",
-)
-
-
-def a_machine_that_answers(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
-    """A `/proc` this test writes, so every host cell fills.
-
-    Nothing here reads the box the suite runs on. None of these paths exists on a
-    developer machine, so a test that asked the real host would record every host
-    cell empty locally and every one full in CI - which is a test that passes or
-    fails on the weather (CLAUDE.md section 13).
-
-    The processor counters climb between reads, because a busy share is the
-    difference of two of them and two identical reads are no window at all.
-    """
-    table = tmp_path / "proc"
-    for pid, comm in (("1", "systemd"), ("742", "llama-server")):
-        (table / pid).mkdir(parents=True)
-        (table / pid / "comm").write_text(f"{comm}\n", encoding="utf-8")
-    ticks = count(start=100, step=200)
-    spent = count(start=0, step=1000)
-    faulted = count(start=7, step=3)
-
-    def built(path: Path) -> str | None:
-        if path == host.PROC_STAT:
-            moment = next(ticks)
-            # A stolen share that climbs with the rest, so the steal cell proves
-            # a reading travelled rather than proving a zero appeared.
-            return f"cpu  {moment} 0 {moment} {moment * 4} 0 0 0 {moment // 10} 0 0\n"
-        if path == host.LOADAVG:
-            return "1.53 1.20 0.91 2/312 9931\n"
-        if path == host.MEMINFO:
-            # Falling headroom, so the floor cell has something below its last
-            # reading to find. A runner reports these in kilobytes.
-            return (
-                "MemTotal:       16373964 kB\n"
-                f"MemAvailable:    {9_000_000 - next(spent)} kB\n"
-                "Cached:          6100000 kB\n"
-                "SwapTotal:       4194300 kB\n"
-                "SwapFree:        4194300 kB\n"
-            )
-        if path.name == "status":
-            return "VmRSS:\t 4194304 kB\nVmHWM:\t 5242880 kB\nRssAnon:\t 1048576 kB\n"
-        if path.name == "stat":
-            # A counter that climbs, so the item's total is a real difference
-            # rather than two reads of one number. `majflt` is the tenth cell
-            # after the bracketed command.
-            return (
-                f"742 (llama-server) S 1 742 742 0 -1 0 900 0 {next(faulted)} 0 "
-                "0 0 0 0 20 0 1 0 12345\n"
-            )
-        if path.name == "comm":
-            return path.read_text(encoding="utf-8")
-        return None
-
-    monkeypatch.setattr(host, "PROC", table)
-    monkeypatch.setattr(host, "_text", built)
-    monkeypatch.setenv("RUNNER_NAME", "ubuntu-4core-3")
-    monkeypatch.setenv("IDHAZH_HOST_TELEMETRY_MODE", "python")
-
-
-def test_every_host_column_reaches_the_row_the_shard_left_behind(
-    tmp_path: Path, monkeypatch: MonkeyPatch
-) -> None:
-    """Eighteen columns that were computed and discarded now outlive the process.
-
-    A throughput number with no machine beside it is not a measurement
-    (Guardrail #10), and until the work stage recorded these, whether a slow item
-    met a noisy neighbour was unanswerable. The assertion is per item rather than
-    per shard, because the shard's average says nothing about the item that was
-    slow - which is the entire question these columns exist to answer.
-    """
-    a_machine_that_answers(monkeypatch, tmp_path / "host")
-    _, items_dir = worked(tmp_path, monkeypatch, server_pid=742)
-
-    written = rows(items_dir)
-
-    assert written, "no rows means the loop below asserts nothing"
-    for item_id, row in written.items():
-        filled = {column for column in HOST_COLUMNS if getattr(row, column) is not None}
-        assert filled == set(HOST_COLUMNS), f"{item_id} lost {set(HOST_COLUMNS) - filled}"
-
-
-def test_the_shard_names_one_machine_on_every_row_it_records(
-    tmp_path: Path, monkeypatch: MonkeyPatch
-) -> None:
-    """One `host_facts` call a shard, so two items cannot name two processors.
-
-    The processor cannot change inside a shard, so every row a shard records has
-    to name the same one. A second reading per item would open `/proc/cpuinfo`
-    again for an answer already taken, and two readings are two answers nobody
-    can reconcile.
-    """
-    a_machine_that_answers(monkeypatch, tmp_path / "host")
-    _, items_dir = worked(tmp_path, monkeypatch)
-
-    written = rows(items_dir)
-
-    assert len({row.cpu_model for row in written.values()}) == 1
-
-
 def test_every_row_a_shard_seals_names_the_job_and_the_worker_that_read_it(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
@@ -280,7 +158,6 @@ def test_every_row_a_shard_seals_names_the_job_and_the_worker_that_read_it(
     knows both, which is why this asserts on the rows it sealed rather than on
     the census that reads them later.
     """
-    a_machine_that_answers(monkeypatch, tmp_path / "host")
     _, items_dir = worked(tmp_path, monkeypatch)
 
     written = rows(items_dir)
@@ -353,7 +230,7 @@ def test_an_empty_shard_needs_no_controller_or_host_instrument(
     tmp_path: Path, monkeypatch: MonkeyPatch, caplog: LogCaptureFixture,
 ) -> None:
     settings = config.load(CONFIG_DIR)
-    monkeypatch.setenv("IDHAZH_HOST_TELEMETRY_MODE", "python")
+    monkeypatch.setenv("IDHAZH_HOST_TELEMETRY_MODE", "typescript")
     monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
     run_plan = RunPlan(
         version=RunPlan.schema_version(), date="2026-09-15",
@@ -364,84 +241,6 @@ def test_an_empty_shard_needs_no_controller_or_host_instrument(
 
     assert not (tmp_path / "run").exists()
     assert "model-server PID not supplied" not in caplog.text
-
-
-@pytest.mark.parametrize("collection", ["on", "host-off", "memory-off", "no-pid"])
-def test_controller_identity_reaches_process_fields_only_when_collection_is_enabled(
-    tmp_path: Path, monkeypatch: MonkeyPatch, caplog: LogCaptureFixture, collection: str,
-) -> None:
-    from idhazh.contracts.base import derive_url_key
-    from idhazh.contracts.feed_health import FetchOutcome
-    from idhazh.fetch import FetchResult
-    from idhazh.telemetry.record import HEALTH_SUFFIX
-
-    from ._builders import isolate_ledgers
-
-    monkeypatch.setenv("IDHAZH_HOST_TELEMETRY_MODE", "off" if collection == "host-off" else "python")
-    monkeypatch.setenv("MEMORY_PROFILING", "off" if collection == "memory-off" else "on")
-    settings = config.load(CONFIG_DIR)
-    settings.app.logging.waiting_heartbeat_seconds = 0
-    isolate_ledgers(tmp_path, monkeypatch)
-    proc = tmp_path / "proc"
-    server = proc / "742"
-    server.mkdir(parents=True)
-    (server / "stat").write_text(
-        "742 (recorded-server) S 1 742 742 0 -1 0 900 0 7 0 0 0 0 0 20 0 1 0 12345\n",
-        encoding="ascii",
-    )
-    (server / "status").write_text(
-        "VmRSS: 4096 kB\nVmHWM: 8192 kB\nRssAnon: 2048 kB\n", encoding="ascii",
-    )
-    monkeypatch.setattr(host, "PROC", proc)
-    for name, filename in (("PROC_STAT", "stat"), ("MEMINFO", "meminfo"), ("LOADAVG", "loadavg")):
-        monkeypatch.setattr(host, name, proc / filename)
-    url = "https://example.com/report"
-    run_plan = RunPlan.model_validate({
-        "version": RunPlan.schema_version(), "date": "2026-09-15", "run_id": "2026-09-15-1",
-        "generated_at": "2026-09-15T06:00:00Z",
-        "verticals": [{"id": "ai", "considered": 1, "planned": 1, "eligible_feeds": 1}],
-        "items": [{
-            "item_id": "ai-01", "url_key": derive_url_key(url), "source_url": url,
-            "canonical_url": url, "source_id": "example", "tier": 1, "vertical": "ai",
-            "title": "A school publishes its building schedule", "rank_score": 1,
-        }],
-    })
-    paragraphs = (
-        "The school published a building schedule on Monday after a public meeting. "
-        "Construction will begin in January and finish before the next academic year. "
-        "The council said the work would replace classrooms and repair the library.",
-        "Residents asked for regular updates on spending and safety. The school agreed "
-        "to publish monthly reports naming completed work and any delays. Teachers "
-        "will use a nearby building while the repairs continue.",
-        "The project includes new heating equipment and wider entrances. Engineers "
-        "will check the foundations before the first rooms are closed. The school "
-        "said no lessons would be cancelled during the first phase.",
-    )
-    html = (
-        "<html><head><title>A school publishes its building schedule</title></head>"
-        "<body><article><h1>A school publishes its building schedule</h1>"
-        + "".join(f"<p>{paragraph}</p>" for paragraph in paragraphs)
-        + "</article></body></html>"
-    ).encode("ascii")
-
-    def fetch_article(_url: str) -> FetchResult:
-        return FetchResult(FetchOutcome.OK, status=200, body=html)
-
-    with (
-        with_an_analysis_service(settings) as read,
-        a_server_that_refuses_every_completion() as endpoint,
-    ):
-        stage_work(
-            run_plan, settings=read, scorer=None, fetcher=fetch_article,
-            model_endpoint=endpoint.endpoint, server_pid=None if collection == "no-pid" else 742,
-        )
-
-    path = tmp_path / "run" / run_plan.date / "items" / f"ai-01{HEALTH_SUFFIX}"
-    row = ItemHealthRow.from_json(path.read_text(encoding="ascii"))
-    assert row.summarize_ms is not None, "the item must reach the process-scoped work window"
-    actual = (row.llama_rss_bytes, row.llama_rss_anon_bytes, row.llama_rss_peak_bytes, row.llama_major_faults)
-    assert actual == ((4096 * 1024, 2048 * 1024, 8192 * 1024, 0) if collection == "on" else (None,) * 4)
-    assert ("model-server PID not supplied" in caplog.text) is (collection == "no-pid")
 
 
 @contextmanager
@@ -479,16 +278,16 @@ def native_item_listener(proc: Path, monkeypatch: MonkeyPatch) -> Iterator[None]
         assert child.returncode == 0, log.read()
 
 
-@pytest.mark.parametrize("memory", [True, False], ids=["memory-on", "memory-off"])
-def test_native_window_files_the_same_item_health_cells_as_python(
-    tmp_path: Path, monkeypatch: MonkeyPatch, memory: bool,
+@pytest.mark.parametrize("collection", ["memory-on", "memory-off", "host-off"])
+def test_native_window_files_item_health_and_off_leaves_readings_unknown(
+    tmp_path: Path, monkeypatch: MonkeyPatch, collection: str,
 ) -> None:
-    """Use the same concrete kernel snapshots via Watch and the real native HTTP route."""
+    """Replay concrete kernel snapshots through the real native HTTP route."""
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("IDHAZH_HOST_TELEMETRY_MODE", "typescript")
+    monkeypatch.setenv("IDHAZH_HOST_TELEMETRY_MODE", "off" if collection == "host-off" else "typescript")
     monkeypatch.setenv("MEMORY_PROFILING", "inherit")
     settings = config.load(CONFIG_DIR)
-    settings.app.observability.memory_profiling_enabled = memory
+    settings.app.observability.memory_profiling_enabled = collection == "memory-on"
     settings.app.logging.waiting_heartbeat_seconds = 0
     proc = tmp_path / "proc"
     worker = os.getpid()
@@ -520,17 +319,7 @@ def test_native_window_files_the_same_item_health_cells_as_python(
         f"{server}/status": "VmRSS: 4096 kB\nVmHWM: 6144 kB\nRssAnon: 2048 kB\n",
         f"{server}/stat": stat(server, 15),
     }
-    for name in ("PROC", "PROC_STAT", "MEMINFO", "LOADAVG"):
-        monkeypatch.setattr(host, name, proc if name == "PROC" else proc / name.split("_")[-1].lower())
-    write(opening)
-    watch = host.Watch(interval_s=0, server_pid=server, memory_profiling_enabled=memory)
-    write(settled)
-    expected = watch.close().cells()
-    assert expected["cpu_busy_pct"] == 2.67 and expected["cpu_steal_pct"] is None
-    if memory:
-        assert expected["llama_rss_peak_bytes"] == 8192 * 1024
-        assert expected["llama_major_faults"] == 5
-        assert expected["os_mem_available_min_bytes"] == 6000 * 1024
+    monkeypatch.setattr(host, "PROC", proc)
     write(opening)
     (proc / "settled.json").write_text(json.dumps(settled), encoding="ascii")
     Path("llama-server.pin.json").write_text(ModelServerPin(
@@ -547,4 +336,15 @@ def test_native_window_files_the_same_item_health_cells_as_python(
     item = run_plan.items[0]
     row = ItemHealthRow.from_json(read_text(items_dir / f"{item.item_id}{HEALTH_SUFFIX}"))
     assert row.summarize_ms is not None
+    expected: dict[str, int | float | None] = dict.fromkeys(host.HostCells.__dataclass_fields__)
+    if collection != "host-off":
+        expected.update(cpu_busy_pct=2.67, cpu_busy_max=2.67, cpu_busy_min=2.67, load_1m=1.25)
+    if collection == "memory-on":
+        expected.update(
+            llama_rss_bytes=4096 * 1024, llama_rss_anon_bytes=2048 * 1024,
+            llama_rss_peak_bytes=8192 * 1024, llama_major_faults=5, python_rss_bytes=512 * 1024,
+            python_rss_anon_bytes=256 * 1024, os_mem_available_min_bytes=6000 * 1024,
+            os_mem_available_bytes=7000 * 1024, os_mem_total_bytes=16000 * 1024,
+            os_mem_cached_bytes=3000 * 1024, os_swap_free_bytes=0, os_swap_total_bytes=1024 * 1024,
+        )
     assert {name: getattr(row, name) for name in expected} == expected

@@ -80,7 +80,7 @@ def read_host_prompt_totals(
             continue
         key = (identity.unit_id, identity.run_id, identity.attempt)
         totals = recorded.get(key)
-        if key not in recorded and host.version < HOST_HARDWARE_VERSION:
+        if key not in recorded and host.version != HOST_HARDWARE_VERSION:
             totals = _pair(host.server_prompt_tokens, host.server_prompt_seconds)
         result.append(HostPromptReading(host, totals))
     return result

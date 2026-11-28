@@ -8,10 +8,10 @@ from typing import Literal
 
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 
-HostTelemetryMode = Literal["python", "typescript", "off"]
+HostTelemetryMode = Literal["typescript", "off"]
 MODE_ENV = "IDHAZH_HOST_TELEMETRY_MODE"
-HOST_TELEMETRY_MODES = ("python", "typescript", "off")
 DEFAULT_MODE: HostTelemetryMode = "typescript"
+HOST_TELEMETRY_MODES = (DEFAULT_MODE, "off")
 
 
 def mode(
@@ -19,11 +19,11 @@ def mode(
 ) -> HostTelemetryMode:
     environment = os.environ if environ is None else environ
     requested = environment.get(MODE_ENV) or DEFAULT_MODE
-    if requested not in HOST_TELEMETRY_MODES:
-        raise ValueError(f"{MODE_ENV} must be python, typescript or off")
+    if requested != DEFAULT_MODE and requested != "off":
+        raise ValueError(f"{MODE_ENV} must be typescript or off")
     if not observability.host_telemetry_enabled or requested == "off":
         return "off"
-    return "typescript" if requested == "typescript" else "python"
+    return DEFAULT_MODE
 
 
 def enabled(

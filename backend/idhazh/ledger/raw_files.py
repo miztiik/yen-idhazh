@@ -48,8 +48,8 @@ from idhazh import day_partition
 from idhazh.contracts.base import Contract
 from idhazh.contracts.file_envelope import FileEnvelope, Tier
 from idhazh.contracts.host_fingerprint import (
-    HOST_CLOCK_FIELDS,
     HOST_HARDWARE_VERSION,
+    HOST_MODEL_FIELDS,
     LEGACY_CPU_FIELDS,
     HostFingerprintRow,
     HostHardwareRow,
@@ -384,7 +384,7 @@ def _settle_host_rows[C: Contract](
                 value is not None and (
                     new.get(name) is None
                     or (
-                        name in HOST_CLOCK_FIELDS | LEGACY_CPU_FIELDS
+                        name in HOST_MODEL_FIELDS | LEGACY_CPU_FIELDS
                         and old["version"] != new["version"] and new[name] != value
                     )
                 )

@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fleetJobs } from '../src/lib/charts/fleet';
 import { platformMixQuery, servingSpeedQuery } from '../src/lib/console/queries/machine';
+import { createOwnedView, dropOwnedViews } from '../src/lib/data/ask-reader';
 import { nodeEngine } from '../src/lib/data/engine';
 import { engineExtensionRepository, explorerConfig } from '../src/lib/server/config';
 import { sliceFromDisk } from '../src/lib/server/ledger-disk';
@@ -97,38 +98,55 @@ test('Hardware and the audit prefer one paired observation and keep hosts withou
 	expect(proof.band).toEqual([2, 30 / (962 / 83.73)]);
 });
 
-test('the saved throughput SQL binds with or without physical legacy columns', async () => {
+test('the Explorer host view hides the retired timer and preserves saved throughput', async () => {
 	const example = explorerConfig().examples.find(({ id }) => id === 'throughput-by-machine');
 	if (example === undefined) throw new Error('The saved throughput question is missing.');
 	const engine = await nodeEngine(createRequire(import.meta.url).resolve, engineExtensionRepository());
 	const [year, month, day] = TODAY.split('-');
 	const file = (ledger: string) => path.join(staged, 'state', 'compact', ledger, 'daily', year, month, `${day}.parquet`);
 	const hostPath = file('host-fingerprint');
+	const retainedPath = test.info().outputPath('retained-host.parquet');
 	const hardwarePath = test.info().outputPath('hardware-only.parquet');
-	// Derive the new physical layout from the same staged hosts, not different rows.
+	// Give the same staged facts both physical layouts without editing an archive.
 	python(['-c', [
 		'import sys',
+		'import pyarrow as pa',
 		'import pyarrow.parquet as pq',
 		'table = pq.read_table(sys.argv[1])',
-		'legacy = ["job_seconds", "model_load_ms", "server_prompt_tokens", "server_prompt_seconds"]',
-		'pq.write_table(table.drop_columns(legacy), sys.argv[2])'
-	].join('\n'), hostPath, hardwarePath]);
-	const host = await engine.register(readFileSync(hostPath));
+		'legacy = ["model_load_ms", "server_prompt_tokens", "server_prompt_seconds"]',
+		'clock = pa.array([45] * table.num_rows, type=pa.int64())',
+		'pq.write_table(table.append_column("job_seconds", clock), sys.argv[2])',
+		'pq.write_table(table.drop_columns(legacy), sys.argv[3])'
+	].join('\n'), hostPath, retainedPath, hardwarePath]);
+	const host = await engine.register(readFileSync(retainedPath));
 	const task = await engine.register(readFileSync(file('task-performance')));
 	const hardware = await engine.register(readFileSync(hardwarePath));
 	try {
-		const run = (hostFile: string, empty = false) => engine.rows(`
-			WITH "host-fingerprint" AS (SELECT * FROM read_parquet('${hostFile}')),
-			     "task-performance" AS (SELECT * FROM read_parquet('${task}') ${empty ? 'WHERE FALSE' : ''})
-			SELECT cpu_model, prompt_tokens_per_second, jobs::INTEGER AS jobs FROM (${example.sql})
-		`, []);
+		const run = () => engine.rows(
+			`SELECT cpu_model, prompt_tokens_per_second, jobs::INTEGER AS jobs FROM (${example.sql})`, []
+		);
+		await createOwnedView(engine, 'task-performance', [{ name: task, window: null }], false);
+		await createOwnedView(engine, 'host-fingerprint', [
+			{ name: host, window: { from: TODAY, to: TODAY } },
+			{ name: hardware, window: { from: YESTERDAY, to: YESTERDAY } }
+		], false);
+		const columns = (await engine.rows('DESCRIBE "host-fingerprint"', [])).map(row => row.column_name);
+		expect(columns).toEqual(expect.arrayContaining(['model_load_ms', 'server_prompt_tokens', 'server_prompt_seconds']));
+		expect(columns).not.toContain('job_seconds');
+		const rows = await engine.rows('SELECT * FROM "host-fingerprint" ORDER BY covers, run_id, shard', []);
+		expect(rows.map(row => row.covers)).toEqual(Array(7).fill(TODAY));
+		expect(rows.every(row => !Object.hasOwn(row, 'job_seconds'))).toBe(true);
+		await expect(engine.rows('SELECT job_seconds FROM "host-fingerprint"', [])).rejects.toThrow(/job_seconds/);
 		const current = { cpu_model: expect.any(String), prompt_tokens_per_second: 30, jobs: 1 };
-		expect(await run(host)).toEqual([
+		expect(await run()).toEqual([
 			current, { cpu_model: null, prompt_tokens_per_second: 962 / 83.73, jobs: 1 }
 		]);
-		expect(await run(hardware)).toEqual([current]);
-		expect(await run(hardware, true)).toEqual([]);
+		await createOwnedView(engine, 'host-fingerprint', [{ name: hardware, window: null }], false);
+		expect(await run()).toEqual([current]);
+		await createOwnedView(engine, 'task-performance', [{ name: task, window: null }], true);
+		expect(await run()).toEqual([]);
 	} finally {
+		await dropOwnedViews(engine);
 		await engine.drop([host, task, hardware]);
 	}
 });

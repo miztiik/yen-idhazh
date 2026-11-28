@@ -1,10 +1,9 @@
 /** Rebuild one captured host row with a genuine native receipt for its current delivery identity. */
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { HOST_FINGERPRINT_VERSION, HostFingerprintRowSchema } from "@idhazh/common-contracts";
 import { persistLedger } from "@idhazh/ledger-file-writer";
 import type { LedgerSettings } from "@idhazh/ledger-file-writer";
-import { hostWriter } from "../scripts/feed-ingest-plan-metadata";
+import { hostWriter, StoredPlannerHostSchema } from "../scripts/feed-ingest-plan-metadata";
 import type { ExecutionIdentity } from "../scripts/feed-ingest-plan-metadata";
 import { WorkflowHostFingerprintSchema } from "../scripts/feed-ingest-plan-host-fingerprint";
 import { metadataRegistrations } from "./host-recordings";
@@ -16,10 +15,10 @@ export async function writeRecordedHostOutput(directory: string, identity: Execu
   const registrations = await metadataRegistrations();
   const registration = registrations["host-fingerprint"];
   const request = { date: identity.run_id.slice(0, 10), writer: hostWriter(identity, true) };
-  const row = HostFingerprintRowSchema.parse({ ...captured.host.row, date: request.date, run_id: identity.run_id });
+  const row = StoredPlannerHostSchema.parse({ ...captured.host.row, date: request.date, run_id: identity.run_id });
   const written = await persistLedger({
     ledger: registration.name, registryEntry: registration, outputRoot: join(directory, "state"),
-    ledgerSettings, rowContract: { schema: HostFingerprintRowSchema, schemaVersion: HOST_FINGERPRINT_VERSION },
+    ledgerSettings, rowContract: { schema: StoredPlannerHostSchema, schemaVersion: row.version },
     writerContext: request.writer, period: { tier: "raw", covers: request.date }, rows: [row],
   });
   if (written.status !== "written") throw new Error(`Recorded host write was refused: ${written.status}`);

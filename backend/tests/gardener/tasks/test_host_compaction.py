@@ -21,9 +21,11 @@ from idhazh.contracts.file_envelope import (
     WriterIdentity,
 )
 from idhazh.contracts.host_fingerprint import (
-    HOST_CLOCK_FIELDS,
+    HOST_FINGERPRINT_VERSION,
     HOST_HARDWARE_VERSION,
+    HOST_MODEL_FIELDS,
     LEGACY_CPU_FIELDS,
+    RETIRED_HOST_CLOCK,
     HostFingerprintRow,
     HostHardwareRow,
     LegacyHostFingerprintRow,
@@ -78,15 +80,15 @@ def _new(
     return path
 
 
-def _rollback(state: Path, *, generic: bool = False) -> Path:
+def _retained_model(state: Path, *, generic: bool = False) -> Path:
     identity = _writer(
         DAY, job=None if generic else "work",
         pipeline="digest" if generic else None, task="work" if generic else None,
     )
     row = HostFingerprintRow(
-        date=DAY, run_id=identity.run_id, job=identity.job, shard=0,
+        version="2026-10-26", date=DAY, run_id=identity.run_id, job=identity.job, shard=0,
         pipeline_name=identity.pipeline_name, task_name=identity.task_name,
-        measured_at=f"{DAY}T00:01:00Z", model_load_ms=123.5, job_seconds=45,
+        measured_at=f"{DAY}T00:01:00Z", model_load_ms=123.5,
         server_prompt_tokens=321, server_prompt_seconds=1.25,
     )
     (path,) = ledger.persist(state, [row], ledger=HOST, covers=DAY, identity=identity)
@@ -98,7 +100,7 @@ def _archived(state: Path) -> Path:
     row = LegacyHostFingerprintRow(
         version="2026-09-20", date=DAY, run_id=identity.run_id, job=ServerJob.ASSEMBLE, shard=0,
         measured_at=f"{DAY}T00:02:00Z", cores=2, threads=4, mhz_at_probe=2750.0,
-        mhz_max=3100.0, job_seconds=33,
+        mhz_max=3100.0,
     )
     unit = ledger.unit_id(
         ledger=HOST, covers=DAY, run_id=identity.run_id, job=identity.job, shard=0,
@@ -174,7 +176,7 @@ def test_host_rows_pack_from_raw_through_year_without_changing_their_evidence(
         NEXT_MONTH: [_new(state, NEXT_MONTH)],
     }
     if historical:
-        days[DAY].extend([_rollback(state), _archived(state)])
+        days[DAY].extend([_retained_model(state), _archived(state)])
     facts = {day: _facts(raw) for day, raw in days.items()}
     month_files: dict[str, Path] = {}
     month_entries: dict[str, CompactEntry] = {}
@@ -206,13 +208,13 @@ def test_host_rows_pack_from_raw_through_year_without_changing_their_evidence(
     rows = ledger.load([annual], model=HostFingerprintRow)
     assert len(rows) == sum(map(len, days.values()))
     if historical:
-        assert set(_rows(annual)[0]) >= HOST_CLOCK_FIELDS | LEGACY_CPU_FIELDS
-        assert {(row.version, row.measured_at) for row in rows if row.job_seconds is not None} == {
-            ("2026-10-26", f"{DAY}T00:01:00Z"),
-            ("2026-10-26", f"{DAY}T00:02:00Z"),
-        }
+        assert set(_rows(annual)[0]) >= HOST_MODEL_FIELDS | LEGACY_CPU_FIELDS
+        models = [row for row in rows if row.model_load_ms is not None]
+        assert [(row.model_load_ms, row.server_prompt_tokens, row.server_prompt_seconds)
+                for row in models] == [(123.5, 321, 1.25)]
+        assert ledger.read_envelope(annual).row_schema_version == HOST_FINGERPRINT_VERSION
     else:
-        assert all(not (row.keys() & (HOST_CLOCK_FIELDS | LEGACY_CPU_FIELDS)) for row in _rows(annual))
+        assert all(not (row.keys() & (HOST_MODEL_FIELDS | LEGACY_CPU_FIELDS)) for row in _rows(annual))
     with parquet.open_bytes(annual.read_bytes()) as opened:
         assert opened.num_row_groups == len(month_files)
     assert published_columns.check(tmp_path, [HOST]) == 0
@@ -261,11 +263,11 @@ def test_unknown_physical_host_column_refuses_the_period_without_removing_its_so
 
 
 @pytest.mark.parametrize("overlaps", [False, True], ids=["different-task", "supersedes"])
-def test_reopened_host_month_never_takes_original_timing_without_a_copy(
+def test_reopened_host_month_never_takes_a_model_reading_without_a_copy(
     tmp_path: Path, overlaps: bool,
 ) -> None:
     state = tmp_path / "state"
-    old = _rollback(state, generic=True)
+    old = _retained_model(state, generic=True)
     model = HostFingerprintRow
     month = DAY[:7]
     packed = ledger.persist_period(
@@ -293,14 +295,32 @@ def test_reopened_host_month_never_takes_original_timing_without_a_copy(
     assert {path: path.read_bytes() for path in original} == original
 
 
-def test_raw_host_digest_is_checked_before_a_valid_measurement_is_normalized(
+def test_original_retained_parquet_is_checked_before_projection(
     tmp_path: Path,
 ) -> None:
     state = tmp_path / "state"
-    path = _new(state, DAY)
+    path = _retained_model(state)
     metadata, (cells,) = parquet.read(path.read_bytes())
+    columns = (*file_columns(HostFingerprintRow), Column(RETIRED_HOST_CLOCK, ColumnType.INT64, True))
+    original = {**cells, RETIRED_HOST_CLOCK: 33}
+    metadata[b"schema_version"] = b"2026-10-26"
+    metadata[b"content_sha256"] = hashlib.sha256(json_lines.rows_bytes([original])).hexdigest().encode()
+    path.write_bytes(parquet.render(
+        columns, [original], envelope=metadata, compression=Compression.NONE,
+    ))
+    (stored,) = ledger.load_stored([path], model=HostFingerprintRow)
+    assert (stored.row.model_load_ms, stored.row.server_prompt_tokens) == (123.5, 321)
+    tree = _tree(state, [path])
+    tree.name_days([DAY])
+    assert _daily_period._take(
+        tree, _policy(), DAY, model=HostFingerprintRow, key=ledger.HOST_FINGERPRINT_KEY,
+        identity=PACKER,
+    ) is None
+    assert RETIRED_HOST_CLOCK not in (stored.original_host_cells or {})
+
+    # Alter only the cell no reader projects. The original digest must still fail.
     data = parquet.render(
-        file_columns(HostHardwareRow), [{**cells, "cpu_logical_processors": 8}],
+        columns, [{**original, RETIRED_HOST_CLOCK: 34}],
         envelope=metadata, compression=Compression.NONE,
     )
     path.write_bytes(data)

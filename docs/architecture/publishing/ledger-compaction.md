@@ -1,6 +1,6 @@
 # Ledger compaction
 
-**Last Updated**: 2026-11-26
+**Last Updated**: 2026-11-28
 
 How a ledger's daily, monthly and yearly files are packed and dropped. The
 gardener runs a compaction like any other task; how a wake runs its tasks and
@@ -222,13 +222,14 @@ task name. A job-only capture keeps its UTC date, run, job and shard key. The
 packer does not assign a pipeline to a job-only row, even when a generic task
 uses the same name.
 
-For host data, the reader checks the original row digest and declared shape
-before normalizing anything. A packed day, month or year containing only the
-new hardware rows omits the four retired timing columns. A pack containing
-older rows keeps their timing cells, and carries the original CPU column names
-when pre-correction rows are present. The compatibility layout adds null
-cells only where a row does not declare the column. Each retained row keeps
-its original version, capture timestamps and writer identity.
+For host data, the reader checks the original row digest, identity and declared
+shape before projecting supported fields. A new pack containing only hardware
+uses the native hardware layout. A pack containing older rows uses the
+`2026-11-28` compatibility layout: it keeps model load and prompt measurements
+and carries original CPU column names where present, but does not project the
+retired whole-job timer. Each retained row keeps its original version, capture
+timestamps and writer identity. Existing files are not rewritten to remove an
+unused column.
 
 The gardener reads the rendered columns and row digest back before planning
 source deletions. An unrecognized or damaged host file stays where it was, and
@@ -236,6 +237,10 @@ a competing attempt that would discard a populated historical reading refuses
 the period instead of taking the source. This applies when reopening a month
 or adopting an unindexed pack that overlaps its sources. Ordinary expiry is
 unchanged; existing archives are not rewritten simply to drop columns.
+The 26 November UTC indexed host-fingerprint pack contained both older and
+native hardware with usable readings. Its companion task, item and shard packs
+and the 28 November Gardener control evidence also remain in use. None of
+these verified files qualified for deletion.
 Packing preserves captured reliability and score values rather than summing
 them. Run counters can be aggregated later, once per fact.
 Before a planner period is opened, the Python pass names its candidate compact

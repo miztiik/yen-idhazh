@@ -85,7 +85,7 @@ test("real API receipts survive a missing planner result and keep byte-valued ca
     expect(host.response.row.l3_cache_bytes).toBe(50_331_648);
     expect(host.response.row.machine_memory_total_mib).toBe(16_383.75);
     expect(host.response.row.job).toBe("isolated-plan");
-    for (const name of ["job_seconds", "model_load_ms", "server_prompt_tokens", "server_prompt_seconds"]) {
+    for (const name of ["model_load_ms", "server_prompt_tokens", "server_prompt_seconds"]) {
       expect(host.response.row).not.toHaveProperty(name);
     }
     expect(Bun.markdown.html(report.markdown)).toContain("<table>");

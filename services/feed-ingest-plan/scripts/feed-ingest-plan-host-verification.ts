@@ -3,11 +3,15 @@ import { isDeepStrictEqual } from "node:util";
 import { HostFingerprintRowSchema } from "@idhazh/common-contracts";
 import { z } from "zod";
 import { FingerprintWrittenSchema } from "../../host-fingerprints/src/api/fingerprint-response";
-import { verifyMetadataFile } from "./feed-ingest-plan-metadata";
+import { projectPlannerHost, StoredPlannerHostSchema, verifyMetadataFile } from "./feed-ingest-plan-metadata";
 import type { ExecutionIdentity, MetadataRegistrations } from "./feed-ingest-plan-metadata";
 
 export const ReadableFingerprintWrittenSchema = FingerprintWrittenSchema.extend({
-  row: z.union([FingerprintWrittenSchema.shape.row, HostFingerprintRowSchema]),
+  row: z.union([
+    FingerprintWrittenSchema.shape.row,
+    HostFingerprintRowSchema,
+    StoredPlannerHostSchema.transform(projectPlannerHost),
+  ]),
 });
 
 export async function verifyHostFingerprint(

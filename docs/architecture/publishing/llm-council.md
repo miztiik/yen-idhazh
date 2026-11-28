@@ -541,11 +541,9 @@ tenant work records `prepare-<tenant>`, `judge-<tenant>` or `settle-<tenant>` on
 the judged day. The judge's existing model-call costs travel with its measured
 task, while its outcome, coverage and verdicts remain in the Council's records.
 Only a verified server contributes `serve-<tenant>` using its own final counters.
-While host compaction still groups on the legacy job column, the Council uses
-distinct job labels for the bounds runner, draw, settlement and each tenant's
-judging runners. This keeps their rows separate without changing legacy
-readers or settling a job under a different runner. The settlement clock keeps
-its existing identity. The listener links only the exact admitted opening.
+Host compaction keeps the generic pipeline, task and shard identity separate
+from the actual workflow job label. The listener links only the exact
+admitted opening from that runner.
 
 **Writers declare their paths beside themselves.** Tenant paths come back from
 `committed_paths` on the protocol. The venue declares `COUNCIL_RUN_RECORDS` and

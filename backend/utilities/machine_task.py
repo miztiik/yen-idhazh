@@ -11,22 +11,20 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from idhazh import config, run_context
-from idhazh.contracts.file_envelope import WriterIdentity
 from idhazh.telemetry import machine_api
-from idhazh.telemetry.host_control import MODE_ENV
+from idhazh.telemetry.host_control import DEFAULT_MODE, MODE_ENV
 from utilities import memory_profiling_control
 
 
 def run(
     command: list[str], *, run_id: str | None = None, days: tuple[str, ...] = (),
-    legacy_opening: WriterIdentity | None = None, instrument: bool = True,
+    instrument: bool = True,
 ) -> int:
     if not command:
         raise ValueError("a trusted workflow command is required")
     env = dict(os.environ)
     env.pop(machine_api.ORIGIN_ENV, None)
     env.pop(machine_api.STATE_ROOT_ENV, None)
-    env.pop("IDHAZH_MACHINE_LEGACY_OPENING_WRITER", None)
     argv = command
     if instrument and env.get("IDHAZH_MACHINE_APIS_READY") == "true":
         run_id = run_id or f"{env['IDHAZH_MACHINE_ACCOUNTING_DAY']}-{env['GITHUB_RUN_ID']}"
@@ -34,15 +32,13 @@ def run(
         memory = memory_profiling_control.resolve(
             env.get("MEMORY_PROFILING", "inherit"), config.REPO_ROOT / "config",
         )
-        if legacy_opening is not None:
-            env["IDHAZH_MACHINE_LEGACY_OPENING_WRITER"] = legacy_opening.model_dump_json()
         argv = [
             "bun", "run", "--no-install", "services/host-probes/src/api/run-recording-task.ts",
             ",".join(days), run_id, str(run_context.run_attempt()),
             env["IDHAZH_MACHINE_PIPELINE"], env["IDHAZH_MACHINE_SHARD"],
             env["GITHUB_SHA"], "on" if memory else "off", *command,
         ]
-    elif instrument and env.get(MODE_ENV) in ("python", "typescript"):
+    elif instrument and env.get(MODE_ENV) == DEFAULT_MODE:
         print(
             "::warning title=Task Performance::Machine API runtime was not prepared",
             file=sys.stderr,

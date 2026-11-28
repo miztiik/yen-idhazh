@@ -46,7 +46,6 @@ import logging
 import sys
 import time
 from collections.abc import Sequence
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
 
@@ -90,12 +89,8 @@ from idhazh.stages import (
 from idhazh.telemetry import (
     cli as telemetry_cli,
 )
-from idhazh.telemetry import (
-    silicon,
-    task_telemetry,
-)
+from idhazh.telemetry import native_capture
 from idhazh.telemetry.host_control import enabled as host_telemetry_enabled
-from idhazh.telemetry.host_control import mode as host_telemetry_mode
 
 
 def _today() -> str:
@@ -191,7 +186,6 @@ STAGES: Final[tuple[str, ...]] = (
     "work",
     "record",
     "fingerprint",
-    "job-clock",
     "assemble",
     "harvest",
     "run",
@@ -401,21 +395,11 @@ def _main(
         ),
     )
     parser.add_argument(
-        "--counters-file",
-        type=Path,
-        default=Path("llama-metrics.prom"),
-        help=(
-            "The GET /metrics body this shard's model server returned at job end. "
-            "Not spelled --metrics: that is llama-server's own flag, and no workflow "
-            "step may write one by hand."
-        ),
-    )
-    parser.add_argument(
         "--job",
         type=ServerJob,
         help=(
             "The runner job writing this row. An explicit value takes precedence over "
-            "GITHUB_JOB for native fingerprints; Python rollback defaults to work."
+            "GITHUB_JOB for native fingerprints."
         ),
     )
     parser.add_argument(
@@ -427,24 +411,6 @@ def _main(
         "--task-name",
         default=None,
         help="Generic task identity for reusable telemetry; pair with --pipeline-name.",
-    )
-    parser.add_argument(
-        "--job-started-at",
-        default="",
-        help=(
-            "Epoch seconds stamped by the first step of the shard job. The host row "
-            "records the difference against its own scrape time. Empty means no "
-            "stamp, and the cell then stays empty rather than reading zero."
-        ),
-    )
-    parser.add_argument(
-        "--server-log",
-        type=Path,
-        default=Path("llama-server.log"),
-        help=(
-            "llama-server's own log. The two lines it brackets a model load with give the "
-            "fixed cost `run.shard_size` exists to amortise."
-        ),
     )
     parser.add_argument(
         "--site-tree",
@@ -656,33 +622,23 @@ def _dispatch(
 
         night = _council_run(parser, args.stage, args.run_id)
         state_dir = common.STATE_ROOT if args.state_root is None else args.state_root
-        # Instrument the command without adding telemetry imports to the venue.
-        # Every date uses the same night and job-start stamp.
-        machine = (
-            task_telemetry.record(
+        if council_selection.names(publish=True):
+            native_capture.file_opening(
                 date=council_identity.opened_on(night),
-                run_id=night,
+                writer=native_capture.writer_for_task(
+                    night, args.commit, pipeline="council", task="save_council_results",
+                ),
                 settings=settings,
-                state_root=state_dir,
-                commit_sha=args.commit,
-                pipeline_name="council",
-                task_name="save_council_results",
-                started_at=datetime.fromtimestamp(int(args.job_started_at), UTC)
-                if args.job_started_at
-                else None,
+                state=state_dir,
             )
-            if council_selection.names(publish=True)
-            else contextlib.nullcontext()
+        results = council_session.settle(
+            settings.council,
+            date=a_date(args.date or _today(), what="--date"),
+            run_id=night,
+            state_dir=state_dir,
+            commit_sha=args.commit,
+            selection=council_selection,
         )
-        with machine:
-            results = council_session.settle(
-                settings.council,
-                date=a_date(args.date or _today(), what="--date"),
-                run_id=night,
-                state_dir=state_dir,
-                commit_sha=args.commit,
-                selection=council_selection,
-            )
         return outcome.of_results(results)
 
     if args.stage == "council-shard":
@@ -818,42 +774,16 @@ def _dispatch(
 
     # An opening capture belongs to the runner even when there is no work plan.
     if args.stage == "fingerprint":
-        selected = host_telemetry_mode(settings.app.observability)
         run_id = _machine_run(parser, date=date, given=args.run_id, execution=args.execution)
-        if selected == "python":
-            silicon.stage_fingerprint(
-                date=date, run_id=run_id, settings=settings, state_root=common.STATE_ROOT,
-                commit_sha=args.commit, shard=args.shard,
-                job=None if args.pipeline_name is not None else (args.job or WORK_JOB),
-                pipeline_name=args.pipeline_name, task_name=args.task_name,
-            )
-        elif selected == "typescript":
-            with task_telemetry.record(
-                date=date, run_id=run_id, settings=settings, state_root=common.STATE_ROOT,
-                commit_sha=args.commit, shard=args.shard, job=args.job,
-                pipeline_name=args.pipeline_name or "operator",
-                task_name=args.task_name or args.job or WORK_JOB,
-            ):
-                pass
-        return 0
-
-    if args.stage == "job-clock":
-        if host_telemetry_mode(settings.app.observability) != "python":
-            common.LOG.info("legacy host clock not recorded outside Python rollback")
-            return 0
-        silicon.stage_job_clock(
+        native_capture.file_opening(
             date=date,
-            run_id=_machine_run(parser, date=date, given=args.run_id, execution=args.execution),
+            writer=native_capture.writer_for_task(
+                run_id, args.commit, shard=args.shard, job=args.job,
+                pipeline=args.pipeline_name or "operator",
+                task=args.task_name or args.job or WORK_JOB,
+            ),
             settings=settings,
-            state_root=common.STATE_ROOT,
-            commit_sha=args.commit,
-            shard=args.shard,
-            job=None if args.pipeline_name is not None else (args.job or WORK_JOB),
-            pipeline_name=args.pipeline_name,
-            task_name=args.task_name,
-            job_started_at=int(args.job_started_at) if args.job_started_at else None,
-            server_log_path=args.server_log,
-            metrics_path=args.counters_file,
+            state=common.STATE_ROOT,
         )
         return 0
 

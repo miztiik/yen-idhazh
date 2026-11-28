@@ -1,195 +1,72 @@
-"""Does whole-host telemetry off bypass collection while preserving work and waiting logs?"""
+"""Does host opt-out leave work, waiting logs and private artifacts independent?"""
 
 from __future__ import annotations
 
-import sys
 import threading
 from pathlib import Path
-from types import FrameType
 
 import pytest
-from pydantic import ValidationError
 from support.ledger import SEED_COMMIT
 from support.paths import CONFIG_DIR
 
-from idhazh import config, ledger
-from idhazh.contracts.base import ServerJob
-from idhazh.contracts.host_fingerprint import HostHardwareRow
+from idhazh import config
 from idhazh.contracts.knobs.observability import ObservabilityConfig
-from idhazh.contracts.ledger_name import LedgerName
-from idhazh.telemetry import silicon, task_telemetry
-from idhazh.telemetry.host_control import enabled, mode
+from idhazh.telemetry import native_capture
+from idhazh.telemetry.host_control import MODE_ENV, enabled, mode
 from idhazh.telemetry.item_heartbeat import ItemHeartbeat
+from utilities import start_shard_memory
 from utilities.host_telemetry_control import resolve
 
 
-def test_master_switch_overrides_either_collector(tmp_path: Path) -> None:
+def test_dispatch_and_master_switch_resolve_the_same_mode(tmp_path: Path) -> None:
     app = config.load(CONFIG_DIR).app
     app.observability.host_telemetry_enabled = True
-    root = tmp_path / "config"
-    root.mkdir()
-    path = root / "idhazh.json"
+    path = tmp_path / "idhazh.json"
     path.write_text(app.to_json(), encoding="ascii")
-    for selected in ("python", "typescript", "off"):
-        assert resolve(selected, root) == selected
-        assert mode(app.observability, {"IDHAZH_HOST_TELEMETRY_MODE": selected}) == selected
+    assert mode(app.observability, {}) == "typescript"
+    for selected in ("typescript", "off"):
+        assert resolve(selected, tmp_path) == mode(app.observability, {MODE_ENV: selected})
     app.observability.host_telemetry_enabled = False
     path.write_text(app.to_json(), encoding="ascii")
-    for selected in ("python", "typescript", "off"):
-        assert resolve(selected, root) == "off"
-        assert not enabled(app.observability, {"IDHAZH_HOST_TELEMETRY_MODE": selected})
-    with pytest.raises(ValueError, match="python, typescript or off"):
-        resolve("false", root)
-    with pytest.raises(ValidationError):
-        ObservabilityConfig.model_validate({"host_telemetry_enabled": "false"})
+    assert resolve("typescript", tmp_path) == "off"
+    assert not enabled(app.observability, {MODE_ENV: "typescript"})
 
 
-@pytest.mark.parametrize("choice", ["rust", "legacy", "native", "shadow", "false"])
-def test_invalid_modes_are_refused_even_when_master_is_off(
-    tmp_path: Path, choice: str
+@pytest.mark.parametrize("unsupported", ["python", "false"])
+def test_invalid_mode_is_refused_even_when_master_is_off(tmp_path: Path, unsupported: str) -> None:
+    with pytest.raises(ValueError, match="typescript or off"):
+        resolve(unsupported, tmp_path)
+    with pytest.raises(ValueError, match="typescript or off"):
+        enabled(ObservabilityConfig(host_telemetry_enabled=False), {MODE_ENV: unsupported})
+
+
+@pytest.mark.parametrize("control", ["dispatch-off", "config-off", "memory-off"])
+def test_disabled_native_instruments_create_no_outputs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, control: str,
 ) -> None:
-    with pytest.raises(ValueError, match="python, typescript or off"):
-        resolve(choice, tmp_path)
-    with pytest.raises(ValueError, match="python, typescript or off"):
-        enabled(ObservabilityConfig(host_telemetry_enabled=False),
-                {"IDHAZH_HOST_TELEMETRY_MODE": choice})
-
-
-def test_missing_mode_defaults_to_typescript_without_disabling_rollback() -> None:
-    assert mode(ObservabilityConfig(), {}) == "typescript"
-    assert enabled(ObservabilityConfig(), {"IDHAZH_HOST_TELEMETRY_MODE": "python"})
-
-
-def test_local_default_writes_one_native_opening_without_a_clock(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.delenv("IDHAZH_HOST_TELEMETRY_MODE", raising=False)
-    monkeypatch.delenv("IDHAZH_MACHINE_API_ORIGIN", raising=False)
-    monkeypatch.delenv("IDHAZH_MACHINE_APIS_READY", raising=False)
-    monkeypatch.setenv("GITHUB_JOB", "encoder-job")
-    settings = config.load(CONFIG_DIR)
-    with task_telemetry.record(
-        date="2026-11-26", run_id="2026-11-26-17", settings=settings,
-        state_root=tmp_path / "state", commit_sha=SEED_COMMIT,
-        pipeline_name="encoder-evaluation", task_name="score-vectors", shard=2,
-        ask_placement=False,
-    ) as paths:
-        (path,) = paths
-        opening = path.read_bytes()
-    assert paths == [path] and opening == path.read_bytes()
-    (stored,) = ledger.load_stored(paths, model=HostHardwareRow)
-    assert (stored.identity.job, stored.identity.pipeline_name,
-            stored.identity.task_name, stored.identity.shard) == (
-        "encoder-job", "encoder-evaluation", "score-vectors", 2,
-    )
-    assert ledger.read_envelope(path).writer == "idhazh_typescript.ledger.parquet"
-    assert set(stored.row.model_dump()).isdisjoint(
-        {"job_seconds", "model_load_ms", "server_prompt_tokens", "server_prompt_seconds"}
-    )
-
-
-@pytest.mark.parametrize("via_config", [False, True], ids=["dispatch-off", "config-off"])
-def test_off_writes_neither_python_host_half(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, via_config: bool
-) -> None:
-    settings = config.load(CONFIG_DIR)
-    settings.app.observability.host_telemetry_enabled = not via_config
-    monkeypatch.setenv("IDHAZH_HOST_TELEMETRY_MODE", "python" if via_config else "off")
-    with task_telemetry.record(
-        date="2026-10-10", run_id="2026-10-10-17", settings=settings,
-        state_root=tmp_path / "state", commit_sha=SEED_COMMIT, job=ServerJob.RUNTIME,
-    ) as paths:
-        assert paths == []
-    for writer in (silicon.file_machine_row, silicon.file_job_clock):
-        result, written = writer(
-            date="2026-10-10", run_id="2026-10-10-17", settings=settings,
-            state_root=tmp_path / "state", commit_sha=SEED_COMMIT,
-        )
-        assert result is None and written == []
-    assert not ledger.raw_root(tmp_path / "state", LedgerName.HOST_FINGERPRINT).exists()
-    assert not (tmp_path / "backend").exists()
-
-
-def test_off_watch_preserves_heartbeat_and_returns_unknown_cells() -> None:
-    ticked = threading.Event()
-    intervals: list[float] = []
-
-    def tick(elapsed: float) -> None:
-        intervals.append(elapsed)
-        ticked.set()
-
-    with ItemHeartbeat(interval_s=0.005, on_tick=tick) as heartbeat:
-        assert ticked.wait(timeout=2)
-        cells = heartbeat.close()
-    assert intervals and all(value >= 0 for value in intervals)
-    assert all(value is None for value in cells.cells().values())
-    assert heartbeat._thread is None
-
-
-
-
-@pytest.mark.parametrize("control", ["dispatch-off", "config-off", "memory-off", "python-on"])
-def test_real_work_preserves_item_health_under_host_and_memory_controls(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, control: str
-) -> None:
-    from pipeline._builders import (
-        a_server_that_refuses_every_completion,
-        captured_article_fetch,
-        isolate_ledgers,
-        plan,
-        with_an_analysis_service,
-    )
-
-    from idhazh.contracts.item_health import ItemHealthRow
-    from idhazh.stages.work import stage_work
-    from idhazh.telemetry import host
-    from idhazh.telemetry.record import HEALTH_SUFFIX
-
-    monkeypatch.setenv(
-        "IDHAZH_HOST_TELEMETRY_MODE", "off" if control == "dispatch-off" else "python"
-    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv(MODE_ENV, "off" if control == "dispatch-off" else "typescript")
     monkeypatch.setenv("MEMORY_PROFILING", "off" if control == "memory-off" else "on")
     settings = config.load(CONFIG_DIR)
     settings.app.observability.host_telemetry_enabled = control != "config-off"
-    isolate_ledgers(tmp_path, monkeypatch)
-    run_plan = plan()
-    observed: list[str] = []
+    root = tmp_path / "config"
+    root.mkdir()
+    (root / "idhazh.json").write_text(settings.app.to_json(), encoding="ascii")
+    if control != "memory-off":
+        writer = native_capture.writer_for_task(
+            "2026-11-26-17", SEED_COMMIT, pipeline="encoder-evaluation", task="score-vectors",
+        )
+        assert native_capture.file_opening(
+            date="2026-11-26", writer=writer, state=tmp_path / "state", settings=settings,
+        ) == (None, [])
+        assert not (tmp_path / "state").exists()
+    start_shard_memory.main()
+    assert not (tmp_path / "backend" / "var" / "shard-memory").exists()
+    assert not (tmp_path / "memory-sampler.log").exists()
 
-    def profile(frame: FrameType, event: str, argument: object) -> None:
-        if event == "call" and frame.f_globals.get("__name__") == "idhazh.telemetry.host":
-            if frame.f_code.co_filename == host.__file__ and frame.f_code.co_name not in (
-                "cells", "shard_cells"
-            ):
-                observed.append(frame.f_code.co_name)
 
-    with (
-        with_an_analysis_service(settings) as read,
-        a_server_that_refuses_every_completion() as server,
-    ):
-        previous = sys.getprofile()
-        sys.setprofile(profile)
-        try:
-            stage_work(
-                run_plan, settings=read, scorer=None, fetcher=captured_article_fetch,
-                model_endpoint=server.endpoint,
-            )
-        finally:
-            sys.setprofile(previous)
-    items = tmp_path / "run" / run_plan.date / "items"
-    health = [
-        ItemHealthRow.from_json(path.read_text(encoding="utf-8"))
-        for path in items.glob(f"*{HEALTH_SUFFIX}")
-    ]
-    assert len(health) == len(run_plan.items)
-    assert all(row.machine_job == ServerJob.WORK and row.machine_shard == 0 for row in health)
-    if control in ("dispatch-off", "config-off"):
-        assert all(row.cpu_busy_pct is None and row.llama_rss_bytes is None for row in health)
-        assert observed == [], "whole-host off called a Python host collector"
-    else:
-        assert "read_now" in observed
-        if control == "memory-off":
-            assert not {"status_bytes", "meminfo_bytes", "major_faults"} & set(observed)
-            assert all(row.llama_rss_bytes is None and row.os_mem_total_bytes is None
-                       for row in health)
-        else:
-            assert "status_bytes" in observed
+def test_heartbeat_can_tick_without_populating_item_host_cells() -> None:
+    ticked = threading.Event()
+    with ItemHeartbeat(interval_s=0.005, on_tick=lambda _: ticked.set()) as heartbeat:
+        assert ticked.wait(timeout=2)
+        assert all(value is None for value in heartbeat.close().cells().values())

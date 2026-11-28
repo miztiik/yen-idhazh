@@ -18,7 +18,6 @@
   "fingerprint_version": 1,
   "flags": "",
   "job": "work",
-  "job_seconds": null,
   "l3_cache_bytes": null,
   "measured_at": "2026-09-16T04:11:02Z",
   "memcpy_gib_s": null,

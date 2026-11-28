@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import cache
 from pathlib import Path
 from types import MappingProxyType
@@ -17,15 +17,17 @@ from idhazh.contracts.host_fingerprint import (
     HOST_HARDWARE_VERSION,
     LEGACY_CPU_FIELDS,
     LEGACY_HOST_VERSIONS,
+    RETIRED_HOST_CLOCK,
     HostFingerprintRow,
     HostHardwareRow,
     LegacyHostFingerprintRow,
     normalize_host_row,
+    project_retained_host_cells,
     strip_null_legacy_placeholders,
 )
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.ledger import arrow_schema, filenames, json_lines
-from idhazh.ledger.arrow_schema import Column
+from idhazh.ledger.arrow_schema import Column, ColumnType
 
 _STAMPS: Final = frozenset(
     (*LEGACY_HOST_VERSIONS, *HOST_FINGERPRINT_READ_VERSIONS, HOST_HARDWARE_VERSION)
@@ -35,8 +37,8 @@ _IDENTITY_CELLS: Final = frozenset(RowIdentity.model_fields)
 _LEGACY_PAYLOAD: Final = frozenset(LegacyHostFingerprintRow.model_fields)
 _HISTORICAL_PAYLOAD: Final = frozenset(HostFingerprintRow.model_fields)
 _HARDWARE_PAYLOAD: Final = frozenset(HostHardwareRow.model_fields)
-_CLOCK_CELLS: Final = _HISTORICAL_PAYLOAD - _HARDWARE_PAYLOAD
-KNOWN_CELLS: Final = _IDENTITY_CELLS | _LEGACY_PAYLOAD | _HISTORICAL_PAYLOAD
+_MODEL_CELLS: Final = _HISTORICAL_PAYLOAD - _HARDWARE_PAYLOAD
+KNOWN_CELLS: Final = _IDENTITY_CELLS | _LEGACY_PAYLOAD | _HISTORICAL_PAYLOAD | {RETIRED_HOST_CLOCK}
 
 
 class HostStorageError(ValueError):
@@ -47,21 +49,19 @@ class HostStorageError(ValueError):
 class HostLayout:
     """The physical columns needed by all original rows in one packed file."""
 
-    hardware: bool = False
     historical: bool = False
     legacy_cpu: bool = False
+    retired_clock: bool = False
 
     @property
     def stamp(self) -> str:
-        if self.hardware or not self.historical:
-            return HOST_HARDWARE_VERSION
-        return HOST_FINGERPRINT_VERSION
+        return HOST_FINGERPRINT_VERSION if self.historical else HOST_HARDWARE_VERSION
 
     def __or__(self, other: HostLayout) -> HostLayout:
         return HostLayout(
-            hardware=self.hardware or other.hardware,
             historical=self.historical or other.historical,
             legacy_cpu=self.legacy_cpu or other.legacy_cpu,
+            retired_clock=self.retired_clock or other.retired_clock,
         )
 
     def project(self, cells: Mapping[str, Any]) -> dict[str, Any]:
@@ -82,6 +82,8 @@ def _columns_by_name(layout: HostLayout) -> dict[str, Column]:
             for column in arrow_schema.columns_of(LegacyHostFingerprintRow)
             if column.name in LEGACY_CPU_FIELDS
         )
+    if layout.retired_clock:
+        result[RETIRED_HOST_CLOCK] = Column(RETIRED_HOST_CLOCK, ColumnType.INT64, nullable=True)
     result.update(
         (column.name, column)
         for column in arrow_schema.columns_of(RowIdentity)
@@ -96,16 +98,22 @@ def columns_for(layout: HostLayout) -> tuple[Column, ...]:
 
 def layout_for_footer(envelope: FileEnvelope, names: Iterable[str]) -> HostLayout:
     """Select a physical profile; only a compact file may mix row generations."""
-    if envelope.row_schema_version == HOST_HARDWARE_VERSION:
-        if envelope.tier is Tier.RAW:
-            return HostLayout(hardware=True)
-        columns = set(names)
-        legacy_cpu = bool(columns & LEGACY_CPU_FIELDS)
+    columns = set(names)
+    legacy_cpu = bool(columns & LEGACY_CPU_FIELDS)
+    if envelope.row_schema_version in (HOST_HARDWARE_VERSION, HOST_FINGERPRINT_VERSION):
+        if envelope.tier is Tier.RAW and envelope.row_schema_version == HOST_HARDWARE_VERSION:
+            return HostLayout()
         return HostLayout(
-            hardware=True, historical=legacy_cpu or bool(columns & _CLOCK_CELLS),
+            historical=legacy_cpu or bool(columns & _MODEL_CELLS),
             legacy_cpu=legacy_cpu,
+            retired_clock=(
+                envelope.row_schema_version == HOST_HARDWARE_VERSION
+                and RETIRED_HOST_CLOCK in columns
+            ),
         )
-    return HostLayout(historical=True, legacy_cpu=bool(set(names) & LEGACY_CPU_FIELDS))
+    return HostLayout(
+        historical=True, legacy_cpu=legacy_cpu, retired_clock=RETIRED_HOST_CLOCK in columns,
+    )
 
 
 def layout_for_rows(rows: Iterable[Mapping[str, Any]]) -> HostLayout:
@@ -115,7 +123,6 @@ def layout_for_rows(rows: Iterable[Mapping[str, Any]]) -> HostLayout:
         if not isinstance(version, str) or version not in _STAMPS:
             raise HostStorageError("unrecognized original host row stamp")
         result |= HostLayout(
-            hardware=version == HOST_HARDWARE_VERSION,
             historical=version != HOST_HARDWARE_VERSION,
             legacy_cpu=version in LEGACY_HOST_VERSIONS,
         )
@@ -139,12 +146,14 @@ def _check_shape(
     from idhazh.ledger import parquet
 
     stamp = envelope.row_schema_version
-    if stamp == HOST_HARDWARE_VERSION:
+    if stamp in (HOST_HARDWARE_VERSION, HOST_FINGERPRINT_VERSION):
         expected = parquet.schema_of(columns_for(layout))
         if set(schema.names) != set(expected.names):
             raise HostStorageError(f"{name} has an unexpected physical host column set")
     else:
-        expected = parquet.schema_of(columns_for(HostLayout(historical=True, legacy_cpu=True)))
+        expected = parquet.schema_of(columns_for(HostLayout(
+            historical=True, legacy_cpu=True, retired_clock=True,
+        )))
     if len(set(schema.names)) != len(schema.names) or any(
         field.name not in expected.names or not expected.field(field.name).type.equals(field.type)
         for field in schema
@@ -161,6 +170,12 @@ def _payload(
         _LEGACY_PAYLOAD if version in LEGACY_HOST_VERSIONS else _HISTORICAL_PAYLOAD
     )
     payload = {key: value for key, value in cells.items() if key not in _WRITER_CELLS}
+    if RETIRED_HOST_CLOCK in payload:
+        if envelope.row_schema_version == HOST_FINGERPRINT_VERSION or (
+            version == HOST_HARDWARE_VERSION and envelope.tier is Tier.RAW
+        ):
+            raise HostStorageError(f"{name} carries a retired column in a current host shape")
+        payload = project_retained_host_cells(payload)
     if version in LEGACY_HOST_VERSIONS:
         # Historical compact files could already pad the early clock columns.
         payload = strip_null_legacy_placeholders(payload)
@@ -214,6 +229,11 @@ def read_rows(
     if hashlib.sha256(json_lines.rows_bytes(stored)).hexdigest() != envelope.content_sha256:
         raise HostStorageError(f"{name} original host content_sha256 mismatch")
     layout = layout_for_rows(stored)
+    if (
+        schema is not None and layout.historical
+        and envelope.row_schema_version != HOST_FINGERPRINT_VERSION
+    ):
+        layout = replace(layout, retired_clock=RETIRED_HOST_CLOCK in schema.names)
     _check_shape(envelope, layout, schema, name=name)
     for cells in stored:
         version = cells["version"]
@@ -272,7 +292,7 @@ def packed_source_layout(path: Path) -> HostLayout:
     envelope = FileEnvelope.from_metadata(metadata).validate_container(Format.PARQUET)
     layout = layout_for_footer(envelope, schema.names) if count else HostLayout()
     _check_shape(envelope, layout, schema, name=path.name)
-    return layout
+    return replace(layout, retired_clock=False)
 
 
 def verify_packed(

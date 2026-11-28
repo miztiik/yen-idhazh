@@ -17,17 +17,15 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from _host_placement import refuse_external_placement
 from support.paths import REPO_ROOT, read_text
 
 from idhazh import cli, config, ledger, run_context
 from idhazh.contracts.council_run_record import CouncilRunRecord, EvaluationStep, ShardOutcome
-from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.ledger_name import LedgerName
 from idhazh.council import registry, session
 from idhazh.council.deadline import SECONDS_A_MINUTE
 
-from ._config import copy_config, selection, set_host_fingerprint_placement, write_declarations
+from ._config import copy_config, selection, write_declarations
 from ._tenants import a_scripted_venue, a_venue, forget, written
 
 A_VENUE = "a_paper_venue"
@@ -239,56 +237,12 @@ def test_a_council_verb_runs_a_night_that_hosts_nobody(
     )
 
 
-def test_python_rollback_records_one_machine_for_the_night_not_for_each_judged_date(
-    venue: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("IDHAZH_HOST_TELEMETRY_MODE", "python")
-    a_venue(venue, package=A_VENUE, slugs={A_SLUG: (1, ())})
-    config_root = _config_registering(venue, A_SLUG)
-    set_host_fingerprint_placement(config_root, False)
-    state = venue / "state"
-    address = [
-        "--config",
-        str(config_root),
-        "--run-id",
-        A_RUN,
-        "--commit",
-        A_SHA,
-        "--state-root",
-        str(state),
-    ]
-
-    with refuse_external_placement():
-        for judged in (A_DATE, "2026-09-19"):
-            selected = selection(
-                config.load_council(config_root), date=judged, run_id=A_RUN, commit_sha=A_SHA
-            )
-            monkeypatch.setenv("COUNCIL_SELECTION", selected.model_dump_json())
-            session.prepare(
-                config.load_council(config_root), date=judged, run_id=A_RUN, selection=selected
-            )
-            assert cli.main(["council-settle", "--date", judged, *address]) == 0
-
-    rows = ledger.load_days(
-        state, LedgerName.HOST_FINGERPRINT, [A_RUN[:10]], model=HostFingerprintRow
-    )
-    assert len(rows) == 1
-    (row,) = rows
-    assert row.job is None
-    assert (row.pipeline_name, row.task_name) == ("council", "save_council_results")
-    assert row.run_id == A_RUN
-    assert row.job_seconds is not None
-    assert row.memcpy_probe_mib == 0 and row.memcpy_gib_s is None
-    assert row.measured_at is not None
-
-
 @pytest.mark.parametrize("verb", [*COUNCIL_VERBS, "council-shard"])
 def test_a_council_verb_refuses_to_invent_a_run_it_was_not_given(verb: str) -> None:
     """A verb with no name to file under stops at the command line, not two hours in.
 
     Every value it could reach for belongs to somebody else: a digest run's id
-    claims a machine and a clock this night never drew.
+    claims a machine this night never drew.
     """
     assert cli.main([verb, "--date", A_DATE]) == 2
 

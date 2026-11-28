@@ -68,12 +68,6 @@ SET: Final = "set"
 #: language's vocabulary in a stamp that outlives the language.
 UNCAPPED: Final = "uncapped"
 
-#: Where Linux names the processor. `platform.processor()` answers `x86_64`
-#: there, which is the same string on every runner and so explains nothing.
-CPUINFO: Final = Path("/proc/cpuinfo")
-
-_CPU_MODEL_KEY: Final = "model name"
-
 _READ_CHUNK: Final = 1024 * 1024
 
 
@@ -121,9 +115,8 @@ def runtime_build(environ: Mapping[str, str] | None = None, *, base_url: str) ->
 def runner_class(environ: Mapping[str, str] | None = None) -> str:
     """Which class of machine ran the work, in that machine's own words.
 
-    A class, never a host. `host_cpu` carries the individual processor and is
-    deliberately undigested; the class is a choice somebody made and belongs in
-    the digest, while which CPU that choice drew is luck and does not.
+    A class, never a host. The individual processor belongs in Host Fingerprints,
+    not in the digest of the configuration that produced an item.
 
     GitHub Actions publishes all three parts. A machine that publishes none of
     them is a developer machine, and says so.
@@ -134,20 +127,6 @@ def runner_class(environ: Mapping[str, str] | None = None) -> str:
     system = env.get("RUNNER_OS") or platform.system() or "unknown"
     arch = env.get("RUNNER_ARCH") or platform.machine() or "unknown"
     return f"{where}/{system}/{arch}".lower()
-
-
-def host_cpu(cpuinfo: Path = CPUINFO) -> str:
-    """The processor this run drew. A diagnostic, and not part of the manifest.
-
-    It is the only field that explains a determinism violation, which is why it
-    has to name the part rather than the architecture.
-    """
-    if cpuinfo.exists():
-        for line in cpuinfo.read_text(encoding="utf-8", errors="replace").splitlines():
-            name, _, value = line.partition(":")
-            if name.strip() == _CPU_MODEL_KEY and value.strip():
-                return value.strip()
-    return platform.processor() or platform.machine() or "unknown"
 
 
 def sampling_spelling(sampling: Mapping[str, Any]) -> dict[str, str]:

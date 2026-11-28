@@ -50,5 +50,5 @@ export function speedForHost(host: Row, version: string, serving: ReadonlyMap<st
 		// Null is an observed but unusable pair, not permission to fall back.
 		if (speed !== undefined) return speed;
 	}
-	return version >= FIRST_HOST_WITH_PROMPT_TOTALS && version < HOST_SCHEMA_VERSION ? pairedSpeed(host) : null;
+	return version >= FIRST_HOST_WITH_PROMPT_TOTALS && version !== HOST_SCHEMA_VERSION ? pairedSpeed(host) : null;
 }

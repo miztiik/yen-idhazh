@@ -89,13 +89,12 @@ destination or model override argument. Capture uses the production tokenizer
 and template checks, reader, request builder, decoder, parser and evidence
 policy, including both orders and any configured reasoning spans.
 
-Supply a named native `HostFingerprintRow` JSON file describing the actual
-model host, not a guessed machine or another run's caller. The existing
-`idhazh.telemetry.silicon.read_row` can collect it locally with
-`ask_placement=False`; serialize the returned row without calling a ledger
-writer. Keep unavailable hardware fields null. For an off-machine controlled
-model, collect the row on that host and supply that file. The
-[host reference](../reference/host-metrics.md) owns collection and meanings.
+Supply a named JSON row describing the actual model host, not the caller or
+another run's machine. Run the
+[native fingerprint command](../reference/host-metrics.md#independent-fingerprint-api-and-cli)
+on that host with a private state root. Save only `row` from the successful
+response, not the receipt wrapper. Set `ask_placement: false` in the capture
+context to omit the external placement request. Keep unavailable fields null.
 
 ```powershell
 python -m utilities.evaluate_content_similarity_judge capture --set backend\var\judge-evaluation\set-<set-hash>.json --split confirmation --host backend\var\judge-evaluation\host.json --output-root backend\var\judge-evaluation

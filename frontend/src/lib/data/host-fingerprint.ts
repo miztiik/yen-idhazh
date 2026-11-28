@@ -7,6 +7,7 @@ const CORRECTED_VERSIONS = new Set([
 	'2026-10-12',
 	'2026-10-14',
 	'2026-10-26',
+	'2026-11-28',
 	HOST_SCHEMA_VERSION
 ]);
 

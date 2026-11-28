@@ -196,14 +196,9 @@ def run_calls(
     observed = props(endpoint, timeout=timeout)
     markers = derive_turn_markers(endpoint, entry=model, timeout=timeout)
     telemetry_selection = host_telemetry_mode(settings.app.observability)
-    facts = (
-        host.host_facts(job=ServerJob.WORK) if telemetry_selection == "python"
-        else host.HostFacts(
-            cpu_model=(
-                native_diagnostics.cpu_model() if telemetry_selection == "typescript" else None
-            ),
-            runner_name=None, job=ServerJob.WORK,
-        )
+    facts = host.HostFacts(
+        cpu_model=native_diagnostics.cpu_model() if telemetry_selection == "typescript" else None,
+        runner_name=None, job=ServerJob.WORK,
     )
     LOG.info(identity.model_dump_json())
     failures: list[str] = []

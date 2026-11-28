@@ -1,6 +1,6 @@
 # What the pipeline records about the machine it ran on
 
-**Last Updated**: 2026-11-26
+**Last Updated**: 2026-11-28
 
 Every host-fingerprint field, what it means and which readings are optional.
 The hardware fingerprint is reusable by any pipeline. Callers name their
@@ -9,7 +9,6 @@ The TypeScript fingerprint service writes one hardware-only opening capture per
 instrumented runner job. Host Probes collects transient CPU and memory profiles
 and files closed work or model-serving observations in Task Performance. Item
 resource readings and diagnostic memory files are separate optional instruments.
-Explicit Python rollback still uses its previous row format.
 
 Read this when a number surprises you and you want to know which machine
 produced it. Runner hardware varies between jobs, so compare measurements only
@@ -32,31 +31,19 @@ operator console, not on the news-reading pages.
 | | |
 | --- | --- |
 | Contract | [`backend/idhazh/contracts/host_fingerprint.py`](../../backend/idhazh/contracts/host_fingerprint.py) |
-| Schema | `HostHardwareRow` for new native writes; `HostFingerprintRow` for compatibility and explicit rollback |
+| Schema | `HostHardwareRow` for captures; `HostFingerprintRow` for supported retained hardware and model readings |
 | Ledger | The caller's state root, then `raw/host-fingerprint/<YYYY>/<MM>/<DD>/`; compaction uses the matching `compact/host-fingerprint/` path |
 | Files | one immutable `<file_id>.parquet` per completed write in the day directory. The reader settles the later whole row of the same work unit; neither file is edited. |
-| Producer | [`host-fingerprints`](../../services/host-fingerprints/src/index.ts) API/CLI. Python callers retain verified original files rather than collecting or rewriting them. [`silicon.py`](../../backend/idhazh/telemetry/silicon.py) remains the explicit rollback collector. |
+| Producer | [`host-fingerprints`](../../services/host-fingerprints/src/index.ts) API/CLI. Python callers request captures and retain verified original files rather than collecting or rewriting them. |
 | Read by | `/console/machine/`, through the browser questions in `frontend/src/lib/console/queries/machine.ts` and shared helpers in `frontend/src/lib/console/machine/records.ts` |
 | Key | `date`, `run_id`, `pipeline_name`, `task_name`, `shard`; legacy rows use `job` instead. The current `job` is the actual workflow job, not a substitute for a pipeline task. |
-| Switch | `observability.host_telemetry_enabled` for the whole instrument; `host_fingerprint` for host-row writes; `host_fingerprint_placement_enabled` for placement metadata in either collector; `memory_profiling_enabled` for memory/page-fault observations only |
+| Switch | `observability.host_telemetry_enabled` for the whole instrument; `host_fingerprint` for host-row writes; `host_fingerprint_placement_enabled` for placement metadata; `memory_profiling_enabled` for memory/page-fault observations only |
 | Committed | The caller owns publication of the files returned by the recorder |
 | Shown on news-reading pages | **no.** Operator surface only |
 
 **The collector is independent of its callers.** A pipeline may use the shared
 recorder or leave host telemetry out. Existing historical readings and recovery
 backups are not rewritten.
-
-Python callers can pass `ask_placement=False` to the task recorder or machine-row
-writer to omit the external host-placement request while retaining local
-collection and ledger writes. The default is `True`; the elapsed-time writer
-makes no placement request. Job instrumentation tests use this existing
-acquisition choice and refuse entry to the real placement reader, so a missing
-forwarding step fails before any network access.
-
-The default-on `observability.host_fingerprint_placement_enabled` setting also
-stops placement reads in both collectors when false. A caller's
-`ask_placement=False` is a narrower opt-out; neither choice stops local
-fingerprint collection or its ledger write.
 
 The manual feed planner workflow starts the
 [independent machine API server](serve-pipeline-apis.md) on the same
@@ -92,7 +79,7 @@ serial number. Its pipeline/task/run/shard identity says which execution produce
 Per-item resource readings live on the item-health row, not in a second copy of
 the job fingerprint.
 
-Both writers use fingerprint algorithm 2. Logical counts come from the online
+The native writer uses fingerprint algorithm 2. Logical counts come from the online
 CPU list, physical counts require complete package/core topology, and target
 capacity uses a verified target process, not the listener. Missing or contradictory
 inputs stay null. A missing frequency entry does not reduce the CPU count.
@@ -115,7 +102,7 @@ Table A - collected measurements
 | A5 | CPU and load over an item window | Optional | Whole-window busy/steal share, busy extrema and closing one-minute load. |
 | A6 | Memory and page faults | Optional | Selected process RAM, machine RAM/swap, available-memory minimum and major page-fault delta. |
 | A7 | Memory artifacts and copy speed | Optional | Process/sample files, server RSS, cgroup peak and an opt-in copy benchmark. The copy probe allocates two buffers and competes for memory bandwidth. |
-| A8 | Ledger writing | Optional | Immutable ledger files through the shared Python or TypeScript writer. A pipeline chooses whether and how to publish its writes. |
+| A8 | Ledger writing | Optional | Immutable files through the native writer. A pipeline chooses whether and how to publish its writes. |
 
 The live runtime is Linux with `/proc` and `/sys`, as on the Ubuntu runner.
 Windows development or recorded-fixture success does not certify live Linux
@@ -128,7 +115,7 @@ Memory diagnostics are separate from the persisted hardware fingerprint.
 `services/host-fingerprints` collects hardware, capacity, optional frequency,
 uptime, placement and the runner label into `HostHardwareRow`. Neither HTTP
 nor CLI accepts task timing or model counters in a hardware capture. The
-historical schema and mixed packs can still read and keep their old values.
+retained-data reader preserves historical hardware and model measurements.
 The service is build-time operator tooling, not a backend for the published site.
 
 Fingerprint HTTP and CLI follow the
@@ -191,9 +178,8 @@ targets leave affinity and quota unavailable; quotas also require a shared
 view of the target's cgroups and mount namespace. The CLI can measure itself
 when no target is supplied; an explicit null asks for no target measurements.
 Either caller can opt out of placement with `ask_placement: false`.
-The four historical timing/model keys are refused even when null:
-`model_load_ms`, `job_seconds`, `server_prompt_tokens` and
-`server_prompt_seconds`. None is a column in the new raw file. Success returns
+Task timing and model keys are refused even when null. They are not columns
+in the raw hardware file. Success returns
 `status: "written"`, the validated `row`, an `unavailable` reason map, and the
 shared writer's `files`. Each file's `path` is relative to the caller's state
 root, with POSIX separators; no absolute local path is returned. The caller
@@ -350,12 +336,10 @@ their own runners, after the existing machine listener verifies readiness.
 Checkout, dependency installation, server startup and publication are not part
 of those intervals. The closed profile is recorded through the
 [Host Probes API](host-probe-api.md#record) with the declared accounting day,
-run, attempt, shard and revision. The host telemetry off setting disables both
-old and new instruments. The existing memory selection governs PID and machine
-RAM without disabling task elapsed time or CPU. The legacy fingerprint and
-job clock remain in use. An opening capture with only a legacy job identity
-cannot supply a `host_unit_id`; a compatible capture must match the same
-execution and runner, and measurement does not take a second fingerprint.
+run, attempt, shard and revision. Host telemetry off skips these observations.
+The memory selection governs PID and machine RAM without disabling task elapsed
+time or CPU. A task may link only to its own execution's verified native
+opening capture; measurement does not take a second fingerprint.
 
 Host CPU remains machine-wide, including other work on the machine.
 Whole-task shares use opening and closing counters. Each rolling sample reports its actual
@@ -454,14 +438,11 @@ it does not report process or machine RAM samples.
 
 ## Digest item windows and shard memory
 
-Digest, Council, gardener and encoder comparison default to `typescript`.
-`python` is an explicit rollback and `off` disables collection. In native
-mode the digest writes an opening fingerprint once; the model close writes
-only Task Performance. Its item watch and private shard memory sampler also
-use TypeScript. None of these observations is a whole-job clock.
-The enabled paths never run two item watches or two shard memory samplers.
-If the native item listener is unavailable, the item still runs and logs
-progress; it does not fall back to Python collection.
+Digest, Council, gardener and encoder comparison default to `typescript`;
+`off` disables collection. Digest captures hardware once per runner and records
+the model close separately in Task Performance. Its item windows and private
+shard memory samples also use TypeScript. Without a listener, the item still
+runs and logs progress; the missing measurements stay unknown.
 
 The item watch opens immediately before model work and closes when the work
 stage has finished that item's model and optional scoring work. Fetch,
@@ -471,8 +452,8 @@ configured heartbeat interval for interior polls, but the application owns
 its heartbeat separately. Whole-item CPU busy and steal come from opening
 and closing `/proc/stat` counters. Idle and I/O wait are not busy; steal is
 separate and stays null if either endpoint lacks it. Guest time is not counted
-twice and a reset invalidates that comparison. Shares are rounded as in the
-Python watch. Busy minimum and maximum include opening-to-first-poll,
+twice and a reset invalidates that comparison. Busy minimum and maximum include
+opening-to-first-poll,
 adjacent polls and the whole-item share, not the last poll-to-close slice.
 An item with no periodic polls still takes both endpoints.
 
@@ -495,7 +476,7 @@ current charge appears in `rss-samples.jsonl` and the lifetime peak in
 `memory-peak.txt`. Unavailable group readings are not replaced with the
 root group's counters. `python-procs.jsonl` keeps the private per-process
 roll-call without executable paths or arguments. Job logs report aggregates
-only in this mode. The same shard artifact and two-day retention apply; raw
+only. The same shard artifact and two-day retention apply; raw
 model counters remain a separate measurement in the artifact. None of these
 sample or roll-call rows enters a ledger or an HTTP response.
 
@@ -521,9 +502,9 @@ Table B - whole-instrument selection
 
 | ID | Setting | Meaning |
 | --- | --- | --- |
-| B1 | `observability.host_telemetry_enabled: true` | Allow host collection in either collector. This is the committed default. |
+| B1 | `observability.host_telemetry_enabled: true` | Allow native host collection. This is the committed default. |
 | B2 | `observability.host_telemetry_enabled: false` | Stop host collection for every caller; no workflow choice can override it. |
-| B3 | Caller uses `task_telemetry.record` | Collect through the shared Python API with separate pipeline, task and shard identity. |
+| B3 | Caller uses the native capture and probe APIs | Collect with separate pipeline, task and shard identity. |
 | B4 | Caller does not record, or a workflow wrapper selects `off` | Leave host telemetry out for that invocation without changing stored data. Workflow dispatch controls are optional wrappers, not part of the recorder contract. |
 
 Table C - controls inside an enabled instrument
@@ -535,17 +516,16 @@ Table C - controls inside an enabled instrument
 | C3 | `memory_profiling: off` | Stop those memory/fault observations; leave their cells unavailable | CPU/load, timing, identity, heartbeat, item health or memory copying |
 | C4 | `observability.host_fingerprint: false` | Stop raw job fingerprint writes/probes | The complete resource monitor or per-item memory/CPU observations |
 | C5 | Empty `host_fingerprint_bandwidth_jobs`, or zero `host_fingerprint_bandwidth_floor_mib` | Stop the copy benchmark | Other host observations |
-| C6 | `observability.host_fingerprint_placement_enabled: false` | Stop placement metadata reads in either collector; leave those cells empty | Local host readings, the fingerprint row or its task clock |
+| C6 | `observability.host_fingerprint_placement_enabled: false` | Stop placement metadata reads and leave those cells empty | Local host readings, the fingerprint row or task observations |
 
 The master false value or caller's off choice wins first. Memory on cannot
 restart a disabled instrument. Whole off skips host readings, raw host
 writes and host-memory artifacts. It keeps work, item health and progress
 logging. No setting deletes existing readings.
 
-Placement metadata requires the configured switch. Python also requires the
-caller's `ask_placement` choice. Either false value skips the external read;
-true in the config cannot override a caller opting out, and a caller's
-default-on cannot override config opting out.
+Placement metadata requires both the configured switch and the native capture
+caller's `ask_placement` choice. Either false value skips only the external
+read; local hardware and its ledger write remain available.
 
 Set the master field to false to stop collection for every caller:
 
@@ -564,18 +544,14 @@ hardware fields still record when the copy is off. An unselected task has
 `memcpy_probe_mib=0` and an empty `memcpy_gib_s`. The buffer floor also disables
 copying when it is zero.
 
-**Any pipeline can record its task.** Use
-[`task_telemetry.record`](../../backend/idhazh/telemetry/task_telemetry.py)
-around the work, passing the pipeline name, task name, shard, run identity,
-loaded settings and state root. Pipeline and task names are separate validated
-strings, not workflow enums. The recorder writes the opening host row and
-closing task clock through the shared ledger, and returns the exact paths for
-the caller's publisher. A work failure still runs the closing step. The caller
-owns publication and may omit this optional instrument entirely.
+**Any pipeline can record its task.** Capture opening hardware through
+Host Fingerprints and file the closed observation through [Host Probes](host-probe-api.md#record).
+Pipeline and task names are separate validated strings, not workflow enums.
+The caller owns publication and may omit either optional instrument.
 
-New generic rows store `pipeline_name` and `task_name` as separate columns and
-leave legacy `job` null. Aggregations combine the names when they need a unique
-task key. Existing job-only rows keep their `job` values and remain readable.
+New generic rows store `pipeline_name` and `task_name` as separate columns.
+`job` names the actual workflow job when known and may differ from `task_name`.
+Existing job-only rows keep their `job` values and remain readable.
 Readers compare a legacy job's text value, not its Python enum identity.
 The host and item-health ledgers join generic rows on date, run, pipeline, task
 and shard; legacy rows join on date, run, job and shard. No historical row is
@@ -640,12 +616,12 @@ waiting heartbeat.
 | `run_id` | run id | The run |
 | `pipeline_name` | validated string? | The generic pipeline identity. Paired with `task_name`; both are absent on legacy rows |
 | `task_name` | validated string? | The generic task identity. Paired with `pipeline_name`; both are absent on legacy rows |
-| `job` | legacy enum or string, nullable | The old workflow identity. New generic rows store null |
+| `job` | legacy enum or string, nullable | The actual workflow job when known; on older job-only rows it identifies the work too |
 | `shard` | int, 0+ | The shard inside the task. A single-shard task writes 0 |
 | `fingerprint` | 16 hex characters? | A digest over the hardware cells that do not depend on the execution |
 | `fingerprint_version` | 1 or 2? | The digest algorithm; null exactly when the digest is null |
 
-**`fingerprint` is countable only with `fingerprint_version`.** New Python rows
+**`fingerprint` is countable only with `fingerprint_version`.** Native captures
 use algorithm 2, which digests vendor, family, model, stepping, model name, L3
 and watched flags only. Counts, target constraints, frequency, placement and
 clocks are excluded. Existing algorithm 1 and 2 rows keep their original labels
@@ -702,7 +678,7 @@ vocabulary lives in the contract rather than in the schema.
 `cpu_logical_processors` counts IDs in `/sys/devices/system/cpu/online`, so
 sparse IDs count as processors and do not imply missing CPUs. A physical count
 is recorded only when every online CPU has a valid package and core ID.
-`cpu_allowed_processors` is the online intersection of the measured Python
+`cpu_allowed_processors` is the online intersection of the measured
 process's effective affinity mask; that mask already includes its cpuset.
 `cpu_quota_cores` is the tightest valid quota found from the process cgroup up
 through its visible ancestors. A denied, missing or malformed ancestor makes
@@ -887,31 +863,22 @@ are the placement decision in the platform's vocabulary rather than ours**, whic
 is the only way to ask whether "a lottery" is really "which pools we draw from".
 A machine that does not answer records nothing, which is every developer machine.
 
-`fingerprint` and `measured_at` are the two cells that carry a question mark
-because of the second half: the half a job writes at its end measured no machine,
-so it names none and stamps no probe time. A compacted row carries both, because
-the probe's half is where they come from.
+## Retained model readings
 
-## Historical closing readings
-
-The half written at job end. Every reading comes from the workflow - one from a
-step that ran before the checkout existed, one from the log of the server this
-job started, one from that server's own `GET /metrics` body - so a run of the
-stage anywhere else records none of them.
+Older host records may contain model observations from the runner's server
+startup log or its final `GET /metrics` body. New serving observations live
+in Task Performance, not in hardware captures.
 
 | Column | Type | What it is | What it is for |
 | --- | --- | --- | --- |
 | `model_load_ms` | float? | Milliseconds between the server's legacy `loading model` and `model loaded` markers; includes context setup | The startup cost `run.shard_size` exists to amortise. Not an exact weights-load time |
-| `job_seconds` | int? | The historical clock from job start to its closing write, before later publishing steps | Retained for compatibility; no live chart or offline report reads it |
 | `server_prompt_tokens` | int? | Prompt tokens llama-server itself counted reading, cached tokens excluded | **The second instrument.** The item ledger's own answer is `sum(input_tokens) - sum(cached_tokens)`, and arithmetic over that ledger cannot check that ledger |
 | `server_prompt_seconds` | float? | Seconds llama-server itself counted reading prompts | The other half. A rate is a ratio, and the 80 percent defect this check caught in August 2026 was in the numerator, so one cell alone could not see it |
 
-During rollout the legacy host row and the separate `serve-summarizer` row
-read the same final counter pair, not two observations. The
-[Hardware publication contract](../architecture/publishing/console-machine.md#what-may-not-be-pooled)
-defines the read-side fallback. Only the legacy row uses the broad startup
-interval. The [model boundary](../architecture/summarize/model-boundary.md#what-proves-the-two-sides-agree)
-explains why the exact weights-load value is unavailable.
+The [Hardware publication contract](../architecture/publishing/console-machine.md#what-may-not-be-pooled)
+defines when the retained counter pair can supply Speed. The old broad
+startup interval is not an exact weights-load value; see the
+[model boundary](../architecture/summarize/model-boundary.md#what-proves-the-two-sides-agree).
 
 ## Identity names
 
@@ -928,15 +895,11 @@ to keep one column. Its full vocabulary lives in the contract.
 
 ## Design rationale
 
-**The HTTP API collects hardware, not work done by its caller.** Maintainer
-ruling, 2026-10-26 UTC: remove timing/model inputs from the HTTP API only, with
-no request migration. The CLI, Python producers and persisted ledger keep those
-fields for compatibility. Total machine RAM is an optional addition
-to the shared row; unmeasured historical capacity stays null. No compatibility
-migration, historical rewrite or replacement metrics ledger is introduced.
-Placement is optional and its failure cannot discard local hardware or a
-completed write. The API creates no host index; publication remains the caller's
-responsibility.
+**A hardware capture identifies the machine, not the work.** Task Performance
+measures the named work, so one opening file can support several task
+observations without being rewritten. Unmeasured historical capacity remains
+null. Placement is optional and its failure cannot discard local hardware.
+The API creates no host index; publication remains the caller's responsibility.
 
 **The independent collector shares the existing persistence stack.** Zod
 validates caller context and the full host row; the existing
@@ -962,17 +925,13 @@ where to place the shared ledger and which exact writes its publisher commits.
 The recorder accepts separate pipeline and task names plus a shard. Those
 columns form the generic identity; a unique ledger unit combines them only
 where a single key is required. Old job-only rows keep their original identity.
-The opening hardware row and closing clock share one work-unit identity, so the
-later file completes the row rather than adding a second task record. Each write
-is an immutable file through the shared ledger, and the reader settles attempts
-using the common rules in
+The task observation links to the verified opening's unit without sharing its
+identity. Each write is immutable; readers settle attempts using the rules in
 [Persistence](../architecture/contracts/persistence.md#the-two-identifiers).
 
-**Platform placement is an independent opt-out.** Maintainer ruling,
-2026-10-24: keep placement collection on by default, but let the operator stop
-the external metadata request in the selected config while local host
-collection and ledger writes continue. A caller may still opt out for one task;
-neither control may defeat the other.
+**Platform placement is an independent opt-out.** A deployment can stop the
+external request in its selected config; a caller can also opt out for one
+task. Neither setting stops local collection or ledger writes.
 
 ## See also
 

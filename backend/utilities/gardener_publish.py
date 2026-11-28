@@ -330,7 +330,6 @@ def publish(
     delete_permissions: tuple[str, ...],
     say: Callable[[str], None] = print,
     performance_root: Path | None = None,
-    native_opening: bool = True,
 ) -> PushOutcome:
     """Apply independently declared ownership through the shared publisher."""
     outside = sorted(
@@ -346,7 +345,7 @@ def publish(
         with ExitStack() as cleanup:
             result = _publish_operations(
                 shard, git, identity, write_permissions, delete_permissions,
-                performance_root=performance_root, native_opening=native_opening,
+                performance_root=performance_root,
                 attempts=attempts, cleanup=cleanup,
             )
     except (OSError, ValueError, RuntimeError) as error:
@@ -380,7 +379,7 @@ def publish(
 def _publish_operations(
     shard: Shard, git: Repository, identity: WriterIdentity,
     write_permissions: tuple[str, ...], delete_permissions: tuple[str, ...], *,
-    performance_root: Path | None, native_opening: bool, attempts: int, cleanup: ExitStack,
+    performance_root: Path | None, attempts: int, cleanup: ExitStack,
 ) -> PublicationResult:
     repo = git.repo
     refused = _refuse_a_directory(shard, repo)
@@ -398,14 +397,9 @@ def _publish_operations(
         task_scope = performance.append_scope(identity)
         host_scope = machine_evidence.raw_scope(machine_evidence.HOST, identity.run_id[:10])
         opening, proofs = performance.append_evidence(
-            performance_root, identity, shard.task_names, native=native_opening,
+            performance_root, identity, shard.task_names,
         )
-        if opening is not None and not native_opening:
-            if opening.path not in shard.written_paths:
-                raise IntegrityError("Task Performance opening is not a shard write")
-            if safe_file(repo, opening.path, exists=True).read_bytes() != opening.data:
-                raise IntegrityError("gardener opening fingerprint bytes changed", (opening.path,))
-        elif opening is not None:
+        if opening is not None:
             proofs = (opening, *proofs)
         for proof in proofs:
             scope = host_scope if proof is opening else task_scope
@@ -829,10 +823,6 @@ def _run_and_land(
                     *owned,
                     staging.staged_path(LedgerName.GARDENER),
                     *(
-                        (staging.staged_path(LedgerName.HOST_FINGERPRINT),)
-                        if collector == "python" else ()
-                    ),
-                    *(
                         staging.staged_path(which)
                         for name in names
                         for which in settings.tasks[name].appends_to
@@ -842,7 +832,6 @@ def _run_and_land(
         ),
         delete_permissions=tuple(owned),
         performance_root=ran.performance_root,
-        native_opening=collector == "typescript",
     )
     code = worst(ran.exit_code, pushed.exit_code)
     stopped = None if pushed.landing is not None else ShardStop.CHECK_REFUSED

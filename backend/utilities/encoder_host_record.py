@@ -16,7 +16,7 @@ from idhazh.telemetry import machine_evidence
 
 @contextmanager
 def stage_local_host(bundle: Path, day: str) -> Iterator[Path]:
-    """Give the rollback clock its own opening rows and retain only completed writes."""
+    """Keep only verified native captures from this score's private state root."""
     scope = machine_evidence.raw_scope(machine_evidence.HOST, day)
     with TemporaryDirectory(prefix="encoder-host-") as directory:
         private = Path(directory)

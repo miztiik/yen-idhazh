@@ -6,7 +6,6 @@ import argparse
 import hashlib
 import json
 from copy import deepcopy
-from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -14,8 +13,8 @@ import pytest
 from idhazh import completed_writes, config, ledger
 from idhazh.atomic_write import write_atomic
 from idhazh.contracts.base import ServerJob
-from idhazh.contracts.host_fingerprint import HostFingerprintRow
-from idhazh.telemetry import silicon, task_telemetry
+from idhazh.contracts.host_fingerprint import HostHardwareRow
+from idhazh.telemetry import native_capture
 from idhazh.telemetry.host_control import MODE_ENV
 from utilities.compare_summary_encoders import (
     read_config,
@@ -140,18 +139,23 @@ def test_render_saved_readings_leaves_the_measurement_and_manifest_unchanged(
     assert "\r\n" not in output.read_bytes().decode("utf-8")
 
 
-def test_rollback_artifact_keeps_only_this_scores_completed_host_writes(
+def test_local_artifact_keeps_only_this_scores_completed_native_capture(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv(MODE_ENV, "python")
+    monkeypatch.setenv(MODE_ENV, "typescript")
     settings = config.load()
     day = "2026-11-26"
     revision = "a" * 40
     archive = tmp_path / "state"
-    _, (unrelated,) = silicon.file_machine_row(
-        date=day, run_id=f"{day}-200", settings=settings, state_root=archive,
-        commit_sha=revision, job=ServerJob.COLLECT, ask_placement=False,
-    )
+    def write_host(state: Path, run: str) -> Path:
+        _, (path,) = native_capture.file_opening(
+            date=day, writer=native_capture.writer_for_task(
+                run, revision, job=ServerJob.COLLECT, pipeline="encoder-comparison", task="score",
+            ), settings=settings, state=state, ask_placement=False,
+        )
+        return path
+
+    unrelated = write_host(archive, f"{day}-200")
     bundle = tmp_path / "host-record"
     reading = tmp_path / "readings" / "minilm-l6.json"
     run_id = f"{day}-201"
@@ -161,19 +165,13 @@ def test_rollback_artifact_keeps_only_this_scores_completed_host_writes(
             stale = private / old_path
             stale.parent.mkdir(parents=True)
             stale.write_bytes(unrelated.read_bytes())
-            with task_telemetry.record(
-                date=day, run_id=run_id, settings=settings, state_root=private,
-                commit_sha=revision, job=ServerJob.COLLECT, ask_placement=False,
-                started_at=datetime(2026, 11, 26, tzinfo=UTC),
-                clock=lambda: datetime(2026, 11, 26, 0, 0, 2, tzinfo=UTC),
-            ) as completed:
-                write_atomic(reading, '{"state":"encoding"}')
-                raise RuntimeError("score failed")
+            completed = write_host(private, run_id)
+            write_atomic(reading, '{"state":"encoding"}')
+            raise RuntimeError("score failed")
 
-    staged = [bundle / "state" / path.relative_to(private) for path in completed]
-    assert staged and set(artifact) == set(staged)
-    rows = [ledger.load([path], model=HostFingerprintRow)[0] for path in staged]
-    assert all(row.run_id == run_id for row in rows)
-    assert rows[-1].job_seconds == 2
+    staged = bundle / "state" / completed.relative_to(private)
+    assert set(artifact) == {staged}
+    (row,) = ledger.load([staged], model=HostHardwareRow)
+    assert (row.run_id, row.pipeline_name, row.task_name) == (run_id, "encoder-comparison", "score")
     assert not (bundle / "state" / old_path).exists()
     assert reading.is_file()

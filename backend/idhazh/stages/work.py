@@ -424,9 +424,7 @@ def stage_work(
     flags = Flags.of(settings.app.logging)
     # The workflow passes the PID written by the model-server maintainer. Looking
     # through the process table could select an unrelated server.
-    if host_mode == "python":
-        shard_facts = host.host_facts(job=ServerJob.WORK)
-    elif host_mode == "typescript":
+    if host_mode == "typescript":
         shard_facts = host.HostFacts(
             cpu_model=None if native_host is None else native_host.cpu_model,
             runner_name=None if native_host is None else native_host.runner_name,
@@ -572,23 +570,16 @@ def stage_work(
         )
         recorder.note(queue_wait_ms=queue_wait_ms)
         recorder.parked(queue_wait_ms)
-        watch_context: ItemHeartbeat | ItemWindow | host.Watch
+        watch_context: ItemHeartbeat | ItemWindow
         if item_probe is not None:
             watch_context = ItemWindow(
                 item_probe, item_probe_identity, interval_s=flags.waiting_heartbeat_seconds,
                 on_tick=_heartbeat(recorder), server=server_pin,
                 memory_profiling_enabled=settings.app.observability.memory_profiling_enabled,
             )
-        elif host_mode != "python":
+        else:
             watch_context = ItemHeartbeat(
                 interval_s=flags.waiting_heartbeat_seconds, on_tick=_heartbeat(recorder)
-            )
-        else:
-            watch_context = host.Watch(
-                interval_s=flags.waiting_heartbeat_seconds,
-                server_pid=server_pid,
-                on_tick=_heartbeat(recorder),
-                memory_profiling_enabled=settings.app.observability.memory_profiling_enabled,
             )
         with (
             tracer.trace(_trace_id(plan.run_id, item)),

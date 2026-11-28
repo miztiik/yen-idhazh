@@ -69,12 +69,11 @@ on:
         type: boolean
         default: false
       host_telemetry:
-        description: 'TypeScript host telemetry, Python rollback on task shards, or off'
+        description: 'TypeScript host telemetry or off'
         type: choice
         default: typescript
         options:
           - typescript
-          - python
           - 'off'
       memory_profiling:
         description: 'OS memory and fault collection; inherit reads shared config'

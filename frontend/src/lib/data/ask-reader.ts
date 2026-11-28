@@ -190,7 +190,12 @@ export function viewStatement(ledger: LedgerName, sources: readonly HeldSource[]
 		parts.push(viewPart([source.name], source.window));
 	}
 	if (whole.length > 0) parts.push(viewPart(whole, null));
-	return `CREATE OR REPLACE VIEW ${quoteIdent(ledger)} AS ${parts.join(' UNION ALL BY NAME ')}${empty ? ' LIMIT 0' : ''}`;
+	const rows = parts.join(' UNION ALL BY NAME ');
+	// Older host packs can carry the retired timer; hardware-only packs never had it.
+	const visible = ledger === 'host-fingerprint'
+		? `SELECT COLUMNS(lambda column_name: lower(column_name) <> 'job_seconds') FROM (${rows})`
+		: rows;
+	return `CREATE OR REPLACE VIEW ${quoteIdent(ledger)} AS ${visible}${empty ? ' LIMIT 0' : ''}`;
 }
 
 export function columnsOf(rows: Record<string, unknown>[]): Column[] {

@@ -89,7 +89,7 @@ FIXTURE_FILES: Final = (
     "file-envelope/a-raw-file.json",
     "host-fingerprint-row/a-machine-that-reported-nothing.json",
     "host-fingerprint-row/every-reading-taken.json",
-    "host-fingerprint-row/the-clock-a-job-kept.json",
+    "host-fingerprint-row/a-model-serving-reading.json",
     "icon-manifest/the-committed-set.json",
     "item-health-row/extract-too-short.json",
     "item-health-row/published-with-elements.json",

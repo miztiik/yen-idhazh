@@ -25,7 +25,6 @@
     "fingerprint_version": null,
     "flags": "",
     "job": "operator",
-    "job_seconds": null,
     "l3_cache_bytes": null,
     "machine_memory_total_mib": null,
     "measured_at": null,

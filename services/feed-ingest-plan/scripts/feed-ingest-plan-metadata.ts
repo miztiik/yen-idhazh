@@ -3,7 +3,7 @@ import { lstat, realpath } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { z } from "zod";
 import {
-  DateStampSchema, HostFingerprintRowSchema, HOST_FINGERPRINT_VERSION,
+  DateStampSchema, HostFingerprintRowSchema, HOST_FINGERPRINT_PRODUCER,
   HOST_HARDWARE_VERSION, HostHardwareRowSchema, PlannerLedgerNameSchema, WriterIdentitySchema,
 } from "../../../packages/common-contracts/src/index";
 import type { HostFingerprintRow, HostHardwareRow } from "../../../packages/common-contracts/src/index";
@@ -26,6 +26,21 @@ const RegistrySchema = z.object({
     ledgers: z.array(z.object({ name: z.string(), grain: z.string(), prefix: z.array(z.string()).nullable() })),
   })),
 });
+
+// Private decoder for the original planner receipt and its exact Parquet layout.
+const RETAINED_HOST_VERSION = "2026-10-26";
+export const StoredPlannerHostSchema = HostFingerprintRowSchema.safeExtend({
+  version: z.literal(RETAINED_HOST_VERSION),
+  job_seconds: z.int().nonnegative().nullable().default(null),
+});
+
+export function projectPlannerHost(row: HostHardwareRow | HostFingerprintRow): HostHardwareRow | HostFingerprintRow {
+  if ("job_seconds" in row) {
+    const { job_seconds: _retired, ...readings } = row;
+    return readings;
+  }
+  return row;
+}
 
 export async function readMetadataRegistrations(path: string | URL): Promise<MetadataRegistrations> {
   const registry = RegistrySchema.parse(await Bun.file(path).json());
@@ -51,7 +66,7 @@ export async function readMetadataRegistrations(path: string | URL): Promise<Met
 export function hostWriter(identity: ExecutionIdentity, historical = false) {
   return WriterIdentitySchema.parse({
     ...ExecutionIdentitySchema.parse(identity), job: historical ? null : "isolated-plan", pipeline_name: "feed-ingest-plan",
-    task_name: "isolated-plan", shard: 0, producer: "telemetry.silicon",
+    task_name: "isolated-plan", shard: 0, producer: HOST_FINGERPRINT_PRODUCER,
   });
 }
 
@@ -96,9 +111,9 @@ export async function verifyMetadataFile(root: string, path: string, registratio
   if (named.ledger === "host-fingerprint") {
     const actual = await readLedgerParquet<HostHardwareRow | HostFingerprintRow>(file, named.ledger, [
       { schema: HostHardwareRowSchema, schemaVersion: HOST_HARDWARE_VERSION },
-      { schema: HostFingerprintRowSchema, schemaVersion: HOST_FINGERPRINT_VERSION },
+      { schema: StoredPlannerHostSchema, schemaVersion: RETAINED_HOST_VERSION },
     ]);
-    const writer = hostWriter(expected, actual.envelope.row_schema_version === HOST_FINGERPRINT_VERSION);
+    const writer = hostWriter(expected, actual.envelope.row_schema_version === RETAINED_HOST_VERSION);
     if (actual.envelope.tier !== "raw" || actual.envelope.covers !== expected.run_id.slice(0, 10)
       || actual.envelope.covers !== named.covers || actual.envelope.file_id !== named.file_id
       || actual.rows.length !== 1 || actual.rows[0]!.row.date !== named.covers
@@ -106,7 +121,7 @@ export async function verifyMetadataFile(root: string, path: string, registratio
       || Object.entries(writer).some(([key, value]) => actual.envelope.identity[key as keyof typeof writer] !== value)) {
       throw new Error("delivery: host output differs from its current execution identity");
     }
-    return { ...named, envelope: actual.envelope, rows: actual.rows.map(stored => stored.row),
+    return { ...named, envelope: actual.envelope, rows: actual.rows.map(stored => projectPlannerHost(stored.row)),
       content_sha256: actual.envelope.content_sha256, row_count: actual.rows.length };
   }
   const contract: LedgerRowContract<object> = plannerContracts[named.ledger];

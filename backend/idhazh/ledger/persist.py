@@ -394,7 +394,7 @@ def persist(
             and all(row.version in HOST_FINGERPRINT_READ_VERSIONS for row in rows)
         )
     ):
-        raise ValueError("raw host writes require the current hardware or explicit rollback row")
+        raise ValueError("raw host writes require a declared hardware or compatibility row")
     if not lifecycle.accepts_new_rows(ledger, len(rows), state_dir=state_dir, identity=identity):
         return []
     knobs = _knobs()
@@ -504,7 +504,7 @@ def _stored(rows: Sequence[LedgerStoredRow]) -> list[dict[str, Any]]:
 def preserves_host_cells(
     source: Sequence[LedgerStoredRow], packed: Sequence[LedgerStoredRow]
 ) -> bool:
-    """Compare originals, allowing only absent cells padded with declared nulls."""
+    """Compare supported original cells, allowing declared null padding."""
     def facts(rows: Sequence[LedgerStoredRow]) -> bytes:
         return json_lines.rows_bytes(
             {key: value for key, value in cells.items() if value is not None}

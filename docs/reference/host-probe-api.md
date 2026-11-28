@@ -183,8 +183,8 @@ flat summary of a closed profile, not its samples, PIDs or handle. TypeScript
 callers can use `summarizeClosedTaskProfile` to select the whole-interval CPU,
 RAM and elapsed readings. Independently measured phases or model-serving
 sessions can send their typed evidence without a profile or handle. If supplied,
-`host_unit_id` must match verified capture bytes in the same private root,
-admitted days and execution; omit it when no capture was available.
+`host_unit_id` must match a verified native hardware capture in the same
+private root, admitted days and execution; omit it when no capture was available.
 
 When the launched job enables the master `observability.host_telemetry_enabled`
 switch, the existing task profiler is enabled and both profile memory settings

@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import { JobNameSchema, RunIdSchema, reject } from "./primitives";
 
-export const HOST_FINGERPRINT_VERSION = "2026-10-26";
+export const HOST_FINGERPRINT_VERSION = "2026-11-28";
 export const HOST_HARDWARE_VERSION = "2026-11-26";
 export const HOST_FINGERPRINT_PRODUCER = "telemetry.silicon";
 export const WATCHED_FLAGS = [
@@ -99,14 +99,13 @@ export const HostHardwareRowSchema = z.strictObject({
 export type HostHardwareRow = z.infer<typeof HostHardwareRowSchema>;
 
 export const HostFingerprintRowSchema = z.strictObject({
-  version: z.enum(["2026-10-10", "2026-10-12", "2026-10-14", HOST_FINGERPRINT_VERSION]).default(HOST_FINGERPRINT_VERSION),
+  version: z.enum(["2026-10-10", "2026-10-12", "2026-10-14", "2026-10-26", HOST_FINGERPRINT_VERSION]).default(HOST_FINGERPRINT_VERSION),
   date: z.iso.date(), run_id: RunIdSchema,
   job: JobNameSchema.nullable().default("work"),
   pipeline_name: JobNameSchema.nullable().default(null),
   task_name: JobNameSchema.nullable().default(null), shard: count,
   ...hardwareFields,
   model_load_ms: number.nonnegative().nullable().default(null),
-  job_seconds: count.nullable().default(null),
   server_prompt_tokens: count.nullable().default(null),
   server_prompt_seconds: number.nonnegative().nullable().default(null),
 }).superRefine((row, ctx) => {

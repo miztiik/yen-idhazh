@@ -34,7 +34,6 @@
   "runner_name": null,
   "measured_at": null,
   "model_load_ms": null,
-  "job_seconds": null,
   "server_prompt_tokens": null,
   "server_prompt_seconds": null
 }

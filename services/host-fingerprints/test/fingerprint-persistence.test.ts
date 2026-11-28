@@ -13,7 +13,7 @@ import { readTable, storedRow } from "./parquet-readback";
 import { FingerprintEventSchema } from "../src/api/create-fingerprint-event";
 import type { FingerprintEvent } from "../src/api/create-fingerprint-event";
 
-const historicalOnly = ["model_load_ms", "job_seconds", "server_prompt_tokens", "server_prompt_seconds"];
+const historicalOnly = ["model_load_ms", "server_prompt_tokens", "server_prompt_seconds"];
 
 function request(input: unknown, carrier = {}) {
   return new Request(`http://localhost${FINGERPRINT_PATH}`, { method: "POST", headers: carrier, body: JSON.stringify(input) });
@@ -73,7 +73,7 @@ test("POST persists the entire hardware row and independent Arrow column transcr
     expect(metadata.content_sha256).toBe(body.files[0].content_sha256);
   } finally { await f.cleanup(); }
 });
-test("full independently recorded row retains every non-null hardware and clock cell through the shared writer", async () => {
+test("full independently recorded row retains every hardware and model cell through the shared writer", async () => {
   const f = await fixture();
   try {
     const { persistLedger } = await import("@idhazh/ledger-file-writer");
@@ -187,7 +187,6 @@ test("HTTP retains the existing task-gated copy benchmark", async () => {
     const body = await response.json();
     expect(body.row.memcpy_probe_mib).toBe(2);
     expect(body.row.memcpy_gib_s).toBeGreaterThan(0);
-    expect(body.row).not.toHaveProperty("job_seconds");
     expect(body.files).toHaveLength(1);
   } finally { await f.cleanup(); }
 });
@@ -242,7 +241,6 @@ test("actual CLI writes readable Parquet, honors selected settings, and exits no
     const actual = storedRow((await readTable(outputRoot, response.files[0].path)).table);
     expect(actual.run_id).toBe(f.capture.writer.run_id);
     expect(actual.pipeline_name).toBe(f.capture.writer.pipeline_name);
-    expect(actual).not.toHaveProperty("job_seconds");
     if (process.platform !== "linux") expect(actual.cpu_vendor).toBeNull();
     const failRoot = join(f.directory, "file-not-directory");
     await writeFile(failRoot, "unchanged");
@@ -250,7 +248,7 @@ test("actual CLI writes readable Parquet, honors selected settings, and exits no
     expect(await failed.exited).not.toBe(0);
     expect(await new Response(failed.stdout).text()).toBe("");
     expect(await new Response(failed.stderr).text()).toContain("host_fingerprint_failed");
-    await writeFile(contextPath, JSON.stringify({ ...f.capture, job_seconds: null }));
+    await writeFile(contextPath, JSON.stringify({ ...f.capture, server_prompt_seconds: null }));
     const obsolete = Bun.spawn(args, { stdout: "pipe", stderr: "pipe" });
     expect(await obsolete.exited).not.toBe(0);
     await writeFile(contextPath, JSON.stringify(f.capture));

@@ -138,7 +138,6 @@ MODULE_NAMES = (
     "idhazh.telemetry.host_control",
     "idhazh.telemetry.machine_api",
     "idhazh.telemetry.machine_evidence",
-    "idhazh.telemetry.silicon",
     "idhazh.telemetry.sinks",
     "idhazh.telemetry.spans",
     "idhazh.telemetry.task_probe",

@@ -27,7 +27,7 @@ from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.task_performance import TaskPerformanceOutcome
 from idhazh.ledger import staging
 from idhazh.telemetry import machine_api, machine_evidence, task_probe
-from idhazh.telemetry.host_control import mode as host_mode
+from idhazh.telemetry.host_control import enabled as host_enabled
 from utilities import digest_performance, machine_task, model_runtime, publication_evidence
 from utilities.publication_conflict import capture_publication_delta, replay_publication_delta
 from utilities.publication_git import Repository
@@ -81,15 +81,7 @@ def _flag(args: list[str], name: str, default: str = "") -> str:
 
 
 def measure(command: list[str]) -> int:
-    selected = host_mode(config.load().app.observability)
-    legacy = None
-    job = os.environ.get("GITHUB_JOB", "")
-    date = os.environ.get("IDHAZH_MACHINE_ACCOUNTING_DAY", "")
-    if selected == "python" and job in VERBS and date:
-        shard = os.environ.get("IDHAZH_MACHINE_SHARD", "0")
-        identity = identify(["--date", date, "--shard", shard], job=job)
-        legacy = digest_performance.opening_file(identity, date, native=False).writer
-    return machine_task.run(command, legacy_opening=legacy, instrument=selected != "off")
+    return machine_task.run(command, instrument=host_enabled(config.load().app.observability))
 
 
 def identify(args: list[str], *, job: str) -> WriterIdentity:
@@ -117,12 +109,10 @@ def run(args: list[str]) -> int:
     identity = identify(args, job=job)
     date = _flag(args, "--date", os.environ.get("PUBLISH_DATE", ""))
     if identity.job is None:
-        raise ValueError("digest publication requires a legacy workflow job identity")
+        raise ValueError("digest publication requires a workflow job identity")
     job = ServerJob(identity.job)
     if verb == "fingerprint":
         digest_performance.capture(config.REPO_ROOT, identity, date, config.load())
-        return 0
-    if verb == "job-clock" and host_mode(config.load().app.observability) != "python":
         return 0
 
     writes: dict[Path, str] = {}
@@ -131,13 +121,10 @@ def run(args: list[str]) -> int:
         native_host = None
         if verb in ("plan", "work", "assemble"):
             observability = config.load().app.observability
-            selected = host_mode(observability)
-            if selected != "off":
+            if host_enabled(observability):
                 repo = config.REPO_ROOT
-                opening = digest_performance.read_opening(
-                    repo, identity, date, native=selected == "typescript",
-                )
-                if selected == "typescript" and verb == "work":
+                opening = digest_performance.read_opening(repo, identity, date)
+                if verb == "work":
                     if opening is not None and isinstance(opening.row, HostHardwareRow):
                         native_host = opening.row
                     elif observability.host_fingerprint:
@@ -187,13 +174,10 @@ def close_serving(args: list[str]) -> int:
         outcome = "success"
     repo = config.REPO_ROOT
     identity = identify(args, job="work")
-    selected = host_mode(config.load().app.observability)
-    if selected == "off":
+    if not host_enabled(config.load().app.observability):
         return 0
     observation = model_runtime.close_serving_observation(repo / "config", "llama-server", outcome)
-    recording = digest_performance.recording(
-        repo, identity, parsed.date, native=selected == "typescript",
-    )
+    recording = digest_performance.recording(repo, identity, parsed.date)
     if observation is not None and recording is not None:
         try:
             recording.record(
@@ -275,22 +259,18 @@ def request_for(
     imported = git.run("rev-parse", "--verify", "--quiet", "refs/worktree/publication-input-state")
     source = imported.stdout.decode().strip() if imported.returncode == 0 else head
     if identity.job is None:
-        raise ValueError("digest publication requires a legacy workflow job identity")
+        raise ValueError("digest publication requires a workflow job identity")
     job = ServerJob(identity.job)
     settings = config.load()
-    selected = host_mode(settings.app.observability)
-    verbs = (*VERBS[job], "job-clock") if selected == "python" else VERBS[job]
     hashes = publication_evidence.read(
-        repo, identity, verbs, excluded=(staging.staged_path(LedgerName.TASK_PERFORMANCE),),
+        repo, identity, VERBS[job], excluded=(staging.staged_path(LedgerName.TASK_PERFORMANCE),),
     )
     has_assembly = job is ServerJob.ASSEMBLE and any(
         not contains(machine_evidence.raw_scope(machine_evidence.HOST, date), path)
         for path in hashes
     )
-    if selected != "off":
-        observer = digest_performance.evidence(
-            repo, identity, date, native=selected == "typescript",
-        )
+    if host_enabled(settings.app.observability):
+        observer = digest_performance.evidence(repo, identity, date)
         for path, digest in observer.items():
             if path in hashes and hashes[path] != digest:
                 raise IntegrityError("completed receipts disagree about the same file", (path,))

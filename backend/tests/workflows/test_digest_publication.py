@@ -37,7 +37,7 @@ from idhazh.llm.serving_metrics import serving_measurement
 from idhazh.render.write import asset_relpath
 from idhazh.stages import common
 from idhazh.stages.assemble import stage_assemble
-from idhazh.telemetry import machine_api, machine_evidence, silicon
+from idhazh.telemetry import machine_api, machine_evidence
 from utilities import digest_assemble, digest_performance, digest_publish, publication_evidence
 from utilities.publication_git import Repository
 from utilities.publication_request import IntegrityError, PublicationRequest, Write
@@ -215,24 +215,18 @@ def test_native_digest_work_and_serving_land_together_without_widening_authority
         run_id=f"{day}-123", attempt=2, job=ServerJob.WORK, shard=3,
         producer="utilities.digest_publish", git_sha=source,
     )
-    settings = config.load(CONFIG_DIR)
-    settings.app.observability.host_fingerprint_bandwidth_jobs = ()
-    settings.app.observability.host_fingerprint = True
     state = repo / "state"
     private = tmp_path / "native"
     scope = ["--date", day, "--execution", "123", "--commit", source, "--shard", str(job.shard)]
     assert digest_publish.run(["fingerprint", *scope]) == 0
     assert "no listener" in caplog.text
     assert not ledger.raw_root(state, LedgerName.HOST_FINGERPRINT).exists()
+    host = digest_performance.opening_file(job, day)
+    (unscoped_opening,) = capture_openings(((tmp_path / "unscoped-host", host),))
     with completed_writes.collect() as unscoped:
-        silicon.file_machine_row(
-            date=day, run_id=job.run_id, settings=settings, state_root=state,
-            commit_sha=source, shard=job.shard, job=ServerJob.WORK, attempt=job.attempt,
-            ask_placement=False,
-        )
+        unscoped_opening.place(repo)
     publication_evidence.save(repo, job, "fingerprint", unscoped)
-    assert digest_performance.read_opening(repo, job, day, native=True) is None
-    host = digest_performance.opening_file(job, day, native=True)
+    assert digest_performance.read_opening(repo, job, day) is None
     store = digest_performance.bundle(repo, job)
     (opening,) = capture_openings(((store, host),))
     caplog.clear()
@@ -248,8 +242,6 @@ def test_native_digest_work_and_serving_land_together_without_widening_authority
     raw_counters = "llamacpp:prompt_tokens_total 139\nllamacpp:prompt_seconds_total 2.25\n"
     measurement = serving_measurement(raw_counters, subject_id="test-model", outcome="success")
     assert measurement is not None
-    assert digest_publish.run(["job-clock", *scope]) == 0
-    assert not publication_evidence.receipt_path(repo, job, "job-clock").exists()
 
     bun = shutil.which("bun")
     assert bun, "Install Bun to exercise the native record route"
@@ -351,7 +343,7 @@ def test_an_opening_only_assemble_can_publish_without_a_digest_plan(
     )
     day = "2026-11-26"
     (opening,) = capture_openings((
-        (digest_performance.bundle(repo, job), digest_performance.opening_file(job, day, native=True)),
+        (digest_performance.bundle(repo, job), digest_performance.opening_file(job, day)),
     ))
 
     result = digest_publish.land(repo=repo, identity=job, date=day)
