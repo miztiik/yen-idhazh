@@ -10,6 +10,10 @@ import { SelectedArticleResponseSchema } from "./article-identity-projection";
 
 export { PlannerLedgerWriteResultSchema as StageWriteResultSchema, PlannerErrorResponseSchema as StageErrorResponseSchema } from "@idhazh/common-contracts";
 const StageWriteResultSchema = PlannerLedgerWriteResultSchema;
+export const DEFERRED_REJECTIONS = { status: "deferred" } as const;
+export const RejectionStageResultSchema = z.union([
+  StageWriteResultSchema, z.strictObject({ status: z.literal(DEFERRED_REJECTIONS.status) }),
+]);
 export const SelectionResponseSchema = OperationMetadataSchema.safeExtend({
   run_id: RunIdSchema,
   selection_started_at_utc: TimestampSchema, evaluated_at: TimestampSchema,
@@ -23,6 +27,6 @@ export const PartitionResponseSchema = OperationMetadataSchema.safeExtend({
 });
 export const PersistenceResponseSchema = OperationMetadataSchema.safeExtend({
   files: StageWriteResultSchema, artifact: RelativePathSchema, selected_count: CountSchema,
-  rejected_files: StageWriteResultSchema,
+  rejected_files: RejectionStageResultSchema,
   run_files: StageWriteResultSchema.optional(), run_status: z.enum(["completed", "partial", "failed"]).optional(),
 });

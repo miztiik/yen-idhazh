@@ -34,6 +34,7 @@ test("unfinished or cancelled collection cannot be selected and a feed cannot be
     const cancellation = await app.request(`${prefix}${PLANNER_API_PATHS.cancelCollection}`, post({ traceId: id }));
     expect(cancellation.status).toBe(200);
     const cancelled = CancelledCollectionSchema.parse(await cancellation.json());
+    expect(cancelled.rejected_articles).toEqual({ status: "empty", files: [] });
     expect((await app.request(`${prefix}${PLANNER_API_PATHS.selectArticles}`, post({ links: [operationLink(cancelled)] }))).status).toBe(409);
     expect(collection.signal.signal.aborted).toBe(true);
     expect((await app.request(`${prefix}${PLANNER_API_PATHS.completeCollection}`, post({ traceId: id }))).status).toBe(409);

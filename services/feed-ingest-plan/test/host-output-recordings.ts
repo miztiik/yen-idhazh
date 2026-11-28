@@ -8,14 +8,17 @@ import type { ExecutionIdentity } from "../scripts/feed-ingest-plan-metadata";
 import { WorkflowHostFingerprintSchema } from "../scripts/feed-ingest-plan-host-fingerprint";
 import { metadataRegistrations } from "./host-recordings";
 
-export async function writeRecordedHostOutput(directory: string, identity: ExecutionIdentity, ledgerSettings: LedgerSettings) {
+export async function writeRecordedHostOutput(
+  directory: string, identity: ExecutionIdentity, ledgerSettings: LedgerSettings, historical = true,
+) {
   const captured = WorkflowHostFingerprintSchema.parse(await Bun.file(new URL(
     "../../../tests/fixtures/feed-ingest-plan/host-report.json", import.meta.url)).json());
   if (captured.host.status !== "recorded") throw new Error("The host output recording must contain a captured native row");
   const registrations = await metadataRegistrations();
   const registration = registrations["host-fingerprint"];
-  const request = { date: identity.run_id.slice(0, 10), writer: hostWriter(identity, true) };
-  const row = StoredPlannerHostSchema.parse({ ...captured.host.row, date: request.date, run_id: identity.run_id });
+  const request = { date: identity.run_id.slice(0, 10), writer: hostWriter(identity, historical) };
+  const { run_id, attempt, job, task_name } = request.writer;
+  const row = StoredPlannerHostSchema.parse({ ...captured.host.row, date: request.date, run_id, attempt, job, task_name });
   const written = await persistLedger({
     ledger: registration.name, registryEntry: registration, outputRoot: join(directory, "state"),
     ledgerSettings, rowContract: { schema: StoredPlannerHostSchema, schemaVersion: row.version },

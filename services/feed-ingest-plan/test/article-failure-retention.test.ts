@@ -1,6 +1,6 @@
 /** Read terminal fetch, extraction and persistence refusals from their real native boundaries. */
 import { expect, test } from "bun:test";
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 import { ArticleFailureDiagnosticSchema, CandidateIdSchema, ParsedFeedBatchSchema, PLANNER_API_PATHS, PLANNER_API_PREFIX, RawDocumentFailureSchema, RejectedArticleRowContract, RejectedArticleRowSchema, SelectedArticlesArtifactSchema } from "@idhazh/common-contracts";
@@ -8,6 +8,9 @@ import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parq
 import { recordedPlan } from "./plan-recordings";
 import { createPlanTestServer } from "./plan-test-server";
 import { FetchResponseSchema, ParseResponseSchema } from "../src/api/document-response.schema";
+import { FinalizedCollectionSchema } from "../src/api/collection-contracts";
+import { getCollection } from "../src/api/collection-operation";
+import { createPlanApp } from "../src/api/server";
 import { stageStore } from "../src/api/stage-store";
 import { deriveArticleIdentity } from "../src/harvest-feeds/article-identity";
 import { recordedPersistenceBatch } from "./persistence-recordings";
@@ -17,6 +20,8 @@ import { executeSelection } from "../src/api/selection-operation";
 import { operationLink } from "../src/api/operation-context";
 import { rawDocumentContentsPath } from "../src/selected-artifact-path";
 import type { OperationLink } from "@idhazh/common-contracts";
+import { runFeedPlan } from "../src/run-feed-plan";
+import { source } from "./harvest-recordings";
 
 async function failureCases() {
   const response = z.object({ status: z.int().optional(), body: z.string().optional(), error: z.string().optional() });
@@ -124,11 +129,105 @@ test("persistence retains both refusal stages with an actual empty selected arti
     const [parsed] = await capture(recorded, ["https://news.example/not-found", "https://news.example/second"]);
     const { batch } = await executeSelection({ links: [parsed] }, recorded.inputs, recorded.runtime);
     const result = await executePersistence({ links: [operationLink(batch)] }, recorded.inputs, recorded.runtime);
+    expect(result.rejected_files).toMatchObject({ status: "written", files: [{ row_count: 1 }] });
     const actual = await rejectedRows(recorded);
     expect(actual).toHaveLength(2);
     expect(new Set(actual.map(row => row.candidate_id)).size).toBe(2);
     expect(actual.map(row => row.stage).sort()).toEqual(["harvest-feeds", "screen-article-candidates"]);
     expect(SelectedArticlesArtifactSchema.parse(await Bun.file(join(recorded.directory, result.artifact)).json()).articles).toEqual([]);
+  } finally { await recorded.close(); }
+});
+
+test.each(["identical", "contradictory", "cancelled"] as const)("combined finalization handles %s rejection evidence", async kind => {
+  const recorded = await recordedPlan();
+  const url = "https://news.example/second";
+  recorded.inputs.harvest.config.triage.min_words = 10_000;
+  recorded.inputs.harvest.config.harvest.request_headers.secondary = null;
+  recorded.transport.recordings.responses[url] = [{ status: 404, body: "" }, { status: 200, fixture: "article" }];
+  recorded.transport.recordings.responses["https://news.example/feed.xml"] = [{ status: 200, body: `
+    <rss version="2.0"><channel><title>Two captured offers</title>
+      <item><title>First offer</title><link>${url}</link></item>
+      <item><title>Second offer</title><link>${url}</link></item>
+    </channel></rss>` }];
+  const rejectionRoot = join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan", "rejected-articles");
+  const cancellation = new AbortController();
+  const app = createPlanApp(recorded.inputs, recorded.runtime);
+  const stages: unknown[] = [];
+  const server = Bun.serve({
+    hostname: "127.0.0.1", port: 0, idleTimeout: 0,
+    async fetch(request) {
+      const path = new URL(request.url).pathname;
+      if (path === `${PLANNER_API_PREFIX}${PLANNER_API_PATHS.finalizeCollection}`) {
+        const replay = request.clone();
+        const { traceId } = await request.clone().json();
+        const collection = getCollection(recorded.inputs, traceId);
+        const captured = collection.state.harvest_rejections;
+        if (captured?.length !== 1) throw new Error("Expected one native terminal harvest failure");
+        const row = captured[0]!;
+        if (kind === "cancelled") cancellation.abort(new Error("Recorded cancellation before sealing rejections"));
+        else captured.push(kind === "identical" ? structuredClone(row) : {
+          ...row, details: { ...row.details, http_status: 410 },
+        });
+        const response = await app.fetch(request);
+        const outcome = FinalizedCollectionSchema.parse(await response.clone().json());
+        if (outcome.rejected_articles?.status === "written") {
+          const file = join(recorded.inputs.outputRoot, outcome.rejected_articles.files[0]!.path);
+          const [contents, info] = await Promise.all([readFile(file), stat(file)]);
+          const requests = recorded.transport.requests.length;
+          expect(await (await app.fetch(replay)).json()).toEqual(outcome);
+          expect(await readFile(file)).toEqual(contents);
+          expect((await stat(file)).mtimeMs).toBe(info.mtimeMs);
+          expect(recorded.transport.requests).toHaveLength(requests);
+        }
+        return response;
+      }
+      const response = await app.fetch(request);
+      if (path === `${PLANNER_API_PREFIX}${PLANNER_API_PATHS.completeCollection}`) {
+        stages.push((await response.clone().json()).rejected_articles);
+      } else if (path === `${PLANNER_API_PREFIX}${PLANNER_API_PATHS.persistSelectedArticles}`) {
+        stages.push((await response.clone().json()).rejected_files);
+      } else return response;
+      await expect(stat(rejectionRoot)).rejects.toMatchObject({ code: "ENOENT" });
+      return response;
+    },
+  });
+  try {
+    const result = await runFeedPlan({}, recorded.inputs, {
+      ...recorded.runtime, signal: cancellation.signal, stage_origin: `http://127.0.0.1:${server.port}`,
+    });
+    expect(stages).toEqual([{ status: "deferred" }, { status: "deferred" }]);
+    if (kind !== "identical") {
+      expect(result.row).toMatchObject({
+        status: "partial", failure_code: kind === "cancelled" ? "PLAN_CANCELLED" : "REJECTION_OUTPUT_FAILED",
+      });
+      expect(result.failure?.operation).toBe("collection-finalize");
+      if (kind === "cancelled") expect(result.failure?.safe_cause).toBe("cancelled");
+      expect(result.files.plan_runs?.status).toBe("written");
+      expect(result.files.rejected_articles).toBeUndefined();
+      await expect(stat(rejectionRoot)).rejects.toMatchObject({ code: "ENOENT" });
+      return;
+    }
+    expect(result.row.status).toBe("completed");
+    const receipt = result.files.rejected_articles;
+    expect(receipt).toMatchObject({ status: "written", files: [{ row_count: 2 }] });
+    const { rows } = await readPlannerParquet(join(recorded.inputs.outputRoot, receipt!.files[0]!.path),
+      "rejected-articles", RejectedArticleRowContract);
+    expect(rows.map(row => row.candidate_id)).toEqual([...new Set(rows.map(row => row.candidate_id))].sort());
+    expect(rows.map(row => row.stage).sort()).toEqual(["harvest-feeds", "screen-article-candidates"]);
+    for (const row of rows) {
+      expect(row).toMatchObject({ run_id: result.row.run_id, attempt: result.row.attempt, url_key: deriveArticleIdentity(url).url_key });
+    }
+  } finally { await server.stop(true); await app.close(); await recorded.close(); }
+});
+
+test("a completed combined run without terminal article rejections writes an explicit empty receipt only", async () => {
+  const recorded = await recordedPlan([source({ url: "https://news.example/empty.xml" })]);
+  try {
+    const result = await runFeedPlan({}, recorded.inputs, recorded.runtime);
+    expect(result.row.status).toBe("completed");
+    expect(result.files.rejected_articles).toEqual({ status: "empty", files: [] });
+    await expect(stat(join(recorded.inputs.outputRoot, "raw", "feed-ingest-plan", "rejected-articles")))
+      .rejects.toMatchObject({ code: "ENOENT" });
   } finally { await recorded.close(); }
 });
 

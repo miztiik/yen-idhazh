@@ -295,12 +295,30 @@ jobs:
         run: bun run services/feed-ingest-plan/scripts/run-feed-ingest-plan.ts
 
       - name: Commit planner ledgers
+        id: commit
         if: ${{ !cancelled() && steps.collect.outputs.current_run_files != '' }}
         env:
           FINALIZATION_OPERATION: commit-ledgers
           CURRENT_RUN_FILES: ${{ steps.collect.outputs.current_run_files }}
           RUN_CANCELLED: 'false'
         run: bun run services/feed-ingest-plan/scripts/finalize-run-output.ts
+
+      - name: Prepare unconfirmed planner metadata
+        id: metadata-recovery
+        if: ${{ always() && steps.collect.outputs.run_id != '' && steps.commit.outcome != 'success' }}
+        env:
+          FINALIZATION_OPERATION: prepare-artifacts
+          METADATA_RECOVERY_ONLY: 'true'
+          RUN_CANCELLED: ${{ cancelled() }}
+        run: bun run services/feed-ingest-plan/scripts/finalize-run-output.ts
+
+      - name: Upload unconfirmed planner metadata
+        if: ${{ always() && steps.metadata-recovery.outputs.metadata_recovery != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: planner-metadata-recovery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/feed-ingest-plan/${{ steps.metadata-recovery.outputs.metadata_recovery }}
+          if-no-files-found: error
 
 
   # The worker timeout comes from run.shard_timeout_minutes in config.

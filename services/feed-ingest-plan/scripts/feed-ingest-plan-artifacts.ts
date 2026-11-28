@@ -37,7 +37,7 @@ async function preparePrivateDiagnostic(input: {
 
 export async function prepareWorkflowArtifacts(input: {
   root: string; directory: string; runNumber: string; attempt: number; outputPath?: string;
-  dumpRawDocumentContents?: boolean; runId?: string; reportFilename?: string;
+  dumpRawDocumentContents?: boolean; runId?: string; reportFilename?: string; metadataRecoveryOnly?: boolean;
 } & (
   | { gitSha: string; job: string; identity?: never; registrations?: never }
   | { identity: ExecutionIdentity; registrations: MetadataRegistrations; gitSha?: never; job?: never }
@@ -46,13 +46,56 @@ export async function prepareWorkflowArtifacts(input: {
   const run = z.string().regex(/^\d+$/).parse(input.runNumber);
   const attempt = WriterIdentitySchema.shape.attempt.parse(input.attempt);
   const gitSha = CommitShaSchema.parse(input.identity?.git_sha ?? input.gitSha);
-  const outputs: Record<string, string> = await prepareServerArtifacts(input);
+  const outputs: Record<string, string> = input.metadataRecoveryOnly ? {} : await prepareServerArtifacts(input);
   const failures: unknown[] = [];
   const responsePath = join(input.directory, "response.json");
   let savedResponse: ReturnType<typeof PlannerSavedResponseSchema.parse> | undefined;
   if (await Bun.file(responsePath).exists()) {
     try { savedResponse = PlannerSavedResponseSchema.parse(await Bun.file(responsePath).json()); }
     catch (error) { failures.push(error); }
+  }
+  async function writeOutput(key: string, path: string) {
+    outputs[key] = path;
+    outputs.artifact_directory = "artifacts";
+    if (input.outputPath !== undefined) await writeGitHubOutputs(input.outputPath, {
+      [key]: path, artifact_directory: outputs.artifact_directory,
+    });
+  }
+  async function retainMetadataRecovery() {
+    if (!await Bun.file(join(input.directory, "host-fingerprint.json")).exists()
+      && (savedResponse === undefined || !("planning_complete" in savedResponse))) return undefined;
+    const context = input.identity === undefined
+      ? await readWorkflowDeliveryContext({ ...input, gitSha })
+      : { identity: input.identity, registrations: input.registrations };
+    const { paths, response, failures: metadataFailures } = await collectWorkflowFiles({ ...input, ...context });
+    failures.push(...metadataFailures);
+    const deliveryFile = Bun.file(join(input.directory, "delivery-result.json"));
+    let delivery: ReturnType<typeof MetadataDeliveryResultSchema.parse> | null = null;
+    try { if (await deliveryFile.exists()) delivery = MetadataDeliveryResultSchema.parse(await deliveryFile.json()); }
+    catch (error) { failures.push(error); }
+    if (!isMetadataDeliveryConfirmed(delivery, paths) && paths.length > 0) {
+      const recovery = `artifacts/uncommitted-metadata-${run}-${attempt}`;
+      const directory = join(input.directory, recovery);
+      await safe_persist_data({
+        sourceRoot: join(input.directory, "state"),
+        files: paths.map(path => ({ sourcePath: path, targetPath: path })),
+        permittedPaths: paths,
+        destination: { kind: "artifact-directory", directory },
+      });
+      await writeFile(join(directory, "current-run-files.json"), JSON.stringify(paths));
+      await writeOutput("metadata_recovery", recovery);
+      console.error(JSON.stringify({ event: "planner_uncommitted_metadata_retained", files: paths.length,
+        delivery_status: delivery?.status ?? "not_recorded" }));
+    }
+    return response;
+  }
+  function requireValidEvidence() {
+    if (failures.length) throw new AggregateError(failures, "Workflow metadata validation failed; valid completed files retained");
+  }
+  if (input.metadataRecoveryOnly) {
+    await retainMetadataRecovery();
+    requireValidEvidence();
+    return outputs;
   }
   const runId = input.runId ?? input.identity?.run_id ?? (savedResponse !== undefined && "planning_complete" in savedResponse
     ? savedResponse.run_id : savedResponse?.failure?.execution.run_id ?? undefined);
@@ -94,13 +137,6 @@ export async function prepareWorkflowArtifacts(input: {
   } else {
     console.error(JSON.stringify({ event: "planner_diagnostic_unavailable", reason: "execution_identity_unavailable" }));
   }
-  async function writeOutput(key: string, path: string) {
-    outputs[key] = path;
-    outputs.artifact_directory = "artifacts";
-    if (input.outputPath !== undefined) await writeGitHubOutputs(input.outputPath, {
-      [key]: path, artifact_directory: outputs.artifact_directory,
-    });
-  }
   async function retain(key: string, source: string, filename: string, exactFilename = false) {
     if (!await Bun.file(source).exists()) {
       console.error(JSON.stringify({ event: "planner_evidence_unavailable", file: filename }));
@@ -118,37 +154,11 @@ export async function prepareWorkflowArtifacts(input: {
   if (!reportFilename.endsWith(`-${run}.md`)) throw new Error("Report artifact run differs from the executed workflow");
   await retain("report", join(input.directory, reportFilename), reportFilename, true);
   if (savedResponse !== undefined) await retain("response", responsePath, "response.json");
-  if (!await Bun.file(join(input.directory, "host-fingerprint.json")).exists()
-    && (savedResponse === undefined || !("planning_complete" in savedResponse))) {
-    if (failures.length) throw new AggregateError(failures, "Diagnostic artifact preparation failed");
-    return outputs;
-  }
-  const context = input.identity === undefined
-    ? await readWorkflowDeliveryContext({ ...input, gitSha })
-    : { identity: input.identity, registrations: input.registrations };
-  const { paths, response, failures: metadataFailures } = await collectWorkflowFiles({ ...input, ...context });
-  failures.push(...metadataFailures);
-  const deliveryFile = Bun.file(join(input.directory, "delivery-result.json"));
-  let delivery: ReturnType<typeof MetadataDeliveryResultSchema.parse> | null = null;
-  try { if (await deliveryFile.exists()) delivery = MetadataDeliveryResultSchema.parse(await deliveryFile.json()); }
-  catch (error) { failures.push(error); }
-  const confirmed = isMetadataDeliveryConfirmed(delivery, paths);
-  if (!confirmed && paths.length > 0) {
-    const recovery = `artifacts/uncommitted-metadata-${run}-${attempt}`;
-    for (const path of paths) {
-      const destination = join(input.directory, recovery, path);
-      await mkdir(dirname(destination), { recursive: true });
-      await copyFile(join(input.directory, "state", path), destination);
-    }
-    await writeFile(join(input.directory, recovery, "current-run-files.json"), JSON.stringify(paths));
-    await writeOutput("metadata_recovery", recovery);
-    console.error(JSON.stringify({ event: "planner_uncommitted_metadata_retained", files: paths.length,
-      delivery_status: delivery?.status ?? "not_recorded" }));
-  }
+  const response = await retainMetadataRecovery();
   if (response !== undefined && response.selected_articles_artifact !== null) {
     await retain("selected", join(input.root, response.selected_articles_artifact), "selected-articles.json");
   }
-  if (failures.length) throw new AggregateError(failures, "Workflow metadata validation failed; valid completed files retained");
+  requireValidEvidence();
   return outputs;
 }
 

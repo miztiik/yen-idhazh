@@ -288,11 +288,11 @@ Table A
 | A1 | `select-articles` | Accepts a complete global parsed result; returns its own operation metadata, metadata-only articles, grouped exclusions, request report and exact `selection_started_at_utc` and `evaluated_at` UTC timestamps. No fetch, model call or automatic health write. |
 | A2 | `partition-articles` | Accepts a selected result and optional configured strategy/count; returns its own operation metadata, assignments and estimated work without reranking. |
 | A3 | `update-feed-health` | Accepts a live document or stage reference and explicit `summarize` or `record` action, defaulting to record; returns its own operation metadata, saved and updated health calculations, partial evidence, request spend, `reliability.window_days` and actual receipts when saved. No availability state file or new addressable health result kind. |
-| A4 | `persist-selected-articles` | Accepts a partitioned result, or a selected result when partitioning is disabled; writes selected and rejected metadata plus the selected text artifact, returning its own operation metadata, exact relative paths, `rejected_files` receipts even for zero-selected results, and a standalone run outcome where applicable. |
+| A4 | `persist-selected-articles` | Accepts a partitioned result, or a selected result when partitioning is disabled. Saves selected metadata and the selected text artifact. `rejected_files` is the explicit stage's receipt, or `{"status":"deferred"}` for the combined run. Standalone run outcomes stay separate. |
 | A5 | `start-feed-collection` | Starts one collection per caller-preallocated execution trace with validated planning controls. Returns its actual operation metadata, captured UTC business context and configured feed IDs, not article text. |
-| A6 | `complete-feed-collection` | Accepts `traceId`; refuses until every required feed and offered article has a terminal outcome. Drains owned work, saves discovery and harvested-rejection evidence and exposes a complete global parsed result under the actual completion operation. Its links name the contributing parses. Repeating completion reuses that completed result. |
-| A7 | `cancel-feed-collection` | Accepts `traceId`; cancels and drains owned work and prevents selection. Returns harvested-rejection receipts and the actual cancellation reference for explicit partial-health recording. |
-| A8 | `finalize-feed-collection` | Accepts `traceId`, measured collection timing and safe orchestration failure context after stage writes settle. Drains owned work and both private diagnostics, then returns state-based status, retained failure context and timing snapshot. |
+| A6 | `complete-feed-collection` | Accepts `traceId`; refuses until every required feed and offered article has a terminal outcome. Saves discovery evidence and exposes the complete global parsed result with links to its parses. `rejected_articles` is the explicit collection's receipt, or `{"status":"deferred"}` for the combined run. Replay reuses the result. |
+| A7 | `cancel-feed-collection` | Accepts `traceId`; cancels and drains owned work and prevents selection. Its reference supports partial-health recording. Rejection output follows the same explicit/deferred distinction as completion. |
+| A8 | `finalize-feed-collection` | Accepts `traceId`, measured collection timing and safe failure context, not rejection rows. It closes private diagnostics, returns status, failure context and timings, and seals `rejected_articles` only for completed combined planning. |
 | A9 | `release-feed-collection` | Accepts `run_id` and `attempt`; releases a finalized collection after dependent live reads finish. This does not erase written files. |
 | A10 | `check-feed-collection` | Accepts the preallocated `traceId`; reports whether that collection is held after an ambiguous startup response. Existence alone does not grant ownership. |
 
@@ -460,22 +460,21 @@ flowchart TD
   FETCH_ARTICLE -->|"Fetch failure or exclusion"| BATCH
   BATCH --> COMPLETE["POST /complete-feed-collection<br/>all required work terminal"]
   COMPLETE --> DISCOVERY[("discovered-articles<br/>earliest known sighting")]
-  COMPLETE --> REJECTIONS[("Body-free harvested rejections")]
   COMPLETE --> SELECT["POST /select-articles<br/>global screening and selection"]
   SELECT --> ENABLED{"partition.enabled?"}
   ENABLED -->|"true"| PARTITION["POST /partition-articles"]
   ENABLED -->|"false: no partition call; null assignments"| READY["Ready selected or partitioned batch"]
   PARTITION --> READY
   READY --> PERSIST["POST /persist-selected-articles"]
-  PERSIST --> METADATA[("Body-free selected and rejected ledgers")]
+  PERSIST --> METADATA[("Body-free selected ledger")]
   PERSIST --> TEXT["Separate selected full-text JSON artifact<br/>summarization is a later consumer"]
   READY --> HEALTH["POST /update-feed-health<br/>record actual work and current availability"]
   HEALTH --> HEALTH_LEDGER[("feed-health-state")]
   PERSIST --> FINAL["POST /finalize-feed-collection<br/>settled status, failure cause and timings"]
   HEALTH --> FINAL
+  FINAL -->|"Completed combined plan"| REJECTIONS[("One rejection Parquet file or explicit empty receipt")]
   FINAL --> RUNS[("plan-runs")]
   PLAN -->|"Cancellation or incomplete work"| CANCEL["POST /cancel-feed-collection<br/>no selection of partial input"]
-  CANCEL --> REJECTIONS
   CANCEL -->|"Completed feed work"| HEALTH
   CANCEL --> FINAL
   RUNS --> SUMMARY["POST /update-feed-health<br/>capture report or its failure while input is retained"]
@@ -484,8 +483,8 @@ flowchart TD
 ```
 
 `/finalize-feed-collection` does not release the collection. Cancellation first
-aborts and drains every owned document request before it snapshots rejection
-and health evidence. Raw-document diagnostics also finish before final status
+aborts and drains every owned document request before it snapshots partial
+health evidence. Raw-document diagnostics also finish before final status
 and timings are returned. The status is `completed` without a failure cause;
 with a cause, it is `partial` only when a work row has a feed check, otherwise
 it is `failed`. The request's final release makes completed and cancelled collections eligible

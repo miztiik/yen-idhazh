@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { finalizeRunOutput } from "../scripts/finalize-run-output";
 import { finishRunOutput } from "../scripts/finish-run-output";
 import { MetadataDeliveryResultSchema } from "../scripts/feed-ingest-plan-delivery-result";
-import { publicationRecording } from "./publication-recordings";
+import { publicationGitRecording, publicationRecording } from "./publication-recordings";
 import { fixtureGit } from "./fixture-git";
 import { publishUploadInventory } from "../scripts/feed-ingest-plan-upload-inventory";
 import { readCloudEvent, writeTraceContext } from "@idhazh/common-contracts";
@@ -15,6 +15,10 @@ import type { FeedIngestEvent } from "@idhazh/common-contracts";
 import { DeliveryCompletionDiagnosticSchema } from "../scripts/safe-persist-http-diagnostic";
 import { readMachineServerEvidence as readServerEvidence } from "@idhazh/host-probes/machine-evidence";
 import { ServerEventDataSchema } from "../../serve-pipeline-apis/src/server-evidence";
+import { runFeedPlan, summarizePlan } from "../src/run-feed-plan";
+import { writeRecordedHostOutput } from "./host-output-recordings";
+import { collectWorkflowFiles } from "../scripts/feed-ingest-plan-current-files";
+import { deliverPlannerFiles } from "../scripts/feed-ingest-plan-deliver";
 
 async function recording(failCollection = false) {
   const fixture = await publicationRecording(failCollection);
@@ -169,6 +173,62 @@ test("a refused Git delivery still writes the report and prepares exact metadata
   } finally { await f.close(); }
 });
 
+test("scheduled recovery retains only verified metadata and re-delivers the original sealed bytes", async () => {
+  const f = await publicationGitRecording();
+  try {
+    const identity = { ...f.identity, job: "plan-typescript" };
+    f.runtime.attempt = identity.attempt;
+    f.inputs.harvest.config.harvest.request_headers.secondary = null;
+    f.transport.recordings.responses["https://news.example/second"] = [{ status: 404, body: "" }];
+    const summary = summarizePlan(await runFeedPlan({}, f.inputs, f.runtime));
+    expect(summary.planning_complete).toBe(true);
+    expect(summary.files.rejected_articles).toMatchObject({ status: "written", files: [{ row_count: 1 }] });
+    expect(await Bun.file(join(f.repository, summary.selected_articles_artifact!)).exists()).toBe(true);
+    await writeRecordedHostOutput(f.directory, identity, f.inputs.ledgerSettings, false);
+    await writeFile(join(f.directory, "response.json"), JSON.stringify(summary));
+    const verified = await collectWorkflowFiles({ root: f.repository, directory: f.directory, identity, registrations: f.registrations });
+    expect(verified.failures).toEqual([]);
+    const paths = verified.paths;
+    const input = {
+      root: f.repository, directory: f.directory, currentRunFiles: JSON.stringify(paths),
+      runNumber: "700", attempt: identity.attempt, gitSha: identity.git_sha, job: identity.job,
+      cancelled: false, outputPath: join(f.directory, "step-outputs"),
+    };
+    const commit = () => finalizeRunOutput({ ...input, operation: "commit-ledgers" });
+    const receipt = () => Bun.file(join(f.directory, "delivery-result.json")).json()
+      .then(value => MetadataDeliveryResultSchema.parse(value));
+    const requests = f.transport.requests.length;
+    await fixtureGit(f.repository, ["remote", "set-url", "origin", join(dirname(f.directory), "missing-origin.git")]);
+    await expect(commit()).rejects.toThrow("Run finalization failed");
+    expect((await receipt()).status).toBe("failed");
+    await finalizeRunOutput({ ...input, operation: "prepare-artifacts", metadataRecoveryOnly: true });
+    const artifacts = join(f.directory, "artifacts");
+    const recovery = join(artifacts, "uncommitted-metadata-700-3");
+    expect(await Bun.file(join(recovery, "current-run-files.json")).json()).toEqual(paths);
+    expect(await Bun.file(join(artifacts, "700-3-selected-articles.json")).exists()).toBe(false);
+    expect(await Bun.file(join(artifacts, "700-3-response.json")).exists()).toBe(false);
+    expect(await fixtureGit(f.origin, ["--git-dir", f.origin, "rev-parse", "main"])).toBe(f.head);
+    for (const path of paths) {
+      expect(await readFile(join(recovery, path))).toEqual(await readFile(join(f.directory, "state", path)));
+    }
+
+    await fixtureGit(f.repository, ["remote", "set-url", "origin", f.origin]);
+    const retry = () => deliverPlannerFiles({
+      ...f.commit, identity, stateRoot: recovery, paths,
+      committer: { name: "Fixture", email: "fixture@example.test" },
+    });
+    const delivered = await retry();
+    expect(delivered).toMatchObject({ status: "landed", paths });
+    for (const path of paths) {
+      expect(await fixtureGit(f.origin, ["--git-dir", f.origin, "rev-parse", `main:state/${path}`]))
+        .toBe(await fixtureGit(f.repository, ["hash-object", "--no-filters", "--", join(recovery, path)]));
+    }
+    expect(await retry()).toMatchObject({ status: "already-on-main", commit: delivered.commit, paths });
+    expect(await fixtureGit(f.origin, ["--git-dir", f.origin, "rev-parse", "main"])).toBe(delivered.commit!);
+    expect(f.transport.requests).toHaveLength(requests);
+  } finally { await f.close(); }
+});
+
 test("a job-summary write failure cannot prevent an already-rendered report or selected text from being uploaded", async () => {
   const f = await recording();
   try {
@@ -209,6 +269,9 @@ test("completed diagnostics can land and be cleaned while a partial collection s
   const f = await recording(true);
   try {
     expect(f.summary.planning_complete).toBe(false);
+    expect(f.summary.files.rejected_articles?.status).toBe("written");
+    expect(f.paths).toContain(f.summary.files.plan_runs!.files[0]!.path);
+    expect(f.paths).not.toContain(f.summary.files.rejected_articles!.files[0]!.path);
     await finalizeRunOutput({ ...f.finalize, operation: "commit-ledgers" });
     await finalizeRunOutput({ ...f.finalize, operation: "prepare-artifacts" });
     expect(MetadataDeliveryResultSchema.parse(await Bun.file(join(f.directory, "delivery-result.json")).json()).status).toBe("landed");
