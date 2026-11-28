@@ -172,6 +172,15 @@ follows selection. When disabled, there is no partition request: selected
 metadata keeps null worker assignments. Health recording and selected output
 are independent writes; useful selected output survives a health-save refusal.
 
+Only a privately reserved combined run defers the harvest and selection
+rejection writes. Those stage replies say `deferred`, not `empty`. After
+collection, selection persistence, health and diagnostics settle successfully,
+finalization seals the same attempt's server-captured decisions. Its receipt
+becomes `files.rejected_articles` in the combined response. On failure or
+cancellation there is no final rejection receipt; completed independent
+receipts and typed diagnostics retain their own lifecycle. Explicit stage
+callers still write their own rejections.
+
 Once selection finishes, the run retains its selected count and
 `selection_metrics`, even if assignment or persistence then fails. A completed
 empty selection has zero website/feed counts and a null mean substance score.

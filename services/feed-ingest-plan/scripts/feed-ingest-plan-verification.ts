@@ -7,6 +7,7 @@ import {
   SelectedArticleRowContract, RejectedArticleRowContract, PlannerLedgerNameSchema,
   readSelectedArticlesArtifact, selectedArticleMetadata,
 } from "../../../packages/common-contracts/src/index";
+import type { PlannerRunResponse } from "../../../packages/common-contracts/src/index";
 import type { LedgerRegistration, LedgerRowContract, PersistLedgerResult } from "../../../packages/ledger-file-writer/src/index";
 import { readPlannerParquet } from "../src/read-ledger-history/read-planner-parquet";
 import { RelativePathSchema } from "../src/config/service-settings";
@@ -18,6 +19,11 @@ export const plannerContracts = {
   "feed-health-state": FeedHealthStateRowContract, "plan-runs": PlanRunRowContract,
 };
 export type PlannerLedger = keyof typeof plannerContracts;
+export function plannerReceiptsForDelivery(summary: PlannerRunResponse): PlannerRunResponse["files"] {
+  if (summary.planning_complete) return summary.files;
+  const { rejected_articles: _diagnostic, ...independent } = summary.files;
+  return independent;
+}
 export function validateLedgerFilePath(path: string, fileId: string, covers: string, registration: LedgerRegistration) {
   DateStampSchema.parse(covers);
   const name = PlannerLedgerNameSchema.parse(registration.name);

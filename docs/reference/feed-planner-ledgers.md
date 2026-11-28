@@ -304,8 +304,11 @@ counters.
 
 This ledger records parsed candidates that were not selected and completed
 article fetch or extraction failures. It does not store titles, article text,
-policy trees or scores. Completed failures remain available when a later
-stage fails.
+policy trees or scores. For a combined TypeScript plan, finalization writes
+one nonempty Parquet file per completed run attempt, or an explicit empty
+receipt with no file. Failed or cancelled plans keep available diagnostics
+outside this ledger. Explicit stage writes and historical multi-file reads
+remain supported.
 
 ### Table M - Rejected article fields
 
@@ -323,15 +326,17 @@ stage fails.
 | M13 | `pacing_time_ms` | Measured total queue wait for the fetch, or null when unmeasured |
 | M14 | `pacing_settings` | Effective domain delay, publisher delay, jitter and enable setting |
 
-Rows are identified by run, attempt and candidate. Retries produce one
+Rows are identified by run, attempt and candidate. Identical copies collapse,
+contradictory terminal rows refuse the write, and the final file is ordered
+by candidate identity. Retries produce one
 terminal row per candidate and run; a recovered fetch does not leave a stale
 failure row. Distinct captured inputs for one URL remain distinct rows.
 There is no nullable-identity settlement fallback. Feed refusals and malformed
 article entries do not become terminal article rows.
 Grouped health counters remain the source for health totals, so
 rejection rows are not counted again.
-See [harvesting](../architecture/sources/feed-harvesting.md#work-facts-and-failures)
-for when completed failure rows are written.
+See the [combined runner](../architecture/sources/feed-plan-runner.md#real-composition-and-identity)
+for which stage owns each write.
 
 The [current TypeScript contract](../architecture/sources/planner-feed-history.md)
 defines row validation and historical read behavior.

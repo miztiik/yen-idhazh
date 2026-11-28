@@ -21,7 +21,7 @@ export async function finalizeRunOutput(input: {
   root: string; directory: string; currentRunFiles?: string; runNumber: string; attempt: number;
   gitSha: string; job: string;
   cancelled: boolean; summaryPath?: string; outputPath?: string;
-  dumpRawDocumentContents?: boolean; runId?: string; signal?: AbortSignal;
+  dumpRawDocumentContents?: boolean; runId?: string; signal?: AbortSignal; metadataRecoveryOnly?: boolean;
   operation?: z.infer<typeof FinalizationOperationSchema>; reportFilename?: string;
 }) {
   const runNumber = z.string().regex(/^\d+$/).parse(input.runNumber);
@@ -92,7 +92,7 @@ if (import.meta.main) {
   try {
     const { RUNNER_TEMP, GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT, GITHUB_STEP_SUMMARY, GITHUB_OUTPUT,
       CURRENT_RUN_FILES, RUN_CANCELLED, DUMP_RAW_DOCUMENT_CONTENTS, RUN_ID, GITHUB_SHA,
-      FINALIZATION_OPERATION, REPORT_FILENAME } = process.env;
+      FINALIZATION_OPERATION, REPORT_FILENAME, METADATA_RECOVERY_ONLY } = process.env;
     if (!RUNNER_TEMP || !GITHUB_RUN_ID || !GITHUB_RUN_ATTEMPT || !GITHUB_OUTPUT || !GITHUB_SHA) {
       throw new Error("Workflow finalization controls are missing");
     }
@@ -108,6 +108,8 @@ if (import.meta.main) {
       ...(RUN_ID === undefined || RUN_ID === "" ? {} : { runId: RUN_ID }),
       signal: cancellation.signal,
       operation: FinalizationOperationSchema.parse(FINALIZATION_OPERATION ?? "all"),
+      ...(METADATA_RECOVERY_ONLY === undefined ? {}
+        : { metadataRecoveryOnly: z.enum(["true", "false"]).parse(METADATA_RECOVERY_ONLY) === "true" }),
       ...(REPORT_FILENAME === undefined || REPORT_FILENAME === "" ? {} : { reportFilename: REPORT_FILENAME }),
     });
   } catch (error) {

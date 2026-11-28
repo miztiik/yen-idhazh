@@ -121,7 +121,7 @@ async function runPlanStages(
   let result: FeedPlanResult | undefined;
   let primary: PlanError | undefined;
   try {
-    prepareCollectionContext(inputs, context);
+    prepareCollectionContext(inputs, context, runtime.signal);
     let begin: z.infer<typeof CollectionResponseSchema> | undefined;
     let startupFailure: PlanError | undefined;
     try {
@@ -282,7 +282,9 @@ async function runPlanStages(
       collectionTiming = { duration_ms: collectionDuration, status: "completed" };
       emit("fetch", "completed", { scope: "plan", duration_ms: collectionDuration });
       files.discovered_articles = collected.discovered_articles;
-      files.rejected_articles = collected.rejected_articles;
+      if (collected.rejected_articles.status !== "deferred") {
+        throw new PlanError("ARTIFACT_INVALID", "Combined collection wrote unsealed rejection output");
+      }
       const selectedResponse = await call(PLANNER_API_PATHS.selectArticles, { links: [operationLink(collected)] }, SelectionResponseSchema);
       const selection = { ...selectedResponse, articles: selectedResponse.articles.map(restoreSelectedArticle) };
       selected = selection;
@@ -303,14 +305,15 @@ async function runPlanStages(
       if (outputs[0].status === "fulfilled" && outputs[0].value.files !== undefined) files.feed_health_state = outputs[0].value.files;
       if (outputs[1].status === "fulfilled") {
         files.selected_articles = outputs[1].value.files;
-        const harvested = files.rejected_articles.files;
-        const rejected = [...harvested, ...outputs[1].value.rejected_files.files];
-        files.rejected_articles = rejected.length ? { status: "written", files: rejected } : { status: "empty", files: [] };
         artifact = outputs[1].value.artifact;
+        if (outputs[1].value.rejected_files.status !== "deferred") {
+          throw new PlanError("ARTIFACT_INVALID", "Combined selection wrote unsealed rejection output");
+        }
       }
       const outputFailures = outputs.flatMap(outcome => outcome.status === "rejected" ? [outcome.reason] : []);
       if (outputFailures.length) throw outputFailures.length === 1 ? outputFailures[0]
         : new AggregateError(outputFailures, "Health and selected output failed");
+      runtime.signal?.throwIfAborted();
     } catch (error) {
       failureCode = error instanceof PlanError ? error.code : "PLANNER_EXECUTION_FAILED";
       failure = capturePlannerFailure(error, { operation: "plan", execution: context, limits: inputs.settings.diagnostics.failure });
@@ -324,7 +327,6 @@ async function runPlanStages(
       let hasPartialWork = false;
       try {
         const cancelled = await call(PLANNER_API_PATHS.cancelCollection, { traceId }, CancelledCollectionSchema, true);
-        files.rejected_articles ??= cancelled.rejected_articles;
         partial = operationLink(cancelled);
         hasPartialWork = cancelled.has_work;
       } catch (error) {
@@ -360,6 +362,10 @@ async function runPlanStages(
       });
     }
     if (outcome.traceId !== traceId) throw new PlanError("ARTIFACT_INVALID", "Final outcome belongs to another collection");
+    if (outcome.status === "completed") {
+      if (outcome.rejected_articles === undefined) throw new PlanError("ARTIFACT_INVALID", "Final plan did not settle its rejection output");
+      files.rejected_articles = outcome.rejected_articles;
+    }
     failureCode = outcome.failure_code;
     failure = outcome.failure ?? failure;
     let recorded: Awaited<ReturnType<typeof recordPlanRun>>;

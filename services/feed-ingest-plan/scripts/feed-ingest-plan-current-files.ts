@@ -8,7 +8,7 @@ import { verifyWorkflowHostRequest, WorkflowHostFingerprintSchema } from "./feed
 import { ExecutionIdentitySchema, readMetadataRegistrations, verifyMetadataFile } from "./feed-ingest-plan-metadata";
 import type { ExecutionIdentity, MetadataRegistrations } from "./feed-ingest-plan-metadata";
 import { verifyHostFingerprint } from "./feed-ingest-plan-host-verification";
-import { verifyPlanningCompletion } from "./feed-ingest-plan-verification";
+import { plannerReceiptsForDelivery, verifyPlanningCompletion } from "./feed-ingest-plan-verification";
 
 export async function readWorkflowDeliveryContext(input: {
   root: string; directory: string; runNumber: string; attempt: number; gitSha: string; job: string;
@@ -59,7 +59,7 @@ export async function collectWorkflowFiles(input: {
         throw new Error("Planner result belongs to another execution");
       }
       const registrations = input.registrations;
-      const verified = await verifyPlanningCompletion(stateRoot, parsed, {
+      const verified = await verifyPlanningCompletion(stateRoot, { ...parsed, files: plannerReceiptsForDelivery(parsed) }, {
         discovered_articles: registrations["discovered-articles"], selected_articles: registrations["selected-articles"],
         rejected_articles: registrations["rejected-articles"],
         feed_health_state: registrations["feed-health-state"], plan_runs: registrations["plan-runs"],

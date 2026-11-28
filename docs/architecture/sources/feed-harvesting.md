@@ -220,12 +220,12 @@ The [screening stage](feed-screening.md) applies admission to parsed candidates.
 
 ## Work facts and failures
 
-The harvester returns candidates and terminal outcomes. During `/plan`, the
-caller collects completed article-fetch and extraction failures in memory.
-Its `finally` block writes them through the registered `rejected-articles`
-ledger writer, including when a later stage fails. Standalone fetch and parse
-write their terminal failures to local ledger files at stage completion;
-the private fetch receipt is not their sole store.
+The harvester returns candidates and terminal outcomes. The
+[combined planner](feed-plan-runner.md#real-composition-and-identity) holds
+completed article fetch and extraction failures for final rejection
+settlement. Standalone fetch and parse write their terminal failures to local
+ledger files at stage completion; the private fetch receipt is not their sole
+store.
 Writing a local ledger file is separate from
 [verified Git delivery](feed-ingest-audit.md#what-is-checked-and-written).
 Only terminal outcomes are retained, not each retry or successful article.

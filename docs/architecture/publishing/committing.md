@@ -206,6 +206,14 @@ The endpoint reuses the existing adapter, which validates exact completed
 planner and host metadata against registered raw ledger prefixes, then calls the shared API. It does not
 give the API planner registration or Parquet policy. Selected article text is
 uploaded separately and is never part of the Git request.
+
+The scheduled TypeScript planner and manual test use the same verified file
+set. It includes the combined plan's rejection output only on completed
+planning. For unconfirmed delivery, both can keep `current-run-files.json`
+and the exact validated metadata bytes; the scheduled upload is limited to
+that recovery directory. Git confirmation and retry compare the same files,
+without running the planner again. If the runner disappears before a push or
+upload, its local files alone do not provide recovery.
 One workflow task calls this delivery endpoint and then the independent Markdown
 renderer. Task consolidation does not give the Git API report or upload
 responsibilities. The report precedes the artifact upload; cleanup waits for

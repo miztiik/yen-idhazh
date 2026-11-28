@@ -70,9 +70,12 @@ articles.
 
 The independent `plan-typescript` job calls the local feed planner API and
 commits the existing [feed planner ledgers](feed-planner-ledgers.md) for the
-live UTC day. It does not upload article text or supply input to workers or
-assembly. Its failures stay visible in that job without blocking the digest
-or its automatic Pages publication trigger.
+live UTC day. If Git delivery is unconfirmed and the runner still holds
+verified output, it uploads only the
+[metadata recovery directory](../architecture/publishing/committing.md#adopting-the-publisher-in-another-workflow).
+It does not upload article text or supply input to workers or assembly. Its
+failures stay visible in that job without blocking the digest or its automatic
+Pages publication trigger.
 
 Assemble after worker failures if planning succeeded and the run was not cancelled.
 Keep successful items and commit failure records; annotate a planned run that

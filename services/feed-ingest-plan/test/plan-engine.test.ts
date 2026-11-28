@@ -1,11 +1,11 @@
 /** Do recorded run results preserve saved identities and report unsuccessful work honestly? */
 import { expect, test } from "bun:test";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import {
   DiscoveredArticleRowContract, FeedHealthStateRowContract, PlanRunRowContract, RejectedArticleRowContract,
   SelectedArticleRowContract, SelectedFeedBatchSchema, SelectedArticlesArtifactSchema, selectedArticleMetadata,
-  PlannerRunResponseSchema, createChildContext, createRootContext, readFeedIngestEvent, readTraceContext, PLANNER_API_PATHS, PLANNER_API_PREFIX, writeTraceContext,
+  ArticleFailureDiagnosticSchema, PlannerRunResponseSchema, createChildContext, createRootContext, readFeedIngestEvent, readTraceContext, PLANNER_API_PATHS, PLANNER_API_PREFIX, writeTraceContext,
 } from "@idhazh/common-contracts";
 import { FeedHealthStateUpdateResponseSchema } from "../src/api/feed-health-state.schema";
 import { ServiceSettingsSchema } from "../src/config/service-settings";
@@ -246,7 +246,7 @@ test("uncertain collection startup uses its preallocated trace to recover owners
   }
 }, 120000);
 
-async function completeHeldCollection(fixture: Awaited<ReturnType<typeof recordedPlan>>, traceId: string) {
+async function completeHeldCollection(fixture: Awaited<ReturnType<typeof recordedPlan>>, traceId: string, combined = false) {
   const collection = getCollection(fixture.inputs, traceId);
   const app = createPlanApp(fixture.inputs, fixture.runtime);
   const server = Bun.serve({ hostname: "127.0.0.1", port: 0, idleTimeout: 0, fetch: app.fetch });
@@ -272,15 +272,24 @@ async function completeHeldCollection(fixture: Awaited<ReturnType<typeof recorde
       }
     }
     const completed = CompletedCollectionSchema.parse(await post(PLANNER_API_PATHS.completeCollection, { traceId }));
+    expect(completed.rejected_articles).toEqual(combined ? { status: "deferred" } : { status: "empty", files: [] });
     const selected = SelectionResponseSchema.parse(await post(PLANNER_API_PATHS.selectArticles, { links: [operationLink(completed)] }));
     const persisted = PersistenceResponseSchema.parse(await post(PLANNER_API_PATHS.persistSelectedArticles, { links: [operationLink(selected)] }));
     expect(selected.run_id).toBe(collection.context.run_id);
     expect(persisted.selected_count).toBeGreaterThan(0);
     expect(persisted.selected_count).toBe(selected.articles.length);
-    expect(FinalizedCollectionSchema.parse(await post(PLANNER_API_PATHS.finalizeCollection, {
+    expect(persisted.rejected_files).toEqual(combined ? { status: "deferred" } : { status: "empty", files: [] });
+    const finalization = {
       traceId, failure_code: null,
       collection_timing: { duration_ms: Math.round(performance.now() - started), status: "completed" },
-    })).status).toBe("completed");
+    };
+    if (combined) {
+      await expect(post(PLANNER_API_PATHS.finalizeCollection, finalization)).rejects.toThrow("REQUEST_INCOMPLETE");
+      await post(PLANNER_API_PATHS.updateFeedHealth, { links: [operationLink(selected)], action: "record" });
+    }
+    const outcome = FinalizedCollectionSchema.parse(await post(PLANNER_API_PATHS.finalizeCollection, finalization));
+    expect(outcome.status).toBe("completed");
+    expect(outcome.rejected_articles).toEqual(combined ? { status: "empty", files: [] } : undefined);
     expect(ReleasedCollectionSchema.parse(await post(PLANNER_API_PATHS.releaseCollection, {
       run_id: collection.context.run_id, attempt: collection.context.writer.attempt,
     })).released).toBe(true);
@@ -333,7 +342,7 @@ test("a rejected overlapping startup cannot discard or consume another operation
     expect(first.context.run_id).toBe(context.run_id);
     expect(first.parentSpanId).toBe(context.spanId);
     expect((await readPlannerDayFiles(fixture.inputs.root, fixture.inputs.registrations.plan_runs, context.date)).members).toEqual([]);
-    await completeHeldCollection(fixture, first.traceId);
+    await completeHeldCollection(fixture, first.traceId, true);
   } finally { await fixture.close(); }
 }, 120000);
 
@@ -501,6 +510,8 @@ test("health and selected persistence failures preserve the independent successf
 
 test("a completed parsed collection supplies the report when actual selection fails", async () => {
   const fixture = await recordedPlan();
+  fixture.inputs.harvest.config.harvest.request_headers.secondary = null;
+  fixture.transport.recordings.responses["https://news.example/second"] = [{ status: 404, body: "" }];
   const app = createPlanApp(fixture.inputs, fixture.runtime);
   let completedInput: ReturnType<typeof operationLink> | undefined;
   const server = Bun.serve({
@@ -529,6 +540,11 @@ test("a completed parsed collection supplies the report when actual selection fa
     expect(result.row.selected_count).toBe(0);
     expect(result.row.selection_metrics).toBeNull();
     expect(result.failure?.error_type).toBe("RangeError");
+    expect(result.files.plan_runs?.status).toBe("written");
+    expect(result.files.rejected_articles).toBeUndefined();
+    expect(fixture.events.some(event => ArticleFailureDiagnosticSchema.safeParse(event).success)).toBe(true);
+    await expect(stat(join(fixture.inputs.outputRoot, "raw", "feed-ingest-plan", "rejected-articles")))
+      .rejects.toMatchObject({ code: "ENOENT" });
     expect(result.health?.status).toBe("summarized");
     if (result.health?.status !== "summarized") throw new Error("Completed collection report was not captured");
     expect(result.health.links).toEqual([completedInput!]);

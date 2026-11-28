@@ -4,7 +4,7 @@ import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import {
   PartitionedFeedBatchSchema, SelectedFeedBatchSchema, StageReferenceRequestSchema, SelectedArticleRowContract,
-  SelectedArticlesArtifactSchema, selectedArticleMetadata, RejectedArticleRowContract,
+  SelectedArticlesArtifactSchema, selectedArticleMetadata,
 } from "@idhazh/common-contracts";
 import { persistLedger } from "@idhazh/ledger-file-writer";
 import type { PersistLedgerResult } from "@idhazh/ledger-file-writer";
@@ -21,12 +21,14 @@ import { createStageLogger } from "../logging/structured-logger";
 import { withPlannerFailure } from "./plan-failure";
 import { retainFailureThroughCleanup } from "./retain-failure-through-cleanup";
 import { commandContext, operationMetadata, operationRunContext } from "./operation-context";
-import { collectionForRun } from "./collection-operation";
+import { collectionForRun, combinedCollectionForPersistence } from "./collection-operation";
+import { DEFERRED_REJECTIONS } from "./stage-response.schema";
+import { writeRejectedArticles } from "../record-harvest-failures";
 import type { OperationMetadata } from "@idhazh/common-contracts";
 
 type PersistedOutput = {
   files: PersistLedgerResult; artifact: string; selected_count: number;
-  rejected_files: PersistLedgerResult;
+  rejected_files: Awaited<ReturnType<typeof writeRejectedArticles>> | typeof DEFERRED_REJECTIONS;
   run_files?: PersistLedgerResult; run_status?: "completed" | "partial" | "failed";
 };
 type Result = PersistedOutput & OperationMetadata;
@@ -40,6 +42,7 @@ export async function executePersistence(raw: unknown, inputs: PlanInputs, runti
     : store.read("partitioned", request.links[0], PartitionedFeedBatchSchema);
   const claim = store.ownership(batch);
   requireStageConfiguration(batch, inputs, runtime);
+  const combined = combinedCollectionForPersistence(inputs, batch, claim);
   const operation = commandContext(runtime, collectionForRun(inputs, batch.context.run_id)?.context, [batch]);
   const context = { ...batch.context, ...operation };
   const path = selectedArtifactPath(inputs.settings.inputs.artifact_root, batch.context);
@@ -92,16 +95,13 @@ export async function executePersistence(raw: unknown, inputs: PlanInputs, runti
         writerContext: batch.context.writer, ledgerSettings: inputs.ledgerSettings, period: { tier: "raw", covers: batch.context.date },
       });
       if (files.status === "skipped") throw new Error("Selected metadata write was refused");
-      const rejectedFiles = await persistLedger({
-        ledger: "rejected-articles", rowContract: RejectedArticleRowContract, rows: batch.rejected_articles,
-        registryEntry: inputs.registrations.rejected_articles, outputRoot: inputs.outputRoot,
-        writerContext: batch.context.writer, ledgerSettings: inputs.ledgerSettings, period: { tier: "raw", covers: batch.context.date },
-      });
-      if (rejectedFiles.status === "skipped") throw new Error("Rejected metadata write was refused");
+      const rejectedFiles = combined === undefined
+        ? await writeRejectedArticles(batch.rejected_articles, batch.context, inputs) : DEFERRED_REJECTIONS;
       await appendDocumentTiming(inputs, batch.context.run_id, { operation: "persist", duration_ms: Math.round(performance.now() - began), status: "completed" });
       const run = await recordStandaloneRun(inputs, batch, path);
       emit("persist", "completed", { output_count: metadata.length,
         duration_ms: Math.round(performance.now() - began), artifact: path });
+      if (combined !== undefined) combined.persistedRejections = batch.rejected_articles;
       return { files, rejected_files: rejectedFiles, artifact: path, selected_count: metadata.length,
         ...(run === undefined ? {} : { run_files: run.files, run_status: run.row.status }) };
     } catch (error) {

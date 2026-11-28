@@ -5,7 +5,7 @@ import {
   RunIdSchema, SlugSchema, PlannerFailureSchema,
 } from "@idhazh/common-contracts";
 import { PlanRequestSchema } from "./plan-request";
-import { StageWriteResultSchema } from "./stage-response.schema";
+import { RejectionStageResultSchema, StageWriteResultSchema } from "./stage-response.schema";
 
 export const BeginCollectionSchema = z.strictObject({
   request: PlanRequestSchema,
@@ -20,11 +20,11 @@ export const CollectionResponseSchema = OperationMetadataSchema.safeExtend({
 });
 export const CompletedCollectionSchema = OperationMetadataSchema.safeExtend({
   discovered_articles: StageWriteResultSchema,
-  rejected_articles: StageWriteResultSchema,
+  rejected_articles: RejectionStageResultSchema,
 });
 export const CancelledCollectionSchema = OperationMetadataSchema.safeExtend({
   status: z.literal("cancelled"),
-  rejected_articles: StageWriteResultSchema, has_work: z.boolean(),
+  rejected_articles: RejectionStageResultSchema, has_work: z.boolean(),
 });
 export const FinalizeCollectionRequestSchema = z.strictObject({
   traceId: TraceIdSchema, failure_code: NonEmptySchema.nullable(),
@@ -37,9 +37,15 @@ export const FinalizedCollectionSchema = z.strictObject({
   traceId: TraceIdSchema, status: z.enum(["completed", "partial", "failed"]),
   failure_code: NonEmptySchema.nullable(), api_timings: z.array(PlanApiTimingSchema),
   failure: PlannerFailureSchema.nullable().default(null),
+  rejected_articles: StageWriteResultSchema.refine(receipt => receipt.status === "empty"
+    || (receipt.files.length === 1 && receipt.files[0]!.row_count > 0),
+  "Final rejection output has one nonempty file or an explicit empty receipt").optional(),
 }).superRefine((value, ctx) => {
   if ((value.status === "completed") !== (value.failure_code === null)) {
     ctx.addIssue({ code: "custom", message: "Only a completed collection has no failure cause" });
+  }
+  if (value.status !== "completed" && value.rejected_articles !== undefined) {
+    ctx.addIssue({ code: "custom", path: ["rejected_articles"], message: "Only a completed collection can seal rejections" });
   }
 });
 export const ReleaseCollectionRequestSchema = z.strictObject({

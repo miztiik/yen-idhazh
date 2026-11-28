@@ -9,7 +9,7 @@ import type { CompactIndex } from "../../../packages/common-contracts/src/index"
 import type { LedgerRegistration } from "../../../packages/ledger-file-writer/src/index";
 import { LedgerDayInputSchema, RelativePathSchema } from "../src/config/service-settings";
 import type { LedgerDayInput } from "../src/config/service-settings";
-import { validateLedgerFilePath } from "./feed-ingest-plan-verification";
+import { plannerReceiptsForDelivery, validateLedgerFilePath } from "./feed-ingest-plan-verification";
 import { PlanResponseSchema } from "../src/api/plan-response.schema";
 import { LedgerHistoryReadError } from "../src/read-ledger-history/ledger-history-error";
 
@@ -18,9 +18,10 @@ export function createExecutionOutputs(raw: unknown, registrations: {
   feed_health_state: LedgerRegistration; plan_runs: LedgerRegistration;
 }): Record<string, string> {
   const summary = PlanResponseSchema.parse(raw);
+  const receipts = plannerReceiptsForDelivery(summary);
   const paths: string[] = [];
   for (const key of ["discovered_articles", "selected_articles", "rejected_articles", "feed_health_state", "plan_runs"] as const) {
-    const result = summary.files[key];
+    const result = receipts[key];
     if (result === undefined) {
       if (summary.planning_complete) throw new Error("Completed run lacks an explicit planner ledger result");
       continue;

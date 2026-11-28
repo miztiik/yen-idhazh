@@ -1,6 +1,6 @@
 /** Own one complete collection and refuse selection before all its work settles. */
 import { createChildContext, PlanApiTimingSchema } from "@idhazh/common-contracts";
-import type { OperationLink, PlannerFeedOffer } from "@idhazh/common-contracts";
+import type { OperationLink, PlannerFailureOperation, PlannerFeedOffer, RejectedArticleRow, SelectedFeedBatch } from "@idhazh/common-contracts";
 import type { HarvestArticleResult } from "../harvest-feeds/harvest-types";
 import type { PlanInputs } from "../load-plan-inputs";
 import type { PlanRuntime } from "../run-feed-plan";
@@ -15,10 +15,12 @@ import { captureDocumentContext, commandContext, operationLink, operationMetadat
 import { documentState } from "./document-state";
 import type { DocumentState } from "./document-state";
 import { stageStore } from "./stage-store";
+import type { ExecutionOwnership } from "./stage-store";
 import { rememberDiscoveries } from "../read-ledger-history/read-discovered-evidence";
 import { summarizeFeedAvailability } from "../availability/feed-availability-view";
 import { utcTimestamp } from "../harvest-feeds/harvest-types";
-import { recordHarvestFailures } from "../record-harvest-failures";
+import { recordHarvestFailures, sealCombinedRejections } from "../record-harvest-failures";
+import { DEFERRED_REJECTIONS } from "./stage-response.schema";
 import { CompletedCollectionSchema } from "./collection-contracts";
 import type { z } from "zod";
 import { snapshotCollectionBatch } from "./collection-batch";
@@ -37,6 +39,7 @@ export type Collection = {
   operations: Set<Promise<unknown>>;
   finalization?: { request: string; result: z.infer<typeof FinalizedCollectionSchema> };
   rejections?: ReturnType<typeof recordHarvestFailures>;
+  persistedRejections?: readonly RejectedArticleRow[];
   completed?: OperationLink;
   parses: Map<string, OperationLink | undefined>;
   offers: Map<string, PlannerFeedOffer>;
@@ -44,25 +47,27 @@ export type Collection = {
   pending_offers: number;
 };
 const collections = new WeakMap<PlanInputs, Map<string, Collection>>();
-const pendingContexts = new WeakMap<PlanInputs, Map<string, RunContext>>();
-const collectionOwners = new WeakMap<Collection, RunContext>();
+type CollectionOwner = { context: RunContext; signal: AbortSignal | undefined };
+const pendingContexts = new WeakMap<PlanInputs, Map<string, CollectionOwner>>();
+const collectionOwners = new WeakMap<Collection, CollectionOwner>();
+const combinedSelectionClaims = new WeakSet<ExecutionOwnership>();
 const preparedStarts = new WeakMap<PlanInputs, WeakMap<RunContext, Promise<z.infer<typeof CollectionResponseSchema>>>>();
 const startingCollections = new WeakMap<PlanInputs, Set<string>>();
-export function prepareCollectionContext(inputs: PlanInputs, context: RunContext) {
+export function prepareCollectionContext(inputs: PlanInputs, context: RunContext, signal?: AbortSignal) {
   let pending = pendingContexts.get(inputs);
   if (pending === undefined) { pending = new Map(); pendingContexts.set(inputs, pending); }
   if (pending.has(context.traceId) || collections.get(inputs)?.has(context.traceId)
     || startingCollections.get(inputs)?.has(context.traceId)
-    || [...pending.values()].some(value => value.run_id === context.run_id)
+    || [...pending.values()].some(value => value.context.run_id === context.run_id)
     || stageStore(inputs).isRunActive(context.run_id)) {
     throw new PlanError("REQUEST_CONFLICT", "Collection execution already belongs to live work", "traceId");
   }
   if (pending.size >= inputs.settings.listener.max_stage_batches) throw new PlanError("REQUEST_BUSY", "Collection startup capacity is occupied");
-  pending.set(context.traceId, context);
+  pending.set(context.traceId, { context, signal });
 }
 export function discardCollectionContext(inputs: PlanInputs, context: RunContext) {
   const pending = pendingContexts.get(inputs);
-  if (pending?.get(context.traceId) === context) pending.delete(context.traceId);
+  if (pending?.get(context.traceId)?.context === context) pending.delete(context.traceId);
   preparedStarts.get(inputs)?.delete(context);
 }
 export async function awaitCollectionStartup(inputs: PlanInputs, context: RunContext) {
@@ -70,7 +75,7 @@ export async function awaitCollectionStartup(inputs: PlanInputs, context: RunCon
 }
 export function ownsPreparedCollection(inputs: PlanInputs, context: RunContext) {
   const collection = collections.get(inputs)?.get(context.traceId);
-  return collection !== undefined && collectionOwners.get(collection) === context;
+  return collection !== undefined && collectionOwners.get(collection)?.context === context;
 }
 function held(inputs: PlanInputs) {
   let value = collections.get(inputs);
@@ -106,17 +111,17 @@ export async function beginCollection(raw: unknown, inputs: PlanInputs, runtime:
   }
   const pending = pendingContexts.get(inputs);
   const prepared = pending?.get(operation.traceId);
-  if (prepared !== undefined && operation.parentSpanId !== prepared.spanId) {
+  if (prepared !== undefined && operation.parentSpanId !== prepared.context.spanId) {
     throw new PlanError("REQUEST_CONFLICT", "Collection startup belongs to another operation", "traceId");
   }
   const context: RunContext = prepared === undefined
     ? resolveRunContext(inputs.settings, runtime.git_sha, runtime.clock?.() ?? new Date(),
       runtime.run_number, operation, runtime.captured_at, runtime.attempt, runtime.producer)
-    : { ...stageContext(prepared), ...operation };
+    : { ...stageContext(prepared.context), ...operation };
   const stages = stageStore(inputs);
   if ([...owned.values()].some(value => value.context.run_id === context.run_id)
     || stages.isRunActive(context.run_id)
-    || [...(pending?.values() ?? [])].some(value => value !== prepared && value.run_id === context.run_id)) {
+    || [...(pending?.values() ?? [])].some(value => value !== prepared && value.context.run_id === context.run_id)) {
     throw new PlanError("REQUEST_CONFLICT", "Execution identity already belongs to live work", "traceId");
   }
   if (owned.size + starting.size >= inputs.settings.listener.max_stage_batches) {
@@ -157,7 +162,7 @@ export async function beginCollection(raw: unknown, inputs: PlanInputs, runtime:
   if (prepared !== undefined) {
     let starts = preparedStarts.get(inputs);
     if (starts === undefined) { starts = new WeakMap(); preparedStarts.set(inputs, starts); }
-    starts.set(prepared, startup);
+    starts.set(prepared.context, startup);
   }
   return startup;
 }
@@ -181,6 +186,17 @@ export function settleCollectionFeed(inputs: PlanInputs, runId: string, feedId: 
 }
 export function collectionForRun(inputs: PlanInputs, runId: string) {
   return [...held(inputs).values()].find(value => value.context.run_id === runId);
+}
+export function combinedCollectionForPersistence(
+  inputs: PlanInputs, batch: Pick<SelectedFeedBatch, "traceId" | "context">, claim: ExecutionOwnership,
+) {
+  if (!combinedSelectionClaims.has(claim)) return undefined;
+  const collection = getCollection(inputs, batch.traceId);
+  if (!collectionOwners.has(collection) || collection.status !== "complete"
+    || collection.context.run_id !== batch.context.run_id || collection.context.writer.attempt !== batch.context.writer.attempt) {
+    throw new PlanError("REQUEST_CONFLICT", "Persistence requires its complete owned collection", "links");
+  }
+  return collection;
 }
 export async function completeCollection(inputs: PlanInputs, id: string) {
   const collection = getCollection(inputs, id);
@@ -206,13 +222,16 @@ export async function completeCollection(inputs: PlanInputs, id: string) {
       outputRoot: inputs.outputRoot, registryEntry: inputs.registrations.discovered_articles, ledgerSettings: inputs.ledgerSettings,
     });
     const batch = snapshotCollectionBatch(inputs, collection, operation, true);
-    stageStore(inputs).ownership(batch).scope = "plan";
-    const rejected = await finalizeCollectionRejections(inputs, collection);
+    const claim = stageStore(inputs).ownership(batch);
+    claim.scope = "plan";
+    const combined = collectionOwners.has(collection);
+    const rejected = combined ? DEFERRED_REJECTIONS : await writeExplicitCollectionRejections(inputs, collection);
     if (collectionCancelled(collection)) {
       throw new PlanError("REQUEST_INCOMPLETE", "Cancelled collection cannot be selected", "traceId");
     }
     collection.status = "complete";
     collection.completed = operationLink(batch);
+    if (combined) combinedSelectionClaims.add(claim);
     return { ...operationMetadata(batch), discovered_articles: saved.result, rejected_articles: rejected };
   })();
   try { return await collection.complete; }
@@ -222,7 +241,7 @@ export async function completeCollection(inputs: PlanInputs, id: string) {
     throw error;
   }
 }
-async function finalizeCollectionRejections(inputs: PlanInputs, collection: Collection) {
+async function writeExplicitCollectionRejections(inputs: PlanInputs, collection: Collection) {
   collection.rejections ??= recordHarvestFailures(collection.state.harvest_rejections ?? [], collection.context, inputs);
   try { return await collection.rejections; }
   catch (error) { delete collection.rejections; throw error; }
@@ -241,7 +260,7 @@ export async function cancelCollection(inputs: PlanInputs, id: string) {
   await drainCollectionOperations(collection);
   const parsed = snapshotCollectionBatch(inputs, collection, operation, false);
   return { ...operationMetadata(parsed), status: "cancelled" as const,
-    rejected_articles: await finalizeCollectionRejections(inputs, collection),
+    rejected_articles: collectionOwners.has(collection) ? DEFERRED_REJECTIONS : await writeExplicitCollectionRejections(inputs, collection),
     has_work: collection.state.work.rows().length > 0 };
 }
 export async function trackCollectionOperation<T>(collection: Collection, operation: () => Promise<T>) {
@@ -276,9 +295,25 @@ export async function finalizeCollection(raw: unknown, inputs: PlanInputs) {
     || request.failure.execution.attempt !== collection.context.writer.attempt)) {
     throw new PlanError("INVALID_REQUEST", "Failure evidence belongs to another execution", "failure");
   }
+  const owner = collectionOwners.get(collection);
+  if (owner !== undefined && request.failure_code === null && (request.failure !== null
+    || request.collection_timing.status !== "completed" || collection.persistedRejections === undefined
+    || !collection.state.health_written)) {
+    throw new PlanError("REQUEST_INCOMPLETE", "Combined finalization requires completed collection, selection and health writes", "traceId");
+  }
   collection.closing = true;
   collection.finalizing = true;
-  await drainCollectionOperations(collection);
+  try {
+    await drainCollectionOperations(collection);
+    const result = await settleCollectionOutcome(inputs, collection, request, owner);
+    collection.finalization = { request: requestKey, result };
+    return result;
+  } finally { collection.finalizing = false; }
+}
+async function settleCollectionOutcome(
+  inputs: PlanInputs, collection: Collection, request: z.infer<typeof FinalizeCollectionRequestSchema>,
+  owner: CollectionOwner | undefined,
+) {
   const timing = PlanApiTimingSchema.parse({
     operation: "fetch", duration_ms: request.collection_timing.duration_ms, status: request.collection_timing.status,
   });
@@ -287,27 +322,39 @@ export async function finalizeCollection(raw: unknown, inputs: PlanInputs) {
   collection.state.api_timings.splice(insertion < 0 ? collection.state.api_timings.length : insertion, 0, timing);
   let failureCode = request.failure_code;
   let failure = request.failure;
+  function retainFailure(error: unknown, operation: PlannerFailureOperation, code: string, cancelled = false) {
+    const current = capturePlannerFailure(error, {
+      operation, execution: collection.context, limits: inputs.settings.diagnostics.failure, cancelled,
+    });
+    failure = failure === null ? current : combinePlannerFailures(failure, current, inputs.settings.diagnostics.failure);
+    failureCode ??= code;
+  }
   const diagnostics = await Promise.allSettled([
     finishRawDocumentFailures(inputs, collection.state.context), finishArticleEntities(inputs, collection.state.context),
   ]);
   for (const [index, result] of diagnostics.entries()) {
     if (result.status !== "rejected") continue;
-    const current = capturePlannerFailure(result.reason, {
-      operation: index === 0 ? "write-document-failures" : "write-entities",
-      execution: collection.context, limits: inputs.settings.diagnostics.failure,
-    });
-    failure = failure === null ? current : combinePlannerFailures(failure, current, inputs.settings.diagnostics.failure);
-    failureCode ??= index === 0 ? "RAW_DOCUMENT_OUTPUT_FAILED" : "ARTICLE_ENTITY_OUTPUT_FAILED";
+    retainFailure(result.reason, index === 0 ? "write-document-failures" : "write-entities",
+      index === 0 ? "RAW_DOCUMENT_OUTPUT_FAILED" : "ARTICLE_ENTITY_OUTPUT_FAILED");
+  }
+  let rejections: Awaited<ReturnType<typeof sealCombinedRejections>> | undefined;
+  if (failureCode === null && owner !== undefined && collection.persistedRejections !== undefined) {
+    try {
+      owner.signal?.throwIfAborted();
+      rejections = await sealCombinedRejections(collection.state.harvest_rejections ?? [],
+        collection.persistedRejections, collection.context, inputs);
+    } catch (error) {
+      const cancelled = owner.signal?.aborted === true && owner.signal.reason === error;
+      retainFailure(error, "collection-finalize", cancelled ? "PLAN_CANCELLED" : "REJECTION_OUTPUT_FAILED", cancelled);
+    }
   }
   const status = failureCode === null ? "completed"
     : collection.state.work.rows().some(row => row.checked_at !== null) ? "partial" : "failed";
-  const result = FinalizedCollectionSchema.parse({
+  return FinalizedCollectionSchema.parse({
     traceId: request.traceId, status, failure_code: failureCode, failure,
     api_timings: [...collection.state.api_timings],
+    ...(rejections === undefined ? {} : { rejected_articles: rejections }),
   });
-  collection.finalization = { request: requestKey, result };
-  collection.finalizing = false;
-  return result;
 }
 export function releaseCollection(raw: unknown, inputs: PlanInputs) {
   const request = ReleaseCollectionRequestSchema.parse(raw);

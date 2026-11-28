@@ -112,7 +112,9 @@ Paragraph, length, density and headline rules live in
 ## Rejection persistence
 
 Explicit selection persistence writes `rejected-articles` even when no article
-wins. It retains only execution/candidate/URL/feed identities, stage, reason and
+wins. The [combined planner](feed-plan-runner.md#real-composition-and-identity)
+defers this write to finalization. The ledger retains only
+execution/candidate/URL/feed identities, stage, reason and
 the applied age cutoff. No title, text, policy or score tree is copied. Fetch
 or parse failures do not acquire fabricated selection rows. Grouped counts
 remain in actual UTC work-day health rows.
