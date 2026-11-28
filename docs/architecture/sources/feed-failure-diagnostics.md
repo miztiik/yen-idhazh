@@ -1,6 +1,6 @@
 # Feed and article failure diagnostics
 
-**Last Updated**: 2026-11-07
+**Last Updated**: 2026-11-28
 
 Which operation failed, what evidence survives it, and which durations were
 actually measured? This is the isolated TypeScript planner's diagnostic
@@ -72,6 +72,18 @@ carry captured evidence; a parse failure has no invented failed HTTP address.
 dispatched target, and `failed_url` is the actual failed target request.
 Local validation has no failed
 request address. Redirect history preserves sanitized hop addresses and status.
+
+The workflow relay publishes the producer's safe failure facts as
+`planner.workflow-failure`. A failed dispatch retains the normalized host of
+the actual request, the feed and known publisher, opaque document identity,
+HTTP status, native cause, available transport error code, and zero-based
+attempt sequence and retry index. The sequence includes preceding validation
+attempts. A later successful retry does not remove the failed dispatch.
+Terminal document work, policy refusals, history gaps and planner
+stage failures retain their own causes and applicable identities. Unavailable
+evidence stays null. The workflow form omits URL paths and queries, response
+headers and bodies, history file paths and exception text; it does not change
+standalone API responses, pacing, or ledger evidence.
 
 `harvest.response_diagnostics` initially selects `content-type`,
 `content-length` and `retry-after`, bounded to 256 characters per value.

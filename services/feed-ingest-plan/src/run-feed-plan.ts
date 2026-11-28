@@ -328,10 +328,11 @@ async function runPlanStages(
             FeedHealthStateUpdateResponseSchema, true);
           if (health.files !== undefined) files.feed_health_state = health.files;
         } catch (error) {
-          failure = combinePlannerFailures(failure, capturePlannerFailure(error, {
+          const healthFailure = capturePlannerFailure(error, {
             operation: "feed-health-state", execution: context, limits: inputs.settings.diagnostics.failure,
-          }), inputs.settings.diagnostics.failure);
-          emit("persist", "failed", { failure_code: "FEED_HEALTH_WRITE_FAILED", failure });
+          });
+          failure = combinePlannerFailures(failure, healthFailure, inputs.settings.diagnostics.failure);
+          emit("persist", "failed", { failure_code: "FEED_HEALTH_WRITE_FAILED", failure: healthFailure });
         }
       }
     }

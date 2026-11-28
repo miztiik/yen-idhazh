@@ -3,6 +3,7 @@ import {
   createCloudEvent, ExtractionQualitySchema, ExtractionSignalSchema, FEED_INGEST_EVENT_VERSION,
   FeedIngestEventDataSchema, FeedIngestEventSchema, NetworkFailureDetailsSchema,
   ArticleFailureDiagnosticSchema, isArticleFailureDiagnostic, PLANNER_PROGRESS_DETAIL_LIMITS,
+  PlannerFailureReadSchema, PLANNER_WORKFLOW_FAILURE_VERSION, PlannerWorkflowFailureDataSchema,
 } from "@idhazh/common-contracts";
 import { z } from "zod";
 import type { FeedIngestEvent, FeedIngestEventData, NetworkFailureDetails, OperationMetadata } from "@idhazh/common-contracts";
@@ -113,7 +114,7 @@ export function prepareProgressEvent(
     entries += keys.length;
     const result: Record<string, unknown> = {};
     for (const key of keys) {
-      if (key === "_compliance") {
+      if (key === "_compliance" || key === "workflow_failure") {
         addViolation("reserved_publisher_field", "details");
         continue;
       }
@@ -188,8 +189,52 @@ export function prepareProgressEvent(
   return FeedIngestEventSchema.parse({ ...carrier, data: { ...base, details } });
 }
 
+function projectWorkflowFailure(data: FeedIngestEventData, attempt: number, evidence?: NetworkFailureDetails) {
+  const { details, operation, run_id } = data;
+  const base = { version: PLANNER_WORKFLOW_FAILURE_VERSION, run_id, attempt, operation };
+  const document = {
+    document_kind: details.document_kind, document_id: details.document_id, candidate_id: details.candidate_id,
+    feed_id: details.feed_id, publisher_id: details.publisher_id,
+  };
+  const target = { destination_domain: details.destination_domain, http_status: evidence?.http_status ?? null };
+  if (operation === "request-attempt") {
+    const request = evidence?.attempt;
+    if (request?.phase !== "target") return undefined;
+    return {
+      ...base, ...document, ...target, kind: "failed-dispatch", cause: request.failure,
+      sequence: request.sequence, retry: request.retry, error_code: request.error_code,
+    };
+  }
+  if (details.scope === "document") {
+    if (details.failure_code === "ARTICLE_EXCLUDED") {
+      return { ...base, ...document, kind: "policy-refusal", cause: details.policy_reason };
+    }
+    return {
+      ...base, ...document, kind: "document-failure",
+      cause: operation === "quality" && isRecord(details.quality_rejection)
+        ? details.quality_rejection.failure_code : details.failure_code ?? null,
+      ...(operation === "fetch" ? { ...target, error_code: details.error_code } : {}),
+    };
+  }
+  if (operation === "history") {
+    const identity = isRecord(details.identity) ? details.identity : undefined;
+    return {
+      ...base, kind: "history-gap", scope: details.source, check: details.failed_check, cause: details.reason,
+      ledger: details.ledger ?? null, day: details.day ?? null, use: details.use ?? null,
+      feed_id: details.feed_id ?? identity?.feed_id ?? null, endpoint_key: identity?.endpoint_key ?? null,
+    };
+  }
+  const failure = details.failure == null ? null : PlannerFailureReadSchema.safeParse(details.failure);
+  if (failure?.success === false) return undefined;
+  return {
+    ...base, kind: "stage-failure", scope: details.scope ?? null, code: details.failure_code,
+    cause: failure?.data.safe_cause ?? null, cause_operation: failure?.data.operation ?? null,
+    system_code: failure?.data.system_code ?? null,
+  };
+}
+
 export function createStageLogger(
-  context: Pick<RunContext, "run_id"> & OperationMetadata,
+  context: Pick<RunContext, "run_id"> & OperationMetadata & { writer?: Pick<RunContext["writer"], "attempt"> },
   source: string,
   write: (event: FeedIngestEvent) => void = writeJsonLine,
 ) {
@@ -202,8 +247,19 @@ export function createStageLogger(
       data: { version: FEED_INGEST_EVENT_VERSION, run_id: context.run_id, operation, phase, details: {} },
       parseData: value => FeedIngestEventDataSchema.parse(value),
     });
-    write(prepareProgressEvent({ ...event, data: { ...event.data, details } },
-      requiredDetails, failureArticleUrl, failureFeedUrls, failureEvidence));
+    const progress = prepareProgressEvent({ ...event, data: { ...event.data, details } },
+      requiredDetails, failureArticleUrl, failureFeedUrls, failureEvidence);
+    if (phase === "failed" && context.writer !== undefined && !isArticleFailureDiagnostic(progress)) {
+      const failure = PlannerWorkflowFailureDataSchema.safeParse(
+        projectWorkflowFailure(progress.data, context.writer.attempt, failureEvidence),
+      );
+      if (failure.success) {
+        write({ ...progress, data: { ...progress.data, details: { ...progress.data.details, workflow_failure: failure.data } } });
+        return;
+      }
+      // An untyped failed progress line is refused visibly by the workflow relay.
+    }
+    write(progress);
   };
 }
 export type StageLogger = ReturnType<typeof createStageLogger>;

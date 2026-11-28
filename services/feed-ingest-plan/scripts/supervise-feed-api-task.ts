@@ -23,7 +23,7 @@ export function superviseFeedApiTask<T>(input: {
     serverEntry: input.serverEntry ?? fileURLToPath(new URL("./serve-feed-apis.ts", import.meta.url)),
     supervision: startup.server.supervision,
     maxControlBytes: (startup.group === "planning" ? startup.planner : startup.delivery).settings.listener.max_body_bytes,
-    evidenceSchema: MachineServerEvidenceSchema, decodeDiagnostic: readFeedApiDiagnostic,
+    evidenceSchema: MachineServerEvidenceSchema, decodeDiagnostic: raw => readFeedApiDiagnostic(raw, startup),
     ready: (message, pid, signal) => readFeedApiReadiness({ message, pid, signal, startup, kind, failure }),
   });
 }

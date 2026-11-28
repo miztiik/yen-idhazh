@@ -111,7 +111,7 @@ export async function fetchDocument(
     });
     if (prepared.status === "rejected") {
       await work.skip();
-      work.rejectFetch(url, "ARTICLE_EXCLUDED");
+      work.rejectFetch(url, prepared.result.rejection?.drop_reason ?? null);
       state.work.article(prepared.result);
       if (prepared.result.rejection !== null) await recordDocumentRejections([prepared.result.rejection], state, inputs);
       if (parent !== null) updateFeedOffer(inputs, state, parent.batch, parent.offer.candidate_id, "rejected");

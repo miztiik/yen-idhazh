@@ -18,6 +18,7 @@ import type { RequestPacing } from "./request-pacing";
 export type FetchAttemptMeasurement = {
   attempt: FetchAttempt; occurred_at: string; outcome: "success" | "failed";
   dispatched_request_count: number; request_coverage: "complete";
+  destination_domain: string | null;
   final_attempted_url: string | null;
   pacing_settings: FeedIngestConfig["harvest"]["request_pacing"];
 };
@@ -172,6 +173,8 @@ export function createSourceFetcher(
         await attempts.emit?.({
           attempt: evidence, occurred_at: dispatchedAt ?? utcTimestamp(clock), outcome: failed ? "failed" : "success",
           dispatched_request_count, request_coverage: "complete",
+          destination_domain: dispatched_request_count > 0 && request !== undefined
+            ? new URL(request.url).hostname.replace(/^\[|\]$|\.$/g, "") : null,
           final_attempted_url: attempts.final_attempted_url,
           pacing_settings: config.request_pacing,
         });
@@ -272,6 +275,7 @@ export function createSourceFetcher(
         await attempts.emit?.({
           attempt, occurred_at: utcTimestamp(clock), outcome: "failed",
           dispatched_request_count: 0, request_coverage: "complete",
+          destination_domain: null,
           final_attempted_url: attempts.final_attempted_url,
           pacing_settings: config.request_pacing,
         });

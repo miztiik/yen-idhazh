@@ -9,7 +9,7 @@ const input = z.strictObject({
   module_line: z.string().optional(), module_lines: z.array(z.string()).optional(),
   group: ApiGroupSchema,
 }).parse(await Bun.stdin.json());
-const writer = createServerEventWriter({ ...input, decode: readFeedApiDiagnostic });
+const writer = createServerEventWriter({ ...input, decode: raw => readFeedApiDiagnostic(raw, input) });
 writer.write({ phase: "starting" });
 if (input.group === "delivery") writer.write({ phase: "ready" });
 if (input.module_line !== undefined) writer.acceptModuleLine(input.module_line);
