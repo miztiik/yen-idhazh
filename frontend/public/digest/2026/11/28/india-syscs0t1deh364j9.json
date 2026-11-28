@@ -1,0 +1,49 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Lok Sabha constituencies in Telangana",
+    "y": "Number of voters (lakh)"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m4",
+      "m5",
+      "m6",
+      "m7"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-syscs0t1deh364j9",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Malkajgiri (largest in country)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Chevella","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Hyderabad","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m3","source_text": null,"text": "Secunderabad","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-1283-1297","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "voter","value": "3800000"},
+    {"derived": null,"element_id": "quantity-1365-1382","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "voter","value": "2940000"},
+    {"derived": null,"element_id": "quantity-1396-1413","mark_id": "m6","source_text": null,"text": null,"time": null,"unit": "voter","value": "2217000"},
+    {"derived": null,"element_id": "quantity-1434-1451","mark_id": "m7","source_text": null,"text": null,"time": null,"unit": "voter","value": "2120000"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Telangana constituency sizes before delimitation",
+  "type": "bar",
+  "version": "2026-11-25"
+}

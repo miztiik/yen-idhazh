@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Metric or Comparison Film",
+    "y": "Collection Amount"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "business-economy-yz0qympyea2x36b2",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "India net collection (day 23)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Global gross","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-204-216","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "\u20b9","value": "10000000000"},
+    {"derived": null,"element_id": "quantity-411-423","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "\u20b9","value": "17900000000"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Ramayana Box Office Milestones and Comparisons",
+  "type": "bar",
+  "version": "2026-11-25"
+}

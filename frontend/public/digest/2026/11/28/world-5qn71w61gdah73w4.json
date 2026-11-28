@@ -1,0 +1,45 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Category",
+    "y": "Amount"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "world-5qn71w61gdah73w4",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Russia defence-military budget (up to)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Russia next-year spending estimate 1","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Russia next-year spending estimate 2","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-2131-2143","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "\u20ac","value": "180000000000"},
+    {"derived": null,"element_id": "quantity-2440-2444","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "\u20ac","value": "500"},
+    {"derived": null,"element_id": "quantity-2446-2458","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "\u20ac","value": "550000000000"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Russia vs EU Military Spending and Drone Production (Kubilius)",
+  "type": "bar",
+  "version": "2026-11-25"
+}

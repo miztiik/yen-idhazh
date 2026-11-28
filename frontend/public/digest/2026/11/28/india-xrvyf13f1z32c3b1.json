@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Reason cited by Midhun Reddy",
+    "y": "Support level"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-xrvyf13f1z32c3b1",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "50% proportionate increase in seats","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Women's reservation","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-1336-1339","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "%","value": "50"},
+    {"derived": null,"element_id": "quantity-1934-1937","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "50"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "YSRCP's Stated Reasons for Backing Delimitation Bill",
+  "type": "bar",
+  "version": "2026-11-25"
+}
