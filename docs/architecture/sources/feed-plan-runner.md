@@ -1,6 +1,6 @@
 # Running the isolated feed planner
 
-**Last Updated**: 2026-11-08
+**Last Updated**: 2026-11-28
 
 How do the API and CLI execute one real feed plan?
 Both compose the same units. The production Python news pipeline, digest
@@ -235,10 +235,16 @@ failure. Direct stage callers retain explicit release. The configured
 capacity bound still applies; no saved response can reopen released input.
 Closing a request-local listener does not release another collection's pinned
 input. That collection's explicit release ends its live ownership.
-The feed pool bounds active feed chains by `harvest.concurrency`. The article
+The feed pool bounds feed fetch-and-parse pairs by `harvest.concurrency` and
+releases them before article work so later feeds can start. The article
 pool allows that many fetches plus `listener.parser_concurrency` parses to be
-in flight; waiting for a parser does not occupy every fetch slot. The listener
-still enforces its separate request and parser limits.
+in flight. With pacing enabled, the combined run admits at most one pending
+fetch per requested domain and publisher before claiming either pool or a
+live-document slot. The next fetch can start while the previous document
+parses. An embargoed source cannot fill the pool with its sibling offers;
+unrelated work can use any remaining capacity. Redirect hops use their actual
+destination keys at network admission. The listener enforces the shared
+network and parser limits separately.
 Within one plan, feed and article parse HTTP calls share one
 `listener.parser_concurrency` limit before those calls start. Other offers wait
 in orchestration, rather than starting a worker deadline before a parser can

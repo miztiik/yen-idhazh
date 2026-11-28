@@ -4,7 +4,8 @@ import type { FeedIngestEvent, OperationLink, OperationMetadata, PlanApiTiming, 
 import { createRootContext, PLANNER_API_PATHS, PLANNER_API_PREFIX, PlannerHealthOutcomeSchema, PlannerRunResponseSchema, writeTraceContext } from "@idhazh/common-contracts";
 import type { PersistLedgerResult } from "@idhazh/ledger-file-writer";
 import type { harvestFeeds } from "./harvest-feeds/harvest-pool";
-import { workPool } from "./harvest-feeds/harvest-pool";
+import { workPool } from "./harvest-feeds/work-pool";
+import { documentAdmission } from "./harvest-feeds/document-admission";
 import type { ArticleParserPool } from "./harvest-feeds/article-parser-pool";
 import type { PlanInputs } from "./load-plan-inputs";
 import type { ProgressRecord } from "./logging/progress-logger";
@@ -198,6 +199,9 @@ async function runPlanStages(
       const feedPool = workPool(inputs.harvest.config.harvest.concurrency);
       const articlePool = workPool(inputs.harvest.config.harvest.concurrency + inputs.settings.listener.parser_concurrency);
       const parsePool = workPool(inputs.settings.listener.parser_concurrency);
+      const admit = documentAdmission(inputs.harvest.config.harvest.request_pacing.enabled,
+        inputs.harvest.config.curate_articles.website_grouping.include_private_suffixes);
+      const sources = new Map(inputs.harvest.sources.map(source => [source.id, source]));
       let documentPool = documentPools.get(inputs);
       if (documentPool === undefined) {
         documentPool = workPool(inputs.settings.listener.max_stage_batches);
@@ -205,9 +209,11 @@ async function runPlanStages(
       }
       const boundedDocuments = documentPool;
       const processFeed = async (feedId: string) => {
-        runtime.signal?.throwIfAborted();
-        runtime.progress?.({ eventType: "FEED_FETCH_STARTED", feed_id: feedId, output_count: null });
-        const parsed = await boundedDocuments(async () => {
+        const source = sources.get(feedId);
+        if (source === undefined) throw new PlanError("ARTIFACT_INVALID", "Collection feed is not configured", "feed_id");
+        const fetchAndParseFeed = async (releaseSource: () => void) => {
+          runtime.signal?.throwIfAborted();
+          runtime.progress?.({ eventType: "FEED_FETCH_STARTED", feed_id: feedId, output_count: null });
           let fetched;
           try {
             fetched = await call(PLANNER_API_PATHS.fetch, {
@@ -217,21 +223,23 @@ async function runPlanStages(
             if (!(error instanceof PlanError) || !["FEED_RESTING", "FEED_RETIRED"].includes(error.code)) throw error;
             emit("fetch", "completed", { feed_id: feedId, availability: error.code, output_count: 0 });
             return null;
-          }
+          } finally { releaseSource(); }
           if (fetched.failure !== null) {
             return null;
           }
           return parsePool(() => call(PLANNER_API_PATHS.parse, {
             links: [operationLink(fetched)],
           }, ParseResponseSchema));
-        });
+        };
+        const parsed = await admit(source.url, source.publisher_id,
+          release => feedPool(() => boundedDocuments(() => fetchAndParseFeed(release))));
         if (parsed === null) {
           runtime.progress?.({ eventType: "FEED_FETCH_COMPLETED", feed_id: feedId, output_count: 0 });
           return;
         }
         if (parsed.fetch_item_type !== "feed") throw new PlanError("ARTIFACT_INVALID", "Feed parsing returned an article result");
         runtime.progress?.({ eventType: "FEED_FETCH_COMPLETED", feed_id: feedId, output_count: parsed.parsed_count });
-        const articleOutcomes = await Promise.allSettled(parsed.offers.map(offer => articlePool(() => boundedDocuments(async () => {
+        const fetchAndParseArticle = async (offer: (typeof parsed.offers)[number], releaseSource: () => void) => {
           runtime.signal?.throwIfAborted();
           runtime.progress?.({ eventType: "ARTICLE_HARVEST_STARTED", feed_id: feedId, output_count: null });
           let article;
@@ -245,7 +253,7 @@ async function runPlanStages(
               return;
             }
             throw error;
-          }
+          } finally { releaseSource(); }
           if (article.failure !== null) {
             runtime.progress?.({ eventType: "ARTICLE_HARVEST_COMPLETED", feed_id: feedId, output_count: 0 });
             return;
@@ -257,12 +265,14 @@ async function runPlanStages(
           if (parsedArticle.fetch_item_type === "article" && parsedArticle.warnings.length) {
             runtime.progress?.({ eventType: "ARTICLE_EXTRACTION_WARNING", feed_id: feedId, output_count: null });
           }
-        }))));
+        };
+        const articleOutcomes = await Promise.allSettled(parsed.offers.map(offer => admit(offer.canonical_url, source.publisher_id,
+          release => articlePool(() => boundedDocuments(() => fetchAndParseArticle(offer, release))))));
         const articleFailure = articleOutcomes.find(outcome => outcome.status === "rejected");
         if (articleFailure?.status === "rejected") throw articleFailure.reason;
       };
       // Settle all required work before selection or failure finalization.
-      const outcomes = await Promise.allSettled(begin.feeds.map(feed => feedPool(() => processFeed(feed))));
+      const outcomes = await Promise.allSettled(begin.feeds.map(processFeed));
       const failed = outcomes.find(outcome => outcome.status === "rejected");
       if (failed?.status === "rejected") throw failed.reason;
       const collected = await call(PLANNER_API_PATHS.completeCollection, { traceId }, CompletedCollectionSchema);

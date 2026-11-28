@@ -197,11 +197,12 @@ function projectWorkflowFailure(data: FeedIngestEventData, attempt: number, evid
     feed_id: details.feed_id, publisher_id: details.publisher_id,
   };
   const target = { destination_domain: details.destination_domain, http_status: evidence?.http_status ?? null };
+  const cooldown = { source_cooldown: details.source_cooldown ?? null };
   if (operation === "request-attempt") {
     const request = evidence?.attempt;
     if (request?.phase !== "target") return undefined;
     return {
-      ...base, ...document, ...target, kind: "failed-dispatch", cause: request.failure,
+      ...base, ...document, ...target, ...cooldown, kind: "failed-dispatch", cause: request.failure,
       sequence: request.sequence, retry: request.retry, error_code: request.error_code,
     };
   }
@@ -213,7 +214,7 @@ function projectWorkflowFailure(data: FeedIngestEventData, attempt: number, evid
       ...base, ...document, kind: "document-failure",
       cause: operation === "quality" && isRecord(details.quality_rejection)
         ? details.quality_rejection.failure_code : details.failure_code ?? null,
-      ...(operation === "fetch" ? { ...target, error_code: details.error_code } : {}),
+      ...(operation === "fetch" ? { ...target, ...cooldown, error_code: details.error_code } : {}),
     };
   }
   if (operation === "history") {
