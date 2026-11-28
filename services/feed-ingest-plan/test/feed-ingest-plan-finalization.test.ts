@@ -16,7 +16,7 @@ import { DeliveryCompletionDiagnosticSchema } from "../scripts/safe-persist-http
 import { readMachineServerEvidence as readServerEvidence } from "@idhazh/host-probes/machine-evidence";
 import { ServerEventDataSchema } from "../../serve-pipeline-apis/src/server-evidence";
 import { runFeedPlan, summarizePlan } from "../src/run-feed-plan";
-import { writeRecordedHostOutput } from "./host-output-recordings";
+import { recordedWorkflowHost } from "./host-recordings";
 import { collectWorkflowFiles } from "../scripts/feed-ingest-plan-current-files";
 import { deliverPlannerFiles } from "../scripts/feed-ingest-plan-deliver";
 
@@ -184,7 +184,7 @@ test("scheduled recovery retains only verified metadata and re-delivers the orig
     expect(summary.planning_complete).toBe(true);
     expect(summary.files.rejected_articles).toMatchObject({ status: "written", files: [{ row_count: 1 }] });
     expect(await Bun.file(join(f.repository, summary.selected_articles_artifact!)).exists()).toBe(true);
-    await writeRecordedHostOutput(f.directory, identity, f.inputs.ledgerSettings, false);
+    await recordedWorkflowHost(f.directory, identity);
     await writeFile(join(f.directory, "response.json"), JSON.stringify(summary));
     const verified = await collectWorkflowFiles({ root: f.repository, directory: f.directory, identity, registrations: f.registrations });
     expect(verified.failures).toEqual([]);
