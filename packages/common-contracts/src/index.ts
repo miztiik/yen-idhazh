@@ -26,6 +26,7 @@ export * from "./observation-order";
 export * from "./schemas/planner-operation.schema";
 export * from "./schemas/raw-document-failure.schema";
 export * from "./schemas/planner-failure.schema";
+export * from "./schemas/planner-workflow-failure.schema";
 export * from "./schemas/planner-response.schema";
 export * from "./schemas/article-entities.schema";
 export * from "./schemas/planner-stage.schema";

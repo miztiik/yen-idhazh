@@ -4,12 +4,16 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
+import { Hono } from "hono";
 import type { z } from "zod";
 import {
-  createCandidateId, createChildContext, createCloudEvent, createRootContext, FEED_INGEST_EVENT_VERSION,
+  createCandidateId, createChildContext, createCloudEvent, createRootContext, deriveUrlKey, FEED_INGEST_EVENT_VERSION,
   ArticleFailureDiagnosticSchema, FeedIngestEventDataSchema, HarvestDiagnosticsSchema,
+  PLANNER_API_PATHS, PLANNER_API_PREFIX, PLANNER_WORKFLOW_FAILURE_TYPE, PlannerWorkflowFailureSchema,
   PlannerRunResponseSchema, readCloudEvent, readFeedIngestEvent, writeTraceContext,
 } from "@idhazh/common-contracts";
+import type { FeedIngestEvent } from "@idhazh/common-contracts";
+import { createApiApp } from "@idhazh/serve-pipeline-apis/app";
 import { ServerEventDataSchema, serverLogFilename } from "@idhazh/serve-pipeline-apis/evidence";
 import { HonoServerConfigSchema } from "@idhazh/serve-pipeline-apis/settings";
 import type { ApiGroup, ServerRun } from "@idhazh/serve-pipeline-apis/evidence";
@@ -20,11 +24,19 @@ import {
 } from "../scripts/safe-persist-http-diagnostic";
 import { createFingerprintCompletionEvent, createFingerprintFailureEvent } from "@idhazh/host-fingerprints/diagnostic";
 import { createProbeCompletionEvent, createProbeFailureEvent } from "@idhazh/host-probes/diagnostic";
-import { DELIVERY_EVENT_SOURCE } from "../src/declare-event-source";
+import { DELIVERY_EVENT_SOURCE, PLANNER_EVENT_SOURCE } from "../src/declare-event-source";
 import { readReportFailureEvidence } from "../scripts/feed-ingest-plan-report-evidence";
 import { renderWorkflowPlanMarkdown } from "../scripts/feed-ingest-plan-report";
-import { prepareProgressEvent } from "../src/logging/structured-logger";
+import { createStageLogger, prepareProgressEvent } from "../src/logging/structured-logger";
 import { readArticleFailureDiagnostics } from "../scripts/read-article-failure-diagnostics";
+import { createPlanTestServer } from "./plan-test-server";
+import { recordedPlan } from "./plan-recordings";
+import { source } from "./harvest-recordings";
+import { recordedPersistenceBatch } from "./persistence-recordings";
+import { executePersistence } from "../src/api/persistence-operation";
+import { operationLink, operationMetadata } from "../src/api/operation-context";
+import { selectedArtifactPath } from "../src/selected-artifact-path";
+import { readDiscoveredEvidence } from "../src/read-ledger-history/read-discovered-evidence";
 
 const listeners = HonoServerConfigSchema.parse(await Bun.file(
   new URL("../../../config/hono-server.json", import.meta.url),
@@ -44,6 +56,170 @@ async function writeEvents(directory: string, run: ServerRun, moduleLine?: strin
   expect(code, error).toBe(0);
   return { result: JSON.parse(output), error, pid: child.pid };
 }
+
+function workflowOccurrence(event: FeedIngestEvent) {
+  const { data, ...envelope } = event;
+  return PlannerWorkflowFailureSchema.parse({ ...envelope, type: PLANNER_WORKFLOW_FAILURE_TYPE, data: data.details.workflow_failure });
+}
+
+test("the workflow retains failed dispatches even after recovery and distinguishes terminal fetch and policy refusal", async () => {
+  const recovered = source({ url: "https://news.example/recovered.xml", publisher_id: "recorded-publisher" });
+  const terminal = source({ id: "recorded-unavailable", url: "https://unavailable.example/feed.xml" });
+  const edge = "https://edge.example./PRIVATE_PATH?token=PRIVATE_QUERY";
+  const f = await recordedPlan([recovered, terminal], [{ id: "recorded-publisher", display_name: "Recorded Publisher" }]);
+  const run = { run_id: f.runtime.run_number!, attempt: 3, started_at: f.runtime.clock!().toISOString(),
+    context: createRootContext({ traceState: "relay=retained" }) };
+  f.runtime.attempt = run.attempt;
+  f.inputs.harvest.config.harvest.concurrency = 1;
+  f.inputs.harvest.extraction.max_retries = 1;
+  f.inputs.harvest.extraction.backoff_initial_seconds = 0.01;
+  f.inputs.harvest.config.harvest.request_headers.secondary = null;
+  f.inputs.harvest.config.harvest.url_exclusions = [{
+    host: "news.example", path_prefix: "/PRIVATE_BLOCKED", include_subdomains: false,
+  }];
+  f.transport.recordings.responses[recovered.url] = [{ status: 302, body: "", location: edge }];
+  f.transport.recordings.responses[edge] = [
+    { status: 429, body: "PRIVATE_BODY", headers: { "retry-after": "PRIVATE_HEADER" } },
+    { status: 200, body: `<rss version="2.0"><channel><title>Recorded feed</title>
+      <item><title>Blocked story</title><link>https://news.example/PRIVATE_BLOCKED/story</link></item>
+      </channel></rss>` },
+  ];
+  f.transport.recordings.responses[terminal.url] = [
+    { error: "ECONNRESET" }, { status: 404, body: "PRIVATE_BODY" },
+  ];
+  const app = createPlanTestServer(f.inputs, f.runtime);
+  try {
+    const response = await app.request(`${PLANNER_API_PREFIX}${PLANNER_API_PATHS.plan}`, {
+      method: "POST", headers: { "content-type": "application/json", ...writeTraceContext(run.context) }, body: "{}",
+    });
+    expect(response.status).toBe(200);
+    expect(PlannerRunResponseSchema.parse(await response.json()).planning_complete).toBe(true);
+    expect(f.transport.requests.map(request => request.url.href)).toEqual([recovered.url, edge, edge, terminal.url, terminal.url]);
+    const failed = f.events.filter(event => event.data.phase === "failed");
+    const result = await writeEvents(f.directory, run, undefined, f.events.map(event => JSON.stringify(event)));
+    const mirrored = result.error.trim().split("\n").map(line => JSON.parse(line));
+    const native = mirrored.filter(event => event.type === PLANNER_WORKFLOW_FAILURE_TYPE).map(event => PlannerWorkflowFailureSchema.parse(event));
+    expect(native).toEqual(failed.map(workflowOccurrence));
+    expect(native.map(event => event.data)).toMatchObject([
+      { kind: "failed-dispatch", operation: "request-attempt", document_kind: "feed",
+        feed_id: recovered.id, publisher_id: recovered.publisher_id, document_id: deriveUrlKey(recovered.url),
+        destination_domain: "edge.example", http_status: 429, cause: "http", error_code: null, retry: 0, sequence: 3 },
+      { kind: "failed-dispatch", feed_id: terminal.id, publisher_id: null, destination_domain: "unavailable.example",
+        http_status: null, cause: "network", error_code: "ECONNRESET", retry: 0, sequence: 1 },
+      { kind: "failed-dispatch", feed_id: terminal.id, http_status: 404, cause: "http", retry: 1, sequence: 2 },
+      { kind: "document-failure", operation: "fetch", document_kind: "feed", feed_id: terminal.id,
+        document_id: deriveUrlKey(terminal.url), destination_domain: "unavailable.example", http_status: 404, cause: "http" },
+    ]);
+    expect(mirrored.filter(event => event.type !== PLANNER_WORKFLOW_FAILURE_TYPE).map(event => event.data.phase))
+      .toEqual(["starting", "stopped"]);
+    expect(result.error).not.toContain("PRIVATE_");
+    expect(await readFile(join(f.directory, serverLogFilename("planning", run)), "utf8")).toBe(result.error);
+
+    // Independent document requests use their own run identity, even with the same trace.
+    const beforeRefusal = f.events.length;
+    const refused = await app.request(`${PLANNER_API_PREFIX}${PLANNER_API_PATHS.fetch}`, {
+      method: "POST", headers: { "content-type": "application/json", ...writeTraceContext(run.context) },
+      body: JSON.stringify({ fetch_item_type: "article", feed_id: recovered.id, url: "https://news.example/PRIVATE_BLOCKED/story" }),
+    });
+    expect(refused.status).toBe(409);
+    expect(await refused.json()).toMatchObject({ code: "ARTICLE_EXCLUDED" });
+    const policyEvents = f.events.slice(beforeRefusal);
+    const documentRun = { ...run, run_id: BigInt(`0x${run.context.traceId}`).toString() };
+    const policyRelay = await writeEvents(f.directory, documentRun, undefined, policyEvents.map(event => JSON.stringify(event)));
+    const policyReadback = policyRelay.error.trim().split("\n").map(line => JSON.parse(line))
+      .filter(event => event.type === PLANNER_WORKFLOW_FAILURE_TYPE).map(event => PlannerWorkflowFailureSchema.parse(event));
+    expect(policyReadback).toEqual(policyEvents.filter(event => event.data.phase === "failed").map(workflowOccurrence));
+    expect(policyReadback).toHaveLength(1);
+    expect(policyReadback[0]?.data).toMatchObject({
+      kind: "policy-refusal", operation: "fetch", document_kind: "article", feed_id: recovered.id, cause: "BLOCKED_URL_MARKER",
+    });
+    expect(policyRelay.error).not.toContain("PRIVATE_");
+    expect(await readFile(join(f.directory, serverLogFilename("planning", documentRun)), "utf8")).toBe(policyRelay.error);
+  } finally { await app.close(); await f.close(); }
+});
+
+test("native history and planner stage causes stay separate from an actual Hono request exception", async () => {
+  const f = await recordedPlan();
+  try {
+    const batch = await recordedPersistenceBatch(f.inputs, f.runtime);
+    const context = batch.context;
+    const run = { run_id: context.run_id.slice(11), attempt: context.writer.attempt, started_at: batch.evaluated_at,
+      context: createRootContext() };
+    const emit = createStageLogger({ ...context, ...operationMetadata(batch) }, f.inputs.event_source, f.runtime.log);
+    await readDiscoveredEvidence({
+      root: f.directory, now: batch.evaluated_at, registration: f.inputs.registrations.discovered_articles,
+      discovered_files: ["raw/discovered-articles/PRIVATE_MISSING.parquet"], discovered_days: [], lookback_days: 1,
+      concurrency: 1, log: emit,
+    });
+    await mkdir(join(f.directory, selectedArtifactPath(f.inputs.settings.inputs.artifact_root, context)), { recursive: true });
+    await expect(executePersistence({ links: [operationLink(batch)] }, f.inputs, f.runtime)).rejects.toThrow();
+    const requestFailures: unknown[] = [];
+    const routes = new Hono();
+    routes.post("/PRIVATE_ROUTE", () => { throw new Error("PRIVATE_EXCEPTION"); });
+    routes.onError(error => { throw error; });
+    const app = createApiApp({
+      identity: { event: "typescript_api_ready", nonce: crypto.randomUUID(), pid: process.pid, port: listeners.planning.port,
+        group: "planning", modules: ["planning"], enabled: true },
+      create: () => ({ fetch: request => routes.fetch(request), maxRequestBodyBytes: 1024, async close() {} }),
+      writeEvent: event => { requestFailures.push(event); },
+    });
+    try {
+      const response = await app.fetch(new Request("http://127.0.0.1/PRIVATE_ROUTE?token=PRIVATE_QUERY", {
+        method: "POST", headers: { authorization: "PRIVATE_HEADER", ...writeTraceContext(run.context) }, body: "PRIVATE_BODY",
+      }));
+      expect(response.status).toBe(500);
+      expect(await response.json()).toEqual({ code: "API_OPERATION_FAILED" });
+    } finally { await app.close(); }
+    expect(requestFailures).toHaveLength(1);
+    const failed = f.events.filter(event => event.data.phase === "failed");
+    const result = await writeEvents(f.directory, run, undefined, [...f.events, ...requestFailures].map(event => JSON.stringify(event)));
+    const mirrored = result.error.trim().split("\n").map(line => JSON.parse(line));
+    const native = mirrored.filter(event => event.type === PLANNER_WORKFLOW_FAILURE_TYPE).map(event => PlannerWorkflowFailureSchema.parse(event));
+    expect(native).toEqual(failed.map(workflowOccurrence));
+    expect(native.map(event => event.data)).toContainEqual(expect.objectContaining({
+      kind: "history-gap", operation: "history", scope: "planner-ledger", check: "named-file-read",
+      cause: "missing", ledger: "discovered-articles", day: null, feed_id: null,
+    }));
+    expect(native.map(event => event.data)).toContainEqual(expect.objectContaining({
+      kind: "stage-failure", operation: "persist", code: "PERSIST_FAILED", cause: "system-error", cause_operation: "persist",
+    }));
+    expect(mirrored.filter(event => event.type === "typescript_api_request_failed")).toEqual(requestFailures);
+    expect(mirrored.filter(event => event.type === "hono.server").map(event => event.data.phase)).toEqual(["starting", "stopped"]);
+    expect(result.error).not.toContain("PRIVATE_");
+    expect(await readFile(join(f.directory, serverLogFilename("planning", run)), "utf8")).toBe(result.error);
+  } finally { await f.close(); }
+});
+
+test("failed progress with an invalid cause, a forged carrier or an unowned run or attempt is refused visibly", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "feed-invalid-workflow-failures-"));
+  const run = { run_id: "700", attempt: 3, started_at: "2026-11-05T00:00:00Z", context: createRootContext() };
+  const events: FeedIngestEvent[] = [];
+  const emit = createStageLogger({ run_id: "2026-11-05-700", writer: { attempt: run.attempt }, ...run.context },
+    PLANNER_EVENT_SOURCE, event => { events.push(event); });
+  emit("plan", "failed", { failure_code: "PLAN_FAILED" });
+  const event = events[0]!;
+  const native = workflowOccurrence(event).data;
+  const replace = (failure: unknown) => ({ ...event, data: { ...event.data, details: { workflow_failure: failure } } });
+  emit("plan", "failed", { workflow_failure: native });
+  const invalid = [
+    events[1], replace({ ...native, attempt: 4 }), replace({ ...native, run_id: "2026-11-05-701" }),
+    replace({ ...native, run_id: "2026-11-04-700" }), replace({ ...native, version: "2026-11-05" }),
+    replace({ ...native, operation: "persist" }),
+    replace({ ...native, cause: "PRIVATE_EXCEPTION includes untrusted text" }),
+    replace({ ...native, headers: { authorization: "PRIVATE_HEADER" } }),
+    { ...event, source: "https://example.com/PRIVATE_PATH?token=PRIVATE_QUERY" },
+    { ...event, data: { ...event.data, phase: "completed" } },
+  ];
+  try {
+    const result = await writeEvents(directory, run, undefined, invalid.map(value => JSON.stringify(value)));
+    const mirrored = result.error.trim().split("\n")
+      .map(line => readCloudEvent(JSON.parse(line), value => ServerEventDataSchema.parse(value)));
+    expect(mirrored.filter(event => event.data.phase === "module_failed").map(event => event.data.code))
+      .toEqual(invalid.map(() => "CHILD_DIAGNOSTIC_INVALID"));
+    expect(result.error).not.toContain("PRIVATE_");
+    expect(await readFile(join(directory, serverLogFilename("planning", run)), "utf8")).toBe(result.error);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
 
 test("completion and lifecycle shapes remain strict while native statuses and ancillary fields retain their meaning", () => {
   const paths = ["raw/generated.parquet"];

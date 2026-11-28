@@ -1,6 +1,6 @@
 /** Project the existing fetch and parse facts as each bounded operation completes. */
 import { createChildContext, DocumentWorkFactSchema, NetworkFailureDetailsSchema, OperationMetadataSchema } from "@idhazh/common-contracts";
-import type { DocumentWorkFact, ExtractionQuality, NetworkFailureDetails, FetchAttempt, OperationMetadata } from "@idhazh/common-contracts";
+import type { DocumentWorkFact, DropReason, ExtractionQuality, NetworkFailureDetails, FetchAttempt, OperationMetadata } from "@idhazh/common-contracts";
 import { observeDocument } from "./document-observation";
 import type { DocumentIdentity } from "./document-observation";
 import type { HarvestContext } from "./harvest-types";
@@ -29,16 +29,22 @@ export function documentWork(context: Context, identity: DocumentIdentity, opera
     ...(context.parentSpanId === undefined ? {} : { parentSpanId: context.parentSpanId }),
     ...(context.traceState === undefined ? {} : { traceState: context.traceState }),
   });
+  const document = {
+    document_id: identity.document_id, candidate_id: identity.candidate_id, document_kind: scope.document_kind,
+    feed_id: scope.feed_id, publisher_id: scope.publisher_id,
+  };
+  let destinationDomain: string | null = null;
   const publish = (operation: "fetch" | "parse" | "quality", phase: "started" | "completed" | "failed",
     metadata: OperationMetadata, duration_ms: number | null, url?: string, failure_code?: string | null,
     quality_rejection?: QualityRejection,
-    fetched?: FetchResult) => context.document_activity?.(
+    fetched?: FetchResult, policyReason?: DropReason | null) => context.document_activity?.(
     operation, phase, {
-      scope: "document",
-      document_id: identity.document_id, candidate_id: identity.candidate_id, document_kind: scope.document_kind,
-      feed_id: scope.feed_id, publisher_id: scope.publisher_id, duration_ms,
+      scope: "document", ...document, duration_ms,
       ...(failure_code == null ? {} : { failure_code }),
+      ...(policyReason === undefined ? {} : { policy_reason: policyReason }),
       ...(quality_rejection === undefined ? {} : { quality_rejection }),
+      ...(phase === "failed" && operation === "fetch" && policyReason === undefined
+        ? { destination_domain: destinationDomain, error_code: fetched?.error_code ?? null } : {}),
       ...(phase === "failed" && fetched?.body_limit != null ? {
         body_limit: fetched.body_limit,
       } : {}),
@@ -88,9 +94,9 @@ export function documentWork(context: Context, identity: DocumentIdentity, opera
     await context.observations?.save([row]);
   }
   return {
-    rejectFetch(url: string, failure_code: string) {
+    rejectFetch(url: string, policyReason: DropReason | null) {
       publish("fetch", "started", operation, null);
-      publish("fetch", "failed", operation, 0, url, failure_code);
+      publish("fetch", "failed", operation, 0, url, "ARTICLE_EXCLUDED", undefined, undefined, policyReason);
     },
     async fetch(fetcher: Pick<SourceFetcher, "fetch">, url: string, signal?: AbortSignal) {
       const started = performance.now();
@@ -103,10 +109,10 @@ export function documentWork(context: Context, identity: DocumentIdentity, opera
             const attemptContext = createChildContext(operation);
             const observation = event("attempt", attemptContext, measurement.occurred_at);
             context.on_attempt?.(observation);
-            if (measurement.outcome === "failed" && measurement.dispatched_request_count > 0) {
+            if (measurement.dispatched_request_count > 0) destinationDomain = measurement.destination_domain;
+            if (measurement.outcome === "failed" && measurement.attempt.phase === "target" && measurement.dispatched_request_count > 0) {
               context.document_activity?.("request-attempt", "failed", {
-                scope: "request", document_id: identity.document_id, candidate_id: identity.candidate_id,
-                document_kind: scope.document_kind, feed_id: scope.feed_id, publisher_id: scope.publisher_id,
+                scope: "request", ...document, destination_domain: measurement.destination_domain,
                 duration_ms: measurement.attempt.duration_ms,
               }, undefined, undefined, failureDetails({
                 body: null, http_status: measurement.attempt.http_status, failure: measurement.attempt.failure,

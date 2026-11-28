@@ -1,6 +1,6 @@
 # Serve pipeline APIs
 
-**Last Updated**: 2026-11-07
+**Last Updated**: 2026-11-28
 
 Which independently owned local servers serve planning, machine measurements
 and output delivery?
@@ -157,6 +157,16 @@ extraction evidence. Invalid terminal records emit `CHILD_DIAGNOSTIC_INVALID`
 without copying their content. The
 [planner log contract](../architecture/sources/feed-operator-api.md#structured-operation-logs)
 owns this current-only subtype.
+Other failed planner progress is relayed as the current-only
+[`planner.workflow-failure`](../../packages/common-contracts/src/schemas/planner-workflow-failure.schema.ts)
+envelope. The producer selects the safe facts before relay. The supervisor
+checks the planner source, UTC run identity, attempt and operation against
+the owned planning task, then emits the same occurrence and trace to stderr
+and the mirror. Invalid evidence remains visible as `CHILD_DIAGNOSTIC_INVALID`
+without its content. Only the shared Hono exception handler emits
+`typescript_api_request_failed`; planner failures do not use that event or its
+`API_OPERATION_FAILED` code. [Feed failure diagnostics](../architecture/sources/feed-failure-diagnostics.md)
+owns the retained facts.
 Delivery completion retains its existing strict diagnostic shape.
 [`DeliveryCompletionDiagnosticSchema`](../../services/feed-ingest-plan/scripts/safe-persist-http-diagnostic.ts)
 retains the native `landed`, `already-on-main`, `no-changes` or `failed` status,
