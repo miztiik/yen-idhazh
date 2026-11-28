@@ -1,4 +1,4 @@
-/** Which routine decisions explain why articles were not selected without counting failures twice? */
+/** How does the report separate ordinary article exclusions from source screening refusals? */
 import { HarvestArticleFailureReasonSchema } from "@idhazh/common-contracts";
 import type { FeedHealthStateRow } from "@idhazh/common-contracts";
 import { escapeMarkdown } from "./markdown-format";
@@ -24,12 +24,23 @@ const stageLabels: Record<string, string> = {
 export function describeReason(reason: string) {
   return reasonLabels[reason] ?? reason.replaceAll("_", " ").toLowerCase();
 }
+
+type ExclusionGroup = { stage: string; reason: string; count: number; feeds: Set<string> };
+
+function sortExclusionGroups(groups: ReadonlyMap<string, ExclusionGroup>) {
+  return [...groups.values()].sort((a, b) => b.count - a.count || a.reason.localeCompare(b.reason));
+}
+
 export function renderSelectionExclusions(feeds: readonly FeedHealthStateRow[] | undefined) {
-  const groups = new Map<string, { stage: string; reason: string; count: number; feeds: Set<string> }>();
+  const selection = new Map<string, ExclusionGroup>();
+  const technical = new Map<string, ExclusionGroup>();
   for (const feed of feeds ?? []) {
     for (const cause of feed.rejection_counts) {
-      if (cause.subject !== "article" || (cause.attribution !== null
-        && HarvestArticleFailureReasonSchema.safeParse(cause.reason_code).success)) continue;
+      if (cause.subject !== "article") continue;
+      const sourceScreening = cause.attribution === "feed" && cause.stage === "screen-article-candidates"
+        && !HarvestArticleFailureReasonSchema.safeParse(cause.reason_code).success;
+      if (cause.attribution !== null && !sourceScreening) continue;
+      const groups = sourceScreening ? technical : selection;
       const key = JSON.stringify([cause.stage, cause.reason_code]);
       const group = groups.get(key) ?? { stage: cause.stage, reason: cause.reason_code, count: 0, feeds: new Set<string>() };
       group.count += cause.count;
@@ -37,14 +48,21 @@ export function renderSelectionExclusions(feeds: readonly FeedHealthStateRow[] |
       groups.set(key, group);
     }
   }
-  const rows = [...groups.values()].sort((a, b) => b.count - a.count || a.reason.localeCompare(b.reason));
+  const rows = sortExclusionGroups(selection);
+  const refusals = sortExclusionGroups(technical);
   return [
     "<details>", "<summary>Why articles were not selected</summary>", "",
     "## Table F - Selection exclusions", "",
-    "| Id | Stage | Reason | Articles excluded | Feeds affected |", "| --- | --- | --- | --- | --- |",
-    ...rows.map((row, index) => `| F${index + 1} | ${escapeMarkdown(stageLabels[row.stage] ?? row.stage.replaceAll("-", " "))} | ${escapeMarkdown(describeReason(row.reason))} | ${row.count} | ${row.feeds.size} |`),
-    ...(rows.length ? [] : ["", feeds === undefined ? "Exclusion evidence was not recorded." : "No routine exclusions were recorded."]),
-    "", "These are recorded decisions, not a subtractable funnel. Failed requests are shown only in Needs attention.",
+    ...(rows.length ? [
+      "| Id | Stage | Reason | Articles excluded | Feeds affected |", "| --- | --- | --- | --- | --- |",
+      ...rows.map((row, index) => `| F${index + 1} | ${escapeMarkdown(stageLabels[row.stage] ?? row.stage.replaceAll("-", " "))} | ${escapeMarkdown(describeReason(row.reason))} | ${row.count} | ${row.feeds.size} |`),
+    ] : [feeds === undefined ? "Exclusion evidence was not recorded." : "No routine exclusions were recorded."]),
+    ...(refusals.length ? [
+      "", "### Technical admission refusals", "",
+      ...refusals.map(row => `- ${escapeMarkdown(describeReason(row.reason))}: ${row.count} ${row.count === 1 ? "refusal" : "refusals"} across ${row.feeds.size} ${row.feeds.size === 1 ? "feed" : "feeds"}.`),
+      "", "A capture can appear in both measures; do not add them.",
+    ] : []),
+    "", "These are recorded decisions, not a subtractable funnel. Request and extraction failures appear only in Needs attention.",
     "Per-feed reasons are retained in the downloadable Markdown run artifact.",
     "", "</details>",
   ].join("\n");

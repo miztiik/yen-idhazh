@@ -9,30 +9,65 @@ import {
 import { PLANNER_EVENT_SOURCE } from "../src/declare-event-source";
 import { renderFailureEvidence } from "../src/reporting/failure-evidence-markdown";
 import { renderPlanMarkdown } from "../src/reporting/plan-markdown";
+import { renderSelectionExclusions } from "../src/reporting/selection-exclusions-markdown";
 import { readPlannerOutputRecording } from "./planner-output-recordings";
 
-test("groups current failure counts without counting policy decisions as failures", async () => {
+test("counts screening refusals, selection decisions and request failures separately", async () => {
   const { response, health } = await readPlannerOutputRecording();
   const base = health.rows[0]!;
-  const cause = { subject: "article" as const, stage: "harvest-feeds", attribution: "feed" as const };
+  const failure = { subject: "article", stage: "harvest-feeds", attribution: "feed" } as const;
+  const screening = { subject: "article", stage: "screen-article-candidates" } as const;
+  const paywall = { ...screening, reason_code: "PAYWALL_OR_BLOCKED" };
+  const tooShort = { ...screening, reason_code: "REJECTED_SCREENING_MIN_WORDS" };
   const rows = [{ ...base, feed_id: "failed-feed", rejection_counts: [
-    { ...cause, reason_code: "FETCH_FAILED_HTTP", count: 3 },
-    { ...cause, reason_code: "REJECTED_SCREENING_MIN_WORDS", count: 7 },
+    { ...failure, reason_code: "FETCH_FAILED_HTTP", count: 3 },
+    { ...failure, reason_code: "EXTRACT_EMPTY", count: 1 },
+    { ...paywall, attribution: "feed" as const, count: 2 },
+    { ...paywall, attribution: null, count: 2 },
+    { ...tooShort, attribution: "feed" as const, count: 7 },
+    { ...tooShort, attribution: null, count: 3 },
   ] }, { ...base, feed_id: "failed-feed", rejection_counts: [
-    { ...cause, reason_code: "FETCH_FAILED_HTTP", count: 2 },
+    { ...failure, reason_code: "FETCH_FAILED_HTTP", count: 2 },
   ] }];
   const before = structuredClone(rows);
   const report = renderPlanMarkdown({ response: { ...response, health: { ...health, rows } } });
   const { document } = parseHTML(Bun.markdown.html(report.markdown));
   const attention = document.querySelectorAll("table")[1]!.textContent!;
   expect(attention).toContain("5 recorded article failures");
+  expect(attention).toContain("No article text extracted");
   expect(attention).not.toContain("minimum word");
+  expect(attention).not.toContain("blocked by screening");
   expect(attention).toContain("response status unavailable in report input");
   expect(attention).not.toContain("403");
   expect(document.querySelector("details summary")?.textContent).toBe("Per-feed article results");
-  expect([...document.querySelectorAll("details")].map(node => node.textContent).join(" "))
-    .toContain("Article below minimum word count");
+  const exclusions = [...document.querySelectorAll("details")]
+    .find(node => node.querySelector("summary")?.textContent === "Why articles were not selected")!;
+  expect([...exclusions.querySelectorAll("tbody tr")].map(row =>
+    [...row.querySelectorAll("td")].slice(2).map(cell => cell.textContent))).toEqual([
+    ["Article below minimum word count", "3", "1"],
+    ["Article blocked by screening rules", "2", "1"],
+  ]);
+  expect(exclusions.querySelector("h3")?.textContent).toBe("Technical admission refusals");
+  expect([...exclusions.querySelectorAll("li")].map(item => item.textContent)).toEqual([
+    "Article below minimum word count: 7 refusals across 1 feed.",
+    "Article blocked by screening rules: 2 refusals across 1 feed.",
+  ]);
+  expect(exclusions.textContent).toContain("do not add them");
   expect(report.notices).toEqual([]);
+  expect(rows).toEqual(before);
+});
+
+test("technical-only partial evidence does not imply a selection decision", async () => {
+  const { health } = await readPlannerOutputRecording();
+  const rows = [{ ...health.rows[0]!, articles_selected: null, counts_complete: false, rejection_counts: [{
+    subject: "article", stage: "screen-article-candidates", reason_code: "PAYWALL_OR_BLOCKED",
+    attribution: "feed", count: 1,
+  }] }] satisfies typeof health.rows;
+  const before = structuredClone(rows);
+  const { document } = parseHTML(Bun.markdown.html(renderSelectionExclusions(rows)));
+  expect(document.querySelectorAll("tbody tr")).toHaveLength(0);
+  expect(document.querySelector("details")?.textContent).toContain("No routine exclusions were recorded.");
+  expect(document.querySelector("li")?.textContent).toBe("Article blocked by screening rules: 1 refusal across 1 feed.");
   expect(rows).toEqual(before);
 });
 

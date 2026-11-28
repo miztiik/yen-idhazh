@@ -377,11 +377,14 @@ unknown values sort last. The request table does not repeat reliability.
 The closing staging note describes input transfer, not complete historical
 day coverage. Missing-day lists apply only to the historical window.
 
-Selection exclusions group routine article decisions by stage and
-plain-English reason, with affected feed counts. They are not a subtractable
-funnel. Current fetch and extraction failures appear only in Needs attention;
-retry events are not added as separate excluded articles. Per-feed protocol
-reasons remain in the artifact diagnostics.
+Selection exclusions count only routine article decisions (those without
+failure attribution), grouped by stage and plain-English reason with affected
+feed counts. Source-attributed screening refusals have a separate Technical
+admission refusals list. The same capture can appear in both measures, so do
+not add them or use them as a subtractable funnel. Refusals alone do not
+establish a selection decision. Current fetch and extraction failures appear
+only in Needs attention; retry events are not added as separate excluded
+articles. Per-feed protocol reasons remain in the artifact diagnostics.
 
 `MISSING_REQUIRED_FIELDS` is an article rejection: its offered URL or identity
 was missing or invalid, or extraction produced no usable title. A grouped
