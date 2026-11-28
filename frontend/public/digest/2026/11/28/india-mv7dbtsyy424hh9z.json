@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Fiscal year",
+    "y": "New SIP registrations (crore)"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-mv7dbtsyy424hh9z",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "2.7 crore in FY2022","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "7.2 crore in FY2026","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-136-145","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": null,"value": "27000000"},
+    {"derived": null,"element_id": "quantity-159-168","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": null,"value": "72000000"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Mutual Fund SIP Registrations by Fiscal Year",
+  "type": "bar",
+  "version": "2026-11-25"
+}

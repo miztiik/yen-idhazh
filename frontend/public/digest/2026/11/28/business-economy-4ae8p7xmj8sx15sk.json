@@ -1,0 +1,65 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Extra charged transactions per month",
+    "y": "Estimated annual cost in Indian rupees"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3",
+      "m4",
+      "m5",
+      "m6",
+      "m7"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m8",
+      "m9",
+      "m10",
+      "m11",
+      "m12",
+      "m13",
+      "m14",
+      "m15"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "business-economy-4ae8p7xmj8sx15sk",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "5 transactions per month","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Annual cost for 5 extra transactions","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "10 transactions per month","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m3","source_text": null,"text": "Annual cost for 10 extra transactions","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m4","source_text": null,"text": "15 transactions per month","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m5","source_text": null,"text": "Annual cost for 15 extra transactions","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m6","source_text": null,"text": "20 transactions per month","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m7","source_text": null,"text": "Annual cost for 20 extra transactions","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-452-453","mark_id": "m8","source_text": null,"text": null,"time": null,"unit": null,"value": "5"},
+    {"derived": null,"element_id": "quantity-500-508","mark_id": "m9","source_text": null,"text": null,"time": null,"unit": null,"value": "1628.4"},
+    {"derived": null,"element_id": "quantity-1596-1598","mark_id": "m10","source_text": null,"text": null,"time": null,"unit": null,"value": "10"},
+    {"derived": null,"element_id": "quantity-1635-1643","mark_id": "m11","source_text": null,"text": null,"time": null,"unit": null,"value": "3256.8"},
+    {"derived": null,"element_id": "quantity-1676-1678","mark_id": "m12","source_text": null,"text": null,"time": null,"unit": null,"value": "15"},
+    {"derived": null,"element_id": "quantity-1694-1702","mark_id": "m13","source_text": null,"text": null,"time": null,"unit": null,"value": "4885.2"},
+    {"derived": null,"element_id": "quantity-1712-1714","mark_id": "m14","source_text": null,"text": null,"time": null,"unit": null,"value": "20"},
+    {"derived": null,"element_id": "quantity-1730-1738","mark_id": "m15","source_text": null,"text": null,"time": null,"unit": null,"value": "6513.6"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Annual ATM Withdrawal Costs by Number of Extra Transactions Per Month",
+  "type": "bar",
+  "version": "2026-11-25"
+}

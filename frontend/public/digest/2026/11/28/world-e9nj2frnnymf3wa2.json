@@ -1,0 +1,61 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Prefecture",
+    "y": "Births (count)"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3",
+      "m4",
+      "m5",
+      "m6"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m7",
+      "m8",
+      "m9",
+      "m10",
+      "m11",
+      "m12",
+      "m13"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "world-e9nj2frnnymf3wa2",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Tokyo births: 41,745 (up 1,864)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Osaka births: 25,431 (up 292)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Kanagawa births: 23,961 (up 122)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m3","source_text": null,"text": "Aichi births: 21,325 (up 392)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m4","source_text": null,"text": "Saitama births: 18,489 (up 88)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m5","source_text": null,"text": "Chiba births: 15,946 (up 121)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m6","source_text": null,"text": "Fukuoka births: 15,294 (up 308)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-727-733","mark_id": "m7","source_text": null,"text": null,"time": null,"unit": null,"value": "41745"},
+    {"derived": null,"element_id": "quantity-786-792","mark_id": "m8","source_text": null,"text": null,"time": null,"unit": null,"value": "25431"},
+    {"derived": null,"element_id": "quantity-828-834","mark_id": "m9","source_text": null,"text": null,"time": null,"unit": null,"value": "23961"},
+    {"derived": null,"element_id": "quantity-855-861","mark_id": "m10","source_text": null,"text": null,"time": null,"unit": null,"value": "21325"},
+    {"derived": null,"element_id": "quantity-884-890","mark_id": "m11","source_text": null,"text": null,"time": null,"unit": null,"value": "18489"},
+    {"derived": null,"element_id": "quantity-910-916","mark_id": "m12","source_text": null,"text": null,"time": null,"unit": null,"value": "15946"},
+    {"derived": null,"element_id": "quantity-943-949","mark_id": "m13","source_text": null,"text": null,"time": null,"unit": null,"value": "15294"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "H1 2026 births by prefecture vs prior year",
+  "type": "bar",
+  "version": "2026-11-25"
+}

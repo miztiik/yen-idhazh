@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Company name",
+    "y": "Value"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-ey4gnh4mstms3bxk",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Annual share price decline (1 year)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Mutual fund holding, Sept 2026","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-529-535","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "%","value": "47.43"},
+    {"derived": null,"element_id": "quantity-581-586","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "6.74"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Annual share price declines and mutual fund holdings among smallcap stocks",
+  "type": "bar",
+  "version": "2026-11-25"
+}

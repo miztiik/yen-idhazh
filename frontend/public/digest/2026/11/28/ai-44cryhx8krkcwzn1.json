@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Date and Statement by Dario Amodei",
+    "y": "Probability of Catastrophic Outcome"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m0",
+      "m1"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": [
+      "m2",
+      "m3"
+    ]
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "ai-44cryhx8krkcwzn1",
+  "marks": [
+    {"derived": null,"element_id": "quantity-809-820","mark_id": "m0","source_text": null,"text": null,"time": null,"unit": "%","value": "10"},
+    {"derived": null,"element_id": "quantity-915-918","mark_id": "m1","source_text": null,"text": null,"time": null,"unit": "%","value": "25"},
+    {"derived": null,"element_id": "date-663-667","mark_id": "m2","source_text": null,"text": "2023","time": "2023","unit": null,"value": null},
+    {"derived": null,"element_id": "date-857-861","mark_id": "m3","source_text": null,"text": "2025","time": "2025","unit": null,"value": null}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Anthropic's Stated Risk Estimates Over Time",
+  "type": "line",
+  "version": "2026-11-25"
+}

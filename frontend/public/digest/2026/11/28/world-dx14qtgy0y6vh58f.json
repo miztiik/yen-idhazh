@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Warming level above pre-industrial baseline",
+    "y": "Number of glaciers kept in the Alps"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "world-dx14qtgy0y6vh58f",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "400 glaciers in the Alps at 1.5\u00b0C","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "20 glaciers kept at 4\u00b0C","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-9522-9534","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "glacier","value": "400"},
+    {"derived": null,"element_id": "quantity-9576-9587","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "glacier","value": "20"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Glaciers retained under different warming scenarios",
+  "type": "bar",
+  "version": "2026-11-25"
+}

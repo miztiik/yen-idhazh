@@ -1,0 +1,45 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Perovskite absorber bandgap and bromide content",
+    "y": "Average short-circuit current density"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m3",
+      "m4",
+      "m5"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "energy-gtzgkzbr42y30r1q",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "20.22 mA/cm\u00b2 for Starlink","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "15.13 mA/cm\u00b2 for Iridium","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "16.34 mA/cm\u00b2 for Galileo","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-2797-2805","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "ma","value": "20.22"},
+    {"derived": null,"element_id": "quantity-2824-2832","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "ma","value": "15.13"},
+    {"derived": null,"element_id": "quantity-2854-2862","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "ma","value": "16.34"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Simulated average short-circuit current density by composition across satellites",
+  "type": "bar",
+  "version": "2026-11-25"
+}

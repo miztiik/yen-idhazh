@@ -1,0 +1,49 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Tech stock name",
+    "y": "Weekly percentage change"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m4",
+      "m5",
+      "m6",
+      "m7"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "ai-ze15h6pkegc5q460",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Mi Material up 5.8%","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "PC Partner up 2%","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "AEM up 3.6% to $6.09","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m3","source_text": null,"text": "UMS up 2.5% at $1.64","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-919-923","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "%","value": "5.8"},
+    {"derived": null,"element_id": "quantity-942-944","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "%","value": "2"},
+    {"derived": null,"element_id": "quantity-1015-1019","mark_id": "m6","source_text": null,"text": null,"time": null,"unit": "%","value": "3.6"},
+    {"derived": null,"element_id": "quantity-1064-1068","mark_id": "m7","source_text": null,"text": null,"time": null,"unit": "%","value": "2.5"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Singapore Tech Stocks Weekly Performance",
+  "type": "bar",
+  "version": "2026-11-25"
+}
