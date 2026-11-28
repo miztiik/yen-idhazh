@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Tariff rate per cent",
+    "y": "Scenario"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-cc0bcesyvwezjjdz",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "25 per cent","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "17 per cent","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-669-680","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "%","value": "25"},
+    {"derived": null,"element_id": "quantity-744-755","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "17"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Tariff Levels in India-US Trade Framework",
+  "type": "dot",
+  "version": "2026-11-25"
+}

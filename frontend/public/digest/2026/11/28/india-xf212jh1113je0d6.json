@@ -1,0 +1,61 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Trade component (billion USD)",
+    "y": "Value or change"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3",
+      "m4",
+      "m5",
+      "m6"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m7",
+      "m8",
+      "m9",
+      "m10",
+      "m11",
+      "m12",
+      "m13"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-xf212jh1113je0d6",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Deficit increased by","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "New deficit level","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Economists' forecast for deficit","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m3","source_text": null,"text": "Imports increased by","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m4","source_text": null,"text": "New imports level","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m5","source_text": null,"text": "Exports increased by","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m6","source_text": null,"text": "New exports level","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-46-59","mark_id": "m7","source_text": null,"text": null,"time": null,"unit": "$","value": "14400000000"},
+    {"derived": null,"element_id": "quantity-63-77","mark_id": "m8","source_text": null,"text": null,"time": null,"unit": "$","value": "149500000000"},
+    {"derived": null,"element_id": "quantity-209-221","mark_id": "m9","source_text": null,"text": null,"time": null,"unit": "$","value": "133000000000"},
+    {"derived": null,"element_id": "quantity-245-258","mark_id": "m10","source_text": null,"text": null,"time": null,"unit": "$","value": "21100000000"},
+    {"derived": null,"element_id": "quantity-262-276","mark_id": "m11","source_text": null,"text": null,"time": null,"unit": "$","value": "365300000000"},
+    {"derived": null,"element_id": "quantity-305-317","mark_id": "m12","source_text": null,"text": null,"time": null,"unit": "$","value": "6700000000"},
+    {"derived": null,"element_id": "quantity-321-335","mark_id": "m13","source_text": null,"text": null,"time": null,"unit": "$","value": "215800000000"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "October US Goods Trade Flows and Deficit Change",
+  "type": "bar",
+  "version": "2026-11-25"
+}

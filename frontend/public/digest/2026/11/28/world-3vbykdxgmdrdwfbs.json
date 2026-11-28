@@ -1,0 +1,49 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Spending category (% of budget)",
+    "y": "Share percentage"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m4",
+      "m5",
+      "m6",
+      "m7"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "world-3vbykdxgmdrdwfbs",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Agriculture, fisheries and cohesion falls from","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Agriculture, fisheries and cohesion to","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Competitiveness, security and defense rises from","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m3","source_text": null,"text": "Competitiveness, security and defense to","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-3438-3443","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "%","value": "59.1"},
+    {"derived": null,"element_id": "quantity-3447-3452","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "%","value": "42.4"},
+    {"derived": null,"element_id": "quantity-3529-3534","mark_id": "m6","source_text": null,"text": null,"time": null,"unit": "%","value": "17.7"},
+    {"derived": null,"element_id": "quantity-3538-3543","mark_id": "m7","source_text": null,"text": null,"time": null,"unit": "%","value": "27.7"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "EU Budget Spending Shifts in Proposal",
+  "type": "bar",
+  "version": "2026-11-25"
+}

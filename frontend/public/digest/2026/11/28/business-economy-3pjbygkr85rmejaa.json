@@ -1,0 +1,49 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Shopping day",
+    "y": "Online spending ($ billions)"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1",
+      "m2",
+      "m3"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m4",
+      "m5",
+      "m6",
+      "m7"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "business-economy-3pjbygkr85rmejaa",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Black Friday (through 6:30 p.m.)","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Saturday","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m2","source_text": null,"text": "Sunday","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m3","source_text": null,"text": "Cyber Monday","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-217-229","mark_id": "m4","source_text": null,"text": null,"time": null,"unit": "$","value": "9700000000"},
+    {"derived": null,"element_id": "quantity-483-495","mark_id": "m5","source_text": null,"text": null,"time": null,"unit": "$","value": "6100000000"},
+    {"derived": null,"element_id": "quantity-562-574","mark_id": "m6","source_text": null,"text": null,"time": null,"unit": "$","value": "6400000000"},
+    {"derived": null,"element_id": "quantity-679-692","mark_id": "m7","source_text": null,"text": null,"time": null,"unit": "$","value": "15100000000"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Projected Online Holiday Spending by Day (Adobe)",
+  "type": "bar",
+  "version": "2026-11-25"
+}

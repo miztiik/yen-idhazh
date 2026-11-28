@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Metric or category measure",
+    "y": "Count"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "world-b19a3v6z5b8r3wgf",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Total children brought home by Ukraine","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Children returned via Bring Kids Back UA so far","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-5811-5825","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "children","value": "2875"},
+    {"derived": null,"element_id": "quantity-5712-5723","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "children","value": "43"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Ukraine's Wartime Reunification and Trade Figures",
+  "type": "bar",
+  "version": "2026-11-25"
+}

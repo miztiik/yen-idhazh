@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Charging scenario (kWh)",
+    "y": "Cost before tax (USD)"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "energy-pwdnxqwh2ws19d4z",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Regular network-wide cost","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Sale-period cost","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-404-410","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "$","value": "19.5"},
+    {"derived": null,"element_id": "quantity-471-474","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "$","value": "10"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "IONNA EV Charging Cost Comparison During Sale vs Regular Rate",
+  "type": "bar",
+  "version": "2026-11-25"
+}

@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Benchmark and benchmark type",
+    "y": "Change versus prior close"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "india-hvfxgsv2kpe4cbrv",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "Brent crude futures gain","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "WTI crude futures gain","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-69-73","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": "%","value": "0.8"},
+    {"derived": null,"element_id": "quantity-202-206","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": "%","value": "2.6"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Crude Futures Gains Amid West Asia Supply Fears",
+  "type": "bar",
+  "version": "2026-11-25"
+}

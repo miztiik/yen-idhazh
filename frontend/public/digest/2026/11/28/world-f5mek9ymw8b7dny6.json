@@ -1,0 +1,41 @@
+{
+  "axis_titles": {
+    "size": null,
+    "x": "Period",
+    "y": "Damage Amount"
+  },
+  "caption": null,
+  "declared_whole": null,
+  "declared_whole_element_id": null,
+  "emphasized_mark_id": null,
+  "encoding": {
+    "bins": [],
+    "category": [
+      "m0",
+      "m1"
+    ],
+    "entity": [],
+    "event_label": [],
+    "quantity": [
+      "m2",
+      "m3"
+    ],
+    "quantity_x": [],
+    "series": [],
+    "size": [],
+    "time": []
+  },
+  "histogram_unit": null,
+  "histogram_unit_table_version": null,
+  "item_id": "world-f5mek9ymw8b7dny6",
+  "marks": [
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m0","source_text": null,"text": "2025 Total Damage","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": null,"label_source": "model","mark_id": "m1","source_text": null,"text": "Daily Loss Rate","time": null,"unit": null,"value": null},
+    {"derived": null,"element_id": "quantity-1240-1253","mark_id": "m2","source_text": null,"text": null,"time": null,"unit": null,"value": "325700000000"},
+    {"derived": null,"element_id": "quantity-1356-1365","mark_id": "m3","source_text": null,"text": null,"time": null,"unit": null,"value": "1000000000"}
+  ],
+  "renderer_version": "2026-10-27T05:00",
+  "title": "Special Fraud Damage by Period",
+  "type": "bar",
+  "version": "2026-11-25"
+}
