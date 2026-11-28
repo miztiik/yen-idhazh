@@ -179,9 +179,17 @@ test("scheduled recovery retains only verified metadata and re-delivers the orig
     const identity = { ...f.identity, job: "plan-typescript" };
     f.runtime.attempt = identity.attempt;
     f.inputs.harvest.config.harvest.request_headers.secondary = null;
-    f.transport.recordings.responses["https://news.example/second"] = [{ status: 404, body: "" }];
+    const unavailable = "https://news.example/not-found";
+    const available = "https://news.example/second";
+    f.transport.recordings.responses["https://news.example/feed.xml"] = [{ status: 200, body: `
+      <rss version="2.0"><channel><title>Recovery input</title>
+        <item><title>Unavailable article</title><link>${unavailable}</link></item>
+        <item><title>Available article</title><link>${available}</link></item>
+      </channel></rss>` }];
     const summary = summarizePlan(await runFeedPlan({}, f.inputs, f.runtime));
     expect(summary.planning_complete).toBe(true);
+    expect(f.transport.requests.map(request => request.url.href)).toContain(unavailable);
+    expect(summary.selected_count).toBeGreaterThan(0);
     expect(summary.files.rejected_articles).toMatchObject({ status: "written", files: [{ row_count: 1 }] });
     expect(await Bun.file(join(f.repository, summary.selected_articles_artifact!)).exists()).toBe(true);
     await recordedWorkflowHost(f.directory, identity);
