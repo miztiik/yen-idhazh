@@ -1,5 +1,5 @@
 {
-  "authority": "backend/idhazh/contracts/host_fingerprint.py: HostFingerprintRow, version 2026-10-26; named contract binding checks this field/type transcript",
+  "authority": "backend/idhazh/contracts/host_fingerprint.py: HostFingerprintRow, version 2026-11-28; named contract binding checks this field/type transcript",
   "columns": {
     "version": "string", "date": "string", "run_id": "string", "job": "string",
     "pipeline_name": "string", "task_name": "string", "shard": "int64",

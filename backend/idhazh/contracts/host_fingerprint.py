@@ -617,12 +617,12 @@ class HostFingerprintRow(_HostHardwareCells):
     __schema_stem__: ClassVar[str] = "host-fingerprint-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version=HOST_FINGERPRINT_VERSION,
+            version="2026-11-28",
             change="Project only hardware and retained model measurements.",
             why="Task Performance measures the named work, independently of the runner.",
         ),
         ChangelogEntry(
-            version=_CORRECTED_VERSION,
+            version="2026-10-26",
             change="Add optional total machine RAM capacity in MiB.",
             why="Machine capacity is distinct from transient task and process memory.",
         ),

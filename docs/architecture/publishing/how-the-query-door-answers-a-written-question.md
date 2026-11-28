@@ -1,6 +1,6 @@
 # How the query door answers a written question
 
-**Last Updated**: 2026-11-25
+**Last Updated**: 2026-11-28
 
 The Data explorer runs one operator-written, read-only DuckDB statement over the tables that SQL names. Repository tables use selected UTC days; local Parquet tables do not. The statement sees views, not repository addresses.
 
@@ -74,6 +74,11 @@ Days before a ledger's first compact period are cut from that ledger's answer, n
 A selected ledger with no file in the span uses an empty view (`LIMIT 0`) over its newest indexed file when another ledger supplies rows. A zero-row packed file can supply columns; an empty or lost coverage record supplies no file. A ledger with no file to supply that empty view is `missing`. When no referenced ledger has a file in the span and no local table is referenced, the answer is `quiet` without executing SQL after dependency discovery.
 
 The column rail describes the one table being browsed, not the query's dependencies. For a repository ledger it describes its newest file, even outside the dates. Columns belong to the ledger; dates bound repository answer rows. A ledger with no file lists no columns. Fetch or engine failures are named in the browser console. Local columns come from the already inspected file.
+
+The repository `host-fingerprint` view omits the retired whole-job timer
+after combining the selected files. Historical hardware, model load and
+prompt counters remain selectable. Both the column rail and SQL use this
+view, with no extra fetch or changes to the retained files.
 
 The **Prompt throughput by machine kind** example uses the
 [Hardware attribution rule](console-machine.md#what-may-not-be-pooled) before
