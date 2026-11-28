@@ -55,13 +55,15 @@ test("the safe-persist HTTP contract reuses run, attempt, exact paths and the un
   }).success).toBe(false);
 });
 
-test("safe-persist startup keeps only the existing private loopback controls", async () => {
+test("safe-persist startup validates the job alongside the private loopback controls", async () => {
   const { startup, inputs } = await readPlannerStartupRecording();
   const controls = { nonce: startup.nonce, settings: startup.settings, output_root: startup.output_root,
-    git_sha: startup.runtime.git_sha };
+    git_sha: startup.runtime.git_sha, job: "plan-typescript" };
   expect(SafePersistHttpStartupSchema.parse(controls)).toEqual(controls);
   expect(SafePersistHttpStartupSchema.safeParse({ ...controls, git_sha: "" }).success).toBe(false);
   expect(SafePersistHttpStartupSchema.safeParse({ ...controls, git_sha: undefined }).success).toBe(false);
+  expect(SafePersistHttpStartupSchema.safeParse({ ...controls, job: undefined }).success).toBe(false);
+  expect(SafePersistHttpStartupSchema.safeParse({ ...controls, job: "plan/typescript" }).success).toBe(false);
   expect(SafePersistHttpStartupSchema.safeParse({ ...controls, permittedPaths: ["state"] }).success).toBe(false);
   expect(FeedApiStartupSchema.safeParse({
     group: "delivery", delivery: controls, directory: "evidence",
@@ -97,7 +99,7 @@ test("planner delivery refuses output outside the current registered formats bef
     message: "Reject an unregistered output",
     retry: {},
     committer: { name: "Test Data Delivery", email: "delivery@example.test" },
-    identity: { run_id: "2026-10-27-1", attempt: 1, git_sha: "a".repeat(40) },
+    identity: { run_id: "2026-10-27-1", attempt: 1, git_sha: "a".repeat(40), job: "isolated-plan" },
     registrations: registrations(),
   })).rejects.toThrow("exact current planner or host raw UUID Parquet path");
 });

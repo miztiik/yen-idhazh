@@ -54,7 +54,7 @@ test("shared planning and delivery keep distinct native health and refuse every 
   const delivery = createFeedApiApp({
     identity: ApiReadySchema.parse({ ...identity, group: "delivery", modules: ["delivery"] }),
     delivery: { root: recorded.directory, directory: recorded.directory, gitSha: recorded.runtime.git_sha,
-      identity: deliveryIdentity, maxBodyBytes: recorded.inputs.settings.listener.max_body_bytes,
+      job: "plan-typescript", identity: deliveryIdentity, maxBodyBytes: recorded.inputs.settings.listener.max_body_bytes,
       signal: new AbortController().signal },
   });
   const request = (suffix: string, method: string) => new Request(`http://127.0.0.1${PLANNER_API_PREFIX}${suffix}`, {

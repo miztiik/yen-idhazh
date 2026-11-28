@@ -95,7 +95,7 @@ test("full sanitized body names survive later failure, artifact preparation and 
       runNumber: "700", runId: result.summary.run_id,
     });
     expect(report.status).toBe("written");
-    const identity = { run_id: result.summary.run_id, attempt: 3, git_sha: fixture.runtime.git_sha };
+    const identity = { run_id: result.summary.run_id, attempt: 3, git_sha: fixture.runtime.git_sha, job: "isolated-plan" };
     const outputs = await prepareWorkflowArtifacts({
       root: fixture.directory, directory, runNumber: "700", attempt: 3,
       identity, registrations: await metadataRegistrations(), runId: result.summary.run_id,
@@ -119,7 +119,7 @@ test("full sanitized body names survive later failure, artifact preparation and 
     expect(files).toContain(filename);
     await expect(finishRunOutput({
       root: fixture.directory, temporaryRoot: fixture.directory,
-      runNumber: "700", attempt: 3, gitSha: fixture.runtime.git_sha, runId: result.summary.run_id,
+      runNumber: "700", attempt: 3, gitSha: fixture.runtime.git_sha, job: identity.job, runId: result.summary.run_id,
       collectionOutcome: "failure", planningComplete: "false", finalizationOutcome: "failure",
       uploadOutcome: "success", artifactId: "123",
       articleEntities: entityOutput, entityUploadOutcome: "failure",

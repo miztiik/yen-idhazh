@@ -1,30 +1,25 @@
 /** Which completed files remain recoverable even when another producer fails? */
 import { join } from "node:path";
 import { z } from "zod";
-import { CommitShaSchema, PlannerSavedResponseSchema } from "@idhazh/common-contracts";
+import { PlannerSavedResponseSchema } from "@idhazh/common-contracts";
 import { ServiceSettingsSchema } from "../src/config/service-settings";
 import { PlanResponseSchema } from "../src/api/plan-response.schema";
-import { WorkflowHostFingerprintSchema } from "./feed-ingest-plan-host-fingerprint";
-import { ExecutionIdentitySchema, hostWriter, readMetadataRegistrations, verifyMetadataFile } from "./feed-ingest-plan-metadata";
+import { verifyWorkflowHostRequest, WorkflowHostFingerprintSchema } from "./feed-ingest-plan-host-fingerprint";
+import { ExecutionIdentitySchema, readMetadataRegistrations, verifyMetadataFile } from "./feed-ingest-plan-metadata";
 import type { ExecutionIdentity, MetadataRegistrations } from "./feed-ingest-plan-metadata";
 import { verifyHostFingerprint } from "./feed-ingest-plan-host-verification";
 import { verifyPlanningCompletion } from "./feed-ingest-plan-verification";
 
 export async function readWorkflowDeliveryContext(input: {
-  root: string; directory: string; runNumber: string; attempt: number; gitSha: string;
+  root: string; directory: string; runNumber: string; attempt: number; gitSha: string; job: string;
 }) {
-  const expectedSha = CommitShaSchema.parse(input.gitSha);
+  const runNumber = z.string().regex(/^\d+$/).parse(input.runNumber);
   const host = z.object({ host_request: WorkflowHostFingerprintSchema.shape.host_request })
     .parse(await Bun.file(join(input.directory, "host-fingerprint.json")).json());
-  const { run_id, attempt, git_sha } = host.host_request.writer;
-  const identity = ExecutionIdentitySchema.parse({ run_id, attempt, git_sha });
-  const writer = JSON.stringify(host.host_request.writer);
-  z.string().regex(/^\d+$/).parse(input.runNumber);
-  if (expectedSha !== identity.git_sha || input.attempt !== identity.attempt
-    || identity.run_id !== `${host.host_request.date}-${input.runNumber}`
-    || ![hostWriter(identity), hostWriter(identity, true)].some(value => writer === JSON.stringify(value))) {
-    throw new Error("Workflow metadata differs from the executed revision, run or attempt");
-  }
+  const identity = ExecutionIdentitySchema.parse({
+    run_id: `${host.host_request.date}-${runNumber}`, attempt: input.attempt, git_sha: input.gitSha, job: input.job,
+  });
+  verifyWorkflowHostRequest(host.host_request, identity);
   const settings = ServiceSettingsSchema.parse(await Bun.file(join(input.root, "config", "feed-ingest-plan-service.json")).json());
   return { identity, registrations: await readMetadataRegistrations(join(input.root, settings.inputs.registrations)) };
 }
@@ -40,6 +35,7 @@ export async function collectWorkflowFiles(input: {
   if (await hostFile.exists()) {
     try {
       const evidence = WorkflowHostFingerprintSchema.parse(await hostFile.json());
+      verifyWorkflowHostRequest(evidence.host_request, input.identity);
       if (evidence.host.status === "recorded") paths.push(...await verifyHostFingerprint(stateRoot,
         { ...evidence.host, status: "written" }, input.registrations, input.identity));
       else if (evidence.host.status === "failed") throw new Error(evidence.host.reason);

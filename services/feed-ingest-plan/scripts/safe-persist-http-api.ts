@@ -17,7 +17,7 @@ import type { FailureCaptureLimits } from "../src/config/service-settings";
 import { captureRequestRuntime, commandContext } from "../src/api/operation-context";
 
 export function createSafePersistApp(input: {
-  root: string; directory: string; maxBodyBytes: number; gitSha: string;
+  root: string; directory: string; maxBodyBytes: number; gitSha: string; job: string;
   identity: z.infer<typeof SafePersistHttpReadySchema>; signal: AbortSignal;
   failureLimits?: FailureCaptureLimits;
   writeEvent?: DeliveryEventOutput;
@@ -57,7 +57,7 @@ export function createSafePersistApp(input: {
     try { result = await deliverWorkflowMetadata({
       root: input.root, directory: input.directory, runNumber: request.runNumber,
       attempt: request.attempt, currentRunFiles: JSON.stringify(request.paths),
-      gitSha: input.gitSha, context,
+      gitSha: input.gitSha, job: input.job, context,
     }); } catch (error) {
       throw withPlannerFailure(error, {
         operation: "commit-ledgers", execution: {
