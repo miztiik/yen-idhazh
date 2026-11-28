@@ -41,7 +41,7 @@ export async function publicationGitRecording() {
     await fixtureGit(repository, ["remote", "add", "origin", origin]);
     await fixtureGit(repository, ["push", "origin", "HEAD:refs/heads/main"]);
     const head = await fixtureGit(repository, ["rev-parse", "HEAD"]);
-    const identity = { run_id: "2026-10-21-700", attempt: 3, git_sha: head };
+    const identity = { run_id: "2026-10-21-700", attempt: 3, git_sha: head, job: "isolated-plan" };
     const registrations = await metadataRegistrations();
     await mkdir(directory, { recursive: true });
     plan.inputs.root = repository;

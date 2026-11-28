@@ -1,6 +1,6 @@
 /** Which completed metadata can cross the safe-persist HTTP boundary and be confirmed? */
 import { z } from "zod";
-import { CommitShaSchema, WriterIdentitySchema } from "@idhazh/common-contracts";
+import { CommitShaSchema, JobNameSchema, WriterIdentitySchema } from "@idhazh/common-contracts";
 import { PlannerReadySchema, PlannerStartupSchema, PlannerStartupFailureSchema } from "../src/config/planner-startup";
 import { RelativePathSchema } from "../src/config/service-settings";
 
@@ -18,9 +18,12 @@ export type SafePersistHttpRequest = z.infer<typeof SafePersistHttpRequestSchema
 // Startup controls use the existing private pipe protocol, never the HTTP request.
 export const SafePersistHttpStartupSchema = PlannerStartupSchema.pick({
   nonce: true, settings: true, output_root: true,
-}).extend({ git_sha: CommitShaSchema }).meta({
-  version: "2026-11-01",
-  changelog: [{ version: "2026-11-01", change: "Carry the supplied checkout identity through private delivery startup." }],
+}).extend({ git_sha: CommitShaSchema, job: JobNameSchema }).meta({
+  version: "2026-11-28",
+  changelog: [
+    { version: "2026-11-28", change: "Require the workflow job on the private delivery startup pipe." },
+    { version: "2026-11-01", change: "Carry the supplied checkout identity through private delivery startup." },
+  ],
 });
 export const SafePersistHttpReadySchema = PlannerReadySchema.pick({
   nonce: true, pid: true, port: true,

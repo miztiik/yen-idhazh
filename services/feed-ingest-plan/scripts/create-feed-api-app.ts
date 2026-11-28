@@ -79,7 +79,7 @@ export async function startFeedApiApp(
       identity: SafePersistHttpReadySchema.parse({
         event: "safe_persist_ready", nonce: startup.delivery.nonce, pid: process.pid, port: startup.server.port,
       }),
-      gitSha: startup.delivery.git_sha, signal,
+      gitSha: startup.delivery.git_sha, job: startup.delivery.job, signal,
       maxBodyBytes: startup.delivery.settings.listener.max_body_bytes,
       failureLimits: startup.delivery.settings.diagnostics.failure,
     };

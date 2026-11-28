@@ -2,7 +2,7 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
-import { CommitShaSchema, WriterIdentitySchema } from "../../../packages/common-contracts/src/index";
+import { CommitShaSchema, JobNameSchema, WriterIdentitySchema } from "../../../packages/common-contracts/src/index";
 import { describePlanError, PlanError } from "../src/api/plan-request";
 import { deliverWorkflowMetadataHttp } from "./safe-persist-http-client";
 import { writeWorkflowReport } from "./feed-ingest-plan-report";
@@ -13,12 +13,13 @@ import { publishWorkflowUploadInventories } from "./feed-ingest-plan-upload-inve
 import { writeGitHubOutputs } from "./feed-ingest-plan-outputs";
 import { runtimeFailureExecution, withPlannerFailure } from "../src/api/plan-failure";
 import { retainWorkflowFailure } from "./retain-workflow-failure";
+import { readWorkflowJob } from "./feed-ingest-plan-workflow-inputs";
 
 const FinalizationOperationSchema = z.enum(["all", "commit-ledgers", "write-report", "prepare-artifacts"]);
 
 export async function finalizeRunOutput(input: {
   root: string; directory: string; currentRunFiles?: string; runNumber: string; attempt: number;
-  gitSha: string;
+  gitSha: string; job: string;
   cancelled: boolean; summaryPath?: string; outputPath?: string;
   dumpRawDocumentContents?: boolean; runId?: string; signal?: AbortSignal;
   operation?: z.infer<typeof FinalizationOperationSchema>; reportFilename?: string;
@@ -26,6 +27,7 @@ export async function finalizeRunOutput(input: {
   const runNumber = z.string().regex(/^\d+$/).parse(input.runNumber);
   const attempt = WriterIdentitySchema.shape.attempt.parse(input.attempt);
   const gitSha = CommitShaSchema.parse(input.gitSha);
+  const job = JobNameSchema.parse(input.job);
   await mkdir(input.directory, { recursive: true });
   const failures: unknown[] = [];
   const operation = FinalizationOperationSchema.parse(input.operation ?? "all");
@@ -39,7 +41,7 @@ export async function finalizeRunOutput(input: {
       if (!input.currentRunFiles) {
         throw new PlanError("COMPLETED_PATHS_MISSING", "Collection did not supply its exact completed ledger paths");
       }
-      return deliverWorkflowMetadataHttp({ ...input, runNumber, attempt, gitSha, currentRunFiles: input.currentRunFiles },
+      return deliverWorkflowMetadataHttp({ ...input, runNumber, attempt, gitSha, job, currentRunFiles: input.currentRunFiles },
         input.signal === undefined ? {} : { signal: input.signal });
     }],
     ["write-report", async () => {
@@ -51,7 +53,7 @@ export async function finalizeRunOutput(input: {
         }
       }
     }],
-    ["prepare-artifacts", () => prepareWorkflowArtifacts({ ...input, runNumber, attempt, gitSha,
+    ["prepare-artifacts", () => prepareWorkflowArtifacts({ ...input, runNumber, attempt, gitSha, job,
       ...(reportFilename === undefined ? {} : { reportFilename }) })],
     ["list-upload-files", () => publishWorkflowUploadInventories({ directory: input.directory, runNumber })],
   ];
@@ -98,7 +100,7 @@ if (import.meta.main) {
       root: process.cwd(), directory: join(RUNNER_TEMP, "feed-ingest-plan"),
       ...(CURRENT_RUN_FILES === undefined ? {} : { currentRunFiles: CURRENT_RUN_FILES }),
       runNumber: GITHUB_RUN_ID, attempt: Number(GITHUB_RUN_ATTEMPT),
-      gitSha: GITHUB_SHA,
+      gitSha: GITHUB_SHA, job: readWorkflowJob(process.env),
       cancelled: z.enum(["true", "false"]).parse(RUN_CANCELLED) === "true",
       ...(GITHUB_STEP_SUMMARY === undefined ? {} : { summaryPath: GITHUB_STEP_SUMMARY }),
       outputPath: GITHUB_OUTPUT,

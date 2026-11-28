@@ -56,7 +56,7 @@ test("independent baselines each apply one check and reverse delivery preserves 
     for (const index of [1, 0]) {
       const result = await deliverPlannerFiles({
         ...fixture.commit, paths: paths[index]!,
-        identity: { run_id: rows[index]!.run_id, attempt: rows[index]!.attempt, git_sha: head },
+        identity: { ...fixture.identity, run_id: rows[index]!.run_id, attempt: rows[index]!.attempt },
         committer: { name: "Fixture", email: "fixture@example.test" },
       });
       expect(result.status).toBe("landed");

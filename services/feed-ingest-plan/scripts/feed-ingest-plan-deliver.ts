@@ -19,6 +19,7 @@ import { z } from "zod";
 import { writeJsonLine } from "../src/logging/structured-logger";
 import { createRootContext, OperationMetadataSchema } from "@idhazh/common-contracts";
 import type { OperationMetadata } from "@idhazh/common-contracts";
+import { readWorkflowJob } from "./feed-ingest-plan-workflow-inputs";
 
 export function metadataWritePermissions(registrations: MetadataRegistrations): string[] {
   return Object.values(registrations).map(({ prefix }) => `state/raw/${prefix.join("/")}`);
@@ -67,7 +68,7 @@ export async function deliverPlannerFiles(input: Readonly<{
 }
 
 export async function deliverWorkflowMetadata(input: {
-  root: string; directory: string; currentRunFiles: string; runNumber: string; attempt: number; gitSha: string;
+  root: string; directory: string; currentRunFiles: string; runNumber: string; attempt: number; gitSha: string; job: string;
   context?: OperationMetadata;
 }) {
   const paths = z.array(RelativePathSchema).parse(JSON.parse(input.currentRunFiles));
@@ -122,7 +123,7 @@ if (import.meta.main) {
     const result = await deliverWorkflowMetadata({
       root: process.cwd(), directory: join(RUNNER_TEMP, "feed-ingest-plan"),
       currentRunFiles: CURRENT_RUN_FILES, runNumber: GITHUB_RUN_ID, attempt: Number(GITHUB_RUN_ATTEMPT),
-      gitSha: GITHUB_SHA,
+      gitSha: GITHUB_SHA, job: readWorkflowJob(process.env),
     });
     console.log(JSON.stringify(result));
   } catch (error) {

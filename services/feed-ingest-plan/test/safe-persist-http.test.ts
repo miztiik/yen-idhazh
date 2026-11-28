@@ -22,6 +22,7 @@ import { ServiceSettingsSchema } from "../src/config/service-settings";
 import { publicationGitRecording, publicationRecording } from "./publication-recordings";
 import { fixtureGit } from "./fixture-git";
 import { writeRecordedHostOutput } from "./host-output-recordings";
+import { recordedWorkflowHost } from "./host-recordings";
 import { API_HEALTH_PATH, ApiReadySchema } from "@idhazh/serve-pipeline-apis/startup";
 import { FeedApiStartupFailureSchema, FeedApiStartupSchema } from "../scripts/read-feed-api-startup";
 import { HonoServerConfigSchema, loadHonoSettings } from "../../serve-pipeline-apis/src/load-settings";
@@ -34,7 +35,7 @@ const serverEntry = fileURLToPath(new URL("../scripts/serve-feed-apis.ts", impor
 const requestFor = (f: Recording, paths = f.commit.paths) => ({ runNumber: "700", attempt: 3, paths });
 const inputFor = (f: Recording) => ({
   root: f.repository, directory: f.directory, currentRunFiles: JSON.stringify(f.commit.paths), runNumber: "700", attempt: 3,
-  gitSha: f.identity.git_sha,
+  gitSha: f.identity.git_sha, job: f.identity.job,
 });
 
 async function hostRecording() {
@@ -53,7 +54,7 @@ async function openApi(f: Recording, writeEvent?: DeliveryEventOutput) {
   });
   const app = createSafePersistApp({
     root: f.repository, directory: f.directory, maxBodyBytes: settings.listener.max_body_bytes,
-    gitSha: f.identity.git_sha,
+    gitSha: f.identity.git_sha, job: f.identity.job,
     identity, signal: new AbortController().signal,
     ...(writeEvent === undefined ? {} : { writeEvent }),
   });
@@ -192,7 +193,7 @@ test("two actual delivery request operations survive native stderr, the completi
     directory: relative(f.repository, f.directory).replaceAll("\\", "/"), run,
     delivery: {
       nonce: randomUUID(), settings, output_root: relative(f.repository, f.directory).replaceAll("\\", "/"),
-      git_sha: f.identity.git_sha,
+      git_sha: f.identity.git_sha, job: f.identity.job,
     },
   });
   const child = Bun.spawn([process.execPath, serverEntry], {
@@ -334,7 +335,7 @@ test("HTTP rejects malformed controls and retains the adapter's existing identit
       { repository: "outside" }, { sourceRoot: "outside" }, { directory: "outside" },
       { permittedPaths: ["state"] }, { destination: { kind: "git", repository: "outside" } },
       { committer: { name: "Fixture", email: "fixture@example.test" } }, { retry: {} }, { message: "Other commit" },
-      { article_text: "Not a delivery control" },
+      { article_text: "Not a delivery control" }, { job: "plan-typescript" },
     ]) {
       const before = events.length;
       await checkFailure(await api.post({ ...requestFor(f), ...controls }, writeTraceContext(parent)), 400, before);
@@ -357,13 +358,20 @@ test("HTTP rejects malformed controls and retains the adapter's existing identit
   } finally { await api.server.stop(true); await f.close(); }
 });
 
-test("the delivery child needs no planner process, response or collection input to deliver completed host metadata", async () => {
-  const f = await hostRecording();
+test("the delivery child delivers a completed host file only for its private workflow job", async () => {
+  const f = await publicationGitRecording();
   try {
-    const paths = f.paths;
+    const job = "plan-typescript";
+    const host = await recordedWorkflowHost(f.directory, { ...f.identity, job });
+    const paths = host.response.files.map(file => file.path);
+    const input = { ...inputFor(f), currentRunFiles: JSON.stringify(paths) };
     expect(await Bun.file(join(f.directory, "response.json")).exists()).toBe(false);
     expect(await Bun.file(join(f.repository, "config", "sources.json")).exists()).toBe(false);
-    const result = await deliverWorkflowMetadataHttp({ ...inputFor(f), currentRunFiles: JSON.stringify(paths) });
+    await expect(deliverWorkflowMetadataHttp(input)).rejects.toThrow();
+    expect(await fixtureGit(f.origin, ["--git-dir", f.origin, "rev-parse", "main"])).toBe(f.head);
+    expect(await Bun.file(join(f.directory, "delivery-result.json")).json())
+      .toEqual({ status: "failed", commit: null, files: paths.length, paths });
+    const result = await deliverWorkflowMetadataHttp({ ...input, job });
     expect(result).toMatchObject({ status: "landed", paths, files: paths.length });
     expect((await fixtureGit(f.origin, ["--git-dir", f.origin,
       "diff-tree", "--no-commit-id", "--name-only", "-r", "main"])).split("\n"))
@@ -479,7 +487,7 @@ test("the real delivery server exits on invalid startup and on its supervisor's 
     const settings = ServiceSettingsSchema.parse(await Bun.file(join(f.repository, "config", "feed-ingest-plan-service.json")).json());
     const delivery = SafePersistHttpStartupSchema.parse({
       nonce: randomUUID(), settings, output_root: relative(f.repository, f.directory).replaceAll("\\", "/"),
-      git_sha: f.identity.git_sha,
+      git_sha: f.identity.git_sha, job: f.identity.job,
     });
     const listener = await loadHonoSettings(f.repository, "delivery");
     const startup = FeedApiStartupSchema.parse({

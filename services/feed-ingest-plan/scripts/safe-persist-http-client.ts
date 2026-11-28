@@ -17,7 +17,7 @@ import { readPlannerResponseError, withPlannerFailure } from "../src/api/plan-fa
 import { retainFailureThroughCleanup } from "../src/api/retain-failure-through-cleanup";
 
 export async function deliverWorkflowMetadataHttp(input: {
-  root: string; directory: string; currentRunFiles: string; runNumber: string; attempt: number; gitSha: string;
+  root: string; directory: string; currentRunFiles: string; runNumber: string; attempt: number; gitSha: string; job: string;
 }, options: { signal?: AbortSignal; serverEntry?: string } = {}) {
   const gitSha = CommitShaSchema.parse(input.gitSha);
   const request = SafePersistHttpRequestSchema.parse({
@@ -29,7 +29,7 @@ export async function deliverWorkflowMetadataHttp(input: {
   try {
     const settings = ServiceSettingsSchema.parse(await Bun.file(join(input.root, "config", "feed-ingest-plan-service.json")).json());
     const startup = SafePersistHttpStartupSchema.parse({
-      nonce: randomUUID(), settings, git_sha: gitSha,
+      nonce: randomUUID(), settings, git_sha: gitSha, job: input.job,
       output_root: relative(input.root, input.directory).replaceAll("\\", "/"),
     });
     const earlier = await readMachineServerEvidence(input.directory, { run_id: input.runNumber, attempt: input.attempt });

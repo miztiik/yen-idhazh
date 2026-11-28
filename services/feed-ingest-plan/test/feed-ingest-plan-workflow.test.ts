@@ -39,6 +39,7 @@ test("workflow preparation, supervised missing-history refusal, reports and outp
       'import assert from "node:assert/strict";',
       'import { join } from "node:path";',
       `import { readWorkflowDeliveryContext } from ${JSON.stringify(new URL("../scripts/feed-ingest-plan-current-files.ts", import.meta.url).href)};`,
+      `import { verifyMetadataFile } from ${JSON.stringify(new URL("../scripts/feed-ingest-plan-metadata.ts", import.meta.url).href)};`,
       `import { writeWorkflowReport } from ${JSON.stringify(new URL("../scripts/feed-ingest-plan-report.ts", import.meta.url).href)};`,
       `import { prepareWorkflowArtifacts } from ${JSON.stringify(new URL("../scripts/feed-ingest-plan-artifacts.ts", import.meta.url).href)};`,
       'assert.equal(Bun.which("git"), null);',
@@ -54,12 +55,17 @@ test("workflow preparation, supervised missing-history refusal, reports and outp
       'assert.equal(result.failure_code, "HISTORY_WINDOW_UNAVAILABLE");',
       'const host = await Bun.file(join(directory, "host-fingerprint.json")).json();',
       'assert.equal(host.host.status, "recorded");',
+      'assert.equal(host.host.row.job, "plan-typescript");',
+      'assert.equal(host.host.row.task_name, "plan-typescript");',
       'const server = await Bun.file(join(directory, "hono-server-planning.json")).json();',
       'assert.equal(server.startup, "ready");',
       'assert.equal(server.shutdown, "stopped");',
-      'const input = { root: process.cwd(), directory, runNumber: controls.environment.GITHUB_RUN_ID, attempt: 3, gitSha: controls.environment.GITHUB_SHA, summaryPath: join(directory, "job-summary.md") };',
+      'const input = { root: process.cwd(), directory, runNumber: controls.environment.GITHUB_RUN_ID, attempt: 3, gitSha: controls.environment.GITHUB_SHA, job: controls.environment.GITHUB_JOB, summaryPath: join(directory, "job-summary.md") };',
       'const context = await readWorkflowDeliveryContext(input);',
       'assert.equal(context.identity.git_sha, input.gitSha);',
+      'const file = await verifyMetadataFile(join(directory, "state"), host.host.files[0].path, context.registrations, context.identity);',
+      'assert.equal(file.envelope.identity.job, "plan-typescript");',
+      'assert.equal(file.envelope.identity.task_name, "plan-typescript");',
       'await assert.rejects(readWorkflowDeliveryContext({ ...input, gitSha: "b".repeat(40) }));',
       'await writeWorkflowReport(input);',
       'const artifacts = await prepareWorkflowArtifacts(input);',
@@ -73,7 +79,7 @@ test("workflow preparation, supervised missing-history refusal, reports and outp
         environment: {
           RUNNER_TEMP: join(fixture.directory, "runner"),
           GITHUB_OUTPUT: join(fixture.directory, "workflow-outputs"),
-          GITHUB_RUN_ID: "700", GITHUB_RUN_ATTEMPT: "3", GITHUB_SHA: fixture.runtime.git_sha,
+          GITHUB_RUN_ID: "700", GITHUB_RUN_ATTEMPT: "3", GITHUB_SHA: fixture.runtime.git_sha, GITHUB_JOB: "plan-typescript",
         },
       })]),
       stdout: "pipe", stderr: "pipe",
@@ -100,6 +106,13 @@ test("workflow preparation validates dispatch data and requires execution contro
   expect(() => readWorkflowRequest({ PARTITION_STRATEGY: "unknown" })).toThrow();
   expect(readWorkflowRequest({ FRESHNESS_HOURS: "12" })).toEqual({ request: {}, policy_overrides: {} });
   await expect(preparePlannerWorkflow(root, {})).rejects.toThrow("Workflow execution controls are missing");
+  const missingRoot = join(root, "unavailable-workflow-fixture");
+  const controls = { RUNNER_TEMP: missingRoot, GITHUB_OUTPUT: join(missingRoot, "outputs"),
+    GITHUB_RUN_ID: "700", GITHUB_RUN_ATTEMPT: "3", GITHUB_SHA: "a".repeat(40) };
+  for (const job of [undefined, "plan/typescript"]) {
+    await expect(preparePlannerWorkflow(missingRoot, { ...controls, GITHUB_JOB: job }))
+      .rejects.toMatchObject({ issues: [{ path: ["GITHUB_JOB"] }] });
+  }
 });
 
 test("planner configuration refuses retired acquisition controls", async () => {

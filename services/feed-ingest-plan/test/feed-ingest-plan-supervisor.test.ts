@@ -59,7 +59,7 @@ test("an occupied port fails without stopping or planning against the unrelated 
     expect(report.markdown).toContain("PLANNER_BIND_FAILED");
     const artifacts = await prepareWorkflowArtifacts({
       root: fixture.directory, directory: fixture.evidence, runNumber: "700", attempt: 3,
-      gitSha: fixture.startup.runtime.git_sha, runId: "2026-10-21-700", reportFilename: report.filename,
+      gitSha: fixture.startup.runtime.git_sha, job: "isolated-plan", runId: "2026-10-21-700", reportFilename: report.filename,
     });
     expect(artifacts.server_logs).toBe("server-logs");
     expect(await Bun.file(join(fixture.evidence, "server-logs", server.log_filename)).text())
@@ -194,7 +194,7 @@ test("a short real child failure preserves existing native diagnostics and its o
     })).rejects.toMatchObject({ code: "PLANNER_READY_IDENTITY" });
     const collected = await collectWorkflowFiles({
       root: fixture.directory, directory: fixture.evidence,
-      identity: { run_id: "2026-10-21-700", attempt: 3, git_sha: fixture.startup.runtime.git_sha },
+      identity: { run_id: "2026-10-21-700", attempt: 3, git_sha: fixture.startup.runtime.git_sha, job: "isolated-plan" },
       registrations: await metadataRegistrations(),
     });
     expect(collected.failures).toEqual([]);

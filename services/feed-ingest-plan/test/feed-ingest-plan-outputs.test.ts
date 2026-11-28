@@ -42,7 +42,7 @@ test("captured native output retains selected text separately from its strict me
       await writeFile(target, await readFile(join(fixture.inputs.outputRoot, path)));
     }
     const deliveryContext = {
-      identity: { run_id: summary.run_id, attempt: summary.attempt, git_sha: "a".repeat(40) },
+      identity: { run_id: summary.run_id, attempt: summary.attempt, git_sha: "a".repeat(40), job: "isolated-plan" },
       registrations: await metadataRegistrations(),
     };
     const retained = await prepareWorkflowArtifacts({ root: fixture.directory, directory, runNumber: "700", attempt: 3, ...deliveryContext });
