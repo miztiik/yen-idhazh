@@ -44,6 +44,7 @@ export function createImpitTransport(): HarvestTransport {
         const response = await client.fetch(input.url, {
           signal: controller.signal, redirect: "manual", timeout: input.timeout_ms,
         });
+        input.observe_headers?.(response.status, response.headers.get("retry-after"));
         let evidence = responseEvidence(response.headers, input, null);
         const reader = response.body.getReader();
         const chunks: Uint8Array[] = [];

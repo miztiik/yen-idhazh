@@ -1,6 +1,6 @@
 # Isolated feed harvesting
 
-**Last Updated**: 2026-11-05
+**Last Updated**: 2026-11-28
 
 How do configured feeds become sanitized article candidates?
 This build-time path leaves production Python discovery and extraction
@@ -129,8 +129,8 @@ JavaScript, sign requests, import credentials or guarantee publisher access.
 Within the bounded target allowance, exhausted network/status retries or
 a successful article body below `recovery_min_body_bytes` can try the secondary
 profile once per redirect hop. Only `recoverable_http_statuses` permit HTTP
-profile recovery; missing, gone and rate-limited responses do not use it by
-default. Each profile keeps the existing status retry rules. Attempt
+profile recovery; a 429 never switches profiles. Each profile keeps the
+existing status retry rules. Attempt
 sequence remains unique; the retry index restarts for a new profile.
 Every actual dispatch is counted. A failed recovery preserves an earlier
 real short response for normal parsing rather than inventing article text.
@@ -143,24 +143,34 @@ Disabling the secondary profile leaves one target allowance.
 The body-size recovery rule never applies to feeds. Short, empty and malformed
 feed downloads keep their real HTTP result and separate parse outcome.
 
-`harvest.request_pacing` applies a process-local scheduler to every dispatched
-feed and article request, including retries, secondary-profile recovery
-and redirect hops. Each request uses its destination domain and, when present,
+The enabled `harvest.request_pacing` control applies a process-local scheduler
+to every feed and article request, including retries, secondary-profile
+recovery and redirect hops. Each request uses its destination domain and, when present,
 the curated publisher ID. The domain key groups hostnames by registrable domain
 (the domain beneath the public suffix), using the configured private-suffix
 policy; a missing publisher ID adds no publisher key. Both keys are acquired
 domain first, then publisher. Validation-only refusals do not
 dispatch and use no slot.
 
-The first request for a key has no initial delay. After the application request
-settles with content or failure, the next request waits for that key's configured
-base delay plus independently sampled jitter. A slot covers application request
-settlement and cooldown, not the physical lifetime of native work that may
-continue after timeout. Cancellation settles the caller's queued wait or ends
-cooldown without dispatching a cancelled request. Queue waits do not consume an
-HTTP attempt timer; measured queue wait is kept on the attempt, and the total
-fetch elapsed time includes it. `duration_ms` excludes both queue wait and
-retry backoff.
+The first request for a key has no initial delay. After a response settles,
+ordinary spacing uses each key's configured delay and independently sampled
+jitter. A 429 reserves both keys from the instant its headers arrive, even
+when its body cannot be read. Valid `Retry-After` seconds or a UTC HTTP date
+give the minimum wait. Without valid guidance, each key uses its own
+exponential retry backoff, capped at the last configured delay (the initial
+delay when retries are disabled). A successful response or idle-key expiry
+clears that key's backoff history. The longer of ordinary spacing and the
+applicable reservations governs the next dispatch.
+
+Only a target admitted by both keys can claim a shared network slot. The slot
+ends at application response settlement, before cooldown or retry wait.
+Cancellation stops queued work without clearing a source's 429 reservation.
+Admission waits count against the existing fetch deadline, not against an
+attempt timer; a dispatched attempt can use only the remaining fetch budget.
+The planner skips a retry that cannot fit a known reservation and retains the
+actual 429. If no request reached the target, the refusal remains a timeout
+and carries no invented HTTP status. See [failure diagnostics](feed-failure-diagnostics.md)
+for how those cases are counted.
 
 The listener shares one scheduler across collection and standalone document
 requests. A direct harvester or probe call owns one for its invocation; the

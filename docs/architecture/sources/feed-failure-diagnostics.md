@@ -49,12 +49,10 @@ identity and pre-download age refusals have null diagnostics, not zero fetch
 and extraction times. Feed parsing retains its separately measured
 `parse_duration_ms` on the feed outcome.
 
-Pacing wait is separate from network-attempt time and retry backoff. An attempt's
-`duration_ms` excludes both its queue wait and backoff; the enclosing fetch
-elapsed time includes them. Validation-only refusals record zero wait.
-Null pacing measurements mean they
-were not recorded. The slot covers application response or failure settlement
-plus cooldown, not any native response work that continues after a timeout.
+Pacing wait includes time in the keyed queues and waiting for shared network
+capacity. An attempt's `duration_ms` excludes that wait and retry backoff;
+the enclosing fetch elapsed time includes them. Validation-only refusals
+record zero wait. Null pacing measurements mean they were not recorded.
 
 Failed feed progress events may include `requested_feed_url` and
 `final_attempted_feed_url`. Each address uses the same diagnostic policy as an
@@ -82,8 +80,13 @@ attempts. A later successful retry does not remove the failed dispatch.
 Terminal document work, policy refusals, history gaps and planner
 stage failures retain their own causes and applicable identities. Unavailable
 evidence stays null. The workflow form omits URL paths and queries, response
-headers and bodies, history file paths and exception text; it does not change
-standalone API responses, pacing, or ledger evidence.
+headers and bodies, history file paths and exception text. `source_cooldown`
+records only the basis (seconds, UTC date, missing or invalid header) and
+remaining milliseconds. On a failed dispatch it records the reservation
+applied for the observed 429. On a terminal fetch it records the reservation
+in effect when a queued target stopped without dispatch; that target adds no
+HTTP request or failed-dispatch event. A prior 429 remains visible if its
+retry could not start. No new fields enter standalone API responses or Parquet.
 
 `harvest.response_diagnostics` initially selects `content-type`,
 `content-length` and `retry-after`, bounded to 256 characters per value.

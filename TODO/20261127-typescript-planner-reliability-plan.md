@@ -32,7 +32,7 @@ Table C - delivery rows
 | ID | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | C1 | 1 | Preserve the cause of failed planner work | - | A | DONE | - | - | - |
-| C2 | 2 | Enforce source cooldown on outbound requests | 1 | B | PENDING | - | - | - |
+| C2 | 2 | Enforce source cooldown on outbound requests | 1 | B | DONE | - | - | - |
 | C3 | 3 | Record the actual planner host job and task | - | A | DONE | laughing-tribble | - | 18d7ffc0-0d39-4d21-90f0-d9884a33281f |
 | C4 | 4 | Count selection exclusions without counting technical refusals twice | - | A | DONE | improved-journey | - | cdc20e6b-0134-4e01-8163-83ac80090104 |
 | C5 | 5 | Seal completed planner rejections once before delivery | 3 | B | DONE | final-planner-rejection-ledger | - | 923d465d-4c98-4b19-b786-d818bb3f0947 |

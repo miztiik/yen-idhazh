@@ -37,6 +37,8 @@ export type TransportRequest = {
   max_body_bytes: number;
   timeout_ms: number;
   signal: AbortSignal;
+  /** Report target headers before attempting to consume the body. */
+  observe_headers?: (status: number, retryAfter: string | null) => void;
 };
 export interface HarvestTransport {
   request(input: TransportRequest): Promise<TransportResponse>;

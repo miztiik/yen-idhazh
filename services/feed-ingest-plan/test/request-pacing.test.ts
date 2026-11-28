@@ -7,13 +7,14 @@ import {
 } from "../src/harvest-feeds/request-pacing";
 import { createSourceFetcher } from "@idhazh/feed-ingest-plan/fetch-source";
 import { fetchDiagnostics } from "../src/harvest-feeds/fetch-diagnostics";
+import { readRetryAfter } from "../src/harvest-feeds/read-retry-after";
 import { RecordedTransport, inputs, readRecordings } from "./harvest-recordings";
 
 type Settings = Parameters<typeof createRequestPacing>[0];
 type DispatchRecord = { url: string; started: number; settled: number };
 
 test("source retries retain pacing evidence and dispatch only target requests on each fetch", async () => {
-  const loaded = await inputs([], { extraction: { max_retries: 1 } });
+  const loaded = await inputs([], { harvest: { fetch_timeout_ms: 1000 }, extraction: { max_retries: 1 } });
   const recordings = await readRecordings();
   const target = "https://news.example/second";
   recordings.responses[target] = [{ status: 503, body: "" }, { status: 200, fixture: "article" }];
@@ -49,6 +50,110 @@ function settings(patch: Partial<Settings> = {}): Settings {
     enabled: true, domain_delay_ms: 0, publisher_delay_ms: 0, jitter_ms: 0, ...patch,
   };
 }
+
+test("429 reserves both source keys but releases the shared dispatch slot", async () => {
+  const limited = "https://news.example.com/feed";
+  const sharedDomain = "https://other.example.com/article";
+  const sharedPublisher = "https://news.example.org/article";
+  const independent = "https://other.example.net/article";
+  const loaded = await inputs([], {
+    harvest: { concurrency: 1, fetch_timeout_ms: 1800, request_pacing: settings() },
+    extraction: { max_retries: 1, backoff_initial_seconds: 0.01 },
+  });
+  const recordings = await readRecordings();
+  for (const url of [sharedDomain, sharedPublisher, independent]) recordings.responses[url] = [{ status: 200, fixture: "article" }];
+  recordings.responses[limited] = [
+    { status: 429, body: "", headers: { "retry-after": "1" } }, { status: 200, body: "ok" },
+  ];
+  const transport = new RecordedTransport(recordings);
+  const fetcher = createSourceFetcher(loaded.config.harvest, loaded.extraction, { transport });
+  const observed = deferred();
+  const dispatchTimes = new Map<string, number>();
+  const dispatched: number[] = [];
+  const cancelledCounts: number[] = [];
+  transport.on_request = request => {
+    if (!dispatchTimes.has(request.url.href)) dispatchTimes.set(request.url.href, performance.now());
+  };
+  let restricted = 0;
+  const first = fetcher.fetch(limited, async measurement => {
+    dispatched.push(measurement.dispatched_request_count);
+    if (measurement.attempt.http_status === 429) {
+      restricted = performance.now();
+      observed.resolve();
+    }
+  }, "feed", undefined, "limited");
+  try {
+    await Promise.race([observed.promise, first.then(() => { throw new Error("No 429 was observed"); })]);
+    const controller = new AbortController();
+    const cancelled = fetcher.fetch(sharedDomain, async measurement => {
+      cancelledCounts.push(measurement.dispatched_request_count);
+    }, "article", controller.signal);
+    const sameDomain = fetcher.fetch(sharedDomain, undefined, "article", undefined, "different");
+    const samePublisher = fetcher.fetch(sharedPublisher, undefined, "article", undefined, "limited");
+    expect(await fetcher.fetch(independent)).toMatchObject({ http_status: 200, failure: null });
+    controller.abort();
+    expect(await cancelled).toMatchObject({ http_status: null, failure: "timeout", final_attempted_url: null });
+    expect(cancelledCounts).toEqual([0, 0]);
+    expect(transport.requests.map(request => request.url.href)).toEqual([limited, independent]);
+    expect((await Promise.all([sameDomain, samePublisher, first])).map(result => result.http_status)).toEqual([200, 200, 200]);
+    for (const url of [sharedDomain, sharedPublisher]) {
+      expect(dispatchTimes.get(url)!, url).toBeGreaterThanOrEqual(restricted + 975);
+    }
+    expect(dispatched).toEqual([0, 1, 1]);
+    expect(transport.requests).toHaveLength(5);
+    expect(transport.peak).toBe(1);
+  } finally { await fetcher.close(); }
+});
+
+test("Retry-After accepts seconds and HTTP dates, not numbers or dates outside the wire protocol", () => {
+  const now = Date.parse("Sun, 06 Nov 1994 08:49:35 GMT") + 500;
+  expect(readRetryAfter(" 003 ", now)).toEqual({ basis: "retry-after-seconds", delay_ms: 3000 });
+  for (const date of ["Sun, 06 Nov 1994 08:49:37 GMT", "Sunday, 06-Nov-94 08:49:37 GMT", "Sun Nov  6 08:49:37 1994"]) {
+    expect(readRetryAfter(date, now)).toEqual({ basis: "retry-after-date", delay_ms: 1500 });
+  }
+  expect(readRetryAfter("Sun, 06 Nov 1994 08:49:35 GMT", now)).toEqual({ basis: "retry-after-date", delay_ms: 0 });
+  for (const bad of ["", "1.5", "-1", "1, 2", "2026-11-28", "Sun, 31 Nov 2026 12:00:00 GMT"]) {
+    expect(readRetryAfter(bad, now)).toEqual({ basis: "invalid-retry-after" });
+  }
+  expect(readRetryAfter(null, now)).toEqual({ basis: "missing-retry-after" });
+});
+
+test("missing and malformed headers grow one bounded source backoff and success resets it", async () => {
+  const target = "https://news.example.com/feed";
+  const loaded = await inputs([], {
+    harvest: { fetch_timeout_ms: 1200, request_pacing: settings({ domain_delay_ms: 35 }) },
+    extraction: { max_retries: 2, backoff_initial_seconds: 0.1, backoff_multiplier: 2 },
+  });
+  const recordings = await readRecordings();
+  const limited = { status: 429, body: "" };
+  const success = { status: 200, body: "ok" };
+  recordings.responses[target] = [
+    limited, { ...limited, headers: { "retry-after": "not a date" } }, limited, success, limited, success,
+  ];
+  const transport = new RecordedTransport(recordings);
+  const fetcher = createSourceFetcher(loaded.config.harvest, loaded.extraction, { transport });
+  const starts: number[] = [];
+  transport.on_request = () => starts.push(performance.now());
+  const decisions: { basis: string; remaining_ms: number }[] = [];
+  const capture: NonNullable<Parameters<typeof fetcher.fetch>[1]> = async attempt => {
+    if (attempt.source_cooldown !== undefined) decisions.push(attempt.source_cooldown);
+  };
+  try {
+    expect(await fetcher.fetch(target, capture, "feed")).toMatchObject({ http_status: 429, failure: "http" });
+    expect(await fetcher.fetch(target, capture, "feed")).toMatchObject({ http_status: 200, failure: null });
+    expect(await fetcher.fetch(target, capture, "feed")).toMatchObject({ http_status: 200, failure: null });
+    expect(decisions).toEqual([
+      { basis: "missing-retry-after", remaining_ms: 100 },
+      { basis: "invalid-retry-after", remaining_ms: 200 },
+      { basis: "missing-retry-after", remaining_ms: 200 },
+      { basis: "missing-retry-after", remaining_ms: 100 },
+    ]);
+    expect(starts).toHaveLength(6);
+    for (const [index, delay] of [[0, 100], [1, 200], [2, 200], [4, 100]] as const) {
+      expect(starts[index + 1]! - starts[index]!).toBeGreaterThanOrEqual(delay);
+    }
+  } finally { await fetcher.close(); }
+});
 
 function recordingDispatch(
   records: DispatchRecord[],
