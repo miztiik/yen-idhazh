@@ -172,3 +172,20 @@ def test_the_declared_drift_window_uses_the_packed_door_without_a_raw_repair_ove
     assert older.parent.relative_to(tmp_path).as_posix() not in declared
     assert load_threshold_history(state, days.fit_history) == []
     assert load_threshold_history(state, days.threshold_history) == [packed]
+
+
+def test_review_days_pair_verdicts_tracks_effective_max_window_nights() -> None:
+    """Sparse checkout and review_days agree on max_window_nights (or window_nights when null)."""
+    night = "2026-11-28"
+    committed = judge_settings.load()
+    days = review_days(night, config=committed)
+
+    assert len(days.pair_verdicts) == committed.thresholds.effective_max_window_nights == 28
+    assert (days.pair_verdicts[0], days.pair_verdicts[-1]) == ("2026-11-01", night)
+
+    fixed = committed.model_copy(
+        update={"thresholds": committed.thresholds.model_copy(update={"max_window_nights": None})}
+    )
+    fixed_days = review_days(night, config=fixed)
+    assert len(fixed_days.pair_verdicts) == fixed.thresholds.window_nights == 7
+    assert (fixed_days.pair_verdicts[0], fixed_days.pair_verdicts[-1]) == ("2026-11-22", night)

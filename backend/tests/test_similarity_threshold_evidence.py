@@ -14,6 +14,7 @@ from support.judged_pairs import a_judged_pair
 
 from idhazh.similarity.threshold_evidence import (
     Evidence,
+    adaptive_evidence_near,
     current_pairs,
     evidence_days,
     evidence_near,
@@ -175,3 +176,123 @@ def test_a_night_nothing_was_judged_on_has_no_stamp_and_so_no_evidence() -> None
 
     assert tonights_stamp([]) is None
     assert current_pairs([earlier], stamp=None) == []
+
+
+def test_evidence_near_excludes_identical_headline_overrides_from_cosine_fits() -> None:
+    """Identical-headline pairs (score=1.0 outright) never distort the cosine logistic curve."""
+    cosine_near = a_judged_pair(0, score=0.98, answer="YES")
+    cosine_one = a_judged_pair(1, score=1.0, answer="YES", headline=False)
+    headline_override = a_judged_pair(2, score=1.0, cosine=0.5, answer="YES", headline=True)
+
+    evidence = evidence_near(
+        [cosine_near, cosine_one, headline_override], threshold=0.95, width=0.06
+    )
+
+    assert evidence.pair_keys == tuple(sorted((cosine_near.pair_key, cosine_one.pair_key)))
+    assert headline_override.pair_key not in evidence.pair_keys
+    assert evidence.usable_pairs_used == 2
+
+
+def test_adaptive_evidence_near_stops_at_min_window_expands_day_by_day_and_deduplicates() -> None:
+    """Adaptive window stops at min_window when full, expands up to max_window, dedupes newest."""
+    night = "2026-11-28"
+    days_29 = evidence_days(night, window_nights=29)
+    too_old = days_29[0]
+    days_28 = days_29[1:]
+    stamp = meaning_stamp(a_judged_pair(0, score=0.70, date=night))
+
+    # 2 pairs per day across 28 days + 1 pair on day 29 (outside max_window_nights=28).
+    rows = [
+        a_judged_pair(day_index * 10 + slot, score=0.70, answer="NO", date=day)
+        for day_index, day in enumerate(days_28)
+        for slot in range(2)
+    ]
+    rows.insert(0, a_judged_pair(9999, score=0.70, answer="YES", date=too_old))
+
+    # Stops at min_window_nights=7 when 14 >= 14, without pulling day 8.
+    at_min = adaptive_evidence_near(
+        rows,
+        night=night,
+        threshold=0.70,
+        width=0.06,
+        min_window_nights=7,
+        max_window_nights=28,
+        minimum_usable_pairs=14,
+        stamp=stamp,
+    )
+    assert (at_min.nights_used, at_min.usable_pairs_used, at_min.first_date) == (
+        7,
+        14,
+        days_28[-7],
+    )
+
+    # Expands day-by-day from 7 to 10 days to reach 20 usable pairs.
+    expanded = adaptive_evidence_near(
+        rows,
+        night=night,
+        threshold=0.70,
+        width=0.06,
+        min_window_nights=7,
+        max_window_nights=28,
+        minimum_usable_pairs=19,
+        stamp=stamp,
+    )
+    assert (expanded.nights_used, expanded.usable_pairs_used, expanded.first_date) == (
+        10,
+        20,
+        days_28[-10],
+    )
+
+    # Caps at max_window_nights=28 when still short, never reading day 29.
+    capped = adaptive_evidence_near(
+        rows,
+        night=night,
+        threshold=0.70,
+        width=0.06,
+        min_window_nights=7,
+        max_window_nights=28,
+        minimum_usable_pairs=100,
+        stamp=stamp,
+    )
+    assert (capped.nights_used, capped.usable_pairs_used, capped.first_date) == (
+        28,
+        56,
+        days_28[0],
+    )
+
+    # Repeated pair_key across days keeps only the newest row; a newer disagreement drops it.
+    repeated_day_older = days_28[-10]
+    repeated_day_newer = days_28[-2]
+    older_agreed = a_judged_pair(
+        0, score=0.70, answer="YES", date=repeated_day_older, pair=777, run_id=f"{repeated_day_older}-1"
+    )
+    newer_no = a_judged_pair(
+        1, score=0.70, answer="NO", date=repeated_day_newer, pair=777, run_id=f"{repeated_day_newer}-1"
+    )
+    older_agreed_2 = a_judged_pair(
+        2, score=0.70, answer="YES", date=repeated_day_older, pair=778, run_id=f"{repeated_day_older}-1"
+    )
+    newer_split = a_judged_pair(
+        3,
+        score=0.70,
+        answer=("YES", "NO"),
+        date=repeated_day_newer,
+        pair=778,
+        run_id=f"{repeated_day_newer}-1",
+    )
+    headline_row = a_judged_pair(
+        4, score=1.0, cosine=0.5, answer="YES", date=night, headline=True, pair=779
+    )
+    deduped = adaptive_evidence_near(
+        [older_agreed, older_agreed_2, newer_no, newer_split, headline_row],
+        night=night,
+        threshold=0.70,
+        width=0.06,
+        min_window_nights=7,
+        max_window_nights=28,
+        minimum_usable_pairs=5,
+        stamp=stamp,
+    )
+    assert deduped.pair_keys == (newer_no.pair_key,)
+    assert deduped.answers == (0,)
+    assert deduped.first_date == repeated_day_newer

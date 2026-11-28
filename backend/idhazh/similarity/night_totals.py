@@ -1,11 +1,13 @@
 """What do a night's own pairs and runners say, apart from where the thresholds stand?
 
-Two parts of a night's threshold row need no curve. The first is the two lightly sampled
-ends: how many pairs the draw found in each, how many came back usable, and how many the judge
-would have called the same story (above the upper threshold) or a different one (below the
-lower), weighting each usable pair by one over its sampling chance. The second is the runners:
-how many reported and what each pair came to, added up, with the answers they gave on the
-known-answer pairs gathered into the night's one text.
+Two parts of a night's threshold row need no curve. The first is the two single-slice lightly
+sampled ends (`fully_dissimilar` below the lower straddling thin band and `fully_similar`
+above the upper straddling thin band): how many pairs the draw found in each end bucket, how
+many came back usable, and how many the judge would have called the same story (in
+`fully_similar`) or a different one (in `fully_dissimilar`), weighting each usable pair by one
+over its sampling chance. The second is the runners: how many reported and what each pair came
+to, added up, with the answers they gave on the known-answer pairs gathered into the night's
+one text.
 
 Both are made from rows already read, so a night's totals can be worked again from its rows and
 the runners' readings. Pure arithmetic: no file, no config file, no clock.
@@ -73,10 +75,11 @@ def _one_end(
 def end_columns(
     tonight: Sequence[StorySimilarityPairVerdict], pools: dict[PairBucket, int]
 ) -> dict[str, Any]:
-    """The two lightly sampled ends' columns: pool, usable pairs and the weighted total.
+    """The two single-slice lightly sampled ends' columns: pool, usable pairs and weighted total.
 
-    With a handful of pairs a night the weighted totals are an alarm and never move a
-    threshold.
+    Summarizes `FULLY_SIMILAR` (above the upper straddling thin band) and `FULLY_DISSIMILAR`
+    (below the lower straddling thin band). With a handful of pairs a night the weighted totals
+    are an alarm and never move a threshold.
     """
     similar = _one_end(
         tonight,

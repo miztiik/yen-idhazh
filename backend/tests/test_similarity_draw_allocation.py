@@ -2,7 +2,7 @@
 
 Unit tier: integer arithmetic over named pools. Every expected number below is worked by
 hand from the committed settings (150 pairs split proportionally across all five buckets
-at weights 4, 40, 20, 30 and 6), so a changed rule shows as a changed number a person can
+at weights 5, 20, 10, 60 and 5), so a changed rule shows as a changed number a person can
 follow.
 """
 
@@ -19,8 +19,9 @@ from idhazh.similarity.slices import Slice, slice_grid
 
 DRAW = judge_settings.load(CONFIG_DIR).draw
 
-#: The slices at the committed starts: the end below, six thin and three coarse slices
-#: from the lower threshold, six thin slices to the upper one, and the end above.
+#: The 23 slices at the committed starts: the end below 0.64, six straddling 0.02 slices
+#: around 0.70, three coarse slices across the middle, twelve straddling 0.01 slices around
+#: 0.93, and the end above 0.99.
 SLICES = slice_grid(0.70, 0.93, draw=DRAW).slices
 
 PLENTY = 10_000
@@ -56,17 +57,23 @@ def takes_by_bucket(
 
 
 def test_a_night_with_pairs_everywhere_spends_the_budget_by_the_weights() -> None:
-    """150 pairs split by unified weights 4, 40, 20, 30 and 6 give 6, 60, 30, 45 and 9."""
+    """150 pairs split by unified weights 5, 20, 10, 60 and 5 give 8, 30, 15, 90 and 7."""
     takes = allocate(SLICES, pools_of(), draw=DRAW)
 
     assert takes_by_bucket(takes) == {
-        "fully_dissimilar": 6,
-        "lower_thin": 60,
-        "middle_coarse": 30,
-        "upper_thin": 45,
-        "fully_similar": 9,
+        "fully_dissimilar": 8,
+        "lower_thin": 30,
+        "middle_coarse": 15,
+        "upper_thin": 90,
+        "fully_similar": 7,
     }
-    assert takes == (6, 10, 10, 10, 10, 10, 10, 10, 10, 10, 8, 8, 8, 7, 7, 7, 9)
+    assert takes == (
+        8,
+        5, 5, 5, 5, 5, 5,
+        5, 5, 5,
+        8, 8, 8, 8, 8, 8, 7, 7, 7, 7, 7, 7,
+        7,
+    )
     assert sum(takes) == DRAW.pair_budget
 
 
@@ -80,21 +87,21 @@ def test_sparse_buckets_and_short_ends_do_not_pad_other_buckets() -> None:
     sparse = allocate(SLICES, pools_of(middle=2, upper=1, similar=2), draw=DRAW)
 
     assert takes_by_bucket(sparse) == {
-        "fully_dissimilar": 6,
-        "lower_thin": 60,
+        "fully_dissimilar": 8,
+        "lower_thin": 30,
         "middle_coarse": 6,
-        "upper_thin": 6,
+        "upper_thin": 12,
         "fully_similar": 2,
     }
-    assert sum(sparse) == 80 < DRAW.pair_budget
+    assert sum(sparse) == 58 < DRAW.pair_budget
 
     empty_ends = allocate(SLICES, pools_of(dissimilar=0, similar=0), draw=DRAW)
 
     assert takes_by_bucket(empty_ends) == {
         "fully_dissimilar": 0,
-        "lower_thin": 60,
-        "middle_coarse": 30,
-        "upper_thin": 45,
+        "lower_thin": 30,
+        "middle_coarse": 15,
+        "upper_thin": 90,
         "fully_similar": 0,
     }
     assert sum(empty_ends) == 135 < DRAW.pair_budget
@@ -102,35 +109,43 @@ def test_sparse_buckets_and_short_ends_do_not_pad_other_buckets() -> None:
 
 def test_slice_overflow_factor_scales_per_slice_cap_without_exceeding_bucket_ceiling() -> None:
     """Sibling slices absorb at most per_slice_cap and never push a bucket past its ceiling."""
+    strict = DRAW.model_copy(update={"slice_overflow_factor": 1.0})
     pools = pools_of()
-    pools[1] = 3  # first lower_thin slice is sparse
-    strict_takes = allocate(SLICES, pools, draw=DRAW)
-    assert strict_takes[1:7] == (3, 10, 10, 10, 10, 10)
-    assert sum(strict_takes[1:7]) == 53 < 60
+    pools[1] = 2  # first lower_thin slice is sparse
+    strict_takes = allocate(SLICES, pools, draw=strict)
+    assert strict_takes[1:7] == (2, 5, 5, 5, 5, 5)
+    assert sum(strict_takes[1:7]) == 27 < 30
 
-    relaxed = DRAW.model_copy(update={"slice_overflow_factor": 1.5})
-    assert per_slice_cap(45, 6, overflow_factor=1.5) == 12
+    # Committed slice_overflow_factor=1.5 allows siblings to absorb up to ceil((B/k) * 1.5).
+    assert per_slice_cap(90, 12, overflow_factor=1.5) == 12
+    assert per_slice_cap(30, 6, overflow_factor=1.5) == 8
 
     one_upper = pools_of(upper=0)
     one_upper[10] = 100
-    assert allocate(SLICES, one_upper, draw=relaxed)[10:16] == (12, 0, 0, 0, 0, 0)
+    assert allocate(SLICES, one_upper, draw=DRAW)[10:22] == (12, *([0] * 11))
 
-    four_upper = pools_of(upper=0)
-    for index in range(10, 14):
-        four_upper[index] = 100
-    four_takes = allocate(SLICES, four_upper, draw=relaxed)[10:16]
-    assert four_takes == (12, 11, 11, 11, 0, 0)
-    assert sum(four_takes) == 45
+    eight_upper = pools_of(upper=0)
+    for index in range(10, 18):
+        eight_upper[index] = 100
+    eight_takes = allocate(SLICES, eight_upper, draw=DRAW)[10:22]
+    assert eight_takes == (12, 12, 11, 11, 11, 11, 11, 11, 0, 0, 0, 0)
+    assert sum(eight_takes) == 90
 
-    doubled = relaxed.model_copy(update={"pair_budget": 300})
+    # Scaling pair_budget scales per_slice_cap linearly with bucket budget.
+    doubled = DRAW.model_copy(update={"pair_budget": 300})
     assert per_slice_cap(
-        doubled.bucket_budgets()[PairBucket.LOWER_THIN], 6, overflow_factor=1.5
+        doubled.bucket_budgets()[PairBucket.UPPER_THIN], 12, overflow_factor=1.5
+    ) == 23
+    base_200 = DRAW.model_copy(update={"pair_budget": 200})
+    double_400 = DRAW.model_copy(update={"pair_budget": 400})
+    assert per_slice_cap(
+        double_400.bucket_budgets()[PairBucket.UPPER_THIN], 12, overflow_factor=1.5
     ) == 2 * per_slice_cap(
-        relaxed.bucket_budgets()[PairBucket.LOWER_THIN], 6, overflow_factor=1.5
+        base_200.bucket_budgets()[PairBucket.UPPER_THIN], 12, overflow_factor=1.5
     )
 
 
-@pytest.mark.parametrize("pair_budget", [1, 7, 20, 60, 150, 300])
+@pytest.mark.parametrize("pair_budget", [1, 7, 20, 60, 80, 150, 300])
 def test_sweeping_pair_budget_auto_scales_slices_and_respects_all_caps(pair_budget: int) -> None:
     """Any pair_budget >= 1 produces a drawable grid that respects bucket and slice caps."""
     scaled = DRAW.model_copy(update={"pair_budget": pair_budget})
@@ -172,7 +187,7 @@ def test_sweeping_pair_budget_auto_scales_slices_and_respects_all_caps(pair_budg
         pools_of(),
         pools_of(lower=1, middle=1, upper=1),
         pools_of(lower=7, middle=3, upper=40, similar=5, dissimilar=2),
-        [PLENTY, 0, 0, 0, 0, 0, 0, 2, 0, 9, 0, 0, 0, 0, 0, 4, 1],
+        [PLENTY, 0, 0, 0, 0, 0, 0, 2, 0, 9, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 1],
     ],
     ids=["plenty", "one each", "uneven", "mostly empty"],
 )
@@ -219,7 +234,7 @@ def test_a_budget_that_cannot_give_every_held_slice_a_pair_is_refused_by_name() 
 
 def test_the_allocation_is_a_function_of_its_inputs() -> None:
     """The same pools and the same settings give the same takes, which is what a re-run needs."""
-    pools = [4000, 3, 9, 1, 22, 40, 0, 12, 6, 2, 31, 7, 5, 8, 19, 40, 11]
+    pools = [4000, 3, 9, 1, 22, 40, 0, 12, 6, 2, 31, 7, 5, 8, 19, 40, 11, 6, 4, 9, 2, 15, 11]
 
     assert allocate(SLICES, pools, draw=DRAW) == allocate(SLICES, pools, draw=DRAW)
 

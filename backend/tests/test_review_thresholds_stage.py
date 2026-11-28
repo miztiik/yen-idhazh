@@ -68,9 +68,10 @@ PAIRS: Final = LedgerName.CONTENT_SIMILARITY_JUDGE_PAIR_VERDICTS
 HISTORY: Final = LedgerName.CONTENT_SIMILARITY_JUDGE_THRESHOLD_HISTORY
 JUDGE_CONFIG: Final = judge_settings.load(CONFIG_DIR)
 
-#: Two pairs in the fully similar end and one in the fully dissimilar end, so each lightly
-#: sampled end has a pool and a handful of answers. Every slice held three times what was drawn.
-ENDS: Final = [(0.95, "YES"), (0.96, "YES"), (0.40, "NO")]
+#: Two pairs in the fully similar end (above 0.99) and one in the fully dissimilar end (below
+#: 0.64), so each lightly sampled end has a pool and a handful of answers. Every slice held
+#: three times what was drawn.
+ENDS: Final = [(0.992, "YES"), (0.995, "YES"), (0.40, "NO")]
 DRIFT_DATE: Final = "2026-11-20"
 DRIFT_RUN: Final = "2026-11-21-10"
 RECIPE: Final = "b" * 64

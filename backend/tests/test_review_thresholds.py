@@ -80,7 +80,7 @@ class Run:
         ]
         window = [
             row
-            for day in evidence_days(date, window_nights=self.rules.window_nights)
+            for day in evidence_days(date, window_nights=self.rules.effective_max_window_nights)
             for row in self.pair_rows.get(day, [])
         ]
         row = build_threshold_row(
@@ -293,7 +293,8 @@ def test_no_night_moves_a_threshold_by_more_than_its_step_and_out_uses_the_large
     widest_out = max(abs(getattr(row, f"{outward}_move")) for row in shifted)
     widest_in = max(abs(getattr(row, f"{inward}_move")) for row in shifted)
 
-    assert widest_out == pytest.approx(RULES.widening_step, abs=1e-9)
+    assert widest_out <= RULES.widening_step + 1e-9
+    assert widest_out > RULES.narrowing_step
     assert widest_in == pytest.approx(RULES.narrowing_step, abs=1e-9)
 
 
@@ -418,3 +419,51 @@ def test_a_gap_is_only_a_night_in_a_row_when_the_nights_are_consecutive() -> Non
     assert run.history[-1].lower_nights_beyond_ignore_range == 2
     assert skipped.lower_nights_beyond_ignore_range == 1
     assert skipped.lower_held_because is ThresholdHoldReason.WAITING_FOR_SECOND_NIGHT
+
+
+def test_build_threshold_row_adapts_lower_and_upper_evidence_windows_independently() -> None:
+    """Upper stays at 7 nights when full while lower expands to 10 nights to clear 240 pairs."""
+    window: list[StorySimilarityPairVerdict] = []
+    for step in range(12):
+        day = a_day(step)
+        lower_pairs = [
+            (round(0.66 + 0.08 * (index + 0.5) / 24, 6), "YES" if index >= 22 else "NO")
+            for index in range(24)
+        ]
+        upper_pairs = [
+            (round(0.89 + 0.08 * (index + 0.5) / 40, 6), "YES" if index >= 10 else "NO")
+            for index in range(40)
+        ]
+        window.extend(
+            a_night_of_pairs(
+                [*lower_pairs, *upper_pairs],
+                date=day,
+                run_id=f"{day}-9",
+                first_index=step * 1000,
+            )
+        )
+
+    night = a_day(11)
+    row = build_threshold_row(
+        night,
+        run_id=f"{night}-9",
+        window=window,
+        history=(),
+        draw_rows=(),
+        readings=(),
+        expected_shards=4,
+        rules=RULES,
+        lookback_days_of_the_draw=LOOKBACK,
+        versions=CONFIG_VERSIONS,
+    )
+    assert row is not None
+    assert (row.upper_nights_used, row.upper_usable_pairs_used, row.upper_window_first_date) == (
+        7,
+        280,
+        a_day(5),
+    )
+    assert (row.lower_nights_used, row.lower_usable_pairs_used, row.lower_window_first_date) == (
+        10,
+        240,
+        a_day(2),
+    )

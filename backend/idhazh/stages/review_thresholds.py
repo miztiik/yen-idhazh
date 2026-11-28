@@ -65,8 +65,7 @@ from idhazh.similarity.threshold_evidence import (
     Evidence,
     MeaningStamp,
     Side,
-    current_pairs,
-    evidence_near,
+    adaptive_evidence_near,
     tonights_stamp,
 )
 from idhazh.similarity.threshold_move import PreviousNight, ThresholdMove, decide_move
@@ -206,7 +205,8 @@ def _one_threshold(
     side: Side,
     *,
     followed: ThresholdsInForce,
-    pairs: Sequence[StorySimilarityPairVerdict],
+    window: Sequence[StorySimilarityPairVerdict],
+    stamp: MeaningStamp | None,
     history: Sequence[StorySimilarityThresholdHistoryRow],
     night: str,
     nearest_other: float,
@@ -215,7 +215,16 @@ def _one_threshold(
     """Evidence, curve and move for one threshold, and its columns of the night's row."""
     before = followed.lower if side == "lower" else followed.upper
     share = rules.lower_share_level if side == "lower" else rules.upper_share_level
-    evidence = evidence_near(pairs, threshold=before, width=rules.near_threshold_width)
+    evidence = adaptive_evidence_near(
+        window,
+        night=night,
+        threshold=before,
+        width=rules.near_threshold_width,
+        min_window_nights=rules.window_nights,
+        max_window_nights=rules.effective_max_window_nights,
+        minimum_usable_pairs=rules.minimum_usable_pairs,
+        stamp=stamp,
+    )
     pull = pull_centre(
         steepness_by_night(history, side=side, night=night, window_nights=rules.pull_window_nights),
         minimum_nights=rules.pull_minimum_nights,
@@ -355,11 +364,11 @@ def build_threshold_row(
         upper_start=rules.upper_start,
     )
     _the_thresholds_the_draw_followed(tonight or draw_rows, followed)
-    pairs = current_pairs(window, stamp=stamp)
     lower_columns, lower, _ = _one_threshold(
         "lower",
         followed=followed,
-        pairs=pairs,
+        window=window,
+        stamp=stamp,
         history=history,
         night=date,
         nearest_other=followed.upper,
@@ -368,7 +377,8 @@ def build_threshold_row(
     upper_columns, _, upper_evidence = _one_threshold(
         "upper",
         followed=followed,
-        pairs=pairs,
+        window=window,
+        stamp=stamp,
         history=history,
         night=date,
         nearest_other=lower.threshold_after,

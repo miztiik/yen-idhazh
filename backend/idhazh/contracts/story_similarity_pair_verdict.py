@@ -124,11 +124,13 @@ FirstTokenWindow = Annotated[
 
 
 class PairBucket(StrEnum):
-    """Where a pair's score sat against the two thresholds, in the draw's five words.
+    """Where a pair's score sat against the draw's five score buckets.
 
-    Written in score order. The two ends are the lightly sampled buckets; the other three
-    are the ambiguous range between the thresholds: a thin run of slices at each threshold,
-    and coarse slices across the middle. A row says which allocation took the pair.
+    Written in score order. The two ends (`fully_dissimilar` and `fully_similar`) are the
+    single-slice lightly sampled buckets sitting outside the two straddling thin bands;
+    `lower_thin` and `upper_thin` straddle each threshold by `thin_band_half_width` (clamped
+    so each end keeps at least one `slice_width` slice), and `middle_coarse` fills the gap
+    between the two thin bands. A row says which allocation took the pair.
     """
 
     FULLY_DISSIMILAR = "fully_dissimilar"
@@ -294,8 +296,9 @@ class StorySimilarityPairVerdict(Contract):
     )
     bucket: PairBucket = Field(
         description=(
-            "Which of the draw's five buckets took the pair: the two lightly sampled ends, "
-            "the thin slices beside each threshold, or the coarse slices between them."
+            "Which of the draw's five buckets took the pair: the two single-slice lightly "
+            "sampled ends outside the straddling thin bands, the straddling thin slices "
+            "around each threshold, or the coarse slices between them."
         )
     )
     slice_low: float = Field(

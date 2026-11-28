@@ -136,13 +136,16 @@ def stamp(*, cosine_weight: float = 1.0) -> ScorerStamp:
 
 
 #: Every slice of the committed starts, and how many pairs each holds in the night below:
-#: the end under 0.70, six thin slices, three coarse ones, six thin ones, the end over 0.93.
+#: the end under 0.64, six straddling 0.02 lower slices, three coarse ones, twelve straddling
+#: 0.01 upper slices, and the end over 0.99.
 SLICE_EDGES: Final = [
-    (-1.0, 0.70), *[(0.70 + n / 100, 0.71 + n / 100) for n in range(6)],
+    (-1.0, 0.64),
+    *[(round(0.64 + 2 * n / 100, 2), round(0.66 + 2 * n / 100, 2)) for n in range(6)],
     (0.76, 0.80), (0.80, 0.84), (0.84, 0.87),
-    *[(0.87 + n / 100, 0.88 + n / 100) for n in range(6)], (0.93, 1.0),
+    *[(round(0.87 + n / 100, 2), round(0.88 + n / 100, 2)) for n in range(12)],
+    (0.99, 1.0),
 ]
-HELD: Final = [5000, *[30] * 6, *[60] * 3, *[20] * 6, 9]
+HELD: Final = [5000, *[30] * 6, *[60] * 3, *[20] * 12, 9]
 
 
 def a_night_of_pairs(
@@ -229,15 +232,15 @@ def test_a_pair_of_addresses_is_kept_once_and_as_the_night_s_own_copy() -> None:
 def test_each_slice_gives_the_number_the_allocation_names_and_the_row_says_what_it_held() -> None:
     """A hand-worked night: every slice holds enough to fill its proportional ceiling.
 
-    Under the committed starts 150 pairs go 6 to the dissimilar end, 60, 30 and 45 to the
-    thin lower, coarse and thin upper slices, and 9 to the similar end. Each pair says how
-    many its slice held and how many the draw took.
+    Under the committed starts 150 pairs go 8 to the dissimilar end, 30, 15 and 90 to the
+    straddling lower, coarse and straddling upper slices, and 7 to the similar end. Each pair
+    says how many its slice held and how many the draw took.
     """
     drawn = select(
         a_night_of_pairs(), lower=0.70, upper=0.93, draw=DRAW, date=DATE, stamp=stamp()
     )
 
-    expected = [6, 10, 10, 10, 10, 10, 10, 10, 10, 10, 8, 8, 8, 7, 7, 7, 9]
+    expected = [8, *[5] * 6, *[5] * 3, *[8] * 6, *[7] * 6, 7]
     assert [taken_by_slice(drawn)[edges] for edges in SLICE_EDGES] == expected
     assert len(drawn.taken) == DRAW.pair_budget
     assert drawn.pairs_available == sum(HELD)
@@ -252,13 +255,13 @@ def test_each_slice_gives_the_number_the_allocation_names_and_the_row_says_what_
 
 def test_select_leaves_unspent_budget_unused_and_auto_coarsens_small_budgets() -> None:
     """Sparse buckets draw fewer than pair_budget pairs, and small budgets select without error."""
-    sparse_held = [5000, *[30] * 6, *[0] * 3, *[0] * 6, 0]
+    sparse_held = [5000, *[30] * 6, *[0] * 3, *[0] * 12, 0]
     sparse = select(
         a_night_of_pairs(sparse_held), lower=0.70, upper=0.93, draw=DRAW, date=DATE, stamp=stamp()
     )
     by_bucket = Counter(one.slice.bucket for one in sparse.taken)
-    assert by_bucket == {PairBucket.FULLY_DISSIMILAR: 6, PairBucket.LOWER_THIN: 60}
-    assert len(sparse.taken) == 66 < DRAW.pair_budget
+    assert by_bucket == {PairBucket.FULLY_DISSIMILAR: 8, PairBucket.LOWER_THIN: 30}
+    assert len(sparse.taken) == 38 < DRAW.pair_budget
 
     small = DRAW.model_copy(update={"pair_budget": 7})
     coarsened = select(
@@ -712,8 +715,8 @@ def test_a_written_judge_file_moves_the_thresholds_the_draw_starts_from(
 ) -> None:
     """The starts are config, so a changed start changes the slice a pair is filed under.
 
-    A pair 12 degrees apart scores 0.978: the similar end under the committed 0.93, and a
-    thin slice under an upper start of 0.99.
+    A pair 12 degrees apart scores 0.978: inside the straddling upper thin band [0.87, 0.99)
+    under the committed 0.93, and in the similar end [0.96, 1.00] under an upper start of 0.90.
     """
     publish(
         tmp_path / "digest",
@@ -722,7 +725,7 @@ def test_a_written_judge_file_moves_the_thresholds_the_draw_starts_from(
         [0.0, 12.0],
     )
     raw = json.loads(read_text(CONFIG_DIR / "judges" / "content-similarity-judge.json"))
-    raw["thresholds"]["upper_start"] = 0.99
+    raw["thresholds"]["upper_start"] = 0.90
     target = tmp_path / "config" / "judges" / "content-similarity-judge.json"
     atomic_write.write_atomic(target, json.dumps(raw))
     atomic_write.write_atomic(
@@ -734,9 +737,9 @@ def test_a_written_judge_file_moves_the_thresholds_the_draw_starts_from(
     _, committed_rows = draw_the_night(tmp_path, monkeypatch, out="committed")
     _, moved_rows = draw_the_night(tmp_path, monkeypatch, settings=settings, out="moved")
 
-    assert [row.bucket for row in committed_rows] == [PairBucket.FULLY_SIMILAR]
-    assert [row.bucket for row in moved_rows] == [PairBucket.UPPER_THIN]
-    assert moved_rows[0].upper_threshold_in_force == 0.99
+    assert [row.bucket for row in committed_rows] == [PairBucket.UPPER_THIN]
+    assert [row.bucket for row in moved_rows] == [PairBucket.FULLY_SIMILAR]
+    assert moved_rows[0].upper_threshold_in_force == 0.90
 
 
 def test_a_day_that_is_not_on_disk_writes_an_empty_draw(tmp_path: Path) -> None:

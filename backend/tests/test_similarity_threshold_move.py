@@ -176,10 +176,10 @@ def test_a_move_does_not_reset_the_count() -> None:
 @pytest.mark.parametrize(
     ("side", "gap", "step"),
     [
-        ("lower", -0.04, 0.02),
-        ("lower", 0.04, 0.005),
-        ("upper", 0.04, 0.02),
-        ("upper", -0.04, 0.005),
+        ("lower", -0.03, 0.02),
+        ("lower", 0.03, 0.01),
+        ("upper", 0.03, 0.02),
+        ("upper", -0.03, 0.01),
     ],
     ids=["lower out", "lower in", "upper out", "upper in"],
 )
@@ -224,8 +224,8 @@ def test_the_far_gap_still_waits_for_its_second_night() -> None:
 
 
 def test_a_gap_just_inside_the_far_gap_is_still_a_near_gap_and_just_beyond_it_is_far() -> None:
-    assert lower(gap=-0.059).move_limited_by is ThresholdMoveLimit.WIDENING_STEP
-    assert lower(gap=-0.061).move_limited_by is ThresholdMoveLimit.FAR_GAP_STEP
+    assert lower(gap=-0.039).move_limited_by is ThresholdMoveLimit.WIDENING_STEP
+    assert lower(gap=-0.041).move_limited_by is ThresholdMoveLimit.FAR_GAP_STEP
 
 
 # --- the limits of the range --------------------------------------------------------------
@@ -312,19 +312,19 @@ def test_two_thresholds_narrowing_together_never_pass_the_smallest_gap() -> None
 
 
 def test_a_move_out_frees_the_other_threshold_to_come_in_by_as_much() -> None:
-    first = lower(before=0.80, gap=-0.04)
-    second = upper(before=0.92, gap=-0.05, other=first.threshold_after, previous=SECOND_NIGHT_OF_A_FALL)
+    first = lower(before=0.80, gap=-0.03)
+    second = upper(before=0.92, gap=-0.03, other=first.threshold_after, previous=SECOND_NIGHT_OF_A_FALL)
 
     assert first.threshold_after == pytest.approx(0.78)
-    assert second.threshold_after == pytest.approx(0.915)
+    assert second.threshold_after == pytest.approx(0.91)
     assert second.move_limited_by is ThresholdMoveLimit.NARROWING_STEP
 
 
 def test_every_word_of_the_move_vocabulary_is_reached_by_the_cases_above() -> None:
     reached = {
         lower(gap=-0.015).move_limited_by,
-        lower(gap=-0.04).move_limited_by,
-        lower(gap=0.04, previous=SECOND_NIGHT_OF_A_RISE).move_limited_by,
+        lower(gap=-0.03).move_limited_by,
+        lower(gap=0.03, previous=SECOND_NIGHT_OF_A_RISE).move_limited_by,
         lower(gap=-0.10).move_limited_by,
         lower(before=0.51, gap=-0.05).move_limited_by,
         upper(before=0.98, gap=0.05, other=0.80).move_limited_by,
