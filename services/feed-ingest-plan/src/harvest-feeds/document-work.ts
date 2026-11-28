@@ -1,6 +1,6 @@
 /** Project the existing fetch and parse facts as each bounded operation completes. */
 import { createChildContext, DocumentWorkFactSchema, NetworkFailureDetailsSchema, OperationMetadataSchema } from "@idhazh/common-contracts";
-import type { DocumentWorkFact, DropReason, ExtractionQuality, NetworkFailureDetails, FetchAttempt, OperationMetadata } from "@idhazh/common-contracts";
+import type { DocumentWorkFact, DropReason, ExtractionQuality, NetworkFailureDetails, FetchAttempt, OperationMetadata, SourceCooldownEvidence } from "@idhazh/common-contracts";
 import { observeDocument } from "./document-observation";
 import type { DocumentIdentity } from "./document-observation";
 import type { HarvestContext } from "./harvest-types";
@@ -34,6 +34,7 @@ export function documentWork(context: Context, identity: DocumentIdentity, opera
     feed_id: scope.feed_id, publisher_id: scope.publisher_id,
   };
   let destinationDomain: string | null = null;
+  let blockedByCooldown: SourceCooldownEvidence | undefined;
   const publish = (operation: "fetch" | "parse" | "quality", phase: "started" | "completed" | "failed",
     metadata: OperationMetadata, duration_ms: number | null, url?: string, failure_code?: string | null,
     quality_rejection?: QualityRejection,
@@ -45,6 +46,8 @@ export function documentWork(context: Context, identity: DocumentIdentity, opera
       ...(quality_rejection === undefined ? {} : { quality_rejection }),
       ...(phase === "failed" && operation === "fetch" && policyReason === undefined
         ? { destination_domain: destinationDomain, error_code: fetched?.error_code ?? null } : {}),
+      ...(phase === "failed" && operation === "fetch" && blockedByCooldown !== undefined
+        ? { source_cooldown: blockedByCooldown } : {}),
       ...(phase === "failed" && fetched?.body_limit != null ? {
         body_limit: fetched.body_limit,
       } : {}),
@@ -109,11 +112,15 @@ export function documentWork(context: Context, identity: DocumentIdentity, opera
             const attemptContext = createChildContext(operation);
             const observation = event("attempt", attemptContext, measurement.occurred_at);
             context.on_attempt?.(observation);
-            if (measurement.dispatched_request_count > 0) destinationDomain = measurement.destination_domain;
+            if (measurement.dispatched_request_count > 0 || measurement.source_cooldown !== undefined) {
+              destinationDomain = measurement.destination_domain;
+              blockedByCooldown = measurement.dispatched_request_count === 0 ? measurement.source_cooldown : undefined;
+            }
             if (measurement.outcome === "failed" && measurement.attempt.phase === "target" && measurement.dispatched_request_count > 0) {
               context.document_activity?.("request-attempt", "failed", {
                 scope: "request", ...document, destination_domain: measurement.destination_domain,
                 duration_ms: measurement.attempt.duration_ms,
+                ...(measurement.source_cooldown === undefined ? {} : { source_cooldown: measurement.source_cooldown }),
               }, undefined, undefined, failureDetails({
                 body: null, http_status: measurement.attempt.http_status, failure: measurement.attempt.failure,
                 final_attempted_url: measurement.final_attempted_url,

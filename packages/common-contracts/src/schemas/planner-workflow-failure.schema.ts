@@ -7,7 +7,7 @@ import { FeedHealthFieldUseSchema } from "./feed-health-fields.schema";
 import { ExtractionFailureSchema, ExtractionSignalSchema, FetchFailureSchema } from "./harvest-diagnostics.schema";
 import { PlannerErrorResponseSchema, PlannerFailureDetailSchema } from "./planner-failure.schema";
 import { FetchAttemptSchema } from "./planner-operation.schema";
-import { CandidateIdSchema, PositiveCountSchema, RunIdSchema, Sha256Schema, SlugSchema } from "./primitives";
+import { CandidateIdSchema, CountSchema, PositiveCountSchema, RunIdSchema, Sha256Schema, SlugSchema } from "./primitives";
 import { DropReasonSchema } from "./rejection.schema";
 
 export const PLANNER_WORKFLOW_FAILURE_TYPE = "planner.workflow-failure";
@@ -20,6 +20,11 @@ const HistoryCheckSchema = z.string().max(64).regex(/^(?:[a-z][a-z0-9_-]*|\$row)
 // Inventory notices can identify a calendar period, never a path or free text.
 const HistoryCauseSchema = z.string().max(64)
   .regex(/^[a-z][a-z0-9_-]*(?::(?:yearly|monthly|daily|\d{4}(?:-\d{2}){0,2}))?$/);
+const SourceCooldownEvidenceSchema = z.strictObject({
+  basis: z.enum(["retry-after-seconds", "retry-after-date", "missing-retry-after", "invalid-retry-after"]),
+  remaining_ms: CountSchema,
+});
+export type SourceCooldownEvidence = z.infer<typeof SourceCooldownEvidenceSchema>;
 const base = {
   version: z.literal(PLANNER_WORKFLOW_FAILURE_VERSION), run_id: RunIdSchema.max(identityLimit), attempt: PositiveCountSchema,
 };
@@ -36,11 +41,13 @@ export const PlannerWorkflowFailureDataSchema = z.discriminatedUnion("kind", [
   z.strictObject({
     ...base, ...document, ...target, kind: z.literal("failed-dispatch"), operation: z.literal("request-attempt"),
     cause: FetchFailureSchema.nullable(), sequence: FetchAttemptSchema.shape.sequence, retry: FetchAttemptSchema.shape.retry,
+    source_cooldown: SourceCooldownEvidenceSchema.nullable(),
   }),
   z.discriminatedUnion("operation", [
     z.strictObject({
       ...documentFailure, ...target, operation: z.literal("fetch"),
       cause: z.union([FetchFailureSchema, z.literal("FETCH_FAILED")]).nullable(),
+      source_cooldown: SourceCooldownEvidenceSchema.nullable(),
     }),
     z.strictObject({
       ...documentFailure, operation: z.literal("parse"),
@@ -76,7 +83,7 @@ export const PlannerWorkflowFailureSchema = CloudEventSchema.safeExtend({
   version: PLANNER_WORKFLOW_FAILURE_VERSION,
   readCompatibility: "current_only; the child and relay use the same schema",
   changelog: [
-    { version: PLANNER_WORKFLOW_FAILURE_VERSION, change: "Retain the native cause of a failed planner occurrence in workflow logs." },
+    { version: PLANNER_WORKFLOW_FAILURE_VERSION, change: "Retain native failure causes and source cooldown decisions in workflow logs." },
   ],
 });
 export type PlannerWorkflowFailure = z.infer<typeof PlannerWorkflowFailureSchema>;

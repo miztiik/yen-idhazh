@@ -130,10 +130,12 @@ export class RecordedTransport implements HarvestTransport {
       }
       if (response.error) throw Object.assign(new Error("recorded transport failure"), { code: response.error });
       if (response.status === undefined) throw new Error("recording is missing its observed status");
+      const headers = new Headers(response.headers);
+      input.observe_headers?.(response.status, headers.get("retry-after"));
       const body = response.fixture ? this.recordings.bodies[response.fixture] : response.body;
       if (body === undefined) throw new Error("recording is missing its observed body");
       const bytes = Buffer.byteLength(body);
-      const evidence = responseEvidence(new Headers(response.headers), input, bytes);
+      const evidence = responseEvidence(headers, input, bytes);
       if (bytes > input.max_body_bytes) throw new BodyLimitError(response.status, input.max_body_bytes, bytes, evidence);
       return { status: response.status, body, location: response.location ?? null, evidence };
     } finally { this.active--; }

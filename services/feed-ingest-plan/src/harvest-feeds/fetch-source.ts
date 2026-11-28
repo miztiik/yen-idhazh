@@ -1,18 +1,18 @@
 /** Fetch safe feed and article targets with bounded retries, redirects and native profiles. */
 import { FeedWebsiteGroupingConfigSchema, FetchAttemptSchema } from "@idhazh/common-contracts";
-import type { FeedIngestConfig, HttpResponseEvidence } from "@idhazh/common-contracts";
+import type { FeedIngestConfig, HttpResponseEvidence, SourceCooldownEvidence } from "@idhazh/common-contracts";
 import type { FetchFailure } from "./harvest-types";
 import type { ExtractionControls } from "./load-harvest-inputs";
 import { BodyLimitError, ResponseReadError, readBodyLimitEvidence } from "./transport";
 import { classifyTransportFailure, readTransportErrorCode } from "./classify-transport-failure";
 import { createImpitTransport } from "./impit-transport";
-import type { BodyLimitEvidence, HarvestTransport, TransportResponse } from "./transport";
+import type { BodyLimitEvidence, HarvestTransport, TransportRequest, TransportResponse } from "./transport";
 import { validateTargetName } from "./safe-target";
 import { diagnosticUrl } from "../logging/diagnostic-url";
 import type { FetchAttempt } from "../api/operation-contracts";
 import { utcTimestamp } from "./harvest-types";
 import { normalizeResourceUrl } from "./normalize-resource-url";
-import { createRequestPacing } from "./request-pacing";
+import { createRequestPacing, DispatchDeadlineError } from "./request-pacing";
 import type { RequestPacing } from "./request-pacing";
 
 export type FetchAttemptMeasurement = {
@@ -21,11 +21,14 @@ export type FetchAttemptMeasurement = {
   destination_domain: string | null;
   final_attempted_url: string | null;
   pacing_settings: FeedIngestConfig["harvest"]["request_pacing"];
+  source_cooldown?: SourceCooldownEvidence;
 };
 type AttemptCapture = {
   rows: FetchAttempt[]; final_attempted_url: string | null; publisher_id: string | null;
+  deadline: number;
   emit?: (measurement: FetchAttemptMeasurement) => Promise<void>;
 };
+type BeginAttempt = (signal: AbortSignal) => Pick<TransportRequest, "signal" | "timeout_ms">;
 
 export type FetchResult = {
   body: string | null;
@@ -78,29 +81,50 @@ export function createSourceFetcher(
     boundary.include_private_suffixes
       ?? FeedWebsiteGroupingConfigSchema.parse({}).include_private_suffixes,
   );
+  const backoffs = Array.from({ length: Math.max(1, controls.max_retries) }, (_, retry) =>
+    controls.backoff_initial_seconds * 1000 * controls.backoff_multiplier ** retry);
+  const retryWait = backoffs.slice(0, controls.max_retries).reduce((total, delay) => total + delay, 0);
+  const profileCount = config.request_headers.secondary === null ? 1 : 2;
+  const allowance = (config.fetch_timeout_ms * (controls.max_retries + 1) + retryWait) * profileCount;
   async function requestOnce(
     raw: string, profile: FeedIngestConfig["harvest"]["request_headers"]["primary"], signal: AbortSignal,
-    publisherId: string | null, dispatched: () => void, beginAttempt: (signal: AbortSignal) => AbortSignal,
-    recordPacingWait: (milliseconds: number) => void,
+    capture: AttemptCapture, dispatched: () => void, beginAttempt: BeginAttempt,
+    recordPacingWait: (milliseconds: number) => void, recordCooldown: (evidence: SourceCooldownEvidence) => void,
   ): Promise<TransportResponse> {
     const url = validateTargetName(raw);
     signal.throwIfAborted();
-    return pacing.run(url, publisherId, signal, async requestSignal => {
-      const attemptSignal = beginAttempt(requestSignal);
+    return pacing.run(url, capture.publisher_id, signal, async (requestSignal, observeResponse) => {
+      const timing = beginAttempt(requestSignal);
       dispatched();
-      return transport.request({
-        url, profile, diagnostics: config.response_diagnostics, signal: attemptSignal,
-        max_body_bytes: controls.max_body_bytes, timeout_ms: config.fetch_timeout_ms,
-      });
-    }, recordPacingWait);
+      let limited = false;
+      const observeRateLimit = (status: number, retryAfter: string | null) => {
+        if (limited || status !== 429) return;
+        limited = true;
+        observeResponse(status, retryAfter);
+      };
+      try {
+        const response = await transport.request({
+          url, profile, diagnostics: config.response_diagnostics, ...timing,
+          max_body_bytes: controls.max_body_bytes,
+          observe_headers: observeRateLimit,
+        });
+        if (response.status === 429) observeRateLimit(429, null);
+        else observeResponse(response.status, null);
+        return response;
+      } catch (error) {
+        if (error instanceof BodyLimitError || error instanceof ResponseReadError) observeRateLimit(error.http_status, null);
+        throw error;
+      }
+    }, recordPacingWait, { concurrency: config.concurrency, deadline: capture.deadline, backoffs, recordCooldown });
   }
 
   async function retry<T>(
     signal: AbortSignal, phase: FetchAttempt["phase"], attempts: AttemptCapture,
     execute: (
       signal: AbortSignal, dispatched: () => void,
-      beginAttempt: (signal: AbortSignal) => AbortSignal,
+      beginAttempt: BeginAttempt,
       recordPacingWait: (milliseconds: number) => void,
+      recordCooldown: (evidence: SourceCooldownEvidence) => void,
     ) => Promise<T>,
     status: (value: T) => number | null,
     request?: { url: string; profile: FeedIngestConfig["harvest"]["request_headers"]["primary"];
@@ -116,31 +140,37 @@ export function createSourceFetcher(
     } = {
       value: null, failure: "network", http_status: null, error_code: null,
     };
+    const expired = () => result.http_status === 429 ? result : { ...result, value: null, failure: "timeout" as const };
     for (let attempt = 0; attempt <= controls.max_retries; attempt++) {
-      if (signal.aborted) return { ...result, value: null, failure: "timeout" };
+      if (signal.aborted || performance.now() >= attempts.deadline) return expired();
+      const previous = result;
       const controller = new AbortController();
       let timer: ReturnType<typeof setTimeout> | undefined;
       let attemptSignal = signal;
       const beginAttempt = (current: AbortSignal) => {
         current.throwIfAborted();
-        timer = setTimeout(() => controller.abort(new DOMException("attempt deadline exceeded", "TimeoutError")), config.fetch_timeout_ms);
+        const timeout_ms = Math.min(config.fetch_timeout_ms, Math.ceil(attempts.deadline - performance.now()));
+        if (timeout_ms <= 0) throw new DispatchDeadlineError();
+        timer = setTimeout(() => controller.abort(new DOMException("attempt deadline exceeded", "TimeoutError")), timeout_ms);
         attemptSignal = AbortSignal.any([current, controller.signal]);
-        return attemptSignal;
+        return { signal: attemptSignal, timeout_ms };
       };
-      if (request === undefined) beginAttempt(signal);
       const started = performance.now();
       let pacing_wait_ms = 0;
       let dispatched_request_count = 0;
       let dispatchedAt: string | null = null;
+      let sourceCooldown: SourceCooldownEvidence | undefined;
       let failed = true;
       let classified = false;
       let evidence: FetchAttempt;
       try {
+        if (request === undefined) beginAttempt(signal);
         const value = await execute(signal, () => {
           dispatched_request_count++;
           dispatchedAt = utcTimestamp(clock);
         }, beginAttempt,
-          milliseconds => { pacing_wait_ms = milliseconds; });
+          milliseconds => { pacing_wait_ms = milliseconds; },
+          cooldown => { sourceCooldown = cooldown; });
         const http_status = status(value);
         result = { value, failure: http_status !== null && http_status >= 400 ? "http" : null, http_status, error_code: null,
           response_evidence: request?.evidence(value) ?? null };
@@ -149,7 +179,7 @@ export function createSourceFetcher(
       } catch (error) {
         const bodyLimit = readBodyLimitEvidence(error);
         result = {
-          value: null, failure: classifyTransportFailure(error, attemptSignal),
+          value: null, failure: error instanceof DispatchDeadlineError ? "timeout" : classifyTransportFailure(error, attemptSignal),
           http_status: error instanceof BodyLimitError || error instanceof ResponseReadError ? error.http_status : null,
           error_code: readTransportErrorCode(error),
           response_evidence: error instanceof ResponseReadError || error instanceof BodyLimitError ? error.response_evidence : null,
@@ -173,20 +203,27 @@ export function createSourceFetcher(
         await attempts.emit?.({
           attempt: evidence, occurred_at: dispatchedAt ?? utcTimestamp(clock), outcome: failed ? "failed" : "success",
           dispatched_request_count, request_coverage: "complete",
-          destination_domain: dispatched_request_count > 0 && request !== undefined
+          destination_domain: (dispatched_request_count > 0 || sourceCooldown !== undefined) && request !== undefined
             ? new URL(request.url).hostname.replace(/^\[|\]$|\.$/g, "") : null,
           final_attempted_url: attempts.final_attempted_url,
           pacing_settings: config.request_pacing,
+          ...(sourceCooldown === undefined ? {} : { source_cooldown: sourceCooldown }),
         });
+      }
+      if (request !== undefined && dispatched_request_count === 0 && result.failure === "timeout") {
+        return previous.http_status === 429 ? previous : result;
       }
       if (result.value !== null && (result.http_status === null || !retryableStatus.has(result.http_status))) return result;
       if (result.failure !== null && !["dns", "network", "timeout", "http"].includes(result.failure)) return result;
-      if (signal.aborted) return { ...result, value: null, failure: "timeout" };
-      if (attempt < controls.max_retries) {
+      if (signal.aborted) return expired();
+      if (attempt < controls.max_retries && !(config.request_pacing.enabled && result.http_status === 429)) {
         const waiting = performance.now();
         try {
-          await pause(controls.backoff_initial_seconds * 1000 * controls.backoff_multiplier ** attempt, signal);
-        } catch (error) { return { ...result, value: null, failure: classifyTransportFailure(error, signal) }; }
+          await pause(backoffs[attempt]!, signal);
+        } catch (error) {
+          if (signal.aborted) return expired();
+          throw error;
+        }
         finally { evidence.backoff_ms = Math.round(performance.now() - waiting); }
       }
     }
@@ -198,18 +235,22 @@ export function createSourceFetcher(
     profile: FeedIngestConfig["harvest"]["request_headers"]["primary"] = config.request_headers.primary,
     onDispatched?: () => void,
   ): Promise<RawResult> {
+    const first = attempts.rows.length;
     const result = await retry(signal, "target", attempts,
-      (current, dispatched, beginAttempt, recordPacingWait) => requestOnce(raw, profile, current,
-        attempts.publisher_id, () => {
+      (current, dispatched, beginAttempt, recordPacingWait, recordCooldown) => requestOnce(raw, profile, current,
+        attempts, () => {
         dispatched();
         onDispatched?.();
-      }, beginAttempt, recordPacingWait),
+      }, beginAttempt, recordPacingWait, recordCooldown),
       value => value.status, { url: raw, profile, evidence: value => value.evidence });
+    const failed = result.http_status === 429
+      ? attempts.rows.slice(first).findLast(attempt => attempt.http_status === 429)
+      : attempts.rows.at(-1);
     return {
       response: result.value, failure: result.failure, http_status: result.http_status,
       error_code: result.error_code,
       response_evidence: result.response_evidence ?? null,
-      failed_url: result.failure === null ? null : attempts.rows.at(-1)?.request_url ?? null,
+      failed_url: result.failure === null ? null : failed?.request_url ?? null,
       ...(result.body_limit === undefined ? {} : { body_limit: result.body_limit }),
     };
   }
@@ -220,6 +261,8 @@ export function createSourceFetcher(
   ): Promise<TargetResult> {
     const profiles = config.request_headers;
     const primary = await read(raw, signal, attempts, profiles.primary, onDispatched);
+    const lastAttempt = attempts.rows.at(-1);
+    if (primary.http_status === 429 || lastAttempt?.phase !== "target" || lastAttempt.request_profile === null) return primary;
     const success = (result: RawResult) => result.response !== null && result.failure === null
       && result.response.status >= 200 && result.response.status < 300;
     const bytes = (result: RawResult) => Buffer.byteLength(result.response?.body.trim() ?? "", "utf8");
@@ -334,15 +377,12 @@ export function createSourceFetcher(
     const operationSignal = externalSignal === undefined
       ? AbortSignal.any([controller.signal, pacing.signal])
       : AbortSignal.any([controller.signal, externalSignal, pacing.signal]);
+    // All target profiles and redirect hops share this bounded operation deadline.
     const attempts: AttemptCapture = {
       rows: [], final_attempted_url: null, publisher_id: publisherId,
+      deadline: performance.now() + allowance,
       ...(emit === undefined ? {} : { emit }),
     };
-    // All target profiles and redirect hops share this bounded operation deadline.
-    const backoff = Array.from({ length: controls.max_retries }, (_, retry) =>
-      controls.backoff_initial_seconds * 1000 * controls.backoff_multiplier ** retry).reduce((sum, value) => sum + value, 0);
-    const profileCount = [config.request_headers.primary, config.request_headers.secondary].filter(profile => profile !== null).length;
-    const allowance = (config.fetch_timeout_ms * (controls.max_retries + 1) + backoff) * profileCount;
     const timer = setTimeout(() => controller.abort(new DOMException("harvest deadline exceeded", "TimeoutError")), allowance);
     try {
       const result = await fetchTarget(raw, operationSignal, attempts, kind);

@@ -17,7 +17,6 @@ import type { observeDocument } from "../harvest-feeds/document-observation";
 import { createIngestObservations } from "../ingest-observations";
 import { prepareArticle } from "../harvest-feeds/prepare-article";
 import { readFeedOffer, updateFeedOffer } from "./feed-offer-state";
-import { workPool } from "../harvest-feeds/harvest-pool";
 import { fetchRejection, recordRejection } from "../harvest-feeds/record-rejection";
 import { fetchDiagnostics } from "../harvest-feeds/fetch-diagnostics";
 import { sourceSnapshot } from "../harvest-feeds/load-harvest-inputs";
@@ -33,7 +32,6 @@ import { stageStore } from "./stage-store";
 import { operationKey, operationMetadata } from "./operation-context";
 
 type FetchRequest = z.infer<typeof FetchRequestSchema>;
-const requestPools = new WeakMap<PlanInputs, ReturnType<typeof workPool>>();
 export function resolveFetchParent(request: FetchRequest, inputs: PlanInputs, runtime: PlanRuntime) {
   if (!("candidate_id" in request)) return null;
   const { batch, offer } = readFeedOffer(inputs, request.links[0], request.candidate_id);
@@ -119,15 +117,10 @@ export async function fetchDocument(
     }
     if (parent !== null) updateFeedOffer(inputs, state, parent.batch, parent.offer.candidate_id, "fetched", record.context);
   }
-  let permit = requestPools.get(inputs);
-  if (permit === undefined) { permit = workPool(inputs.harvest.config.harvest.concurrency); requestPools.set(inputs, permit); }
-  const bounded = permit;
   let result: Awaited<ReturnType<typeof work.fetch>>;
   try {
-    result = await bounded(() => {
-      runtime.signal?.throwIfAborted();
-      return work.fetch(state.fetcher, identity.canonical_url, runtime.signal);
-    });
+    runtime.signal?.throwIfAborted();
+    result = await work.fetch(state.fetcher, identity.canonical_url, runtime.signal);
   } catch (error) {
     if (request.fetch_item_type === "feed") {
       state.work.interruptFeed(source.id, record.context, utcTimestamp(runtime.observation_clock));

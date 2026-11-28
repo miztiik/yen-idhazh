@@ -1,9 +1,10 @@
 /** Exercise recorded address, sanitization and target-request failure boundaries. */
 import { expect, test } from "bun:test";
-import { createCandidateId, FeedUrlExclusionSchema } from "@idhazh/common-contracts";
+import { createCandidateId, FeedUrlExclusionSchema, PlannerWorkflowFailureDataSchema } from "@idhazh/common-contracts";
 import { sanitizeText, SANITIZER_VERSION } from "../src/harvest-feeds/sanitize-text";
 import { isPublicAddress, validateTargetName } from "../src/harvest-feeds/safe-target";
 import { createSourceFetcher } from "../src/harvest-feeds/fetch-source";
+import type { FetchAttemptMeasurement } from "../src/harvest-feeds/fetch-source";
 import { mapPool } from "../src/harvest-feeds/harvest-pool";
 import { matchUrlExclusion } from "../src/harvest-feeds/url-exclusions";
 import { fetchDiagnostics } from "../src/harvest-feeds/fetch-diagnostics";
@@ -18,6 +19,8 @@ import { deriveFeedIdentity } from "../src/harvest-feeds/feed-identity";
 import { matchMediaArticle, matchMediaOffer } from "../src/harvest-feeds/media-filter";
 import { harvestArticle } from "../src/harvest-feeds/harvest-article";
 import { sourceSnapshot } from "../src/harvest-feeds/load-harvest-inputs";
+import { recordedPlan } from "./plan-recordings";
+import { runFeedPlan } from "../src/run-feed-plan";
 
 test("recorded sanitizer vectors match sanitizer-3, keep prose and are idempotent", async () => {
   const fixture = await readSafety();
@@ -177,6 +180,99 @@ test("feed and article redirects dispatch only validated target hops", async () 
       ]);
     } finally { await fetcher.close(); }
   }
+});
+
+test("a redirect target's UTC cooldown survives a failed body read without relying on diagnostic headers", async () => {
+  const start = "https://start.example.net/feed";
+  const limited = "https://limited.example.com/story";
+  const domainSibling = "https://sibling.example.com/story";
+  const publisherSibling = "https://publisher.example.org/story";
+  const harvest = await inputs([], {
+    harvest: {
+      fetch_timeout_ms: 1000,
+      request_pacing: { enabled: true, domain_delay_ms: 0, publisher_delay_ms: 0, jitter_ms: 0 },
+      response_diagnostics: { header_names: ["content-type"], max_header_value_chars: 20 },
+    },
+    extraction: { max_body_bytes: 1024, max_retries: 1 },
+  });
+  const recordings = await readRecordings();
+  recordings.responses[start] = [{ status: 302, body: "", location: limited }];
+  recordings.responses[limited] = [{
+    status: 429, body: "x".repeat(1025), headers: { "retry-after": new Date(Date.now() + 60_000).toUTCString() },
+  }];
+  for (const url of [domainSibling, publisherSibling]) recordings.responses[url] = [{ status: 200, fixture: "article" }];
+  const transport = new RecordedTransport(recordings);
+  const fetcher = createSourceFetcher(harvest.config.harvest, harvest.extraction, { transport });
+  const measured: FetchAttemptMeasurement[] = [];
+  const capture = async (evidence: FetchAttemptMeasurement) => { measured.push(evidence); };
+  try {
+    expect(await fetcher.fetch(start, capture, "feed", undefined, "limited")).toMatchObject({
+      failure: "body-too-large", http_status: 429, final_attempted_url: limited,
+      response_evidence: { selected_headers: {} },
+    });
+    expect(await fetcher.fetch(domainSibling, capture)).toMatchObject({ failure: "timeout", http_status: null, final_attempted_url: null });
+    expect(await fetcher.fetch(publisherSibling, capture, "article", undefined, "limited"))
+      .toMatchObject({ failure: "timeout", http_status: null, final_attempted_url: null });
+    expect(measured.filter(attempt => attempt.attempt.phase === "target").map(value => [
+      value.attempt.http_status, value.dispatched_request_count, value.source_cooldown?.basis,
+    ])).toEqual([
+      [302, 1, undefined], [429, 1, "retry-after-date"], [null, 0, "retry-after-date"], [null, 0, "retry-after-date"],
+    ]);
+    expect(transport.requests.map(request => request.url.href)).toEqual([start, limited]);
+  } finally { await fetcher.close(); }
+});
+
+test("the combined planner keeps a healthy article moving through bounded document slots during a 429", async () => {
+  const fixture = await recordedPlan();
+  const { config, extraction } = fixture.inputs.harvest;
+  config.harvest.concurrency = 1;
+  config.harvest.fetch_timeout_ms = 2500;
+  config.harvest.request_pacing = { enabled: true, domain_delay_ms: 0, publisher_delay_ms: 0, jitter_ms: 0 };
+  config.harvest.request_headers.secondary = null;
+  extraction.max_retries = 1;
+  fixture.inputs.settings.listener.parser_concurrency = 1;
+  fixture.inputs.settings.listener.max_stage_batches = 4;
+  const feed = fixture.inputs.harvest.sources[0]!;
+  const recovering = "https://news.example/recovers";
+  const limited = "https://news.example/rate-limited";
+  const blocked = "https://news.example/not-dispatched";
+  const healthy = "https://unrelated.example/article";
+  const offers = [recovering, limited, blocked, healthy].map((url, index) =>
+    `<item><title>Recorded story ${index}</title><link>${url}</link></item>`).join("");
+  const responses = fixture.transport.recordings.responses;
+  responses[feed.url] = [{ status: 200, body: `<rss version="2.0"><channel><title>Recorded feed</title>${offers}</channel></rss>` }];
+  responses[recovering] = [
+    { status: 429, body: "", headers: { "retry-after": "1" } }, { status: 200, fixture: "article" },
+  ];
+  responses[limited] = [{ status: 429, body: "", headers: { "retry-after": "600" } }];
+  for (const url of [healthy, blocked]) responses[url] = [{ status: 200, fixture: "article" }];
+  try {
+    const result = await runFeedPlan({}, fixture.inputs, fixture.runtime);
+    expect(result.row.status).toBe("completed");
+    const requests = fixture.transport.requests.map(request => request.url.href);
+    expect(requests.filter(url => url !== healthy)).toEqual([feed.url, recovering, recovering, limited]);
+    expect(requests.indexOf(healthy)).toBeGreaterThan(requests.indexOf(recovering));
+    expect(requests.indexOf(healthy)).toBeLessThan(requests.lastIndexOf(recovering));
+    expect(fixture.transport.peak).toBe(1);
+    if (result.health === null || !("rows" in result.health)) throw new Error("The completed planner must retain its request counts");
+    expect(result.health.rows).toContainEqual(expect.objectContaining({ feed_id: feed.id, feed_requests: 1, article_requests: 4 }));
+    const native = fixture.events.filter(event => event.data.phase === "failed" && event.data.details.workflow_failure !== undefined)
+      .map(event => PlannerWorkflowFailureDataSchema.parse(event.data.details.workflow_failure));
+    const scope = (url: string) => deriveArticleIdentity(url).url_key;
+    expect(native).toContainEqual(expect.objectContaining({
+      kind: "failed-dispatch", document_id: scope(limited), http_status: 429, cause: "http",
+      source_cooldown: { basis: "retry-after-seconds", remaining_ms: 600_000 },
+    }));
+    expect(native).toContainEqual(expect.objectContaining({
+      kind: "document-failure", operation: "fetch", document_id: scope(limited), http_status: 429, cause: "http",
+    }));
+    expect(native).toContainEqual(expect.objectContaining({
+      kind: "document-failure", operation: "fetch", document_id: scope(blocked), destination_domain: "news.example",
+      http_status: null, cause: "timeout",
+      source_cooldown: expect.objectContaining({ basis: "retry-after-seconds" }),
+    }));
+    expect(native.some(event => event.kind === "failed-dispatch" && event.document_id === scope(blocked))).toBe(false);
+  } finally { await fixture.close(); }
 });
 
 test("permanent statuses do not retry; transient statuses use existing retry controls", async () => {
@@ -373,6 +469,17 @@ test("permanent statuses do not retry; transient statuses use existing retry con
     { transport: feedTransport }).fetch(target, undefined, "feed");
   expect(shortFeed).toMatchObject({ body: fixture.short_content, http_status: 200, failure: null });
   expect(feedTransport.requests.filter(request => request.url.href === target)).toHaveLength(1);
+  const limitedRecordings = await readRecordings();
+  limitedRecordings.responses[target] = [{ status: 429, body: "" }, { status: 200, fixture: "article" }];
+  const limitedTransport = new RecordedTransport(limitedRecordings);
+  const limitedFetcher = createSourceFetcher({
+    ...profileInputs.config.harvest,
+    request_headers: { ...profileInputs.config.harvest.request_headers, recoverable_http_statuses: [429] },
+  }, profileInputs.extraction, { transport: limitedTransport });
+  try {
+    expect(await limitedFetcher.fetch(target)).toMatchObject({ http_status: 429, failure: "http" });
+    expect(limitedTransport.requests.map(request => request.profile.browser)).toEqual(["firefox"]);
+  } finally { await limitedFetcher.close(); }
   const retryRecordings = await readRecordings();
   retryRecordings.responses[target] = [
     { status: 503, body: "" }, { status: 503, body: "" }, { status: 200, fixture: "article" },

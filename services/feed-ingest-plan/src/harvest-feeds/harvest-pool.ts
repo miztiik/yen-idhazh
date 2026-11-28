@@ -34,22 +34,6 @@ export async function mapPool<T, R>(items: readonly T[], concurrency: number, ex
   return output;
 }
 
-export function workPool(concurrency: number) {
-  PositiveCountSchema.parse(concurrency);
-  let active = 0;
-  const waiting: (() => void)[] = [];
-  return async <T>(execute: () => Promise<T>): Promise<T> => {
-    if (active >= concurrency) await new Promise<void>(resolve => waiting.push(resolve));
-    else active++;
-    try { return await execute(); }
-    finally {
-      const next = waiting.shift();
-      if (next === undefined) active--;
-      else next();
-    }
-  };
-}
-
 export async function harvestFeeds(
   inputs: HarvestInputs, context: HarvestContext,
   boundary: {
@@ -64,11 +48,6 @@ export async function harvestFeeds(
     include_private_suffixes: boundary.include_private_suffixes
       ?? inputs.config.curate_articles.website_grouping.include_private_suffixes,
   }, context.observation_clock);
-  const permit = workPool(inputs.config.harvest.concurrency);
-  const boundedFetcher: Pick<typeof fetcher, "fetch"> = {
-    fetch: (url, emit, kind, signal, publisherId) =>
-      permit(() => fetcher.fetch(url, emit, kind, signal, publisherId)),
-  };
   const ownedPool = context.parser_pool ?? new ArticleParserPool(inputs.config.harvest.concurrency);
   const runContext = { ...context, parser_pool: ownedPool,
     parser_options: { ...context.parser_options, timeout_ms: inputs.config.harvest.parse_timeout_ms } };
@@ -86,7 +65,7 @@ export async function harvestFeeds(
         return { outcome, articles: [], rejection: null };
       }
       context.progress?.("FEED_FETCH_STARTED", { feed_id: source.feed_id });
-      const feed = await readFeed(source, boundedFetcher, runContext, inputs.config.harvest.fetch_timeout_ms);
+      const feed = await readFeed(source, fetcher, runContext, inputs.config.harvest.fetch_timeout_ms);
       context.on_feed?.(feed.outcome, feed.entries, utcTimestamp(context.observation_clock));
       context.progress?.("FEED_FETCH_COMPLETED", { feed_id: source.feed_id, output_count: feed.entries.length });
       const offeredArticles: OfferedArticle[] = feed.entries.map(entry => ({
@@ -96,7 +75,7 @@ export async function harvestFeeds(
       const articles = await mapPool(offeredArticles, inputs.config.harvest.concurrency, async offered => {
         if (feed.parse === null) throw new Error("Offered article requires its completed feed parse");
         context.progress?.("ARTICLE_HARVEST_STARTED", { feed_id: source.feed_id, candidate_id: offered.candidate_id });
-        const result = await harvestArticle(offered, inputs, boundedFetcher, runContext);
+        const result = await harvestArticle(offered, inputs, fetcher, runContext);
         context.on_article?.(result);
         context.progress?.("ARTICLE_HARVEST_COMPLETED", {
           feed_id: source.feed_id, candidate_id: offered.candidate_id, output_count: result.candidate === null ? 0 : 1,
