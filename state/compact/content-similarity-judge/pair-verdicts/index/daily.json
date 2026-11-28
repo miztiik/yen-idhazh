@@ -11,7 +11,8 @@
     {"bytes": 62277,"covers": "2026-11-22","rows": 150},
     {"bytes": 61022,"covers": "2026-11-23","rows": 150},
     {"bytes": 61907,"covers": "2026-11-24","rows": 150},
-    {"bytes": 62407,"covers": "2026-11-25","rows": 150}
+    {"bytes": 62407,"covers": "2026-11-25","rows": 150},
+    {"bytes": 88140,"covers": "2026-11-26","rows": 300}
   ],
   "ledger": "pair-verdicts",
   "period": "daily",

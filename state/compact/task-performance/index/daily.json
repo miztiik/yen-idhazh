@@ -1,6 +1,8 @@
 {
   "coverage": [],
-  "entries": [],
+  "entries": [
+    {"bytes": 17381,"covers": "2026-11-26","rows": 73}
+  ],
   "ledger": "task-performance",
   "period": "daily",
   "version": "2026-11-25"
