@@ -48,13 +48,16 @@ class ReviewDays:
 def review_days(night: str, *, config: ContentSimilarityJudgeConfig) -> ReviewDays:
     """Name the sparse checkout and review windows for the fit and for drift.
 
-    **Guardrail #12 declaration.** Pair verdicts still use `thresholds.window_nights` ending on
-    the night. History covers the maximum of the draw lookback, the pull window, and the drift
-    lookback, all ending before the night. The fit keeps only its original draw and pull days.
+    **Guardrail #12 declaration.** Pair verdicts cover `thresholds.effective_max_window_nights`
+    ending on the night, bounding both the adaptive evidence window and the sparse checkout.
+    History covers the maximum of the draw lookback, the pull window, and the drift lookback,
+    all ending before the night. The fit keeps only its original draw and pull days.
     """
     fit_window = max(config.draw.thresholds_lookback_days, config.thresholds.pull_window_nights)
     return ReviewDays(
-        pair_verdicts=evidence_days(night, window_nights=config.thresholds.window_nights),
+        pair_verdicts=evidence_days(
+            night, window_nights=config.thresholds.effective_max_window_nights
+        ),
         threshold_history=lookback_days(
             night, within_days=max(fit_window, config.diagnostics.score_baseline_lookback_days)
         ),

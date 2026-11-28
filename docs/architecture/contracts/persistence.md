@@ -1,6 +1,6 @@
 # The Ledger Door: Parquet and JSON Lines Under state/raw and state/compact
 
-**Last Updated**: 2026-11-25
+**Last Updated**: 2026-11-28
 
 How a contract payload reaches disk under `state/raw/` and `state/compact/`, how it comes back, and how the parquet engine is swapped. The door is `backend/idhazh/ledger/persist.py`; everything a producer needs is two calls, `ledger.persist` and `ledger.load`. The registry and the lifecycle statuses are [ledger-registry.md](ledger-registry.md), what each ledger answers is [state-ledgers.md](state-ledgers.md), and the shape of a contract is [schemas.md](schemas.md).
 
@@ -317,7 +317,7 @@ Every ledger whose rows a later run settles files through the door. The table sa
 | run plans | `stages.plan`, through `ledger.persist` | `stages.common._load_plan`, through `ledger.load_days` for one named UTC day, keeping the plan of the run `--execution` names | the day its `date` names |
 | council run records | `council.session._collect`, through `ledger.persist` in the `save_council_results` job | the Records explorer, through the ledger door | the judged day its `date` names |
 | holdout marks | `backend/utilities/sample_sheet.py --harvest`, a person's command, through `ledger.persist` with job `operator` | the Judgement page through `markedPairs` in `frontend/src/lib/server/content-similarity-holdout.ts`, over `similarity.holdout_reach_days` | the day the marks were made, because the row has no `date` field |
-| similarity judge's pair verdicts | `stages.file_pair_verdicts`, through `ledger.persist` in the `save_council_results` job, under the council's writer identity | `content_similarity_judge.ledger_reads.load_pair_verdicts`, read by the tenant's scheduler over the days the council offers and by `stages.review_thresholds` over the last `window_nights` days, with tonight's own rows read raw through `load_pair_verdicts_filed_on` | the judged day its `date` names |
+| similarity judge's pair verdicts | `stages.file_pair_verdicts`, through `ledger.persist` in the `save_council_results` job, under the council's writer identity | `content_similarity_judge.ledger_reads.load_pair_verdicts`, read by the tenant's scheduler over the days the council offers and by `stages.review_thresholds` over the days `review_days` names (up to `max_window_nights`), with tonight's own rows read raw through `load_pair_verdicts_filed_on` | the judged day its `date` names |
 | similarity judge's threshold history | `stages.review_thresholds`, through `ledger.persist` in the `save_council_results` job after the pair verdicts, under the same identity | `content_similarity_judge.ledger_reads.load_threshold_history`, read by `stages.pick_item_pairs` over `thresholds_lookback_days` days before the night and by `stages.review_thresholds` over the days `review_days` names | the judged day its `date` names |
 
 Each writer names the commit its run checked out, which is why `idhazh plan`, `record`, `fingerprint` and `job-clock` take `--commit` as `idhazh assemble` always did, and a gardener run takes `--git-sha`. No job has to ask for the parquet engine to reach these ledgers, because pyarrow is part of the base install ([What it costs to install](#what-it-costs-to-install)).

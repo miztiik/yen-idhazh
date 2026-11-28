@@ -1,6 +1,6 @@
 # How the content-similarity judge follows its thresholds
 
-**Last Updated**: 2026-11-27
+**Last Updated**: 2026-11-28
 
 Which pairs of stories does the nightly judge read, what does it keep about each, and
 where do its two thresholds sit and move? This page owns the nightly draw, the rows it
@@ -25,10 +25,11 @@ check. Because the sample is uneven on purpose, every pair carries the chance it
 being read, so a night's totals can be rebuilt from the rows alone.
 
 The same rows then say where the thresholds belong. Each night the judge reads its own
-answers from the last seven nights that scored near each threshold, fits a curve through
-them, and moves the threshold toward the score where the curve says the same-story share
-reaches the threshold's level: out quickly, in slowly, a step at a time, with every
-number behind the move written down.
+answers from a bounded adaptive window (`window_nights` = 7 up to `max_window_nights` = 28
+nights ending on the night) that scored near each threshold, excluding identical-headline
+overrides (`headline=True`), fits a curve through them, and moves the threshold toward the
+score where the curve says the same-story share reaches the threshold's level: out quickly,
+in slowly, a step at a time, with every number behind the move written down.
 
 ## Words this page uses
 
@@ -41,14 +42,14 @@ number behind the move written down.
 | Ambiguous range | The scores between the two thresholds, where the judge's answers are mixed |
 | Slice | A narrow range of scores that has its own sampling chance. The score range from -1 to 1 is cut into slices every night |
 | Bucket | A group of slices: `fully_dissimilar`, `lower_thin`, `middle_coarse`, `upper_thin`, `fully_similar` |
-| Thin slices | The run of narrow slices that starts at the lower threshold, and the run that ends at the upper one |
-| Coarse slices | The wider slices that fill the range between the two thin runs |
-| Lightly sampled ends | The two buckets beyond the thresholds, sampled lightly as live checks on the judge |
+| Thin slices | The straddling band of narrow slices within `draw.thin_band_half_width` on both sides of each threshold, clamped so each lightly sampled end keeps at least one `slice_width` slice |
+| Coarse slices | The wider slices that fill the range between the two thin bands |
+| Lightly sampled ends | The two single-slice buckets outside the straddling thin bands (`fully_dissimilar` below the lower band, `fully_similar` above the upper band), sampled lightly as live checks on the judge |
 | Sampling chance | Usable pairs over available pairs, for one slice on one night: the chance a pair of that slice was both taken and usable |
 | Weight | One over the sampling chance. A usable pair stands for that many pairs of its slice |
 | Thresholds in force | The two thresholds a night's draw followed |
 | Share level | The same-story share that defines a threshold: 0.05 for the lower one and 0.90 for the upper one. A threshold is the score where the fitted curve reaches it |
-| Evidence | The usable pairs that scored within 0.06 of a threshold in the last seven nights, read the way tonight's were |
+| Evidence | The usable non-headline pairs that scored within 0.06 of a threshold over the threshold's adaptive window (7 to 28 nights ending on the night), read the way tonight's were |
 | Curve | The rise of the same-story share with the score, fitted to the evidence as a logistic curve with an intercept and a steepness |
 | Pull | A soft tug that keeps the curve's steepness near its recent median, so thin evidence can shift the curve and cannot tilt it |
 | Estimate | The score where the curve reaches the threshold's share level |
@@ -75,7 +76,7 @@ flowchart TD
   FILE --> LEDGER[("pair-verdicts<br/>One row a pair, with its sampling chance")]
   JUDGE --> READING["Each runner's reading of its own instrument,<br/>with its known-answer answers beside it"]
   READING --> FILE
-  LEDGER --> REVIEW["review-thresholds, once a night, after the filing<br/>Read the last 7 nights, fit each curve, move or hold"]
+  LEDGER --> REVIEW["review-thresholds, once a night, after the filing<br/>Read up to 28 nights (7-28d adaptive), fit each curve, move or hold"]
   FILE -->|"this attempt's filed batch"| REVIEW
   DRAW --> REVIEW
   READING --> REVIEW
@@ -105,8 +106,10 @@ by the judging stage and is described under [the known-answer pairs](#the-known-
   and counts the readings the runners shipped. A night with a lost runner files the
   rows the others returned.
 - **Review** ([review_thresholds.py](../../../backend/idhazh/stages/review_thresholds.py))
-  runs in the collecting job right after the filing. It calls no model. It reads the
-  last seven nights of `pair-verdicts` for the fit. It uses the draw and this attempt's
+  runs in the collecting job right after the filing. It calls no model. It reads up to
+  `thresholds.max_window_nights` (28) nights of `pair-verdicts`, expanding each threshold
+  independently from `thresholds.window_nights` (7) up to 28 nights until it reaches
+  `minimum_usable_pairs`. It uses the draw and this attempt's
   exact filed batch for the sample readings, and the reports for runner and known-answer
   readings. It uses the [full-pool histogram](#which-pairs-the-draw-can-take) carried by
   preparation for drift. It files the threshold decisions and the readings in
@@ -166,21 +169,30 @@ like ([why](#design-rationale)).
 ## The slices
 
 The two thresholds are rounded onto a grid of `draw.slice_width`, the lower one down and
-the upper one up, so the range between them is never narrower than they say and a
-lightly sampled end never reaches past the threshold it lies beyond. The grid is counted
-in whole slices, because `floor(0.58 / 0.01)` is 57 in floating point. Starts that leave
-no room for both thin runs, or for a lightly sampled end, are refused when the file is
-read, by the same rounding the draw uses.
+the upper one up, so the range between them is never narrower than they say. The grid is
+counted in whole slices, because `floor(0.58 / 0.01)` is 57 in floating point. Each
+threshold's thin band straddles `draw.thin_band_half_width` (0.06, a whole number of thin
+slices) on both sides of the rounded threshold, with outer edges clamped so each lightly
+sampled end (`fully_dissimilar` and `fully_similar`) always keeps at least one
+`slice_width` slice before -1 or 1:
 
-At the committed starts of 0.70 and 0.93, the range from -1 to 1 is 17 slices:
+- `lower_band_start = max(-1.0 + slice_width, lower_grid - thin_band_half_width)`
+- `lower_band_end = lower_grid + thin_band_half_width`
+- `upper_band_start = upper_grid - thin_band_half_width`
+- `upper_band_end = min(1.0 - slice_width, upper_grid + thin_band_half_width)`
+
+Starts that leave the two straddling thin bands overlapping, or leave no room for a lightly
+sampled end, are refused when the file is read, by the same rounding the draw uses.
+
+At the committed starts of 0.70 and 0.93 (with `pair_budget = 150`, `bucket_weights = 5 / 20 / 10 / 60 / 5`, `thin_band_half_width = 0.06`, and `min_pairs_per_slice = 3`), the range from -1 to 1 is 23 slices:
 
 | Bucket | Slices | Edges |
 | --- | ---: | --- |
-| `fully_dissimilar` | 1 | -1.00 to 0.70 |
-| `lower_thin` | 6 | six slices of 0.01 from 0.70 to 0.76 |
+| `fully_dissimilar` | 1 | -1.00 to 0.64 |
+| `lower_thin` | 6 | six slices of 0.02 from 0.64 to 0.76, with 0.70 on an exact edge |
 | `middle_coarse` | 3 | 0.76 to 0.80, 0.80 to 0.84, 0.84 to 0.87 |
-| `upper_thin` | 6 | six slices of 0.01 from 0.87 to 0.93 |
-| `fully_similar` | 1 | 0.93 to 1.00 |
+| `upper_thin` | 12 | twelve slices of 0.01 from 0.87 to 0.99, with 0.93 on an exact edge |
+| `fully_similar` | 1 | 0.99 to 1.00 |
 
 A score on an edge belongs to the slice above it, and the top slice holds 1.0, which a
 shared headline scores outright. The last coarse slice is the remainder when the middle
@@ -190,13 +202,21 @@ Multi-slice buckets (`lower_thin`, `middle_coarse`, `upper_thin`) auto-coarsen f
 planned budget `B` (`DrawConfig.bucket_budgets()`) and `draw.min_pairs_per_slice`:
 
 - When a bucket's span has zero grid ticks (for example, `middle_coarse` when the
-  thresholds sit exactly two thin runs apart), it emits zero slices.
+  thresholds sit exactly two thin half-widths apart), it emits zero slices.
 - When `B` is zero under a tiny `draw.pair_budget`, the bucket emits one full-span slice
   so the grid still partitions -1 to 1 contiguously, and the allocator assigns it zero
   pairs.
-- When `B >= 1`, the bucket allows at most `max(1, B // draw.min_pairs_per_slice)` slices
-  and widens its step to `max(base_step, ceil(span_ticks / max_slices))`, so every funded
-  bucket emits at most `B` slices and never starves a non-empty slice.
+- For `middle_coarse` with `B >= 1`, the bucket allows at most
+  `max_slices = max(1, B // draw.min_pairs_per_slice)` slices and widens its step to
+  `max(coarse_ticks, ceil(span_ticks / max_slices))`.
+- For straddling thin buckets (`lower_thin`, `upper_thin`) with `B >= 1` and
+  `max_slices >= 2`, `[band_start, threshold_tick)` and `[threshold_tick, band_end)` are
+  partitioned separately using the smallest divisor `step` of `half_ticks` such that
+  `ceil(below_ticks / step) + ceil(above_ticks / step) <= max_slices` (falling back to one
+  full-span slice only when `B == 0` or `max_slices == 1`). Each threshold stays on an
+  exact slice edge across budgets: with `5 / 20 / 10 / 60 / 5` and `min_pairs_per_slice = 3`,
+  `upper_thin` stays `12 x 0.01` at budgets 80, 150 and 300, while `lower_thin` coarsens
+  cleanly to `4 x 0.03` at 80, `6 x 0.02` at 150 and `12 x 0.01` at 300.
 
 ## How many pairs each slice gives
 
@@ -207,28 +227,28 @@ night's pairs in each slice and the budget, and gives each slice a whole number.
    `DrawConfig.bucket_budgets()` splits `draw.pair_budget` in proportion to the five
    relative weights in `draw.bucket_weights` (`fully_dissimilar`, `lower_thin`,
    `middle_coarse`, `upper_thin`, `fully_similar`), breaking remainder ties by descending
-   weight and then score order. At 150 pairs with weights 4, 40, 20, 30 and 6, the five
-   planned ceilings are 6, 60, 30, 45 and 9.
+   weight and then score order. At 150 pairs with weights 5, 20, 10, 60 and 5, the five
+   planned ceilings are 8, 30, 15, 90 and 7.
 2. **Each bucket stops at its planned ceiling; unspent pairs stay unspent.** A bucket
    that holds fewer pairs than its ceiling - including a short lightly sampled end or a
    sparse interior bucket - never hands leftover pairs to another bucket. Sparse nights
    therefore draw fewer than `draw.pair_budget` pairs rather than padding busier buckets.
 3. **Inside a bucket, slices share the ceiling evenly up to a relative per-slice cap.**
    Before sharing ceiling `B` across `k` slices, each slice pool is capped at
-   `ceil((B / k) * draw.slice_overflow_factor)`. At the default `1.0`, no slice absorbs
-   extra pairs when sibling slices are sparse; raising the factor scales sibling capacity
-   linearly with `draw.pair_budget` without exceeding `B`.
+   `ceil((B / k) * draw.slice_overflow_factor)`. At the committed `1.5`, a sibling slice
+   can absorb up to 1.5x the bucket's average share when neighbors are sparse (12 in
+   `upper_thin`, 8 in `lower_thin` and `middle_coarse` at 150 pairs) without exceeding `B`.
 
 At the committed settings, on a night where every slice holds at least its share, the 150
 pairs fall like this:
 
 | Bucket | Pairs a slice, lowest slice first | Pairs |
 | --- | --- | ---: |
-| `fully_dissimilar` | 6 | 6 |
-| `lower_thin` | 10, 10, 10, 10, 10, 10 | 60 |
-| `middle_coarse` | 10, 10, 10 | 30 |
-| `upper_thin` | 8, 8, 8, 7, 7, 7 | 45 |
-| `fully_similar` | 9 | 9 |
+| `fully_dissimilar` | 8 | 8 |
+| `lower_thin` | 5, 5, 5, 5, 5, 5 | 30 |
+| `middle_coarse` | 5, 5, 5 | 15 |
+| `upper_thin` | 8, 8, 8, 8, 8, 8, 7, 7, 7, 7, 7, 7 | 90 |
+| `fully_similar` | 7 | 7 |
 
 Because `slice_grid` auto-coarsens every funded multi-slice bucket to at most `B` slices,
 any `draw.pair_budget >= 1` produces a drawable grid where every non-empty slice in a
@@ -496,24 +516,35 @@ read, so a night can be worked again from its row and `pair-verdicts` alone.
 
 ### The evidence
 
-The evidence for a threshold is the usable pairs from the last `window_nights` nights
-(seven, ending on the night) that scored within `near_threshold_width` (0.06) of where
-the threshold stood that night, on either side and edges included. Three rules decide
-which rows count:
+The evidence for a threshold is selected independently for `lower` and `upper` from a
+bounded adaptive window of `pair-verdicts`: starting from the newest `window_nights` (7)
+UTC days ending on the night, and expanding backward one UTC day at a time up to
+`max_window_nights` (28) until at least `minimum_usable_pairs` (240) usable non-headline
+pairs score within `near_threshold_width` (0.06) of where the threshold stood that night
+(edges included), or stopping at `max_window_nights` if still short. Stopping depends only
+on the usable pair count, never on the verdicts. Four rules decide which rows count:
 
-- **Each pair counts once, by its newest row.** A re-run judges the same pairs again and
-  both runs keep their rows. The row filed last counts, whatever it says, and it is
-  chosen before anyone asks whether it is usable: a newer reading that disagreed with
-  itself is the pair's reading now, and the older agreeing one is not kept beside it.
+- **Each pair counts once, by its newest row.** A re-run or repeat across days keeps all
+  its rows in the ledger. The row filed last inside the bounded maximum window counts,
+  whatever it says, and it is chosen before anyone asks whether it is usable: a newer
+  reading that disagreed with itself is the pair's reading now, and an older agreeing one
+  is not kept beside it.
 - **Only pairs read the way tonight's were count.** A different judge model, prompt,
   grammar, scorer, cosine weight or judge policy changes what an answer means, so
   such pairs are left out and the window restarts by itself the next night. A night
   nothing was judged on has no meaning stamp and so no evidence.
 - **Only usable pairs count.** An answer is "the same story" for a YES, and not for a NO
   or an UNCLEAR.
+- **Identical-headline overrides stay out of cosine fits.** Pairs with `headline=True`
+  score 1.0 outright by rule rather than by cosine, so `evidence_near` excludes them from
+  the logistic curve fit while they remain judged and counted in `fully_similar` end
+  diagnostics.
 
-A window with fewer than seven nights holds the nights there are, and `nights_used` on the
-row says how many. The review of a night reads only the days up to that night, so the
+Because `upper_thin` receives 60 percent of the nightly budget and `lower_thin` receives
+20 percent, `upper` ordinarily reaches 240 usable pairs inside the 7-night minimum window
+while `lower` expands cleanly (for example to about 10 nights at 150 pairs a night) to
+clear 240 without stalling. `nights_used` on the row says how many distinct nights
+contributed pairs. The review of a night reads only the days up to that night, so the
 council can settle an older night after a newer one and the older night is worked out as
 if the newer one did not exist.
 
@@ -579,8 +610,8 @@ not reset the count: after a move the gap is measured from the new threshold, an
 still beyond the range on the same side is still a night in a row.
 
 Otherwise the threshold moves by the gap, cut to a step: `widening_step` (0.02) when
-moving out, `narrowing_step` (0.005) when moving in, and `far_gap_step` (0.02) either
-way when the gap is over `far_gap` (0.06). A gap smaller than its step is taken whole.
+moving out, `narrowing_step` (0.01) when moving in, and `far_gap_step` (0.02) either
+way when the gap is over `far_gap` (0.04). A gap smaller than its step is taken whole.
 
 Three limits come after the step: the lower threshold stops at `lowest_lower_threshold`
 (0.50), the upper at `highest_upper_threshold` (0.99), and neither comes closer to the
@@ -647,12 +678,14 @@ a night nothing ran from one that ran and lost everything.
   lowest_allowed, highest_allowed and smallest_gap. **`held_because` is one of** none,
   not_enough_evidence, fit_failed, within_ignore_range and waiting_for_second_night. `none`
   means the threshold moved, or that nothing cut the move.
-- **The lightly sampled ends** take their pool, the pairs the draw found there, from the
+- **The lightly sampled ends** summarize the two single-slice end buckets outside the
+  straddling thin bands (`fully_similar` above the upper band and `fully_dissimilar`
+  below the lower band). They take their pool, the pairs the draw found there, from the
   draw file, because an end whose rows were all lost leaves none in `pair-verdicts`. The
   estimated totals weight each usable pair by one over its sampling chance:
-  `above_upper_same_story_estimated` adds the weights of the YES pairs above the upper
-  threshold, and `below_lower_different_story_estimated` the weights of the pairs below
-  the lower one that were not YES. Each is empty when no pair there was usable. With a
+  `above_upper_same_story_estimated` adds the weights of the YES pairs in `fully_similar`,
+  and `below_lower_different_story_estimated` the weights of the pairs in
+  `fully_dissimilar` that were not YES. Each is empty when no pair there was usable. With a
   handful of pairs a night they are an alarm and never move a threshold.
 - **The runner columns are sums over the runners that reported.** A runner that never
   reported is in no sum, so the four endings still add up to `pairs_dealt` on a night that
@@ -764,11 +797,11 @@ below 0.88 had been judged, so they are provisional until the first seven real n
 | --- | ---: | --- |
 | `draw.pair_budget` | 150 | Maximum live pairs a night. Sparse nights may draw fewer. The judge refuses a full budget its shards cannot finish inside the council's window |
 | `draw.slice_width` | 0.01 | Thin slice width, and the grid every edge sits on |
-| `draw.thin_slices_each_end` | 6 | Thin slices at each threshold |
+| `draw.thin_band_half_width` | 0.06 | Half-width on each side of each threshold covered by its straddling thin band, a whole number of thin slices |
 | `draw.coarse_slice_width` | 0.04 | Coarse slice width, a whole number of thin slices |
-| `draw.bucket_weights` | 4, 40, 20, 30, 6 | Relative weights for `fully_dissimilar`, `lower_thin`, `middle_coarse`, `upper_thin` and `fully_similar` |
-| `draw.slice_overflow_factor` | 1.0 | Multiplier on each bucket's average per-slice share (`ceil((B / k) * factor)`) capping sibling absorption inside a bucket |
-| `draw.min_pairs_per_slice` | 1 | Target minimum planned pairs per slice in funded multi-slice buckets; smaller budgets coarsen slice steps automatically |
+| `draw.bucket_weights` | 5, 20, 10, 60, 5 | Relative weights for `fully_dissimilar`, `lower_thin`, `middle_coarse`, `upper_thin` and `fully_similar` |
+| `draw.slice_overflow_factor` | 1.5 | Multiplier on each bucket's average per-slice share (`ceil((B / k) * factor)`) capping sibling absorption inside a bucket |
+| `draw.min_pairs_per_slice` | 3 | Target minimum planned pairs per slice in funded multi-slice buckets; smaller budgets coarsen slice steps automatically while keeping thresholds on exact edges |
 | `draw.thresholds_lookback_days` | 14 | How old the newest threshold-history row may be |
 | `diagnostics.cutoff` | 0.87 | Score compared with the sampled judge answers; does not change the draw or publication |
 | `diagnostics.score_bins` | 40 | Equal-width bins over the full pre-draw score pool |
@@ -778,24 +811,26 @@ below 0.88 had been judged, so they are provisional until the first seven real n
 | `diagnostics.fit_pair_limit` | 1050 | Most keys kept in an exact upper fit proof; larger fits are still used normally |
 | `thresholds.lower_start`, `thresholds.upper_start` | 0.70, 0.93 | The thresholds when no recent row sets them |
 | `thresholds.lower_share_level`, `thresholds.upper_share_level` | 0.05, 0.90 | The same-story share that defines each threshold |
-| `thresholds.window_nights` | 7 | Nights of `pair-verdicts` the evidence reads, ending on the night |
-| `thresholds.near_threshold_width` | 0.06 | How far either side of a threshold a pair may score and still be evidence for it |
+| `thresholds.window_nights`, `thresholds.max_window_nights` | 7, 28 | Minimum and maximum UTC nights of `pair-verdicts` the adaptive evidence window reads, ending on the night (when `max_window_nights` is null, fixed at `window_nights`) |
+| `thresholds.near_threshold_width` | 0.06 | How far either side of a threshold a non-headline pair may score and still be evidence for it |
 | `thresholds.minimum_usable_pairs` | 240 | The fewest usable pairs near a threshold a night may act on |
 | `thresholds.ignore_range` | 0.01 | A gap this small or smaller is not acted on |
 | `thresholds.nights_running_required` | 2 | Nights in a row a gap must stand before a threshold moves |
-| `thresholds.widening_step`, `thresholds.narrowing_step` | 0.02, 0.005 | The most a threshold moves in a night, out and in |
-| `thresholds.far_gap`, `thresholds.far_gap_step` | 0.06, 0.02 | A gap over the first takes the second, in either direction |
+| `thresholds.widening_step`, `thresholds.narrowing_step` | 0.02, 0.01 | The most a threshold moves in a night, out and in |
+| `thresholds.far_gap`, `thresholds.far_gap_step` | 0.04, 0.02 | A gap over the first takes the second, in either direction |
 | `thresholds.lowest_lower_threshold`, `thresholds.highest_upper_threshold` | 0.50, 0.99 | The furthest each threshold may go |
-| `thresholds.smallest_gap` | 0.12 | The least distance between the thresholds: two runs of six thin slices of 0.01 |
+| `thresholds.smallest_gap` | 0.12 | The least distance between the thresholds: twice `draw.thin_band_half_width` so the two straddling thin bands never overlap |
 | `thresholds.pull_start_steepness`, `thresholds.pull_spread` | 24.6, 8.0 | Where the curve's steepness is pulled until history exists, and how loosely |
 | `thresholds.pull_window_nights`, `thresholds.pull_minimum_nights` | 28, 7 | The nights of steepness the pull centre is the median of, and the fewest it needs |
 
 The file is refused when its settings contradict each other, because a draw cut from them
-would fail every night. The lower share level must be below the upper; the pull needs no
+would fail every night. The lower share level must be below the upper; `max_window_nights`
+must be at least `window_nights` when set; the pull needs no
 more nights than its window holds; the far gap must be above the ignore range and its step
 no smaller than either near step; each limit must leave the draw room for a thin slice of
-the lightly sampled end beyond it; the smallest gap must hold both thin runs; and the starts
-must sit inside the limits and at least the smallest gap apart.
+the lightly sampled end beyond it; the smallest gap must be at least twice
+`draw.thin_band_half_width`; and the starts must sit inside the limits and at least the
+smallest gap apart.
 
 The known-answer pairs have a file of their own,
 [config/judges/content-similarity-canaries.json](../../../config/judges/content-similarity-canaries.json),
@@ -822,7 +857,7 @@ rows, and a setting changes by an edit that bumps its file's `version`
 | First council run | Older nights with no `pair-verdicts` row are named one a night, newest first, until the 7-night window has slid past the rest | A night that has rows and is named again is a fault in the scheduler's read ([which nights](#which-nights-the-judge-is-behind-on)) |
 | First gardener run | Three compaction tasks for this judge: `pair-verdicts`, `threshold-history` and `holdout-pairs` | A ledger missing from the list is never packed: its compaction declaration or its name in the gardener's task list is missing ([adding a ledger](../contracts/ledger-registry.md#onboarding-and-offboarding)) |
 | First 7 real nights | Per threshold, whether `usable_pairs_used` reached `minimum_usable_pairs` (240), and where `estimate` sits against the configured start (0.70 and 0.93) | Short of 240: raise `draw.pair_budget` (the guard has [room](#the-known-answer-pairs)) or reweight `draw.bucket_weights`. Far from its start: nothing to edit, because the threshold walks to the estimate and a start is read only while no row is in the last 14 days. A `thresholds` setting the rows contradict is re-derived from them |
-| First week | The share of usable `fully_dissimilar` pairs answered YES: 4 percent of `draw.pair_budget` a night (at most 42 pairs over 7 nights at 150) | More than 1 in 20 (3 of 42 is 7.1 percent, 2 of 42 is 4.8 percent): move `lower_share_level` from 0.05 to 0.10 ([why](#design-rationale)) |
+| First week | The share of usable `fully_dissimilar` pairs answered YES: 5 percent of `draw.pair_budget` a night (at most 56 pairs over 7 nights at 150) | More than 1 in 20 (3 of 56 is 5.4 percent, 2 of 56 is 3.6 percent): move `lower_share_level` from 0.05 to 0.10 ([why](#design-rationale)) |
 | First 14 real nights | Per threshold, the nights held as `fit_failed` with `usable_pairs_used` of at least 240 | Three in a row on one threshold: the window cannot place it, so price a rule ([why none is added](#design-rationale)) |
 | First 14 real nights | Nights that have pair rows and no history row | Each is a failed review: it is not named again, and the next night follows the newest earlier row. The collecting job's log has the error |
 | First 14 real nights | By `run_id`, the share of a night's pair rows that a later run filed again for the same night. It was 24 percent over the old design's 14 nights | Above 10 percent: build a re-run that judges only what it lacks ([why not yet](#design-rationale)) |
@@ -862,11 +897,32 @@ each slice at `ceil((B / k) * draw.slice_overflow_factor)`, and auto-coarsening 
 multi-slice buckets from `draw.min_pairs_per_slice` make every ceiling and slice count
 scale from config with no fixed pair floor or crash at small budgets.
 
-**The grid rounds outward.** A threshold between two grid lines would otherwise split a
-slice, and a slice that straddles a threshold belongs to neither bucket. Rounding the
-lower threshold down and the upper one up keeps the ambiguous range at least as wide as
-the thresholds say, and each lightly sampled end stops at its threshold, which the
-contract checks.
+**The grid rounds outward and thin bands straddle both sides of each threshold.** A
+threshold between two grid lines would otherwise split a slice. Rounding the lower
+threshold down and the upper one up keeps the ambiguous range at least as wide as the
+thresholds say, while straddling `thin_band_half_width` on both sides of each threshold
+gives the logistic fitter balanced support above and below the crossing point instead of
+extrapolating outward from one side. Clamping the outer thin-band edges to `-1 + slice_width`
+and `1 - slice_width` guarantees both lightly sampled ends keep at least one slice and
+never cross their threshold, which the contract checks. Partitioning below and above the
+threshold separately during auto-coarsening keeps each threshold on an exact slice edge
+whenever the bucket funds at least two slices.
+
+**Upper-first budget weighting and a bounded adaptive evidence window (7 to 28 nights).**
+Finding an accurate upper bound for same-story matching is the primary role of this judge,
+so `upper_thin` receives 60 percent of `draw.pair_budget` (`5 / 20 / 10 / 60 / 5`). That
+keeps `upper` densely sampled inside the 7-night minimum window while `lower` (20 percent)
+and smaller future budgets expand backward day by day up to `max_window_nights` (28) until
+reaching `minimum_usable_pairs` (240). Because stopping depends only on the usable count and
+the maximum window is fixed in config, sparse checkouts remain bounded (Guardrail #12) and
+fits never peek at verdicts to choose their window length.
+
+**Identical-headline overrides stay out of cosine fits.** A shared headline scores 1.0
+outright regardless of its cosine, so pooling `headline=True` rows into `evidence_near`
+would pin the upper logistic curve artificially near 1.0 whenever `upper` approaches 0.94
+or higher. Excluding `headline=True` inside `evidence_near` keeps the logistic curve purely
+about cosine similarity while headline matches are still judged and reported in
+`fully_similar` diagnostics.
 
 **The chance is worked out when the night is filed.** A draw cannot know which pairs will
 agree, and a count taken from what was dealt would credit a lost runner's pairs as usable.
@@ -906,11 +962,14 @@ can die having pushed half its rows.
 not the runner's, so the review folds them into one row a night, and a reading stays a
 scratch file shipped between jobs and never a ledger of its own.
 
-**One curve for each threshold, pooled over seven nights.** One night's pairs near a
-threshold are too few to place it. In a simulation over the replayed nights, a single
-night's estimate was off by more than 0.02 on about a third of nights (32 percent at the
-lower threshold and 28 at the upper), and the seven-night pool on 6 and 2 percent. These
-are estimates from replayed pools and not measurements of the real judge.
+**One curve for each threshold, pooled over an adaptive 7-to-28-night window.** One night's
+pairs near a threshold are too few to place it. In a simulation over the replayed nights, a
+single night's estimate was off by more than 0.02 on about a third of nights (32 percent at
+the lower threshold and 28 at the upper), and a seven-night pool on 6 and 2 percent. These
+are estimates from replayed pools and not measurements of the real judge. Expanding day by
+day from `window_nights` (7) up to `max_window_nights` (28) when a side has fewer than
+`minimum_usable_pairs` (240) lets `upper` stay responsive at 7 nights while `lower` or
+smaller budgets still clear 240 usable pairs without stalling.
 
 **Weights stay out of the curve.** A pair's chance depends on its score alone, so the
 curve needs none. In a simulation over the same replayed pools, the share of
@@ -933,14 +992,10 @@ need no library: Newton's method with the step halved takes at most 50 steps.
 **Out is fast and in is slow.** A threshold sitting too far inside the doubtful range
 leaves wrong answers in a bucket the draw barely checks, while one sitting too far out
 only spends some pairs on near-certain ones. The merge line that decides what publishes is
-a fixed value a person sets and is not touched here. The speed is
-per move and not per night: each move out pushes about a third of the older pairs out of
-the 0.06 window, so the usable pairs fall under 240 and the next move waits for the window
-to refill. A gap of 0.12 takes 6 moves out and 13 in (3 at the far step, then 10 at the
-narrowing step), and a gap of 0.075 takes 4 and 10. A night is at least a move, plus the
-night that confirms the gap, plus the waits. On the tests' synthetic nights, a threshold
-came within 0.02 of a point 0.05 away in 6 to 7 nights moving out and 9 to 10 moving in,
-and not four times as fast as the steps of 0.02 and 0.005 suggest.
+a fixed value a person sets and is not touched here. Outward moves take `widening_step`
+(0.02), inward moves take `narrowing_step` (0.01), and gaps larger than `far_gap` (0.04)
+take `far_gap_step` (0.02) in either direction so a poorly placed start converges quickly
+while steady-state inward drift stays half the outward step.
 
 **A limit only shortens a move.** A setting can change under a standing threshold, such as
 a lowest score raised above where the lower threshold already stands. A limit that jumped
@@ -983,7 +1038,7 @@ declared files.
 thresholds, so a night that holds files one, and the thresholds never fall back to the
 configured starts while nights keep running. Two things follow. Editing `lower_start` or
 `upper_start` changes nothing for a judge with a row in the last 14 days. And a change to
-`thin_slices_each_end` or `smallest_gap` that leaves the draw less room than the
+`thin_band_half_width` or `smallest_gap` that leaves the draw less room than the
 thresholds already in the history take makes the draw refuse every night until the history
 is cleared, which an operator does by pruning the newest 14 days of `threshold-history`
 with [the named prune](../../how-to/prune-a-collection.md#prune-a-range-of-days-out-of-a-ledger).

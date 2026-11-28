@@ -517,12 +517,13 @@ def test_settlement_files_only_this_attempts_exact_sample(
         )
         for one in slices.slices
     } == {
-        (-1.0, 0.70): (6, 2, 1, 1, 0, 0, 0, 0),
+        (-1.0, 0.64): (6, 2, 1, 1, 0, 0, 0, 0),
         (0.76, 0.80): (3, 1, 0, 0, 0, 0, 0, 1),
         (0.84, 0.87): (3, 1, 0, 1, 0, 0, 0, 0),
         (0.87, 0.88): (3, 1, 1, 0, 0, 0, 0, 0),
         (0.89, 0.90): (12, 4, 0, 0, 1, 1, 1, 1),
-        (0.93, 1.0): (6, 2, 1, 1, 0, 0, 0, 0),
+        (0.93, 0.94): (3, 1, 1, 0, 0, 0, 0, 0),
+        (0.96, 0.97): (3, 1, 0, 1, 0, 0, 0, 0),
     }
     assert first.evaluated_cutoff == 0.87
     assert (first.sample_tp, first.sample_fp, first.sample_fn, first.sample_tn) == (2, 1, 1, 2)

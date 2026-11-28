@@ -116,6 +116,9 @@ def test_a_missing_owned_knob_is_refused_at_the_judge_reader(tmp_path: Path, key
     ("block", "changes", "refused"),
     [
         ("draw", {"slice_width": 0.03}, "does not divide 1"),
+        ("draw", {"thin_band_half_width": 0.065}, "whole number of"),
+        ("draw", {"thin_band_half_width": 0.005}, "whole number of"),
+        ("draw", {"thin_slices_each_end": 6}, "thin_slices_each_end"),
         ("draw", {"coarse_slice_width": 0.035}, "whole number of"),
         ("draw", {"slice_overflow_factor": 0.99}, "slice_overflow_factor"),
         ("draw", {"min_pairs_per_slice": 0}, "min_pairs_per_slice"),
@@ -124,22 +127,22 @@ def test_a_missing_owned_knob_is_refused_at_the_judge_reader(tmp_path: Path, key
             {
                 "bucket_weights": {
                     "fully_dissimilar": 0,
-                    "lower_thin": 40,
-                    "middle_coarse": 20,
-                    "upper_thin": 30,
-                    "fully_similar": 6,
+                    "lower_thin": 20,
+                    "middle_coarse": 10,
+                    "upper_thin": 60,
+                    "fully_similar": 5,
                 }
             },
             "fully_dissimilar",
         ),
         (
             "draw",
-            {"fully_similar": {"weight": 6, "minimum": 2, "maximum": 6}},
+            {"fully_similar": {"weight": 5, "minimum": 2, "maximum": 6}},
             "fully_similar",
         ),
         (
             "draw",
-            {"fully_dissimilar": {"weight": 4, "minimum": 1, "maximum": 4}},
+            {"fully_dissimilar": {"weight": 5, "minimum": 1, "maximum": 4}},
             "fully_dissimilar",
         ),
         ("draw", {"pair_budget": 0}, "pair_budget"),
@@ -151,6 +154,8 @@ def test_a_missing_owned_knob_is_refused_at_the_judge_reader(tmp_path: Path, key
         ("thresholds", {"upper_start": 0.9900000005}, "fully similar end"),
         ("thresholds", {"lower_start": -0.9900000005}, "fully dissimilar end"),
         ("thresholds", {"lower_share_level": 0.95}, "lower_share_level 0.95 is not below"),
+        ("thresholds", {"max_window_nights": 6}, "max_window_nights 6 is below"),
+        ("thresholds", {"max_window_nights": 0}, "max_window_nights"),
         ("thresholds", {"pull_minimum_nights": 29}, "pull_minimum_nights 29 is above"),
         ("thresholds", {"far_gap": 0.01}, "far_gap 0.01 is not above"),
         ("thresholds", {"far_gap_step": 0.01}, "far_gap_step 0.01 is under"),
@@ -215,16 +220,20 @@ def test_the_versions_a_night_read_are_one_line_of_ascii_json_keyed_by_file(
 
 
 def test_draw_bucket_budgets_splits_by_largest_remainder_and_deterministic_ties() -> None:
-    from idhazh.contracts.knobs.content_similarity_judge import DrawBucketWeights, DrawConfig
+    from idhazh.contracts.knobs.content_similarity_judge import (
+        DrawBucketWeights,
+        DrawConfig,
+        ThresholdsConfig,
+    )
     from idhazh.contracts.story_similarity_pair_verdict import PairBucket
 
     draw = judge_settings.load(CONFIG_DIR).draw
     assert draw.bucket_budgets() == {
-        PairBucket.FULLY_DISSIMILAR: 6,
-        PairBucket.LOWER_THIN: 60,
-        PairBucket.MIDDLE_COARSE: 30,
-        PairBucket.UPPER_THIN: 45,
-        PairBucket.FULLY_SIMILAR: 9,
+        PairBucket.FULLY_DISSIMILAR: 8,
+        PairBucket.LOWER_THIN: 30,
+        PairBucket.MIDDLE_COARSE: 15,
+        PairBucket.UPPER_THIN: 90,
+        PairBucket.FULLY_SIMILAR: 7,
     }
 
     # Remainder tie (5 vs 5 out of 10) breaks by descending weight (3 beats 1).
@@ -274,6 +283,13 @@ def test_draw_bucket_budgets_splits_by_largest_remainder_and_deterministic_ties(
     raw_draw.pop("min_pairs_per_slice")
     defaulted = DrawConfig.model_validate(raw_draw)
     assert (defaulted.slice_overflow_factor, defaulted.min_pairs_per_slice) == (1.0, 1)
+
+    raw_thresholds = committed("thresholds")
+    assert ThresholdsConfig.model_validate(raw_thresholds).effective_max_window_nights == 28
+    raw_thresholds.pop("max_window_nights")
+    fixed_window = ThresholdsConfig.model_validate(raw_thresholds)
+    assert fixed_window.max_window_nights is None
+    assert fixed_window.effective_max_window_nights == fixed_window.window_nights == 7
 
     for bad in (float("nan"), float("inf")):
         with pytest.raises(ValueError):

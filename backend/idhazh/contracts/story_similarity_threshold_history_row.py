@@ -131,8 +131,9 @@ _MEANING: Final[Mapping[str, str]] = MappingProxyType(
             "where the fitted curve reaches it."
         ),
         "nights_used": (
-            "How many nights of evidence the {side} estimate read. Fewer than the window "
-            "when a change of judge, scorer or settings restarted it."
+            "How many distinct nights of evidence the {side} estimate read, starting from the "
+            "minimum window and expanding up to the configured maximum when short of usable "
+            "pairs, or fewer when a change of judge, scorer or settings restarted it."
         ),
         "usable_pairs_used": (
             "How many usable pairs near the {side} threshold the estimate read, over those "
@@ -481,8 +482,9 @@ class StorySimilarityThresholdHistoryRow(Contract):
     above_upper_pairs_available: int = Field(
         ge=0,
         description=(
-            "How many pairs of the night the draw found in the fully similar bucket, the "
-            "pool its lightly sampled end drew from."
+            "How many pairs of the night the draw found in the single-slice fully similar "
+            "bucket (above the upper straddling thin band), the pool its lightly sampled end "
+            "drew from."
         ),
     )
     above_upper_pairs_usable: int = Field(
@@ -493,17 +495,19 @@ class StorySimilarityThresholdHistoryRow(Contract):
         default=None,
         ge=0.0,
         description=(
-            "How many of the pairs in the fully similar bucket the judge would have called "
-            "the same story, estimated by weighting each usable pair by one over its "
-            "sampling chance. Empty when no pair there was usable. With a handful of pairs "
-            "a night this is an alarm and never moves a threshold."
+            "How many of the pairs in the single-slice fully similar bucket (above the upper "
+            "straddling thin band) the judge would have called the same story, estimated by "
+            "weighting each usable pair by one over its sampling chance. Empty when no pair "
+            "there was usable. With a handful of pairs a night this is an alarm and never "
+            "moves a threshold."
         ),
     )
     below_lower_pairs_available: int = Field(
         ge=0,
         description=(
-            "How many pairs of the night the draw found in the fully dissimilar bucket, the "
-            "pool its lightly sampled end drew from."
+            "How many pairs of the night the draw found in the single-slice fully dissimilar "
+            "bucket (below the lower straddling thin band), the pool its lightly sampled end "
+            "drew from."
         ),
     )
     below_lower_pairs_usable: int = Field(
@@ -514,9 +518,10 @@ class StorySimilarityThresholdHistoryRow(Contract):
         default=None,
         ge=0.0,
         description=(
-            "How many of the pairs in the fully dissimilar bucket the judge would have "
-            "called different stories, estimated the same way. Empty when no pair there was "
-            "usable. An alarm, like its twin above."
+            "How many of the pairs in the single-slice fully dissimilar bucket (below the "
+            "lower straddling thin band) the judge would have called different stories, "
+            "estimated the same way. Empty when no pair there was usable. An alarm, like its "
+            "twin above."
         ),
     )
     runners_expected: int = Field(

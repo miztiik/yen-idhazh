@@ -5,17 +5,17 @@
   "draw": {
     "pair_budget": 150,
     "slice_width": 0.01,
-    "thin_slices_each_end": 6,
+    "thin_band_half_width": 0.06,
     "coarse_slice_width": 0.04,
     "bucket_weights": {
-      "fully_dissimilar": 4,
-      "lower_thin": 40,
-      "middle_coarse": 20,
-      "upper_thin": 30,
-      "fully_similar": 6
+      "fully_dissimilar": 5,
+      "lower_thin": 20,
+      "middle_coarse": 10,
+      "upper_thin": 60,
+      "fully_similar": 5
     },
-    "slice_overflow_factor": 1.0,
-    "min_pairs_per_slice": 1,
+    "slice_overflow_factor": 1.5,
+    "min_pairs_per_slice": 3,
     "thresholds_lookback_days": 14
   },
   "thresholds": {
@@ -24,13 +24,14 @@
     "lower_share_level": 0.05,
     "upper_share_level": 0.9,
     "window_nights": 7,
+    "max_window_nights": 28,
     "near_threshold_width": 0.06,
     "minimum_usable_pairs": 240,
     "ignore_range": 0.01,
     "nights_running_required": 2,
     "widening_step": 0.02,
-    "narrowing_step": 0.005,
-    "far_gap": 0.06,
+    "narrowing_step": 0.01,
+    "far_gap": 0.04,
     "far_gap_step": 0.02,
     "lowest_lower_threshold": 0.5,
     "highest_upper_threshold": 0.99,
@@ -51,5 +52,5 @@
   },
   "flush_every_pairs": 1,
   "judge_temperature": 0.0,
-  "version": "2026-11-27"
+  "version": "2026-11-28"
 }

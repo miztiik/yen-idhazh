@@ -46,25 +46,25 @@ class DrawBucketWeights(Model):
     fully_dissimilar: int = Field(
         ge=1,
         description=(
-            "Weight of the lightly sampled end below the lower bound threshold. Weights are "
+            "Weight of the lightly sampled end below the lower straddling thin band. Weights are "
             "relative: only their proportions across all five buckets matter."
         ),
     )
     lower_thin: int = Field(
         ge=1,
-        description="Weight of the thin slices that start at the lower bound threshold.",
+        description="Weight of the straddling thin slices around the lower bound threshold.",
     )
     middle_coarse: int = Field(
         ge=1,
-        description="Weight of the coarse slices that fill the range between the two thin runs.",
+        description="Weight of the coarse slices that fill the range between the two thin bands.",
     )
     upper_thin: int = Field(
         ge=1,
-        description="Weight of the thin slices that end at the upper bound threshold.",
+        description="Weight of the straddling thin slices around the upper bound threshold.",
     )
     fully_similar: int = Field(
         ge=1,
-        description="Weight of the lightly sampled end above the upper bound threshold.",
+        description="Weight of the lightly sampled end above the upper straddling thin band.",
     )
 
 
@@ -88,18 +88,21 @@ class DrawConfig(Model):
             "threshold down and the upper one up to this grid."
         ),
     )
-    thin_slices_each_end: int = Field(
-        ge=1,
+    thin_band_half_width: float = Field(
+        gt=0.0,
+        le=1.0,
+        allow_inf_nan=False,
         description=(
-            "Thin slices that start at the lower bound threshold, and as many that end at the "
-            "upper one."
+            "Half-width on each side of each threshold covered by its straddling thin band, "
+            "a whole number of thin slices. Outer band edges clamp so each lightly sampled "
+            "end keeps at least one thin slice."
         ),
     )
     coarse_slice_width: float = Field(
         gt=0.0,
         le=1.0,
         description=(
-            "Width of the coarse slices between the two thin runs, a whole number of thin "
+            "Width of the coarse slices between the two thin bands, a whole number of thin "
             "slices. The last coarse slice is narrower when the range does not divide."
         ),
     )
@@ -166,6 +169,14 @@ class DrawConfig(Model):
             raise ValueError(
                 f"slice_width {self.slice_width} does not divide 1 into whole slices"
             )
+        per_half_band = self.thin_band_half_width / self.slice_width
+        if per_half_band < 1.0 - _WHOLE_NUMBER_NOISE or abs(
+            per_half_band - round(per_half_band)
+        ) > _WHOLE_NUMBER_NOISE:
+            raise ValueError(
+                f"thin_band_half_width {self.thin_band_half_width} is not a whole number of "
+                f"slice_width {self.slice_width} slices"
+            )
         per_coarse = self.coarse_slice_width / self.slice_width
         if per_coarse < 1.0 - _WHOLE_NUMBER_NOISE or abs(per_coarse - round(per_coarse)) > (
             _WHOLE_NUMBER_NOISE
@@ -180,7 +191,8 @@ class DrawConfig(Model):
 class ThresholdsConfig(Model):
     """Where the two thresholds start, what defines each, and how a night is allowed to move them.
 
-    A night reads the pairs of the last `window_nights` nights that scored near a threshold,
+    A night reads the pairs of the last `window_nights` nights (expanding day by day up to
+    `max_window_nights` when usable pairs near a threshold are below `minimum_usable_pairs`),
     fits a curve through the judge's answers, and finds the score where the same-story share
     reaches the threshold's level. The gap between that score and the threshold is acted on
     only when it is big enough, has stood long enough and rests on enough pairs, and then
@@ -225,9 +237,19 @@ class ThresholdsConfig(Model):
     window_nights: int = Field(
         ge=1,
         description=(
-            "How many UTC days, ending on the night, of pair-verdicts the estimate reads. "
+            "Minimum UTC days, ending on the night, of pair-verdicts the estimate reads. "
             "Several nights are pooled because one night's pairs near a threshold are too few "
-            "to place it."
+            "to place it; when still short of `minimum_usable_pairs`, the review expands day "
+            "by day up to `max_window_nights`."
+        ),
+    )
+    max_window_nights: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Maximum UTC days, ending on the night, of pair-verdicts the estimate may expand "
+            "to when `window_nights` holds fewer than `minimum_usable_pairs` usable pairs near "
+            "a threshold. When omitted or null, the window stays fixed at `window_nights`."
         ),
     )
     near_threshold_width: float = Field(
@@ -308,8 +330,8 @@ class ThresholdsConfig(Model):
         gt=0.0,
         description=(
             "The least distance between the two thresholds. A move that would bring them "
-            "closer stops here, because the draw cannot cut its thin slices from a range "
-            "narrower than both thin runs."
+            "closer stops here, because the draw cannot cut non-overlapping straddling thin "
+            "bands from a narrower range."
         ),
     )
     pull_start_steepness: float = Field(
@@ -341,9 +363,14 @@ class ThresholdsConfig(Model):
         ),
     )
 
+    @property
+    def effective_max_window_nights(self) -> int:
+        """Maximum UTC days of pair-verdicts the review reads, defaulting to `window_nights`."""
+        return self.window_nights if self.max_window_nights is None else self.max_window_nights
+
     @model_validator(mode="after")
     def _the_two_share_levels_and_the_pull_window_are_in_order(self) -> Self:
-        """The lower level is below the upper, and the median can have as many nights as it needs.
+        """The lower level is below the upper, and each window holds at least its minimum.
 
         A threshold row refuses a lower share level that is not below the upper one, so a
         config that allowed it would pass here and fail every night when the row is filed.
@@ -352,6 +379,11 @@ class ThresholdsConfig(Model):
             raise ValueError(
                 f"lower_share_level {self.lower_share_level} is not below upper_share_level "
                 f"{self.upper_share_level}"
+            )
+        if self.max_window_nights is not None and self.max_window_nights < self.window_nights:
+            raise ValueError(
+                f"max_window_nights {self.max_window_nights} is below window_nights "
+                f"{self.window_nights}"
             )
         if self.pull_minimum_nights > self.pull_window_nights:
             raise ValueError(
@@ -445,12 +477,13 @@ class ContentSimilarityJudgeConfig(Model):
         """A draw cut from these starts has every slice it names, with none overlapping.
 
         The starts are rounded onto the grid the way the draw rounds them, so a start that
-        fits here fits when the draw cuts its slices. The two thin runs sit at the two
-        thresholds, so they need the range between the rounded thresholds to hold both, and
-        each lightly sampled end needs at least one thin slice of room before -1 or 1.
+        fits here fits when the draw cuts its slices. Each straddling thin band reaches
+        `thin_band_half_width` inward from its threshold, so the rounded thresholds must sit at
+        least twice that half-width apart, and each lightly sampled end needs at least one thin
+        slice of room before -1 or 1.
         """
         width = self.draw.slice_width
-        thin = self.draw.thin_slices_each_end
+        half_ticks = round(self.draw.thin_band_half_width / width)
         lower, upper = self.thresholds.lower_start, self.thresholds.upper_start
         lower_tick, upper_tick = threshold_ticks(lower, upper, slice_width=width)
         per_unit = round(1.0 / width)
@@ -462,10 +495,11 @@ class ContentSimilarityJudgeConfig(Model):
             raise ValueError(
                 f"upper_start {upper} leaves the fully similar end under one slice wide"
             )
-        if upper_tick - lower_tick < 2 * thin:
+        if upper_tick - lower_tick < 2 * half_ticks:
             raise ValueError(
                 f"the starts {lower} and {upper} are {upper - lower:.4f} apart, and "
-                f"{thin} thin slices at each end need {2 * thin * width:.4f}"
+                f"straddling thin bands of half-width {self.draw.thin_band_half_width:.4f} "
+                f"need {2 * half_ticks * width:.4f}"
             )
         return self
 
@@ -476,13 +510,14 @@ class ContentSimilarityJudgeConfig(Model):
         The thresholds move only between the lowest and highest allowed scores and never closer
         than the smallest gap, so a draw cut from any place they can reach needs what the starts
         were checked for: a thin slice of fully dissimilar and of fully similar range at the
-        ends, and both thin runs between. The starts must also stand inside the limits and at
-        least the smallest gap apart, or the first night would be cut short by a limit it began
-        outside. This runs after the check of the starts, so a start that fails both is refused
-        for its own reason.
+        ends, and non-overlapping straddling thin bands between. The starts must also stand
+        inside the limits and at least the smallest gap apart, or the first night would be cut
+        short by a limit it began outside. This runs after the check of the starts, so a start
+        that fails both is refused for its own reason.
         """
         rules = self.thresholds
-        width, thin = self.draw.slice_width, self.draw.thin_slices_each_end
+        width = self.draw.slice_width
+        half_ticks = round(self.draw.thin_band_half_width / width)
         per_unit = round(1.0 / width)
         lowest_tick, highest_tick = threshold_ticks(
             rules.lowest_lower_threshold, rules.highest_upper_threshold, slice_width=width
@@ -497,10 +532,11 @@ class ContentSimilarityJudgeConfig(Model):
                 f"highest_upper_threshold {rules.highest_upper_threshold} leaves the fully "
                 "similar end under one slice wide"
             )
-        if rules.smallest_gap * per_unit + GRID_NOISE < 2 * thin:
+        if rules.smallest_gap * per_unit + GRID_NOISE < 2 * half_ticks:
             raise ValueError(
-                f"smallest_gap {rules.smallest_gap} is under the {2 * thin * width:.4f} that "
-                f"{thin} thin slices at each end need"
+                f"smallest_gap {rules.smallest_gap} is under the {2 * half_ticks * width:.4f} "
+                f"that straddling thin bands of half-width "
+                f"{self.draw.thin_band_half_width:.4f} need"
             )
         if rules.lower_start < rules.lowest_lower_threshold:
             raise ValueError(

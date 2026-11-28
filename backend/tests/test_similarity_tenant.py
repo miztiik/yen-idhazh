@@ -167,18 +167,18 @@ NIGHT_FIXTURE: Final = (
 
 
 def test_the_collecting_job_is_told_the_days_the_review_reads_and_no_others() -> None:
-    """Seven nights of pairs ending on the night, and the 28 days of history before it.
+    """Up to max_window_nights (28) of pairs ending on the night, and 28 days of history before it.
 
-    The edges are what is pinned. The night six days back is read and the one seven back is
-    not. The history reaches the 28th day before the night, and neither the 29th nor the
-    night itself, whose own row is what the run is about to file.
+    The edges are what is pinned. The night 27 days back is read and the one 28 back is not.
+    The history reaches the 28th day before the night, and neither the 29th nor the night
+    itself, whose own row is what the run is about to file.
     """
     declared = set(tenant.TENANT.publication_inputs(date=NIGHT))
     pairs = "state/raw/content-similarity-judge/pair-verdicts"
     history = "state/raw/content-similarity-judge/threshold-history"
 
-    assert {f"{pairs}/2026/12/28", f"{pairs}/2027/01/03"} <= declared
-    assert f"{pairs}/2026/12/27" not in declared
+    assert {f"{pairs}/2026/12/07", f"{pairs}/2027/01/03"} <= declared
+    assert f"{pairs}/2026/12/06" not in declared
     assert {f"{history}/2026/12/06", f"{history}/2027/01/02"} <= declared
     assert f"{history}/2026/12/05" not in declared
     assert f"{history}/2027/01/03" not in declared
@@ -292,7 +292,7 @@ def test_a_checkout_holding_only_the_declared_files_reads_what_the_whole_tree_re
             (sparse / relative).write_bytes(path.read_bytes())
         return sparse / "state"
 
-    assert {row.date for row in whole[0]} == {"2026-12-28", "2026-12-30", "2027-01-01", NIGHT}
+    assert {row.date for row in whole[0]} == {"2026-12-20", "2026-12-28", "2026-12-30", "2027-01-01", NIGHT}
     assert {row.date for row in whole[1]} == {"2026-12-06", "2026-12-20", "2027-01-02"}
     assert what_the_review_reads(copy_without(None)) == whole
     for needed in (
