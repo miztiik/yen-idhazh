@@ -56,7 +56,8 @@
     {"bytes": 57660,"covers": "2026-11-22","rows": 1143},
     {"bytes": 51465,"covers": "2026-11-23","rows": 966},
     {"bytes": 66639,"covers": "2026-11-24","rows": 1431},
-    {"bytes": 61736,"covers": "2026-11-25","rows": 1342}
+    {"bytes": 61736,"covers": "2026-11-25","rows": 1342},
+    {"bytes": 64776,"covers": "2026-11-26","rows": 1382}
   ],
   "ledger": "counterfactual-scores",
   "period": "daily",
